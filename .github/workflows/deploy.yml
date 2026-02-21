@@ -17,13 +17,11 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install clasp
-        run: npm install -g @google/clasp
-
       - name: Create clasprc.json
-        run: echo "$CLASP_SETTING" > ~/.clasprc.json
-        env:
-          CLASP_SETTING: ${{ secrets.CLASP_SETTING }}
+        run: |
+          cat << 'EOF' > ~/.clasprc.json
+          ${{ secrets.CLASP_SETTING }}
+          EOF
 
       - name: Deploy
-        run: clasp push --force
+        run: npx @google/clasp push --force
