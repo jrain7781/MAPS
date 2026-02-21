@@ -21,9 +21,7 @@ jobs:
         env:
           CLASP_SETTING: ${{ secrets.CLASP_SETTING }}
         run: |
-          mkdir -p ~/.clasp
-          # Clean all whitespace/newlines from the secret before decoding to prevent 'invalid input'
-          echo "$CLASP_SETTING" | tr -d '\n\r ' | base64 --decode > ~/.clasprc.json
+          node -e "const fs=require('fs'); const path=require('path'); const os=require('os'); const b64=process.env.CLASP_SETTING.replace(/\s/g, ''); fs.mkdirSync(os.homedir(), {recursive:true}); fs.writeFileSync(path.join(os.homedir(), '.clasprc.json'), Buffer.from(b64, 'base64'))"
 
       - name: Deploy to GAS
         run: |
