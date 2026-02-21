@@ -54,20 +54,23 @@ jobs:
           "
 
       - name: Update Deploy Info
+        env:
+          RUN_NUM: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          cat > _DeployInfo.js << 'DEPLOY_EOF'
-          /**
-           * === 배포 정보 (GitHub Actions 자동 업데이트) ===
-           * GAS에서 이 파일을 열면 마지막 배포 시간을 확인할 수 있습니다.
-           */
-          var DEPLOY_INFO = {
-            version: '${{ github.run_number }}',
-            commit: '${{ github.sha }}',
-            deployedAt: '$(date -u +"%Y-%m-%d %H:%M:%S UTC")',
-            branch: '${{ github.ref_name }}',
-            message: $(git log -1 --pretty=format:'"%s"')
+          node -e "
+          const fs = require('fs');
+          const info = {
+            version: process.env.RUN_NUM,
+            commit: process.env.COMMIT_SHA.substring(0, 7),
+            deployedAt: new Date().toISOString(),
+            branch: process.env.BRANCH
           };
-          DEPLOY_EOF
+          const content = '/**\n * === 배포 정보 (자동 업데이트) ===\n * GAS에서 이 파일을 열면 마지막 배포 시간을 확인할 수 있습니다.\n */\nvar DEPLOY_INFO = ' + JSON.stringify(info, null, 2) + ';\n';
+          fs.writeFileSync('_DeployInfo.js', content);
+          console.log('Deploy info updated:', JSON.stringify(info));
+          "
 
       - name: Deploy to GAS
         run: npx @google/clasp push --force
