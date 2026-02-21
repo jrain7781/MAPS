@@ -18,12 +18,25 @@ jobs:
           node-version: '18'
 
       - name: Create clasprc.json
+        env:
+          CLASP_SETTING: ${{ secrets.CLASP_SETTING }}
         run: |
           mkdir -p ~/.clasp
-          echo '${{ secrets.CLASP_SETTING }}' > ~/.clasprc.json
-          # Ensure .clasp.json is present (for debugging)
-          ls -la .clasp.json || echo ".clasp.json NOT FOUND"
+          echo "$CLASP_SETTING" > ~/.clasprc.json
+          echo "Verifying .clasprc.json structure..."
+          node -e "
+            try {
+              const c = JSON.parse(require('fs').readFileSync(require('path').join(require('os').homedir(), '.clasprc.json'), 'utf8'));
+              console.log('JSON structure is valid.');
+              console.log('Available keys:', Object.keys(c));
+              if (c.tokens) console.log('Tokens found:', Object.keys(c.tokens));
+            } catch (e) {
+              console.error('FAILED to parse .clasprc.json:', e.message);
+              process.exit(1);
+            }
+          "
 
       - name: Deploy to GAS
         run: |
-          npx @google/clasp push --force || (echo "Deployment failed, checking environment..." && npx @google/clasp list && exit 1)
+          echo "Starting deployment..."
+          npx @google/clasp push --force
