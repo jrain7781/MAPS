@@ -29,10 +29,8 @@ jobs:
 
           let output;
           if (raw.token) {
-            // Already in clasp 2.5 format
             output = raw;
           } else if (raw.tokens && raw.tokens.default) {
-            // Old format: transform to clasp 2.5 format
             const t = raw.tokens.default;
             output = {
               token: {
@@ -49,12 +47,27 @@ jobs:
               },
               isLocalCreds: false
             };
-            console.log('Converted old token format to clasp 2.5 format.');
           }
 
           fs.writeFileSync(path.join(os.homedir(), '.clasprc.json'), JSON.stringify(output));
           console.log('clasprc.json created successfully.');
           "
+
+      - name: Update Deploy Info
+        run: |
+          cat > _DeployInfo.js << 'DEPLOY_EOF'
+          /**
+           * === 배포 정보 (GitHub Actions 자동 업데이트) ===
+           * GAS에서 이 파일을 열면 마지막 배포 시간을 확인할 수 있습니다.
+           */
+          var DEPLOY_INFO = {
+            version: '${{ github.run_number }}',
+            commit: '${{ github.sha }}',
+            deployedAt: '$(date -u +"%Y-%m-%d %H:%M:%S UTC")',
+            branch: '${{ github.ref_name }}',
+            message: $(git log -1 --pretty=format:'"%s"')
+          };
+          DEPLOY_EOF
 
       - name: Deploy to GAS
         run: npx @google/clasp push --force
