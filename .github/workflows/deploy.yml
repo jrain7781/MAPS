@@ -22,8 +22,7 @@ jobs:
           CLASP_SETTING_BASE64: ${{ secrets.CLASP_SETTING }}
         run: |
           mkdir -p ~/.clasp
-          # Remove any potential whitespace or newlines from the secret before decoding
-          echo "$CLASP_SETTING_BASE64" | tr -d '\r\n ' | base64 --decode > ~/.clasprc.json
+          python3 -c "import base64, os; data = os.environ['CLASP_SETTING_BASE64'].replace('\n', '').replace(' ', '').strip(); open(os.path.expanduser('~/.clasprc.json'), 'wb').write(base64.b64decode(data))"
           echo "Verifying .clasprc.json structure..."
           node -e "
             try {
@@ -31,7 +30,7 @@ jobs:
               console.log('JSON structure is valid.');
               if (c.tokens) console.log('Authentication tokens successfully loaded.');
             } catch (e) {
-              console.error('FAILED to parse .clasprc.json. This usually means the Base64 string in GitHub Secrets is incorrect.');
+              console.error('FAILED to parse .clasprc.json. The current Base64 secret is still invalid.');
               process.exit(1);
             }
           "
