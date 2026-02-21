@@ -22,8 +22,8 @@ jobs:
           CLASP_SETTING: ${{ secrets.CLASP_SETTING }}
         run: |
           mkdir -p ~/.clasp
-          # Decode the Base64 secret into the home directory
-          echo "$CLASP_SETTING" | base64 --decode > ~/.clasprc.json
+          # Clean all whitespace/newlines from the secret before decoding to prevent 'invalid input'
+          echo "$CLASP_SETTING" | tr -d '\n\r ' | base64 --decode > ~/.clasprc.json
 
       - name: Deploy to GAS
         run: |
