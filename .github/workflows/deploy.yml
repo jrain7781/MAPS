@@ -19,24 +19,23 @@ jobs:
 
       - name: Create clasprc.json
         env:
-          CLASP_SETTING: ${{ secrets.CLASP_SETTING }}
+          CLASP_SETTING_BASE64: ${{ secrets.CLASP_SETTING }}
         run: |
           mkdir -p ~/.clasp
-          echo "$CLASP_SETTING" > ~/.clasprc.json
+          echo "$CLASP_SETTING_BASE64" | base64 --decode > ~/.clasprc.json
           echo "Verifying .clasprc.json structure..."
           node -e "
             try {
               const c = JSON.parse(require('fs').readFileSync(require('path').join(require('os').homedir(), '.clasprc.json'), 'utf8'));
               console.log('JSON structure is valid.');
-              console.log('Available keys:', Object.keys(c));
-              if (c.tokens) console.log('Tokens found:', Object.keys(c.tokens));
+              if (c.tokens) console.log('Authentication tokens successfully loaded.');
             } catch (e) {
-              console.error('FAILED to parse .clasprc.json:', e.message);
+              console.error('FAILED to parse .clasprc.json. This usually means the Base64 string in GitHub Secrets is incorrect.');
               process.exit(1);
             }
           "
 
       - name: Deploy to GAS
         run: |
-          echo "Starting deployment..."
+          echo "Starting deployment to Google Apps Script..."
           npx @google/clasp push --force
