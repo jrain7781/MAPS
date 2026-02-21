@@ -19,9 +19,11 @@ jobs:
 
       - name: Create clasprc.json
         run: |
-          cat << 'EOF' > ~/.clasprc.json
-          ${{ secrets.CLASP_SETTING }}
-          EOF
+          mkdir -p ~/.clasp
+          echo '${{ secrets.CLASP_SETTING }}' > ~/.clasprc.json
+          # Ensure .clasp.json is present (for debugging)
+          ls -la .clasp.json || echo ".clasp.json NOT FOUND"
 
-      - name: Deploy
-        run: npx @google/clasp push --force
+      - name: Deploy to GAS
+        run: |
+          npx @google/clasp push --force || (echo "Deployment failed, checking environment..." && npx @google/clasp list && exit 1)
