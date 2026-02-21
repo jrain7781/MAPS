@@ -22,7 +22,8 @@ jobs:
           CLASP_SETTING_BASE64: ${{ secrets.CLASP_SETTING }}
         run: |
           mkdir -p ~/.clasp
-          echo "$CLASP_SETTING_BASE64" | base64 --decode > ~/.clasprc.json
+          # Remove any potential whitespace or newlines from the secret before decoding
+          echo "$CLASP_SETTING_BASE64" | tr -d '\r\n ' | base64 --decode > ~/.clasprc.json
           echo "Verifying .clasprc.json structure..."
           node -e "
             try {
