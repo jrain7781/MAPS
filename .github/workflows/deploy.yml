@@ -21,7 +21,24 @@ jobs:
         env:
           CLASP_SETTING: ${{ secrets.CLASP_SETTING }}
         run: |
-          node -e "const fs=require('fs'); const path=require('path'); const os=require('os'); const b64=process.env.CLASP_SETTING.replace(/\s/g, ''); fs.mkdirSync(os.homedir(), {recursive:true}); fs.writeFileSync(path.join(os.homedir(), '.clasprc.json'), Buffer.from(b64, 'base64'))"
+          node -e "
+          const fs = require('fs');
+          const os = require('os');
+          const path = require('path');
+          const raw = process.env.CLASP_SETTING;
+          let content;
+          try {
+            JSON.parse(raw);
+            content = raw;
+            console.log('Secret is raw JSON - using directly.');
+          } catch(e) {
+            content = Buffer.from(raw.replace(/\s/g, ''), 'base64').toString('utf8');
+            JSON.parse(content);
+            console.log('Secret is Base64 - decoded successfully.');
+          }
+          fs.writeFileSync(path.join(os.homedir(), '.clasprc.json'), content);
+          console.log('clasprc.json created successfully.');
+          "
 
       - name: Deploy to GAS
         run: |
