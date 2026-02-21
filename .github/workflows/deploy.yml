@@ -20,7 +20,41 @@ jobs:
       - name: Create clasprc.json
         env:
           CLASP_SETTING: ${{ secrets.CLASP_SETTING }}
-        run: node -e "require('fs').writeFileSync(require('os').homedir() + '/.clasprc.json', process.env.CLASP_SETTING)"
+        run: |
+          node -e "
+          const fs = require('fs');
+          const os = require('os');
+          const path = require('path');
+          const raw = JSON.parse(process.env.CLASP_SETTING);
+
+          let output;
+          if (raw.token) {
+            // Already in clasp 2.5 format
+            output = raw;
+          } else if (raw.tokens && raw.tokens.default) {
+            // Old format: transform to clasp 2.5 format
+            const t = raw.tokens.default;
+            output = {
+              token: {
+                access_token: t.access_token,
+                refresh_token: t.refresh_token,
+                scope: 'https://www.googleapis.com/auth/script.deployments https://www.googleapis.com/auth/script.projects https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/logging.read https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cloud-platform',
+                token_type: t.token_type || 'Bearer',
+                expiry_date: t.expiry_date
+              },
+              oauth2ClientSettings: {
+                clientId: t.client_id,
+                clientSecret: t.client_secret,
+                redirectUri: 'http://localhost'
+              },
+              isLocalCreds: false
+            };
+            console.log('Converted old token format to clasp 2.5 format.');
+          }
+
+          fs.writeFileSync(path.join(os.homedir(), '.clasprc.json'), JSON.stringify(output));
+          console.log('clasprc.json created successfully.');
+          "
 
       - name: Deploy to GAS
         run: npx @google/clasp push --force
