@@ -1,8 +1,8 @@
 /**
  * [Config.gs]
  * 프로젝트 전반에서 사용되는 환경 설정 및 상수 정의
- * // GitHub Actions Auto-Deploy Test: 2026-02-21
- * Updated: 2026-02-20
+ * // GitHub Actions Auto-Deploy Final Test: 2026-02-21 (Base64 Mode)
+ * Updated: 2026-02-21
  */
 
 // --- 구글 시트 설정 ---
