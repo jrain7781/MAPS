@@ -8282,10 +8282,13 @@ MJ 이정우 팀장
             }
         });
 
-        // 월별 요약 업데이트 (네비게이션 연월 아래 - 심플 텍스트)
+        // 월별 요약 업데이트 (네비게이션 연월 아래 - 컬러 텍스트, 콤마 제거)
         var msEl = document.getElementById('cMS');
         if (msEl) {
-            msEl.innerHTML = '(입찰 ' + (counts_month['입찰'] || 0) + ', 추천 ' + (counts_month['추천'] || 0) + ', 변경 ' + (counts_month['변경'] || 0) + ')';
+            msEl.innerHTML =
+                '<span class="ms-it bid">입찰 ' + (counts_month['입찰'] || 0) + '</span>' +
+                '<span class="ms-it rec">추천 ' + (counts_month['추천'] || 0) + '</span>' +
+                '<span class="ms-it chg">변경 ' + (counts_month['변경'] || 0) + '</span>';
         }
 
         // 이전/다음달 힌트
@@ -8409,17 +8412,18 @@ MJ 이정우 팀장
      * 날짜 선택 (리스트 앵커로 스크롤)
      */
     function selD(d) {
-        // [지시사항] 오늘부터(tR === 'today') 모드일 때 과거 날짜는 선택 불가
+        // [긴급 복구] 오늘부터 모드에서 진짜 과거인 경우만 차단 (dS < tS 비교와 일치해야 함)
+        // 빈 박스(cd e) 등은 HTML 상에서 onclick이 없으므로 여기서 dS만 체크
         if (tR === 'today' && d < tS) return;
 
         var idx = mS.indexOf(d);
         if (idx > -1) {
-            mS.splice(idx, 1); // 이미 있으면 제거 (해제)
+            mS.splice(idx, 1);
         } else {
-            mS.push(d); // 없으면 추가 (선택)
+            mS.push(d);
         }
-        rCal(); // 빨간 체크표시 갱신
-        rLst(); // 리스트 즉시 연동
+        rCal(); // 화면 갱신
+        rLst(); // 리스트 연동
     }
 
     /**
