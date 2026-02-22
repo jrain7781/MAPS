@@ -8554,8 +8554,8 @@ MJ 이정우 팀장
         var txtCol = (s === '추천') ? '#000' : '#fff'; // v3.15: 추천 가독성 개선 (검정색)
         var dtStyle = 'background-color:' + borderCol + '; color:' + txtCol + '; font-size:0.75rem; height:24px; display:flex; align-items:center; padding:0 10px; border-radius:10px 0 10px 0; font-weight:800; position:absolute; top:0; left:0; z-index:10;';
 
-        // 조사이미지 아이콘 (사진 프레임 SVG)
-        var swipeIco = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>';
+        // 조사이미지 아이콘 (사진 프레임 SVG - 이미지 보기 의미)
+        var swipeIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
         var skSafe = sk.replace(/'/g, '');
 
         var h = '<div class="' + cls + '" style="position:relative; margin-top:4px;" data-id="' + i.id + '" data-sk="' + skSafe + '">' +
@@ -8608,8 +8608,12 @@ MJ 이정우 팀장
     }
 
     /**
-     * 조사 이미지 뷰어 (스와이프 패널)
+     * 조사 이미지 뷰어 - 밀어내기 애니메이션
      */
+    function _getDashEl() {
+        return document.querySelector('.member-dashboard-v2');
+    }
+
     function openImgViewer(id, sk) {
         var viewer = document.getElementById('imgViewer');
         var body = document.getElementById('imgVBody');
@@ -8619,6 +8623,10 @@ MJ 이정우 팀장
         if (title) title.textContent = sk || '';
         if (cnt) cnt.textContent = '';
         body.innerHTML = '<div class="img-vph">이미지 불러오는 중...</div>';
+
+        // 밀어내기: 대시보드 왼쪽으로, 뷰어 오른쪽에서 들어옴
+        var dash = _getDashEl();
+        if (dash) dash.classList.add('dash-pushed');
         viewer.classList.add('open');
 
         google.script.run
@@ -8652,10 +8660,13 @@ MJ 이정우 팀장
 
     function closeImgViewer() {
         var viewer = document.getElementById('imgViewer');
+        var dash = _getDashEl();
+        // 밀어내기 역방향: 뷰어 오른쪽으로, 대시보드 되돌아옴
         if (viewer) viewer.classList.remove('open');
+        if (dash) dash.classList.remove('dash-pushed');
     }
 
-    // 뷰어 내 왼쪽 스와이프 → 닫기
+    // 뷰어 내 오른쪽 스와이프 → 닫기 (밀어내기 역방향)
     (function initImgViewerSwipe_() {
         var viewer = document.getElementById('imgViewer');
         if (!viewer) return;
@@ -8667,15 +8678,31 @@ MJ 이정우 팀장
         viewer.addEventListener('touchend', function (e) {
             var dx = e.changedTouches[0].clientX - sx;
             var dy = e.changedTouches[0].clientY - sy;
-            if (dx < -60 && Math.abs(dx) > Math.abs(dy)) {
+            // 오른쪽 스와이프 → 카드로 돌아가기
+            if (dx > 60 && Math.abs(dx) > Math.abs(dy)) {
                 closeImgViewer();
             }
         }, { passive: true });
     })();
 
-    // 카드 오른쪽 스와이프 → 조사이미지 열기
+    // 카드 왼쪽 스와이프 → 조사이미지 열기 (+ 첫 로딩 힌트 애니)
     function initCardSwipes_() {
         var cards = document.querySelectorAll('#iL .ic[data-id]');
+
+        // 첫 방문 시 스와이프 힌트 애니 (localStorage 플래그)
+        var hintKey = 'imgSwipeHintShown';
+        if (!localStorage.getItem(hintKey) && cards.length > 0) {
+            cards.forEach(function (el, idx) {
+                setTimeout(function () {
+                    el.classList.add('ic-hint');
+                    el.addEventListener('animationend', function () {
+                        el.classList.remove('ic-hint');
+                    }, { once: true });
+                }, idx * 80); // 카드마다 약간 시차
+            });
+            localStorage.setItem(hintKey, '1');
+        }
+
         cards.forEach(function (el) {
             var sx = 0, sy = 0;
             el.addEventListener('touchstart', function (e) {
@@ -8685,7 +8712,8 @@ MJ 이정우 팀장
             el.addEventListener('touchend', function (e) {
                 var dx = e.changedTouches[0].clientX - sx;
                 var dy = e.changedTouches[0].clientY - sy;
-                if (dx > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                // 왼쪽 스와이프 → 이미지 뷰어 열기
+                if (dx < -60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
                     openImgViewer(el.dataset.id, el.dataset.sk);
                 }
             }, { passive: true });
