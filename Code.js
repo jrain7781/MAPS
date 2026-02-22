@@ -320,3 +320,51 @@ function saveAuctionSettings(settings) {
 
   return { success: true, message: '옥션 URL 설정이 저장되었습니다.' };
 }
+
+/**
+ * 대시보드 카드 버튼에서 입찰확정/입찰취소 요청 처리
+ * - 텔레그램 봇 버튼과 동일한 흐름: telegram_requests 등록 + 텔레그램 댓글 전송
+ * @param {string} memberToken  회원 토큰 (APP_CTX.token)
+ * @param {string} itemId       물건 ID
+ * @param {string} action       'bid' (입찰확정) | 'cancel' (입찰취소)
+ * @return {Object} {success, message}
+ */
+function processMemberDashboardAction(memberToken, itemId, action) {
+  var t = String(memberToken || '').trim();
+  var item = String(itemId || '').trim();
+  var act = String(action || '').trim();
+
+  if (!t) return { success: false, message: '회원 토큰이 없습니다.' };
+  if (!item) return { success: false, message: '물건 ID가 없습니다.' };
+  if (act !== 'bid' && act !== 'cancel') return { success: false, message: '잘못된 action입니다.' };
+
+  // 1) 토큰으로 회원 조회
+  var member = getMemberByToken(t);
+  if (!member) return { success: false, message: '회원 정보를 찾을 수 없습니다.' };
+
+  var chatId = String(member.telegram_chat_id || '').trim();
+  if (!chatId) return { success: false, message: '텔레그램이 연결되지 않은 회원입니다.\n텔레그램 봇에서 먼저 토큰 인증을 완료해주세요.' };
+
+  // 2) telegram_requests 등록 (createTelegramRequest 내부에서 소유권/중복 검증)
+  var reqAction = (act === 'bid') ? 'REQUEST_BID' : 'REQUEST_CANCEL';
+  var reqResult = createTelegramRequest(reqAction, item, chatId, '', 'dashboard');
+  if (!reqResult.success && !reqResult.already) {
+    return { success: false, message: reqResult.message || '요청 등록에 실패했습니다.' };
+  }
+
+  // 3) 텔레그램 댓글 전송 (BID_YES/CANCEL_YES 와 동일한 메시지)
+  try {
+    var itemData = getItemLiteById_(item);
+    var shortDate = itemData ? formatShortInDate_(itemData['in-date']) : '';
+    var sakunNo = itemData ? String(itemData.sakun_no || '').trim() : '';
+    var prefix = (shortDate && sakunNo) ? (shortDate + ' ' + sakunNo + ' ') : '';
+    var label = (act === 'bid') ? '입찰확정' : '입찰취소';
+    var comment = prefix + label + ' 요청이 되었습니다. 잠시만 기다려주세요~';
+    telegramSendMessage(chatId, comment);
+  } catch (e) {
+    // 텔레그램 전송 실패는 비치명적 - 요청은 이미 등록됨
+    Logger.log('[processMemberDashboardAction] 텔레그램 전송 오류: ' + (e.message || ''));
+  }
+
+  return { success: true, message: reqResult.already ? '이미 동일한 요청이 접수되어 있습니다.' : '요청이 접수되었습니다.' };
+}

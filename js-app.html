@@ -1305,9 +1305,26 @@
         if (!item) return '';
         const sakun = escapeHtml(String(item.sakun_no || ''));
         const court = escapeHtml(String(item.court || ''));
-        const status = escapeHtml(String(item.status || '미정'));
-        const bidPrice = escapeHtml(String(item['bid-price'] || '0'));
+        const rawStatus = String(item.stu_member || item.status || '미정').trim();
+        const status = escapeHtml(rawStatus);
+        const bidPrice = escapeHtml(String(item.bidprice || item['bid-price'] || '0'));
         const itemId = item.id;
+
+        // 상태에 따라 버튼 구성
+        // 추천: 입찰확정 + 입찰취소 버튼
+        // 입찰: 취소 버튼 (취소하시겠습니까? 확인 후 REQUEST_CANCEL)
+        // 그 외: 버튼 없음
+        let buttonsHtml = '';
+        if (rawStatus === '추천') {
+            buttonsHtml = `
+                <button class="member-action-btn btn-bid-confirm" onclick="handleMemberBidConfirm('${itemId}', '${sakun}')">입찰확정</button>
+                <button class="member-action-btn btn-bid-cancel-req" onclick="handleMemberBidCancelReq('${itemId}', '${sakun}')">입찰취소</button>
+            `;
+        } else if (rawStatus === '입찰') {
+            buttonsHtml = `
+                <button class="member-action-btn btn-bid-cancel-req" onclick="handleMemberBidCancelReq('${itemId}', '${sakun}')">취소</button>
+            `;
+        }
 
         return `
             <div class="member-item-card" onclick="handleMemberCardClick('${itemId}')">
@@ -1318,10 +1335,7 @@
                     </div>
                     <div class="member-bid-price">${bidPrice} 원</div>
                 </div>
-                <div class="member-card-right" onclick="event.stopPropagation()">
-                    <button class="member-action-btn btn-bid-apply" onclick="handleMemberBidApply('${itemId}', '${sakun}')">입찰</button>
-                    <button class="member-action-btn btn-bid-cancel" onclick="handleMemberBidCancel('${itemId}', '${sakun}')">취소</button>
-                </div>
+                <div class="member-card-right" onclick="event.stopPropagation()">${buttonsHtml}</div>
             </div>
         `;
     }
@@ -1333,44 +1347,50 @@
         if (!itemId) return;
         const item = allBiddingData.find(it => String(it.id) === String(itemId));
         if (item) {
-            // 이미지 탭으로 모달 열기
             viewItemDetail(item, 'investigation');
         }
     }
 
     /**
-     * 입찰 신청 처리
+     * [추천] 입찰확정 버튼: 텔레그램과 동일한 REQUEST_BID 전송
+     * 추천 → 입찰 업데이트 요청
      */
-    function handleMemberBidApply(itemId, sakun) {
-        if (!confirm(`[${sakun}]\n입찰 신청을 하시겠습니까?`)) return;
+    function handleMemberBidConfirm(itemId, sakun) {
+        if (!confirm(`[${sakun}]\n입찰확정 하시겠습니까?`)) return;
+        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
 
         google.script.run
             .withSuccessHandler(res => {
-                showStatus('입찰 신청이 접수되었습니다.', 'success');
-                // 코멘트 기록 대용으로 상태 변경 + 로그 남기기 기능이 서버에 있어야 함
-                // 여기서는 상태를 '입찰'로 변경하는 예시
-                google.script.run.updateBiddingStatus(itemId, '입찰', `회원 입찰 신청 (텔레그램 연동)`);
-                loadDataAndRenderCalendar(true); // 새로고침
+                if (res && res.success) {
+                    showStatus(res.message || '입찰확정 요청이 접수되었습니다.', 'success');
+                } else {
+                    showStatus((res && res.message) || '요청 처리에 실패했습니다.', 'error');
+                }
+                setTimeout(() => loadDataAndRenderCalendar(true), 500);
             })
-            .withFailureHandler(err => showStatus('입찰 신청 실패: ' + err.message, 'error'))
-            .withUserObject(itemId)
-            .readAllData(); // 임시로 트리거 (실제로는 서버에 신청 함수가 있어야 함)
-
-        // 위 방식은 서버 함수가 준비 안되었을 수 있으므로 기존 로직 활용 시:
-        google.script.run.saveItemData({ id: itemId, status: '입찰', remarks: `[입찰신청] ${new Date().toLocaleString()}` }, true);
-        showStatus('입찰 신청이 완료되었습니다.', 'success');
-        setTimeout(() => loadDataAndRenderCalendar(true), 500);
+            .withFailureHandler(err => showStatus('오류: ' + (err.message || err), 'error'))
+            .processMemberDashboardAction(APP_CTX.token, itemId, 'bid');
     }
 
     /**
-     * 입찰 취소 처리
+     * [추천] 입찰취소 버튼 / [입찰] 취소 버튼: 텔레그램과 동일한 REQUEST_CANCEL 전송
+     * 추천 → 미정, 또는 입찰 → 취소 요청
      */
-    function handleMemberBidCancel(itemId, sakun) {
-        if (!confirm(`[${sakun}]\n입찰을 취소하시겠습니까?`)) return;
+    function handleMemberBidCancelReq(itemId, sakun) {
+        if (!confirm(`[${sakun}]\n취소하시겠습니까?`)) return;
+        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
 
-        google.script.run.saveItemData({ id: itemId, status: '미정', remarks: `[입찰취소] ${new Date().toLocaleString()}` }, true);
-        showStatus('취소되었습니다.', 'success');
-        setTimeout(() => loadDataAndRenderCalendar(true), 500);
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res && res.success) {
+                    showStatus(res.message || '취소 요청이 접수되었습니다.', 'success');
+                } else {
+                    showStatus((res && res.message) || '요청 처리에 실패했습니다.', 'error');
+                }
+                setTimeout(() => loadDataAndRenderCalendar(true), 500);
+            })
+            .withFailureHandler(err => showStatus('오류: ' + (err.message || err), 'error'))
+            .processMemberDashboardAction(APP_CTX.token, itemId, 'cancel');
     }
 
     /**
@@ -8618,40 +8638,61 @@ MJ 이정우 팀장
     /**
      * 서버 통신 (google.script.run 연동)
      */
-    function doBC() { // 입찰 취소
+    function doBC() { // 입찰 -> 취소 요청 (텔레그램 연동)
         if (!curI) return;
         cm('mBC');
-        showLoading(true);
+        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
         google.script.run
-            .withSuccessHandler(function () {
-                showLoading(false);
-                loadDataAndRenderMemberDashboard(true); // 데이터 갱신
-            })
-            .cancelBidding(curI);
-    }
-
-    function doRC() { // 추천 -> 입찰 확정
-        if (!curI) return;
-        cm('mRA');
-        showLoading(true);
-        google.script.run
-            .withSuccessHandler(function () {
-                showLoading(false);
+            .withSuccessHandler(function (res) {
+                if (res && res.success) {
+                    showStatus(res.message || '취소 요청이 접수되었습니다.', 'success');
+                } else {
+                    showStatus((res && res.message) || '요청 처리에 실패했습니다.', 'error');
+                }
                 loadDataAndRenderMemberDashboard(true);
             })
-            .applyBidding(curI);
+            .withFailureHandler(function (err) {
+                showStatus('오류: ' + (err.message || err), 'error');
+            })
+            .processMemberDashboardAction(APP_CTX.token, curI, 'cancel');
     }
 
-    function doRX() { // 추천 거절
+    function doRC() { // 추천 -> 입찰확정 요청 (텔레그램 연동)
         if (!curI) return;
         cm('mRA');
-        showLoading(true);
+        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
         google.script.run
-            .withSuccessHandler(function () {
-                showLoading(false);
+            .withSuccessHandler(function (res) {
+                if (res && res.success) {
+                    showStatus(res.message || '입찰확정 요청이 접수되었습니다.', 'success');
+                } else {
+                    showStatus((res && res.message) || '요청 처리에 실패했습니다.', 'error');
+                }
                 loadDataAndRenderMemberDashboard(true);
             })
-            .rejectBidding(curI);
+            .withFailureHandler(function (err) {
+                showStatus('오류: ' + (err.message || err), 'error');
+            })
+            .processMemberDashboardAction(APP_CTX.token, curI, 'bid');
+    }
+
+    function doRX() { // 추천 -> 입찰취소 요청 (추천→미정, 텔레그램 연동)
+        if (!curI) return;
+        cm('mRA');
+        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
+        google.script.run
+            .withSuccessHandler(function (res) {
+                if (res && res.success) {
+                    showStatus(res.message || '입찰취소 요청이 접수되었습니다.', 'success');
+                } else {
+                    showStatus((res && res.message) || '요청 처리에 실패했습니다.', 'error');
+                }
+                loadDataAndRenderMemberDashboard(true);
+            })
+            .withFailureHandler(function (err) {
+                showStatus('오류: ' + (err.message || err), 'error');
+            })
+            .processMemberDashboardAction(APP_CTX.token, curI, 'cancel');
     }
 
 </script>
