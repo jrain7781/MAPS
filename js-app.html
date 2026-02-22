@@ -8282,13 +8282,10 @@ MJ 이정우 팀장
             }
         });
 
-        // 월별 요약 업데이트 (네비게이션 연월 아래)
+        // 월별 요약 업데이트 (네비게이션 연월 아래 - 심플 텍스트)
         var msEl = document.getElementById('cMS');
         if (msEl) {
-            msEl.innerHTML =
-                '<div class="ms-it" style="color:#4f46e5"><div class="ms-sh cir" style="background:#4f46e5"></div>' + (counts_month['입찰'] || 0) + '</div>' +
-                '<div class="ms-it" style="color:#fb923c"><div class="ms-sh tri" style="color:#fb923c"></div>' + (counts_month['추천'] || 0) + '</div>' +
-                '<div class="ms-it" style="color:#1f2937"><div class="ms-sh sq" style="background:#1f2937"></div>' + (counts_month['변경'] || 0) + '</div>';
+            msEl.innerHTML = '(입찰 ' + (counts_month['입찰'] || 0) + ', 추천 ' + (counts_month['추천'] || 0) + ', 변경 ' + (counts_month['변경'] || 0) + ')';
         }
 
         // 이전/다음달 힌트
@@ -8395,15 +8392,13 @@ MJ 이정우 팀장
         sOrder.forEach(function (s) {
             if (pC[s] > 0) {
                 var itH = '<div class="hi-it">' +
-                    '<div class="cdot ' + shapes[s] + '" style="' + (s === '추천' ? 'color:' + colors[s] + '; background:none; box-shadow:none;' : 'background:' + colors[s]) + '"></div>' +
-                    '<div class="hi-v">' + pC[s] + '</div>' +
+                    '<div class="cdot ' + shapes[s] + '" data-val="' + pC[s] + '" style="' + (s === '추천' ? 'color:' + colors[s] : 'background:' + colors[s]) + '">' + (s === '추천' ? '' : pC[s]) + '</div>' +
                     '</div>';
                 pEl.innerHTML += itH;
             }
             if (nC[s] > 0) {
                 var itH = '<div class="hi-it">' +
-                    '<div class="cdot ' + shapes[s] + '" style="' + (s === '추천' ? 'color:' + colors[s] + '; background:none; box-shadow:none;' : 'background:' + colors[s]) + '"></div>' +
-                    '<div class="hi-v">' + nC[s] + '</div>' +
+                    '<div class="cdot ' + shapes[s] + '" data-val="' + nC[s] + '" style="' + (s === '추천' ? 'color:' + colors[s] : 'background:' + colors[s]) + '">' + (s === '추천' ? '' : nC[s]) + '</div>' +
                     '</div>';
                 nEl.innerHTML += itH;
             }
@@ -8414,6 +8409,9 @@ MJ 이정우 팀장
      * 날짜 선택 (리스트 앵커로 스크롤)
      */
     function selD(d) {
+        // [지시사항] 오늘부터(tR === 'today') 모드일 때 과거 날짜는 선택 불가
+        if (tR === 'today' && d < tS) return;
+
         var idx = mS.indexOf(d);
         if (idx > -1) {
             mS.splice(idx, 1); // 이미 있으면 제거 (해제)
