@@ -8327,12 +8327,15 @@ MJ 이정우 팀장
                 var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '변경': '#1f2937' };
                 var shapes = { '입찰': '', '추천': 'tri', '변경': 'sq' };
 
+                var lastS = '';
                 sOrder.forEach(function (s) {
                     if (fS.indexOf(s) === -1) return;
                     var c = items[s] || 0;
                     for (var j = 0; j < c; j++) {
                         var style = (s === '추천') ? 'color:' + colors[s] : 'background:' + colors[s];
-                        dotH += '<div class="dc ' + shapes[s] + '" style="' + style + '"></div>';
+                        var ovlCls = (s === lastS) ? 'ovl' : '';
+                        dotH += '<div class="dc ' + shapes[s] + ' ' + ovlCls + '" style="' + style + '"></div>';
+                        lastS = s;
                     }
                 });
             }
@@ -8384,14 +8387,27 @@ MJ 이정우 팀장
         });
 
         pEl.innerHTML = '';
-        if (pC['입찰'] > 0) pEl.innerHTML += '<div class="cdot" style="background:#4f46e5">' + pC['입찰'] + '</div>';
-        if (pC['추천'] > 0) pEl.innerHTML += '<div class="cdot tri" style="color:#fb923c; background:none; box-shadow:none; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:11px solid currentColor; font-size:9px; display:inline-flex; align-items:flex-end; padding-bottom:1px;">' + pC['추천'] + '</div>';
-        if (pC['변경'] > 0) pEl.innerHTML += '<div class="cdot" style="background:#1f2937; border-radius:2px;">' + pC['변경'] + '</div>';
-
         nEl.innerHTML = '';
-        if (nC['입찰'] > 0) nEl.innerHTML += '<div class="cdot" style="background:#4f46e5">' + nC['입찰'] + '</div>';
-        if (nC['추천'] > 0) nEl.innerHTML += '<div class="cdot tri" style="color:#fb923c; background:none; box-shadow:none; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:11px solid currentColor; font-size:9px; display:inline-flex; align-items:flex-end; padding-bottom:1px;">' + nC['추천'] + '</div>';
-        if (nC['변경'] > 0) nEl.innerHTML += '<div class="cdot" style="background:#1f2937; border-radius:2px;">' + nC['변경'] + '</div>';
+        var sOrder = ['입찰', '추천', '변경'];
+        var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '변경': '#1f2937' };
+        var shapes = { '입찰': 'cir', '추천': 'tri', '변경': 'sq' };
+
+        sOrder.forEach(function (s) {
+            if (pC[s] > 0) {
+                var itH = '<div class="hi-it">' +
+                    '<div class="cdot ' + shapes[s] + '" style="' + (s === '추천' ? 'color:' + colors[s] + '; background:none; box-shadow:none;' : 'background:' + colors[s]) + '"></div>' +
+                    '<div class="hi-v">' + pC[s] + '</div>' +
+                    '</div>';
+                pEl.innerHTML += itH;
+            }
+            if (nC[s] > 0) {
+                var itH = '<div class="hi-it">' +
+                    '<div class="cdot ' + shapes[s] + '" style="' + (s === '추천' ? 'color:' + colors[s] + '; background:none; box-shadow:none;' : 'background:' + colors[s]) + '"></div>' +
+                    '<div class="hi-v">' + nC[s] + '</div>' +
+                    '</div>';
+                nEl.innerHTML += itH;
+            }
+        });
     }
 
     /**
@@ -8433,7 +8449,8 @@ MJ 이정우 팀장
         });
 
         if (filtered.length === 0) {
-            el.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:.9rem">조건에 맞는 물건이 없습니다.</div>';
+            el.innerHTML = '<div style="text-align:center; padding:60px 20px; color:#94a3b8; font-size:0.95rem; font-weight:500;">' +
+                '날짜를 선택하시면 물건카드가 보입니다.</div>';
             return;
         }
 
