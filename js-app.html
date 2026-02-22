@@ -8182,7 +8182,7 @@ MJ 이정우 팀장
        오퍼스(Opus) 멤버 대시보드 v2 엔진
        ============================================= */
     var mD = new Date(); // 현재 캘린더 월
-    var mS = null;       // 선택된 날짜 (YYMMDD)
+    var mS = [];         // [수정] 다중 선택을 위해 배열로 변경
     var fS = ['입찰', '추천', '변경']; // 활성 필터
     var tR = 'today';    // 범위: 'today'(오늘부터) 또는 'all'(전체)
 
@@ -8199,7 +8199,7 @@ MJ 이정우 팀장
      */
     function chMo(d) {
         mD.setMonth(mD.getMonth() + d);
-        mS = null; // 월 변경 시 날짜 선택 해제
+        mS = []; // [수정] 월 변경 시 모든 선택 해제
         rCal();
         rLst();
     }
@@ -8311,38 +8311,36 @@ MJ 이정우 팀장
             if (wk === 0 || wk === 6) continue;
 
             var dS = yS + mS_str + String(d).padStart(2, '0');
+
+            // [지시사항 2] 오늘부터 / 전체 필터에 따라 날짜 박스 노출 결정
+            if (tR === 'today' && dS < tS) continue; // 과거 날짜 박스 자체를 생성 안 함
+
             var isT = (dS === tS);
-            var isS = (dS === mS);
+            var isS = (mS.indexOf(dS) > -1); // [수정] 다중 선택 확인
             var items = counts[dS] || {};
-            var has = (items['입찰'] > 0 || items['추천'] > 0 || items['변경'] > 0);
 
-            var cls = 'cd';
-            if (isT) cls += ' t';
-            if (has) {
-                if (dS >= tS) cls += ' fh'; // 오늘 포함 미래: 초록
-                else cls += ' ph';        // 과거: 회색
-            }
-
+            // [지시사항 3] 상단바 상태(fS) 필터에 따라 점(Dot) 노출 결정
             var dotH = '';
             var sOrder = ['입찰', '추천', '변경'];
             var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '변경': '#1f2937' };
 
-            // [수정] 오늘부터(tR === 'today') 모드이면 오늘 이전 날짜의 동그라미를 완전히 숨김
-            var showDots = true;
-            if (tR === 'today' && dS < tS) showDots = false;
+            sOrder.forEach(function (s) {
+                if (fS.indexOf(s) === -1) return; // 상단바에서 꺼진 상태는 점 안 보여줌
+                var c = items[s] || 0;
+                for (var j = 0; j < c; j++) {
+                    dotH += '<div class="dc" style="background:' + colors[s] + '"></div>';
+                }
+            });
 
-            if (showDots) {
-                sOrder.forEach(function (s) {
-                    if (fS.indexOf(s) === -1) return;
-                    var c = items[s] || 0;
-                    for (var j = 0; j < c; j++) {
-                        dotH += '<div class="dc" style="background:' + colors[s] + '"></div>';
-                    }
-                });
-            }
+            var cls = 'cd';
+            if (isT) cls += ' t';
+            if (isS) cls += ' sel'; // 선택된 상태 스타일 (필요시 CSS 추가)
+
+            // [지시사항 1] 날짜 숫자 앞에 붉은색 체크표시 (✓)
+            var checkH = isS ? '<span style="color:#ef4444; font-weight:bold; margin-right:2px;">✓</span>' : '';
 
             var h3 = '<div class="' + cls + '" onclick="selD(\'' + dS + '\')">' +
-                '<div class="dn">' + d + '</div>' +
+                '<div class="dn">' + checkH + d + '</div>' +
                 '<div class="dcs">' + dotH + '</div>' +
                 '</div>';
             grid.insertAdjacentHTML('beforeend', h3);
@@ -8427,21 +8425,12 @@ MJ 이정우 팀장
             var dt = String(item['in-date'] || '');
             var s = String(item.stu_member || '미정');
 
-            // 1. 상태 필터
+            // [지시사항 3] 상단바 상태(fS) 필터에 부합하는 물건만
             if (fS.indexOf(s) === -1) return false;
 
-            // 2. 날짜 선택 시
-            if (mS) {
-                if (dt !== mS) return false;
-            } else {
-                // 날짜 미선택 시: 월별 필터
-                var yS = String(mD.getFullYear()).slice(-2);
-                var mS_str = String(mD.getMonth() + 1).padStart(2, '0');
-                if (dt.substring(0, 4) !== (yS + mS_str)) return false;
+            // [지시사항 1] 날짜 다중 선택된 일자(mS)에 해당하는 물건만
+            if (mS.indexOf(dt) === -1) return false;
 
-                // 오늘부터 모드
-                if (tR === 'today' && dt < tS) return false;
-            }
             return true;
         });
 
@@ -8542,7 +8531,6 @@ MJ 이정우 팀장
             '</div>' +
             '<div class="ic-time">' + tm + '</div>' +
             '</div>' +
-            '<div class="ic-in-date" style="' + dtStyle + '">' + dtLabel + '</div>' +
             '</div>';
         return h;
     }
