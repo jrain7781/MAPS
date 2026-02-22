@@ -8516,6 +8516,7 @@ MJ 이정우 팀장
         });
 
         el.innerHTML = html;
+        initCardSwipes_(); // 카드 스와이프 이벤트 등록
     }
 
     /**
@@ -8553,7 +8554,11 @@ MJ 이정우 팀장
         var txtCol = (s === '추천') ? '#000' : '#fff'; // v3.15: 추천 가독성 개선 (검정색)
         var dtStyle = 'background-color:' + borderCol + '; color:' + txtCol + '; font-size:0.75rem; height:24px; display:flex; align-items:center; padding:0 10px; border-radius:10px 0 10px 0; font-weight:800; position:absolute; top:0; left:0; z-index:10;';
 
-        var h = '<div class="' + cls + '" style="position:relative; margin-top:4px;">' +
+        // 스와이프 힌트 아이콘 (→ 조사이미지 보기)
+        var swipeIco = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg>';
+        var skSafe = sk.replace(/'/g, '');
+
+        var h = '<div class="' + cls + '" style="position:relative; margin-top:4px;" data-id="' + i.id + '" data-sk="' + skSafe + '">' +
             '<div class="ic-in-date" style="' + dtStyle + '">' + dtLabel + '</div>' +
             '<div class="ic-l" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
             '<div class="ic-copy-row">' +
@@ -8573,7 +8578,7 @@ MJ 이정우 팀장
             '<div class="ic-r">' +
             '<div class="ic-r-row">' +
             '<button class="' + bCls + '" onclick="setB(\'' + i.id + '\', \'' + s + '\', \'' + sk + '\')">' + bTxt + '</button>' +
-            '<button class="img-btn" onclick="openImgPopup(\'' + i.id + '\')">🖼️</button>' +
+            '<button class="img-btn" title="조사이미지 보기 (→)" onclick="event.stopPropagation();openImgViewer(\'' + i.id + '\',\'' + skSafe + '\')">' + swipeIco + '</button>' +
             '</div>' +
             '<div class="ic-time">' + tm + '</div>' +
             '</div>' +
@@ -8601,16 +8606,92 @@ MJ 이정우 팀장
     }
 
     /**
-     * 이미지 팝업 열기 (실제 조사 상세와 연동)
+     * 조사 이미지 뷰어 (스와이프 패널)
      */
-    function openImgPopup(id) {
-        // [수정] 팝업만 띄우는 대신 조사 상세 모달을 활용하거나 연동
-        showInvestigationDetail(id);
+    function openImgViewer(id, sk) {
+        var viewer = document.getElementById('imgViewer');
+        var body = document.getElementById('imgVBody');
+        var title = document.getElementById('imgVTitle');
+        var cnt = document.getElementById('imgVCnt');
+        if (!viewer || !body) return;
+        if (title) title.textContent = sk || '';
+        if (cnt) cnt.textContent = '';
+        body.innerHTML = '<div class="img-vph">이미지 불러오는 중...</div>';
+        viewer.classList.add('open');
+
+        google.script.run
+            .withSuccessHandler(function (rows) {
+                body.innerHTML = '';
+                if (!rows || rows.length === 0) {
+                    body.innerHTML = '<div class="img-vph">등록된 조사 이미지가 없습니다.</div>';
+                    return;
+                }
+                if (cnt) cnt.textContent = rows.length + '장';
+                rows.forEach(function (r) {
+                    if (!r.image_id) return;
+                    var card = document.createElement('div');
+                    card.className = 'img-vcard';
+                    var img = document.createElement('img');
+                    img.alt = r.file_name || '조사 이미지';
+                    img.loading = 'lazy';
+                    img.src = 'https://drive.google.com/thumbnail?sz=w1200&id=' + encodeURIComponent(r.image_id);
+                    img.onerror = function () {
+                        this.src = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id);
+                    };
+                    card.appendChild(img);
+                    body.appendChild(card);
+                });
+            })
+            .withFailureHandler(function () {
+                body.innerHTML = '<div class="img-vph">이미지를 불러올 수 없습니다.</div>';
+            })
+            .getItemImages(id);
     }
-    function closeImgPopup() {
-        var p = document.getElementById('imgPopup');
-        if (p) p.classList.remove('open');
+
+    function closeImgViewer() {
+        var viewer = document.getElementById('imgViewer');
+        if (viewer) viewer.classList.remove('open');
     }
+
+    // 뷰어 내 왼쪽 스와이프 → 닫기
+    (function initImgViewerSwipe_() {
+        var viewer = document.getElementById('imgViewer');
+        if (!viewer) return;
+        var sx = 0, sy = 0;
+        viewer.addEventListener('touchstart', function (e) {
+            sx = e.touches[0].clientX;
+            sy = e.touches[0].clientY;
+        }, { passive: true });
+        viewer.addEventListener('touchend', function (e) {
+            var dx = e.changedTouches[0].clientX - sx;
+            var dy = e.changedTouches[0].clientY - sy;
+            if (dx < -60 && Math.abs(dx) > Math.abs(dy)) {
+                closeImgViewer();
+            }
+        }, { passive: true });
+    })();
+
+    // 카드 오른쪽 스와이프 → 조사이미지 열기
+    function initCardSwipes_() {
+        var cards = document.querySelectorAll('#iL .ic[data-id]');
+        cards.forEach(function (el) {
+            var sx = 0, sy = 0;
+            el.addEventListener('touchstart', function (e) {
+                sx = e.touches[0].clientX;
+                sy = e.touches[0].clientY;
+            }, { passive: true });
+            el.addEventListener('touchend', function (e) {
+                var dx = e.changedTouches[0].clientX - sx;
+                var dy = e.changedTouches[0].clientY - sy;
+                if (dx > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                    openImgViewer(el.dataset.id, el.dataset.sk);
+                }
+            }, { passive: true });
+        });
+    }
+
+    function openImgPopup(id) { openImgViewer(id, ''); }
+    function closeImgPopup() { closeImgViewer(); }
 
     /**
      * 모달 제천

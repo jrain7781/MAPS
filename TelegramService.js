@@ -432,13 +432,27 @@ function handleTelegramWebhook_(update) {
         SpreadsheetApp.flush();
         _whLog('flush 완료');
 
-        // 3) 댓글 전송
-        var label = isBid ? '입찰확정' : '입찰취소';
-        var comment = prefix + label + ' 요청이 되었습니다. 잠시만 기다려주세요~';
+        // 3) 댓글 전송 (HTML 포맷: 사건번호 굵게, 입찰확정 🔵 / 입찰취소 🔴 굵게 + MAPS 버튼)
+        var labelHtml = isBid ? '<b>🔵 입찰확정</b>' : '<b>🔴 입찰취소</b>';
+        var caseHtml = sakunNo ? ('<b>' + telegramEscapeHtml_(sakunNo) + '</b>') : '';
+        var dateStr = shortDate ? (telegramEscapeHtml_(shortDate) + ' ') : '';
+        var comment = dateStr + caseHtml + '\n' + labelHtml + ' 요청이 되었습니다.\n잠시만 기다려주세요~';
+
+        // MAPS 바로가기 버튼 (회원 토큰으로 직접 진입)
+        var mapsRm = null;
+        try {
+          var mObj = getMemberByTelegramChatId(chatId);
+          var mToken = mObj ? String(mObj.member_token || '').trim() : '';
+          var mBase = getWebAppBaseUrl_();
+          if (mToken && mBase) {
+            mapsRm = { inline_keyboard: [[{ text: '🏠 MAPS 바로가기', web_app: { url: mBase + '?view=member&t=' + encodeURIComponent(mToken) } }]] };
+          }
+        } catch (me) { _whLog('MAPS 버튼 생성 오류: ' + (me.message || '')); }
+
         if (originMessageId) {
-          telegramSendMessage(chatId, comment, null, { replyToMessageId: originMessageId });
+          telegramSendMessage(chatId, comment, mapsRm, { replyToMessageId: originMessageId });
         } else {
-          telegramSendMessage(chatId, comment);
+          telegramSendMessage(chatId, comment, mapsRm);
         }
         _whLog('댓글 전송 완료');
       } catch (e) {
