@@ -8177,316 +8177,447 @@ MJ 이정우 팀장
     /**
      * 상태 카드 필터 토글
      */
-    function toggleMemberDashFilter(el) {
-        el.classList.toggle('active');
-        // 캘린더 + 목록 갱신
-        renderMemberDashboardCalendar();
-        renderMemberDashboardItems();
-    }
+
+    /* =============================================
+       오퍼스(Opus) 멤버 대시보드 v2 엔진
+       ============================================= */
+    var mD = new Date(); // 현재 캘린더 월
+    var mS = null;       // 선택된 날짜 (YYMMDD)
+    var fS = ['입찰', '추천', '변경']; // 활성 필터
+    var tR = 'today';    // 범위: 'today'(오늘부터) 또는 'all'(전체)
 
     /**
-     * 회원 대시보드 메인 렌더링 진입점
+     * 초기화 및 데이터 로드 후 호출
      */
     function renderMemberDashboard() {
-        renderMemberDashboardSummary();
-        renderMemberDashboardCalendar();
-        renderMemberDashboardItems();
+        rCal(); // 캘린더 렌더링
+        rLst(); // 리스트 렌더링
     }
 
     /**
-     * 상태별 건수 요약 카드 (현재 캘린더 월 기준 합계)
+     * 월 변경
      */
-    function renderMemberDashboardSummary() {
-        const counts = { '입찰': 0, '추천': 0, '변경': 0, '낙찰': 0 };
-        const year = memberDashCalDate.getFullYear();
-        const month = memberDashCalDate.getMonth();
-        const yearStr = String(year).slice(-2);
-        const monthStr = String(month + 1).padStart(2, '0');
-
-        allBiddingData.forEach(item => {
-            const itemDate = String(item['in-date'] || '');
-            if (itemDate.length < 6) return;
-            if (itemDate.substring(0, 2) !== yearStr || itemDate.substring(2, 4) !== monthStr) return;
-            const status = String(item.stu_member || '미정');
-            if (counts.hasOwnProperty(status)) {
-                counts[status]++;
-            }
-        });
-
-        const elBid = document.getElementById('mdash-count-bid');
-        const elRec = document.getElementById('mdash-count-recommend');
-        const elChg = document.getElementById('mdash-count-changed');
-        const elSold = document.getElementById('mdash-count-sold');
-
-        if (elBid) elBid.textContent = counts['입찰'];
-        if (elRec) elRec.textContent = counts['추천'];
-        if (elChg) elChg.textContent = counts['변경'];
-        if (elSold) elSold.textContent = counts['낙찰'];
+    function chMo(d) {
+        mD.setMonth(mD.getMonth() + d);
+        mS = null; // 월 변경 시 날짜 선택 해제
+        rCal();
+        rLst();
     }
 
     /**
-     * 월별 캘린더 그리드 렌더링 (동그라미 방식)
+     * 범위 설정 (오늘부터 / 전체)
      */
-    function renderMemberDashboardCalendar() {
-        const grid = document.getElementById('memberDashCalGrid');
-        const titleEl = document.getElementById('memberDashCalTitle');
-        if (!grid) return;
+    function setR(r) {
+        tR = r;
+        // UI 버튼 업데이트
+        ['tT', 'tA', 'rT', 'rA'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            var isOn = (id.slice(-1) === (r === 'today' ? 'T' : 'A'));
+            el.classList.toggle('on', isOn);
+        });
+        rCal();
+        rLst();
+    }
 
-        const year = memberDashCalDate.getFullYear();
-        const month = memberDashCalDate.getMonth();
-        const today = new Date();
-        const selectedStatuses = getSelectedMemberDashStatuses();
+    /**
+     * 상태 필터 토글
+     */
+    function togF(f) {
+        var idx = fS.indexOf(f);
+        if (idx > -1) fS.splice(idx, 1);
+        else fS.push(f);
 
-        if (titleEl) {
-            titleEl.textContent = `${year}년 ${month + 1}월`;
+        // UI 버튼 업데이트 (목록 필터 영역)
+        var btnIds = { '입찰': 'fB', '추천': 'fR', '변경': 'fC' };
+        if (btnIds[f]) {
+            var el = document.getElementById(btnIds[f]);
+            if (el) el.classList.toggle('off', idx > -1);
         }
+        rCal();
+        rLst();
+    }
 
-        const yearStr = String(year).slice(-2);
-        const monthStr = String(month + 1).padStart(2, '0');
+    /**
+     * 캘린더 렌더링 (동그라미 방식)
+     */
+    function rCal() {
+        var grid = document.getElementById('cG');
+        var title = document.getElementById('cT');
+        if (!grid || !title) return;
 
-        // 날짜별 필터된 물건 수집 (상태 필터 적용)
-        const dayItems = {}; // key: 일(1~31), value: [{status, id}]
+        var y = mD.getFullYear();
+        var m = mD.getMonth();
+        title.textContent = y + '년 ' + (m + 1) + '월';
 
-        // 이전/다음달 정보 수집용
-        const prevMonth = new Date(year, month - 1, 1);
-        const nextMonth = new Date(year, month + 1, 1);
-        const prevYearStr = String(prevMonth.getFullYear()).slice(-2);
-        const prevMonthStr = String(prevMonth.getMonth() + 1).padStart(2, '0');
-        const nextYearStr = String(nextMonth.getFullYear()).slice(-2);
-        const nextMonthStr = String(nextMonth.getMonth() + 1).padStart(2, '0');
+        var yS = String(y).slice(-2);
+        var mS_str = String(m + 1).padStart(2, '0');
+        var now = new Date();
+        var tS = String(now.getFullYear()).slice(-2) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
 
-        const prevCounts = { '입찰': 0, '추천': 0 };
-        const nextCounts = { '입찰': 0, '추천': 0 };
+        // 데이터 요약 (캘린더용)
+        var counts = {}; // YYMMDD -> {입찰:0, 추천:0, 변경:0}
+        var total = { '입찰': 0, '추천': 0, '변경': 0 };
 
-        allBiddingData.forEach(item => {
-            const itemDate = String(item['in-date'] || '');
-            if (itemDate.length < 6) return;
+        allBiddingData.forEach(function (item) {
+            var dt = String(item['in-date'] || '');
+            if (dt.length < 6) return;
+            var s = String(item.stu_member || '미정');
+            if (['입찰', '추천', '변경'].indexOf(s) === -1) return;
 
-            const isPrev = (itemDate.substring(0, 2) === prevYearStr && itemDate.substring(2, 4) === prevMonthStr);
-            const isNext = (itemDate.substring(0, 2) === nextYearStr && itemDate.substring(2, 4) === nextMonthStr);
-            const isCurrent = (itemDate.substring(0, 2) === yearStr && itemDate.substring(2, 4) === monthStr);
-            const status = String(item.stu_member || '미정');
-
-            if (isPrev && prevCounts.hasOwnProperty(status)) prevCounts[status]++;
-            if (isNext && nextCounts.hasOwnProperty(status)) nextCounts[status]++;
-
-            if (isCurrent) {
-                // [수정] 아무것도 선택되지 않았을 때(length=0) 전체가 보이는 버그 수정: 선택된 상태가 아니면 무조건 제외
-                if (!selectedStatuses.includes(status)) return;
-                const day = parseInt(itemDate.substring(4, 6), 10);
-                if (!dayItems[day]) dayItems[day] = [];
-                dayItems[day].push({ status, id: item.id });
+            // 월별 합계 (현재 월)
+            if (dt.substring(0, 4) === (yS + mS_str)) {
+                if (!total[s]) total[s] = 0;
+                total[s]++;
             }
+
+            // 오늘 이후 체크 (오늘부터 모드일 때 캘린더에 표시할지 여부)
+            if (tR === 'today' && dt < tS) return;
+
+            if (!counts[dt]) counts[dt] = { '입찰': 0, '추천': 0, '변경': 0 };
+            counts[dt][s]++;
         });
 
-        // 네비게이션 정보 렌더링
-        const prevInfoEl = document.getElementById('mdash-prev-month-info');
-        const nextInfoEl = document.getElementById('mdash-next-month-info');
-        if (prevInfoEl) {
-            let html = '';
-            if (prevCounts['입찰'] > 0) html += `<span class="mdash-info-dot" style="background:${MEMBER_DASH_STATUS_COLORS['입찰']}">${prevCounts['입찰']}</span>`;
-            if (prevCounts['추천'] > 0) html += `<span class="mdash-info-dot" style="background:${MEMBER_DASH_STATUS_COLORS['추천']}">${prevCounts['추천']}</span>`;
-            prevInfoEl.innerHTML = html;
-        }
-        if (nextInfoEl) {
-            let html = '';
-            if (nextCounts['입찰'] > 0) html += `<span class="mdash-info-dot" style="background:${MEMBER_DASH_STATUS_COLORS['입찰']}">${nextCounts['입찰']}</span>`;
-            if (nextCounts['추천'] > 0) html += `<span class="mdash-info-dot" style="background:${MEMBER_DASH_STATUS_COLORS['추천']}">${nextCounts['추천']}</span>`;
-            nextInfoEl.innerHTML = html;
-        }
+        // 상단 카운트 업데이트
+        if (document.getElementById('cB')) document.getElementById('cB').textContent = total['입찰'] || 0;
+        if (document.getElementById('cR')) document.getElementById('cR').textContent = total['추천'] || 0;
+        if (document.getElementById('cC')) document.getElementById('cC').textContent = total['변경'] || 0;
+        if (document.getElementById('lB')) document.getElementById('lB').textContent = total['입찰'] || 0;
+        if (document.getElementById('lR')) document.getElementById('lR').textContent = total['추천'] || 0;
+        if (document.getElementById('lC')) document.getElementById('lC').textContent = total['변경'] || 0;
+
+        // 이전/다음달 힌트 (오늘부터 모드 제외하고 항상 표시)
+        rHint(y, m);
 
         grid.innerHTML = '';
+        var fD = new Date(y, m, 1).getDay(); // 0(일)~6(토)
+        if (fD === 0) fD = 7; fD--; // 월(0)~금(4) 기준으로 조정
 
-        const firstDayOfMonth = new Date(year, month, 1);
-        const lastDateOfMonth = new Date(year, month + 1, 0).getDate();
+        var lD = new Date(y, m + 1, 0).getDate();
 
-        // 시작 요일 (월=0 기준)
-        let startDay = firstDayOfMonth.getDay();
-        if (startDay === 0) startDay = 7;
-        startDay -= 1;
-
-        // 빈 셀 (전월, 주말 제외)
-        for (let i = 0; i < startDay && i < 5; i++) {
-            grid.insertAdjacentHTML('beforeend', '<div class="member-dash-day empty"></div>');
+        // 빈 칸 (평일만 표시하므로 5열 기준)
+        for (var i = 0; i < fD && i < 5; i++) {
+            grid.insertAdjacentHTML('beforeend', '<div class="cd e"></div>');
         }
 
-        // 날짜 셀
-        for (let d = 1; d <= lastDateOfMonth; d++) {
-            const currentDate = new Date(year, month, d);
-            const dayOfWeek = currentDate.getDay();
-            if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+        for (var d = 1; d <= lD; d++) {
+            var curr = new Date(y, m, d);
+            var wk = curr.getDay();
+            if (wk === 0 || wk === 6) continue;
 
-            const dayStr = String(d).padStart(2, '0');
-            const dateKey = `${yearStr}${monthStr}${dayStr}`;
-            const isToday = (currentDate.toDateString() === today.toDateString());
-            const isPast = (currentDate < today && !isToday);
-            const isSelected = (memberDashSelectedDate === dateKey);
-            const items = dayItems[d] || [];
-            const hasItems = items.length > 0;
+            var dS = yS + mS_str + String(d).padStart(2, '0');
+            var isT = (dS === tS);
+            var isS = (dS === mS);
+            var items = counts[dS] || {};
+            var has = (items['입찰'] > 0 || items['추천'] > 0 || items['변경'] > 0);
 
-            let classes = 'member-dash-day';
-            if (isToday) classes += ' today';
-            if (isPast) classes += ' past';
-            // [수정] 초기 렌더링 시 selected 클래스 부여 로직 제거
-            if (hasItems) classes += ' has-items';
-
-            // 동그라미 생성 (물건 1개 = 동그라미 1개, 같은 상태 겹침 표현)
-            let circlesHtml = '';
-            if (items.length > 0) {
-                // 상태별 그룹핑
-                const statusGroups = {};
-                items.forEach(it => {
-                    if (!statusGroups[it.status]) statusGroups[it.status] = 0;
-                    statusGroups[it.status]++;
-                });
-
-                const statusOrder = ['입찰', '추천', '변경', '미정', '상품'];
-                let circleIndex = 0;
-                statusOrder.forEach(s => {
-                    const count = statusGroups[s] || 0;
-                    const color = MEMBER_DASH_STATUS_COLORS[s] || '#e5e7eb';
-                    for (let i = 0; i < count; i++) {
-                        // 같은 상태 2건이면 약간 겹치게 오프셋
-                        const offset = (count > 1 && i > 0) ? `margin-left: -6px;` : '';
-                        const zIdx = (count > 1 && i > 0) ? `z-index: ${10 + i};` : '';
-                        circlesHtml += `<span class="member-dash-circle" style="background:${color};${offset}${zIdx}" title="${s}"></span>`;
-                        circleIndex++;
-                    }
-                });
+            var cls = 'cd';
+            if (isT) cls += ' t';
+            if (has) {
+                if (dS >= tS) cls += ' fh'; // 오늘 포함 미래: 초록
+                else cls += ' ph';        // 과거: 회색
             }
 
-            const cellHtml = `
-                <div class="${classes}" onclick="selectMemberDashboardDate('${dateKey}')">
-                    <span class="member-dash-day-num">${d}</span>
-                    <div class="member-dash-day-circles">${circlesHtml}</div>
-                </div>
-            `;
-            grid.insertAdjacentHTML('beforeend', cellHtml);
-        }
+            var dotH = '';
+            var sOrder = ['입찰', '추천', '변경'];
+            var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '변경': '#1f2937' };
+            sOrder.forEach(function (s) {
+                if (fS.indexOf(s) === -1) return;
+                var c = items[s] || 0;
+                for (var j = 0; j < c; j++) {
+                    dotH += '<div class="dc" style="background:' + colors[s] + '"></div>';
+                }
+            });
 
-        // 마지막 행 빈 셀 채우기
-        const totalCells = grid.children.length;
-        const remainder = totalCells % 5;
-        if (remainder > 0) {
-            for (let i = 0; i < (5 - remainder); i++) {
-                grid.insertAdjacentHTML('beforeend', '<div class="member-dash-day empty"></div>');
+            var h3 = '<div class="' + cls + '" onclick="selD(\'' + dS + '\')">' +
+                '<div class="dn">' + d + '</div>' +
+                '<div class="dcs">' + dotH + '</div>' +
+                '</div>';
+            grid.insertAdjacentHTML('beforeend', h3);
+        }
+    }
+
+    /**
+     * 이전/다음달 힌트 (상태별 건수)
+     */
+    function rHint(y, m) {
+        var pEl = document.getElementById('dP');
+        var nEl = document.getElementById('dN');
+        if (!pEl || !nEl) return;
+
+        var pM = new Date(y, m - 1, 1);
+        var nM = new Date(y, m + 1, 1);
+        var pY = String(pM.getFullYear()).slice(-2);
+        var pM_s = String(pM.getMonth() + 1).padStart(2, '0');
+        var nY = String(nM.getFullYear()).slice(-2);
+        var nM_s = String(nM.getMonth() + 1).padStart(2, '0');
+
+        var pC = { '입찰': 0, '추천': 0 };
+        var nC = { '입찰': 0, '추천': 0 };
+
+        allBiddingData.forEach(function (item) {
+            var dt = String(item['in-date'] || '');
+            var s = String(item.stu_member || '');
+            if (dt.substring(0, 4) === (pY + pM_s)) {
+                if (pC.hasOwnProperty(s)) pC[s]++;
+            } else if (dt.substring(0, 4) === (nY + nM_s)) {
+                if (nC.hasOwnProperty(s)) nC[s]++;
             }
+        });
+
+        pEl.innerHTML = '';
+        if (pC['입찰'] > 0) pEl.innerHTML += '<div class="cdot" style="background:#4f46e5">' + pC['입찰'] + '</div>';
+        if (pC['추천'] > 0) pEl.innerHTML += '<div class="cdot" style="background:#fb923c">' + pC['추천'] + '</div>';
+
+        nEl.innerHTML = '';
+        if (nC['입찰'] > 0) nEl.innerHTML += '<div class="cdot" style="background:#4f46e5">' + nC['입찰'] + '</div>';
+        if (nC['추천'] > 0) nEl.innerHTML += '<div class="cdot" style="background:#fb923c">' + nC['추천'] + '</div>';
+    }
+
+    /**
+     * 날짜 선택 (리스트 앵커로 스크롤)
+     */
+    function selD(d) {
+        mS = d;
+        rCal(); // 선택 효과 반영을 위해 갱신 (리스트 필터링은 안함)
+
+        var el = document.querySelector('.date-anchor[data-date="' + d + '"]');
+        if (el) {
+            // 스티키 헤더(상단바 44px + 캘린더바 54px + 여백) 고려
+            var offset = 120;
+            var bodyRect = document.getElementById('MemberDashboard').getBoundingClientRect();
+            var elRect = el.getBoundingClientRect();
+            var top = elRect.top - bodyRect.top + document.getElementById('MemberDashboard').scrollTop - offset;
+
+            document.getElementById('MemberDashboard').scrollTo({
+                top: Math.max(0, top),
+                behavior: 'smooth'
+            });
+
+            // 하이라이트 효과
+            el.style.backgroundColor = '#fef08a';
+            setTimeout(function () { el.style.backgroundColor = ''; }, 1500);
         }
     }
 
     /**
-     * 월 이동
+     * 리스트 렌더링
      */
-    function changeMemberDashboardMonth(delta, event) {
-        if (event) {
-            event.preventDefault();
-            event.stopPropagation();
-        }
-        memberDashCalDate.setMonth(memberDashCalDate.getMonth() + delta);
-        memberDashSelectedDate = null;
-        renderMemberDashboardSummary();
-        renderMemberDashboardCalendar();
-        renderMemberDashboardItems();
-    }
+    function rLst() {
+        var el = document.getElementById('iL');
+        if (!el) return;
 
-    /**
-     * 날짜 선택
-     */
-    function selectMemberDashboardDate(dateStr) {
-        // 이미 선택된 날짜 다시 클릭 시 해제
-        if (memberDashSelectedDate === dateStr) {
-            memberDashSelectedDate = null;
-        } else {
-            memberDashSelectedDate = dateStr;
-        }
+        var now = new Date();
+        var tS = String(now.getFullYear()).slice(-2) + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
 
-        // [수정] 날짜 선택 시 진하게 바뀌는 시각 효과 로직 제거 (클래스 부여 로직 삭제)
+        // 필터링 적용
+        var filtered = allBiddingData.filter(function (item) {
+            var dt = String(item['in-date'] || '');
+            var s = String(item.stu_member || '미정');
 
-        renderMemberDashboardItems();
-    }
+            // 1. 상태 필터
+            if (fS.indexOf(s) === -1) return false;
 
-    /**
-     * 물건 목록 렌더링 (상태 필터 + 날짜 필터 적용)
-     */
-    function renderMemberDashboardItems() {
-        const titleEl = document.getElementById('memberDashItemsTitle');
-        const listEl = document.getElementById('memberDashItemsList');
-        if (!listEl) return;
-
-        const selectedStatuses = getSelectedMemberDashStatuses();
-        const year = memberDashCalDate.getFullYear();
-        const month = memberDashCalDate.getMonth();
-        const yearStr = String(year).slice(-2);
-        const monthStr = String(month + 1).padStart(2, '0');
-
-        // 날짜 타이틀
-        if (memberDashSelectedDate && memberDashSelectedDate.length >= 6) {
-            const yy = memberDashSelectedDate.substring(0, 2);
-            const mm = memberDashSelectedDate.substring(2, 4);
-            const dd = memberDashSelectedDate.substring(4, 6);
-            const statusLabel = selectedStatuses.length > 0 ? ` (${selectedStatuses.join(', ')})` : '';
-            if (titleEl) titleEl.textContent = `20${yy}년 ${parseInt(mm)}월 ${parseInt(dd)}일 물건${statusLabel}`;
-        } else {
-            const statusLabel = selectedStatuses.length > 0 ? ` — ${selectedStatuses.join(', ')}` : '';
-            if (titleEl) titleEl.textContent = `${year}년 ${month + 1}월 물건${statusLabel}`;
-        }
-
-        // 필터링
-        const items = allBiddingData.filter(item => {
-            const itemDate = String(item['in-date'] || '');
-            if (itemDate.length < 6) return false;
-
-            // 날짜 선택 시: 해당 날짜만
-            if (memberDashSelectedDate) {
-                if (itemDate !== memberDashSelectedDate) return false;
+            // 2. 날짜 선택 시
+            if (mS) {
+                if (dt !== mS) return false;
             } else {
-                // 날짜 미선택 시: 현재 월 전체
-                if (itemDate.substring(0, 2) !== yearStr || itemDate.substring(2, 4) !== monthStr) return false;
+                // 날짜 미선택 시: 월별 필터
+                var yS = String(mD.getFullYear()).slice(-2);
+                var mS_str = String(mD.getMonth() + 1).padStart(2, '0');
+                if (dt.substring(0, 4) !== (yS + mS_str)) return false;
+
+                // 오늘부터 모드
+                if (tR === 'today' && dt < tS) return false;
             }
-
-            // 상태 필터 (선택되지 않은 상태는 무조건 제외 - 아무것도 선택 안 하면 아무것도 안 보임)
-            const status = String(item.stu_member || '미정');
-            if (!selectedStatuses.includes(status)) return false;
-
             return true;
         });
 
-        if (items.length === 0) {
-            const msg = memberDashSelectedDate ? '해당 날짜에 조건에 맞는 물건이 없습니다.' : '해당 월에 조건에 맞는 물건이 없습니다.';
-            listEl.innerHTML = `<div class="text-center p-6 text-gray-400">${msg}</div>`;
+        if (filtered.length === 0) {
+            el.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:.9rem">조건에 맞는 물건이 없습니다.</div>';
             return;
         }
 
-        // 날짜별 그룹핑 (날짜 미선택 시)
-        let html = '';
-        if (!memberDashSelectedDate) {
-            let lastDate = '';
-            items.sort((a, b) => String(a['in-date'] || '').localeCompare(String(b['in-date'] || '')));
-            items.forEach(item => {
-                const rawDate = String(item['in-date'] || '');
-                if (rawDate.length >= 6) {
-                    const dateLabel = `20${rawDate.slice(0, 2)}년 ${rawDate.slice(2, 4)}월 ${rawDate.slice(4, 6)}일`;
-                    if (dateLabel !== lastDate) {
-                        html += `<div class="member-dash-date-divider">${dateLabel}</div>`;
-                        lastDate = dateLabel;
-                    }
-                }
-                html += createMemberItemCard(item);
-            });
-        } else {
-            items.forEach(item => {
-                html += createMemberItemCard(item);
-            });
-        }
-        listEl.innerHTML = html;
+        // 정렬: 날짜순 -> 사건번호순
+        filtered.sort(function (a, b) {
+            var da = String(a['in-date'] || '');
+            var db = String(b['in-date'] || '');
+            if (da !== db) return da.localeCompare(db);
+            return String(a['sakun-no'] || '').localeCompare(String(b['sakun-no'] || ''));
+        });
 
-        // [수정] 자동 스크롤 이동 제거 요청 반영 (화면 고정)
-        /*
-        const section = document.getElementById('memberDashItemsSection');
-        if (section) {
-            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var html = '';
+        var lastD = '';
+        var lastM = '';
+
+        filtered.forEach(function (item) {
+            var dt = String(item['in-date'] || '');
+            var mm = dt.substring(2, 4);
+            var dd = dt.substring(4, 6);
+
+            // 월 구분선
+            if (mm !== lastM) {
+                html += '<div class="mdv"><span>' + parseInt(mm) + '월</span></div>';
+                lastM = mm;
+                lastD = ''; // 월 바뀌면 날짜선도 다시
+            }
+
+            // 날짜 구분선 (앵커 포인트)
+            if (dt !== lastD) {
+                html += '<div class="dp date-anchor" data-date="' + dt + '">' + parseInt(mm) + '월 ' + parseInt(dd) + '일</div>';
+                lastD = dt;
+            }
+
+            html += cItem(item);
+        });
+
+        el.innerHTML = html;
+    }
+
+    /**
+     * 물건 카드 HTML 생성
+     */
+    var N_MAP = { '대표님': 'MJ', '전제혁': '전부쌤' };
+    function mapN(n) { return N_MAP[n] || n; }
+    function fmtP(n) { return n ? new Intl.NumberFormat('ko-KR').format(parseInt(n)) : '0'; }
+
+    function cItem(i) {
+        var s = String(i.stu_member || '미정');
+        var cls = 'ic';
+        if (s === '입찰') cls += ' sb';
+        else if (s === '추천') cls += ' sr';
+        else if (s === '변경') cls += ' sc';
+
+        var bCls = 'badge';
+        var bTxt = s;
+        if (s === '입찰') bCls += ' bb';
+        else if (s === '추천') bCls += ' br';
+        else if (s === '변경') bCls += ' bc';
+
+        var sk = String(i['sakun-no'] || '');
+        var ct = String(i['court-name'] || '');
+        var pr = i['bid-price'] ? fmtP(i['bid-price']) : '0';
+        var m_nm = mapN(String(i.m_name_id || ''));
+        var tm = String(i['write-time'] || '').substring(11, 16);
+
+        var h = '<div class="' + cls + '">' +
+            '<div class="ic-l" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
+            '<div class="ic-copy-row">' +
+            '<div class="ic-sakun">' + sk + '</div>' +
+            '<button class="copy-btn" onclick="copyT(\'' + sk + '\', event)">' +
+            '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
+            '</button>' +
+            '</div>' +
+            '<div class="ic-court">' + ct + ' / ' + m_nm + '</div>' +
+            '<div class="ic-copy-row">' +
+            '<div class="ic-price">' + (pr === '0' ? '가격미정' : pr + ' 원') + '</div>' +
+            '<button class="copy-btn" onclick="copyT(\'' + pr + '\', event)">' +
+            '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
+            '</button>' +
+            '</div>' +
+            '</div>' +
+            '<div class="ic-r">' +
+            '<div class="ic-r-row">' +
+            '<button class="' + bCls + '" onclick="setB(\'' + i.id + '\', \'' + s + '\', \'' + sk + '\')">' + bTxt + '</button>' +
+            '<button class="img-btn" onclick="openImgPopup(\'' + i.id + '\')">🖼️</button>' +
+            '</div>' +
+            '<div class="ic-time">' + tm + '</div>' +
+            '</div>' +
+            '</div>';
+        return h;
+    }
+
+    /**
+     * 클립보드 복사
+     */
+    function copyT(t, e) {
+        if (e) e.stopPropagation();
+        var tmp = document.createElement('textarea');
+        tmp.value = t;
+        document.body.appendChild(tmp);
+        tmp.select();
+        document.execCommand('copy');
+        document.body.removeChild(tmp);
+
+        var toast = document.getElementById('copyToast');
+        if (toast) {
+            toast.classList.add('show');
+            setTimeout(function () { toast.classList.remove('show'); }, 1500);
         }
-        */
+    }
+
+    /**
+     * 이미지 팝업 열기 (실제 조사 상세와 연동)
+     */
+    function openImgPopup(id) {
+        // [수정] 팝업만 띄우는 대신 조사 상세 모달을 활용하거나 연동
+        showInvestigationDetail(id);
+    }
+    function closeImgPopup() {
+        var p = document.getElementById('imgPopup');
+        if (p) p.classList.remove('open');
+    }
+
+    /**
+     * 모달 제천
+     */
+    function cm(id) {
+        var m = document.getElementById(id);
+        if (m) m.classList.remove('open');
+    }
+
+    /**
+     * 입찰 액션 처리
+     */
+    var curI = null; // 현재 타겟 ID
+    function setB(id, s, sk) {
+        curI = id;
+        if (s === '입찰') {
+            document.getElementById('mBD').textContent = '[' + sk + ']';
+            document.getElementById('mBC').classList.add('open');
+        } else if (s === '추천') {
+            document.getElementById('mRT').textContent = '[' + sk + ']';
+            document.getElementById('mRA').classList.add('open');
+        }
+    }
+
+    /**
+     * 서버 통신 (google.script.run 연동)
+     */
+    function doBC() { // 입찰 취소
+        if (!curI) return;
+        cm('mBC');
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(function () {
+                showLoading(false);
+                loadDataAndRenderMemberDashboard(true); // 데이터 갱신
+            })
+            .cancelBidding(curI);
+    }
+
+    function doRC() { // 추천 -> 입찰 확정
+        if (!curI) return;
+        cm('mRA');
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(function () {
+                showLoading(false);
+                loadDataAndRenderMemberDashboard(true);
+            })
+            .applyBidding(curI);
+    }
+
+    function doRX() { // 추천 거절
+        if (!curI) return;
+        cm('mRA');
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(function () {
+                showLoading(false);
+                loadDataAndRenderMemberDashboard(true);
+            })
+            .rejectBidding(curI);
     }
 
 </script>

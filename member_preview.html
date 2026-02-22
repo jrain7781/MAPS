@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>회원 대시보드 — 로컬 프리뷰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased
+        }
+
+        .wrap {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 0 12px 40px
+        }
+
+        /* ===== 1. 상단바 ===== */
+        .top-bar {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            background: #f3f4f6;
+            padding: 8px 0 4px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center
+        }
+
+        .top-bar-inner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            flex-wrap: wrap
+        }
+
+        .rg {
+            display: inline-flex;
+            align-items: center
+        }
+
+        .rb {
+            display: inline-flex;
+            align-items: center;
+            height: 32px;
+            padding: 0 16px;
+            border: 1.5px solid #d1d5db;
+            background: #fff;
+            color: #374151;
+            font-size: .82rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all .15s;
+            user-select: none;
+            position: relative
+        }
+
+        .rb:first-child {
+            border-radius: 999px 0 0 999px;
+            z-index: 2
+        }
+
+        .rb:last-child {
+            border-radius: 0 999px 999px 0;
+            margin-left: -1px;
+            z-index: 1
+        }
+
+        .rb.on {
+            background: #16a34a;
+            border-color: #16a34a;
+            color: #fff;
+            z-index: 3
+        }
+
+        .sp {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            height: 32px;
+            padding: 0 12px;
+            border-radius: 999px;
+            font-size: .82rem;
+            font-weight: 800;
+            color: #fff;
+            user-select: none;
+            pointer-events: none
+        }
+
+        .sp.bid {
+            background: #4f46e5
+        }
+
+        .sp.rec {
+            background: #fb923c
+        }
+
+        .sp.chg {
+            background: #1f2937
+        }
+
+        /* ===== 2. 캘린더 ===== */
+        /* 네비게이션 — 행고정!!! */
+        .cal-nav-bar {
+            position: sticky;
+            top: 44px;
+            z-index: 35;
+            background: #fff;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 14px 14px 0 0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .06)
+        }
+
+        .cal-nav-inner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 10px 16px
+        }
+
+        .cal-c {
+            display: flex;
+            align-items: center;
+            gap: 14px
+        }
+
+        .cnb {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            cursor: pointer;
+            color: #6b7280;
+            transition: all .15s
+        }
+
+        .cnb:hover {
+            background: #f3f4f6
+        }
+
+        .cal-t {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #1f2937;
+            min-width: 100px;
+            text-align: center
+        }
+
+        .cal-d {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            gap: 3px
+        }
+
+        .cal-d.l {
+            left: 10px
+        }
+
+        .cal-d.r {
+            right: 10px
+        }
+
+        .cdot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 800;
+            color: #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .2)
+        }
+
+        /* 캘린더 바디 (스크롤됨) */
+        .cal-body {
+            background: #fff;
+            border: 1.5px solid #e5e7eb;
+            border-top: none;
+            border-radius: 0 0 14px 14px;
+            margin-bottom: 8px;
+            overflow: hidden
+        }
+
+        .cal-wk {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 2px;
+            padding: 4px 12px;
+            background: #f9fafb;
+            border-bottom: 1px solid #f0f0f0
+        }
+
+        .cal-wk>div {
+            text-align: center;
+            font-size: .72rem;
+            font-weight: 700;
+            color: #9ca3af;
+            padding: 3px 0
+        }
+
+        .cal-g {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 3px;
+            padding: 8px 12px 12px
+        }
+
+        .cd {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 58px;
+            padding: 5px 2px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all .15s;
+            background: #fff;
+            border: 2px solid transparent
+        }
+
+        .cd.e {
+            cursor: default;
+            background: transparent;
+            border: none
+        }
+
+        .cd:hover:not(.e) {
+            background: #eef2ff;
+            border-color: #c7d2fe
+        }
+
+        .cd.t {
+            border-color: #ef4444 !important;
+            background: #fff
+        }
+
+        .cd.t .dn {
+            color: #ef4444
+        }
+
+        .cd.fh {
+            background: #dcfce7 !important;
+            border-color: #86efac !important
+        }
+
+        .cd.ph {
+            background: #fafbfc;
+            border-color: #d1d5db !important
+        }
+
+        .cd.pe {
+            background: #fafbfc;
+            opacity: .5
+        }
+
+        .dn {
+            font-size: .95rem;
+            font-weight: 800;
+            color: #1f2937;
+            line-height: 1;
+            margin-bottom: 4px
+        }
+
+        .dcs {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 0
+        }
+
+        .dc {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+            flex-shrink: 0
+        }
+
+        /* ===== 3. 리스트 카드 ===== */
+        .lc {
+            background: #fff;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 14px;
+            overflow: visible;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .06)
+        }
+
+        /* 리스트 필터 바 — 행고정 */
+        .lf {
+            position: sticky;
+            top: 98px;
+            z-index: 25;
+            background: #fff;
+            border: 1.5px solid #e5e7eb;
+            border-bottom: 1px solid #f0f0f0;
+            border-radius: 14px 14px 0 0;
+            margin: -1px;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            flex-wrap: wrap
+        }
+
+        .lb {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            height: 32px;
+            padding: 0 12px;
+            border-radius: 999px;
+            font-size: .82rem;
+            font-weight: 800;
+            color: #fff;
+            cursor: pointer;
+            transition: all .15s;
+            user-select: none;
+            border: none
+        }
+
+        .lb.bid {
+            background: #4f46e5
+        }
+
+        .lb.rec {
+            background: #fb923c
+        }
+
+        .lb.chg {
+            background: #1f2937
+        }
+
+        .lb.off {
+            opacity: .25
+        }
+
+        .lb-body {
+            padding: 8px 12px 16px
+        }
+
+        /* 월 구분 — 회색 라운드 */
+        .mdv {
+            text-align: center;
+            padding: 10px 0;
+            margin: 8px -12px 8px
+        }
+
+        .mdv span {
+            display: inline-block;
+            padding: 7px 50px;
+            border-radius: 999px;
+            font-size: .95rem;
+            font-weight: 800;
+            background: #6b7280;
+            color: #fff;
+            letter-spacing: .05em
+        }
+
+        /* 날짜 Pill */
+        .dp {
+            display: inline-block;
+            background: #475569;
+            color: #fff;
+            font-size: .78rem;
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 999px;
+            margin: 8px 0 6px
+        }
+
+        /* 물건 카드 — 2열 */
+        .ic {
+            background: #fff;
+            border: 3px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 14px;
+            display: flex;
+            gap: 8px;
+            min-height: 90px;
+            margin-bottom: 8px
+        }
+
+        .ic.sb {
+            border-color: #4f46e5
+        }
+
+        .ic.sr {
+            border-color: #fb923c
+        }
+
+        .ic.sc {
+            border-color: #1f2937
+        }
+
+        .ic-l {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-width: 0
+        }
+
+        .ic-copy-row {
+            display: flex;
+            align-items: center;
+            gap: 4px
+        }
+
+        .ic-sakun {
+            font-size: 1.05rem;
+            font-weight: 900;
+            color: #1e293b;
+            line-height: 1.3;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap
+        }
+
+        .ic-court {
+            font-size: .76rem;
+            color: #64748b;
+            margin-top: 2px
+        }
+
+        .ic-price {
+            font-size: 1.1rem;
+            font-weight: 900;
+            color: #ef4444;
+            margin-top: 4px
+        }
+
+        .copy-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px;
+            color: #94a3b8;
+            font-size: .85rem;
+            transition: color .15s;
+            flex-shrink: 0
+        }
+
+        .copy-btn:hover {
+            color: #475569
+        }
+
+        .copy-btn:active {
+            color: #16a34a
+        }
+
+        /* 우측: 버튼 + 아이콘 + 시간 */
+        .ic-r {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 4px;
+            min-width: 80px
+        }
+
+        .ic-r-row {
+            display: flex;
+            align-items: center;
+            gap: 6px
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 18px;
+            border-radius: 10px;
+            font-size: .88rem;
+            font-weight: 800;
+            cursor: pointer;
+            border: none;
+            color: #fff;
+            transition: all .15s;
+            white-space: nowrap
+        }
+
+        .badge.bb {
+            background: #4f46e5
+        }
+
+        .badge.bb:active {
+            background: #4338ca
+        }
+
+        .badge.br {
+            background: #fb923c
+        }
+
+        .badge.br:active {
+            background: #ea580c
+        }
+
+        .badge.bc {
+            background: #1f2937;
+            cursor: default
+        }
+
+        .img-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #f1f5f9;
+            border: 1.5px solid #e2e8f0;
+            cursor: pointer;
+            transition: all .15s;
+            color: #64748b;
+            font-size: 1rem
+        }
+
+        .img-btn:hover {
+            background: #e2e8f0;
+            color: #1e293b
+        }
+
+        .img-btn:active {
+            transform: scale(.9)
+        }
+
+        .ic-time {
+            font-size: .68rem;
+            color: #9ca3af;
+            white-space: nowrap;
+            padding-left: 0
+        }
+
+        /* 이미지 팝업 */
+        .img-popup {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, .85);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            cursor: pointer
+        }
+
+        .img-popup.open {
+            display: flex
+        }
+
+        .img-popup-ph {
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 40px 60px;
+            color: #94a3b8;
+            text-align: center;
+            font-size: .9rem
+        }
+
+        .img-popup-close {
+            color: #fff;
+            font-size: .8rem;
+            margin-top: 16px;
+            opacity: .6
+        }
+
+        /* 복사 토스트 */
+        .copy-toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 999px;
+            font-size: .82rem;
+            font-weight: 700;
+            z-index: 300;
+            opacity: 0;
+            transition: opacity .3s;
+            pointer-events: none
+        }
+
+        .copy-toast.show {
+            opacity: 1
+        }
+
+        /* 모달 */
+        .mo {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, .5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center
+        }
+
+        .mo.open {
+            display: flex
+        }
+
+        .mx {
+            background: #fff;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 340px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, .2)
+        }
+
+        .mx h3 {
+            font-size: 1rem;
+            font-weight: 800;
+            margin: 0 0 6px
+        }
+
+        .mx p {
+            font-size: .85rem;
+            color: #64748b;
+            margin: 0 0 20px
+        }
+
+        .ma {
+            display: flex;
+            gap: 10px;
+            justify-content: center
+        }
+
+        .mm {
+            flex: 1;
+            padding: 10px 0;
+            border-radius: 10px;
+            font-size: .9rem;
+            font-weight: 700;
+            cursor: pointer;
+            border: none
+        }
+
+        .mm.c {
+            background: #f1f5f9;
+            color: #475569
+        }
+
+        .mm.o {
+            background: #4f46e5;
+            color: #fff
+        }
+
+        .mm.d {
+            background: #ef4444;
+            color: #fff
+        }
+
+        @media(max-width:480px) {
+            .wrap {
+                padding: 0 8px 30px
+            }
+
+            .cd {
+                min-height: 48px;
+                padding: 4px 1px
+            }
+
+            .dn {
+                font-size: .8rem
+            }
+
+            .dc {
+                width: 13px;
+                height: 13px
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <!-- 1. 상단바 -->
+        <div class="top-bar">
+            <div class="top-bar-inner">
+                <div class="rg">
+                    <button class="rb on" id="tT" onclick="setR('today')">오늘부터</button>
+                    <button class="rb" id="tA" onclick="setR('all')">전체</button>
+                </div>
+                <span class="sp bid"><span id="cB">0</span>입찰</span>
+                <span class="sp rec"><span id="cR">0</span>추천</span>
+                <span class="sp chg"><span id="cC">0</span>변경</span>
+            </div>
+        </div>
+
+        <!-- 2. 캘린더 네비 (행고정!!!) -->
+        <div class="cal-nav-bar" id="calNavBar">
+            <div class="cal-nav-inner">
+                <div class="cal-d l" id="dP"></div>
+                <div class="cal-c">
+                    <button class="cnb" onclick="chMo(-1)"><svg width="16" height="16" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                        </svg></button>
+                    <div class="cal-t" id="cT"></div>
+                    <button class="cnb" onclick="chMo(1)"><svg width="16" height="16" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg></button>
+                </div>
+                <div class="cal-d r" id="dN"></div>
+            </div>
+        </div>
+        <!-- 캘린더 바디 (스크롤됨) -->
+        <div class="cal-body">
+            <div class="cal-wk">
+                <div>월</div>
+                <div>화</div>
+                <div>수</div>
+                <div>목</div>
+                <div>금</div>
+            </div>
+            <div class="cal-g" id="cG"></div>
+        </div>
+
+        <!-- 3. 리스트 카드 -->
+        <div class="lc">
+            <div class="lf" id="lfBar">
+                <div class="rg">
+                    <button class="rb on" id="rT" onclick="setR('today')">오늘부터</button>
+                    <button class="rb" id="rA" onclick="setR('all')">전체</button>
+                </div>
+                <button class="lb bid" id="fB" onclick="togF('입찰')"><span id="lB">0</span>입찰</button>
+                <button class="lb rec" id="fR" onclick="togF('추천')"><span id="lR">0</span>추천</button>
+                <button class="lb chg" id="fC" onclick="togF('변경')"><span id="lC">0</span>변경</button>
+            </div>
+            <div class="lb-body" id="iL"></div>
+        </div>
+    </div>
+
+    <!-- 이미지 팝업 -->
+    <div class="img-popup" id="imgPopup" onclick="closeImgPopup()">
+        <div class="img-popup-ph">
+            <div style="font-size:4rem;margin-bottom:16px">🖼️</div>조사 이미지 영역<div
+                style="font-size:.75rem;margin-top:8px;color:#64748b">실제 구현 시 이미지 표시</div>
+        </div>
+        <div class="img-popup-close">탭하여 닫기</div>
+    </div>
+    <!-- 복사 토스트 -->
+    <div class="copy-toast" id="copyToast">복사되었습니다!</div>
+    <!-- 모달 -->
+    <div class="mo" id="mBC">
+        <div class="mx">
+            <h3>입찰을 취소하시겠습니까?</h3>
+            <p id="mBD"></p>
+            <div class="ma"><button class="mm c" onclick="cm('mBC')">아니오</button><button class="mm d"
+                    onclick="doBC()">예</button></div>
+        </div>
+    </div>
+    <div class="mo" id="mRA">
+        <div class="mx">
+            <h3 id="mRT"></h3>
+            <p>원하시는 액션을 선택하세요.</p>
+            <div class="ma"><button class="mm c" onclick="cm('mRA')">취소</button><button class="mm o"
+                    onclick="doRC()">입찰확정</button><button class="mm d" onclick="doRX()">입찰취소</button></div>
+        </div>
+    </div>
+
+    <script>
+        const TODAY = new Date(), TS = ymd(TODAY);
+        function ymd(d) { return String(d.getFullYear()).slice(-2) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') }
+        function addD(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
+        const VS = new Set(['입찰', '추천', '변경']);
+        // 담당자 매핑
+        const NAME_MAP = { '대표님': 'MJ', '전제혁': '전부쌤' };
+        function mapName(n) { return NAME_MAP[n] || n }
+
+        const DATA = (() => {
+            const a = [], co = ['부산동부', '서울중앙', '수원', '인천', '대전', '대구'],
+                ss = ['입찰', '추천', '변경', '입찰', '추천', '미정', '상품'],
+                ba = ['2024타경', '2025타경', '2024카단'],
+                names = ['대표님', '전제혁', '김철수'];
+            let id = 1;
+            for (let o = -60; o <= 60; o++) {
+                const d = addD(TODAY, o); if (d.getDay() === 0 || d.getDay() === 6) continue;
+                const c = Math.floor(Math.random() * 3.5);
+                for (let i = 0; i < c; i++) {
+                    const s = ss[Math.floor(Math.random() * ss.length)];
+                    a.push({
+                        id: String(id++), 'in-date': ymd(d),
+                        sakun_no: ba[Math.floor(Math.random() * ba.length)] + String(10000 + Math.floor(Math.random() * 90000)),
+                        court: co[Math.floor(Math.random() * co.length)], stu_member: s,
+                        m_name_id: names[Math.floor(Math.random() * names.length)],
+                        bidprice: Math.floor(Math.random() * 50 + 5) * 10000000,
+                        created_at: `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(Math.floor(Math.random() * 12) + 8).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`
+                    });
+                }
+            }
+            return a.filter(i => VS.has(i.stu_member));
+        })();
+
+        const SC = { '입찰': '#4f46e5', '추천': '#fb923c', '변경': '#6b7280' };
+        let range = 'today', calD = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+        let af = new Set(['입찰', '추천', '변경']), mId = null;
+
+        function setR(r) {
+            range = r;
+            ['tT', 'rT'].forEach(id => document.getElementById(id).classList.toggle('on', r === 'today'));
+            ['tA', 'rA'].forEach(id => document.getElementById(id).classList.toggle('on', r === 'all'));
+            updC(); renderL();
+        }
+        function updC() {
+            const ft = DATA.filter(i => i['in-date'] >= TS);
+            const src = range === 'today' ? ft : DATA;
+            const b = src.filter(i => i.stu_member === '입찰').length;
+            const r = src.filter(i => i.stu_member === '추천').length;
+            const c = src.filter(i => i.stu_member === '변경').length;
+            document.getElementById('cB').textContent = b;
+            document.getElementById('cR').textContent = r;
+            document.getElementById('cC').textContent = c;
+            document.getElementById('lB').textContent = b;
+            document.getElementById('lR').textContent = r;
+            document.getElementById('lC').textContent = c;
+        }
+        function togF(s) {
+            if (af.has(s)) af.delete(s); else af.add(s);
+            document.getElementById('fB').classList.toggle('off', !af.has('입찰'));
+            document.getElementById('fR').classList.toggle('off', !af.has('추천'));
+            document.getElementById('fC').classList.toggle('off', !af.has('변경'));
+            renderL();
+        }
+
+        // ===== 캘린더 =====
+        function chMo(d) {
+            calD.setMonth(calD.getMonth() + d);
+            renderCal();
+            // 화면 이동 안 함! 리스트 내 해당 월만 찾아 놓기 (리스트 자체 스크롤은 안 함)
+        }
+        function renderCal() {
+            const y = calD.getFullYear(), m = calD.getMonth(), g = document.getElementById('cG');
+            document.getElementById('cT').textContent = `${y}년 ${m + 1}월`; g.innerHTML = '';
+            const ys = String(y).slice(-2), ms = String(m + 1).padStart(2, '0');
+            const td = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+            const pm = new Date(y, m - 1, 1), nm = new Date(y, m + 1, 1);
+            const pys = String(pm.getFullYear()).slice(-2), pms = String(pm.getMonth() + 1).padStart(2, '0');
+            const nys = String(nm.getFullYear()).slice(-2), nms = String(nm.getMonth() + 1).padStart(2, '0');
+            const pc = { '입찰': 0, '추천': 0 }, nc = { '입찰': 0, '추천': 0 }, di = {};
+            DATA.forEach(i => {
+                const d = i['in-date']; if (d.length < 6) return; const s = i.stu_member || '미정';
+                if (d.substring(0, 2) === pys && d.substring(2, 4) === pms && pc.hasOwnProperty(s)) pc[s]++;
+                if (d.substring(0, 2) === nys && d.substring(2, 4) === nms && nc.hasOwnProperty(s)) nc[s]++;
+                if (d.substring(0, 2) === ys && d.substring(2, 4) === ms) {
+                    const day = parseInt(d.substring(4, 6), 10);
+                    if (!di[day]) di[day] = []; di[day].push(i);
+                }
+            });
+            const pe = document.getElementById('dP'), ne = document.getElementById('dN');
+            let ph = ''; if (pc['입찰'] > 0) ph += `<span class="cdot" style="background:#4f46e5">${pc['입찰']}</span>`;
+            if (pc['추천'] > 0) ph += `<span class="cdot" style="background:#fb923c">${pc['추천']}</span>`; pe.innerHTML = ph;
+            let nh = ''; if (nc['입찰'] > 0) nh += `<span class="cdot" style="background:#4f46e5">${nc['입찰']}</span>`;
+            if (nc['추천'] > 0) nh += `<span class="cdot" style="background:#fb923c">${nc['추천']}</span>`; ne.innerHTML = nh;
+            const fd = new Date(y, m, 1), ld = new Date(y, m + 1, 0).getDate();
+            let sd = fd.getDay(); if (sd === 0) sd = 7; sd -= 1;
+            for (let i = 0; i < sd && i < 5; i++)g.insertAdjacentHTML('beforeend', '<div class="cd e"></div>');
+            for (let d = 1; d <= ld; d++) {
+                const cur = new Date(y, m, d), dow = cur.getDay();
+                if (dow === 0 || dow === 6) continue;
+                const dk = `${ys}${ms}${String(d).padStart(2, '0')}`;
+                const isT = cur.getTime() === td.getTime(), isP = cur < td && !isT, isF = cur > td || isT;
+                const items = di[d] || [], has = items.length > 0;
+                let cl = 'cd';
+                if (isT) cl += ' t'; if (isP && !has) cl += ' pe'; if (isP && has) cl += ' ph'; if (isF && has) cl += ' fh';
+                let cir = '';
+                if (has) {
+                    const gr = {}; items.forEach(i => { const s = i.stu_member || '미정'; gr[s] = (gr[s] || 0) + 1 });
+                    ['입찰', '추천', '변경'].forEach(s => {
+                        const n = gr[s] || 0, c = SC[s] || '#e5e7eb';
+                        for (let i = 0; i < n; i++) {
+                            const ml = (n > 1 && i > 0) ? 'margin-left:-5px;' : '';
+                            const zi = (n > 1 && i > 0) ? `z-index:${10 + i};` : '';
+                            cir += `<span class="dc" style="background:${c};${ml}${zi}"></span>`
+                        }
+                    });
+                }
+                g.insertAdjacentHTML('beforeend', `<div class="${cl}" onclick="sD('${dk}')"><span class="dn">${d}</span><div class="dcs">${cir}</div></div>`);
+            }
+            const tot = g.children.length, rem = tot % 5;
+            if (rem > 0) for (let i = 0; i < 5 - rem; i++)g.insertAdjacentHTML('beforeend', '<div class="cd e"></div>');
+        }
+        function sD(dk) {
+            const el = document.querySelector(`.date-anchor[data-date="${dk}"]`);
+            if (!el) return;
+            const top = el.getBoundingClientRect().top + window.scrollY - 160;
+            window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+            el.style.transform = 'scale(1.08)'; el.style.transition = 'transform .2s';
+            setTimeout(() => { el.style.transform = '' }, 1200);
+        }
+
+        // ===== 복사 =====
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const t = document.getElementById('copyToast');
+                t.classList.add('show');
+                setTimeout(() => t.classList.remove('show'), 1500);
+            }).catch(() => alert('복사 실패'));
+        }
+
+        // ===== 리스트 =====
+        function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML }
+        function fP(n) { return n ? new Intl.NumberFormat('ko-KR').format(n) + ' 원' : '0 원' }
+        function renderL() {
+            const box = document.getElementById('iL');
+            let items = range === 'today' ? DATA.filter(i => i['in-date'] >= TS) : [...DATA];
+            items = items.filter(i => af.has(i.stu_member));
+            items.sort((a, b) => {
+                const da = a['in-date'], db = b['in-date'];
+                if (da >= TS && db >= TS) return da.localeCompare(db);
+                if (da < TS && db < TS) return db.localeCompare(da);
+                return da >= TS ? -1 : 1;
+            });
+            if (!items.length) { box.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af">조회된 물건이 없습니다.</div>'; return }
+            let h = '', lm = '', ld = '';
+            items.forEach(item => {
+                const rd = item['in-date']; if (rd.length < 6) return;
+                const mm = rd.substring(2, 4), dd = rd.substring(4, 6), mL = `${parseInt(mm)}월`, dL = `26-${mm}-${dd}`;
+                const ym = rd.substring(0, 4);
+                if (mL !== lm) {
+                    h += `<div class="mdv month-anchor" data-month="${ym}"><span>${mL}</span></div>`;
+                    lm = mL; ld = '';
+                }
+                if (dL !== ld) {
+                    h += `<div class="dp date-anchor" data-date="${rd}">${dL}</div>`;
+                    ld = dL;
+                }
+                const s = item.stu_member || '미정';
+                const cc = s === '입찰' ? 'sb' : s === '추천' ? 'sr' : s === '변경' ? 'sc' : '';
+                const bc = s === '입찰' ? 'bb' : s === '추천' ? 'br' : s === '변경' ? 'bc' : '';
+                const ck = s === '입찰' ? `onclick="oB('${item.id}','${esc(item.sakun_no)}')"` :
+                    s === '추천' ? `onclick="oR('${item.id}','${esc(item.sakun_no)}')"` : '';
+                const priceRaw = item.bidprice ? new Intl.NumberFormat('ko-KR').format(item.bidprice) : '0';
+                const displayName = mapName(item.m_name_id || '');
+
+                h += `<div class="ic ${cc}">
+            <div class="ic-l">
+                <div class="ic-copy-row">
+                    <span class="ic-sakun">${esc(item.sakun_no)}</span>
+                    <button class="copy-btn" onclick="event.stopPropagation();copyText('${esc(item.sakun_no)}')" title="사건번호 복사">📋</button>
+                </div>
+                <div class="ic-court">${esc(item.court)} / ${esc(displayName)}</div>
+                <div class="ic-copy-row">
+                    <span class="ic-price">${fP(item.bidprice)}</span>
+                    <button class="copy-btn" onclick="event.stopPropagation();copyText('${priceRaw}')" title="입찰가 복사">📋</button>
+                </div>
+            </div>
+            <div class="ic-r">
+                <div class="ic-r-row">
+                    <button class="badge ${bc}" ${ck}>${esc(s)}</button>
+                    <button class="img-btn" onclick="openImgPopup('${item.id}')" title="조사이미지">🔍</button>
+                </div>
+                <span class="ic-time">${esc(item.created_at || '')}</span>
+            </div>
+        </div>`;
+            });
+            box.innerHTML = h;
+        }
+
+        // ===== 팝업/모달 =====
+        function openImgPopup(id) { document.getElementById('imgPopup').classList.add('open') }
+        function closeImgPopup() { document.getElementById('imgPopup').classList.remove('open') }
+        function oB(id, s) { mId = id; document.getElementById('mBD').textContent = `[${s}]`; document.getElementById('mBC').classList.add('open') }
+        function cm(id) { document.getElementById(id).classList.remove('open'); mId = null }
+        function doBC() { alert(`[프리뷰] 입찰 취소 전송 ID:${mId}`); cm('mBC') }
+        function oR(id, s) { mId = id; document.getElementById('mRT').textContent = s; document.getElementById('mRA').classList.add('open') }
+        function doRC() { alert(`[프리뷰] 입찰확정 전송 ID:${mId}`); cm('mRA') }
+        function doRX() { alert(`[프리뷰] 입찰취소 전송 ID:${mId}`); cm('mRA') }
+
+        // ===== 초기화 =====
+        updC(); renderCal(); renderL();
+    </script>
+</body>
+
+</html>

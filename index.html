@@ -239,78 +239,94 @@
                 </div>
             </div>
 
-            <!-- ==================== 회원 대시보드 ==================== -->
+            <!-- ==================== 회원 대시보드 (오퍼스 v2) ==================== -->
             <div id="MemberDashboard" class="tab-content h-full p-0 overflow-y-auto content-hidden">
-                <div class="member-dashboard-wrapper">
-                    <div class="member-dash-summary-sticky" id="memberDashSummarySticky">
-                        <!-- 상태 필터 카드 (토글) — 월별 합계 -->
-                        <div class="member-dash-summary" id="memberDashSummary">
-                            <div class="member-dash-card member-dash-card-bid active" data-status="입찰"
-                                onclick="toggleMemberDashFilter(this)">
-                                <div class="member-dash-card-count" id="mdash-count-bid">0</div>
-                                <div class="member-dash-card-label">입찰</div>
+                <div class="member-dashboard-v2">
+                    <!-- 1. 상단바 -->
+                    <div class="top-bar">
+                        <div class="top-bar-inner">
+                            <div class="rg">
+                                <button class="rb on" id="tT" onclick="setR('today')">오늘부터</button>
+                                <button class="rb" id="tA" onclick="setR('all')">전체</button>
                             </div>
-                            <div class="member-dash-card member-dash-card-recommend active" data-status="추천"
-                                onclick="toggleMemberDashFilter(this)">
-                                <div class="member-dash-card-count" id="mdash-count-recommend">0</div>
-                                <div class="member-dash-card-label">추천</div>
-                            </div>
-                            <div class="member-dash-card member-dash-card-changed" data-status="변경"
-                                onclick="toggleMemberDashFilter(this)">
-                                <div class="member-dash-card-count" id="mdash-count-changed">0</div>
-                                <div class="member-dash-card-label">변경</div>
-                            </div>
+                            <span class="sp bid"><span id="cB">0</span>입찰</span>
+                            <span class="sp rec"><span id="cR">0</span>추천</span>
+                            <span class="sp chg"><span id="cC">0</span>변경</span>
                         </div>
                     </div>
 
-                    <!-- 새로운 캘린더 카드 컨테이너 -->
-                    <div class="member-dash-calendar-card">
-                        <div class="member-dash-calendar-header-sticky">
-                            <!-- 월별 네비게이션 -->
-                            <div class="member-dash-cal-nav">
-                                <div id="mdash-prev-month-info" class="mdash-nav-info-container ml-1"></div>
-                                <div class="flex items-center gap-4">
-                                    <button type="button" onclick="changeMemberDashboardMonth(-1, event)"
-                                        class="member-dash-nav-btn">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M15 19l-7-7 7-7"></path>
-                                        </svg>
-                                    </button>
-                                    <div class="member-dash-cal-title" id="memberDashCalTitle">2026년 2월</div>
-                                    <button type="button" onclick="changeMemberDashboardMonth(1, event)"
-                                        class="member-dash-nav-btn">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M9 5l7 7-7 7"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-                                <div id="mdash-next-month-info" class="mdash-nav-info-container mr-1"></div>
+                    <!-- 2. 캘린더 네비 (행고정) -->
+                    <div class="cal-nav-bar" id="calNavBar">
+                        <div class="cal-nav-inner">
+                            <div class="cal-d l" id="dP"></div>
+                            <div class="cal-c">
+                                <button class="cnb" onclick="chMo(-1)"><svg width="16" height="16" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M15 19l-7-7 7-7" />
+                                    </svg></button>
+                                <div class="cal-t" id="cT"></div>
+                                <button class="cnb" onclick="chMo(1)"><svg width="16" height="16" fill="none"
+                                        stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 5l7 7-7 7" />
+                                    </svg></button>
                             </div>
-
-                            <!-- 요일 헤더 -->
-                            <div class="member-dash-cal-header" id="memberDashCalHeader">
-                                <div>월</div>
-                                <div>화</div>
-                                <div>수</div>
-                                <div>목</div>
-                                <div>금</div>
-                            </div>
-                        </div>
-
-                        <!-- 캘린더 그리드 -->
-                        <div class="member-dash-cal-grid" id="memberDashCalGrid">
-                            <!-- JS로 렌더링 -->
+                            <div class="cal-d r" id="dN"></div>
                         </div>
                     </div>
-
-                    <!-- 선택 날짜 물건 목록 -->
-                    <div class="member-dash-items-section" id="memberDashItemsSection">
-                        <h3 class="member-dash-items-title" id="memberDashItemsTitle">날짜를 선택하세요</h3>
-                        <div class="member-dash-items-list" id="memberDashItemsList">
-                            <div class="text-center p-6 text-gray-400">위 캘린더에서 날짜를 클릭하면 해당 날짜의 물건이 표시됩니다.</div>
+                    <!-- 캘린더 바디 -->
+                    <div class="cal-body">
+                        <div class="cal-wk">
+                            <div>월</div>
+                            <div>화</div>
+                            <div>수</div>
+                            <div>목</div>
+                            <div>금</div>
                         </div>
+                        <div class="cal-g" id="cG"></div>
+                    </div>
+
+                    <!-- 3. 리스트 카드 -->
+                    <div class="lc">
+                        <div class="lf" id="lfBar">
+                            <div class="rg">
+                                <button class="rb on" id="rT" onclick="setR('today')">오늘부터</button>
+                                <button class="rb" id="rA" onclick="setR('all')">전체</button>
+                            </div>
+                            <button class="lb bid" id="fB" onclick="togF('입찰')"><span id="lB">0</span>입찰</button>
+                            <button class="lb rec" id="fR" onclick="togF('추천')"><span id="lR">0</span>추천</button>
+                            <button class="lb chg" id="fC" onclick="togF('변경')"><span id="lC">0</span>변경</button>
+                        </div>
+                        <div class="lb-body" id="iL"></div>
+                    </div>
+                </div>
+
+                <!-- 이미지 팝업 -->
+                <div class="img-popup" id="imgPopup" onclick="closeImgPopup()">
+                    <div class="img-popup-ph">
+                        <div style="font-size:4rem;margin-bottom:16px">🖼️</div>조사 이미지 영역<div
+                            style="font-size:.75rem;margin-top:8px;color:#64748b">실제 구현 시 이미지 표시</div>
+                    </div>
+                    <div class="img-popup-close">탭하여 닫기</div>
+                </div>
+                <!-- 복사 토스트 -->
+                <div class="copy-toast" id="copyToast">복사되었습니다!</div>
+                <!-- 모달 -->
+                <div class="mo" id="mBC">
+                    <div class="mx">
+                        <h3>입찰을 취소하시겠습니까?</h3>
+                        <p id="mBD"></p>
+                        <div class="ma"><button class="mm c" onclick="cm('mBC')">아니오</button><button class="mm d"
+                                onclick="doBC()">예</button></div>
+                    </div>
+                </div>
+                <div class="mo" id="mRA">
+                    <div class="mx">
+                        <h3 id="mRT"></h3>
+                        <p>원하시는 액션을 선택하세요.</p>
+                        <div class="ma"><button class="mm c" onclick="cm('mRA')">취소</button><button class="mm o"
+                                onclick="doRC()">입찰확정</button><button class="mm d" onclick="doRX()">입찰취소</button></div>
                     </div>
                 </div>
             </div>
