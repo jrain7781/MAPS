@@ -8451,23 +8451,6 @@ MJ 이정우 팀장
         var lastM = '';
 
         filtered.forEach(function (item) {
-            var dt = String(item['in-date'] || '');
-            var mm = dt.substring(2, 4);
-            var dd = dt.substring(4, 6);
-
-            // 월 구분선
-            if (mm !== lastM) {
-                html += '<div class="mdv"><span>' + parseInt(mm) + '월</span></div>';
-                lastM = mm;
-                lastD = ''; // 월 바뀌면 날짜선도 다시
-            }
-
-            // 날짜 구분선 (앵커 포인트)
-            if (dt !== lastD) {
-                html += '<div class="dp date-anchor" data-date="' + dt + '">' + parseInt(mm) + '월 ' + parseInt(dd) + '일</div>';
-                lastD = dt;
-            }
-
             html += cItem(item);
         });
 
@@ -8484,9 +8467,11 @@ MJ 이정우 팀장
     function cItem(i) {
         var s = String(i.stu_member || '미정');
         var cls = 'ic';
-        if (s === '입찰') cls += ' sb';
-        else if (s === '추천') cls += ' sr';
-        else if (s === '변경') cls += ' sc';
+        var borderCol = '#e2e8f0'; // 기본 색상
+
+        if (s === '입찰') { cls += ' sb'; borderCol = '#4f46e5'; }
+        else if (s === '추천') { cls += ' sr'; borderCol = '#fb923c'; }
+        else if (s === '변경') { cls += ' sc'; borderCol = '#1f2937'; }
 
         var bCls = 'badge';
         var bTxt = s;
@@ -8494,24 +8479,30 @@ MJ 이정우 팀장
         else if (s === '추천') bCls += ' br';
         else if (s === '변경') bCls += ' bc';
 
-        var sk = String(i['sakun-no'] || '');
-        var ct = String(i['court-name'] || '');
-        var pr = i['bid-price'] ? fmtP(i['bid-price']) : '0';
+        // 서버 헤더와 일치하도록 키 수정
+        var sk = String(i.sakun_no || '');
+        var ct = String(i.court || '');
+        var pr = i.bidprice ? fmtP(i.bidprice) : '0';
         var m_nm = mapN(String(i.m_name_id || ''));
-        var tm = String(i['write-time'] || '').substring(11, 16);
+        var tm = String(i.reg_date || '').substring(11, 16); // 시간 추출
 
-        var h = '<div class="' + cls + '">' +
+        // 입찰일자 배지 (카드 하단에 딱 붙임)
+        var dt = String(i['in-date'] || '');
+        var dtLabel = dt.substring(2, 4) + '월 ' + dt.substring(4, 6) + '일';
+        var dtStyle = 'background-color:' + borderCol + '; color:#fff; font-size:0.7rem; padding:1px 8px; border-radius:4px 0 10px 0; font-weight:700; position:absolute; bottom:0; left:0;';
+
+        var h = '<div class="' + cls + '" style="position:relative; padding-bottom:20px;">' +
             '<div class="ic-l" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
             '<div class="ic-copy-row">' +
             '<div class="ic-sakun">' + sk + '</div>' +
-            '<button class="copy-btn" onclick="copyT(\'' + sk + '\', event)">' +
+            '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + sk + '\', event)">' +
             '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
             '</button>' +
             '</div>' +
             '<div class="ic-court">' + ct + ' / ' + m_nm + '</div>' +
             '<div class="ic-copy-row">' +
             '<div class="ic-price">' + (pr === '0' ? '가격미정' : pr + ' 원') + '</div>' +
-            '<button class="copy-btn" onclick="copyT(\'' + pr + '\', event)">' +
+            '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + pr + '\', event)">' +
             '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
             '</button>' +
             '</div>' +
@@ -8523,6 +8514,7 @@ MJ 이정우 팀장
             '</div>' +
             '<div class="ic-time">' + tm + '</div>' +
             '</div>' +
+            '<div class="ic-in-date" style="' + dtStyle + '">' + dtLabel + '</div>' +
             '</div>';
         return h;
     }
