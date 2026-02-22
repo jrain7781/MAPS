@@ -357,10 +357,24 @@ function processMemberDashboardAction(memberToken, itemId, action) {
     var itemData = getItemLiteById_(item);
     var shortDate = itemData ? formatShortInDate_(itemData['in-date']) : '';
     var sakunNo = itemData ? String(itemData.sakun_no || '').trim() : '';
-    var prefix = (shortDate && sakunNo) ? (shortDate + ' ' + sakunNo + ' ') : '';
-    var label = (act === 'bid') ? '입찰확정' : '입찰취소';
-    var comment = prefix + label + ' 요청이 되었습니다. 잠시만 기다려주세요~';
-    telegramSendMessage(chatId, comment);
+    var isBid = (act === 'bid');
+
+    // 사건번호: 검은색 굵게, 입찰확정: 🔵 파랑 굵게, 입찰취소: 🔴 빨강 굵게
+    var labelHtml = isBid
+      ? '<b>🔵 입찰확정</b>'
+      : '<b>🔴 입찰취소</b>';
+    var caseHtml = sakunNo ? ('<b>' + sakunNo + '</b>') : '';
+    var datePrefix = shortDate ? (shortDate + ' ') : '';
+    var comment = datePrefix + caseHtml + '\n' + labelHtml + ' 요청이 되었습니다.\n잠시만 기다려주세요~';
+
+    // MAPS 바로가기 버튼 (회원 토큰 포함)
+    var baseUrl = getWebAppBaseUrl_();
+    var mapsUrl = baseUrl ? (baseUrl + '?view=member&t=' + encodeURIComponent(t)) : '';
+    var replyMarkup = mapsUrl
+      ? { inline_keyboard: [[{ text: '🏠 MAPS 바로가기', web_app: { url: mapsUrl } }]] }
+      : null;
+
+    telegramSendMessage(chatId, comment, replyMarkup);
   } catch (e) {
     // 텔레그램 전송 실패는 비치명적 - 요청은 이미 등록됨
     Logger.log('[processMemberDashboardAction] 텔레그램 전송 오류: ' + (e.message || ''));
