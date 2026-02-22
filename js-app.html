@@ -8261,37 +8261,37 @@ MJ 이정우 팀장
 
         // 데이터 요약: 숫자는 오늘부터/전체(tR)에만 반응하고 필터(fS)에는 반응하지 않음
         var counts = {};
-        var total = { '입찰': 0, '추천': 0, '변경': 0 };
+        var counts_month = { '입찰': 0, '추천': 0, '변경': 0 };
 
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
             if (dt.length < 6) return;
             var s = String(item.stu_member || '미정');
 
-            // 1. 전체 통계 계산 (범위 tR만 적용)
-            var inRange = true;
-            if (tR === 'today' && dt < tS) inRange = false;
-
-            if (inRange && total.hasOwnProperty(s)) {
-                total[s]++;
-            }
-
-            // 2. 캘린더 동그라미용 (현재 월 + 상태 필터 fS 적용)
+            // 1. 해당 월 통계 계산 (tR 범위 적용)
             if (dt.substring(0, 4) === (yS + mS_str)) {
+                var inRange = true;
+                if (tR === 'today' && dt < tS) inRange = false;
+
+                if (inRange && counts_month.hasOwnProperty(s)) {
+                    counts_month[s]++;
+                }
+
                 if (!counts[dt]) counts[dt] = { '입찰': 0, '추천': 0, '변경': 0 };
                 counts[dt][s]++;
             }
         });
 
-        // 상단 카운트 업데이트
-        if (document.getElementById('cB')) document.getElementById('cB').textContent = total['입찰'] || 0;
-        if (document.getElementById('cR')) document.getElementById('cR').textContent = total['추천'] || 0;
-        if (document.getElementById('cC')) document.getElementById('cC').textContent = total['변경'] || 0;
-        if (document.getElementById('lB')) document.getElementById('lB').textContent = total['입찰'] || 0;
-        if (document.getElementById('lR')) document.getElementById('lR').textContent = total['추천'] || 0;
-        if (document.getElementById('lC')) document.getElementById('lC').textContent = total['변경'] || 0;
+        // 월별 요약 업데이트 (네비게이션 연월 아래)
+        var msEl = document.getElementById('cMS');
+        if (msEl) {
+            msEl.innerHTML =
+                '<div class="ms-it" style="color:#4f46e5"><div class="ms-sh cir" style="background:#4f46e5"></div>' + (counts_month['입찰'] || 0) + '</div>' +
+                '<div class="ms-it" style="color:#fb923c"><div class="ms-sh tri" style="color:#fb923c"></div>' + (counts_month['추천'] || 0) + '</div>' +
+                '<div class="ms-it" style="color:#1f2937"><div class="ms-sh sq" style="background:#1f2937"></div>' + (counts_month['변경'] || 0) + '</div>';
+        }
 
-        // 이전/다음달 힌트 (오늘부터 모드 제외하고 항상 표시)
+        // 이전/다음달 힌트
         rHint(y, m);
 
         grid.innerHTML = '';
@@ -8320,18 +8320,19 @@ MJ 이정우 팀장
             var isT = (dS === tS);
             var isS = (mS.indexOf(dS) > -1);
 
-            // [지시사항 3] 상단바 상태(fS) 필터에 따라 점(Dot) 노출 결정
+            // [지시사항] 지표 형태 다변화 및 겹침 로직
             var dotH = '';
-            // 오늘부터 모드에서 과거 날짜는 점을 아예 생성 안 함
             if (!isPastToday) {
                 var sOrder = ['입찰', '추천', '변경'];
                 var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '변경': '#1f2937' };
+                var shapes = { '입찰': '', '추천': 'tri', '변경': 'sq' };
 
                 sOrder.forEach(function (s) {
                     if (fS.indexOf(s) === -1) return;
                     var c = items[s] || 0;
                     for (var j = 0; j < c; j++) {
-                        dotH += '<div class="dc" style="background:' + colors[s] + '"></div>';
+                        var style = (s === '추천') ? 'color:' + colors[s] : 'background:' + colors[s];
+                        dotH += '<div class="dc ' + shapes[s] + '" style="' + style + '"></div>';
                     }
                 });
             }
@@ -8339,9 +8340,8 @@ MJ 이정우 팀장
             var cls = 'cd';
             if (isT) cls += ' t';
             if (has && !isPastToday) {
-                // 오늘부터 모드에서 과거 날짜는 바탕색/테두리 클래스(fh/ph)를 안 붙임
-                if (dS >= tS) cls += ' fh'; // 오늘 포함 미래: 초록
-                else cls += ' ph';        // 과거 (전체 모드일 때만 도달 가능)
+                if (dS >= tS) cls += ' fh';
+                else cls += ' ph';
             }
             if (isS) cls += ' sel';
 
@@ -8370,8 +8370,8 @@ MJ 이정우 팀장
         var nY = String(nM.getFullYear()).slice(-2);
         var nM_s = String(nM.getMonth() + 1).padStart(2, '0');
 
-        var pC = { '입찰': 0, '추천': 0 };
-        var nC = { '입찰': 0, '추천': 0 };
+        var pC = { '입찰': 0, '추천': 0, '변경': 0 };
+        var nC = { '입찰': 0, '추천': 0, '변경': 0 };
 
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
@@ -8385,11 +8385,13 @@ MJ 이정우 팀장
 
         pEl.innerHTML = '';
         if (pC['입찰'] > 0) pEl.innerHTML += '<div class="cdot" style="background:#4f46e5">' + pC['입찰'] + '</div>';
-        if (pC['추천'] > 0) pEl.innerHTML += '<div class="cdot" style="background:#fb923c">' + pC['추천'] + '</div>';
+        if (pC['추천'] > 0) pEl.innerHTML += '<div class="cdot tri" style="color:#fb923c; background:none; box-shadow:none; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:11px solid currentColor; font-size:9px; display:inline-flex; align-items:flex-end; padding-bottom:1px;">' + pC['추천'] + '</div>';
+        if (pC['변경'] > 0) pEl.innerHTML += '<div class="cdot" style="background:#1f2937; border-radius:2px;">' + pC['변경'] + '</div>';
 
         nEl.innerHTML = '';
         if (nC['입찰'] > 0) nEl.innerHTML += '<div class="cdot" style="background:#4f46e5">' + nC['입찰'] + '</div>';
-        if (nC['추천'] > 0) nEl.innerHTML += '<div class="cdot" style="background:#fb923c">' + nC['추천'] + '</div>';
+        if (nC['추천'] > 0) nEl.innerHTML += '<div class="cdot tri" style="color:#fb923c; background:none; box-shadow:none; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:11px solid currentColor; font-size:9px; display:inline-flex; align-items:flex-end; padding-bottom:1px;">' + nC['추천'] + '</div>';
+        if (nC['변경'] > 0) nEl.innerHTML += '<div class="cdot" style="background:#1f2937; border-radius:2px;">' + nC['변경'] + '</div>';
     }
 
     /**
@@ -8443,23 +8445,7 @@ MJ 이정우 팀장
             return String(a['sakun-no'] || '').localeCompare(String(b['sakun-no'] || ''));
         });
 
-        // [추가] 리스트 최상단 월별 썸머리 (현재 달의 전체 데이터 요약)
-        var yS_sum = String(mD.getFullYear()).slice(-2);
-        var mS_sum = String(mD.getMonth() + 1).padStart(2, '0');
-        var curSum = { '입찰': 0, '추천': 0, '변경': 0 };
-        allBiddingData.forEach(function (it) {
-            var d_it = String(it['in-date'] || '');
-            var s_it = String(it.stu_member || '');
-            if (d_it.substring(0, 4) === (yS_sum + mS_sum)) {
-                if (curSum.hasOwnProperty(s_it)) curSum[s_it]++;
-            }
-        });
-
-        var sumH = '<div class="mdv" style="margin:0 -12px 16px; border-bottom:1px solid #eee; padding-bottom:12px;">' +
-            '<span style="background:#475569; padding:6px 20px; font-size:0.85rem; font-weight:700;">' + (mD.getMonth() + 1) + '월 전체 요약: ' +
-            '입찰 ' + curSum['입찰'] + ' / 추천 ' + curSum['추천'] + ' / 변경 ' + curSum['변경'] + '</span></div>';
-
-        var html = sumH;
+        var html = '';
         var lastD = '';
 
         filtered.forEach(function (item) {
