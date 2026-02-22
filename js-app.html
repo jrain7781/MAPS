@@ -8313,7 +8313,11 @@ MJ 이정우 팀장
             var dS = yS + mS_str + String(d).padStart(2, '0');
 
             // [지시사항 2] 오늘부터 / 전체 필터에 따라 날짜 박스 노출 결정
-            if (tR === 'today' && dS < tS) continue;
+            // [수정] 자리를 건너뛰지 않고 빈 칸으로 채워 그리드 구조(4~5주) 유지
+            if (tR === 'today' && dS < tS) {
+                grid.insertAdjacentHTML('beforeend', '<div class="cd e"></div>');
+                continue;
+            }
 
             var items = counts[dS] || {};
             var has = (items['입찰'] > 0 || items['추천'] > 0 || items['변경'] > 0);
@@ -8392,26 +8396,14 @@ MJ 이정우 팀장
      * 날짜 선택 (리스트 앵커로 스크롤)
      */
     function selD(d) {
-        mS = d;
-        rCal(); // 선택 효과 반영을 위해 갱신 (리스트 필터링은 안함)
-
-        var el = document.querySelector('.date-anchor[data-date="' + d + '"]');
-        if (el) {
-            // 스티키 헤더(상단바 44px + 캘린더바 54px + 여백) 고려
-            var offset = 120;
-            var bodyRect = document.getElementById('MemberDashboard').getBoundingClientRect();
-            var elRect = el.getBoundingClientRect();
-            var top = elRect.top - bodyRect.top + document.getElementById('MemberDashboard').scrollTop - offset;
-
-            document.getElementById('MemberDashboard').scrollTo({
-                top: Math.max(0, top),
-                behavior: 'smooth'
-            });
-
-            // 하이라이트 효과
-            el.style.backgroundColor = '#fef08a';
-            setTimeout(function () { el.style.backgroundColor = ''; }, 1500);
+        var idx = mS.indexOf(d);
+        if (idx > -1) {
+            mS.splice(idx, 1); // 이미 있으면 제거 (해제)
+        } else {
+            mS.push(d); // 없으면 추가 (선택)
         }
+        rCal(); // 빨간 체크표시 갱신
+        rLst(); // 리스트 즉시 연동
     }
 
     /**
