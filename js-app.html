@@ -8663,18 +8663,29 @@ MJ 이정우 팀장
         _loadViewerImages_(id, sk);
     }
 
-    // 뷰어 닫기
+    // 뷰어 닫기 - 손 뗀 위치에서 부드럽게 마무리
     function closeImgViewer() {
         var viewer = document.getElementById('imgViewer');
-        if (viewer) { viewer.style.transition = ''; viewer.style.transform = ''; viewer.classList.remove('open'); }
-        if (_swipedCard) {
-            _swipedCard.style.transition = ''; _swipedCard.style.transform = ''; _swipedCard.style.opacity = '';
-            _swipedCard.classList.remove('ic-swiped-out');
-            _swipedCard = null;
+        var card = _swipedCard;
+        _swipedCard = null;
+        // 뷰어: 현재 위치 → 오른쪽으로 퇴장
+        if (viewer) {
+            viewer.style.transition = 'transform .22s ease';
+            viewer.style.transform = 'translateX(100%)';
         }
+        // 카드: 현재 위치 → 원래 자리로 복귀
+        if (card) {
+            card.style.transition = 'transform .22s ease, opacity .22s ease';
+            card.style.transform = 'translateX(0)';
+            card.style.opacity = '1';
+        }
+        setTimeout(function () {
+            if (viewer) { viewer.style.transition = ''; viewer.style.transform = ''; viewer.classList.remove('open'); }
+            if (card) { card.style.transition = ''; card.style.transform = ''; card.style.opacity = ''; card.classList.remove('ic-swiped-out'); }
+        }, 230);
     }
 
-    // 뷰어에서 오른쪽 드래그 → 카드로 복귀 (손가락 실시간 추적)
+    // 뷰어에서 오른쪽 드래그 → 카드와 뷰어가 한 몸처럼 같이 이동
     (function initImgViewerSwipe_() {
         var viewer = document.getElementById('imgViewer');
         if (!viewer) return;
@@ -8688,13 +8699,15 @@ MJ 이정우 팀장
             var dx = e.touches[0].clientX - sx, dy = e.touches[0].clientY - sy;
             if (!dragging) { if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) dragging = true; else return; }
             if (dragging && dx > 0) {
+                var W = window.innerWidth;
+                // 뷰어: 손가락 따라 오른쪽으로
                 viewer.style.transition = 'none';
                 viewer.style.transform = 'translateX(' + dx + 'px)';
+                // 카드: 뷰어 바로 왼쪽에 딱 붙어서 같이 이동 (dx - W → 0)
                 if (_swipedCard) {
-                    var cardX = -(window.innerWidth * 1.1) + dx;
                     _swipedCard.style.transition = 'none';
-                    _swipedCard.style.transform = 'translateX(' + cardX + 'px)';
-                    _swipedCard.style.opacity = String(Math.min(1, dx / (window.innerWidth * 0.5)));
+                    _swipedCard.style.transform = 'translateX(' + (dx - W) + 'px)';
+                    _swipedCard.style.opacity = String(Math.min(1, dx / (W * DRAG_THRESHOLD)));
                 }
             }
         }, { passive: true });
@@ -8704,17 +8717,18 @@ MJ 이정우 팀장
             dragging = false;
             var dx = e.changedTouches[0].clientX - sx;
             if (dx > window.innerWidth * DRAG_THRESHOLD) {
-                closeImgViewer();
+                closeImgViewer(); // 1/3 이상 → 닫기 완료 (손 뗀 위치에서 자연스럽게 마무리)
             } else {
-                viewer.style.transition = 'transform .25s ease'; viewer.style.transform = 'translateX(0)';
+                // 스냅백: 뷰어 원위치, 카드 다시 사라짐
+                viewer.style.transition = 'transform .22s ease'; viewer.style.transform = 'translateX(0)';
                 if (_swipedCard) {
-                    _swipedCard.style.transition = 'transform .25s ease, opacity .25s ease';
+                    _swipedCard.style.transition = 'transform .22s ease, opacity .22s ease';
                     _swipedCard.style.transform = 'translateX(-110%)'; _swipedCard.style.opacity = '0';
                 }
                 setTimeout(function () {
                     viewer.style.transition = ''; viewer.style.transform = '';
                     if (_swipedCard) { _swipedCard.style.transition = ''; _swipedCard.style.transform = ''; _swipedCard.style.opacity = ''; }
-                }, 280);
+                }, 230);
             }
         }, { passive: true });
     })();
