@@ -8608,11 +8608,9 @@ MJ 이정우 팀장
     }
 
     /**
-     * 조사 이미지 뷰어 - 밀어내기 애니메이션
+     * 조사 이미지 뷰어 - 해당 카드만 왼쪽으로 날아가는 애니메이션
      */
-    function _getDashEl() {
-        return document.querySelector('.member-dashboard-v2');
-    }
+    var _swipedCard = null; // 현재 열린 카드 element 추적
 
     function openImgViewer(id, sk) {
         var viewer = document.getElementById('imgViewer');
@@ -8624,9 +8622,9 @@ MJ 이정우 팀장
         if (cnt) cnt.textContent = '';
         body.innerHTML = '<div class="img-vph">이미지 불러오는 중...</div>';
 
-        // 밀어내기: 대시보드 왼쪽으로, 뷰어 오른쪽에서 들어옴
-        var dash = _getDashEl();
-        if (dash) dash.classList.add('dash-pushed');
+        // 해당 카드만 왼쪽으로 날림, 나머지 카드는 그대로
+        _swipedCard = document.querySelector('#iL .ic[data-id="' + id + '"]');
+        if (_swipedCard) _swipedCard.classList.add('ic-swiped-out');
         viewer.classList.add('open');
 
         google.script.run
@@ -8660,10 +8658,12 @@ MJ 이정우 팀장
 
     function closeImgViewer() {
         var viewer = document.getElementById('imgViewer');
-        var dash = _getDashEl();
-        // 밀어내기 역방향: 뷰어 오른쪽으로, 대시보드 되돌아옴
+        // 뷰어 닫힘 + 날아간 카드 제자리로 복귀
         if (viewer) viewer.classList.remove('open');
-        if (dash) dash.classList.remove('dash-pushed');
+        if (_swipedCard) {
+            _swipedCard.classList.remove('ic-swiped-out');
+            _swipedCard = null;
+        }
     }
 
     // 뷰어 내 오른쪽 스와이프 → 닫기 (밀어내기 역방향)
