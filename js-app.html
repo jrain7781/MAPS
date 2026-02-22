@@ -8313,11 +8313,12 @@ MJ 이정우 팀장
             var dS = yS + mS_str + String(d).padStart(2, '0');
 
             // [지시사항 2] 오늘부터 / 전체 필터에 따라 날짜 박스 노출 결정
-            if (tR === 'today' && dS < tS) continue; // 과거 날짜 박스 자체를 생성 안 함
+            if (tR === 'today' && dS < tS) continue;
 
-            var isT = (dS === tS);
-            var isS = (mS.indexOf(dS) > -1); // [수정] 다중 선택 확인
             var items = counts[dS] || {};
+            var has = (items['입찰'] > 0 || items['추천'] > 0 || items['변경'] > 0);
+            var isT = (dS === tS);
+            var isS = (mS.indexOf(dS) > -1);
 
             // [지시사항 3] 상단바 상태(fS) 필터에 따라 점(Dot) 노출 결정
             var dotH = '';
@@ -8325,7 +8326,7 @@ MJ 이정우 팀장
             var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '변경': '#1f2937' };
 
             sOrder.forEach(function (s) {
-                if (fS.indexOf(s) === -1) return; // 상단바에서 꺼진 상태는 점 안 보여줌
+                if (fS.indexOf(s) === -1) return;
                 var c = items[s] || 0;
                 for (var j = 0; j < c; j++) {
                     dotH += '<div class="dc" style="background:' + colors[s] + '"></div>';
@@ -8334,9 +8335,12 @@ MJ 이정우 팀장
 
             var cls = 'cd';
             if (isT) cls += ' t';
-            if (isS) cls += ' sel'; // 선택된 상태 스타일 (필요시 CSS 추가)
+            if (has) {
+                if (dS >= tS) cls += ' fh'; // 오늘 포함 미래: 초록
+                else cls += ' ph';        // 과거 (전체 모드일 때만 도달 가능)
+            }
+            if (isS) cls += ' sel';
 
-            // [지시사항 1] 날짜 숫자 앞에 붉은색 체크표시 (✓)
             var checkH = isS ? '<span style="color:#ef4444; font-weight:bold; margin-right:2px;">✓</span>' : '';
 
             var h3 = '<div class="' + cls + '" onclick="selD(\'' + dS + '\')">' +
