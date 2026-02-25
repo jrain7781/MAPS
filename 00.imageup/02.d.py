@@ -194,9 +194,12 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
 
                 # [필터] 사건번호 또는 관리번호 (공매 포함)
                 if ("사건번호" in text or "관리번호" in text) and "감정가" in text:
-                    # [모드 교차 검증] 경매=타경 있음, 공매=타경 없음
-                    if type_prefix == "경매" and "타경" not in text: continue
-                    if type_prefix == "공매" and "타경" in text: continue
+                    # [모드 교차 검증] 하이픈 개수 기준: 경매=1개, 공매=2개
+                    _cn = re.search(r"20\d{2}-[\d-]+", text)
+                    if _cn:
+                        _dash = _cn.group().count("-")
+                        if type_prefix == "경매" and _dash >= 2: continue
+                        if type_prefix == "공매" and _dash < 2: continue
                     candidates.append(item)
         except: continue
     
