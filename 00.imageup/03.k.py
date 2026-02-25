@@ -89,29 +89,62 @@ def capture_combined_element(driver, header_element, table_element, file_path):
         return False
 
 
-def extract_smart_date(header_text, type_prefix):
-    today_year = datetime.datetime.now().year
-    
-    # [1] 전체 날짜 형태 우선 (2025.02.14 또는 25.02.14)
-    full_date_match = re.search(r"(?:20)?(\d{2})[\.-](\d{1,2})[\.-](\d{1,2})", header_text)
-    if full_date_match:
-        yy, mm, dd = full_date_match.groups()
-        return f"{yy}{mm.zfill(2)}{dd.zfill(2)}"
+def extract_reg_date(header_text):
+    """헤더에서 등록일(YY.MM.DD) 파싱 → datetime.date 반환"""
+    m = re.search(r"(\d{2})\.(\d{2})\.(\d{2})", header_text)
+    if m:
+        yy, mm, dd = m.groups()
+        try:
+            return datetime.date(2000 + int(yy), int(mm), int(dd))
+        except:
+            pass
+    return None
 
-    # [2] 공매 전용: 종료일(~ 뒷부분) 또는 단순 월/일
+
+def extract_smart_date(header_text, type_prefix, reg_date=None):
+    """날짜 추출 → (파일명용 YYMMDD 문자열, datetime.date or None) 반환"""
+    today_year = datetime.datetime.now().year
+
+    # [1] 공매 전용: "02.23 14:00~02.25 17:00" → ~ 뒤 종료일 사용
     if type_prefix == "공매":
+        end_match = re.search(r"~\s*(\d{1,2})[\./](\d{1,2})", header_text)
+        if end_match:
+            em, ed = int(end_match.group(1)), int(end_match.group(2))
+            # 년도 확정: 등록일 월 > 입찰 종료월이면 다음 연도
+            if reg_date:
+                year = (reg_date.year + 1) if reg_date.month > em else reg_date.year
+            else:
+                year = today_year
+            try:
+                bid_date = datetime.date(year, em, ed)
+                return f"{str(year)[2:]}{str(em).zfill(2)}{str(ed).zfill(2)}", bid_date
+            except:
+                pass
+
+        # fallback: end_date_match (단순 ~ 패턴)
         end_date_match = re.search(r"~\s*(?:20\d{2}[\./])?(\d{1,2})[\./](\d{1,2})", header_text)
         if end_date_match:
             month, day = end_date_match.groups()
-            return f"{str(today_year)[2:]}{month.zfill(2)}{day.zfill(2)}"
-            
+            return f"{str(today_year)[2:]}{month.zfill(2)}{day.zfill(2)}", None
+
         gongmae_pattern = re.search(r"(?<!\d\.)(?<!\d)(?:0[1-9]|1[0-2])[\./](?:[0-2][0-9]|3[01])(?!\d)", header_text)
         if gongmae_pattern:
             mm_dd = gongmae_pattern.group()
             month, day = re.split(r"[\./]", mm_dd)
-            return f"{str(today_year)[2:]}{month.zfill(2)}{day.zfill(2)}"
+            return f"{str(today_year)[2:]}{month.zfill(2)}{day.zfill(2)}", None
 
-    return "000000"
+    # [2] 경매: 전체 날짜 (2025.02.14 또는 25.02.14 또는 2026-02-26)
+    full_date_match = re.search(r"(?:20)?(\d{2})[\.-](\d{1,2})[\.-](\d{1,2})", header_text)
+    if full_date_match:
+        yy, mm, dd = full_date_match.groups()
+        try:
+            year = 2000 + int(yy)
+            bid_date = datetime.date(year, int(mm), int(dd))
+            return f"{yy}{mm.zfill(2)}{dd.zfill(2)}", bid_date
+        except:
+            pass
+
+    return "000000", None
 
 
 def get_newest_list_file():
@@ -240,25 +273,31 @@ def process_list_page_capture_all(driver, save_dir, type_prefix, suffix="", mana
                 header_text = full_text.split("\n")[0]
                 header_element = item
 
-            pattern = r"20\d{2}-\d+[\d-]*(?:\(\d+\))?|20\d{2}타경\d+[\d()]*"
+            pattern = r"20\d{2}-\d+[\d-]*(?:\(\d+\))?|20\d{2}\ud0c0\uacbd\d+[\d()]*"
             match = re.search(pattern, full_text) or re.search(pattern, header_text)
             
             raw_sakun = match.group() if match else f"번호미상{i}"
             
-            # [수정] 사건번호 정규화: 하이픈 개수에 따른 엄격한 분류
+            # 사건번호 정규화: 하이픈 개수에 따른 엄격한 분류
             dash_count = raw_sakun.count("-")
             if dash_count == 1:
-                # 하이픈 1개: 경매 (2025-3861 -> 2025타경3861)
                 sakun_no = raw_sakun.replace("-", "타경")
             elif dash_count >= 2:
-                # 하이픈 2개 이상: 공매 (2024-12345-001 유지)
                 sakun_no = raw_sakun.split()[0] if " " in raw_sakun else raw_sakun
             elif type_prefix == "경매":
                 sakun_no = raw_sakun.replace("-", "타경")
             else:
                 sakun_no = raw_sakun.split()[0]
-            
-            bid_date_str = extract_smart_date(header_text, type_prefix)
+
+            # 등록일 파싱
+            reg_date = extract_reg_date(header_text)
+
+            # 날짜 추출 + 입찰일 스킵 체크
+            bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
+            if bid_date_obj and bid_date_obj <= datetime.date.today():
+                print(f"    ⏭ 입찰일 {bid_date_obj} <= 오늘, 스킵")
+                continue
+
             court_name = "공매" if type_prefix == "공매" else get_court_from_text(full_text)
 
             # 안전한 파일명

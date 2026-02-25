@@ -18,8 +18,9 @@ from selenium.webdriver.support import expected_conditions as EC
 # [설정] 계정 및 경로
 # ==============================================================================
 ACCOUNTS = [
-    {"id": "mjgold", "pw": "28471296"},
-    {"id": "mjjang1", "pw": "28471295"}
+    {"id": "mjgold",   "pw": "28471296",    "manager": "대표님"},
+    {"id": "mjjang1",  "pw": "28471295",    "manager": "대표님"},
+    {"id": "jjhsm81",  "pw": "marlboro81!!", "manager": "전제혁"}
 ]
 
 # 저장 경로: 구글 드라이브 (웹 등록과 동일하게 유지)
@@ -118,28 +119,58 @@ def capture_combined_element(driver, header_element, table_element, file_path):
 # ==============================================================================
 # [함수 4] 날짜 추출 로직 (헤더 텍스트 기반)
 # ==============================================================================
-def extract_smart_date(header_text, type_prefix):
-    today_year = datetime.datetime.now().year
-    
-    # [공매 전용] "12/23 10:00" 형태 -> 251223
-    if type_prefix == "공매":
-        gongmae_pattern = re.search(r"(\d{1,2})[\./](\d{1,2})\s+(\d{1,2}):(\d{1,2})", header_text)
-        if gongmae_pattern:
-            month, day, _, _ = gongmae_pattern.groups()
-            return f"{str(today_year)[2:]}{month.zfill(2)}{day.zfill(2)}"
+def extract_reg_date(header_text):
+    """헤더에서 등록일(YY.MM.DD) 파싱 → datetime.date 반환"""
+    m = re.search(r"(\d{2})\.(\d{2})\.(\d{2})", header_text)
+    if m:
+        yy, mm, dd = m.groups()
+        try:
+            return datetime.date(2000 + int(yy), int(mm), int(dd))
+        except:
+            pass
+    return None
 
-    # [경매 전용] "2025.02.14" 형태 -> 250214
+def extract_smart_date(header_text, type_prefix, reg_date=None):
+    """날짜 추출 → (파일명용 문자열 YYMMDD, datetime.date or None) 반환"""
+    today_year = datetime.datetime.now().year
+
+    # [공매 전용] "02.23 14:00~02.25 17:00" → ~ 뒤 종료일 사용
+    if type_prefix == "공매":
+        end_match = re.search(r"~\s*(\d{1,2})[\./](\d{1,2})", header_text)
+        if end_match:
+            em, ed = int(end_match.group(1)), int(end_match.group(2))
+            # 년도 확정: 등록일 월 > 입찰 종료월이면 다음 연도
+            if reg_date:
+                year = (reg_date.year + 1) if reg_date.month > em else reg_date.year
+            else:
+                year = today_year
+            try:
+                bid_date = datetime.date(year, em, ed)
+                return f"{str(year)[2:]}{str(em).zfill(2)}{str(ed).zfill(2)}", bid_date
+            except:
+                pass
+        # fallback: 첫 번째 시간 패턴
+        gm = re.search(r"(\d{1,2})[\./](\d{1,2})\s+\d{1,2}:\d{1,2}", header_text)
+        if gm:
+            month, day = gm.group(1), gm.group(2)
+            return f"{str(today_year)[2:]}{month.zfill(2)}{day.zfill(2)}", None
+
+    # [경매 전용] "2026-02-26" 또는 "2025.02.14" 형태
     k_auction_pattern = re.search(r"(20\d{2})[\.-](\d{1,2})[\.-](\d{1,2})", header_text)
     if k_auction_pattern:
         year, month, day = k_auction_pattern.groups()
-        return f"{year[2:]}{month.zfill(2)}{day.zfill(2)}"
+        try:
+            bid_date = datetime.date(int(year), int(month), int(day))
+            return f"{year[2:]}{month.zfill(2)}{day.zfill(2)}", bid_date
+        except:
+            pass
 
-    return "000000"
+    return "000000", None
 
 # ==============================================================================
 # [함수 5] 리스트 처리
 # ==============================================================================
-def process_list_page(driver, save_dir, type_prefix):
+def process_list_page(driver, save_dir, type_prefix, manager=""):
     print(f"\n  ▶ [{type_prefix}] 리스트 분석 시작...")
     remove_popups_css(driver)
     
@@ -197,27 +228,45 @@ def process_list_page(driver, save_dir, type_prefix):
                 header_text = full_text.split('\n')[0]
                 header_element = item 
 
-            # 3. [핵심수정] 사건번호 추출 (괄호 물건번호 포함)
-            # 예: 2024-82718(5)
+            # 3. 사건번호 추출 + 하이픈 개수 검증
             pattern = r"20\d{2}-\d+[\d-]*(?:\(\d+\))?"
             match = re.search(pattern, full_text)
             if not match: match = re.search(pattern, header_text)
-            
             raw_sakun = match.group() if match else f"번호미상{i}"
-            sakun_no = raw_sakun.replace("-", "타경") if type_prefix == "경매" else raw_sakun.split()[0]
-            
-            # 4. 날짜 추출 (헤더에서)
-            bid_date_str = extract_smart_date(header_text, type_prefix)
+            dash_count = raw_sakun.count("-")
 
-            # 5. 법원명 추출
+            if type_prefix == "경매":
+                if dash_count >= 2:
+                    print(f"    ⚠ 경매 사건번호 하이픈 2개 이상 → 스킵: {raw_sakun}")
+                    skipped_count += 1
+                    continue
+                sakun_no = raw_sakun.replace("-", "타경")  # 2025-1234 → 2025타경1234
+            else:  # 공매
+                if dash_count < 2:
+                    print(f"    ⚠ 공매 사건번호 하이픈 1개 이하 → 스킵: {raw_sakun}")
+                    skipped_count += 1
+                    continue
+                sakun_no = raw_sakun.split()[0] if " " in raw_sakun else raw_sakun
+
+            # 4. 등록일 파싱
+            reg_date = extract_reg_date(header_text)
+
+            # 5. 날짜 추출 + 입찰일 스킵 체크
+            bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
+            if bid_date_obj and bid_date_obj <= datetime.date.today():
+                print(f"    ⏭ 입찰일 {bid_date_obj} <= 오늘, 스킵")
+                skipped_count += 1
+                continue
+
+            # 6. 법원명 추출
             court_name = "공매" if type_prefix == "공매" else get_court_from_text(full_text)
 
-            # 6. 저장 (합체 캡처)
+            # 7. 저장 (합체 캡처)
             safe_sakun = re.sub(r'[\\/*?:"<>|]', "", sakun_no)
             safe_court = re.sub(r'[\\/*?:"<>|]', "", court_name)
-            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}.png"
+            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}_{manager}.png"
             file_path = os.path.join(save_dir, filename)
-            
+
             if capture_combined_element(driver, header_element, item, file_path):
                 print(f"    - ({i+1}) 📸 저장: {filename}")
                 count += 1
@@ -235,6 +284,7 @@ def process_list_page(driver, save_dir, type_prefix):
 def run_macro(account):
     user_id = account['id']
     user_pw = account['pw']
+    manager = account.get("manager", "")
     save_dir = BASE_SAVE_DIR
     os.makedirs(save_dir, exist_ok=True)
 
@@ -277,7 +327,7 @@ def run_macro(account):
         remove_popups_css(driver)
         time.sleep(1)
         apply_list_scale_and_search(driver)
-        process_list_page(driver, save_dir, "경매")
+        process_list_page(driver, save_dir, "경매", manager)
 
         # 공매
         try:
@@ -286,7 +336,7 @@ def run_macro(account):
             time.sleep(1)
             remove_popups_css(driver)
             apply_list_scale_and_search(driver)
-            process_list_page(driver, save_dir, "공매")
+            process_list_page(driver, save_dir, "공매", manager)
             
         except Exception as e:
             print(f"  ❌ 공매 진입 중 오류: {e}")
