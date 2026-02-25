@@ -1,0 +1,2716 @@
+<style>
+  /* Custom styles and font settings - Last Updated: 2026-02-04 */
+  html {
+    overscroll-behavior: none;
+    /* 풀다운 새로고침/화면이탈 방지 */
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f7f9fb;
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* 회원 전용 모드 - PC에서 더 크게 */
+  body.member-view-mode {
+    background-color: #ffffff;
+  }
+
+  body.member-view-mode .tab-content {
+    padding: 0 !important;
+  }
+
+  body.member-view-mode .bidding-schedule-card-body {
+    border: none;
+    border-radius: 0;
+  }
+
+  @media (min-width: 1024px) {
+    body.member-view-mode .calendar-day-date {
+      font-size: 1.2rem;
+      padding: 12px 0;
+    }
+
+    body.member-view-mode .sakun-no-cell {
+      font-size: 1.1rem;
+    }
+
+    body.member-view-mode .calendar-grid,
+    body.member-view-mode .calendar-grid-week {
+      gap: 4px;
+      background-color: #f1f5f9;
+      /* 그리드 사이 간격 색상 */
+      display: grid !important;
+      grid-template-columns: repeat(5, 1fr) !important;
+    }
+
+    body.member-view-mode .calendar-day {
+      border: none;
+      padding: 8px;
+    }
+
+    /* 회원 전용 모드 - 모바일이 아닐 때 가로 꽉 차게 */
+    body.member-view-mode #header-container,
+    body.member-view-mode .tab-content,
+    body.member-view-mode .calendar-view {
+      max-width: none !important;
+      width: 100% !important;
+    }
+
+    /* 회원 전용 모드 - 모달 크게 */
+    body.member-view-mode .modal-content {
+      max-width: 1400px !important;
+      /* 조금 더 크게 */
+      width: 98% !important;
+      height: 92vh !important;
+      overflow-y: auto;
+    }
+
+    body.member-view-mode #modal-investigation-content .flex-col {
+      height: 75vh !important;
+    }
+  }
+
+  /* 회원 전용 특화 카드 스타일 */
+  .member-item-card {
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .member-item-card:hover {
+    border-color: #6366f1;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  }
+
+  .member-card-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .member-card-right {
+    display: flex;
+    gap: 8px;
+    margin-left: 12px;
+  }
+
+  .member-sakun-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+  }
+
+  .member-sakun-no {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #1e293b;
+  }
+
+  .member-court-status {
+    font-size: 0.75rem;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .member-bid-price {
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: #ef4444;
+    /* 붉고 진하게 */
+  }
+
+  .member-action-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    transition: all 0.2s;
+  }
+
+  .btn-bid-apply {
+    background: #4f46e5;
+    color: #fff;
+  }
+
+  .btn-bid-apply:hover {
+    background: #4338ca;
+  }
+
+  .btn-bid-cancel-red {
+    background: #fee2e2;
+    color: #ef4444;
+    border: 1px solid #fecaca;
+  }
+
+  .btn-bid-cancel-red:hover {
+    background: #fecaca;
+  }
+
+  /* 회원 전용 모드에서 숨길 요소 전용 클래스 */
+  body.member-view-mode .member-hidden {
+    display: none !important;
+  }
+
+  /* 옥션 링크 버튼 스타일 */
+  .btn-auction-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: #fff;
+    color: #4f46e5;
+    border: 1px solid #e0e7ff;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+
+  .btn-auction-link:hover {
+    background: #f5f7ff;
+    border-color: #c7d2fe;
+  }
+
+  .btn-bid-cancel {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+  }
+
+  .btn-bid-cancel:hover {
+    background: #e2e8f0;
+  }
+
+  /* 입찰확정 버튼 (추천 → 입찰) */
+  .btn-bid-confirm {
+    background: #4f46e5;
+    color: #fff;
+  }
+
+  .btn-bid-confirm:hover {
+    background: #4338ca;
+  }
+
+  /* 입찰취소/취소 버튼 (추천 → 미정 또는 입찰 → 취소) */
+  .btn-bid-cancel-req {
+    background: #fee2e2;
+    color: #ef4444;
+    border: 1px solid #fecaca;
+  }
+
+  .btn-bid-cancel-req:hover {
+    background: #fecaca;
+  }
+
+  /* 모바일 연속 리스트 뷰 전용 */
+  .mobile-item-list {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .mobile-item-list .date-divider {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #475569;
+    padding: 8px 12px;
+    background: #f8fafc;
+    border-radius: 6px;
+    margin-top: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  /* 캡쳐 영역 스타일 */
+  .capture-target {
+    padding: 20px;
+    background: white;
+  }
+
+  /* Loader style */
+  .loader {
+    border-top-color: #3498db;
+    -webkit-animation: spinner 1.5s linear infinite;
+    animation: spinner 1.5s linear infinite;
+  }
+
+  @-webkit-keyframes spinner {
+    0% {
+      -webkit-transform: rotate(0deg);
+    }
+
+    100% {
+      -webkit-transform: rotate(360deg);
+    }
+  }
+
+  @keyframes spinner {
+    0% {
+      transform: rotate(0deg);
+    }
+
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Content display control */
+  .content-hidden {
+    display: none !important;
+  }
+
+  /* Active menu button style */
+  .menu-active {
+    background-color: #eef2ff;
+    color: #4f46e5;
+    font-weight: 600;
+    border-left: 4px solid #4f46e5;
+    border-radius: 8px;
+  }
+
+  /* Sidebar styles - 메뉴 사이 간격 및 라운드 추가 */
+  .sidebar button {
+    margin: 4px 8px;
+    border-radius: 8px;
+  }
+
+  /* 메인 콘텐츠 영역 하단 여백 추가 */
+  .tab-content {
+    padding-bottom: 12px !important;
+  }
+
+  /* --- [Calendar Styles] --- */
+  /* 입찰일정 전체 배경 및 여백 (기본 색상으로 복구) */
+  #BiddingSchedule {
+    padding: 12px !important;
+    background-color: #f1f5f9;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 입찰일정 카드 본체 - 탭 아래 흰색 박스 */
+  .bidding-schedule-card-body {
+    background-color: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0 12px 12px 12px;
+    /* 탭 밀착을 위해 상단 왼쪽만 직각 */
+    box-shadow: none;
+    /* 음영 제거 */
+    position: relative;
+    z-index: 0;
+    margin-top: -1px;
+    /* 탭과 테두리 겹침 처리 */
+  }
+
+  /* 입찰일정 탭 스트립 */
+  #BiddingSchedule .detail-tab-strip {
+    padding: 0;
+    gap: 0;
+    margin-bottom: 0;
+    z-index: 1;
+    background-color: transparent;
+    /* 오른쪽 배경색이 보이도록 투명화 */
+    border: none;
+  }
+
+  /* 입찰일정 v2: 상단 탭 숨김 */
+  #BiddingSchedule.bs-nav-v2 #calendarTabs {
+    display: none !important;
+  }
+
+  /* 입찰일정 v2: 버튼형 내비게이션 */
+  #BiddingSchedule.bs-nav-v2 .calendar-view-btn-group {
+    gap: 6px;
+  }
+
+  #BiddingSchedule.bs-nav-v2 .calendar-view-btn {
+    height: 36px;
+    min-width: 72px;
+    padding: 0 14px;
+    border: 1px solid #cbd5e1;
+    /* slate-300 */
+    background: #e2e8f0;
+    /* slate-200 */
+    color: #0f172a;
+    /* slate-900 */
+    border-radius: 10px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  #BiddingSchedule.bs-nav-v2 .calendar-view-btn:hover {
+    background: #cbd5e1;
+    /* slate-300 */
+  }
+
+  #BiddingSchedule.bs-nav-v2 .calendar-view-btn.active {
+    background: #1d4ed8;
+    /* blue-700 */
+    border-color: #1d4ed8;
+    color: #ffffff;
+  }
+
+  #BiddingSchedule.bs-nav-v2 .calendar-month-nav {
+    height: 36px;
+    padding: 0 6px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    /* 월별/월별(법원)에서 년월 표시를 '담당자(대표님) 조회' 드롭다운과 더 띄우기
+       - JS에서 --cal-manager-width(px)를 주입
+       - 모바일에서는 과도한 공백을 피하고, md 이상에서 "드롭다운 폭만큼" 우측 이동 */
+    margin-left: 8px;
+  }
+
+  @media (min-width: 768px) {
+    #BiddingSchedule.bs-nav-v2 .calendar-month-nav {
+      margin-left: calc(var(--cal-manager-width, 80px) + 12px);
+    }
+  }
+
+  /* 캘린더 뷰 */
+  .calendar-view {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* 주별 그리드 */
+  .calendar-grid-week {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  @media (min-width: 768px) {
+    .calendar-grid-week {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0;
+      border: 1px solid #ffffff;
+      border-radius: 8px;
+      overflow: visible;
+    }
+  }
+
+  /* 월별 그리드 */
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  @media (min-width: 768px) {
+    .calendar-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0;
+      border: 1px solid #ffffff;
+      border-radius: 8px;
+      overflow: visible;
+    }
+  }
+
+  .calendar-day {
+    min-height: 120px;
+    height: auto;
+    border-right: 1px solid #e5e7eb;
+    border-top: 1px solid #e5e7eb;
+    padding: 4px;
+    overflow-y: visible;
+    font-size: 0.8rem;
+    background-color: white;
+  }
+
+  /* Date input placeholder 스타일 */
+  input[type="date"]::before {
+    content: attr(placeholder);
+    color: #9ca3af;
+    margin-right: 0.5em;
+  }
+
+  input[type="date"]:focus::before,
+  input[type="date"]:valid::before {
+    content: "";
+  }
+
+  input[type="date"] {
+    color: #1f2937;
+  }
+
+  input[type="date"]:invalid {
+    color: #9ca3af;
+  }
+
+  /* 월 변경 표시 스타일 (삭제됨) */
+  @media (max-width: 767px) {
+    .calendar-day {
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 12px;
+      min-height: auto;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .other-month {
+      display: none !important;
+    }
+  }
+
+  .calendar-day:last-child {
+    border-right: none;
+  }
+
+  /* Date Header Style */
+  .calendar-day-date {
+    border-radius: 8px;
+    background-color: #93c5fd;
+    color: #000000;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+    padding: 8px 0;
+    text-align: center;
+    border-bottom: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
+
+  .current-month {
+    color: #374151;
+  }
+
+  .other-month {
+    color: #9ca3af;
+  }
+
+  /* 오늘 날짜 스타일: 배경 투명, 진한 청색 테두리 */
+  .today {
+    background-color: transparent;
+    border: 3px solid #1e3a8a;
+  }
+
+  /* PC View Table Style */
+  .bid-item-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    margin-bottom: 12px;
+    border: 1.5px solid #6b7280;
+    border-radius: 16px;
+    overflow: hidden;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+  }
+
+  .bid-item-table:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px -1px rgba(0, 0, 0, 0.2);
+    background-color: #c7d2fe;
+  }
+
+  .bid-item-table td {
+    border-right: 1px solid transparent;
+    border-bottom: 1px solid transparent;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 6px 4px;
+  }
+
+  /* Badge Styles */
+  .stu-tag {
+    display: block;
+    margin: 1px;
+    padding: 3px 6px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    font-weight: 500;
+    text-align: center;
+  }
+
+  .stu-tag-bid {
+    background-color: #a5b4fc;
+    color: #312e81;
+  }
+
+  .stu-tag-recommend {
+    background-color: #ffbe76;
+    color: #9c4a18;
+  }
+
+  .stu-tag-default {
+    background-color: #e5e7eb;
+    color: #374151;
+  }
+
+  .stu-tag-changed {
+    background-color: #6b7280;
+    color: #ffffff;
+  }
+
+  .stu-tag-product {
+    background-color: #fef9c3;
+    color: #854d0e;
+  }
+
+  /* Text Colors */
+  .sakun-no-cell {
+    font-weight: 700;
+    color: #4f46e5;
+    text-align: left;
+    vertical-align: middle;
+    word-break: break-all;
+    white-space: normal;
+    padding: 6px 4px;
+    line-height: normal;
+  }
+
+  .m-name-id-red {
+    font-weight: 700;
+    color: #dc2626;
+  }
+
+  .bidprice-cell {
+    font-weight: 700;
+    color: #4b5563;
+  }
+
+  /* Modal */
+  .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+  .modal-content {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 1rem;
+    max-width: 850px;
+    width: 95%;
+    height: 90vh;
+    /* min-height 대신 height로 고정하여 흔들림 방지 */
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+  }
+
+  /* 모달 탭 컨텐츠 영역 - 일정한 높이 유지 및 가변 내용 스크롤 처리 */
+  .modal-tab-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 조사 탭 이미지 리스트 컨테이너 */
+  .investigation-image-container-modal {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 500px;
+    /* 로딩 중에도 이 높이를 유지 */
+  }
+
+  #modal-investigation-image-container {
+    flex: 1;
+    min-height: 480px;
+  }
+
+  /* Dashboard & Sidebar Styles */
+  .dashboard-table-row:hover {
+    background-color: #f3f4f6;
+  }
+
+  .summary-item {
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .summary-item:hover {
+    background-color: #e0e7ff;
+    color: #3730a3;
+  }
+
+  /* Mobile Menu Overlay */
+  .mobile-menu-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 60;
+    /* top-bar(z:40)보다 위에 위치 */
+  }
+
+  .mobile-menu-overlay.open {
+    display: block;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 240px;
+    background-color: white;
+    border-right: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 70;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+  }
+
+  @media (min-width: 768px) {
+    .sidebar {
+      position: static;
+      transform: none;
+      box-shadow: 10px 0 15px -3px rgba(0, 0, 0, 0.1);
+      z-index: auto;
+    }
+
+    .hamburger-btn {
+      display: none !important;
+    }
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  @media (max-width: 767px) {
+    .mobile-hidden {
+      display: none !important;
+    }
+
+    .mobile-fullscreen {
+      width: 100% !important;
+      height: calc(100vh - 64px) !important;
+      display: block !important;
+      padding-bottom: 0 !important;
+    }
+
+    .modal-content {
+      padding: 1rem;
+      width: 95%;
+    }
+  }
+
+  /* 입찰물건 상세/조사 탭 · 조사 이미지 가로 꽉 차고 세로 스크롤 */
+  .investigation-image-max {
+    width: 100%;
+    height: auto;
+    display: block;
+    vertical-align: top;
+  }
+
+  .investigation-image-wrap {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  /* 입찰일정 탭과 조회 항목 박스 연결성 */
+  #BiddingSchedule .detail-tab-strip {
+    border-bottom: none;
+  }
+
+  #BiddingSchedule .list-title-strip {
+    border-top: none;
+  }
+
+  /* 왼쪽 입찰 목록 제목 strip — 오른쪽 상세 탭과 세로 44px 고정 맞춤 */
+  .list-title-strip {
+    height: auto;
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    box-sizing: border-box;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    box-shadow: none !important;
+  }
+
+  .list-title-strip .list-title-strip-heading {
+    font-size: 1.125rem;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  /* 조회 항목(검색) 바깥 박스
+     - 입력칸(각 input/select)의 크기는 유지
+     - 감싸는 박스 높이만 키워 우측 "입찰정보 상세/수정 제목" 하단과 시각적 라인 정렬
+     - 내부 조회 입력들이 세로 기준 가운데 오도록 정렬 */
+  .list-search-strip {
+    height: auto;
+    min-height: 50px;
+    padding: 0.5rem 1rem;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+  }
+
+  .list-search-strip input,
+  .list-search-strip select,
+  .list-search-strip button[title="상태"] {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-size: 0.875rem;
+    box-sizing: border-box;
+  }
+
+  /* 조회 항목 입력/필터 시 강조 스타일 (테두리는 기존 그대로) */
+  .filter-active-input {
+    background-color: #eff6ff !important;
+    /* 연한 푸른색 배경 (Blue-50) */
+    font-weight: 800 !important;
+    color: #1d4ed8 !important;
+    /* 진한 푸른색 글자 (Blue-700) */
+  }
+
+  /* 상태 버튼(드롭다운) 강조 */
+  .filter-active-input#search-status-btn,
+  .filter-active-input#cal-search-status-btn {
+    background-color: #eff6ff !important;
+    /* 입력칸과 동일: Blue-50 */
+    color: #1d4ed8 !important;
+    /* Blue-700 */
+  }
+
+  /* 상태 버튼 안의 아이콘(▼)도 대비 맞춤 */
+  .filter-active-input#search-status-btn svg,
+  .filter-active-input#cal-search-status-btn svg {
+    color: #1d4ed8 !important;
+  }
+
+  /* 상태 라벨 및 텍스트 대비색 */
+  .filter-active-input #search-status-label,
+  .filter-active-input #cal-search-status-label {
+    font-weight: 800 !important;
+    color: inherit !important;
+  }
+
+  /* 입력창 placeholder 대비색 */
+  .filter-active-input::placeholder {
+    color: #60a5fa !important;
+    /* Blue-400 */
+  }
+
+  /* 상세 탭 폼 제목 — 입찰 목록 제목과 동일한 폰트 크기 */
+  #formTitle {
+    font-size: 1.125rem;
+    line-height: 1.2;
+  }
+
+  /* 상세화면 액션 버튼(등록화면/등록/수정/삭제) — 크기 축소 */
+  .detail-form-btn {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    min-height: 28px;
+    box-sizing: border-box;
+  }
+
+  /* 조사 탭 인쇄·복사 — 상세화면 버튼과 동일 세로/가로, 등록화면 버튼 위에 오도록 */
+  .investigation-toolbar-btn {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    min-width: 52px;
+    min-height: 28px;
+    box-sizing: border-box;
+  }
+
+  .list-title-strip-btn {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+  }
+
+  .list-title-strip-btn svg {
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  /* 일괄 적용 전용 스타일 */
+  .bulk-action-select {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background-color: #f9fafb;
+    color: #374151;
+    cursor: pointer;
+  }
+
+  .bulk-status-target {
+    font-weight: 700;
+    color: #1e40af;
+  }
+
+  .list-cell-member {
+    text-align: center;
+  }
+
+  .list-has-image-dot {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    vertical-align: middle;
+  }
+
+  .list-has-image-dot.status-complete {
+    background-color: #10b981;
+  }
+
+  /* 초록: 이미지+옥션 */
+  .list-has-image-dot.status-image-only {
+    background-color: #9ca3af;
+  }
+
+  /* 회색: 이미지만 */
+  .list-has-image-dot.status-auction-only {
+    background-color: #2563eb;
+  }
+
+  /* 파랑: 옥션만 */
+
+  /* 등록 버튼 가로 조정 및 왼쪽 이동 */
+  #createTopButton,
+  #editTopButton {
+    min-width: 80px !important;
+  }
+
+  /* 입찰 목록 테이블 컬럼 폭·정렬 - 960px 고정 (width: 100% 제거) */
+  .item-list-table {
+    table-layout: fixed;
+    width: 758px;
+    min-width: 758px;
+  }
+
+  .item-list-table .item-col-check {
+    width: 32px;
+  }
+
+  .item-list-table .item-col-date {
+    width: 78px;
+  }
+
+  .item-list-table .list-th-img,
+  .item-list-table .item-col-img {
+    width: 48px;
+    padding-left: 0;
+  }
+
+  .item-list-table .list-img-cell {
+    cursor: pointer;
+    vertical-align: middle;
+    text-align: center;
+    padding-left: 0;
+  }
+
+  .item-list-table .item-col-sakun {
+    width: 210px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .item-list-table th.item-col-sakun {
+    padding-left: 0.5rem;
+  }
+
+  .item-list-table td.item-col-sakun {
+    padding-left: 1rem;
+  }
+
+  .item-list-table .item-col-court {
+    width: 80px;
+  }
+
+  .item-list-table th.item-col-court {
+    padding-left: 0.5em;
+  }
+
+  .item-list-table td.item-col-court {
+    padding-left: 0;
+  }
+
+  .item-list-table .item-col-status {
+    width: 80px;
+  }
+
+  .item-list-table .item-col-member {
+    width: 130px;
+  }
+
+  .item-list-table .item-col-manager {
+    width: 70px;
+  }
+
+  /* 전송 컬럼 숨김 (완전 제거) - 모든 가능한 셀렉터 포함 */
+  .item-list-table th:last-child:not(.item-col-manager):not(.item-col-member):not(.item-col-status):not(.item-col-court):not(.item-col-sakun):not(.item-col-img):not(.item-col-date),
+  .item-list-table td:last-child:not(.item-col-manager):not(.item-col-member):not(.item-col-status):not(.item-col-court):not(.item-col-sakun):not(.item-col-img):not(.item-col-date),
+  .item-list-table .item-col-action,
+  .item-list-table th.item-col-action,
+  .item-list-table td.item-col-action {
+    display: none !important;
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+  }
+
+  /* 실제 화면의 테이블이 `.item-list-table`이 아닐 수 있어 listPane 기준으로도 강제 숨김 */
+  #listPane th.item-col-action,
+  #listPane td.item-col-action {
+    display: none !important;
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+  }
+
+  /* 리스트 박스 · 조사(상세) 박스 레이아웃 (기본 색상으로 복구) */
+  .item-management-layout {
+    gap: 12px !important;
+    padding: 12px !important;
+    align-items: stretch;
+    background-color: #f1f5f9;
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .item-list-pane {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    flex: 1;
+    /* w-1/2 대신 flex-1 사용 */
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .item-detail-pane {
+    flex: 1;
+    /* w-1/2 대신 flex-1 사용 */
+    min-width: 0;
+  }
+
+  /* 상세 탭 전체 — 리스트와 대칭되는 카드 룩 (상단/우측 테두리 제거 버전) */
+  .detail-pane-card {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    /* margin-right 제거: parent padding(12px)으로 이미 간격이 확보됨 */
+    margin: 0 !important;
+  }
+
+  .detail-tab-strip {
+    display: flex;
+    align-items: flex-end;
+    gap: 0;
+    /* 탭 사이 간격 제거 */
+    padding: 0;
+    /* 왼쪽 정렬을 위해 패딩 제거 */
+    background: transparent;
+    position: relative;
+    z-index: 1;
+  }
+
+  .detail-tab-panel {
+    background: transparent;
+    border: none;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    margin-top: -1px;
+    /* 탭과 내용 박스 겹침 처리 */
+  }
+
+  /* 상세 탭(폼) 내용 박스 */
+  #itemDetailTabContent {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0 12px 12px 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    flex: 1;
+  }
+
+  /* 조사 탭 내용 박스 - 조사탭 선택시 상단 라운딩 조정을 위해 개별 설정 가능 */
+  #itemInvestigationTabContent {
+    background: #fff;
+    /* 조사탭 선택시에도 일체감을 위해 배경색 부여 */
+    border: 1px solid #e5e7eb;
+    border-radius: 0 12px 12px 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    flex: 1;
+  }
+
+  /* 탭 버튼 스타일 - 크기 키우고 카드와 밀착 (원복) */
+  .detail-tab-btn {
+    border: 1px solid #e5e7eb;
+    background: #94a3b8;
+    /* 비활성 상태: 더 진하게 조정 (Slate-400) */
+    color: #ffffff;
+    /* 가독성을 위해 흰색 글자 적용 */
+    padding: 12px 64px;
+    /* 가로 크기 확대 유지 */
+    border-radius: 12px 12px 0 0;
+    /* 상단 라운드 적용, 하단 직각 */
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.15s ease;
+    border-bottom: none;
+    /* 하단 테두리 제거하여 음영 느낌 최소화 */
+    margin-right: -1px;
+    /* 테두리 겹침 방지 */
+    box-shadow: none !important;
+    /* 모든 음영 제거 */
+    position: relative;
+    /* z-index 작동을 위해 추가 */
+  }
+
+  .detail-tab-btn.active {
+    background: #fff;
+    /* 활성 상태: 카드와 동일한 흰색 */
+    color: #1e40af;
+    border-bottom-color: #fff !important;
+    /* 아래쪽 테두리 제거하여 일체감 형성 */
+    box-shadow: none;
+    font-weight: 800;
+    z-index: 2;
+    /* 활성 탭이 위로 오도록 */
+    transform: none;
+    /* 공중에 떠 있는 효과 제거하고 밀착 */
+  }
+
+  /* 입찰일정 전용 탭 스타일 */
+  #BiddingSchedule .detail-tab-strip {
+    background-color: transparent;
+    padding: 0;
+    gap: 0;
+    margin-bottom: 0;
+    z-index: 1;
+    justify-content: flex-start;
+    /* 왼쪽 끝 정렬 */
+  }
+
+  #BiddingSchedule .detail-tab-btn {
+    border: 1px solid #e5e7eb;
+    border-bottom: 1px solid #e5e7eb;
+    background: #94a3b8;
+    color: #ffffff;
+    padding: 12px 48px;
+    border-radius: 12px 12px 0 0;
+    /* 각 탭 위쪽, 오른쪽(양쪽) 라운드 처리 */
+    box-shadow: none !important;
+    margin-right: 0px;
+    /* 탭 사이 간격 제거 */
+  }
+
+  #BiddingSchedule .detail-tab-btn:first-child {
+    margin-left: 0;
+    /* 첫 번째 탭(주별) 왼쪽 여백 제거 */
+  }
+
+  #BiddingSchedule .detail-tab-btn.active {
+    background: #fff;
+    color: #1e40af;
+    border-bottom: 1px solid #fff;
+    margin-bottom: -1px;
+    z-index: 2;
+  }
+
+  /* 입찰일정 카드 스타일 조정 - 탭 오른쪽 배경색 투명화 및 테두리 제거 */
+  #BiddingSchedule>div {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: transparent;
+    /* 배경색 제거하여 진한 회색이 보이게 함 */
+    border: none;
+    box-shadow: none;
+  }
+
+  /* 인쇄용 전용 영역 — 화면에선 숨김, 인쇄 시에만 표시 */
+  #printInvestigationArea {
+    display: none !important;
+  }
+
+  @media print {
+    body * {
+      visibility: hidden !important;
+    }
+
+    #printInvestigationArea {
+      display: block !important;
+      visibility: visible !important;
+      position: fixed !important;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: #fff;
+      z-index: 99999;
+      padding: 0;
+    }
+
+    #printInvestigationArea img {
+      visibility: visible !important;
+      width: 100% !important;
+      height: auto !important;
+      max-width: 100% !important;
+      display: block !important;
+    }
+
+    #printInvestigationArea p {
+      visibility: visible !important;
+    }
+  }
+
+  /* ========================================================================
+     회원 대시보드 (MemberDashboard)
+     ======================================================================== */
+
+  .member-dashboard-wrapper {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 16px 16px 40px;
+    /* 하단 간격 확대 */
+  }
+
+  /* 회원 대시보드 요약 카드 스티키 */
+  .member-dash-summary-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    /* 캘린더 헤더(24)보다 위 */
+    background: #f3f4f6;
+    /* 전체 페이지 배경색과 동일하게 */
+    padding: 12px 0 4px;
+    margin-bottom: 0;
+  }
+
+  .member-dash-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 0 4px;
+  }
+
+  /* 가로형 Pill 스타일 원복 */
+  .member-dash-card {
+    flex: 1;
+    height: 36px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    border: 1px solid #eeeeee;
+    background: #ffffff;
+    user-select: none;
+    -webkit-user-select: none;
+    min-width: 0;
+    padding: 0 10px;
+  }
+
+  .member-dash-card svg {
+    display: none;
+  }
+
+  .member-dash-card:active {
+    transform: scale(0.95);
+  }
+
+  /* 비활성 상태 (이미지 하단 Ghost 스타일) */
+  .member-dash-card:not(.active):not(.member-dash-card-sold) {
+    background: #ffffff !important;
+    border-color: #eeeeee !important;
+  }
+
+  .member-dash-card:not(.active) .member-dash-card-count {
+    color: #d0d0d0 !important;
+  }
+
+  .member-dash-card:not(.active) .member-dash-card-label {
+    color: #d0d0d0 !important;
+  }
+
+  .member-dash-card-count {
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .member-dash-card-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  /* 활성 상태 (진하고 선명한 색상으로 강화) */
+  /* 입찰 (Vivid Indigo) */
+  .member-dash-card-bid.active {
+    background-color: #818cf8 !important;
+    /* 더 진한 인디고 */
+    border-color: #818cf8 !important;
+    color: #ffffff !important;
+    /* 진해진 배경에 맞춰 글자 흰색으로 */
+    box-shadow: 0 4px 10px rgba(129, 140, 248, 0.3);
+  }
+
+  .member-dash-card-bid.active .member-dash-card-count,
+  .member-dash-card-bid.active .member-dash-card-label {
+    color: #ffffff !important;
+  }
+
+  /* 추천 (Vivid Orange) */
+  .member-dash-card-recommend.active {
+    background-color: #fb923c !important;
+    /* 더 진한 주황 */
+    border-color: #fb923c !important;
+    color: #ffffff !important;
+    /* 진해진 배경에 맞춰 글자 흰색으로 */
+    box-shadow: 0 4px 10px rgba(251, 146, 60, 0.3);
+  }
+
+  .member-dash-card-recommend.active .member-dash-card-count,
+  .member-dash-card-recommend.active .member-dash-card-label {
+    color: #ffffff !important;
+  }
+
+  /* 변경 (Gray) */
+  .member-dash-card-changed.active {
+    background-color: #6b7280 !important;
+    border-color: #6b7280 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 6px rgba(107, 114, 128, 0.3);
+  }
+
+
+  /* 캘린더 섹션 */
+  .member-dash-calendar-section {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+
+  .member-dash-cal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 0 10px;
+  }
+
+  .member-dash-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    /* 터치 영역 확대 */
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    touch-action: manipulation;
+  }
+
+  .member-dash-cal-title {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #1f2937;
+    min-width: 120px;
+    text-align: center;
+    letter-spacing: -0.025em;
+  }
+
+  /* 네비게이션 정보 컨테이너 (좌우 끝) */
+  .mdash-nav-info-container {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 4px;
+  }
+
+  .mdash-nav-info-container.ml-1 {
+    left: 4px;
+  }
+
+  .mdash-nav-info-container.mr-1 {
+    right: 4px;
+  }
+
+  /* 네비게이션 정보 도트 원복 */
+  .mdash-info-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: #000;
+    /* 숫자 검은색으로 변경 */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  }
+
+  .member-dash-cal-header {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+    margin-bottom: 4px;
+    padding: 0 8px;
+    /* 가로 패딩 추가 */
+  }
+
+  .member-dash-cal-header>div {
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #9ca3af;
+    padding: 4px 0;
+  }
+
+  .member-dash-cal-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 3px;
+    padding: 8px;
+    /* 카드 그리드 내부 여백 */
+  }
+
+  /* 날짜 셀 */
+  .member-dash-day {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 60px;
+    padding: 6px 2px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: #ffffff;
+    /* 기본 배경 흰색 */
+    border: 2px solid transparent;
+  }
+
+  .member-dash-day:hover:not(.empty) {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+  }
+
+  .member-dash-day.today {
+    background: #fff;
+    border-color: #ef4444 !important;
+    /* 오늘 날짜 빨간 테두리 */
+  }
+
+  .member-dash-day.today .member-dash-day-num {
+    color: #ef4444;
+  }
+
+  /* 과거 날짜 스타일 - 날짜 숫자는 선명하게, 점만 흐리게 */
+  .member-dash-day.past {
+    background: #fafbfc;
+    /* 과거 날짜는 약간의 회색톤 유지 */
+    opacity: 1;
+    filter: none;
+  }
+
+  .member-dash-day.past .member-dash-circle {
+    opacity: 0.25;
+    /* 과거 날짜의 물건 점만 흐리게 처리 */
+    transform: scale(0.9);
+  }
+
+  /* [삭제] 날짜 선택 스타일(진하게 변함) 제거 요청 반영 */
+
+  .member-dash-day.has-items {
+    background-color: #ffffff !important;
+    /* 물건 있는 날도 오늘 이후는 배경 흰색 */
+    border-color: #e2e8f0 !important;
+  }
+
+  /* [삭제] .has-items.selected 스타일 제거 */
+
+  .member-dash-day.empty {
+    cursor: default;
+    background: transparent;
+    border: none;
+  }
+
+  .member-dash-day-num {
+    font-size: 1.05rem;
+    /* 크기 키움 */
+    font-weight: 800;
+    /* 더 두껍게 */
+    color: #1f2937;
+    /* 더 진한 색상 */
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  /* 동그라미 (물건 1개 = 동그라미 1개) */
+  .member-dash-day-circles {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-top: 2px;
+  }
+
+  .member-dash-circle {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    /* 흰색 테두리 제거 */
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    /* 그림자 약간 강화하여 입체감 유지 */
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  /* 날짜 구분선 (날짜 미선택, 월별 목록) */
+  .member-dash-date-divider {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #6366f1;
+    padding: 8px 4px 4px;
+    margin-top: 8px;
+    border-bottom: 1px solid #e0e7ff;
+  }
+
+  .member-dash-date-divider:first-child {
+    margin-top: 0;
+  }
+
+  /* 물건 목록 섹션 */
+  .member-dash-items-section {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    padding: 14px;
+  }
+
+  .member-dash-items-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .member-dash-items-list {
+    min-height: 60px;
+  }
+
+  /* 모바일 반응형 */
+  @media (max-width: 480px) {
+    .member-dashboard-wrapper {
+      padding: 10px;
+    }
+
+    .member-dash-summary {
+      gap: 6px;
+    }
+
+    .member-dash-card {
+      padding: 10px 4px;
+      border-radius: 8px;
+    }
+
+    .member-dash-card-count {
+      font-size: 1.3rem;
+    }
+
+    .member-dash-day {
+      min-height: 50px;
+      padding: 4px 1px;
+    }
+
+    .member-dash-day-num {
+      font-size: 0.75rem;
+    }
+
+    .member-dash-circle {
+      width: 14px;
+      height: 14px;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .member-dashboard-wrapper {
+      max-width: 720px;
+      padding: 24px;
+    }
+
+    .member-dash-day {
+      min-height: 70px;
+      padding: 8px 4px;
+    }
+
+    .member-dash-day-num {
+      font-size: 0.95rem;
+    }
+
+    .member-dash-circle {
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  /* =============================================
+     오퍼스(Opus) 멤버 대시보드 v2 전용 스타일
+     ============================================= */
+  .member-dashboard-v2 {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 12px 40px;
+    background: #f3f4f6;
+    min-height: 100%;
+  }
+
+  /* 1. 상단바 */
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: #f3f4f6;
+    padding: 8px 0 4px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .top-bar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .rg {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .rb {
+    display: inline-flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 16px;
+    border: 1.5px solid #d1d5db;
+    background: #fff;
+    color: #374151;
+    font-size: .82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+    -webkit-user-select: none;
+    position: relative;
+  }
+
+  .rb:first-child {
+    border-radius: 999px 0 0 999px;
+    z-index: 2;
+  }
+
+  .rb:last-child {
+    border-radius: 0 999px 999px 0;
+    margin-left: -1px;
+    z-index: 1;
+  }
+
+  .rb.on {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+    z-index: 3;
+  }
+
+  .sp {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: .82rem;
+    font-weight: 800;
+    color: #fff;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: none;
+  }
+
+  .sp.bid {
+    background: #4f46e5;
+  }
+
+  .sp.rec {
+    background: #fb923c;
+  }
+
+  .sp.chg {
+    background: #1f2937;
+  }
+
+  /* 2. 캘린더 */
+  .cal-nav-bar {
+    position: sticky;
+    top: 44px;
+    z-index: 35;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 14px 14px 0 0;
+    margin: -1px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+  }
+
+  .cal-nav-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+  }
+
+  /* 화살표와 타이틀 그룹 */
+  .cal-c {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    position: relative;
+    height: 100%;
+  }
+
+  /* v3.14: 특정 네비바 스코프 한정 정밀 정렬 (공통 스타일 flex-col 절대 건들지 않음) */
+  #calNavBar .cal-cv {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    /* 타이틀과 요약 사이의 황금 여백 */
+    height: 100%;
+  }
+
+  #calNavBar .cal-c {
+    gap: 6px;
+    /* 화살표 밀착 */
+  }
+
+  #calNavBar .cnb {
+    background: #f1f5f9;
+    /* 화살표 배경 추가 */
+    width: 32px;
+    height: 32px;
+    color: #4b5563;
+  }
+
+  .flex-col-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .cnb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all .15s;
+  }
+
+  .cnb:hover {
+    background: #f3f4f6;
+  }
+
+  .cal-t {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #1f2937;
+    min-width: 110px;
+    text-align: center;
+    line-height: normal;
+    /* 상속 영향 제거 */
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .cal-d {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  /* 힌트 개별 아이템 (아이콘 + 숫자 하단) */
+  .hi-it {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 14px;
+  }
+
+  .hi-v {
+    font-size: 10px;
+    font-weight: 800;
+    color: #4b5563;
+    line-height: 1;
+  }
+
+  .cal-d.l {
+    left: 8px;
+  }
+
+  .cal-d.r {
+    right: 8px;
+  }
+
+  .cdot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 900;
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+    line-height: 1;
+    position: relative;
+  }
+
+  .cdot.tri {
+    width: 0;
+    height: 0;
+    border-left: 9px solid transparent;
+    border-right: 9px solid transparent;
+    border-bottom: 16px solid currentColor;
+    border-radius: 0;
+    box-shadow: none;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
+    background: transparent !important;
+    color: #fff;
+  }
+
+  /* 세모 안의 숫자를 위한 별도 처리 (V3.8 검은색) */
+  .cdot.tri::after {
+    content: attr(data-val);
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: 900;
+    color: #000;
+    /* 지시사항: 추천 숫자는 검은색 */
+    z-index: 10;
+  }
+
+  .cdot.sq {
+    border-radius: 2px;
+  }
+
+  .cal-body {
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-top: none;
+    border-radius: 0 0 14px 14px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+
+  .cal-wk {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+    padding: 4px 12px;
+    background: #f9fafb;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .cal-wk>div {
+    text-align: center;
+    font-size: .72rem;
+    font-weight: 700;
+    color: #9ca3af;
+    padding: 3px 0;
+  }
+
+  .cal-g {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 3px;
+    padding: 8px 12px 12px;
+  }
+
+  .cd {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 58px;
+    padding: 5px 2px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all .15s;
+    background: #ffffff;
+    /* 기본 배경 */
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  }
+
+  .cd.e {
+    cursor: default;
+    background: transparent;
+    border: none;
+  }
+
+  .cd:hover:not(.e) {
+    background: #eef2ff;
+    border-color: #c7d2fe;
+  }
+
+  .cd.t {
+    border-color: #ef4444 !important;
+    background: #fff;
+  }
+
+  .cd.t .dn {
+    color: #ef4444;
+  }
+
+  .cd.fh {
+    background: #ecfdf5 !important;
+    /* 연초록 배경 (미래) */
+    border-color: #6ee7b7 !important;
+  }
+
+  .cd.ph {
+    background: #f8fafc !important;
+    /* 연회색 배경 (과거) */
+    border-color: #cbd5e1 !important;
+  }
+
+  .cd.pe {
+    background: #fafbfc;
+    opacity: .5;
+  }
+
+  .dn {
+    font-size: .95rem;
+    font-weight: 800;
+    color: #1f2937;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .dcs {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 2px;
+    margin-top: 2px;
+  }
+
+  /* 동그라미 (물건 1개 = 동그라미 1개) */
+  .dc {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    /* 기본 동그라미 */
+    border: 1px solid #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+    flex-shrink: 0;
+    position: relative;
+    transition: transform 0.1s;
+    margin-left: 0;
+  }
+
+  /* 동일 상태일 때만 겹침 발생 (JS에서 클래스 부여) */
+  .dc.ovl {
+    margin-left: -5px;
+  }
+
+  .dc:first-child {
+    margin-left: 0 !important;
+  }
+
+  /* Z-index 로직: 왼쪽이 위로 오도록 (역순 배치 필요할 수 있음, 여기서는 단순 처리) */
+  .dc:nth-child(1) {
+    z-index: 10;
+  }
+
+  .dc:nth-child(2) {
+    z-index: 9;
+  }
+
+  .dc:nth-child(3) {
+    z-index: 8;
+  }
+
+  .dc:nth-child(4) {
+    z-index: 7;
+  }
+
+  .dc:nth-child(5) {
+    z-index: 6;
+  }
+
+  .dc:nth-child(6) {
+    z-index: 5;
+  }
+
+  /* 형태 다변화 */
+  .dc.tri {
+    border-radius: 0;
+    background: transparent !important;
+    border: none;
+    box-shadow: none;
+    width: 0;
+    height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-bottom: 13px solid currentColor;
+    /* 색상은 인라인 스타일로 결정 */
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+  }
+
+  .dc.sq {
+    border-radius: 2px;
+    /* 네모는 라운드 거의 없음 */
+  }
+
+  .top-bar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 4px;
+  }
+
+  .fg {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    /* 서로 붙임 */
+  }
+
+  /* v3.14: 요약 정보 정밀 수직 안착 (절대좌표 배제) */
+  #calNavBar .cal-ms {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    gap: 6px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .ms-it {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+  }
+
+  /* 요약 텍스트 색상 */
+  .ms-it.bid {
+    color: #4f46e5;
+  }
+
+  .ms-it.rec {
+    color: #fb923c;
+  }
+
+  .ms-it.chg {
+    color: #1f2937;
+  }
+
+  .ms-sh {
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+  }
+
+  .ms-sh.cir {
+    border-radius: 50%;
+  }
+
+  .ms-sh.tri {
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 10px solid currentColor;
+  }
+
+  .ms-sh.sq {
+    border-radius: 1px;
+  }
+
+  /* 3. 리스트 카드 */
+  .lc {
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 14px;
+    overflow: visible;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+  }
+
+  .lf {
+    position: sticky;
+    top: 98px;
+    z-index: 25;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-bottom: 1px solid #f0f0f0;
+    border-radius: 14px 14px 0 0;
+    margin: -1px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .lb {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: .82rem;
+    font-weight: 800;
+    color: #fff;
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+    border: none;
+  }
+
+  .lb.bid {
+    background: #4f46e5;
+  }
+
+  .lb.rec {
+    background: #fb923c;
+  }
+
+  .lb.chg {
+    background: #1f2937;
+  }
+
+  .lb.off {
+    opacity: .25;
+  }
+
+  .lb-body {
+    padding: 8px 12px 16px;
+  }
+
+  .mdv {
+    text-align: center;
+    padding: 10px 0;
+    margin: 8px -12px 8px;
+  }
+
+  .mdv span {
+    display: inline-block;
+    padding: 7px 50px;
+    border-radius: 999px;
+    font-size: .95rem;
+    font-weight: 800;
+    background: #6b7280;
+    color: #fff;
+    letter-spacing: .05em;
+  }
+
+  .dp {
+    display: inline-block;
+    background: #475569;
+    color: #fff;
+    font-size: .78rem;
+    font-weight: 700;
+    padding: 4px 14px;
+    border-radius: 999px;
+    margin: 8px 0 6px;
+  }
+
+  /* 왼쪽 스와이프 힌트 애니메이션 */
+  @keyframes swipeLeftHint {
+    0% {
+      transform: translateX(0);
+    }
+
+    30% {
+      transform: translateX(-16px);
+      box-shadow: 6px 0 18px rgba(79, 70, 229, .18);
+    }
+
+    65% {
+      transform: translateX(-8px);
+    }
+
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  .ic-hint {
+    animation: swipeLeftHint 0.75s ease 0.4s both;
+  }
+
+  .ic {
+    background: #fff;
+    border: 3px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 38px 14px 14px !important;
+    display: flex;
+    gap: 8px;
+    min-height: 90px;
+    margin-bottom: 8px;
+    transition: transform .28s cubic-bezier(.4, 0, .2, 1), opacity .28s ease;
+    will-change: transform;
+  }
+
+  /* 선택된 카드만 왼쪽으로 날아감 */
+  .ic.ic-swiped-out {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+
+  .ic.sb {
+    border-color: #4f46e5;
+  }
+
+  .ic.sr {
+    border-color: #fb923c;
+  }
+
+  .ic.sc {
+    border-color: #1f2937;
+  }
+
+  .ic-l {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0;
+  }
+
+  .ic-copy-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .ic-sakun {
+    font-size: 1.05rem;
+    font-weight: 900;
+    color: #1e293b;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ic-court {
+    font-size: .76rem;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  .ic-price {
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: #ef4444;
+    margin-top: 4px;
+  }
+
+  .copy-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    color: #94a3b8;
+    font-size: .85rem;
+    transition: color .15s;
+    flex-shrink: 0;
+  }
+
+  .ic-r {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 72px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 18px;
+    border-radius: 10px;
+    font-size: .88rem;
+    font-weight: 800;
+    cursor: pointer;
+    border: none;
+    color: #fff;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+
+  .badge.bb {
+    background: #4f46e5;
+  }
+
+  .badge.br {
+    background: #fb923c;
+  }
+
+  .badge.bc {
+    background: #1f2937;
+    cursor: default;
+  }
+
+  .ic-time {
+    font-size: .68rem;
+    color: #9ca3af;
+    white-space: nowrap;
+    padding-left: 0;
+  }
+
+  /* 팝업 / 모달 / 토스트 */
+  .img-popup {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, .85);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    cursor: pointer;
+  }
+
+  .img-popup.open {
+    display: flex;
+  }
+
+  .img-popup-ph {
+    background: #1e293b;
+    border-radius: 16px;
+    padding: 40px 60px;
+    color: #94a3b8;
+    text-align: center;
+    font-size: .9rem;
+  }
+
+  .copy-toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: #fff;
+    padding: 8px 20px;
+    border-radius: 999px;
+    font-size: .82rem;
+    font-weight: 700;
+    z-index: 300;
+    opacity: 0;
+    transition: opacity .3s;
+    pointer-events: none;
+  }
+
+  .copy-toast.show {
+    opacity: 1;
+  }
+
+  .mo {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, .55);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mo.open {
+    display: flex;
+  }
+
+  .mx {
+    position: relative;
+    background: #fff;
+    border-radius: 20px;
+    padding: 28px 24px 24px;
+    max-width: 380px;
+    width: 92%;
+    text-align: center;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .22);
+  }
+
+  /* 모달 X 닫기 버튼 */
+  .mo-x {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: #f1f5f9;
+    border-radius: 50%;
+    font-size: .85rem;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s, color .15s;
+    line-height: 1;
+  }
+
+  .mo-x:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+  }
+
+  .mx h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 6px;
+    line-height: 1.4;
+  }
+
+  .mo-label {
+    font-size: .78rem;
+    color: #94a3b8;
+    font-weight: 500;
+    margin: 0 0 4px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+  .mo-case {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 20px;
+    line-height: 1.4;
+  }
+
+  .mo-sub {
+    font-size: .95rem;
+    color: #475569;
+    font-weight: 600;
+    margin: 0 0 20px;
+    line-height: 1.4;
+  }
+
+  .mo-result {
+    font-size: .92rem;
+    font-weight: 700;
+    color: #0f766e;
+    background: #f0fdf4;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin: 0 0 16px;
+    line-height: 1.4;
+  }
+
+  .mo-result.hidden {
+    display: none;
+  }
+
+  .ma {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+  }
+
+  .mm {
+    flex: none;
+    padding: 11px 22px;
+    border-radius: 12px;
+    font-size: .88rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: opacity .15s;
+    min-width: 80px;
+  }
+
+  .mm:active {
+    opacity: .8;
+  }
+
+  .mm.c {
+    background: #f1f5f9;
+    color: #64748b;
+    padding: 11px 18px;
+    min-width: unset;
+  }
+
+  .mm-end {
+    margin-left: auto;
+  }
+
+  .mm.o {
+    background: #4f46e5;
+    color: #fff;
+  }
+
+  .mm.d {
+    background: #ef4444;
+    color: #fff;
+  }
+
+  /* 조사 이미지 뷰어 (스와이프 패널) */
+  .img-viewer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #f1f5f9;
+    z-index: 300;
+    transform: translateX(100%);
+    transition: transform .28s cubic-bezier(.4, 0, .2, 1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .img-viewer.open {
+    transform: translateX(0);
+  }
+
+  .img-vh {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    gap: 10px;
+  }
+
+  .img-vback {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    font-size: .9rem;
+    font-weight: 700;
+    color: #4f46e5;
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 8px;
+  }
+
+  .img-vtitle {
+    font-size: .95rem;
+    font-weight: 700;
+    color: #1e293b;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .img-vcnt {
+    font-size: .78rem;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+
+  .img-vbody {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .img-vph {
+    text-align: center;
+    padding: 60px 20px;
+    color: #94a3b8;
+    font-size: .9rem;
+  }
+
+  .img-vcard {
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .08);
+  }
+
+  .img-vcard img {
+    width: 100%;
+    display: block;
+    min-height: 120px;
+    background: #f1f5f9;
+    object-fit: cover;
+  }
+
+  .img-btn {
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #ede9fe;
+    border: 1.5px solid #c4b5fd;
+    cursor: pointer;
+    transition: all .15s;
+    color: #4f46e5;
+    flex-shrink: 0;
+  }
+
+  .img-btn:active {
+    background: #c4b5fd;
+  }
+
+  @media(max-width:480px) {
+    .cd {
+      min-height: 48px;
+      padding: 4px 1px;
+    }
+
+    .dn {
+      font-size: .8rem;
+    }
+
+    .dc {
+      width: 13px;
+      height: 13px;
+    }
+  }
+</style>
