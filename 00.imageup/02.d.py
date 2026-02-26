@@ -19,7 +19,7 @@ from selenium.webdriver.support import expected_conditions as EC
 # ==============================================================================
 ACCOUNTS = [
     {"id": "mjgold",   "pw": "28471296",    "manager": "대표님"},
-    {"id": "mjjang1",  "pw": "28471295",    "manager": "대표님"},
+    {"id": "mjjang1",  "pw": "28471298",    "manager": "대표님"},
     {"id": "jjhsm81",  "pw": "marlboro81!!", "manager": "전제혁"}
 ]
 
@@ -66,16 +66,41 @@ def remove_popups_css(driver):
 # ==============================================================================
 # [함수 2-1] 입찰일 기준: 개수 20 선택 + 검색만 (정렬/보기 미변경)
 # ==============================================================================
+def wait_for_ajax(driver, timeout=15):
+    """AJAX 완료 대기 - jQuery 여부 무관, 최소 3초 보장"""
+    time.sleep(0.5)  # AJAX 시작 보장
+    _start = time.time()
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("""
+                try { return jQuery.active === 0; } catch(e) { return true; }
+            """)
+        )
+    except:
+        pass
+    # 비 jQuery AJAX 대비: 총 3초 보장 (0.5s 초기 + 최소 2.5s 추가)
+    _elapsed = time.time() - _start
+    if _elapsed < 2.5:
+        time.sleep(2.5 - _elapsed)
+
 def apply_list_scale_and_search(driver):
     """개수: 20(#list_scale=20), 검색(#btnSrch) 클릭. 정렬은 건드리지 않음."""
+    # list_scale: JS 직접 설정 + change 이벤트 발생
     try:
-        scale_select = Select(driver.find_element(By.ID, "list_scale"))
-        scale_select.select_by_value("20")
+        driver.execute_script("""
+            var s = document.getElementById('list_scale');
+            if(s) { s.value = '20'; s.dispatchEvent(new Event('change', {bubbles:true})); }
+        """)
         time.sleep(0.3)
-        driver.find_element(By.ID, "btnSrch").click()
+    except:
+        pass
+    # btnSrch: JS 강제 클릭
+    try:
+        btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "btnSrch")))
+        driver.execute_script("arguments[0].click();", btn)
         time.sleep(2)
     except Exception as e:
-        print(f"  ⚠ 개수 선택 또는 검색 실패: {e}")
+        print(f"  ⚠ 검색 버튼 클릭 실패: {e}")
 
 # ==============================================================================
 # [함수 3] [핵심] 헤더+테이블 합체 캡처
@@ -98,22 +123,25 @@ def capture_combined_element(driver, header_element, table_element, file_path):
         # 높이 = (테이블 바닥) - (헤더 천장)
         height = (rect_t['top'] + rect_t['height']) - rect_h['top']
 
-        if width <= 0 or height <= 0: return False
+        if width <= 0 or height <= 0:
+            print(f"      ⚠ 캡처 실패: 크기 이상 (width={width:.1f}, height={height:.1f})")
+            return False
 
         # 3. 캡처
         screenshot_base64 = driver.execute_cdp_cmd("Page.captureScreenshot", {
             "clip": { "x": x, "y": y, "width": width, "height": height, "scale": 1 },
             "captureBeyondViewport": True, "format": "png"
         })
-        
+
         if os.path.exists(file_path):
             try: os.remove(file_path); time.sleep(0.1)
             except: pass
-            
+
         with open(file_path, "wb") as f:
             f.write(base64.b64decode(screenshot_base64['data']))
         return True
-    except:
+    except Exception as e:
+        print(f"      ⚠ 캡처 오류: {type(e).__name__}: {e}")
         return False
 
 # ==============================================================================
@@ -267,10 +295,54 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
             # 6. 법원명 추출
             court_name = "공매" if type_prefix == "공매" else get_court_from_text(full_text)
 
+            # 6-1. 옥션 product_id 추출 (이미지 src 패턴: 경매=Thumnail/m/.../m{ID}_, 공매=PubAuct/...//{ID}_)
+            product_id = ""
+            try:
+                product_id = driver.execute_script("""
+                    var tbl = arguments[0], hdr = arguments[1];
+                    // 1. 이미지 src/onerror에서 추출
+                    var imgs = tbl.querySelectorAll('img');
+                    for(var i=0; i<imgs.length; i++){
+                        var src = imgs[i].getAttribute('src') || '';
+                        var m = src.match(/Thumnail\/m\/\d+\/m(\d+)_/) || src.match(/PubAuct\/\d+\/\d+\/(\d+)_/);
+                        if(m) return m[1];
+                        var oe = imgs[i].getAttribute('onerror') || '';
+                        var m2 = oe.match(/Thumnail\/m\/\d+\/m(\d+)_/) || oe.match(/PubAuct\/\d+\/\d+\/(\d+)_/);
+                        if(m2) return m2[1];
+                    }
+                    // 2. href/onclick fallback (테이블→헤더)
+                    var sources = [tbl, hdr];
+                    for(var s=0; s<sources.length; s++){
+                        var link = sources[s].querySelector('a[href*="product_id="]');
+                        if(link){ var m=link.href.match(/product_id=(\d+)/); if(m) return m[1]; }
+                        var all = sources[s].querySelectorAll('[onclick]');
+                        for(var j=0; j<all.length; j++){
+                            var m=(all[j].getAttribute('onclick')||'').match(/product_id[=\(,]['"]?(\d+)/);
+                            if(m) return m[1];
+                        }
+                    }
+                    // 3. 부모 방향 속성 탐색
+                    var el = tbl.parentElement;
+                    for(var i=0; i<10; i++){
+                        if(!el || el===document.body) break;
+                        var attrs = el.attributes || [];
+                        for(var j=0; j<attrs.length; j++){
+                            var m = attrs[j].value.match(/product_id[=\(,]['"]?(\d+)/);
+                            if(m) return m[1];
+                        }
+                        el = el.parentElement;
+                    }
+                    return '';
+                """, item, header_element) or ""
+            except:
+                pass
+            print(f"    🔍 product_id: {product_id or '미추출'}")
+
             # 7. 저장 (합체 캡처)
             safe_sakun = re.sub(r'[\\/*?:"<>|]', "", sakun_no)
             safe_court = re.sub(r'[\\/*?:"<>|]', "", court_name)
-            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}_{manager}.png"
+            pid_suffix = f"_{product_id}" if product_id else ""
+            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}_{manager}{pid_suffix}.png"
             file_path = os.path.join(save_dir, filename)
 
             if capture_combined_element(driver, header_element, item, file_path):
@@ -280,8 +352,9 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                 print(f"    - ({i+1}) ❌ 캡처 실패")
             
         except Exception as e:
+            print(f"    ⚠ 물건 처리 오류 ({i+1}번째): {type(e).__name__}: {e}")
             continue
-            
+
     print(f"  ✅ [{type_prefix}] {count}건 저장 완료 (메모없음 제외: {skipped_count}건)")
 
 # ==============================================================================
@@ -299,8 +372,7 @@ def run_macro(account):
 
     options = webdriver.ChromeOptions()
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--force-device-scale-factor=1")
-    options.add_argument("--disable-gpu")
+    options.add_argument("--force-device-scale-factor=2")
     options.add_experimental_option("detach", True)
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
@@ -339,7 +411,7 @@ def run_macro(account):
         try:
             print("  ▶ [공매] 페이지 전환 시도...")
             driver.execute_script("if(document.querySelector('#itype2')) document.querySelector('#itype2').click();")
-            time.sleep(1)
+            wait_for_ajax(driver)  # 공매 전환 AJAX 완료까지 대기 (조회 끝났는지 확인)
             remove_popups_css(driver)
             apply_list_scale_and_search(driver)
             process_list_page(driver, save_dir, "공매", manager)

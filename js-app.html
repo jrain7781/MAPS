@@ -632,11 +632,6 @@
             try { loadTelegramRequests(); } catch (e) { }
         }
 
-        // 환경설정 탭으로 이동 시 동기화 충돌 내역(대기실) 로드
-        if (tabId === 'Preferences' && !IS_MEMBER_VIEW) {
-            try { loadSyncConflicts(); } catch (e) { }
-        }
-
         // 회원 대시보드 탭 이동 시 렌더링
         if (tabId === 'MemberDashboard') {
             try {
@@ -4386,6 +4381,7 @@ MJ 이정우 팀장
                 renderStatusManagementDashboard();
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
+                if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
             })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
@@ -5613,8 +5609,8 @@ MJ 이정우 팀장
                             statusDiv.classList.add('text-green-600');
                             showStatus('이미지 동기화가 완료되었습니다.', 'success');
 
-                            // 대기실 데이터도 갱신
-                            if (totalConflict > 0) loadSyncConflicts();
+                            // 대시보드 이미지 현황 갱신
+                            if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats();
                         }
                     } else {
                         statusDiv.textContent = '오류: ' + result.message;
@@ -5777,7 +5773,7 @@ MJ 이정우 팀장
         if (!tbody) return;
 
         if (!logs || logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-500">조회된 이력이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="p-4 text-center text-gray-500">조회된 이력이 없습니다.</td></tr>';
             return;
         }
 
@@ -5799,16 +5795,27 @@ MJ 이정우 팀장
         const court = log.court || log[4] || '-';
         const fileName = log.file_name || log[5] || '-';
         const msg = log.message || log[6] || '-';
-        const imgId = log.image_code || log[7] || '-';
+        const imgId = log.image_code || log.image_id || log[7] || '-';
         const aucId = log.auction_id || log[8] || '-';
+        const existingUploader = log.existing_uploader || log[9] || '';
+        const fileUploader = log.file_uploader || log[10] || '';
 
         let statusClass = 'text-gray-600';
         if (status.includes('신규')) statusClass = 'text-green-600';
         else if (status.includes('매칭')) statusClass = 'text-blue-600';
         else if (status.includes('충돌')) statusClass = 'text-red-600';
 
+        // 충돌 여부: 두 담당자가 다를 때 빨간색 표시
+        const isConflict = existingUploader && fileUploader && existingUploader !== fileUploader;
+        const existingCell = existingUploader
+            ? `<span class="${isConflict ? 'text-red-600 font-bold' : 'text-gray-600'} text-[10px]">${existingUploader}</span>`
+            : '<span class="text-gray-300">-</span>';
+        const fileCell = fileUploader
+            ? `<span class="${isConflict ? 'text-red-600 font-bold' : 'text-gray-600'} text-[10px]">${fileUploader}</span>`
+            : '<span class="text-gray-300">-</span>';
+
         return `
-            <tr class="hover:bg-gray-50 border-b border-gray-100 last:border-0">
+            <tr class="hover:bg-gray-50 border-b border-gray-100 last:border-0${isConflict ? ' bg-red-50' : ''}">
                 <td class="px-3 py-2 text-[11px] text-gray-500">${dateStr}</td>
                 <td class="px-3 py-2 text-xs font-bold ${statusClass}">${status}</td>
                 <td class="px-3 py-2 text-xs font-bold">
@@ -5818,11 +5825,54 @@ MJ 이정우 팀장
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-600">${inDate}</td>
                 <td class="px-3 py-2 text-xs text-gray-600">${court}</td>
+                <td class="px-3 py-2 text-xs">${existingCell}</td>
+                <td class="px-3 py-2 text-xs">${fileCell}</td>
                 <td class="px-3 py-2 text-xs text-gray-500 truncate max-w-[150px]" title="${fileName}">${msg}</td>
                 <td class="px-3 py-2 text-[10px] text-gray-400 font-mono">${imgId}</td>
                 <td class="px-3 py-2 text-[10px] text-gray-400">${aucId}</td>
             </tr>
         `;
+    }
+
+    /**
+     * 대시보드 - 이미지 동기화 현황 로드 (최근 7일)
+     */
+    function loadDashboardImageStats() {
+        const tbody = document.getElementById('imageSyncStatsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-gray-400">조회 중...</td></tr>';
+        google.script.run
+            .withSuccessHandler(renderDashboardImageStats)
+            .withFailureHandler(err => {
+                if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-red-500 py-4 text-center">${err.message}</td></tr>`;
+            })
+            .getSyncStats();
+    }
+
+    function renderDashboardImageStats(stats) {
+        const tbody = document.getElementById('imageSyncStatsBody');
+        if (!tbody) return;
+        if (!stats || stats.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-gray-400">최근 7일 동기화 이력이 없습니다.</td></tr>';
+            return;
+        }
+        let html = '';
+        stats.forEach(s => {
+            const conflictCell = s.conflictCount > 0
+                ? `<span class="text-red-600 font-bold">${s.conflictCount}</span>`
+                : '<span class="text-gray-300">-</span>';
+            html += `<tr class="border-b border-gray-100 hover:bg-gray-50">
+                <td class="py-1 px-2 text-gray-600">${s.date}</td>
+                <td class="py-1 px-2 font-medium">${s.manager}</td>
+                <td class="py-1 px-2">${conflictCell}</td>
+                <td class="py-1 px-2 font-bold text-indigo-600">${s.total}</td>
+                <td class="py-1 px-2 text-green-600">${s.newCount}</td>
+                <td class="py-1 px-2 text-blue-600">${s.matchCount}</td>
+                <td class="py-1 px-2 text-blue-600">${s.aucMatch}</td>
+                <td class="py-1 px-2 text-orange-600">${s.aucNoMatch > 0 ? s.aucNoMatch : '-'}</td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
     }
 
     /**
@@ -5856,171 +5906,6 @@ MJ 이정우 팀장
 
             if (typeof showStatus === 'function') showStatus(`${sakunNo} 건으로 이동하여 검색을 실행했습니다.`, 'success');
         }
-    }
-
-    /**
-     * 이미지 동기화 충돌 내역(대기실) 로드
-     */
-    function loadSyncConflicts() {
-        const tbody = document.getElementById('syncConflictTableBody');
-        if (!tbody) return;
-
-        google.script.run
-            .withSuccessHandler(conflicts => {
-                renderSyncConflicts(conflicts);
-            })
-            .withFailureHandler(err => {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500">로드 실패: ${err.message}</td></tr>`;
-            })
-            .getSyncConflicts();
-    }
-
-    /**
-     * 동기화 충돌 내역 렌더링
-     */
-    function renderSyncConflicts(conflicts) {
-        const tbody = document.getElementById('syncConflictTableBody');
-        if (!tbody) return;
-
-        if (!conflicts || conflicts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-12 text-center text-gray-500 italic">대기 중인 충돌 내역이 없습니다.</td></tr>';
-            return;
-        }
-
-        let html = '';
-        conflicts.forEach(c => {
-            const timeStr = c.timestamp ? c.timestamp : '-';
-            const bidPrice = Number(c.bid_price || 0).toLocaleString();
-
-            html += `
-                <tr class="hover:bg-red-50 transition-colors">
-                    <td class="px-3 py-3 text-center">
-                        <input type="checkbox" class="sync-conflict-item-check rounded" value="${c.id}">
-                    </td>
-                    <td class="px-3 py-3">
-                        <div class="text-[10px] text-gray-400 mb-1">${timeStr}</div>
-                        <div class="text-sm font-bold text-gray-800">
-                            <a href="javascript:void(0)" onclick="searchFromSyncLog('${c.sakun_no}')" class="text-indigo-600 hover:text-indigo-800 hover:underline">
-                                ${c.sakun_no}
-                            </a>
-                        </div>
-                    </td>
-                    <td class="px-3 py-3 text-gray-700 font-medium">${c.court || '-'}</td>
-                    <td class="px-3 py-3">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-blue-50 text-blue-600 border border-blue-100">${c.state || '-'}</span>
-                    </td>
-                    <td class="px-3 py-3 text-gray-700">${c.member || '-'}</td>
-                    <td class="px-3 py-3 text-right font-mono font-bold text-gray-900">${bidPrice}</td>
-                    <td class="px-3 py-3">
-                        <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-[11px]">${c.existing_uploader}</span>
-                    </td>
-                    <td class="px-3 py-3">
-                        <div class="flex items-center">
-                            <span class="px-2 py-1 bg-red-100 text-red-700 rounded text-[11px] font-bold border border-red-200">${c.new_uploader}</span>
-                            <button onclick="openAuctionWindowById('${c.auction_id}')" class="ml-2 text-blue-600 hover:text-blue-800" title="옥션보기">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                            </button>
-                        </div>
-                    </td>
-                    <td class="px-3 py-3 text-center">
-                        <div class="flex flex-col space-y-1 items-center">
-                            <button onclick="handleSyncConflictResolve('${c.id}', 'keep_existing')" 
-                                    class="w-20 px-2 py-1 bg-gray-500 text-white text-[10px] rounded hover:bg-gray-600 transition">
-                                기존 유지
-                            </button>
-                            <button onclick="handleSyncConflictResolve('${c.id}', 'replace_with_new')" 
-                                    class="w-20 px-2 py-1 bg-red-600 text-white text-[10px] rounded hover:bg-red-700 transition shadow-sm">
-                                신규 교체
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
-        tbody.innerHTML = html;
-    }
-
-    // [NEW] 동기화 충돌 체크박스 전체 토글
-    function toggleAllSyncConflictCheckboxes(master) {
-        const checks = document.querySelectorAll('.sync-conflict-item-check');
-        checks.forEach(c => c.checked = master.checked);
-    }
-
-    function showBulkSyncResolveModal() {
-        const selectedIds = Array.from(document.querySelectorAll('.sync-conflict-item-check:checked')).map(c => c.value);
-        if (selectedIds.length === 0) {
-            showStatus('처리할 항목을 선택해주세요.', 'warning');
-            return;
-        }
-
-        const countSpan = document.getElementById('bulk-sync-count');
-        if (countSpan) countSpan.textContent = selectedIds.length;
-
-        document.getElementById('syncConflictBulkModal').classList.remove('content-hidden');
-    }
-
-    function closeSyncConflictBulkModal() {
-        document.getElementById('syncConflictBulkModal').classList.add('content-hidden');
-    }
-
-    /**
-     * 모달에서 버튼 클릭 시 실제 처리 실행
-     */
-    function executeBulkSyncResolve(action) {
-        const selectedIds = Array.from(document.querySelectorAll('.sync-conflict-item-check:checked')).map(c => c.value);
-        if (selectedIds.length === 0) return;
-
-        closeSyncConflictBulkModal();
-        handleBulkSyncConflictResolve(selectedIds, action);
-    }
-
-    function handleBulkSyncConflictResolve(ids, action) {
-        showStatus(`${ids.length}건 일괄 처리 중...`, 'warning');
-
-        google.script.run
-            .withSuccessHandler(res => {
-                if (res.success) {
-                    showStatus(res.message, 'success');
-                    loadSyncConflicts();
-                    const master = document.getElementById('sync-conflict-checkall');
-                    if (master) master.checked = false;
-                } else {
-                    showStatus(res.message, 'error');
-                }
-            })
-            .withFailureHandler(err => {
-                showStatus('일괄 처리 실패: ' + err.message, 'error');
-            })
-            .resolveSyncConflictsBatch(ids, action);
-    }
-
-    /**
-     * 충돌 해결 실행
-     */
-    function handleSyncConflictResolve(conflictId, action) {
-        const msg = action === 'keep_existing'
-            ? '기존유지: 이미지ID, 옥션ID가 이 이미지의 정보로 업데이트 됩니다.\n(담당자는 변경되지 않습니다. 계속하시겠습니까?)'
-            : '신규교체: 입찰가담당자, 이미지ID, 옥션ID가 이 이미지의 정보로 업데이트 됩니다.\n(계속하시겠습니까?)';
-
-        if (!confirm(msg)) return;
-
-        showStatus('충돌 해결 중...', 'warning');
-
-        google.script.run
-            .withSuccessHandler(res => {
-                if (res && res.success) {
-                    showStatus(res.message || '해결되었습니다.', 'success');
-                    loadSyncConflicts();
-                    // 필요한 경우 물건 데이터 재로드
-                    if (action === 'replace_with_new') loadData(true);
-                } else {
-                    showStatus(res && res.message ? res.message : '해결 실패', 'error');
-                }
-            })
-            .withFailureHandler(err => {
-                showStatus('해결 오류: ' + err.message, 'error');
-            })
-            .resolveSyncConflict(conflictId, action);
     }
 
     /**

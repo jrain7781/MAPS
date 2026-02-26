@@ -72,6 +72,7 @@ def capture_combined_element(driver, header_element, table_element, file_path):
         width = rect_t['width']
         height = (rect_t['top'] + rect_t['height']) - rect_h['top']
         if width <= 0 or height <= 0:
+            print(f"      ⚠ 캡처 실패: 크기 이상 (width={width:.1f}, height={height:.1f})")
             return False
         screenshot_base64 = driver.execute_cdp_cmd("Page.captureScreenshot", {
             "clip": {"x": x, "y": y, "width": width, "height": height, "scale": 1},
@@ -85,7 +86,8 @@ def capture_combined_element(driver, header_element, table_element, file_path):
         with open(file_path, "wb") as f:
             f.write(base64.b64decode(screenshot_base64['data']))
         return True
-    except:
+    except Exception as e:
+        print(f"      ⚠ 캡처 오류: {type(e).__name__}: {e}")
         return False
 
 
@@ -300,19 +302,63 @@ def process_list_page_capture_all(driver, save_dir, type_prefix, suffix="", mana
 
             court_name = "공매" if type_prefix == "공매" else get_court_from_text(full_text)
 
+            # 옥션 product_id 추출 (이미지 src 패턴: 경매=Thumnail/m/.../m{ID}_, 공매=PubAuct/...//{ID}_)
+            product_id = ""
+            try:
+                product_id = driver.execute_script("""
+                    var tbl = arguments[0], hdr = arguments[1];
+                    // 1. 이미지 src/onerror에서 추출
+                    var imgs = tbl.querySelectorAll('img');
+                    for(var i=0; i<imgs.length; i++){
+                        var src = imgs[i].getAttribute('src') || '';
+                        var m = src.match(/Thumnail\/m\/\d+\/m(\d+)_/) || src.match(/PubAuct\/\d+\/\d+\/(\d+)_/);
+                        if(m) return m[1];
+                        var oe = imgs[i].getAttribute('onerror') || '';
+                        var m2 = oe.match(/Thumnail\/m\/\d+\/m(\d+)_/) || oe.match(/PubAuct\/\d+\/\d+\/(\d+)_/);
+                        if(m2) return m2[1];
+                    }
+                    // 2. href/onclick fallback (테이블→헤더)
+                    var sources = [tbl, hdr];
+                    for(var s=0; s<sources.length; s++){
+                        var link = sources[s].querySelector('a[href*="product_id="]');
+                        if(link){ var m=link.href.match(/product_id=(\d+)/); if(m) return m[1]; }
+                        var all = sources[s].querySelectorAll('[onclick]');
+                        for(var j=0; j<all.length; j++){
+                            var m=(all[j].getAttribute('onclick')||'').match(/product_id[=\(,]['"]?(\d+)/);
+                            if(m) return m[1];
+                        }
+                    }
+                    // 3. 부모 방향 속성 탐색
+                    var el = tbl.parentElement;
+                    for(var i=0; i<10; i++){
+                        if(!el || el===document.body) break;
+                        var attrs = el.attributes || [];
+                        for(var j=0; j<attrs.length; j++){
+                            var m = attrs[j].value.match(/product_id[=\(,]['"]?(\d+)/);
+                            if(m) return m[1];
+                        }
+                        el = el.parentElement;
+                    }
+                    return '';
+                """, item, header_element) or ""
+            except:
+                pass
+            print(f"    🔍 product_id: {product_id or '미추출'}")
+
             # 안전한 파일명
             safe_sakun = re.sub(r'[_]', "-", sakun_no)
             safe_sakun = re.sub(r'[\\/*?:"<>|]', "", safe_sakun)
             safe_court = re.sub(r'[_]', "-", court_name)
             safe_court = re.sub(r'[\\/*?:"<>|]', "", safe_court)
-            
-            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}_{manager}.png"
+            pid_suffix = f"_{product_id}" if product_id else ""
+            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}_{manager}{pid_suffix}.png"
             file_path = os.path.join(save_dir, filename)
             
             if capture_combined_element(driver, header_element, item, file_path):
                 print(f"    - 📸 저장: {filename}")
                 count += 1
         except Exception as e:
+            print(f"    ⚠ 물건 처리 오류 ({i+1}번째): {type(e).__name__}: {e}")
             continue
     return count
 
@@ -332,8 +378,7 @@ def run_macro(account, list_filepath):
 
     options = webdriver.ChromeOptions()
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--force-device-scale-factor=1")
-    options.add_argument("--disable-gpu")
+    options.add_argument("--force-device-scale-factor=2")
     options.add_experimental_option("detach", True)
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     wait = WebDriverWait(driver, 15)
