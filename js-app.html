@@ -5853,26 +5853,58 @@ MJ 이정우 팀장
         const tbody = document.getElementById('imageSyncStatsBody');
         if (!tbody) return;
         if (!stats || stats.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-gray-400">최근 7일 동기화 이력이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-gray-400">최근 동기화 이력이 없습니다.</td></tr>';
             return;
         }
         let html = '';
         stats.forEach(s => {
+            const m = s.manager.replace(/'/g, "\\'");
+            const clickable = (val, cls) => val > 0
+                ? `<span class="${cls} cursor-pointer hover:underline font-bold" onclick="navigateToSyncItems('${m}')">${val}</span>`
+                : `<span class="text-gray-300">-</span>`;
             const conflictCell = s.conflictCount > 0
-                ? `<span class="text-red-600 font-bold">${s.conflictCount}</span>`
+                ? `<span class="text-red-600 cursor-pointer hover:underline font-bold" onclick="navigateToSyncItems('${m}')">${s.conflictCount}</span>`
                 : '<span class="text-gray-300">-</span>';
             html += `<tr class="border-b border-gray-100 hover:bg-gray-50">
                 <td class="py-1 px-2 text-gray-600 whitespace-nowrap">${s.time}</td>
                 <td class="py-1 px-2 font-medium">${s.manager}</td>
                 <td class="py-1 px-2">${conflictCell}</td>
-                <td class="py-1 px-2 font-bold text-indigo-600">${s.total}</td>
-                <td class="py-1 px-2 text-green-600">${s.newCount}</td>
-                <td class="py-1 px-2 text-blue-600">${s.matchCount}</td>
-                <td class="py-1 px-2 text-blue-600">${s.aucMatch}</td>
-                <td class="py-1 px-2 text-orange-600">${s.aucNoMatch > 0 ? s.aucNoMatch : '-'}</td>
+                <td class="py-1 px-2">${clickable(s.total, 'text-indigo-600')}</td>
+                <td class="py-1 px-2">${clickable(s.newCount, 'text-green-600')}</td>
+                <td class="py-1 px-2">${clickable(s.matchCount, 'text-blue-600')}</td>
+                <td class="py-1 px-2">${clickable(s.aucMatch, 'text-blue-600')}</td>
+                <td class="py-1 px-2">${clickable(s.aucNoMatch, 'text-orange-600')}</td>
             </tr>`;
         });
         tbody.innerHTML = html;
+    }
+
+    /**
+     * 이미지 동기화 현황 숫자 클릭 → 입찰물건관리로 이동 후 해당 담당자 필터 적용
+     */
+    function navigateToSyncItems(manager) {
+        navigateTo('ItemManagement');
+        setTimeout(() => {
+            // 상태 전체 선택
+            const allStatusCb = document.getElementById('search-status-all');
+            if (allStatusCb) {
+                allStatusCb.checked = true;
+                if (typeof handleStatusAll === 'function') handleStatusAll(allStatusCb);
+            }
+            // 입찰가담당(m_name_id) select 설정
+            const managerSelect = document.getElementById('search-manager');
+            if (managerSelect) managerSelect.value = manager;
+            // 담당자명 텍스트 입력도 설정 (select 매칭 실패 시 텍스트 검색으로 폴백)
+            const mNameInput = document.getElementById('search-mname');
+            if (mNameInput) mNameInput.value = '';
+            // 사건번호/날짜 초기화
+            const sakunInput = document.getElementById('search-sakunno');
+            if (sakunInput) sakunInput.value = '';
+            // 필터 적용
+            if (typeof applyFilters === 'function') applyFilters();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (typeof showStatus === 'function') showStatus(`${manager} 담당 물건을 조회합니다.`, 'success');
+        }, 150);
     }
 
     /**

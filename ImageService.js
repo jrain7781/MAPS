@@ -113,7 +113,7 @@ function getSyncLogs(filters) {
 /**
  * 대시보드용: sync_logs를 "동기화 실행 세션" 단위로 집계하여 반환합니다.
  * - 20분 이상 간격이 있으면 새로운 세션으로 판단
- * - 세션 내에서 담당자(file_uploader)별로 집계
+ * - 세션 내에서 담당자(items m_name_id = existing_uploader)별로 집계
  * - 반환값: 최근 30건, 최신 세션이 위
  */
 function getSyncStats() {
@@ -128,12 +128,27 @@ function getSyncStats() {
     // 유효한 로그만 필터링 후 타임스탬프 오름차순 정렬
     const entries = data
       .filter(row => row[0] && new Date(row[0]) >= cutoff)
-      .map(row => ({
-        ts: new Date(row[0]),
-        type: String(row[1]),
-        aucId: String(row[8] || ''),
-        fileUploader: String(row[10] || '').trim() || '미상'
-      }))
+      .map(row => {
+        // 담당자 결정: ① items m_name_id(existing_uploader) ② 파일명 파싱 ③ 파일담당자 순
+        let manager = String(row[9] || '').trim(); // existing_uploader = items.m_name_id
+        if (!manager) {
+          // 신규등록 등 m_name_id 없는 경우: 파일명에서 직접 파싱
+          const fn = String(row[5] || '');
+          const dotIdx = fn.lastIndexOf('.');
+          const nameNoExt = dotIdx > -1 ? fn.substring(0, dotIdx) : fn;
+          const fparts = nameNoExt.split('_');
+          // 끝이 순수 숫자면 옥션ID 제거
+          if (fparts.length > 0 && /^\d{4,12}$/.test(fparts[fparts.length - 1])) fparts.pop();
+          if (fparts.length > 3) manager = fparts[fparts.length - 1].trim();
+        }
+        if (!manager) manager = String(row[10] || '').trim(); // file_uploader 최종 폴백
+        return {
+          ts: new Date(row[0]),
+          type: String(row[1]),
+          aucId: String(row[8] || ''),
+          manager: manager || '대표님'
+        };
+      })
       .sort((a, b) => a.ts - b.ts);
 
     if (entries.length === 0) return [];
@@ -156,18 +171,18 @@ function getSyncStats() {
     const result = [];
     sessions.forEach(session => {
       const timeStr = Utilities.formatDate(session[0].ts, Session.getScriptTimeZone(), 'MM/dd HH:mm');
-      const byUploader = new Map();
+      const byManager = new Map();
 
       session.forEach(e => {
-        if (!byUploader.has(e.fileUploader)) {
-          byUploader.set(e.fileUploader, {
+        if (!byManager.has(e.manager)) {
+          byManager.set(e.manager, {
             time: timeStr,
-            manager: e.fileUploader,
+            manager: e.manager,
             total: 0, newCount: 0, matchCount: 0,
             conflictCount: 0, aucMatch: 0, aucNoMatch: 0
           });
         }
-        const s = byUploader.get(e.fileUploader);
+        const s = byManager.get(e.manager);
         s.total++;
         if (e.type === '신규등록') s.newCount++;
         if (e.type === '매칭성공') s.matchCount++;
@@ -175,7 +190,7 @@ function getSyncStats() {
         if (e.aucId) s.aucMatch++; else s.aucNoMatch++;
       });
 
-      byUploader.forEach(s => result.push(s));
+      byManager.forEach(s => result.push(s));
     });
 
     // 최신 세션이 위에 오도록 역순, 최대 30행
