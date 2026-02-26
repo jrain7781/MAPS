@@ -110,41 +110,76 @@ function getSyncLogs(filters) {
 /**
  * 대시보드용: 최근 7일 동기화 통계를 날짜×담당자 기준으로 집계하여 반환합니다.
  */
+/**
+ * 대시보드용: sync_logs를 "동기화 실행 세션" 단위로 집계하여 반환합니다.
+ * - 20분 이상 간격이 있으면 새로운 세션으로 판단
+ * - 세션 내에서 담당자(file_uploader)별로 집계
+ * - 반환값: 최근 30건, 최신 세션이 위
+ */
 function getSyncStats() {
   try {
     const sh = ensureSyncLogsSheet();
     const lastRow = sh.getLastRow();
     if (lastRow < 2) return [];
 
-    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 최근 30일
     const data = sh.getRange(2, 1, lastRow - 1, SYNC_LOGS_HEADERS.length).getValues();
 
-    const statsMap = new Map();
-    data.forEach(row => {
-      const ts = row[0];
-      if (!ts || new Date(ts) < cutoff) return;
-      const type = String(row[1]);
-      const inDate = String(row[3]);
-      const aucId = String(row[8] || '');
-      const fileUploader = String(row[10] || row[5] || '').trim() || '미상';
+    // 유효한 로그만 필터링 후 타임스탬프 오름차순 정렬
+    const entries = data
+      .filter(row => row[0] && new Date(row[0]) >= cutoff)
+      .map(row => ({
+        ts: new Date(row[0]),
+        type: String(row[1]),
+        aucId: String(row[8] || ''),
+        fileUploader: String(row[10] || '').trim() || '미상'
+      }))
+      .sort((a, b) => a.ts - b.ts);
 
-      const key = `${inDate}_${fileUploader}`;
-      if (!statsMap.has(key)) {
-        statsMap.set(key, {
-          date: inDate, manager: fileUploader,
-          conflictCount: 0, total: 0, newCount: 0,
-          matchCount: 0, aucMatch: 0, aucNoMatch: 0
-        });
+    if (entries.length === 0) return [];
+
+    // 20분 이상 간격 = 새 세션으로 분리
+    const SESSION_GAP_MS = 20 * 60 * 1000;
+    const sessions = [];
+    let current = [entries[0]];
+    for (let i = 1; i < entries.length; i++) {
+      if (entries[i].ts - entries[i - 1].ts > SESSION_GAP_MS) {
+        sessions.push(current);
+        current = [entries[i]];
+      } else {
+        current.push(entries[i]);
       }
-      const s = statsMap.get(key);
-      s.total++;
-      if (type === '신규등록') s.newCount++;
-      if (type === '매칭성공') s.matchCount++;
-      if (type === '충돌') s.conflictCount++;
-      if (aucId) s.aucMatch++; else s.aucNoMatch++;
+    }
+    sessions.push(current);
+
+    // 각 세션을 담당자별로 집계
+    const result = [];
+    sessions.forEach(session => {
+      const timeStr = Utilities.formatDate(session[0].ts, Session.getScriptTimeZone(), 'MM/dd HH:mm');
+      const byUploader = new Map();
+
+      session.forEach(e => {
+        if (!byUploader.has(e.fileUploader)) {
+          byUploader.set(e.fileUploader, {
+            time: timeStr,
+            manager: e.fileUploader,
+            total: 0, newCount: 0, matchCount: 0,
+            conflictCount: 0, aucMatch: 0, aucNoMatch: 0
+          });
+        }
+        const s = byUploader.get(e.fileUploader);
+        s.total++;
+        if (e.type === '신규등록') s.newCount++;
+        if (e.type === '매칭성공') s.matchCount++;
+        if (e.type === '충돌') s.conflictCount++;
+        if (e.aucId) s.aucMatch++; else s.aucNoMatch++;
+      });
+
+      byUploader.forEach(s => result.push(s));
     });
 
-    return Array.from(statsMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+    // 최신 세션이 위에 오도록 역순, 최대 30행
+    return result.reverse().slice(0, 30);
   } catch (e) {
     Logger.log(`getSyncStats Error: ${e.message}`);
     return [];
