@@ -3058,6 +3058,14 @@
         const mName = input.value.trim();
         if (!mName) return;
 
+        // 물건상태가 '미정' 또는 '상품'이면 빈 값 허용 (이미 위에서 empty 체크로 리턴됨)
+        // 입력 필드 ID에 따라 메항/모달 상태 필드 구분
+        const isModal = input.id && input.id.indexOf('modal') !== -1;
+        const stuMemberEl = isModal
+            ? document.getElementById('modal-form-stu-member')
+            : document.getElementById('form-stu-member');
+        const stuMember = stuMemberEl ? stuMemberEl.value : '';
+
         // "이정우 (MJ) 한한한" 형식에서 이름 부분만 추출하여 비교
         const cleanMName = mName.split(' ')[0].split('(')[0].trim();
         const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
@@ -4071,12 +4079,20 @@ MJ 이정우 팀장
 
         // [회원명 검증]
         const cleanMName = String(mName || '').split(' ')[0].split('(')[0].trim();
-        const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
-        const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
-        if (!isValidMember) {
-            showStatus('등록된 회원이 아닙니다.', 'error');
-            if (modalFormMName) modalFormMName.focus();
-            return;
+
+        // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과 (필수 아님)
+        const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
+
+        if (isOptionalMemberStatus && !cleanMName) {
+            // 회원명이 없어도 등록 허용
+        } else {
+            const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
+            const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
+            if (!isValidMember) {
+                showStatus('등록된 회원이 아닙니다.', 'error');
+                if (modalFormMName) modalFormMName.focus();
+                return;
+            }
         }
         const bidPrice = bidPriceRaw === '' ? '0' : bidPriceRaw;
         const bidState = document.getElementById('modal-form-bid-state') ? document.getElementById('modal-form-bid-state').value : '';
@@ -4170,12 +4186,20 @@ MJ 이정우 팀장
 
         // [회원명 검증]
         const cleanMName = String(mName || '').split(' ')[0].split('(')[0].trim();
-        const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
-        const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
-        if (!isValidMember) {
-            showStatus('등록된 회원이 아닙니다.', 'error');
-            if (formMName) formMName.focus();
-            return;
+
+        // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과 (필수 아님)
+        const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
+
+        if (isOptionalMemberStatus && !cleanMName) {
+            // 회원명이 없어도 등록 허용
+        } else {
+            const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
+            const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
+            if (!isValidMember) {
+                showStatus('등록된 회원이 아닙니다.', 'error');
+                if (formMName) formMName.focus();
+                return;
+            }
         }
         const bidPrice = rawBidPrice === '' ? '0' : rawBidPrice;
         const imageId = formImageId ? formImageId.value : '';
@@ -5929,12 +5953,12 @@ MJ 이정우 팀장
         const s = _imgSyncStatsCache[statsIdx];
         if (!s) return;
         let sakunNos, label;
-        if (type === '전체')        { sakunNos = s.allSakunNos;        label = '전체'; }
-        else if (type === '신규등록') { sakunNos = s.newSakunNos;       label = '신규등록'; }
-        else if (type === '매칭')    { sakunNos = s.matchSakunNos;     label = '매칭(이미지)'; }
-        else if (type === '충돌')    { sakunNos = s.conflictSakunNos;  label = '충돌'; }
-        else if (type === '옥션매칭') { sakunNos = s.aucMatchSakunNos;  label = '매칭(옥션ID)'; }
-        else if (type === '옥션미매칭'){ sakunNos = s.aucNoMatchSakunNos; label = '매칭X(옥션ID)'; }
+        if (type === '전체') { sakunNos = s.allSakunNos; label = '전체'; }
+        else if (type === '신규등록') { sakunNos = s.newSakunNos; label = '신규등록'; }
+        else if (type === '매칭') { sakunNos = s.matchSakunNos; label = '매칭(이미지)'; }
+        else if (type === '충돌') { sakunNos = s.conflictSakunNos; label = '충돌'; }
+        else if (type === '옥션매칭') { sakunNos = s.aucMatchSakunNos; label = '매칭(옥션ID)'; }
+        else if (type === '옥션미매칭') { sakunNos = s.aucNoMatchSakunNos; label = '매칭X(옥션ID)'; }
         else { sakunNos = s.allSakunNos; label = '전체'; }
 
         if (!sakunNos || sakunNos.length === 0) {

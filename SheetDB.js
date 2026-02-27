@@ -165,7 +165,12 @@ function formatParamsDate(value, format = 'yyMMdd') {
  */
 function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
-  if (!isValidMemberName_(mName)) return { success: false, message: '등록된 회원이 아닙니다.' };
+
+  // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과
+  const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
+  if (!(isOptionalMemberStatus && !String(mName || '').trim())) {
+    if (!isValidMemberName_(mName)) return { success: false, message: '등록된 회원이 아닙니다.' };
+  }
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
   // [방어 코드] 쓰기 전에 15번째 열(m_name2)까지 확보
@@ -184,7 +189,12 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
  */
 function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
-  if (!isValidMemberName_(mName)) return { success: false, message: '등록된 회원이 아닙니다.' };
+
+  // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과
+  const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
+  if (!(isOptionalMemberStatus && !String(mName || '').trim())) {
+    if (!isValidMemberName_(mName)) return { success: false, message: '등록된 회원이 아닙니다.' };
+  }
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
   // [방어 코드] 15번째 열(m_name2)까지 확보
