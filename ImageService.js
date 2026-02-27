@@ -11,10 +11,7 @@ const ITEM_IMAGES_SHEET_NAME = 'item_images';
 const ITEM_IMAGES_HEADERS = ['item_id', 'image_id', 'uploader', 'created_at', 'file_name'];
 
 const SYNC_LOGS_SHEET_NAME = 'sync_logs';
-const SYNC_LOGS_HEADERS = ['timestamp', 'type', 'sakun_no', 'in_date', 'court', 'file_name', 'status_msg', 'image_id', 'auction_id'];
-
-const SYNC_CONFLICTS_SHEET_NAME = 'sync_conflicts';
-const SYNC_CONFLICTS_HEADERS = ['id', 'timestamp', 'sakun_no', 'item_id', 'new_uploader', 'file_name', 'image_id', 'auction_id'];
+const SYNC_LOGS_HEADERS = ['timestamp', 'type', 'sakun_no', 'in_date', 'court', 'file_name', 'status_msg', 'image_id', 'auction_id', 'existing_uploader', 'file_uploader'];
 
 function ensureSyncLogsSheet() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -33,116 +30,6 @@ function ensureSyncLogsSheet() {
     }
   }
   return sh;
-}
-
-/**
- * 동기화 충돌 내역을 기록할 시트를 가져오거나 생성합니다.
- */
-function ensureSyncConflictsSheet() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sh = ss.getSheetByName(SYNC_CONFLICTS_SHEET_NAME);
-  if (!sh) {
-    sh = ss.insertSheet(SYNC_CONFLICTS_SHEET_NAME);
-    sh.getRange(1, 1, 1, SYNC_CONFLICTS_HEADERS.length).setValues([SYNC_CONFLICTS_HEADERS]);
-    sh.getRange(1, 1, 1, SYNC_CONFLICTS_HEADERS.length).setFontWeight('bold');
-    sh.setFrozenRows(1);
-    sh.setTabColor('#e57373'); // 빨간색 계열로 표시
-  } else {
-    // [보완] 헤더 컬럼 구조가 바뀌었거나 item_id가 없으면 전체 마이그레이션(데이터 정리) 실행
-    var currentHeader = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
-    if (currentHeader.length !== SYNC_CONFLICTS_HEADERS.length || currentHeader.indexOf('item_id') === -1) {
-      Logger.log('[Sync] 구형 데이터 형식 감지 - 마이그레이션 시작');
-      migrateSyncConflictsData_(sh);
-    }
-  }
-  return sh;
-}
-
-/**
- * 구형 sync_conflicts 데이터를 신규 ID 기반 형식으로 변환합니다.
- * - 누락된 item_id를 items 시트에서 찾아서 채움
- * - 불필요한 컬럼 정리
- */
-function migrateSyncConflictsData_(sh) {
-  try {
-    const lastRow = sh.getLastRow();
-    if (lastRow < 2) {
-      // 데이터가 없으면 헤더만 갱신
-      sh.clear();
-      sh.getRange(1, 1, 1, SYNC_CONFLICTS_HEADERS.length).setValues([SYNC_CONFLICTS_HEADERS]);
-      sh.getRange(1, 1, 1, SYNC_CONFLICTS_HEADERS.length).setFontWeight('bold');
-      sh.setFrozenRows(1);
-      return;
-    }
-
-    // 1. 기존 데이터 읽기
-    const oldValues = sh.getDataRange().getValues();
-    const oldHeaders = oldValues[0];
-    const oldRows = oldValues.slice(1);
-
-    // 구형 인덱스 찾기
-    const idxSakun = oldHeaders.indexOf('sakun_no');
-    const idxDate = oldHeaders.indexOf('in_date');
-    const idxCourt = oldHeaders.indexOf('court');
-    const idxUploader = oldHeaders.indexOf('new_uploader');
-    const idxFile = oldHeaders.indexOf('file_name');
-    const idxImg = oldHeaders.indexOf('image_id');
-    const idxAuc = oldHeaders.indexOf('auction_id');
-
-    // 2. 전체 items 데이터 로드 (매칭용)
-    const items = readAllData(); // SheetDB.js의 readAllData 사용
-    const itemMap = new Map();
-    items.forEach(item => {
-      // 매칭 키: 사건번호_날짜_법원
-      const key = `${String(item.sakun_no).trim()}_${String(item['in-date']).trim()}_${String(item.court).trim()}`;
-      itemMap.set(key, item.id);
-    });
-
-    // 3. 신규 데이터 구성
-    const newRows = oldRows.map(row => {
-      const sakun = idxSakun > -1 ? String(row[idxSakun]).trim() : '';
-      const inDate = idxDate > -1 ? String(row[idxDate]).trim() : '';
-      const court = idxCourt > -1 ? String(row[idxCourt]).trim() : '';
-
-      const key = `${sakun}_${inDate}_${court}`;
-      const itemId = itemMap.get(key) || ''; // 매칭되는 ID 찾기
-
-      // SYNC_CONFLICTS_HEADERS = ['id', 'timestamp', 'sakun_no', 'item_id', 'new_uploader', 'file_name', 'image_id', 'auction_id']
-      return [
-        row[0] || new Date().getTime().toString(), // id
-        row[1] || new Date(), // timestamp
-        sakun,
-        itemId,
-        idxUploader > -1 ? row[idxUploader] : '',
-        idxFile > -1 ? row[idxFile] : '',
-        idxImg > -1 ? row[idxImg] : '',
-        idxAuc > -1 ? row[idxAuc] : ''
-      ];
-    });
-
-    // 4. 시트 갱신
-    sh.clear();
-    sh.getRange(1, 1, 1, SYNC_CONFLICTS_HEADERS.length).setValues([SYNC_CONFLICTS_HEADERS]);
-    sh.getRange(1, 1, 1, SYNC_CONFLICTS_HEADERS.length).setFontWeight('bold');
-    if (newRows.length > 0) {
-      sh.getRange(2, 1, newRows.length, SYNC_CONFLICTS_HEADERS.length).setValues(newRows);
-    }
-    sh.setFrozenRows(1);
-    Logger.log(`[Sync] 마이그레이션 완료: ${newRows.length}건 처리`);
-  } catch (e) {
-    Logger.log(`[Sync] 마이그레이션 실패: ${e.message}`);
-  }
-}
-
-/**
- * 동기화 충돌 파일을 보관할 전용 폴더를 가져오거나 생성합니다.
- */
-function getSyncConflictsFolder() {
-  const uploadFolder = DriveApp.getFolderById(IMAGE_UPLOAD_FOLDER_ID);
-  const parent = uploadFolder.getParents().next();
-  const folders = parent.getFoldersByName('sync_conflicts');
-  if (folders.hasNext()) return folders.next();
-  return parent.createFolder('sync_conflicts');
 }
 
 /**
@@ -203,19 +90,134 @@ function getSyncLogs(filters) {
 
     result.push({
       timestamp: Utilities.formatDate(new Date(timestamp), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'),
-      type: type,
+      status: type,
       sakun_no: sakunNo,
       in_date: inDate,
       court: court,
       file_name: fileName,
-      status_msg: statusMsg,
+      message: statusMsg,
       image_id: String(row[7] || ''),
-      auction_id: String(row[8] || '')
+      auction_id: String(row[8] || ''),
+      existing_uploader: String(row[9] || ''),
+      file_uploader: String(row[10] || '')
     });
 
     if (result.length >= 200) break; // 최대 200건
   }
   return result;
+}
+
+/**
+ * 대시보드용: 최근 7일 동기화 통계를 날짜×담당자 기준으로 집계하여 반환합니다.
+ */
+/**
+ * 대시보드용: sync_logs를 "동기화 실행 세션" 단위로 집계하여 반환합니다.
+ * - 20분 이상 간격이 있으면 새로운 세션으로 판단
+ * - 세션 내에서 담당자(items m_name_id = existing_uploader)별로 집계
+ * - 반환값: 최근 30건, 최신 세션이 위
+ */
+function getSyncStats() {
+  try {
+    const sh = ensureSyncLogsSheet();
+    const lastRow = sh.getLastRow();
+    if (lastRow < 2) return [];
+
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 최근 30일
+    const data = sh.getRange(2, 1, lastRow - 1, SYNC_LOGS_HEADERS.length).getValues();
+
+    // 유효한 로그만 필터링 후 타임스탬프 오름차순 정렬
+    const entries = data
+      .filter(row => row[0] && new Date(row[0]) >= cutoff)
+      .map(row => {
+        // 담당자 결정: ① items m_name_id(existing_uploader) ② 파일명 파싱 ③ 파일담당자 순
+        let manager = String(row[9] || '').trim(); // existing_uploader = items.m_name_id
+        if (!manager) {
+          // 신규등록 등 m_name_id 없는 경우: 파일명에서 직접 파싱
+          const fn = String(row[5] || '');
+          const dotIdx = fn.lastIndexOf('.');
+          const nameNoExt = dotIdx > -1 ? fn.substring(0, dotIdx) : fn;
+          const fparts = nameNoExt.split('_');
+          // 끝이 순수 숫자면 옥션ID 제거
+          if (fparts.length > 0 && /^\d{4,12}$/.test(fparts[fparts.length - 1])) fparts.pop();
+          if (fparts.length > 3) manager = fparts[fparts.length - 1].trim();
+        }
+        if (!manager) manager = String(row[10] || '').trim(); // file_uploader 최종 폴백
+        return {
+          ts: new Date(row[0]),
+          type: String(row[1]),
+          sakunNo: String(row[2] || '').trim(),
+          aucId: String(row[8] || ''),
+          manager: manager || '대표님'
+        };
+      })
+      .sort((a, b) => a.ts - b.ts);
+
+    if (entries.length === 0) return [];
+
+    // 1시간 이상 간격 = 새 세션으로 분리
+    const SESSION_GAP_MS = 60 * 60 * 1000;
+    const sessions = [];
+    let current = [entries[0]];
+    for (let i = 1; i < entries.length; i++) {
+      if (entries[i].ts - entries[i - 1].ts > SESSION_GAP_MS) {
+        sessions.push(current);
+        current = [entries[i]];
+      } else {
+        current.push(entries[i]);
+      }
+    }
+    sessions.push(current);
+
+    // 각 세션을 담당자별로 집계
+    const result = [];
+    sessions.forEach(session => {
+      const timeStr = Utilities.formatDate(session[0].ts, Session.getScriptTimeZone(), 'MM/dd HH:mm');
+      const byManager = new Map();
+
+      session.forEach(e => {
+        if (!byManager.has(e.manager)) {
+          byManager.set(e.manager, {
+            time: timeStr,
+            manager: e.manager,
+            total: 0, newCount: 0, matchCount: 0,
+            conflictCount: 0, aucMatch: 0, aucNoMatch: 0,
+            allSakunNos: [], newSakunNos: [], matchSakunNos: [],
+            conflictSakunNos: [], aucMatchSakunNos: [], aucNoMatchSakunNos: []
+          });
+        }
+        const s = byManager.get(e.manager);
+        s.total++;
+        if (e.sakunNo && !s.allSakunNos.includes(e.sakunNo)) s.allSakunNos.push(e.sakunNo);
+        if (e.type === '신규등록') {
+          s.newCount++;
+          if (e.sakunNo && !s.newSakunNos.includes(e.sakunNo)) s.newSakunNos.push(e.sakunNo);
+        }
+        if (e.type === '매칭성공') {
+          s.matchCount++;
+          if (e.sakunNo && !s.matchSakunNos.includes(e.sakunNo)) s.matchSakunNos.push(e.sakunNo);
+        }
+        if (e.type === '충돌') {
+          s.conflictCount++;
+          if (e.sakunNo && !s.conflictSakunNos.includes(e.sakunNo)) s.conflictSakunNos.push(e.sakunNo);
+        }
+        if (e.aucId) {
+          s.aucMatch++;
+          if (e.sakunNo && !s.aucMatchSakunNos.includes(e.sakunNo)) s.aucMatchSakunNos.push(e.sakunNo);
+        } else {
+          s.aucNoMatch++;
+          if (e.sakunNo && !s.aucNoMatchSakunNos.includes(e.sakunNo)) s.aucNoMatchSakunNos.push(e.sakunNo);
+        }
+      });
+
+      byManager.forEach(s => result.push(s));
+    });
+
+    // 최신 세션이 위에 오도록 역순, 최대 30행
+    return result.reverse().slice(0, 30);
+  } catch (e) {
+    Logger.log(`getSyncStats Error: ${e.message}`);
+    return [];
+  }
 }
 
 function ensureItemImagesSheet() {
@@ -613,33 +615,19 @@ function syncImages(batchLimit = 100) {
         const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
         let itemId = currentItemId;
 
+        let isConflict = false;
+
         if (itemId) {
-          // [충돌 체크] 업로더가 다를 경우 대기실로 전송
-          if (existingUploader !== regMember) {
-            const conflictSheet = ensureSyncConflictsSheet();
-            conflictSheet.appendRow([
-              new Date().getTime().toString(),
-              new Date(), sakunNo, itemId, regMember,
-              fileName, imageCode, auctionId
-            ]);
-
-            const conflictFolder = getSyncConflictsFolder();
-            moveFileToArchive(file, conflictFolder);
-
-            syncResults.push([
-              new Date(), '충돌(대기)', sakunNo, inDate, court, fileName,
-              `업로더 불일치 (기존:${existingUploader} VS 신규:${regMember}) - 대기실 전송`,
-              imageCode, auctionId
-            ]);
-
+          // [충돌 감지] 업로더 불일치 - 로그만 남기고 정상 처리 계속 (대기실 전송 없음)
+          if (existingUploader !== '' && regMember !== '' && existingUploader !== regMember) {
+            isConflict = true;
             conflictCount++;
-            continue; // while 루프의 다음 파일로
           }
 
-          // [기존 물건 매칭] - 데이터 보호 원칙 적용 (상태/담당자 유지)
+          // [기존 물건 매칭] - 이미지/옥션ID 항상 업데이트 (충돌 여부 무관, 상태/담당자 유지)
           sheet.getRange(matchedRowIndex, 13).setValue(imageCode);
           if (auctionId) sheet.getRange(matchedRowIndex, 16).setValue(auctionId);
-          matchCount++;
+          if (!isConflict) matchCount++;
         } else {
           // [신규 물건 등록]
           const newId = new Date().getTime().toString() + Math.floor(Math.random() * 100);
@@ -666,10 +654,14 @@ function syncImages(batchLimit = 100) {
 
         syncResults.push([
           new Date(),
-          matchedRowIndex > -1 ? '매칭성공' : '신규등록',
+          matchedRowIndex > -1 ? (isConflict ? '충돌' : '매칭성공') : '신규등록',
           sakunNo, inDate, court, fileName,
-          matchedRowIndex > -1 ? '기존 물건 업데이트 완료' : '신규 물건 등록 완료',
-          imageCode, auctionId
+          matchedRowIndex > -1
+            ? (isConflict ? `업로더 불일치 (기존:${existingUploader} VS 신규:${regMember})` : '기존 물건 업데이트 완료')
+            : '신규 물건 등록 완료',
+          imageCode, auctionId,
+          existingUploader || '',
+          regMember || ''
         ]);
 
       } catch (e) {
@@ -705,7 +697,7 @@ function syncImages(batchLimit = 100) {
 
     // 상세 결과 메시지 생성
     let message = `처리 완료: 총 ${processCount}건 (신규: ${newCount}, 매칭: ${matchCount})`;
-    if (conflictCount > 0) message += `, 충돌(대기): ${conflictCount}건`;
+    if (conflictCount > 0) message += `, 충돌: ${conflictCount}건`;
     if (skipCount > 0) message += `, 건너뜀: ${skipCount}건`;
     if (errorCount > 0) message += `, 오류: ${errorCount}건`;
     if (remainingFiles > 0) message += `, 남은 파일: ${remainingFiles}건 (자동 계속 진행)`;
@@ -719,7 +711,9 @@ function syncImages(batchLimit = 100) {
       file_name: r[5],
       message: r[6],
       image_code: r[7],
-      auction_id: r[8]
+      auction_id: r[8],
+      existing_uploader: String(r[9] || ''),
+      file_uploader: String(r[10] || '')
     }));
 
     return {
@@ -821,160 +815,6 @@ function getImageDataUrl(fileId) {
   } catch (e) {
     return null;
   }
-}
-
-/**
- * 대기 중인 동기화 충돌 내역을 가져옵니다.
- */
-function getSyncConflicts() {
-  try {
-    const sh = ensureSyncConflictsSheet();
-    const lastRow = sh.getLastRow();
-    if (lastRow < 2) return [];
-
-    // 1. 대기실 원본 데이터 로드
-    const data = sh.getRange(2, 1, lastRow - 1, SYNC_CONFLICTS_HEADERS.length).getValues();
-
-    // 2. 전체 매칭을 위해 items 시트 데이터 로드 (최신 정보 Join 목적)
-    const items = readAllDataWithImageIds();
-    const itemMap = new Map();
-    items.forEach(item => {
-      itemMap.set(String(item.id).trim(), item);
-    });
-
-    // 3. 데이터 조합 (Join)
-    return data.map(row => {
-      const obj = {};
-      SYNC_CONFLICTS_HEADERS.forEach((h, i) => {
-        let val = row[i];
-        if (h === 'timestamp' && val instanceof Date) {
-          val = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
-        }
-        obj[h] = val;
-      });
-
-      // item_id 기반으로 items 시트의 최신 정보 입히기
-      const matchedItem = itemMap.get(String(obj.item_id).trim());
-      if (matchedItem) {
-        obj.sakun_no = matchedItem.sakun_no; // 시트 기록값 대신 items 시트의 최신값 사용 가능
-        obj.court = matchedItem.court;
-        obj.in_date = matchedItem['in-date'];
-        obj.state = matchedItem.stu_member; // 진행상태
-        obj.member = matchedItem.m_name; // 회원명
-        obj.bid_price = matchedItem.bidprice; // 입찰가
-        obj.existing_uploader = matchedItem.m_name_id; // 기존 입찰가담당자 (m_name_id로 변경)
-      } else {
-        // 매칭되는 물건이 items에서 사라진 경우 (거의 없겠지만 대비)
-        obj.state = '삭제됨';
-        obj.existing_uploader = '-';
-      }
-
-      return obj;
-    });
-  } catch (e) {
-    Logger.log(`getSyncConflicts Error: ${e.message}`);
-    return [];
-  }
-}
-
-/**
- * 동기화 충돌을 해결합니다.
- * @param {string} conflictId - 충돌 ID
- * @param {string} action - 'keep_existing' (취소) 또는 'replace_with_new' (교체)
- */
-function resolveSyncConflict(conflictId, action) {
-  try {
-    const sh = ensureSyncConflictsSheet();
-    const lastRow = sh.getLastRow();
-    if (lastRow < 2) return { success: false, message: '충돌 내역이 없습니다.' };
-
-    const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-    const idx = ids.findIndex(id => String(id) === String(conflictId));
-    if (idx === -1) return { success: false, message: '해당 충돌 내역을 찾을 수 없습니다.' };
-
-    const rowIndex = idx + 2;
-    const row = sh.getRange(rowIndex, 1, 1, SYNC_CONFLICTS_HEADERS.length).getValues()[0];
-    const itemId = String(row[3]).trim(); // item_id (Col 4)
-    const newUploader = row[4];           // new_uploader (Col 5)
-    const fileName = row[5];              // file_name (Col 6)
-    const imageCode = row[6];             // image_id (Col 7)
-    const auctionId = row[7];             // auction_id (Col 8)
-
-    const itemsSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(IMAGE_DB_SHEET_NAME);
-    const archiveFolder = DriveApp.getFolderById(IMAGE_ARCHIVE_FOLDER_ID);
-    const conflictFolder = getSyncConflictsFolder();
-
-    // 1. DB에서 해당 물건 찾기 (ID 기반 직접 검색)
-    const lastRowItems = itemsSheet.getLastRow();
-    if (lastRowItems < 2) return { success: false, message: 'DB에 데이터가 없습니다.' };
-
-    const itemIds = itemsSheet.getRange(2, 1, lastRowItems - 1, 1).getValues().flat();
-    const itemRowIdx = itemIds.findIndex(id => String(id).trim() === itemId);
-    const matchedRowIdx = itemRowIdx > -1 ? itemRowIdx + 2 : -1;
-
-    if (matchedRowIdx > -1) {
-      // 2. 공통 업데이트 (이미지 ID, 옥션 ID)
-      itemsSheet.getRange(matchedRowIdx, 13).setValue(imageCode); // image_id (Col 13)
-      if (auctionId) itemsSheet.getRange(matchedRowIdx, 16).setValue(auctionId); // auction_id (Col 16)
-
-      // 3. 조건부 업데이트 (입찰가담당자) - 신규교체일 때만 실행
-      if (action === 'replace_with_new') {
-        // [필독] m_name(Col 7, 회원명)은 절대 건드리지 않음. m_name_id(Col 6, 입찰가담당자)만 업데이트.
-        itemsSheet.getRange(matchedRowIdx, 6).setValue(newUploader); // m_name_id (Col 6) - 0-based index 5
-      }
-
-      // [주의] 상태값, 입찰가, 회원명 등은 절대 건드리지 않음
-
-      // 4. item_images 시트 업데이트 (이력기록)
-      const imgSheet = ensureItemImagesSheet();
-      const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
-      imgSheet.appendRow([itemId, imageCode, 'system', nowStr, fileName]);
-    } else {
-      return { success: false, message: '매칭되는 물건을 찾을 수 없습니다.' };
-    }
-
-    // 5. 파일 보관 처리 (충돌 폴더 -> 아카이브 폴더)
-    const files = conflictFolder.getFilesByName(fileName);
-    if (files.hasNext()) {
-      const file = files.next();
-      moveFileToArchive(file, archiveFolder);
-    }
-
-    // 충돌 내역 삭제
-    sh.deleteRow(rowIndex);
-
-    return {
-      success: true,
-      message: action === 'replace_with_new' ? '새 담당자로 교차 등록되었습니다.' : '기존 담당자 정보를 유지하였습니다.'
-    };
-
-  } catch (e) {
-    Logger.log(`resolveSyncConflict Error: ${e.message}`);
-    return { success: false, message: `오류 발생: ${e.message}` };
-  }
-}
-
-/**
- * 여러 개의 동기화 충돌을 한 번에 해결합니다.
- * @param {Array} conflictIds - 충돌 ID 배열
- * @param {string} action - 'keep_existing' 또는 'replace_with_new'
- */
-function resolveSyncConflictsBatch(conflictIds, action) {
-  if (!conflictIds || !Array.isArray(conflictIds)) return { success: false, message: '충돌 ID가 유효하지 않습니다.' };
-
-  let successCount = 0;
-  let failCount = 0;
-
-  conflictIds.forEach(id => {
-    const res = resolveSyncConflict(id, action);
-    if (res.success) successCount++;
-    else failCount++;
-  });
-
-  return {
-    success: true,
-    message: `${successCount}건 처리 완료` + (failCount > 0 ? `, ${failCount}건 실패` : '')
-  };
 }
 
 /**

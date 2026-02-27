@@ -298,6 +298,8 @@
 
     let dashboardFilter = { active: false, date: null, status: null, type: null, manager: null };
     let calendarFilter = { active: false, member: null, status: null };
+    let syncSakunFilter = { active: false, sakunNos: [], label: '' };
+    let _imgSyncStatsCache = [];
     let itemListSort = { key: null, dir: 1 };
 
     // 데이터 캐시 관리
@@ -630,11 +632,6 @@
         // 대시보드로 이동 시 요청 목록 즉시 갱신
         if (tabId === 'Dashboard' && !IS_MEMBER_VIEW) {
             try { loadTelegramRequests(); } catch (e) { }
-        }
-
-        // 환경설정 탭으로 이동 시 동기화 충돌 내역(대기실) 로드
-        if (tabId === 'Preferences' && !IS_MEMBER_VIEW) {
-            try { loadSyncConflicts(); } catch (e) { }
         }
 
         // 회원 대시보드 탭 이동 시 렌더링
@@ -997,10 +994,10 @@
                     cell.textContent = '';
                 }
                 cell = row.insertCell(3);
-                cell.textContent = item.sakun_no;
+                cell.textContent = String(item.sakun_no || '').trim();
                 cell.className = 'item-col-sakun text-left';
                 cell = row.insertCell(4);
-                cell.textContent = item.court;
+                cell.textContent = String(item.court || '').trim();
                 cell.className = 'item-col-court text-left';
                 cell = row.insertCell(5);
                 const statusClass = getStatusTagClass(item.stu_member);
@@ -1014,7 +1011,7 @@
                 }
                 cell.className = 'item-col-member text-center';
                 cell = row.insertCell(7);
-                cell.textContent = item.m_name_id;
+                cell.textContent = String(item.m_name_id || '').trim();
                 cell.className = 'item-col-manager text-center';
 
                 // 전송 컬럼이 있다면 제거 (즉시 실행)
@@ -3061,6 +3058,14 @@
         const mName = input.value.trim();
         if (!mName) return;
 
+        // 물건상태가 '미정' 또는 '상품'이면 빈 값 허용 (이미 위에서 empty 체크로 리턴됨)
+        // 입력 필드 ID에 따라 메항/모달 상태 필드 구분
+        const isModal = input.id && input.id.indexOf('modal') !== -1;
+        const stuMemberEl = isModal
+            ? document.getElementById('modal-form-stu-member')
+            : document.getElementById('form-stu-member');
+        const stuMember = stuMemberEl ? stuMemberEl.value : '';
+
         // "이정우 (MJ) 한한한" 형식에서 이름 부분만 추출하여 비교
         const cleanMName = mName.split(' ')[0].split('(')[0].trim();
         const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
@@ -4074,12 +4079,20 @@ MJ 이정우 팀장
 
         // [회원명 검증]
         const cleanMName = String(mName || '').split(' ')[0].split('(')[0].trim();
-        const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
-        const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
-        if (!isValidMember) {
-            showStatus('등록된 회원이 아닙니다.', 'error');
-            if (modalFormMName) modalFormMName.focus();
-            return;
+
+        // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과 (필수 아님)
+        const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
+
+        if (isOptionalMemberStatus && !cleanMName) {
+            // 회원명이 없어도 등록 허용
+        } else {
+            const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
+            const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
+            if (!isValidMember) {
+                showStatus('등록된 회원이 아닙니다.', 'error');
+                if (modalFormMName) modalFormMName.focus();
+                return;
+            }
         }
         const bidPrice = bidPriceRaw === '' ? '0' : bidPriceRaw;
         const bidState = document.getElementById('modal-form-bid-state') ? document.getElementById('modal-form-bid-state').value : '';
@@ -4173,12 +4186,20 @@ MJ 이정우 팀장
 
         // [회원명 검증]
         const cleanMName = String(mName || '').split(' ')[0].split('(')[0].trim();
-        const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
-        const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
-        if (!isValidMember) {
-            showStatus('등록된 회원이 아닙니다.', 'error');
-            if (formMName) formMName.focus();
-            return;
+
+        // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과 (필수 아님)
+        const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
+
+        if (isOptionalMemberStatus && !cleanMName) {
+            // 회원명이 없어도 등록 허용
+        } else {
+            const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
+            const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
+            if (!isValidMember) {
+                showStatus('등록된 회원이 아닙니다.', 'error');
+                if (formMName) formMName.focus();
+                return;
+            }
         }
         const bidPrice = rawBidPrice === '' ? '0' : rawBidPrice;
         const imageId = formImageId ? formImageId.value : '';
@@ -4386,6 +4407,7 @@ MJ 이정우 팀장
                 renderStatusManagementDashboard();
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
+                if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
             })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
@@ -4687,14 +4709,19 @@ MJ 이정우 팀장
 
         const activeFilterBanner = document.getElementById('activeFilterBanner');
         const activeFilterText = document.getElementById('activeFilterText');
-        if (dashboardFilter.active && activeFilterBanner && activeFilterText) {
+        const syncFilterBanner = document.getElementById('syncFilterBanner');
+        const syncFilterText = document.getElementById('syncFilterText');
+        if (syncSakunFilter.active && syncFilterBanner && syncFilterText) {
+            syncFilterBanner.classList.remove('content-hidden');
+            syncFilterText.textContent = `이미지동기화 필터: ${syncSakunFilter.label}`;
+            if (activeFilterBanner) activeFilterBanner.classList.add('content-hidden');
+        } else if (dashboardFilter.active && activeFilterBanner && activeFilterText) {
+            if (syncFilterBanner) syncFilterBanner.classList.add('content-hidden');
             activeFilterBanner.classList.remove('content-hidden');
             let filterDesc = "";
-
             const managerText = (dashboardFilter.manager && dashboardFilter.manager !== 'All')
                 ? `[${dashboardFilter.manager}] `
                 : '';
-
             if (dashboardFilter.type === 'total_status') {
                 filterDesc = `당일 이후 전체 [${dashboardFilter.status}] 건`;
             } else {
@@ -4709,6 +4736,7 @@ MJ 이정우 팀장
             activeFilterText.textContent = `${filterDesc} 필터링 중`;
         } else {
             if (activeFilterBanner) activeFilterBanner.classList.add('content-hidden');
+            if (syncFilterBanner) syncFilterBanner.classList.add('content-hidden');
         }
 
         if (allBiddingData.length === 0 && loadingIndicator && !loadingIndicator.classList.contains('content-hidden')) {
@@ -4726,12 +4754,14 @@ MJ 이정우 팀장
         let filteredData = allBiddingData.filter(item => {
             const inDate = String(item['in-date'] || '');
             const regDate = String(item.reg_date || '');
-            // 입찰일자 필터링: 검색어가 있으면 검색어로, 없으면 오늘 이후만 (숫자 비교로 정확한 날짜 비교)
+            // 입찰일자 필터링: syncSakunFilter 활성 시 날짜 제한 없음
             const inDateStr = String(inDate || '');
             const inDateNum = inDateStr.replace(/\D/g, '');
-            const matchesIndate = termIndate
-                ? (inDateStr.includes(termIndate) || inDateNum.includes(termIndate.replace(/\D/g, '')))
-                : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, '')));
+            const matchesIndate = syncSakunFilter.active
+                ? true
+                : (termIndate
+                    ? (inDateStr.includes(termIndate) || inDateNum.includes(termIndate.replace(/\D/g, '')))
+                    : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, ''))));
             const matchesSakunNo = !termSakunNo || String(item.sakun_no || '').toLowerCase().includes(termSakunNo);
             // 정확한 매칭: 입력값과 정확히 일치하는 경우만 통과
             const matchesCourt = !termCourt || String(item.court || '').toLowerCase().trim() === termCourt.toLowerCase().trim();
@@ -4775,6 +4805,12 @@ MJ 이정우 팀장
             }
             return true;
         });
+        // syncSakunFilter: 특정 사건번호 목록으로만 좁히기
+        if (syncSakunFilter.active && syncSakunFilter.sakunNos.length > 0) {
+            filteredData = filteredData.filter(item =>
+                syncSakunFilter.sakunNos.includes(String(item.sakun_no || '').trim())
+            );
+        }
         if (itemListSort.key) {
             const k = itemListSort.key;
             const d = itemListSort.dir;
@@ -4806,6 +4842,7 @@ MJ 이정우 팀장
 
     function clearDashboardFilter() {
         dashboardFilter = { active: false, date: null, status: null, type: null, manager: null };
+        syncSakunFilter = { active: false, sakunNos: [], label: '' };
         applyFilters();
     }
 
@@ -5613,8 +5650,8 @@ MJ 이정우 팀장
                             statusDiv.classList.add('text-green-600');
                             showStatus('이미지 동기화가 완료되었습니다.', 'success');
 
-                            // 대기실 데이터도 갱신
-                            if (totalConflict > 0) loadSyncConflicts();
+                            // 대시보드 이미지 현황 갱신
+                            if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats();
                         }
                     } else {
                         statusDiv.textContent = '오류: ' + result.message;
@@ -5777,7 +5814,7 @@ MJ 이정우 팀장
         if (!tbody) return;
 
         if (!logs || logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-500">조회된 이력이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="p-4 text-center text-gray-500">조회된 이력이 없습니다.</td></tr>';
             return;
         }
 
@@ -5799,16 +5836,27 @@ MJ 이정우 팀장
         const court = log.court || log[4] || '-';
         const fileName = log.file_name || log[5] || '-';
         const msg = log.message || log[6] || '-';
-        const imgId = log.image_code || log[7] || '-';
+        const imgId = log.image_code || log.image_id || log[7] || '-';
         const aucId = log.auction_id || log[8] || '-';
+        const existingUploader = log.existing_uploader || log[9] || '';
+        const fileUploader = log.file_uploader || log[10] || '';
 
         let statusClass = 'text-gray-600';
         if (status.includes('신규')) statusClass = 'text-green-600';
         else if (status.includes('매칭')) statusClass = 'text-blue-600';
         else if (status.includes('충돌')) statusClass = 'text-red-600';
 
+        // 충돌 여부: 두 담당자가 다를 때 빨간색 표시
+        const isConflict = existingUploader && fileUploader && existingUploader !== fileUploader;
+        const existingCell = existingUploader
+            ? `<span class="${isConflict ? 'text-red-600 font-bold' : 'text-gray-600'} text-[10px]">${existingUploader}</span>`
+            : '<span class="text-gray-300">-</span>';
+        const fileCell = fileUploader
+            ? `<span class="${isConflict ? 'text-red-600 font-bold' : 'text-gray-600'} text-[10px]">${fileUploader}</span>`
+            : '<span class="text-gray-300">-</span>';
+
         return `
-            <tr class="hover:bg-gray-50 border-b border-gray-100 last:border-0">
+            <tr class="hover:bg-gray-50 border-b border-gray-100 last:border-0${isConflict ? ' bg-red-50' : ''}">
                 <td class="px-3 py-2 text-[11px] text-gray-500">${dateStr}</td>
                 <td class="px-3 py-2 text-xs font-bold ${statusClass}">${status}</td>
                 <td class="px-3 py-2 text-xs font-bold">
@@ -5818,11 +5866,141 @@ MJ 이정우 팀장
                 </td>
                 <td class="px-3 py-2 text-xs text-gray-600">${inDate}</td>
                 <td class="px-3 py-2 text-xs text-gray-600">${court}</td>
+                <td class="px-3 py-2 text-xs">${existingCell}</td>
+                <td class="px-3 py-2 text-xs">${fileCell}</td>
                 <td class="px-3 py-2 text-xs text-gray-500 truncate max-w-[150px]" title="${fileName}">${msg}</td>
                 <td class="px-3 py-2 text-[10px] text-gray-400 font-mono">${imgId}</td>
                 <td class="px-3 py-2 text-[10px] text-gray-400">${aucId}</td>
             </tr>
         `;
+    }
+
+    /**
+     * 대시보드 - 이미지 동기화 현황 로드 (최근 7일)
+     */
+    function loadDashboardImageStats() {
+        const tbody = document.getElementById('imageSyncStatsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-gray-400">조회 중...</td></tr>';
+        google.script.run
+            .withSuccessHandler(renderDashboardImageStats)
+            .withFailureHandler(err => {
+                if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-red-500 py-4 text-center">${err.message}</td></tr>`;
+            })
+            .getSyncStats();
+
+    }
+
+    function renderDashboardImageStats(stats) {
+        const tbody = document.getElementById('imageSyncStatsBody');
+        if (!tbody) return;
+        if (!stats || stats.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-gray-400">최근 동기화 이력이 없습니다.</td></tr>';
+            return;
+        }
+        _imgSyncStatsCache = stats;
+        // 20분 세션별 교대 색상: 같은 time = 같은 세션
+        const SESSION_BG = ['', 'bg-indigo-50'];
+        let sessionIdx = -1;
+        let prevTime = null;
+        let html = '';
+        stats.forEach((s, idx) => {
+            if (s.time !== prevTime) { sessionIdx++; prevTime = s.time; }
+            const bg = SESSION_BG[sessionIdx % 2];
+            const mk = (val, cls, type) => val > 0
+                ? `<span class="${cls} cursor-pointer hover:underline font-bold" onclick="navigateToSyncItemsBySakunNos(${idx},'${type}')">${val}</span>`
+                : '<span class="text-gray-300">-</span>';
+            const conflictCell = s.conflictCount > 0
+                ? `<span class="text-red-600 cursor-pointer hover:underline font-bold" onclick="navigateToSyncItemsBySakunNos(${idx},'충돌')" onmouseenter="showConflictTooltip(event)" onmouseleave="hideConflictTooltip()">${s.conflictCount}</span>`
+                : '<span class="text-gray-300">-</span>';
+            html += `<tr class="border-b border-gray-100 hover:brightness-95 ${bg}">
+                <td class="py-1 px-1 text-gray-600 whitespace-nowrap">${s.time}</td>
+                <td class="py-1 px-1 font-medium truncate">${s.manager}</td>
+                <td class="py-1 px-1">${conflictCell}</td>
+                <td class="py-1 px-1">${mk(s.total, 'text-indigo-600', '전체')}</td>
+                <td class="py-1 px-1">${mk(s.newCount, 'text-green-600', '신규등록')}</td>
+                <td class="py-1 px-1">${mk(s.matchCount, 'text-blue-600', '매칭')}</td>
+                <td class="py-1 px-1">${mk(s.aucMatch, 'text-blue-600', '옥션매칭')}</td>
+                <td class="py-1 px-1">${mk(s.aucNoMatch, 'text-orange-600', '옥션미매칭')}</td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    const _CONFLICT_TOOLTIP_MSG = '이미등록된 담당자는 변경되지 않습니다. 담당자 확인후 MAPS 시스템에서 직접 담당자 수정 해 주시고, 담당이 아닌 옥션 관심물건은 삭제 해 주세요~';
+
+    function showConflictTooltip(e) {
+        const t = document.getElementById('g-conflict-tooltip');
+        if (!t) return;
+        t.textContent = _CONFLICT_TOOLTIP_MSG;
+        t.style.display = 'block';
+        const r = e.target.getBoundingClientRect();
+        t.style.left = Math.max(4, r.left + r.width / 2 - 60) + 'px';
+        t.style.top = (r.top - t.offsetHeight - 10) + 'px';
+    }
+
+    function hideConflictTooltip() {
+        const t = document.getElementById('g-conflict-tooltip');
+        if (t) t.style.display = 'none';
+    }
+
+    /**
+     * 이미지 동기화 현황 숫자 클릭 → 해당 사건번호 목록으로 입찰물건관리 이동
+     * @param {number} statsIdx - _imgSyncStatsCache 인덱스
+     * @param {string} type - '전체'|'신규등록'|'매칭'|'충돌'|'옥션매칭'|'옥션미매칭'
+     */
+    function navigateToSyncItemsBySakunNos(statsIdx, type) {
+        const s = _imgSyncStatsCache[statsIdx];
+        if (!s) return;
+        let sakunNos, label;
+        if (type === '전체') { sakunNos = s.allSakunNos; label = '전체'; }
+        else if (type === '신규등록') { sakunNos = s.newSakunNos; label = '신규등록'; }
+        else if (type === '매칭') { sakunNos = s.matchSakunNos; label = '매칭(이미지)'; }
+        else if (type === '충돌') { sakunNos = s.conflictSakunNos; label = '충돌'; }
+        else if (type === '옥션매칭') { sakunNos = s.aucMatchSakunNos; label = '매칭(옥션ID)'; }
+        else if (type === '옥션미매칭') { sakunNos = s.aucNoMatchSakunNos; label = '매칭X(옥션ID)'; }
+        else { sakunNos = s.allSakunNos; label = '전체'; }
+
+        if (!sakunNos || sakunNos.length === 0) {
+            if (typeof showStatus === 'function') showStatus('조회할 사건번호가 없습니다.', 'warning');
+            return;
+        }
+
+        syncSakunFilter = { active: true, sakunNos, label: `${s.time} ${s.manager} [${label}] ${sakunNos.length}건` };
+        dashboardFilter = { active: false, date: null, status: null, type: null, manager: null };
+
+        navigateTo('ItemManagement');
+        setTimeout(() => {
+            // 모든 검색 필드 초기화
+            const allStatusCb = document.getElementById('search-status-all');
+            if (allStatusCb) { allStatusCb.checked = true; if (typeof handleStatusAll === 'function') handleStatusAll(allStatusCb); }
+            const managerSelect = document.getElementById('search-manager');
+            if (managerSelect) managerSelect.value = '';
+            const sakunInput = document.getElementById('search-sakunno');
+            if (sakunInput) sakunInput.value = '';
+            const indateInput = document.getElementById('search-indate');
+            if (indateInput) indateInput.value = '';
+            if (typeof applyFilters === 'function') applyFilters();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (typeof showStatus === 'function') showStatus(`${syncSakunFilter.label} 조회 중`, 'success');
+        }, 150);
+    }
+
+    /**
+     * @deprecated navigateToSyncItemsBySakunNos 사용 권장
+     */
+    function navigateToSyncItems(manager) {
+        navigateTo('ItemManagement');
+        setTimeout(() => {
+            const allStatusCb = document.getElementById('search-status-all');
+            if (allStatusCb) { allStatusCb.checked = true; if (typeof handleStatusAll === 'function') handleStatusAll(allStatusCb); }
+            const managerSelect = document.getElementById('search-manager');
+            if (managerSelect) managerSelect.value = manager;
+            const sakunInput = document.getElementById('search-sakunno');
+            if (sakunInput) sakunInput.value = '';
+            if (typeof applyFilters === 'function') applyFilters();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 150);
     }
 
     /**
@@ -5856,171 +6034,6 @@ MJ 이정우 팀장
 
             if (typeof showStatus === 'function') showStatus(`${sakunNo} 건으로 이동하여 검색을 실행했습니다.`, 'success');
         }
-    }
-
-    /**
-     * 이미지 동기화 충돌 내역(대기실) 로드
-     */
-    function loadSyncConflicts() {
-        const tbody = document.getElementById('syncConflictTableBody');
-        if (!tbody) return;
-
-        google.script.run
-            .withSuccessHandler(conflicts => {
-                renderSyncConflicts(conflicts);
-            })
-            .withFailureHandler(err => {
-                tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-red-500">로드 실패: ${err.message}</td></tr>`;
-            })
-            .getSyncConflicts();
-    }
-
-    /**
-     * 동기화 충돌 내역 렌더링
-     */
-    function renderSyncConflicts(conflicts) {
-        const tbody = document.getElementById('syncConflictTableBody');
-        if (!tbody) return;
-
-        if (!conflicts || conflicts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-12 text-center text-gray-500 italic">대기 중인 충돌 내역이 없습니다.</td></tr>';
-            return;
-        }
-
-        let html = '';
-        conflicts.forEach(c => {
-            const timeStr = c.timestamp ? c.timestamp : '-';
-            const bidPrice = Number(c.bid_price || 0).toLocaleString();
-
-            html += `
-                <tr class="hover:bg-red-50 transition-colors">
-                    <td class="px-3 py-3 text-center">
-                        <input type="checkbox" class="sync-conflict-item-check rounded" value="${c.id}">
-                    </td>
-                    <td class="px-3 py-3">
-                        <div class="text-[10px] text-gray-400 mb-1">${timeStr}</div>
-                        <div class="text-sm font-bold text-gray-800">
-                            <a href="javascript:void(0)" onclick="searchFromSyncLog('${c.sakun_no}')" class="text-indigo-600 hover:text-indigo-800 hover:underline">
-                                ${c.sakun_no}
-                            </a>
-                        </div>
-                    </td>
-                    <td class="px-3 py-3 text-gray-700 font-medium">${c.court || '-'}</td>
-                    <td class="px-3 py-3">
-                        <span class="px-2 py-0.5 rounded-full text-[10px] bg-blue-50 text-blue-600 border border-blue-100">${c.state || '-'}</span>
-                    </td>
-                    <td class="px-3 py-3 text-gray-700">${c.member || '-'}</td>
-                    <td class="px-3 py-3 text-right font-mono font-bold text-gray-900">${bidPrice}</td>
-                    <td class="px-3 py-3">
-                        <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-[11px]">${c.existing_uploader}</span>
-                    </td>
-                    <td class="px-3 py-3">
-                        <div class="flex items-center">
-                            <span class="px-2 py-1 bg-red-100 text-red-700 rounded text-[11px] font-bold border border-red-200">${c.new_uploader}</span>
-                            <button onclick="openAuctionWindowById('${c.auction_id}')" class="ml-2 text-blue-600 hover:text-blue-800" title="옥션보기">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                            </button>
-                        </div>
-                    </td>
-                    <td class="px-3 py-3 text-center">
-                        <div class="flex flex-col space-y-1 items-center">
-                            <button onclick="handleSyncConflictResolve('${c.id}', 'keep_existing')" 
-                                    class="w-20 px-2 py-1 bg-gray-500 text-white text-[10px] rounded hover:bg-gray-600 transition">
-                                기존 유지
-                            </button>
-                            <button onclick="handleSyncConflictResolve('${c.id}', 'replace_with_new')" 
-                                    class="w-20 px-2 py-1 bg-red-600 text-white text-[10px] rounded hover:bg-red-700 transition shadow-sm">
-                                신규 교체
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
-        tbody.innerHTML = html;
-    }
-
-    // [NEW] 동기화 충돌 체크박스 전체 토글
-    function toggleAllSyncConflictCheckboxes(master) {
-        const checks = document.querySelectorAll('.sync-conflict-item-check');
-        checks.forEach(c => c.checked = master.checked);
-    }
-
-    function showBulkSyncResolveModal() {
-        const selectedIds = Array.from(document.querySelectorAll('.sync-conflict-item-check:checked')).map(c => c.value);
-        if (selectedIds.length === 0) {
-            showStatus('처리할 항목을 선택해주세요.', 'warning');
-            return;
-        }
-
-        const countSpan = document.getElementById('bulk-sync-count');
-        if (countSpan) countSpan.textContent = selectedIds.length;
-
-        document.getElementById('syncConflictBulkModal').classList.remove('content-hidden');
-    }
-
-    function closeSyncConflictBulkModal() {
-        document.getElementById('syncConflictBulkModal').classList.add('content-hidden');
-    }
-
-    /**
-     * 모달에서 버튼 클릭 시 실제 처리 실행
-     */
-    function executeBulkSyncResolve(action) {
-        const selectedIds = Array.from(document.querySelectorAll('.sync-conflict-item-check:checked')).map(c => c.value);
-        if (selectedIds.length === 0) return;
-
-        closeSyncConflictBulkModal();
-        handleBulkSyncConflictResolve(selectedIds, action);
-    }
-
-    function handleBulkSyncConflictResolve(ids, action) {
-        showStatus(`${ids.length}건 일괄 처리 중...`, 'warning');
-
-        google.script.run
-            .withSuccessHandler(res => {
-                if (res.success) {
-                    showStatus(res.message, 'success');
-                    loadSyncConflicts();
-                    const master = document.getElementById('sync-conflict-checkall');
-                    if (master) master.checked = false;
-                } else {
-                    showStatus(res.message, 'error');
-                }
-            })
-            .withFailureHandler(err => {
-                showStatus('일괄 처리 실패: ' + err.message, 'error');
-            })
-            .resolveSyncConflictsBatch(ids, action);
-    }
-
-    /**
-     * 충돌 해결 실행
-     */
-    function handleSyncConflictResolve(conflictId, action) {
-        const msg = action === 'keep_existing'
-            ? '기존유지: 이미지ID, 옥션ID가 이 이미지의 정보로 업데이트 됩니다.\n(담당자는 변경되지 않습니다. 계속하시겠습니까?)'
-            : '신규교체: 입찰가담당자, 이미지ID, 옥션ID가 이 이미지의 정보로 업데이트 됩니다.\n(계속하시겠습니까?)';
-
-        if (!confirm(msg)) return;
-
-        showStatus('충돌 해결 중...', 'warning');
-
-        google.script.run
-            .withSuccessHandler(res => {
-                if (res && res.success) {
-                    showStatus(res.message || '해결되었습니다.', 'success');
-                    loadSyncConflicts();
-                    // 필요한 경우 물건 데이터 재로드
-                    if (action === 'replace_with_new') loadData(true);
-                } else {
-                    showStatus(res && res.message ? res.message : '해결 실패', 'error');
-                }
-            })
-            .withFailureHandler(err => {
-                showStatus('해결 오류: ' + err.message, 'error');
-            })
-            .resolveSyncConflict(conflictId, action);
     }
 
     /**
