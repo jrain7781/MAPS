@@ -1,0 +1,84 @@
+입찰가 담 항목 중복(충돌) 로직 변경
+- 현재 특정 폴더로 이전해서 대기 후 사용자가 판단후 처리 (기존,신규)
+- 수정
+ - 입찰일자, 사건번호, 법원 키로 등록이 되어 있으면 입찰가담당 무시하고 매칭
+ - 입찰일자, 사건번호, 법원 키로 등록이 되어 있지 않으면 신규등록 시 파일명의 입찰가 담당자로 등록 (현재로직)
+
+
+0. 옥션id 추가
+-웹에서 캡처되는 이미지를 클릭하면 상세화면이동
+-경매, 공매 다름
+-https://www.auction1.co.kr/auction/ca_view.php?product_id=2670494&list_ctrl=0&user_ssid=2065512245699fbab7437a4
+
+
+1. 아이디 추가 (전제혁)
+모든로직은 0.1.I, 02.d, 03.k 모두 동일하게 적용한다.
+
+1. 로그인 계정
+ 1) 추가 ID
+-ID: jjhsm81
+-PW: marlboro81!!
+
+ 2) 아이디 로직
+ - 기존 2개(mjgold, mjjang1) -> 입찰가 담당 = 대표님
+ - 신규 추가 ID -> 입찰가 담당 = 전제혁
+
+3. 파일명 생성 로직
+ - 사건번호_입찰일자_법원_입찰가담당_옥션ID
+ - 경매 예) 2024타경1234_260225_부산_대표님_옥션ID
+ - 공매 예) 2025-123412-001_부산_전제혁_옥션ID
+
+4. 경매 사건번호 로직
+- 구분이 경매로 진입
+- 하이폰이 하나만 있음: 2025-1234
+- 경매로직인데 사건번호에 하이폰이 2개면 오류로 캡쳐하지마 
+- 파일명 생성시 변경: 하이폰을 타경으로 치환: 2025타경1234
+
+5. 경매 입찰일자 확인로직
+- 구분이 경매로 진입
+- 헤더 등록일 작성형태: 26.02.25
+- 헤더 입찰일자 작성형태: 2026-02-26(경매1일전)
+- 입찰일이 오늘 이전(오늘포함)이면 캡쳐하지 않는다. 
+- 파일명생성형태:260225
+
+6. 공매 사건번호 로직
+- 구분이 공매로 진입
+- 하이폰이 2개 있음: 2025-123412-123
+- 공매로직인데 사건번호에 하이폰이 1개면 오류로 캡쳐하지마 
+- 파일명 생성시 변경: 하이폰을 그대로 파일명으로 사용: 2025-123412-123
+
+7. 공매 입찰일자 확인로직
+- 구분이 공매로 진입
+- 헤더 등록일 작성형태: 26.02.25
+- 헤더 입찰일자 작성형태: 02.23 14:00~02.25 17:00
+- 02.23 14:00~02.25 17:00   이면 ~ 뒤의 일자로 입찰일자를 정한다
+- 년도 확정로직
+  - 등록일 =< 입찰일은 등록일의 년도로 확정
+  - 등록일 > 입찰일은 등록일의 년도+1 로 확정
+- 파일명생성형태:260225
+- 확정된 입찰일이 오늘 이전(오늘포함)이면 캡쳐하지 않는다. 
+
+공매 진입시 01.i 와 02,d 가 안되는 거 같아
+공매 진입시 로직 03.k(잘됨) 기준과 로직 분석 보고해
+
+
+1. 공매라디오버튼
+<input type="radio" name="itype" id="itype2" value="2" data-gtm-form-interact-field-id="0">
+#itype2
+
+2. 정렬/보기
+등록일은 공매와 동일
+<select name="order_type" id="order_type" style="width:100px" data-gtm-form-interact-field-id="0">
+					
+				<option value="0">-정렬-</option><option value="num1,num2,p_num asc">사건번호↑</option><option value="num1 desc,num2 desc,p_num desc">사건번호↓</option><option value="next_biddate,num1,num2,p_num asc">매각기일↑</option><option value="next_biddate desc,num1,num2,p_num asc">매각기일↓</option><option value="ju_price asc">감정가↑</option><option value="ju_price desc">감정가↓</option><option value="bi_price asc">최저입찰가↑</option><option value="bi_price desc">최저입찰가↓</option><option value="address asc">소재지↑</option><option value="address desc">소재지↓</option><option value="law,support,lesson,num1,num2,p_num asc">법원↑</option><option value="law desc,support desc,lesson,num1,num2,p_num asc">법원↓</option><option value="priority asc,next_biddate desc">관심도↑</option><option value="priority desc,next_biddate desc">관심도↓</option><option value="idx asc">등록일↑</option><option value="idx desc">등록일↓</option></select>
+#order_type
+
+3. 개수 10 -> 20개
+<select name="list_scale" id="list_scale" data-gtm-form-interact-field-id="1">
+				<option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="50">50</option><option value="100">100</option><option value="200">200</option>				</select>
+#list_scale
+
+
+4. 검색
+<span class="btn_box_ss btn_lightblack" id="btnSrch" style="padding:6px">검색</span>
+#btnSrch
