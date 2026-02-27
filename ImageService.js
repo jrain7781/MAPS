@@ -145,6 +145,7 @@ function getSyncStats() {
         return {
           ts: new Date(row[0]),
           type: String(row[1]),
+          sakunNo: String(row[2] || '').trim(),
           aucId: String(row[8] || ''),
           manager: manager || '대표님'
         };
@@ -153,8 +154,8 @@ function getSyncStats() {
 
     if (entries.length === 0) return [];
 
-    // 20분 이상 간격 = 새 세션으로 분리
-    const SESSION_GAP_MS = 20 * 60 * 1000;
+    // 1시간 이상 간격 = 새 세션으로 분리
+    const SESSION_GAP_MS = 60 * 60 * 1000;
     const sessions = [];
     let current = [entries[0]];
     for (let i = 1; i < entries.length; i++) {
@@ -179,15 +180,33 @@ function getSyncStats() {
             time: timeStr,
             manager: e.manager,
             total: 0, newCount: 0, matchCount: 0,
-            conflictCount: 0, aucMatch: 0, aucNoMatch: 0
+            conflictCount: 0, aucMatch: 0, aucNoMatch: 0,
+            allSakunNos: [], newSakunNos: [], matchSakunNos: [],
+            conflictSakunNos: [], aucMatchSakunNos: [], aucNoMatchSakunNos: []
           });
         }
         const s = byManager.get(e.manager);
         s.total++;
-        if (e.type === '신규등록') s.newCount++;
-        if (e.type === '매칭성공') s.matchCount++;
-        if (e.type === '충돌') s.conflictCount++;
-        if (e.aucId) s.aucMatch++; else s.aucNoMatch++;
+        if (e.sakunNo && !s.allSakunNos.includes(e.sakunNo)) s.allSakunNos.push(e.sakunNo);
+        if (e.type === '신규등록') {
+          s.newCount++;
+          if (e.sakunNo && !s.newSakunNos.includes(e.sakunNo)) s.newSakunNos.push(e.sakunNo);
+        }
+        if (e.type === '매칭성공') {
+          s.matchCount++;
+          if (e.sakunNo && !s.matchSakunNos.includes(e.sakunNo)) s.matchSakunNos.push(e.sakunNo);
+        }
+        if (e.type === '충돌') {
+          s.conflictCount++;
+          if (e.sakunNo && !s.conflictSakunNos.includes(e.sakunNo)) s.conflictSakunNos.push(e.sakunNo);
+        }
+        if (e.aucId) {
+          s.aucMatch++;
+          if (e.sakunNo && !s.aucMatchSakunNos.includes(e.sakunNo)) s.aucMatchSakunNos.push(e.sakunNo);
+        } else {
+          s.aucNoMatch++;
+          if (e.sakunNo && !s.aucNoMatchSakunNos.includes(e.sakunNo)) s.aucNoMatchSakunNos.push(e.sakunNo);
+        }
       });
 
       byManager.forEach(s => result.push(s));
