@@ -4408,6 +4408,8 @@ MJ 이정우 팀장
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
                 if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
+                if (typeof loadTelegramStats === 'function') loadTelegramStats(); // [추가] 텔레그램 연동 현황
+                toggleDashboardLoading(false);
             })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
@@ -5923,6 +5925,45 @@ MJ 이정우 팀장
                 <td class="py-1 px-1">${mk(s.aucMatch, 'text-blue-600', '옥션매칭')}</td>
                 <td class="py-1 px-1">${mk(s.aucNoMatch, 'text-orange-600', '옥션미매칭')}</td>
             </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    /**
+     * 대시보드 - 텔레그램 연동 현황 로드
+     */
+    function loadTelegramStats() {
+        const tbody = document.getElementById('telegramStatsBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-400">데이터 조회 중...</td></tr>';
+
+        google.script.run
+            .withSuccessHandler(renderTelegramStats)
+            .withFailureHandler(err => {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-red-500">${err.message}</td></tr>`;
+            })
+            .getTelegramIntegrationStats();
+    }
+
+    function renderTelegramStats(stats) {
+        const tbody = document.getElementById('telegramStatsBody');
+        if (!tbody || !stats) return;
+
+        let html = '';
+        stats.forEach((s, idx) => {
+            const isTotal = s.gubun === '합계';
+            const rowClass = isTotal ? 'bg-gray-100 font-bold border-t-2 border-gray-300' : 'border-b border-gray-100 hover:bg-gray-50';
+            const gubunClass = isTotal ? 'bg-gray-200' : 'bg-gray-50';
+
+            html += `
+                <tr class="${rowClass}">
+                    <td class="py-2 px-2 text-center border-r ${gubunClass}">${s.gubun}</td>
+                    <td class="py-2 px-2 text-center font-bold text-gray-800">${s.total}</td>
+                    <td class="py-2 px-2 text-center border-l ${s.approved > 0 ? 'text-blue-600 font-bold' : 'text-gray-400'}">${s.approved || '-'}</td>
+                    <td class="py-2 px-2 text-center border-l ${s.chatId > 0 ? 'text-indigo-600 font-bold' : 'text-gray-400'}">${s.chatId || '-'}</td>
+                    <td class="py-2 px-2 text-center border-l ${s.token > 0 ? 'text-green-600 font-bold' : 'text-gray-400'}">${s.token || '-'}</td>
+                </tr>
+            `;
         });
         tbody.innerHTML = html;
     }
