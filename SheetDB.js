@@ -2126,17 +2126,18 @@ function getTelegramJoinStats() {
 }
 
 /**
- * 텔레그램 가입현황 [물건 모드]: 오늘 이후 입찰일 물건에 배정된 회원의 텔레그램 가입 여부
- * @return {Array} [{ class_type, item_count, total, joined }, ..., { class_type:'합계', ... }]
+ * 텔레그램 가입현황 [물건 모드]: 오늘(포함) 이후 입찰일 물건에 배정된 회원의 텔레그램 가입 여부
+ * 회원 모드와 동일 컬럼: class_type, item_count(=물건수), total(=회원수), joined(=가입수), chat_id
  */
 function getTelegramJoinStatsByItem() {
-  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
+  var tz = Session.getScriptTimeZone();
+  var today = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
   var members = readAllMembersNew();
   var classes = readAllClasses();
   var classMap = {};
   classes.forEach(function (c) { classMap[String(c.class_id)] = c; });
 
-  // member_id → 회원 정보 매핑
+  // member_id → 회원 정보 매핑 (관리자 제외)
   var memberMap = {};
   members.forEach(function (m) {
     if (String(m.gubun || '').trim() === '관리자') return;
@@ -2155,7 +2156,16 @@ function getTelegramJoinStatsByItem() {
     var itemObj = {};
     ITEM_HEADERS.forEach(function (h, i) { itemObj[h] = row[i]; });
 
-    var inDate = String(itemObj['in-date'] || '').replace(/\D/g, '');
+    // in-date: Date 객체/문자열 모두 yyyyMMdd 숫자 문자열로 변환
+    var inDateRaw = itemObj['in-date'];
+    var inDate;
+    if (inDateRaw instanceof Date && !isNaN(inDateRaw.getTime())) {
+      inDate = Utilities.formatDate(inDateRaw, tz, 'yyyyMMdd');
+    } else {
+      inDate = String(inDateRaw || '').replace(/\D/g, '');
+      // 'yyMMdd'(6자리) → 'yyyyMMdd' 변환
+      if (inDate.length === 6) inDate = '20' + inDate;
+    }
     if (!inDate || inDate < today) return; // 오늘 이후 물건만
 
     var memberId = String(itemObj['m_name_id'] || '').trim();
@@ -2168,16 +2178,22 @@ function getTelegramJoinStatsByItem() {
     var ct = String(cls.class_type || '').trim();
     if (!ct) return;
 
-    if (!statMap[ct]) statMap[ct] = { class_type: ct, item_count: 0, total: 0, joined: 0 };
+    if (!statMap[ct]) statMap[ct] = { class_type: ct, item_count: 0, total: 0, joined: 0, chat_id: 0 };
     statMap[ct].item_count++;
     statMap[ct].total++;
     if (String(m.telegram_enabled || '').toUpperCase() === 'Y') statMap[ct].joined++;
+    if (String(m.telegram_chat_id || '').trim() !== '') statMap[ct].chat_id++;
   });
 
   var classTypes = Object.keys(statMap).sort();
   var result = classTypes.map(function (t) { return statMap[t]; });
-  var totals = { class_type: '합계', item_count: 0, total: 0, joined: 0 };
-  result.forEach(function (r) { totals.item_count += r.item_count; totals.total += r.total; totals.joined += r.joined; });
+  var totals = { class_type: '합계', item_count: 0, total: 0, joined: 0, chat_id: 0 };
+  result.forEach(function (r) {
+    totals.item_count += r.item_count;
+    totals.total += r.total;
+    totals.joined += r.joined;
+    totals.chat_id += r.chat_id;
+  });
   result.push(totals);
   return result;
 }

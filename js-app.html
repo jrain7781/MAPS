@@ -4652,7 +4652,7 @@ MJ 이정우 팀장
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
                 if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
-                if (typeof loadTelegramJoinStats === 'function') loadTelegramJoinStats(); // 텔레그램 가입현황
+                if (typeof loadTelegramJoinStatsByItem === 'function') loadTelegramJoinStatsByItem(); // 텔레그램 가입현황 (물건 모드 디폴트)
                 if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
             })
             .withFailureHandler(error => {
@@ -6269,7 +6269,7 @@ MJ 이정우 팀장
                 <td class="py-1.5 px-3 text-center">${row.item_count}</td>
                 <td class="py-1.5 px-3 text-center">${row.total}</td>
                 <td class="py-1.5 px-3 text-center text-blue-600">${row.joined}</td>
-                <td class="py-1.5 px-3 text-center text-orange-500">${row.total - row.joined}</td>
+                <td class="py-1.5 px-3 text-center text-orange-500">${row.chat_id}</td>
             </tr>`;
         });
         el.innerHTML = `<table class="w-full text-xs border-collapse">
@@ -6278,12 +6278,13 @@ MJ 이정우 팀장
                 <th class="py-1.5 px-3 text-center font-bold">가입율</th>
                 <th class="py-1.5 px-3 text-center font-bold">물건수</th>
                 <th class="py-1.5 px-3 text-center font-bold">회원수</th>
-                <th class="py-1.5 px-3 text-center font-bold">가입</th>
-                <th class="py-1.5 px-3 text-center font-bold">미가입</th>
+                <th class="py-1.5 px-3 text-center font-bold">가입수</th>
+                <th class="py-1.5 px-3 text-center font-bold">Chat_ID</th>
             </tr></thead>
             <tbody>${rows.join('')}</tbody>
         </table>`;
     }
+
 
     function renderTelegramJoinStats(stats) {
         const el = document.getElementById('telegramJoinBody');
