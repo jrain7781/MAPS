@@ -8655,48 +8655,41 @@ MJ 이정우 팀장
 
                 rows.forEach(function (r) {
                     const wrap = document.createElement('div');
-                    wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white capture-target'; // capture-target 추가
+                    wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white capture-target relative'; // relative 추가
                     const img = document.createElement('img');
                     img.className = 'investigation-image-max w-full cursor-pointer';
                     img.alt = r.file_name || '이미지';
-                    img.dataset.id = r.image_id; // dataset.imageId -> dataset.id로 통일
+                    img.dataset.id = r.image_id;
                     img.dataset.uploader = r.uploader || '';
 
                     if (r.image_id) {
-                        // Base64로 이미지 가져오기 시도 (로그인 권한 문제 해결)
-                        img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='; // placeholder
+                        img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
                         google.script.run
                             .withSuccessHandler(function (dataUrl) {
                                 if (dataUrl) {
                                     img.src = dataUrl;
                                 } else {
-                                    // 실패 시 기존 썸네일이라도 시도
                                     img.src = 'https://drive.google.com/thumbnail?sz=w1600&id=' + encodeURIComponent(r.image_id);
                                 }
                             })
                             .getImageDataUrl(r.image_id);
 
-                        const auctionId = currentModalItemData ? currentModalItemData.auction_id : null;
-                        let originalUrl = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id);
+                        // 이미지 클릭 시 라이트박스 열기 (새 창 대신 앱 내 확대)
+                        img.onclick = function () {
+                            openLightbox(this.src, r.file_name || '조사 이미지');
+                        };
 
-                        if (auctionId && String(auctionId).trim()) {
-                            const pid = String(auctionId).trim();
-                            const isGongmae = (currentModalItemData.court === '공매' || currentModalItemData.sakun_no.includes('-'));
-                            const pattern = isGongmae ? auctionSettingsCache.gongmae_pattern : auctionSettingsCache.auction_pattern;
-
-                            if (pattern && pattern.includes('[ID]')) {
-                                originalUrl = pattern.replace('[ID]', pid);
-                            } else if (pattern) {
-                                // [ID]가 명시되지 않았으면 기본 예시처럼 뒤에 붙임 (보험용)
-                                originalUrl = pattern + pid;
-                            } else {
-                                // 설정이 없으면 기본값 사용
-                                const defaultBase = isGongmae ? 'https://www.auction1.co.kr/auction/ca_view.php?product_id=' : 'https://www.auction1.co.kr/auction/ca_view.php?product_id=';
-                                originalUrl = defaultBase + pid;
-                            }
-                        }
-
-                        img.onclick = (function (url) { return function () { window.open(url, '_blank'); }; })(originalUrl);
+                        // 우측 상단 다운로드 버튼 추가
+                        const dlBtn = document.createElement('button');
+                        dlBtn.className = 'absolute top-2 right-2 p-1.5 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition z-10';
+                        dlBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>';
+                        dlBtn.title = '다운로드';
+                        dlBtn.onclick = function (e) {
+                            e.stopPropagation();
+                            const url = 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(r.image_id);
+                            window.open(url, '_blank');
+                        };
+                        wrap.appendChild(dlBtn);
                     }
                     wrap.appendChild(img);
 
@@ -9465,11 +9458,27 @@ MJ 이정우 팀장
                 if (cnt) cnt.textContent = rows.length + '장';
                 rows.forEach(function (r) {
                     if (!r.image_id) return;
-                    var card = document.createElement('div'); card.className = 'img-vcard';
+                    var card = document.createElement('div'); card.className = 'img-vcard relative';
                     var img = document.createElement('img');
                     img.alt = r.file_name || '조사 이미지'; img.loading = 'lazy';
+                    img.className = 'cursor-pointer';
                     img.src = 'https://drive.google.com/thumbnail?sz=w1200&id=' + encodeURIComponent(r.image_id);
                     img.onerror = function () { this.src = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id); };
+
+                    // 라이트박스 연결
+                    img.onclick = function () {
+                        openLightbox(this.src, r.file_name || '조사 이미지');
+                    };
+
+                    // 다운로드 버튼
+                    const dlBtn = document.createElement('button');
+                    dlBtn.className = 'absolute top-2 right-2 p-1.5 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition z-10';
+                    dlBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>';
+                    dlBtn.onclick = function (e) {
+                        e.stopPropagation();
+                        window.open('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(r.image_id), '_blank');
+                    };
+                    card.appendChild(dlBtn);
                     card.appendChild(img); body.appendChild(card);
                 });
             })
@@ -9945,4 +9954,58 @@ MJ 이정우 팀장
             .processMemberDashboardAction(APP_CTX.token, id, 'cancel');
     }
 
+    /**
+     * 이미지 라이트박스 관련 함수 (확대/다운로드)
+     */
+    function openLightbox(src, caption) {
+        const lb = document.getElementById('imageLightbox');
+        const lbImg = document.getElementById('lightboxImg');
+        const lbCap = document.getElementById('lightboxCaption');
+        const dlBtn = document.getElementById('lightboxDownloadBtn');
+        
+        if (!lb || !lbImg) return;
+        
+        lbImg.src = src;
+        lbImg.classList.remove('zoomed');
+        lbImg.classList.replace('cursor-zoom-out', 'cursor-zoom-in');
+        
+        if (lbCap) lbCap.textContent = caption || '';
+        
+        // 다운로드 버튼 URL 설정
+        if (src.includes('id=')) {
+            const id = src.split('id=')[1].split('&')[0];
+            dlBtn.onclick = function(e) {
+                e.stopPropagation();
+                window.open('https://drive.google.com/uc?export=download&id=' + id, '_blank');
+            };
+        } else {
+            dlBtn.onclick = function(e) {
+               e.stopPropagation();
+               const a = document.createElement('a');
+               a.href = src;
+               a.download = caption || 'download.png';
+               document.body.appendChild(a);
+               a.click();
+               document.body.removeChild(a);
+            };
+        }
+        
+        lb.classList.remove('content-hidden');
+    }
+
+    function closeLightbox() {
+        const lb = document.getElementById('imageLightbox');
+        if (lb) lb.classList.add('content-hidden');
+    }
+
+    function toggleLightboxZoom(e) {
+        const img = e.target;
+        if (img.classList.contains('zoomed')) {
+            img.classList.remove('zoomed');
+            img.classList.replace('cursor-zoom-out', 'cursor-zoom-in');
+        } else {
+            img.classList.add('zoomed');
+            img.classList.replace('cursor-zoom-in', 'cursor-zoom-out');
+        }
+    }
 </script>
