@@ -1,4 +1,4 @@
-<script>
+﻿<script>
     // =============================================================================
     // MJ경매 입찰 관리 시스템 - 통합 JavaScript
     // =============================================================================
@@ -9648,88 +9648,301 @@ MJ 이정우 팀장
     /**
      * 입찰 액션 처리
      */
-    var curI = null; // 현재 타겟 ID
+    var curI = null;    // 현재 타겟 물건 ID
+    var curSk = null;   // 현재 타겟 사건번호
+
+    // =====================================================================
+    // 대시보드 자동승인 토글 관리
+    // =====================================================================
+    var AUTO_APPROVE_KEY = 'mjaps_auto_approve';
+
+    function onAutoApproveToggleChange(cb) {
+        var isOn = cb.checked;
+        updateAutoApproveUI_(isOn);
+        // 서버 설정 저장
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run.withSuccessHandler(function (res) {
+                if (res && res.success) {
+                    localStorage.setItem(AUTO_APPROVE_KEY, res.autoApprove ? 'true' : 'false');
+                    showStatus('자동승인이 ' + (res.autoApprove ? '활성화' : '비활성화') + '되었습니다.');
+                }
+            }).setAutoApproveSetting(isOn);
+        } else {
+            localStorage.setItem(AUTO_APPROVE_KEY, isOn ? 'true' : 'false');
+        }
+    }
+
+    function updateAutoApproveUI_(isOn) {
+        var track = document.getElementById('auto-approve-track');
+        var thumb = document.getElementById('auto-approve-thumb');
+        var label = document.getElementById('auto-approve-label');
+        var toggle = document.getElementById('auto-approve-toggle');
+        if (track) track.style.backgroundColor = isOn ? '#22c55e' : '#d1d5db';
+        if (thumb) thumb.style.transform = isOn ? 'translateX(20px)' : 'translateX(0)';
+        if (label) {
+            label.textContent = isOn ? '자동 🟢' : '수동 🔴';
+            label.className = 'text-xs font-bold px-2 py-0.5 rounded-full ' +
+                (isOn ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500');
+        }
+        if (toggle) toggle.checked = isOn;
+    }
+
+    function initAutoApproveToggle_() {
+        var toggle = document.getElementById('auto-approve-toggle');
+        if (!toggle) return;
+
+        // 서버 설정 우선 확인
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run.withSuccessHandler(function (isOn) {
+                toggle.checked = !!isOn;
+                localStorage.setItem(AUTO_APPROVE_KEY, isOn ? 'true' : 'false');
+                updateAutoApproveUI_(!!isOn);
+            }).getAutoApproveSetting();
+        } else {
+            var saved = (localStorage.getItem(AUTO_APPROVE_KEY) === 'true');
+            toggle.checked = saved;
+            updateAutoApproveUI_(saved);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () { initAutoApproveToggle_(); });
+
+    // =====================================================================
+    // 팝업 공통 유틸
+    // showModalLoading_: 팝업 버튼 → 로딩 스피너로 변경
+    // showModalResult_: 결과 텍스트 표시 → 성공 시 1.5초 후 자동닫힘
+    // =====================================================================
+    function showModalLoading_(modalId, resultId) {
+        var modal = document.getElementById(modalId);
+        var result = document.getElementById(resultId);
+        if (!modal) return;
+        modal.querySelectorAll('button.mm').forEach(function (btn) {
+            btn.disabled = true;
+            if (!btn.dataset.origText) btn.dataset.origText = btn.textContent;
+        });
+        if (result) {
+            result.className = 'mo-result';
+            result.innerHTML = '<span class="ic-spin" style="display:inline-block;vertical-align:middle;margin-right:6px;border-top-color:#4f46e5;width:14px;height:14px;border-width:2.5px;"></span>잠시만 기다려 주세요...';
+        }
+    }
+
+    function showModalResult_(modalId, resultId, message, isError) {
+        var modal = document.getElementById(modalId);
+        var result = document.getElementById(resultId);
+        if (!modal) return;
+        // 액션 버튼 숨기기
+        modal.querySelectorAll('button.mm').forEach(function (btn) { btn.style.display = 'none'; });
+        if (result) {
+            result.className = 'mo-result ' + (isError ? 'error' : 'success');
+            result.textContent = message;
+        }
+        if (!isError) {
+            // 성공: 1.5초 후 팝업 자동닫힘 + 버튼 복원
+            setTimeout(function () {
+                var el = document.getElementById(modalId);
+                if (el) el.classList.remove('open');
+                if (modal) {
+                    modal.querySelectorAll('button.mm').forEach(function (btn) {
+                        btn.style.display = '';
+                        btn.disabled = false;
+                        if (btn.dataset.origText) btn.textContent = btn.dataset.origText;
+                    });
+                    if (result) { result.className = 'mo-result hidden'; result.textContent = ''; }
+                }
+            }, 1500);
+        } else {
+            // 오류: 버튼 다시 보이기 + 활성화
+            modal.querySelectorAll('button.mm').forEach(function (btn) {
+                btn.style.display = '';
+                btn.disabled = false;
+                if (btn.dataset.origText) btn.textContent = btn.dataset.origText;
+            });
+        }
+    }
+
+    // =====================================================================
+    // 카드 뱃지 클릭 → 자동/수동 공통으로 팝업 열기
+    // =====================================================================
     function setB(id, s, sk) {
         curI = id;
+        curSk = sk;
         if (s === '입찰') {
-            document.getElementById('mBD').textContent = '[' + sk + ']';
-            document.getElementById('mBC').classList.add('open');
+            var mBD = document.getElementById('mBD');
+            if (mBD) mBD.textContent = '[' + sk + '] 입찰 취소를 신청하시겠습니까?';
+            var mBC = document.getElementById('mBC');
+            if (mBC) {
+                mBC.querySelectorAll('button.mm').forEach(function (btn) { btn.style.display = ''; btn.disabled = false; });
+                var mBR = document.getElementById('mBR');
+                if (mBR) { mBR.className = 'mo-result hidden'; mBR.textContent = ''; }
+                mBC.classList.add('open');
+            }
         } else if (s === '추천') {
-            document.getElementById('mRT').textContent = '[' + sk + ']';
-            document.getElementById('mRA').classList.add('open');
+            var mRT = document.getElementById('mRT');
+            if (mRT) mRT.textContent = '[' + sk + ']';
+            var mRA = document.getElementById('mRA');
+            if (mRA) {
+                mRA.querySelectorAll('button.mm').forEach(function (btn) { btn.style.display = ''; btn.disabled = false; });
+                var mRR = document.getElementById('mRR');
+                if (mRR) { mRR.className = 'mo-result hidden'; mRR.textContent = ''; }
+                mRA.classList.add('open');
+            }
         }
     }
 
-    /**
-     * 서버 통신 (google.script.run 연동)
-     */
-    // 모달 결과 표시 후 자동 닫힘
-    function showModalResult_(modalId, resultElemId, message, isError) {
-        var el = document.getElementById(resultElemId);
-        if (el) {
-            el.textContent = message;
-            el.style.background = isError ? '#fef2f2' : '#f0fdf4';
-            el.style.color = isError ? '#b91c1c' : '#0f766e';
-            el.classList.remove('hidden');
+    // =====================================================================
+    // =====================================================================
+    // 팝업 버튼 핸들러
+    // 자동승인 ON  → processMemberDashboardActionDirect (DB 직접 변경)
+    // 자동승인 OFF → processMemberDashboardAction (승인대기 등록)
+    // google.script.run은 동적 메서드명 호출 불가 → if/else 완전 분리
+    // =====================================================================
+    function doBC() {
+        if (!curI || !APP_CTX.token) return;
+        var id = curI;
+        var sk = curSk || '';
+        var card = document.querySelector('[data-id="' + id + '"]');
+        var badge = card ? card.querySelector('.badge') : null;
+
+        // 팝업 즉시 닫기 + 버튼 로딩 표시
+        var mBC = document.getElementById('mBC');
+        if (mBC) mBC.classList.remove('open');
+        if (badge) {
+            badge.disabled = true;
+            badge.innerHTML = '<span class="ic-spin" style="width:12px;height:12px;border-width:2px;border-top-color:#fff;"></span>';
         }
-        setTimeout(function () {
-            cm(modalId);
-            if (el) { el.classList.add('hidden'); el.textContent = ''; }
-        }, isError ? 2200 : 1600);
+
+        function onSuccess(res) {
+            if (res && res.success) {
+                if (res.autoApproved) {
+                    showStatus('입찰 취소 완료되었습니다.');
+                    allBiddingData = allBiddingData.filter(function (it) { return String(it.id) !== String(id); });
+                    if (card) {
+                        card.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+                        card.style.opacity = '0';
+                        card.style.transform = 'translateX(-30px)';
+                        setTimeout(function () {
+                            if (card.parentNode) card.parentNode.removeChild(card);
+                            renderMemberItemList();
+                        }, 500);
+                    }
+                } else {
+                    showStatus('입찰 취소 신청되었습니다.');
+                    if (badge) {
+                        badge.disabled = true;
+                        badge.innerHTML = '신청완료';
+                        badge.style.backgroundColor = '#9ca3af';
+                    }
+                    setTimeout(function () { renderMemberItemList(); }, 600);
+                }
+            } else {
+                showStatus((res && res.message) || '요청 실패', 'error');
+                if (badge) { badge.disabled = false; badge.innerHTML = '입찰'; }
+            }
+        }
+        function onFail(err) {
+            showStatus('오류: ' + (err.message || err), 'error');
+            if (badge) { badge.disabled = false; badge.innerHTML = '입찰'; }
+        }
+
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFail)
+            .processMemberDashboardAction(APP_CTX.token, id, 'cancel');
     }
 
-    function doBC() { // 입찰 -> 취소 요청 (텔레그램 연동)
-        if (!curI) return;
-        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
-        google.script.run
-            .withSuccessHandler(function (res) {
-                if (res && res.success) {
-                    showModalResult_('mBC', 'mBR', '입찰취소 신청이 되었습니다.', false);
-                    refreshCurrentMemberView_();
+    function doRC() {
+        if (!curI || !APP_CTX.token) return;
+        var id = curI;
+        var sk = curSk || '';
+        var card = document.querySelector('[data-id="' + id + '"]');
+        var badge = card ? card.querySelector('.badge') : null;
+
+        // 팝업 즉시 닫기 + 버튼 로딩 표시
+        var mRA = document.getElementById('mRA');
+        if (mRA) mRA.classList.remove('open');
+        if (badge) {
+            badge.disabled = true;
+            badge.innerHTML = '<span class="ic-spin" style="width:12px;height:12px;border-width:2px;border-top-color:#fff;"></span>';
+        }
+
+        function onSuccess(res) {
+            if (res && res.success) {
+                if (res.autoApproved) {
+                    showStatus('입찰확정 완료되었습니다.');
+                    var item = allBiddingData.find(function (it) { return String(it.id) === String(id); });
+                    if (item) item.stu_member = '입찰';
                 } else {
-                    showModalResult_('mBC', 'mBR', (res && res.message) || '요청 처리에 실패했습니다.', true);
+                    showStatus('입찰확정 신청되었습니다.');
+                    if (badge) {
+                        badge.disabled = true;
+                        badge.innerHTML = '신청완료';
+                        badge.style.backgroundColor = '#9ca3af';
+                    }
                 }
-            })
-            .withFailureHandler(function (err) {
-                showModalResult_('mBC', 'mBR', '오류: ' + (err.message || err), true);
-            })
-            .processMemberDashboardAction(APP_CTX.token, curI, 'cancel');
+                // 목록 재렌더링
+                setTimeout(function () { renderMemberItemList(); }, 600);
+            } else {
+                showStatus((res && res.message) || '요청 실패', 'error');
+                if (badge) { badge.disabled = false; badge.innerHTML = '추천'; }
+            }
+        }
+        function onFail(err) {
+            showStatus('오류: ' + (err.message || err), 'error');
+            if (badge) { badge.disabled = false; badge.innerHTML = '추천'; }
+        }
+
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFail)
+            .processMemberDashboardAction(APP_CTX.token, id, 'bid');
     }
 
-    function doRC() { // 추천 -> 입찰확정 요청 (텔레그램 연동)
-        if (!curI) return;
-        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
-        google.script.run
-            .withSuccessHandler(function (res) {
-                if (res && res.success) {
-                    showModalResult_('mRA', 'mRR', '입찰확정 신청이 되었습니다.', false);
-                    refreshCurrentMemberView_();
-                } else {
-                    showModalResult_('mRA', 'mRR', (res && res.message) || '요청 처리에 실패했습니다.', true);
-                }
-            })
-            .withFailureHandler(function (err) {
-                showModalResult_('mRA', 'mRR', '오류: ' + (err.message || err), true);
-            })
-            .processMemberDashboardAction(APP_CTX.token, curI, 'bid');
-    }
+    function doRX() {
+        if (!curI || !APP_CTX.token) return;
+        var id = curI;
+        var sk = curSk || '';
+        var card = document.querySelector('[data-id="' + id + '"]');
+        var badge = card ? card.querySelector('.badge') : null;
 
-    function doRX() { // 추천 -> 입찰취소 요청 (추천→미정, 텔레그램 연동)
-        if (!curI) return;
-        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
-        google.script.run
-            .withSuccessHandler(function (res) {
-                if (res && res.success) {
-                    showModalResult_('mRA', 'mRR', '입찰취소 신청이 되었습니다.', false);
-                    refreshCurrentMemberView_();
+        // 팝업 즉시 닫기 + 버튼 로딩 표시
+        var mRA = document.getElementById('mRA');
+        if (mRA) mRA.classList.remove('open');
+        if (badge) {
+            badge.disabled = true;
+            badge.innerHTML = '<span class="ic-spin" style="width:12px;height:12px;border-width:2px;border-top-color:#fff;"></span>';
+        }
+
+        function onSuccess(res) {
+            if (res && res.success) {
+                if (res.autoApproved) {
+                    showStatus('입찰 취소 완료되었습니다.');
+                    allBiddingData = allBiddingData.filter(function (it) { return String(it.id) !== String(id); });
+                    if (card) {
+                        card.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+                        card.style.opacity = '0';
+                        card.style.transform = 'translateX(-30px)';
+                        setTimeout(function () {
+                            if (card.parentNode) card.parentNode.removeChild(card);
+                            renderMemberItemList();
+                        }, 500);
+                    }
                 } else {
-                    showModalResult_('mRA', 'mRR', (res && res.message) || '요청 처리에 실패했습니다.', true);
+                    showStatus('입찰 취소 신청되었습니다.');
+                    if (badge) {
+                        badge.disabled = true;
+                        badge.innerHTML = '신청완료';
+                        badge.style.backgroundColor = '#9ca3af';
+                    }
+                    setTimeout(function () { renderMemberItemList(); }, 600);
                 }
-            })
-            .withFailureHandler(function (err) {
-                showModalResult_('mRA', 'mRR', '오류: ' + (err.message || err), true);
-            })
-            .processMemberDashboardAction(APP_CTX.token, curI, 'cancel');
+            } else {
+                showStatus((res && res.message) || '요청 실패', 'error');
+                if (badge) { badge.disabled = false; badge.innerHTML = '추천'; }
+            }
+        }
+        function onFail(err) {
+            showStatus('오류: ' + (err.message || err), 'error');
+            if (badge) { badge.disabled = false; badge.innerHTML = '추천'; }
+        }
+
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFail)
+            .processMemberDashboardAction(APP_CTX.token, id, 'cancel');
     }
 
 </script>

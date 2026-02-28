@@ -408,11 +408,13 @@ function handleTelegramWebhook_(update) {
         }
         _whLog('items 조회 완료');
 
-        var prefix = (shortDate && sakunNo)
-          ? (telegramEscapeHtml_(shortDate) + ' ' + telegramEscapeHtml_(sakunNo) + ' ')
-          : '';
+        // 2) 자동승인 여부 확인
+        var isAutoApprove = (typeof getAutoApproveSetting === 'function') ? getAutoApproveSetting() : false;
+        var reqStatus = isAutoApprove ? 'APPROVED' : 'PENDING';
+        var requestedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+        var approvedAt = isAutoApprove ? requestedAt : '';
 
-        // 2) telegram_requests 시트에 바로 등록
+        // 3) telegram_requests 시트에 등록
         var reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
         if (!reqSheet) {
           reqSheet = ss.insertSheet(TELEGRAM_REQUESTS_SHEET_NAME);
@@ -420,23 +422,38 @@ function handleTelegramWebhook_(update) {
         }
         var reqAction = isBid ? 'REQUEST_BID' : 'REQUEST_CANCEL';
         var reqId = String(new Date().getTime());
-        var requestedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
         reqSheet.appendRow([
-          reqId, requestedAt, reqAction, 'PENDING',
+          reqId, requestedAt, reqAction, reqStatus,
           String(itemId), memberId, chatId, username,
           JSON.stringify({ origin_message_id: originMessageId || '' }),
-          '', ''
+          approvedAt, isAutoApprove ? 'auto' : ''
         ]);
-        _whLog('appendRow 완료');
-        // ★ flush로 즉시 반영 (대시보드에서 바로 조회 가능하도록)
+        _whLog('appendRow 완료 (' + reqStatus + ')');
+
+        // 3.5) 자동승인 시 DB 직접 업데이트
+        if (isAutoApprove) {
+          try {
+            var newStu = isBid ? '입찰' : '미정';
+            if (typeof updateItemStuMemberById_ === 'function') {
+              updateItemStuMemberById_(itemId, newStu);
+              _whLog('DB 업데이트 완료: ' + newStu);
+            }
+          } catch (dbErr) { _whLog('DB 업데이트 실패: ' + dbErr.message); }
+        }
+
+        // ★ flush로 즉시 반영
         SpreadsheetApp.flush();
         _whLog('flush 완료');
 
-        // 3) 댓글 전송 (HTML 포맷: 사건번호 굵게, 입찰확정 🔵 / 입찰취소 🔴 굵게 + MAPS 버튼)
+        // 4) 댓글 전송
         var labelHtml = isBid ? '<b>🔵 입찰확정</b>' : '<b>🔴 입찰취소</b>';
+        if (isAutoApprove) labelHtml += ' 완료';
+        else labelHtml += ' 요청';
+
         var caseHtml = sakunNo ? ('<b>' + telegramEscapeHtml_(sakunNo) + '</b>') : '';
         var dateStr = shortDate ? (telegramEscapeHtml_(shortDate) + ' ') : '';
-        var comment = dateStr + caseHtml + '\n' + labelHtml + ' 요청이 되었습니다.\n잠시만 기다려주세요~';
+
+        var comment = dateStr + caseHtml + '\n' + labelHtml + (isAutoApprove ? '되었습니다.' : '이 되었습니다.\n잠시만 기다려주세요~');
 
         // MAPS 바로가기 버튼 (회원 토큰으로 직접 진입)
         var mapsRm = null;

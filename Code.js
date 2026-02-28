@@ -83,6 +83,25 @@ const CLASS_HEADERS = [
   'reg_id'              // 등록자
 ];
 
+// --- 전역 설정 관리 (PropertiesService) ---
+function getAutoApproveSetting() {
+  try {
+    const p = PropertiesService.getScriptProperties();
+    const val = p.getProperty('MJAPS_AUTO_APPROVE');
+    // 설정이 없거나 'true'가 아니면 false (보수적 접근)
+    return val === 'true';
+  } catch (e) {
+    Logger.log('[getAutoApproveSetting] 오류: ' + e.message);
+    return false;
+  }
+}
+
+function setAutoApproveSetting(isOn) {
+  const p = PropertiesService.getScriptProperties();
+  p.setProperty('MJAPS_AUTO_APPROVE', isOn ? 'true' : 'false');
+  return { success: true, autoApprove: isOn };
+}
+
 // --- 수업 회차(class_d1) 시트 헤더 ---
 const CLASS_D1_HEADERS = [
   'class_d1_id',      // 회차 ID (PK, 예: 5001_20260128121033_1)
@@ -342,43 +361,161 @@ function processMemberDashboardAction(memberToken, itemId, action) {
   var member = getMemberByToken(t);
   if (!member) return { success: false, message: '회원 정보를 찾을 수 없습니다.' };
 
-  var chatId = String(member.telegram_chat_id || '').trim();
-  if (!chatId) return { success: false, message: '텔레그램이 연결되지 않은 회원입니다.\n텔레그램 봇에서 먼저 토큰 인증을 완료해주세요.' };
 
-  // 2) telegram_requests 등록 (createTelegramRequest 내부에서 소유권/중복 검증)
+  var chatId = String(member.telegram_chat_id || '').trim();
+  // chatId가 없어도 수동 신청 가능 (텔레그램 알림만 생략됨)
+
+
   var reqAction = (act === 'bid') ? 'REQUEST_BID' : 'REQUEST_CANCEL';
-  var reqResult = createTelegramRequest(reqAction, item, chatId, '', 'dashboard');
+
+  // 2) 자동승인 여부 확인
+  const isAuto = getAutoApproveSetting();
+
+  if (isAuto) {
+    // 자동승인 모드: 즉시 DB 업데이트 + 승인완료로 로그 기록
+    const newStatus = (act === 'bid') ? '입찰' : '미정';
+    try {
+      updateItemStuMemberById_(item, newStatus);
+      // 로그 기록 (APPROVED 상태)
+      createTelegramRequestByToken_(reqAction, item, member.member_id, 'dashboard (auto-approved)', 'APPROVED');
+
+      // 텔레그램 알림 (있을 경우)
+      if (chatId) {
+        const itemData = getItemLiteById_(item);
+        const shortDate = itemData ? formatShortInDate_(itemData['in-date']) : '';
+        const sakunNo = itemData ? String(itemData.sakun_no || '').trim() : '';
+        const msg = (shortDate ? shortDate + ' ' : '') + (sakunNo ? '<b>' + sakunNo + '</b>\n' : '') +
+          (act === 'bid' ? '<b>🔵 입찰확정</b>' : '<b>🔴 입찰취소</b>') + ' 처리되었습니다.';
+        telegramSendMessage(chatId, msg);
+      }
+      return { success: true, message: '자동 승인 처리되었습니다.', autoApproved: true, newStatus: newStatus };
+    } catch (e) {
+      return { success: false, message: '자동 승인 처리 중 오류: ' + (e.message || '') };
+    }
+  }
+
+  // 3) 수동신청 모드: telegram_requests 등록
+  var reqResult;
+  if (chatId) {
+    reqResult = createTelegramRequest(reqAction, item, chatId, '', 'dashboard');
+  } else {
+    reqResult = createTelegramRequestByToken_(reqAction, item, member.member_id, 'dashboard');
+  }
   if (!reqResult.success && !reqResult.already) {
     return { success: false, message: reqResult.message || '요청 등록에 실패했습니다.' };
   }
 
-  // 3) 텔레그램 댓글 전송 (BID_YES/CANCEL_YES 와 동일한 메시지)
+  // 4) 텔레그램 댓글 전송 (chatId 있을 때만)
+  if (chatId) {
+    try {
+      var itemData = getItemLiteById_(item);
+      var shortDate = itemData ? formatShortInDate_(itemData['in-date']) : '';
+      var sakunNo = itemData ? String(itemData.sakun_no || '').trim() : '';
+      var isBid = (act === 'bid');
+
+      var labelHtml = isBid ? '<b>🔵 입찰확정</b>' : '<b>🔴 입찰취소</b>';
+      var caseHtml = sakunNo ? ('<b>' + sakunNo + '</b>') : '';
+      var datePrefix = shortDate ? (shortDate + ' ') : '';
+      var comment = datePrefix + caseHtml + '\n' + labelHtml + ' 요청이 되었습니다.\n잠시만 기다려주세요~';
+
+      var baseUrl = getWebAppBaseUrl_();
+      var mapsUrl = baseUrl ? (baseUrl + '?view=member&t=' + encodeURIComponent(t)) : '';
+      var replyMarkup = mapsUrl
+        ? { inline_keyboard: [[{ text: '🏠 MAPS 바로가기', web_app: { url: mapsUrl } }]] }
+        : null;
+
+      telegramSendMessage(chatId, comment, replyMarkup);
+    } catch (e) {
+      Logger.log('[processMemberDashboardAction] 텔레그램 전송 오류: ' + (e.message || ''));
+    }
+  }
+
+  return { success: true, message: reqResult.already ? '이미 동일한 요청이 접수되어 있습니다.' : '요청이 접수되었습니다.', autoApproved: false };
+}
+
+/**
+ * chatId 없이 memberId로 직접 telegram_requests 시트에 행 등록 (상태 지정 가능)
+ */
+function createTelegramRequestByToken_(action, itemId, memberId, note, status) {
   try {
-    var itemData = getItemLiteById_(item);
-    var shortDate = itemData ? formatShortInDate_(itemData['in-date']) : '';
-    var sakunNo = itemData ? String(itemData.sakun_no || '').trim() : '';
-    var isBid = (act === 'bid');
+    var sheet = ensureTelegramRequestsSheet_();
+    var a = String(action || '').trim();
+    var item = String(itemId || '').trim();
+    var mid = String(memberId || '').trim();
+    var s = String(status || 'PENDING').trim();
+    if (!a || !item || !mid) return { success: false, message: '요청 정보가 부족합니다.' };
 
-    // 사건번호: 검은색 굵게, 입찰확정: 🔵 파랑 굵게, 입찰취소: 🔴 빨강 굵게
-    var labelHtml = isBid
-      ? '<b>🔵 입찰확정</b>'
-      : '<b>🔴 입찰취소</b>';
-    var caseHtml = sakunNo ? ('<b>' + sakunNo + '</b>') : '';
-    var datePrefix = shortDate ? (shortDate + ' ') : '';
-    var comment = datePrefix + caseHtml + '\n' + labelHtml + ' 요청이 되었습니다.\n잠시만 기다려주세요~';
+    var reqId = String(new Date().getTime());
+    var requestedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    var approvedAt = (s === 'APPROVED') ? requestedAt : '';
 
-    // MAPS 바로가기 버튼 (회원 토큰 포함)
+    sheet.appendRow([reqId, requestedAt, a, s, item, mid, '', '', String(note || ''), approvedAt, 'auto']);
+    return { success: true, message: '기록되었습니다.', req_id: reqId, member_id: mid, item_id: item };
+  } catch (e) {
+    return { success: false, message: e.message || '등록 중 오류가 발생했습니다.' };
+  }
+}
+
+
+/**
+ * [자동승인 전용] 대시보드 카드에서 입찰확정/취소를 관리자 승인 없이 즉시 DB에 반영합니다.
+ * - 'bid'  → stu_member = '입찰' 직접 저장
+ * - 'cancel' → stu_member = '미정' 직접 저장
+ * - 처리 완료 후 회원 텔레그램으로 확정 메시지 전송
+ * @param {string} memberToken  회원 토큰
+ * @param {string} itemId       물건 ID
+ * @param {string} action       'bid' | 'cancel'
+ * @return {Object} {success, message, newStatus}
+ */
+function processMemberDashboardActionDirect(memberToken, itemId, action) {
+  var t = String(memberToken || '').trim();
+  var item = String(itemId || '').trim();
+  var act = String(action || '').trim();
+
+  if (!t) return { success: false, message: '회원 토큰이 없습니다.' };
+  if (!item) return { success: false, message: '물건 ID가 없습니다.' };
+  if (act !== 'bid' && act !== 'cancel') return { success: false, message: '잘못된 action입니다.' };
+
+  // 1) 토큰으로 회원 조회
+  var member = getMemberByToken(t);
+  if (!member) return { success: false, message: '회원 정보를 찾을 수 없습니다.' };
+
+  var chatId = String(member.telegram_chat_id || '').trim();
+
+  // 2) 물건 조회 + 소유권 확인
+  var itemData = getItemLiteById_(item);
+  if (!itemData) return { success: false, message: '물건 정보를 찾을 수 없습니다.' };
+  if (String(itemData.member_id || '').trim() !== String(member.member_id)) {
+    return { success: false, message: '본인 물건이 아닙니다.' };
+  }
+
+  // 3) DB 직접 업데이트
+  var newStatus = (act === 'bid') ? '입찰' : '미정';
+  try {
+    updateItemStuMemberById_(item, newStatus);
+  } catch (e) {
+    return { success: false, message: 'DB 업데이트 실패: ' + (e.message || '') };
+  }
+
+  // 4) 텔레그램으로 처리 완료 메시지 전송
+  try {
+    var shortDate = formatShortInDate_(itemData['in-date']);
+    var sakunNo = String(itemData.sakun_no || '').trim();
+    var prefix = (shortDate ? shortDate + ' ' : '') + (sakunNo ? '<b>' + sakunNo + '</b>\n' : '');
+    var msgHtml = (act === 'bid')
+      ? prefix + '<b>🔵 입찰확정</b> 완료되었습니다!'
+      : prefix + '<b>🔴 입찰취소</b> 처리되었습니다.';
+
     var baseUrl = getWebAppBaseUrl_();
     var mapsUrl = baseUrl ? (baseUrl + '?view=member&t=' + encodeURIComponent(t)) : '';
     var replyMarkup = mapsUrl
       ? { inline_keyboard: [[{ text: '🏠 MAPS 바로가기', web_app: { url: mapsUrl } }]] }
       : null;
 
-    telegramSendMessage(chatId, comment, replyMarkup);
+    if (chatId) telegramSendMessage(chatId, msgHtml, replyMarkup);
   } catch (e) {
-    // 텔레그램 전송 실패는 비치명적 - 요청은 이미 등록됨
-    Logger.log('[processMemberDashboardAction] 텔레그램 전송 오류: ' + (e.message || ''));
+    Logger.log('[processMemberDashboardActionDirect] 텔레그램 전송 오류: ' + (e.message || ''));
   }
 
-  return { success: true, message: reqResult.already ? '이미 동일한 요청이 접수되어 있습니다.' : '요청이 접수되었습니다.' };
+  return { success: true, message: (act === 'bid') ? '입찰확정 완료' : '입찰취소 완료', newStatus: newStatus };
 }
