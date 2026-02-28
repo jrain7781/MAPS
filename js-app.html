@@ -636,6 +636,12 @@
             else stopTelegramRequestsPolling_();
         } catch (e) { }
 
+        // 입찰일정 탭에 있을 때만 캘린더 자동 갱신 폴링 유지
+        try {
+            if (tabId === 'BiddingSchedule') startCalendarPolling_();
+            else stopCalendarPolling_();
+        } catch (e) { }
+
         // 대시보드로 이동 시 요청 목록 즉시 갱신
         if (tabId === 'Dashboard' && !IS_MEMBER_VIEW) {
             try { loadTelegramRequests(); } catch (e) { }
@@ -1013,7 +1019,9 @@
                 cell = row.insertCell(6);
                 {
                     const tEnabled = getMemberTelegramEnabled_(item.member_id);
-                    cell.innerHTML = tEnabled === 'Y' ? '<span class="telegram-badge">T</span>' : '';
+                    const tBidState = String(item.bid_state || '').trim();
+                    const tBadgeClass = (tBidState === '확인완료' || tBidState.includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
+                    cell.innerHTML = tEnabled === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                 }
                 cell.className = 'item-col-telegram text-center';
                 cell = row.insertCell(7);
@@ -1371,25 +1379,27 @@
         const bidState = String(item.bid_state || '').trim();
         const status = escapeHtml(rawStatus);
 
-        let bidPriceStr = escapeHtml(String(item.bidprice || item['bid-price'] || '0'));
-        if (bidPriceStr === '0' || bidPriceStr === '') bidPriceStr = '미입력';
-        else bidPriceStr = bidPriceStr + ' 원';
-
+        const rawBidprice = String(item.bidprice || item['bid-price'] || '').replace(/[^0-9]/g, '');
         const itemId = item.id;
 
-        // 입찰가 블러/선명 처리 로직
-        // bid_state: 신규(기본) => 미정, 전달완료 => 흐리게 (클릭유도), 확인완료 => 선명하게
+        // 입찰가 공개 로직 (마스킹 방식, 블러 없음)
+        // 신규/미입력 → "미정", 전달완료 → 첫자리+****원, 확인완료 → 전체공개
         let bidPriceHtml = '';
         let statusSpanHtml = `<span class="member-court-status">${court} / ${status}</span>`;
 
         if (bidState === '전달완료') {
-            bidPriceHtml = `<div class="member-bid-price price-blur" id="price-blur-${itemId}" onclick="event.stopPropagation(); handleBidPriceClick('${itemId}')" title="클릭하여 입찰가 확인">${bidPriceStr}</div>`;
-        } else if (bidState === '확인완료' || bidState.includes('확인완료')) { // HTML태그 포함된 상태 대비
-            bidPriceHtml = `<div class="member-bid-price price-clear">${bidPriceStr}</div>`;
+            let maskedStr = '미정';
+            if (rawBidprice && rawBidprice.length > 0) {
+                maskedStr = rawBidprice[0] + '*'.repeat(Math.max(rawBidprice.length - 1, 3)) + '원';
+            }
+            bidPriceHtml = `<div class="member-bid-price text-gray-500 font-semibold text-sm cursor-pointer" onclick="event.stopPropagation(); handleBidPriceClick('${itemId}')" title="터치하여 입찰가 확인">${maskedStr} 👆</div>`;
+        } else if (bidState === '확인완료' || bidState.includes('확인완료')) {
+            const fullPrice = rawBidprice ? (Number(rawBidprice).toLocaleString('ko-KR') + '원') : '미입력';
+            bidPriceHtml = `<div class="member-bid-price text-blue-600 font-bold text-sm">${fullPrice}</div>`;
             statusSpanHtml = `<span class="member-court-status">${court} / <span class="bid-state-confirmed">확인완료</span></span>`;
         } else {
-            // 기본 상태 (신규 등)
-            bidPriceHtml = `<div class="member-bid-price">${bidPriceStr}</div>`;
+            // 기본 상태 (신규/미전달): 미정 표시
+            bidPriceHtml = `<div class="member-bid-price text-gray-400 font-normal text-sm">미정</div>`;
         }
 
         // 상태에 따라 버튼 구성
@@ -1423,44 +1433,62 @@
     }
 
     /**
-     * 입찰가 클릭 시 블러 해제 및 상태(확인완료) 업데이트
+     * 입찰가 터치 시: 텔레그램으로 가격 전송 + MAPS 확인완료 처리 + 앱 새로고침
      */
     function handleBidPriceClick(itemId) {
-        const priceEl = document.getElementById(`price-blur-${itemId}`);
-        if (!priceEl) return;
-
-        // 이미 선명해졌다면 무시
-        if (priceEl.classList.contains('price-clear')) return;
-
-        // 1. 즉시 UI 블러 해제
-        priceEl.classList.remove('price-blur');
-        priceEl.classList.add('price-clear');
-        priceEl.removeAttribute('onclick');
-
-        // 2. 백엔드 상태 업데이트(확인완료)
-        // 토큰은 회원 링크에서 파라미터로 받은 값 사용
-        const mToken = APP_CTX.token;
+        const mToken = APP_CTX && APP_CTX.token;
         if (!mToken) return;
+
+        // 중복 클릭 방지: 처리 중인 itemId 기록
+        if (window._bidPriceConfirmingSet && window._bidPriceConfirmingSet.has(String(itemId))) return;
+        if (!window._bidPriceConfirmingSet) window._bidPriceConfirmingSet = new Set();
+        window._bidPriceConfirmingSet.add(String(itemId));
+
+        // ★ 해당 카드의 가격 div를 즉시 로딩 표시로 변경
+        const card = document.querySelector('[data-id="' + itemId + '"]');
+        const priceDiv = card ? card.querySelector('.ic-price') : null;
+        if (priceDiv) {
+            priceDiv.className = 'ic-price ic-price-loading';
+            priceDiv.onclick = null;
+            priceDiv.innerHTML = '<span class="ic-spin"></span> 잠시만 기다려 주세요...';
+        }
 
         google.script.run
             .withSuccessHandler(res => {
+                window._bidPriceConfirmingSet.delete(String(itemId));
                 if (res && res.success) {
-                    // 성공하면 내부 데이터(allBiddingData)의 상태도 갱신하여 
-                    // 다시 그릴 때 '확인완료'로 렌더링되게 함
+                    // 로컬 데이터 갱신
                     const item = allBiddingData.find(it => String(it.id) === String(itemId));
-                    if (item) {
-                        item.bid_state = '확인완료';
+                    if (item) item.bid_state = '확인완료';
+                    // ★ 해당 카드 가격 div만 즉시 DOM 업데이트 (전체 재렌더 없이)
+                    if (priceDiv) {
+                        const pr = (item && item.bidprice) ? (typeof fmtP === 'function' ? fmtP(item.bidprice) : String(item.bidprice)) : '0';
+                        const fullPrice = (pr && pr !== '0') ? pr + ' 원' : '미입력';
+                        priceDiv.className = 'ic-price ic-price-confirmed';
+                        priceDiv.onclick = null;
+                        priceDiv.innerHTML = fullPrice;
                     }
-                    // 확인완료 UI로 업데이트하기 위해 화면 부분 갱신 (선택적)
-                    // renderMemberDashboard();
                 } else {
-                    console.log('입찰가 확인 실패: ' + (res ? res.message : '응답 없음'));
+                    // 실패 시 원래 상태로 복원
+                    if (priceDiv) {
+                        priceDiv.className = 'ic-price ic-price-pending';
+                        priceDiv.onclick = function (e) { e.stopPropagation(); handleBidPriceClick(itemId); };
+                        priceDiv.innerHTML = '입찰가 도착! 터치하세요 👆';
+                    }
+                    console.warn('입찰가 확인 실패: ' + (res ? res.message : '응답 없음'));
                 }
             })
             .withFailureHandler(err => {
-                console.log('입찰가 확인 오류: ' + err.message);
+                window._bidPriceConfirmingSet.delete(String(itemId));
+                // 오류 시 원래 상태로 복원
+                if (priceDiv) {
+                    priceDiv.className = 'ic-price ic-price-pending';
+                    priceDiv.onclick = function (e) { e.stopPropagation(); handleBidPriceClick(itemId); };
+                    priceDiv.innerHTML = '입찰가 도착! 터치하세요 👆';
+                }
+                console.warn('입찰가 확인 오류: ' + err.message);
             })
-            .updateBidPriceConfirmed(mToken, itemId);
+            .confirmBidPriceWithTelegramReply(mToken, itemId);
     }
 
     /**
@@ -1795,7 +1823,8 @@
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                         const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                         const mNameValue = bid.m_name || '';
-                        const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? '<span class="telegram-badge">T</span>' : '';
+                        const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
+                        const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
 
@@ -2493,7 +2522,8 @@
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                         const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                         const mNameValue = bid.m_name || '';
-                        const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? '<span class="telegram-badge">T</span>' : '';
+                        const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
+                        const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
 
@@ -3853,6 +3883,7 @@
         if (modalFormBidPrice) modalFormBidPrice.value = (price == 0 || price === '0') ? '' : new Intl.NumberFormat('ko-KR').format(price);
 
         const savedBidState = data.bid_state || '';
+        window._prevModalBidState = savedBidState; // 이중 전송 방지용: 원래 상태 기억
         setBidState(savedBidState);
 
         const templateContainer = document.getElementById('template-area-container');
@@ -4006,6 +4037,7 @@ MJ 이정우 팀장
         const hiddenInput = document.getElementById('modal-form-bid-state');
         const btnNew = document.getElementById('modal-bid-state-new-btn');
         const btnDelivered = document.getElementById('modal-bid-state-delivered-btn');
+        const btnConfirmed = document.getElementById('modal-bid-state-confirmed-btn');
 
         if (hiddenInput) hiddenInput.value = state;
 
@@ -4015,9 +4047,16 @@ MJ 이정우 팀장
             btnNew.classList.add('bg-red-100', 'text-red-700');
         }
         if (btnDelivered) {
-            btnDelivered.classList.remove('bg-blue-500', 'text-white', 'font-bold');
+            btnDelivered.classList.remove('bg-gray-900', 'text-white', 'font-bold');
             btnDelivered.classList.add('bg-gray-100', 'text-gray-700');
         }
+        if (btnConfirmed) {
+            btnConfirmed.classList.remove('bg-blue-500', 'text-white', 'font-bold');
+            btnConfirmed.classList.add('bg-gray-100', 'text-gray-700');
+        }
+
+        // 텔레그램 뱃지 초기화 (modal)
+        const modalBadge = document.getElementById('modal-telegram-badge');
 
         // 선택된 버튼 스타일 적용
         if (state === '신규') {
@@ -4026,21 +4065,43 @@ MJ 이정우 팀장
                 btnNew.classList.add('bg-red-500', 'text-white', 'font-bold');
             }
             if (bidInput) {
-                bidInput.classList.remove('text-gray-700');
+                bidInput.classList.remove('text-gray-700', 'text-blue-600');
                 bidInput.classList.add('text-red-600');
+            }
+            // 신규: T 뱃지 원래대로 (흰 바탕 파란 T)
+            if (modalBadge && modalBadge.innerHTML.trim()) {
+                modalBadge.innerHTML = '<span class="telegram-badge">T</span>';
             }
         } else if (state === '전달완료') {
             if (btnDelivered) {
                 btnDelivered.classList.remove('bg-gray-100', 'text-gray-700');
-                btnDelivered.classList.add('bg-blue-500', 'text-white', 'font-bold');
+                btnDelivered.classList.add('bg-gray-900', 'text-white', 'font-bold');
             }
             if (bidInput) {
-                bidInput.classList.remove('text-red-600');
+                bidInput.classList.remove('text-red-600', 'text-blue-600');
                 bidInput.classList.add('text-gray-700');
             }
-        } else {
+            // 전달완료: T 뱃지 원래대로 (흰 바탕 파란 T)
+            if (modalBadge && modalBadge.innerHTML.trim()) {
+                modalBadge.innerHTML = '<span class="telegram-badge">T</span>';
+            }
+        } else if (state === '확인완료') {
+            if (btnConfirmed) {
+                btnConfirmed.classList.remove('bg-gray-100', 'text-gray-700');
+                btnConfirmed.classList.add('bg-blue-500', 'text-white', 'font-bold');
+            }
             if (bidInput) {
-                bidInput.classList.remove('text-gray-700');
+                bidInput.classList.remove('text-red-600', 'text-gray-700');
+                bidInput.classList.add('text-blue-600');
+            }
+            // 확인완료: T 뱃지 → 파란 배경 흰 T
+            if (modalBadge && modalBadge.innerHTML.trim()) {
+                modalBadge.innerHTML = '<span class="telegram-badge-confirmed">T</span>';
+            }
+        } else {
+            // 빈값 기본: 입찰가 붉은색
+            if (bidInput) {
+                bidInput.classList.remove('text-gray-700', 'text-blue-600');
                 bidInput.classList.add('text-red-600');
             }
         }
@@ -4209,8 +4270,25 @@ MJ 이정우 팀장
                     showStatus(result.message, 'success');
                     dataCache = { data: null, timestamp: 0 };
                     closeDetailModal();
-                    // forceRefresh = true를 전달하여 서버에서 최신 데이터를 가져오도록 함
                     loadDataAndRenderCalendar(true);
+
+                    // 전달완료 상태로 "전환"될 때만 텔레그램 자동 전송 (이전 상태가 전달완료가 아닌 경우만)
+                    const prevBidState = typeof window._prevModalBidState !== 'undefined' ? window._prevModalBidState : '';
+                    window._prevModalBidState = bidState; // 저장 성공 후 갱신
+                    if (bidState === '전달완료' && prevBidState !== '전달완료' && memberId && getMemberTelegramEnabled_(memberId) === 'Y') {
+                        google.script.run
+                            .withSuccessHandler(tgResult => {
+                                if (tgResult && tgResult.success) {
+                                    showStatus('입찰가 안내를 텔레그램으로 전송했습니다.', 'success');
+                                } else {
+                                    showStatus('텔레그램 전송 실패: ' + (tgResult ? tgResult.message : ''), 'warning');
+                                }
+                            })
+                            .withFailureHandler(tgErr => {
+                                showStatus('텔레그램 전송 오류: ' + tgErr.message, 'warning');
+                            })
+                            .sendItemToMemberTelegramWithStyle(memberId, id, 'bid_price');
+                    }
                 } else {
                     showStatus(result.message, 'error');
                 }
@@ -4561,6 +4639,26 @@ MJ 이정우 팀장
         if (telegramRequestsPoller_) {
             clearInterval(telegramRequestsPoller_);
             telegramRequestsPoller_ = null;
+        }
+    }
+
+    // --- [Calendar] 자동 갱신 폴링 (15초, BiddingSchedule 탭 활성 시) ---
+    let calendarPoller_ = null;
+
+    function startCalendarPolling_() {
+        if (IS_MEMBER_VIEW) return;
+        if (calendarPoller_) return; // 이미 실행 중이면 중복 방지
+        calendarPoller_ = setInterval(() => {
+            const cal = document.getElementById('BiddingSchedule');
+            if (!cal || cal.classList.contains('content-hidden')) return;
+            try { loadDataAndRenderCalendar(true); } catch (e) { } // 서버에서 최신 데이터 조용히 갱신
+        }, 15000); // 15초마다 자동 갱신
+    }
+
+    function stopCalendarPolling_() {
+        if (calendarPoller_) {
+            clearInterval(calendarPoller_);
+            calendarPoller_ = null;
         }
     }
 
@@ -9266,8 +9364,27 @@ MJ 이정우 팀장
         var sk = String(i.sakun_no || '');
         var ct = String(i.court || '');
         var pr = i.bidprice ? fmtP(i.bidprice) : '0';
+        var bidSt = String(i.bid_state || '').trim(); // bid_state 파악
         var m_nm = mapN(String(i.m_name_id || ''));
         var tm = String(i.reg_date || '').substring(11, 16); // 시간 추출
+
+        // bid_state에 따른 입찰가 표시 HTML 분기
+        var priceHtml;
+        var copyBtnHtml = '';
+        if (bidSt === '전달완료') {
+            // 전달완료: 클릭 유도, 마스킹
+            priceHtml = '<div class="ic-price ic-price-pending" onclick="event.stopPropagation();handleBidPriceClick(\'' + i.id + '\')">입찰가 도착! 터치하세요 👆</div>';
+        } else if (bidSt === '확인완료' || bidSt.includes('확인완료')) {
+            // 확인완료: 전체 공개 + 복사 버튼
+            var fullPrice = (pr && pr !== '0') ? pr + ' 원' : '미입력';
+            priceHtml = '<div class="ic-price ic-price-confirmed">' + fullPrice + '</div>';
+            copyBtnHtml = '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + pr + '\', event)">' +
+                '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
+                '</button>';
+        } else {
+            // 기본 (신규/미전달): 미정 표시
+            priceHtml = '<div class="ic-price ic-price-default">가격미정</div>';
+        }
 
         // [수정] 입찰일자 배지: 카드 상단에 딱 붙임 (Flush with top-left)
         var dt = String(i['in-date'] || '');
@@ -9294,10 +9411,8 @@ MJ 이정우 팀장
             '</div>' +
             '<div class="ic-court">' + ct + ' / ' + m_nm + '</div>' +
             '<div class="ic-copy-row">' +
-            '<div class="ic-price">' + (pr === '0' ? '가격미정' : pr + ' 원') + '</div>' +
-            '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + pr + '\', event)">' +
-            '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
-            '</button>' +
+            priceHtml +
+            copyBtnHtml +
             '</div>' +
             '</div>' +
             // 우측 액션 영역 (입찰/추천 배지 + 시간)

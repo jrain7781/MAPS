@@ -491,6 +491,45 @@ function handleTelegramWebhook_(update) {
       return;
     }
 
+    // === 입찰가 확인완료 ===
+    if (action === 'PRICE_CONFIRM') {
+      try { telegramAnswerCallbackQuery_(cqId, '입찰가를 확인합니다.', false); } catch (e) { }
+      try {
+        // chatId로 회원 조회 → member_token 획득
+        var pcMember = (typeof getMemberByTelegramChatId === 'function') ? getMemberByTelegramChatId(chatId) : null;
+        if (!pcMember || !pcMember.member_token) {
+          telegramSendMessage(chatId, '회원 정보를 확인할 수 없습니다. 관리자에게 문의해 주세요.');
+          return;
+        }
+        // 물건 정보 조회 (가격 포함)
+        var pcItem = getBidItemByIdForTelegram_(itemId);
+        // bid_state를 확인완료로 업데이트
+        var pcResult = (typeof updateBidPriceConfirmed === 'function')
+          ? updateBidPriceConfirmed(pcMember.member_token, itemId)
+          : { success: false, message: '함수 없음' };
+        if (pcResult && pcResult.success) {
+          // 가격 공개 메시지 전송
+          if (pcItem) {
+            var pcShortDate = formatShortInDate_(pcItem['in-date']);
+            var pcSakunNo = String(pcItem.sakun_no || '');
+            var pcCourt = String(pcItem.court || '');
+            var pcBidPrice = formatKrw_(pcItem.bidprice);
+            var pcSimpleLine = [pcShortDate, pcSakunNo, pcCourt].filter(Boolean).join(' / ');
+            var divider = '=============================';
+            var priceRevealMsg = divider + '\n' + pcSimpleLine + '\n' + pcBidPrice + '원 입니다.\n' + divider;
+            telegramSendMessage(chatId, priceRevealMsg);
+          } else {
+            telegramSendMessage(chatId, '✅ 입찰가 확인완료 처리되었습니다.');
+          }
+        } else {
+          telegramSendMessage(chatId, '처리 오류: ' + (pcResult ? pcResult.message : '알 수 없는 오류'));
+        }
+      } catch (e) {
+        try { telegramSendMessage(chatId, '오류: ' + (e.message || '')); } catch (e2) { }
+      }
+      return;
+    }
+
     // === 이미지 보기 ===
     if (action === 'IMAGE') {
       // image_ids 필요하므로 readAllDataWithImageIds 호출 (사용 빈도 낮음)
@@ -609,11 +648,17 @@ function telegramBuildItemMessage_(item, member, styleKey) {
   let onlyViewButton = false;
 
   if (style === 'bid_price') {
-    subtitle = 'MJ 경매 스쿨입니다. 입찰가가 도착했습니다.\n아래 버튼(보러가기)을 눌러 확인해 주세요.';
-    statusValuePlain = '입찰';
-    // 입찰가는 본문에서 직접 노출하지 않고 웹앱에서 확인 유도
-    includeBidPrice = false;
-    onlyViewButton = true;
+    // 간결한 포맷: 입찰일자 / 사건번호 / 법원 + 입찰가확인 버튼 + 내물건보기 버튼
+    const shortDate = telegramEscapeHtml_(formatShortInDate_(item['in-date']));
+    const simpleLine = [shortDate, sakunNo, court].filter(Boolean).join(' / ');
+    const lines2 = [];
+    lines2.push(simpleLine);
+    lines2.push('입찰가가 도착했습니다. 확인하시겠습니까?');
+    const keyboard2 = [];
+    keyboard2.push([{ text: '입찰가확인', callback_data: 'MJ|PRICE_CONFIRM|' + itemId }]);
+    if (url) keyboard2.push([{ text: '내물건보기', web_app: { url: url } }]);
+    const replyMarkup2 = keyboard2.length > 0 ? { inline_keyboard: keyboard2 } : null;
+    return { text: lines2.join('\n'), replyMarkup: replyMarkup2 };
   } else if (style === 'status') {
     subtitle = 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.';
     statusValuePlain = '변경';
@@ -739,6 +784,20 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
   const enabled = String(memberRow.telegram_enabled || '').toUpperCase();
   if (enabled === 'N') {
     return { success: false, message: '해당 회원은 텔레그램 전송이 비활성화(N) 상태입니다.' };
+  }
+
+  // bid_price 스타일: 60초 내 중복 전송 방지 (이중 전송 버그 방어)
+  if (styleKey === 'bid_price') {
+    try {
+      const cache = CacheService.getScriptCache();
+      const dedupeKey = 'bps_' + String(itemId).trim() + '_' + String(targetMemberId).trim();
+      if (cache.get(dedupeKey)) {
+        return { success: true, message: '이미 전송됨 (60초 내 중복 방지)' };
+      }
+      cache.put(dedupeKey, '1', 60);
+    } catch (e) {
+      // 캐시 오류는 무시하고 전송 계속
+    }
   }
 
   // 전송 객체 구성

@@ -333,10 +333,67 @@ function updateBidPriceConfirmed(memberToken, itemId) {
 
   // 4. 상태 업데이트
   // 12번째 열(L열)이 bid_state
-  sheet.getRange(rowIndex, 12).setValue('<span style="color: blue; font-weight: bold;">확인완료</span>');
+  sheet.getRange(rowIndex, 12).setValue('확인완료');
   SpreadsheetApp.flush();
 
   return { success: true, message: '입찰가 확인 처리가 완료되었습니다.' };
+}
+
+/**
+ * 회원 앱에서 입찰가 터치 시: 텔레그램으로 전체 가격 전송 + bid_state 확인완료 처리
+ * @param {string} memberToken - 회원 토큰 (권한 검증용)
+ * @param {string} itemId - 물건 ID
+ * @return {Object} {success: boolean, message: string}
+ */
+function confirmBidPriceWithTelegramReply(memberToken, itemId) {
+  if (!memberToken || !itemId) {
+    return { success: false, message: '요청 정보가 올바르지 않습니다.' };
+  }
+
+  // 1. 회원 검증
+  const member = getMemberByToken(memberToken);
+  if (!member) {
+    return { success: false, message: '유효하지 않은 회원 토큰입니다.' };
+  }
+
+  // 2. 물건 정보 조회
+  const item = (typeof getItemLiteById_ === 'function') ? getItemLiteById_(String(itemId)) : null;
+  if (!item) {
+    return { success: false, message: '물건 정보를 찾을 수 없습니다.' };
+  }
+
+  // 3. 시트에서 해당 물건 찾아 bid_state 확인완료로 업데이트
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
+
+  const finder = sheet.getRange(2, 1, lastRow - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true);
+  const match = finder.findNext();
+  if (!match) {
+    return { success: false, message: '해당 물건을 찾을 수 없습니다.' };
+  }
+  sheet.getRange(match.getRow(), 12).setValue('확인완료');
+  SpreadsheetApp.flush();
+
+  // 4. 텔레그램으로 가격 공개 메시지 전송 (chatId 있을 때만)
+  const chatId = String(member.telegram_chat_id || '').trim();
+  if (chatId && typeof telegramSendMessage === 'function') {
+    try {
+      const shortDate = (typeof formatShortInDate_ === 'function') ? formatShortInDate_(item['in-date']) : String(item['in-date'] || '');
+      const sakunNo = String(item.sakun_no || '');
+      const court = String(item.court || '');
+      const bidPrice = (typeof formatKrw_ === 'function') ? formatKrw_(item.bidprice) : String(item.bidprice || '');
+      const simpleLine = [shortDate, sakunNo, court].filter(Boolean).join(' / ');
+      const divider = '=============================';
+      const priceMsg = divider + '\n' + simpleLine + '\n' + bidPrice + '원 입니다.\n' + divider;
+      telegramSendMessage(chatId, priceMsg);
+    } catch (e) {
+      Logger.log('confirmBidPriceWithTelegramReply 텔레그램 전송 오류: ' + e.message);
+    }
+  }
+
+  return { success: true, message: '확인완료 처리되었습니다.' };
 }
 
 /**
