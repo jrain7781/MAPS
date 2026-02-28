@@ -2163,12 +2163,14 @@ function getTelegramJoinStatsByItem() {
       inDate = Utilities.formatDate(inDateRaw, tz, 'yyyyMMdd');
     } else {
       inDate = String(inDateRaw || '').replace(/\D/g, '');
-      // 'yyMMdd'(6자리) → 'yyyyMMdd' 변환
-      if (inDate.length === 6) inDate = '20' + inDate;
+      // 'yyMMdd'(6자리) → 'yyyyMMdd' 변환, 그 이상이면 8자리까지만 취함 (YYYYMMDD)
+      if (inDate.length >= 8) inDate = inDate.substring(0, 8);
+      else if (inDate.length === 6) inDate = '20' + inDate;
     }
     if (!inDate || inDate < today) return; // 오늘 이후 물건만
 
-    var memberId = String(itemObj['m_name_id'] || '').trim();
+    // member_id(index 8)로 회원 매핑
+    var memberId = String(itemObj['member_id'] || '').trim();
     if (!memberId) return;
 
     var m = memberMap[memberId];
@@ -2178,29 +2180,78 @@ function getTelegramJoinStatsByItem() {
     var ct = String(cls.class_type || '').trim();
     if (!ct) return;
 
-    if (!statMap[ct]) statMap[ct] = { class_type: ct, item_count: 0, total: 0, joined: 0, chat_id: 0 };
+    if (!statMap[ct]) statMap[ct] = { class_type: ct, item_count: 0, total: 0, joined: 0, chat_id: 0, _members: {} };
+    // 1번 요건: 물건수
     statMap[ct].item_count++;
-    statMap[ct].total++;
-    if (String(m.telegram_enabled || '').toUpperCase() === 'Y') statMap[ct].joined++;
-    if (String(m.telegram_chat_id || '').trim() !== '') statMap[ct].chat_id++;
+
+    // 2번 요건: 1번의 물건을 가진 회원의 수 (고유 회원)
+    if (!statMap[ct]._members[memberId]) {
+      statMap[ct]._members[memberId] = true;
+      statMap[ct].total++;
+      if (String(m.telegram_enabled || '').toUpperCase() === 'Y') statMap[ct].joined++;
+      if (String(m.telegram_chat_id || '').trim() !== '') statMap[ct].chat_id++;
+    }
   });
 
   var classTypes = Object.keys(statMap).sort();
   var result = classTypes.map(function (t) { return statMap[t]; });
+
+  // DEBUG INFO
+  if (result.length === 0) {
+    var debugInfo = "";
+    if (data.length > 0) {
+      var d = data[data.length - 1]; // last row
+      debugInfo = "today:" + today + ", in-date:" + d[1] + ", mId:" + d[8];
+    }
+    result.push({ class_type: 'DEBUG: ' + debugInfo, item_count: data.length, total: members.length, joined: 0, chat_id: 0 });
+  }
+
   var totals = { class_type: '합계', item_count: 0, total: 0, joined: 0, chat_id: 0 };
   result.forEach(function (r) {
-    totals.item_count += r.item_count;
-    totals.total += r.total;
-    totals.joined += r.joined;
-    totals.chat_id += r.chat_id;
+    if (r.class_type.indexOf('DEBUG') === -1) {
+      totals.item_count += r.item_count;
+      totals.total += r.total;
+      totals.joined += r.joined;
+      totals.chat_id += r.chat_id;
+    }
   });
   result.push(totals);
   return result;
 }
 
 /**
- * 텔레그램 승인현황: telegram_requests 기반으로 날짜별 통계 (관리자 제외)
+ * 디버그: 물건 모드 데이터 샘플 확인
  */
+function debugTelegramJoinItemStats() {
+  var tz = Session.getScriptTimeZone();
+  var today = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
+  var members = readAllMembersNew();
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { today: today, totalItems: 0, samples: [] };
+  var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
+
+  var samples = [];
+  for (var i = 0; i < Math.min(data.length, 10); i++) {
+    var row = data[i];
+    var itemObj = {};
+    ITEM_HEADERS.forEach(function (h, idx) { itemObj[h] = row[idx]; });
+    var inDateRaw = itemObj['in-date'];
+    var inDateType = typeof inDateRaw;
+    var isDate = inDateRaw instanceof Date;
+    var inDate = isDate ? Utilities.formatDate(inDateRaw, tz, 'yyyyMMdd') : String(inDateRaw || '').replace(/\D/g, '');
+    samples.push({
+      inDateRaw: String(inDateRaw),
+      inDateType: inDateType,
+      isDate: isDate,
+      inDate: inDate,
+      member_id: itemObj['member_id'],
+      m_name_id: itemObj['m_name_id']
+    });
+  }
+  return { today: today, totalItems: data.length, memberCount: members.length, samples: samples, headers: ITEM_HEADERS };
+}
+
 function getAutoApprovalStats() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
