@@ -1,4 +1,4 @@
-﻿<script>
+<script>
     // =============================================================================
     // MJ경매 입찰 관리 시스템 - 통합 JavaScript
     // =============================================================================
@@ -2765,6 +2765,103 @@
         statusTableBody.appendChild(totalRow);
     }
 
+    // ── 자동승인 현황 ──────────────────────────────────────────
+    // ── 텔레그램 승인현황 ──────────────────────────────────────────
+    var _autoApprovalStatsCache = null; // 클라이언트 캐시: 대시보드 재진입 시 서버 호출 방지
+    function loadAutoApprovalStats(forceRefresh) {
+        var el = document.getElementById('autoApprovalBody');
+        if (!el) return;
+        // 캐시가 있으면 서버 호출 없이 바로 렌더링 (다른 카드들과 동일한 동작)
+        if (!forceRefresh && _autoApprovalStatsCache) {
+            renderAutoApprovalStats(_autoApprovalStatsCache);
+            return;
+        }
+        el.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">조회 중...</div>';
+        google.script.run
+            .withSuccessHandler(function (stats) {
+                _autoApprovalStatsCache = stats;
+                renderAutoApprovalStats(stats);
+            })
+            .withFailureHandler(function (err) {
+                if (el) el.innerHTML = '<div class="p-4 text-center text-red-500 text-sm">' + (err && err.message ? err.message : '오류 발생') + '</div>';
+            })
+            .getAutoApprovalStats();
+    }
+
+    function renderAutoApprovalStats(stats) {
+        var el = document.getElementById('autoApprovalBody');
+        if (!el) return;
+        if (!stats || stats.length === 0) {
+            el.innerHTML = '<div class="py-4 text-center text-gray-400 text-sm">데이터 없음</div>';
+            return;
+        }
+        // item_id 목록을 전역에 저장해 onclick에서 참조 (인코딩 이슈 없이 안전)
+        window._approvalStats = stats;
+        var DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'];
+        var fmtDateDay = function (s) {
+            try { var p = s.split('/'); var dt = new Date(2000 + parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)); return s + ' (' + DAYS_KO[dt.getDay()] + ')'; } catch (e) { return s; }
+        };
+        var mkCell = function (count, color, rowIdx, field) {
+            if (!count) return '<td class="py-1.5 px-1 text-center text-gray-200 text-xs">-</td>';
+            // onclick에 안전한 숫자와 ASCII 문자열만 사용 → &quot; 문제 없음
+            var click = 'onclick="navigateToItemsByIds(' + rowIdx + ',\'' + field + '\')" style="cursor:pointer"';
+            return '<td class="py-1.5 px-1 text-center text-xs font-bold hover:underline ' + color + '" ' + click + '>' + count + '</td>';
+        };
+        var tbodyHtml = '';
+        stats.forEach(function (row, i) {
+            tbodyHtml += '<tr class="border-b border-gray-100 hover:bg-gray-50">'
+                + '<td class="py-1.5 px-2 whitespace-nowrap text-xs border-r bg-gray-50 font-bold text-gray-700 text-center">' + fmtDateDay(row.date) + '</td>'
+                + mkCell(row.recommend, 'text-gray-700', i, 'recommend_ids')
+                + mkCell(row.bid_approved, 'text-indigo-600', i, 'bid_approved_ids')
+                + mkCell(row.bid_pending, 'text-orange-500', i, 'bid_pending_ids')
+                + mkCell(row.cancel_approved, 'text-gray-500', i, 'cancel_approved_ids')
+                + mkCell(row.delivered, 'text-blue-600', i, 'delivered_ids')
+                + mkCell(row.confirmed, 'text-green-600', i, 'confirmed_ids')
+                + '</tr>';
+        });
+        el.innerHTML = '<div class="overflow-y-auto" style="max-height:210px">'
+            + '<table class="w-full text-xs border-collapse">'
+            + '<thead class="sticky top-0 z-10 bg-gray-50">'
+            + '<tr class="border-b border-gray-100 text-gray-600">'
+            + '<th class="py-1.5 px-2 text-center font-bold border-r" rowspan="2">날자</th>'
+            + '<th class="py-1 px-1 text-center font-bold" rowspan="2">물건<br>추천</th>'
+            + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200" colspan="2">추천물건</th>'
+            + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200">입찰물건</th>'
+            + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200" colspan="2">입찰가</th>'
+            + '</tr>'
+            + '<tr class="bg-gray-50 border-b border-gray-200 text-gray-500">'
+            + '<th class="py-1 px-1 text-center border-l border-gray-200">입찰확정</th>'
+            + '<th class="py-1 px-1 text-center">미선택</th>'
+            + '<th class="py-1 px-1 text-center border-l border-gray-200">입찰취소</th>'
+            + '<th class="py-1 px-1 text-center border-l border-gray-200">전달</th>'
+            + '<th class="py-1 px-1 text-center">확인</th>'
+            + '</tr></thead>'
+            + '<tbody>' + tbodyHtml + '</tbody>'
+            + '</table></div>';
+    }
+
+
+    function navigateToItemsByIds(rowIdx, field) {
+        var stats = window._approvalStats;
+        if (!stats || !stats[rowIdx]) return;
+        var ids = stats[rowIdx][field];
+        if (!ids || !ids.length) return;
+        dashboardFilter = { active: true, date: '', type: 'item_ids', status: ids, manager: null };
+        navigateTo('ItemManagement');
+    }
+
+    function navigateToItemsByStatus() {
+        var statuses = Array.prototype.slice.call(arguments);
+        dashboardFilter = { active: true, date: '', type: 'all_status', status: statuses, manager: null };
+        navigateTo('ItemManagement');
+    }
+
+    function navigateToItemsByBidState(bidState) {
+        dashboardFilter = { active: true, date: '', type: 'all_bid_state', status: bidState, manager: null };
+        navigateTo('ItemManagement');
+    }
+    // ──────────────────────────────────────────────────────────────
+
     // 차트 그리기
     function renderMemberBidChart() {
         if (!memberBidChartCanvas || !summaryText) return;
@@ -4541,6 +4638,7 @@ MJ 이정우 팀장
             renderMissingBidDashboard();
             renderStatusManagementDashboard();
             renderMemberBidChart();
+            if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
             return;
         }
         toggleDashboardLoading(true);
@@ -4555,6 +4653,7 @@ MJ 이정우 팀장
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
                 if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
                 if (typeof loadTelegramJoinStats === 'function') loadTelegramJoinStats(); // 텔레그램 가입현황
+                if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
             })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
@@ -4898,6 +4997,15 @@ MJ 이정우 팀장
                     filterDesc = `${niceDate} 입찰가 미입력 건`;
                 } else if (dashboardFilter.type === 'status') {
                     filterDesc = `${niceDate} [${dashboardFilter.status}] 건`;
+                } else if (dashboardFilter.type === 'auto_all') {
+                    filterDesc = `${niceDate} 물건추천 전체`;
+                } else if (dashboardFilter.type === 'bid_state') {
+                    filterDesc = `${niceDate} 입찰가 [${dashboardFilter.status}] 건`;
+                } else if (dashboardFilter.type === 'all_status') {
+                    const st = Array.isArray(dashboardFilter.status) ? dashboardFilter.status.join('/') : dashboardFilter.status;
+                    filterDesc = `전체 [${st}] 건`;
+                } else if (dashboardFilter.type === 'all_bid_state') {
+                    filterDesc = `전체 입찰가 [${dashboardFilter.status}] 건`;
                 }
             }
             activeFilterText.textContent = `${filterDesc} 필터링 중`;
@@ -4924,11 +5032,16 @@ MJ 이정우 팀장
             // 입찰일자 필터링: syncSakunFilter 활성 시 날짜 제한 없음
             const inDateStr = String(inDate || '');
             const inDateNum = inDateStr.replace(/\D/g, '');
-            const matchesIndate = syncSakunFilter.active
+            // all_status/all_bid_state/item_ids 타입은 날짜 전체 범위를 조회 (과거 날짜 포함)
+            const bypassDateFilter = dashboardFilter.active &&
+                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids');
+            const matchesIndate = bypassDateFilter
                 ? true
-                : (termIndate
-                    ? (inDateStr.includes(termIndate) || inDateNum.includes(termIndate.replace(/\D/g, '')))
-                    : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, ''))));
+                : (syncSakunFilter.active
+                    ? true
+                    : (termIndate
+                        ? (inDateStr.includes(termIndate) || inDateNum.includes(termIndate.replace(/\D/g, '')))
+                        : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, '')))));
             const matchesSakunNo = !termSakunNo || String(item.sakun_no || '').toLowerCase().includes(termSakunNo);
             // 정확한 매칭: 입력값과 정확히 일치하는 경우만 통과
             const matchesCourt = !termCourt || String(item.court || '').toLowerCase().trim() === termCourt.toLowerCase().trim();
@@ -4965,6 +5078,19 @@ MJ 이정우 팀장
                     return itemDate === dashboardFilter.date && item.stu_member === dashboardFilter.status;
                 } else if (dashboardFilter.type === 'total_status') {
                     return itemDate >= todayYYMMDD && item.stu_member === dashboardFilter.status;
+                } else if (dashboardFilter.type === 'auto_all') {
+                    return itemDate === dashboardFilter.date && ['추천', '입찰', '변경'].includes(item.stu_member);
+                } else if (dashboardFilter.type === 'bid_state') {
+                    return itemDate === dashboardFilter.date && String(item.bid_state || '') === dashboardFilter.status;
+                } else if (dashboardFilter.type === 'all_status') {
+                    const st = Array.isArray(dashboardFilter.status) ? dashboardFilter.status : [dashboardFilter.status];
+                    return st.includes(item.stu_member);
+                } else if (dashboardFilter.type === 'all_bid_state') {
+                    return String(item.bid_state || '') === dashboardFilter.status;
+                } else if (dashboardFilter.type === 'item_ids') {
+                    // 텔레그램 승인현황 클릭: 해당 item_id 목록에 속하는 물건만
+                    var ids = Array.isArray(dashboardFilter.status) ? dashboardFilter.status : [];
+                    return ids.indexOf(String(item.id || '')) >= 0;
                 }
             } else {
                 // 입찰물건 관리 기본은 "전체"를 보여주고, 필요 시 사용자가 검색/필터로 좁히도록 함
@@ -5053,7 +5179,31 @@ MJ 이정우 팀장
             searchManagerInput.classList.add('filter-active-input');
         }
 
-        const statusToSet = (dashboardFilter.type === 'missing') ? '입찰' : (dashboardFilter.status || '');
+        // all_status / all_bid_state / item_ids 타입: dashboardFilter가 2단계에서 처리하므로
+        // 1단계 상태 체크박스는 '전체' 로 설정 (모두 통과)
+        if (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids') {
+            const allStatusCb = document.getElementById('search-status-all');
+            if (allStatusCb) allStatusCb.checked = true;
+            document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => { cb.checked = false; });
+            const statusBtn = document.getElementById('search-status-btn');
+            const statusLabel = document.getElementById('search-status-label');
+            if (statusBtn) statusBtn.classList.add('filter-active-input');
+            if (statusLabel) {
+                if (dashboardFilter.type === 'item_ids') {
+                    statusLabel.textContent = '텔레그램 승인건 (' + (dashboardFilter.status ? dashboardFilter.status.length : 0) + '건)';
+                } else {
+                    const label = Array.isArray(dashboardFilter.status)
+                        ? dashboardFilter.status.join('/')
+                        : String(dashboardFilter.status || '');
+                    statusLabel.textContent = label || '전체';
+                }
+            }
+            return;
+        }
+
+        const statusToSet = (dashboardFilter.type === 'missing') ? '입찰' : (
+            Array.isArray(dashboardFilter.status) ? dashboardFilter.status[0] : (dashboardFilter.status || '')
+        );
         if (statusToSet) {
             document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => {
                 cb.checked = (cb.value === statusToSet);
@@ -6078,6 +6228,63 @@ MJ 이정우 팀장
             .getTelegramJoinStats();
     }
 
+    // 라디오버튼 모드 변경: 물건 or 회원
+    function onTelegramJoinModeChange(radio) {
+        if (radio.value === 'item') {
+            loadTelegramJoinStatsByItem();
+        } else {
+            loadTelegramJoinStats();
+        }
+    }
+
+    // 물건 모드: 오늘 이후 입찰일 물건의 배정 회원 텔레그램 가입 여부 집계
+    function loadTelegramJoinStatsByItem() {
+        const el = document.getElementById('telegramJoinBody');
+        if (!el) return;
+        el.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">조회 중...</div>';
+        google.script.run
+            .withSuccessHandler(function (stats) {
+                renderTelegramJoinStatsByItem(stats);
+            })
+            .withFailureHandler(err => {
+                if (el) el.innerHTML = `<div class="p-4 text-center text-red-500 text-sm">${err.message}</div>`;
+            })
+            .getTelegramJoinStatsByItem();
+    }
+
+    function renderTelegramJoinStatsByItem(stats) {
+        const el = document.getElementById('telegramJoinBody');
+        if (!el || !stats) return;
+        if (!stats.length) {
+            el.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">오늘 이후 물건 없음</div>';
+            return;
+        }
+        const rows = stats.map(row => {
+            const isTotal = row.class_type === '합계';
+            const rate = row.total > 0 ? Math.round(row.joined / row.total * 100) + '%' : '0%';
+            const boldClass = isTotal ? 'font-bold bg-gray-50' : 'font-bold';
+            return `<tr class="${boldClass} border-b border-gray-100 text-xs">
+                <td class="py-1.5 px-3 text-center">${row.class_type}</td>
+                <td class="py-1.5 px-3 text-center text-red-500">${rate}</td>
+                <td class="py-1.5 px-3 text-center">${row.item_count}</td>
+                <td class="py-1.5 px-3 text-center">${row.total}</td>
+                <td class="py-1.5 px-3 text-center text-blue-600">${row.joined}</td>
+                <td class="py-1.5 px-3 text-center text-orange-500">${row.total - row.joined}</td>
+            </tr>`;
+        });
+        el.innerHTML = `<table class="w-full text-xs border-collapse">
+            <thead><tr class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                <th class="py-1.5 px-3 text-center font-bold">수업</th>
+                <th class="py-1.5 px-3 text-center font-bold">가입율</th>
+                <th class="py-1.5 px-3 text-center font-bold">물건수</th>
+                <th class="py-1.5 px-3 text-center font-bold">회원수</th>
+                <th class="py-1.5 px-3 text-center font-bold">가입</th>
+                <th class="py-1.5 px-3 text-center font-bold">미가입</th>
+            </tr></thead>
+            <tbody>${rows.join('')}</tbody>
+        </table>`;
+    }
+
     function renderTelegramJoinStats(stats) {
         const el = document.getElementById('telegramJoinBody');
         if (!el || !stats) return;
@@ -6112,13 +6319,21 @@ MJ 이정우 팀장
     // 텔레그램 가입현황에서 회원관리로 이동 + 필터 적용
     // telegramFilter: '' = 전체, 'Y' = 가입수(telegram_enabled=Y), 'C' = Chat_ID 있는 회원
     function goToMemberMgmtByTelegram(classType, telegramFilter) {
-        window._memberMgmtTelegramFilter = telegramFilter || '';
+        // 필터 정보를 플래그로 저장 (loadMembersNew 완료 시 참조)
+        window._pendingTelegramNavFilter = { classType: classType, telegramFilter: telegramFilter || '' };
         navigateTo('MemberManagement');
-        setTimeout(() => {
-            const ctEl = document.getElementById('mem-search-class-type');
-            if (ctEl) { ctEl.value = classType; }
-            if (typeof filterMembersNew === 'function') filterMembersNew();
-        }, 300);
+        // allMembersNewData가 이미 로드되어 있으면 즉시 필터 적용
+        if (allMembersNewData && allMembersNewData.length > 0) {
+            var f = window._pendingTelegramNavFilter;
+            window._pendingTelegramNavFilter = null;
+            window._memberMgmtTelegramFilter = f.telegramFilter;
+            setTimeout(function () {
+                var ctEl = document.getElementById('mem-search-class-type');
+                if (ctEl) ctEl.value = f.classType;
+                if (typeof filterMembersNew === 'function') filterMembersNew();
+            }, 50);
+        }
+        // 미로드 상태면 loadMembersNew 완료 후 _pendingTelegramNavFilter를 처리
     }
     // ─────────────────────────────────────────────────────────────
 
@@ -7345,6 +7560,14 @@ MJ 이정우 팀장
             .withSuccessHandler(data => {
                 allMembersNewData = Array.isArray(data) ? data : [];
                 loadClassDropdownOptions();
+                // 텔레그램 가입현황에서 넘어온 경우 필터 적용
+                if (window._pendingTelegramNavFilter) {
+                    var f = window._pendingTelegramNavFilter;
+                    window._pendingTelegramNavFilter = null;
+                    window._memberMgmtTelegramFilter = f.telegramFilter;
+                    var ctEl = document.getElementById('mem-search-class-type');
+                    if (ctEl) ctEl.value = f.classType;
+                }
                 filterMembersNew();
             })
             .withFailureHandler(err => {
@@ -10009,34 +10232,34 @@ MJ 이정우 팀장
         const lbImg = document.getElementById('lightboxImg');
         const lbCap = document.getElementById('lightboxCaption');
         const dlBtn = document.getElementById('lightboxDownloadBtn');
-        
+
         if (!lb || !lbImg) return;
-        
+
         lbImg.src = src;
         lbImg.classList.remove('zoomed');
         lbImg.classList.replace('cursor-zoom-out', 'cursor-zoom-in');
-        
+
         if (lbCap) lbCap.textContent = caption || '';
-        
+
         // 다운로드 버튼 URL 설정
         if (src.includes('id=')) {
             const id = src.split('id=')[1].split('&')[0];
-            dlBtn.onclick = function(e) {
+            dlBtn.onclick = function (e) {
                 e.stopPropagation();
                 window.open('https://drive.google.com/uc?export=download&id=' + id, '_blank');
             };
         } else {
-            dlBtn.onclick = function(e) {
-               e.stopPropagation();
-               const a = document.createElement('a');
-               a.href = src;
-               a.download = caption || 'download.png';
-               document.body.appendChild(a);
-               a.click();
-               document.body.removeChild(a);
+            dlBtn.onclick = function (e) {
+                e.stopPropagation();
+                const a = document.createElement('a');
+                a.href = src;
+                a.download = caption || 'download.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
             };
         }
-        
+
         lb.classList.remove('content-hidden');
     }
 

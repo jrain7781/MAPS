@@ -2092,27 +2092,189 @@ function getTelegramJoinStats() {
   var members = readAllMembersNew();
   var classes = readAllClasses();
   var classMap = {};
-  classes.forEach(function(c) { classMap[String(c.class_id)] = c; });
+  classes.forEach(function (c) { classMap[String(c.class_id)] = c; });
 
-  var classTypes = ['CLASS', 'PT', '프리미엄PT', '돈클'];
+  // class_type을 동적으로 수집 (하드코딩 제거 → 실제 DB 값 사용)
+  var classTypeSet = {};
+  classes.forEach(function (c) {
+    var ct = String(c.class_type || '').trim();
+    if (ct) classTypeSet[ct] = true;
+  });
+  var classTypes = Object.keys(classTypeSet).sort();
+
   var stats = {};
-  classTypes.forEach(function(t) {
+  classTypes.forEach(function (t) {
     stats[t] = { class_type: t, total: 0, joined: 0, chat_id: 0 };
   });
 
-  members.forEach(function(m) {
+  members.forEach(function (m) {
+    if (String(m.gubun || '').trim() === '관리자') return; // 관리자 제외
     var cls = classMap[String(m.class_id)] || {};
-    var ct = cls.class_type || '';
+    var ct = String(cls.class_type || '').trim();
+    if (!ct) return;
     if (!stats[ct]) stats[ct] = { class_type: ct, total: 0, joined: 0, chat_id: 0 };
     stats[ct].total++;
     if (String(m.telegram_enabled || '').toUpperCase() === 'Y') stats[ct].joined++;
     if (String(m.telegram_chat_id || '').trim() !== '') stats[ct].chat_id++;
   });
 
-  var result = classTypes.map(function(t) { return stats[t]; });
+  var result = classTypes.map(function (t) { return stats[t]; });
   var totals = { class_type: '합계', total: 0, joined: 0, chat_id: 0 };
-  result.forEach(function(r) { totals.total += r.total; totals.joined += r.joined; totals.chat_id += r.chat_id; });
+  result.forEach(function (r) { totals.total += r.total; totals.joined += r.joined; totals.chat_id += r.chat_id; });
   result.push(totals);
+  return result;
+}
+
+/**
+ * 텔레그램 가입현황 [물건 모드]: 오늘 이후 입찰일 물건에 배정된 회원의 텔레그램 가입 여부
+ * @return {Array} [{ class_type, item_count, total, joined }, ..., { class_type:'합계', ... }]
+ */
+function getTelegramJoinStatsByItem() {
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
+  var members = readAllMembersNew();
+  var classes = readAllClasses();
+  var classMap = {};
+  classes.forEach(function (c) { classMap[String(c.class_id)] = c; });
+
+  // member_id → 회원 정보 매핑
+  var memberMap = {};
+  members.forEach(function (m) {
+    if (String(m.gubun || '').trim() === '관리자') return;
+    memberMap[String(m.member_id)] = m;
+  });
+
+  // 아이템 데이터 읽기
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
+
+  // class_type별로 물건과 회원 집계
+  var statMap = {};
+  data.forEach(function (row) {
+    var itemObj = {};
+    ITEM_HEADERS.forEach(function (h, i) { itemObj[h] = row[i]; });
+
+    var inDate = String(itemObj['in-date'] || '').replace(/\D/g, '');
+    if (!inDate || inDate < today) return; // 오늘 이후 물건만
+
+    var memberId = String(itemObj['m_name_id'] || '').trim();
+    if (!memberId) return;
+
+    var m = memberMap[memberId];
+    if (!m) return;
+
+    var cls = classMap[String(m.class_id)] || {};
+    var ct = String(cls.class_type || '').trim();
+    if (!ct) return;
+
+    if (!statMap[ct]) statMap[ct] = { class_type: ct, item_count: 0, total: 0, joined: 0 };
+    statMap[ct].item_count++;
+    statMap[ct].total++;
+    if (String(m.telegram_enabled || '').toUpperCase() === 'Y') statMap[ct].joined++;
+  });
+
+  var classTypes = Object.keys(statMap).sort();
+  var result = classTypes.map(function (t) { return statMap[t]; });
+  var totals = { class_type: '합계', item_count: 0, total: 0, joined: 0 };
+  result.forEach(function (r) { totals.item_count += r.item_count; totals.total += r.total; totals.joined += r.joined; });
+  result.push(totals);
+  return result;
+}
+
+/**
+ * 텔레그램 승인현황: telegram_requests 기반으로 날짜별 통계 (관리자 제외)
+ */
+function getAutoApprovalStats() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+  if (!reqSheet || reqSheet.getLastRow() < 2) return [];
+
+  // 회원 gubun 맵 (관리자 제외용)
+  var members = readAllMembersNew();
+  var memberGubunMap = {};
+  members.forEach(function (m) {
+    memberGubunMap[String(m.member_id)] = String(m.gubun || '').trim();
+  });
+
+  // 아이템 bid_state 맵
+  var itemsSheet = ss.getSheetByName(DB_SHEET_NAME);
+  var itemBidStateMap = {};
+  if (itemsSheet && itemsSheet.getLastRow() >= 2) {
+    var iLastRow = itemsSheet.getLastRow();
+    var iCols = Math.min(itemsSheet.getMaxColumns(), 12);
+    var iData = itemsSheet.getRange(2, 1, iLastRow - 1, iCols).getValues();
+    iData.forEach(function (r) {
+      var id = String(r[0] || '').trim();
+      if (id) itemBidStateMap[id] = String(r[11] || '');
+    });
+  }
+
+  var lastRow = reqSheet.getLastRow();
+  var rows = reqSheet.getRange(2, 1, lastRow - 1, 11).getValues();
+  // [0]req_id [1]requested_at [2]action [3]status [4]item_id [5]member_id [6]chat_id [7]username [8]note [9]approved_at [10]approved_by
+
+  var dateStats = {};
+  rows.forEach(function (row) {
+    var action = String(row[2] || '').trim();
+    var status = String(row[3] || '').trim();
+    var itemId = String(row[4] || '').trim();
+    var memberId = String(row[5] || '').trim();
+    var reqAt = row[1];
+    var appAt = row[9];
+
+    if (memberGubunMap[memberId] === '관리자') return;
+    if (!itemId) return;
+
+    var dateToUse = (status === 'APPROVED' && appAt) ? appAt : reqAt;
+    if (!dateToUse) return;
+    var d = new Date(dateToUse);
+    if (isNaN(d.getTime())) return;
+
+    var dateKey = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yy/MM/dd');
+    if (!dateStats[dateKey]) {
+      dateStats[dateKey] = {
+        date: dateKey,
+        items: {},
+        bid_approved_ids: [], bid_pending_ids: [], cancel_ids: [],
+        delivered_ids: [], confirmed_ids: []
+      };
+    }
+    var ds = dateStats[dateKey];
+    ds.items[itemId] = true;
+
+    if (action === 'REQUEST_BID' && status === 'APPROVED') {
+      if (ds.bid_approved_ids.indexOf(itemId) < 0) ds.bid_approved_ids.push(itemId);
+      var bs = String(itemBidStateMap[itemId] || '');
+      if (bs === '전달완료') { if (ds.delivered_ids.indexOf(itemId) < 0) ds.delivered_ids.push(itemId); }
+      else if (bs === '확인완료') { if (ds.confirmed_ids.indexOf(itemId) < 0) ds.confirmed_ids.push(itemId); }
+    } else if (action === 'REQUEST_BID' && status === 'PENDING') {
+      if (ds.bid_pending_ids.indexOf(itemId) < 0) ds.bid_pending_ids.push(itemId);
+    } else if (action === 'REQUEST_CANCEL' && status === 'APPROVED') {
+      if (ds.cancel_ids.indexOf(itemId) < 0) ds.cancel_ids.push(itemId);
+    }
+  });
+
+  var result = Object.keys(dateStats).map(function (k) {
+    var s = dateStats[k];
+    var allIds = Object.keys(s.items);
+    return {
+      date: s.date,
+      recommend: allIds.length,
+      recommend_ids: allIds,
+      bid_approved: s.bid_approved_ids.length,
+      bid_approved_ids: s.bid_approved_ids,
+      bid_pending: s.bid_pending_ids.length,
+      bid_pending_ids: s.bid_pending_ids,
+      cancel_approved: s.cancel_ids.length,
+      cancel_approved_ids: s.cancel_ids,
+      delivered: s.delivered_ids.length,
+      delivered_ids: s.delivered_ids,
+      confirmed: s.confirmed_ids.length,
+      confirmed_ids: s.confirmed_ids
+    };
+  });
+  result.sort(function (a, b) { return b.date.localeCompare(a.date); });
   return result;
 }
 
