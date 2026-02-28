@@ -2771,7 +2771,7 @@
 
         const memberData = {};
         const uniqueMembers = new Set();
-        const summaryCounts = { product: 0, recommend: 0, bid: 0, change: 0, undecided: 0 };
+        const summaryCounts = { recommend: 0, bid: 0, change: 0 };
         allBiddingData.forEach(item => {
             let memberName = item.m_name;
             if (!memberName || memberName.trim() === '' || memberName === '미등록') {
@@ -2780,39 +2780,26 @@
             uniqueMembers.add(memberName);
 
             const status = item.stu_member;
-            if (status === '상품') summaryCounts.product++;
-            else if (status === '추천') summaryCounts.recommend++;
+            if (status === '추천') summaryCounts.recommend++;
             else if (status === '입찰') summaryCounts.bid++;
             else if (status === '변경') summaryCounts.change++;
-            else if (status === '미정') summaryCounts.undecided++;
 
             if (!memberData[memberName]) {
-                memberData[memberName] = { '상품': 0, '미정': 0, '추천': 0, '입찰': 0, '변경': 0 };
+                memberData[memberName] = { '추천': 0, '입찰': 0, '변경': 0 };
             }
 
-            if (['상품', '미정', '추천', '입찰', '변경'].includes(status)) {
+            if (['추천', '입찰', '변경'].includes(status)) {
                 memberData[memberName][status]++;
-            } else {
-                memberData[memberName]['미정']++;
             }
         });
         summaryText.innerHTML = `
-          전체 회원수: ${uniqueMembers.size}명 
-          (<span class="summary-item" onclick="filterCalendarByStatus('상품')">상품 ${summaryCounts.product}건</span> |
-           <span class="summary-item" onclick="filterCalendarByStatus('미정')">미정 ${summaryCounts.undecided}건</span> |
-           <span class="summary-item" onclick="filterCalendarByStatus('추천')">추천 ${summaryCounts.recommend}건</span> | 
-           <span class="summary-item" onclick="filterCalendarByStatus('입찰')">입찰 ${summaryCounts.bid}건</span> | 
+          전체 회원수: ${uniqueMembers.size}명
+          (<span class="summary-item" onclick="filterCalendarByStatus('추천')">추천 ${summaryCounts.recommend}건</span> |
+           <span class="summary-item" onclick="filterCalendarByStatus('입찰')">입찰 ${summaryCounts.bid}건</span> |
            <span class="summary-item" onclick="filterCalendarByStatus('변경')">변경 ${summaryCounts.change}건</span>)
        `;
-        let labels = Object.keys(memberData).sort();
-        const indexUndecided = labels.indexOf('미정');
-        if (indexUndecided > -1) {
-            labels.splice(indexUndecided, 1);
-            labels.unshift('미정');
-        }
+        const labels = Object.keys(memberData).sort();
 
-        const productData = labels.map(name => memberData[name]['상품']);
-        const undecidedData = labels.map(name => memberData[name]['미정']);
         const recommendData = labels.map(name => memberData[name]['추천']);
         const bidData = labels.map(name => memberData[name]['입찰']);
         const changeData = labels.map(name => memberData[name]['변경']);
@@ -2825,8 +2812,6 @@
             data: {
                 labels: labels,
                 datasets: [
-                    { label: '상품', data: productData, backgroundColor: 'rgba(253, 224, 71, 0.8)', stack: 'Stack 0' },
-                    { label: '미정', data: undecidedData, backgroundColor: 'rgba(209, 213, 219, 0.8)', stack: 'Stack 0' },
                     { label: '추천', data: recommendData, backgroundColor: 'rgba(251, 191, 36, 0.8)', stack: 'Stack 0' },
                     { label: '입찰', data: bidData, backgroundColor: 'rgba(79, 70, 229, 0.8)', stack: 'Stack 0' },
                     { label: '변경', data: changeData, backgroundColor: 'rgba(75, 85, 99, 0.8)', stack: 'Stack 0' }
