@@ -4554,6 +4554,7 @@ MJ 이정우 팀장
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
                 if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
+                if (typeof loadTelegramJoinStats === 'function') loadTelegramJoinStats(); // 텔레그램 가입현황
             })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
@@ -6064,6 +6065,63 @@ MJ 이정우 팀장
     /**
      * 대시보드 - 이미지 동기화 현황 로드 (최근 7일)
      */
+    // ── 텔레그램 가입현황 ──────────────────────────────────────────
+    function loadTelegramJoinStats() {
+        const el = document.getElementById('telegramJoinBody');
+        if (!el) return;
+        el.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">조회 중...</div>';
+        google.script.run
+            .withSuccessHandler(renderTelegramJoinStats)
+            .withFailureHandler(err => {
+                if (el) el.innerHTML = `<div class="p-4 text-center text-red-500 text-sm">${err.message}</div>`;
+            })
+            .getTelegramJoinStats();
+    }
+
+    function renderTelegramJoinStats(stats) {
+        const el = document.getElementById('telegramJoinBody');
+        if (!el || !stats) return;
+        const rows = stats.map(row => {
+            const isTotal = row.class_type === '합계';
+            const rate = row.total > 0 ? Math.round(row.joined / row.total * 100) + '%' : '0%';
+            const boldClass = isTotal ? 'font-bold bg-gray-50' : 'font-bold';
+            const onClick = isTotal ? '' : `onclick="goToMemberMgmtByTelegram('${row.class_type}', '')"`;
+            const onClickJoined = isTotal ? '' : `onclick="goToMemberMgmtByTelegram('${row.class_type}', 'Y')"`;
+            const onClickChatId = isTotal ? '' : `onclick="goToMemberMgmtByTelegram('${row.class_type}', 'C')"`;
+            const numClass = 'cursor-pointer text-blue-600 hover:underline';
+            return `<tr class="${boldClass} border-b border-gray-100 text-xs">
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : 'cursor-pointer hover:text-indigo-600'}" ${onClick}>${row.class_type}</td>
+                <td class="py-1.5 px-3 text-center text-red-500">${rate}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClick}>${row.total}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClickJoined}>${row.joined}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClickChatId}>${row.chat_id}</td>
+            </tr>`;
+        });
+        el.innerHTML = `<table class="w-full text-xs border-collapse">
+            <thead><tr class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                <th class="py-1.5 px-3 text-center font-bold">수업</th>
+                <th class="py-1.5 px-3 text-center font-bold">가입율</th>
+                <th class="py-1.5 px-3 text-center font-bold">회원수</th>
+                <th class="py-1.5 px-3 text-center font-bold">가입수</th>
+                <th class="py-1.5 px-3 text-center font-bold">Chat_ID</th>
+            </tr></thead>
+            <tbody>${rows.join('')}</tbody>
+        </table>`;
+    }
+
+    // 텔레그램 가입현황에서 회원관리로 이동 + 필터 적용
+    // telegramFilter: '' = 전체, 'Y' = 가입수(telegram_enabled=Y), 'C' = Chat_ID 있는 회원
+    function goToMemberMgmtByTelegram(classType, telegramFilter) {
+        window._memberMgmtTelegramFilter = telegramFilter || '';
+        navigateTo('MemberManagement');
+        setTimeout(() => {
+            const ctEl = document.getElementById('mem-search-class-type');
+            if (ctEl) { ctEl.value = classType; }
+            if (typeof filterMembersNew === 'function') filterMembersNew();
+        }, 300);
+    }
+    // ─────────────────────────────────────────────────────────────
+
     function loadDashboardImageStats() {
         const tbody = document.getElementById('imageSyncStatsBody');
         if (!tbody) return;
@@ -7507,6 +7565,8 @@ MJ 이정우 팀장
         const classNameKw = document.getElementById('mem-search-class-name')?.value || '';
         const classGradeKw = document.getElementById('mem-search-class-grade')?.value || '';
         const classLocKw = document.getElementById('mem-search-class-loc')?.value || '';
+        const telegramFilter = window._memberMgmtTelegramFilter || '';
+        window._memberMgmtTelegramFilter = ''; // 한 번 사용 후 초기화
 
         // 수업 정보 매핑
         const classMap = {};
@@ -7528,6 +7588,8 @@ MJ 이정우 팀장
             if (classNameKw && (cls.class_name || '') !== classNameKw) return false;
             if (classGradeKw && (cls.class_grade || '') !== classGradeKw) return false;
             if (classLocKw && (cls.class_loc || '') !== classLocKw) return false;
+            if (telegramFilter === 'Y' && String(m.telegram_enabled || '').toUpperCase() !== 'Y') return false;
+            if (telegramFilter === 'C' && !String(m.telegram_chat_id || '').trim()) return false;
             return true;
         });
 

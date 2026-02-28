@@ -2085,6 +2085,38 @@ function readAllMembersNew() {
 }
 
 /**
+ * 텔레그램 가입현황 통계 (수업 타입별)
+ * @return {Array} [{ class_type, total, joined, chat_id }, ..., { class_type:'합계', ... }]
+ */
+function getTelegramJoinStats() {
+  var members = readAllMembersNew();
+  var classes = readAllClasses();
+  var classMap = {};
+  classes.forEach(function(c) { classMap[String(c.class_id)] = c; });
+
+  var classTypes = ['CLASS', 'PT', '프리미엄PT', '돈클'];
+  var stats = {};
+  classTypes.forEach(function(t) {
+    stats[t] = { class_type: t, total: 0, joined: 0, chat_id: 0 };
+  });
+
+  members.forEach(function(m) {
+    var cls = classMap[String(m.class_id)] || {};
+    var ct = cls.class_type || '';
+    if (!stats[ct]) stats[ct] = { class_type: ct, total: 0, joined: 0, chat_id: 0 };
+    stats[ct].total++;
+    if (String(m.telegram_enabled || '').toUpperCase() === 'Y') stats[ct].joined++;
+    if (String(m.telegram_chat_id || '').trim() !== '') stats[ct].chat_id++;
+  });
+
+  var result = classTypes.map(function(t) { return stats[t]; });
+  var totals = { class_type: '합계', total: 0, joined: 0, chat_id: 0 };
+  result.forEach(function(r) { totals.total += r.total; totals.joined += r.joined; totals.chat_id += r.chat_id; });
+  result.push(totals);
+  return result;
+}
+
+/**
  * 회원 중복 검사 (이름 + 전화번호)
  */
 function checkMemberDuplicate_(memberName, phone, excludeId) {
