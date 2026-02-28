@@ -138,6 +138,24 @@
     /* 붉고 진하게 */
   }
 
+  /* 입찰가 블러 처리 및 확인완료 상태 스타일 추가 */
+  .price-blur {
+    filter: blur(5px);
+    transition: filter 0.3s ease;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .price-clear {
+    filter: blur(0);
+  }
+
+  .bid-state-confirmed {
+    color: #2563eb !important;
+    /* blue-600 */
+    font-weight: 800 !important;
+  }
+
   .member-action-btn {
     padding: 8px 16px;
     border-radius: 8px;
@@ -932,25 +950,74 @@
     min-width: 80px !important;
   }
 
-  /* 입찰 목록 테이블 컬럼 폭·정렬 - 960px 고정 (width: 100% 제거) */
+  /* 텔레그램 연동 뱃지 (흰 바탕, 파란 T) */
+  .telegram-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1.5px solid #2563eb;
+    color: #2563eb;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+    vertical-align: middle;
+  }
+
+  /* 입찰 목록 테이블 컬럼 폭·정렬 - 가로 스크롤 지원 */
   .item-list-table {
     table-layout: fixed;
-    width: 758px;
-    min-width: 758px;
+    width: 958px;
+    min-width: 958px;
   }
 
-  .item-list-table .item-col-check {
+  /* check/date/img/sakun_no 는 sticky (사건번호까지 고정) */
+  .item-list-table th.item-col-check,
+  .item-list-table td.item-col-check {
     width: 32px;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #ffffff;
+  }
+  .item-list-table thead th.item-col-check {
+    z-index: 12;
+    background: #f9fafb;
   }
 
-  .item-list-table .item-col-date {
+  .item-list-table th.item-col-date,
+  .item-list-table td.item-col-date {
     width: 78px;
+    position: sticky;
+    left: 32px;
+    z-index: 2;
+    background: #ffffff;
+  }
+  .item-list-table thead th.item-col-date {
+    z-index: 12;
+    background: #f9fafb;
   }
 
-  .item-list-table .list-th-img,
-  .item-list-table .item-col-img {
+  .item-list-table th.item-col-img,
+  .item-list-table td.item-col-img {
     width: 48px;
     padding-left: 0;
+    position: sticky;
+    left: 110px;
+    z-index: 2;
+    background: #ffffff;
+  }
+  .item-list-table thead th.item-col-img {
+    z-index: 12;
+    background: #f9fafb;
+  }
+
+  .item-list-table .list-th-img {
+    cursor: pointer;
   }
 
   .item-list-table .list-img-cell {
@@ -960,11 +1027,21 @@
     padding-left: 0;
   }
 
-  .item-list-table .item-col-sakun {
+  .item-list-table th.item-col-sakun,
+  .item-list-table td.item-col-sakun {
     width: 210px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    position: sticky;
+    left: 158px;
+    z-index: 2;
+    background: #ffffff;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.06);
+  }
+  .item-list-table thead th.item-col-sakun {
+    z-index: 12;
+    background: #f9fafb;
   }
 
   .item-list-table th.item-col-sakun {
@@ -973,6 +1050,22 @@
 
   .item-list-table td.item-col-sakun {
     padding-left: 1rem;
+  }
+
+  /* hover 시 sticky 셀 배경 */
+  .item-list-table tr:hover td.item-col-check,
+  .item-list-table tr:hover td.item-col-date,
+  .item-list-table tr:hover td.item-col-img,
+  .item-list-table tr:hover td.item-col-sakun {
+    background: #f3f4f6;
+  }
+
+  /* 선택된 행의 sticky 셀 배경 */
+  .item-list-table tr.bg-indigo-100 td.item-col-check,
+  .item-list-table tr.bg-indigo-100 td.item-col-date,
+  .item-list-table tr.bg-indigo-100 td.item-col-img,
+  .item-list-table tr.bg-indigo-100 td.item-col-sakun {
+    background: #e0e7ff;
   }
 
   .item-list-table .item-col-court {
@@ -991,6 +1084,11 @@
     width: 80px;
   }
 
+  /* T (telegram_enabled) 컬럼 */
+  .item-list-table .item-col-telegram {
+    width: 32px;
+  }
+
   .item-list-table .item-col-member {
     width: 130px;
   }
@@ -999,9 +1097,19 @@
     width: 70px;
   }
 
+  /* 입찰가 컬럼 */
+  .item-list-table .item-col-bidprice {
+    width: 100px;
+    text-align: right;
+    padding-right: 0.5rem;
+    font-weight: 600;
+    color: #374151;
+    white-space: nowrap;
+  }
+
   /* 전송 컬럼 숨김 (완전 제거) - 모든 가능한 셀렉터 포함 */
-  .item-list-table th:last-child:not(.item-col-manager):not(.item-col-member):not(.item-col-status):not(.item-col-court):not(.item-col-sakun):not(.item-col-img):not(.item-col-date),
-  .item-list-table td:last-child:not(.item-col-manager):not(.item-col-member):not(.item-col-status):not(.item-col-court):not(.item-col-sakun):not(.item-col-img):not(.item-col-date),
+  .item-list-table th:last-child:not(.item-col-bidprice):not(.item-col-manager):not(.item-col-member):not(.item-col-status):not(.item-col-court):not(.item-col-sakun):not(.item-col-img):not(.item-col-date):not(.item-col-telegram),
+  .item-list-table td:last-child:not(.item-col-bidprice):not(.item-col-manager):not(.item-col-member):not(.item-col-status):not(.item-col-court):not(.item-col-sakun):not(.item-col-img):not(.item-col-date):not(.item-col-telegram),
   .item-list-table .item-col-action,
   .item-list-table th.item-col-action,
   .item-list-table td.item-col-action {

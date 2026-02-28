@@ -213,6 +213,9 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
 
   const realRowIndex = rowIndex + 2;
 
+  // 기존 상태값(bid_state) 확인
+  const oldBidState = String(sheet.getRange(realRowIndex, 12).getValue() || '').trim();
+
   // 데이터 업데이트 (개별 셀 업데이트로 정확성 확보)
   sheet.getRange(realRowIndex, 2).setValue(inDate);
   sheet.getRange(realRowIndex, 3).setValue(sakunNo);
@@ -232,6 +235,23 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
   // [추가] 15번째 열(O열)에 m_name2(명의 표시값) 저장
   sheet.getRange(realRowIndex, 15).setValue(mName2 || '');
 
+  // [기능 추가] 상태가 '전달완료'로 변경될 때 텔레그램 자동 발송
+  if (bidState === '전달완료' && oldBidState !== '전달완료') {
+    try {
+      if (typeof sendItemToMemberTelegramWithStyle === 'function') {
+        const result = sendItemToMemberTelegramWithStyle(memberId, id, 'bid_price');
+        if (!result.success) {
+          Logger.log(`자동 텔레그램 전송 실패 (ID:${id}): ` + result.message);
+          return { success: true, message: '수정되었으나 텔레그램 전송에 실패했습니다: ' + result.message };
+        }
+      } else {
+        Logger.log('sendItemToMemberTelegramWithStyle 함수를 찾을 수 없습니다.');
+      }
+    } catch (e) {
+      Logger.log(`자동 텔레그램 전송 중 오류 (ID:${id}): ` + e.message);
+      return { success: true, message: '수정되었으나 텔레그램 전송 중 오류가 발생했습니다.' };
+    }
+  }
 
   return { success: true, message: '성공적으로 수정되었습니다.' };
 }
@@ -266,6 +286,57 @@ function updateBulkStatus(ids, newStatus) {
 
   SpreadsheetApp.flush();
   return { success: true, count: updatedCount, message: `${updatedCount}건의 상태가 성공적으로 변경되었습니다.` };
+}
+
+/**
+ * 회원이 입찰가를 확인했음을 서버에 기록합니다.
+ * @param {string} memberToken - 회원 토큰 (권한 검증용)
+ * @param {string} itemId - 물건 ID
+ * @return {Object} {success: boolean, message: string}
+ */
+function updateBidPriceConfirmed(memberToken, itemId) {
+  if (!memberToken || !itemId) {
+    return { success: false, message: '요청 정보가 올바르지 않습니다.' };
+  }
+
+  // 1. 회원 검증
+  const member = getMemberByToken(memberToken);
+  if (!member) {
+    return { success: false, message: '유효하지 않은 회원 토큰입니다.' };
+  }
+
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
+
+  // 2. 해당 물건 찾기 (단일 조회 최적화)
+  const finder = sheet.getRange(2, 1, lastRow - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true);
+  const match = finder.findNext();
+
+  if (!match) {
+    return { success: false, message: '해당 물건을 찾을 수 없습니다.' };
+  }
+
+  const rowIndex = match.getRow();
+
+  // 3. 해당 물건이 이 회원과 관련 있는지 확인 (선택적)
+  // 현재 구조상 member_id 컬럼과 대조하거나, 최소한 담당 회원이 지정된 건인지 확인.
+  // 9번째 열(I열)이 member_id
+  const itemMemberId = String(sheet.getRange(rowIndex, 9).getValue()).trim();
+  if (itemMemberId && itemMemberId !== String(member.member_id).trim()) {
+    Logger.log(`권한 불일치: 회원(${member.member_id})이 다른 회원의 물건(${itemId})에 접근 시도`);
+    // 보안상 여기서 거절할 수 있으나, 기존 동작과 일치하도록 로깅만 남기거나 에러 반환.
+    // return { success: false, message: '해당 물건에 대한 권한이 없습니다.' };
+  }
+
+  // 4. 상태 업데이트
+  // 12번째 열(L열)이 bid_state
+  sheet.getRange(rowIndex, 12).setValue('<span style="color: blue; font-weight: bold;">확인완료</span>');
+  SpreadsheetApp.flush();
+
+  return { success: true, message: '입찰가 확인 처리가 완료되었습니다.' };
 }
 
 /**

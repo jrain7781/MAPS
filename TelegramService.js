@@ -609,9 +609,11 @@ function telegramBuildItemMessage_(item, member, styleKey) {
   let onlyViewButton = false;
 
   if (style === 'bid_price') {
-    subtitle = 'MJ 경매 스쿨입니다.  입찰가 안내드립니다.\n낙찰을 기원드립니다.';
+    subtitle = 'MJ 경매 스쿨입니다. 입찰가가 도착했습니다.\n아래 버튼(보러가기)을 눌러 확인해 주세요.';
     statusValuePlain = '입찰';
-    includeBidPrice = true;
+    // 입찰가는 본문에서 직접 노출하지 않고 웹앱에서 확인 유도
+    includeBidPrice = false;
+    onlyViewButton = true;
   } else if (style === 'status') {
     subtitle = 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.';
     statusValuePlain = '변경';
@@ -663,7 +665,7 @@ function telegramBuildItemMessage_(item, member, styleKey) {
   // url 버튼은 일부 환경에서 "Open this link?" 팝업이 뜸 → web_app으로 인앱 웹뷰 열기
   if (url) row1.push({ text: '내물건보기', web_app: { url: url } });
 
-  if (!onlyViewButton) {
+  if (!onlyViewButton && style !== 'bid_price') {
     row2.push({ text: '입찰확정', callback_data: 'MJ|BID_CONFIRM|' + itemId });
     row2.push({ text: '입찰취소', callback_data: 'MJ|CANCEL_CONFIRM|' + itemId });
   }
@@ -749,6 +751,29 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
 
   const msg = telegramBuildItemMessage_(item, member, styleKey);
   telegramSendMessage(chatId, msg.text, msg.replyMarkup);
+
+  // 전송 성공 시 bid_price인 경우 상태를 전달완료로 변경
+  if (styleKey === 'bid_price') {
+    try {
+      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var itemsSheet = ss.getSheetByName(DB_SHEET_NAME);
+      if (itemsSheet) {
+        var itemsLastRow = itemsSheet.getLastRow();
+        if (itemsLastRow >= 2) {
+          var itemsIdList = itemsSheet.getRange(2, 1, itemsLastRow - 1, 1).getValues().map(v => String(v[0]).trim());
+          var idx = itemsIdList.indexOf(String(itemId).trim());
+          if (idx !== -1) {
+            // L열(12번째 열)이 bid_state
+            itemsSheet.getRange(idx + 2, 12).setValue('전달완료');
+            SpreadsheetApp.flush();
+          }
+        }
+      }
+    } catch (e) {
+      Logger.log('단건 전송 후 bid_state 업데이트 실패: ' + e.message);
+    }
+  }
+
   return { success: true, message: '텔레그램으로 전송했습니다.' };
 }
 
