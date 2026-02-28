@@ -2163,15 +2163,18 @@ function getTelegramJoinStatsByItem() {
       inDate = Utilities.formatDate(inDateRaw, tz, 'yyyyMMdd');
     } else {
       inDate = String(inDateRaw || '').replace(/\D/g, '');
-      // 'yyMMdd'(6자리) → 'yyyyMMdd' 변환, 그 이상이면 8자리까지만 취함 (YYYYMMDD)
-      if (inDate.length >= 8) inDate = inDate.substring(0, 8);
-      else if (inDate.length === 6) inDate = '20' + inDate;
+      if (inDate.length === 6) {
+        // 'yyMMdd'(6자리) → 'yyyyMMdd' 변환
+        inDate = '20' + inDate;
+      } else if (inDate.length > 8) {
+        inDate = inDate.substring(0, 8);
+      }
     }
-    if (!inDate || inDate < today) return; // 오늘 이후 물건만
+    if (!inDate || inDate.length !== 8 || inDate < today) return; // 오늘(포함) 이후 물건만 집계. 비정상 날짜 제외.
 
-    // 물건상태 필터: 추천, 입찰, 변경 건에 대해서만 집계
-    var bidState = String(itemObj['bid_state'] || '').trim();
-    if (['추천', '입찰', '변경'].indexOf(bidState) === -1) return;
+    // 물건상태 필터: 추천, 입찰, 변경 건에 대해서만 집계 (열 이름: 'stu_member')
+    var stuMember = String(itemObj['stu_member'] || '').trim();
+    if (['추천', '입찰', '변경'].indexOf(stuMember) === -1) return;
 
     // member_id(index 8)로 회원 매핑
     var memberId = String(itemObj['member_id'] || '').trim();
@@ -2200,24 +2203,12 @@ function getTelegramJoinStatsByItem() {
   var classTypes = Object.keys(statMap).sort();
   var result = classTypes.map(function (t) { return statMap[t]; });
 
-  // DEBUG INFO
-  if (result.length === 0) {
-    var debugInfo = "";
-    if (data.length > 0) {
-      var d = data[data.length - 1]; // last row
-      debugInfo = "today:" + today + ", in-date:" + d[1] + ", mId:" + d[8];
-    }
-    result.push({ class_type: 'DEBUG: ' + debugInfo, item_count: data.length, total: members.length, joined: 0, chat_id: 0 });
-  }
-
   var totals = { class_type: '합계', item_count: 0, total: 0, joined: 0, chat_id: 0 };
   result.forEach(function (r) {
-    if (r.class_type.indexOf('DEBUG') === -1) {
-      totals.item_count += r.item_count;
-      totals.total += r.total;
-      totals.joined += r.joined;
-      totals.chat_id += r.chat_id;
-    }
+    totals.item_count += r.item_count;
+    totals.total += r.total;
+    totals.joined += r.joined;
+    totals.chat_id += r.chat_id;
   });
   result.push(totals);
   return result;
