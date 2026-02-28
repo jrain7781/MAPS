@@ -6263,13 +6263,23 @@ MJ 이정우 팀장
             const isTotal = row.class_type === '합계';
             const rate = row.total > 0 ? Math.round(row.joined / row.total * 100) + '%' : '0%';
             const boldClass = isTotal ? 'font-bold bg-gray-50' : 'font-bold';
+
+            // 물건수 클릭 -> 입찰물건관리
+            const onClickItem = isTotal ? '' : `onclick="goToItemMgmtByTelegram('${row.class_type}')"`;
+            // 회원수/가입수/Chat_ID 클릭 -> 회원관리
+            const onClickMemTotal = isTotal ? '' : `onclick="goToMemberMgmtByTelegram('${row.class_type}', '')"`;
+            const onClickMemJoined = isTotal ? '' : `onclick="goToMemberMgmtByTelegram('${row.class_type}', 'Y')"`;
+            const onClickMemChatId = isTotal ? '' : `onclick="goToMemberMgmtByTelegram('${row.class_type}', 'C')"`;
+
+            const numClass = 'cursor-pointer text-blue-600 hover:underline';
+
             return `<tr class="${boldClass} border-b border-gray-100 text-xs">
-                <td class="py-1.5 px-3 text-center">${row.class_type}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : 'cursor-pointer hover:text-indigo-600'}" ${onClickItem}>${row.class_type}</td>
                 <td class="py-1.5 px-3 text-center text-red-500">${rate}</td>
-                <td class="py-1.5 px-3 text-center">${row.item_count}</td>
-                <td class="py-1.5 px-3 text-center">${row.total}</td>
-                <td class="py-1.5 px-3 text-center text-blue-600">${row.joined}</td>
-                <td class="py-1.5 px-3 text-center text-orange-500">${row.chat_id}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClickItem}>${row.item_count}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClickMemTotal}>${row.total}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClickMemJoined}>${row.joined}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClickMemChatId}>${row.chat_id}</td>
             </tr>`;
         });
         el.innerHTML = `<table class="w-full text-xs border-collapse">
@@ -6284,6 +6294,7 @@ MJ 이정우 팀장
             <tbody>${rows.join('')}</tbody>
         </table>`;
     }
+
 
 
     function renderTelegramJoinStats(stats) {
@@ -6335,6 +6346,44 @@ MJ 이정우 팀장
             }, 50);
         }
         // 미로드 상태면 loadMembersNew 완료 후 _pendingTelegramNavFilter를 처리
+    }
+
+    // 텔레그램 가입현황(물건 모드)에서 입찰물건관리로 이동 + 수업 필터 적용
+    function goToItemMgmtByTelegram(classType) {
+        // 1. 입찰물건관리 탭으로 이동
+        navigateTo('Dashboard'); // '입찰물건관리'의 화면 ID가 Dashboard
+
+        // 2. 대시보드 필터 초기화 (특정 상태 필터 끄기)
+        dashboardFilter.active = false;
+        dashboardFilter.date = '';
+        dashboardFilter.status = '';
+        dashboardFilter.type = '';
+        dashboardFilter.manager = '';
+
+        // 3. 필터 UI 초기화 후 수업(classType)만 세팅
+        setTimeout(function () {
+            // 다른 입력창 초기화
+            if (searchIndateInput) searchIndateInput.value = '';
+            if (searchSakunNoInput) searchSakunNoInput.value = '';
+            if (searchCourtInput) searchCourtInput.value = '';
+            if (searchRegDateInput) searchRegDateInput.value = '';
+            if (searchManagerInput) searchManagerInput.value = '';
+            if (searchMNameInput) searchMNameInput.value = '';
+
+            // 상태구분 전체 선택
+            const allStatusCb = document.getElementById('search-status-all');
+            if (allStatusCb) allStatusCb.checked = true;
+            document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => { cb.checked = false; });
+
+            // 수업 셋팅
+            const ctEl = document.getElementById('bid-class-type');
+            if (ctEl) {
+                ctEl.value = classType;
+                ctEl.dispatchEvent(new Event('change'));
+            }
+
+            if (typeof applyFilters === 'function') applyFilters();
+        }, 50);
     }
     // ─────────────────────────────────────────────────────────────
 

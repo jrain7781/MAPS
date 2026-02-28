@@ -2169,6 +2169,10 @@ function getTelegramJoinStatsByItem() {
     }
     if (!inDate || inDate < today) return; // 오늘 이후 물건만
 
+    // 물건상태 필터: 추천, 입찰, 변경 건에 대해서만 집계
+    var bidState = String(itemObj['bid_state'] || '').trim();
+    if (['추천', '입찰', '변경'].indexOf(bidState) === -1) return;
+
     // member_id(index 8)로 회원 매핑
     var memberId = String(itemObj['member_id'] || '').trim();
     if (!memberId) return;
