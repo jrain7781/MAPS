@@ -153,7 +153,7 @@ function readAllData() {
     // [추가] 17번째 열(16번 인덱스) chuchen_state 매핑
     rowData['chuchen_state'] = (row.length > 16) ? (row[16] || '') : '';
     // [추가] 18번째 열(17번 인덱스) chuchen_date 매핑
-    rowData['chuchen_date']  = (row.length > 17) ? (row[17] || '') : '';
+    rowData['chuchen_date'] = (row.length > 17) ? (row[17] || '') : '';
 
     // [추가] item_images 테이블에 이미지가 있는지 확인
     rowData['has_images'] = itemsWithImages.has(String(row[0]).trim());
@@ -2390,9 +2390,15 @@ function getAutoApprovalStats() {
  */
 function checkMemberDuplicate_(memberName, phone, excludeId) {
   const allMembers = readAllMembersNew();
+  const normalizedName = String(memberName || '').trim();
+  const normalizedPhone = String(phone || '').trim().replace(/[^0-9]/g, '');
+
+  // 두 정보 중 하나라도 없으면 중복판단을 하지 않음 (폼에서 필수값 체크는 따로 함)
+  if (!normalizedName || !normalizedPhone) return false;
+
   return allMembers.some(m =>
-    String(m.member_name || '').trim() === String(memberName || '').trim() &&
-    String(m.phone || '').trim().replace(/[^0-9]/g, '') === String(phone || '').trim().replace(/[^0-9]/g, '') &&
+    String(m.member_name || '').trim() === normalizedName &&
+    String(m.phone || '').trim().replace(/[^0-9]/g, '') === normalizedPhone &&
     String(m.member_id) !== String(excludeId)
   );
 }
@@ -2937,10 +2943,10 @@ function updateChuchenState(itemIds, state, dateStr) {
     if (!sheet) return { success: false, updated: 0 };
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, updated: 0 };
-    var idCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(function(v) { return String(v[0]).trim(); });
+    var idCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(function (v) { return String(v[0]).trim(); });
     var updated = 0;
     var idsStr = itemIds.map(String);
-    idCol.forEach(function(id, i) {
+    idCol.forEach(function (id, i) {
       if (idsStr.indexOf(id) !== -1) {
         sheet.getRange(i + 2, 17).setValue(state); // Q열: chuchen_state
         if (state === '전달완료' && dateStr) {

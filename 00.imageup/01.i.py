@@ -210,12 +210,24 @@ def extract_smart_date(header_text, type_prefix, reg_date=None):
 
     return "000000", None
 
-def extract_date_from_dom(driver, item):
-    """경매: table.tbl_noline 6번째 td에서 입찰일자 추출
+def extract_sakun_from_dom(driver, container):
+    """사건번호/관리번호 추출 (경매/공매 공통)
+    위치: table.tbl_grid.hand tbody tr:nth-child(1) td:nth-child(2)
+    """
+    try:
+        td = container.find_element(By.CSS_SELECTOR, "table.tbl_grid.hand tbody tr:nth-child(1) td:nth-child(2)")
+        return td.text.strip()
+    except:
+        return None
+
+
+def extract_date_from_dom(driver, container):
+    """경매 전용: table.tbl_noline 6번째 td에서 입찰일자 추출
+    위치: table.tbl_noline tbody tr td:nth-child(6)
     예: '2026-03-04(경매1일전)' → ('260304', datetime.date(2026, 3, 4))
     """
     try:
-        td = item.find_element(By.CSS_SELECTOR, "table.tbl_noline tbody tr td:nth-child(6)")
+        td = container.find_element(By.CSS_SELECTOR, "table.tbl_noline tbody tr td:nth-child(6)")
         td_text = td.text.strip()          # "2026-03-04(경매1일전)"
         date_part = td_text.split("(")[0].strip()  # "2026-03-04"
         m = re.match(r"(20\d{2})-(\d{1,2})-(\d{1,2})", date_part)
@@ -240,10 +252,11 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
     except:
         return
 
-    all_tables = driver.find_elements(By.TAG_NAME, "table")
+    container_xpath = "//div[starts-with(@id, 'tr_')] | //tr[starts-with(@id, 'tr_')]"
+    all_containers = driver.find_elements(By.XPATH, container_xpath)
     candidates = []
     
-    for item in all_tables:
+    for item in all_containers:
         try:
             if item.size['height'] > 100:
                 text = item.text
@@ -295,10 +308,16 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                 header_element = item 
 
             # 3. 사건번호 추출 + 하이픈 개수 검증
-            pattern = r"20\d{2}-\d+[\d-]*(?:\(\d+\))?"
-            match = re.search(pattern, full_text)
-            if not match: match = re.search(pattern, header_text)
-            raw_sakun = match.group() if match else f"번호미상{i}"
+            # DOM에서 사건번호 추출 시도
+            dom_sakun = extract_sakun_from_dom(driver, item)
+            if dom_sakun:
+                raw_sakun = dom_sakun
+            else:
+                pattern = r"20\d{2}-\d+[\d-]*(?:\(\d+\))?"
+                match = re.search(pattern, full_text)
+                if not match: match = re.search(pattern, header_text)
+                raw_sakun = match.group() if match else f"번호미상{i}"
+            
             dash_count = raw_sakun.count("-")
 
             if type_prefix == "경매":
@@ -323,6 +342,7 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                 if bid_date_str == "000000":
                     bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
             else:
+                # 공매는 입찰일자 로직 절대 건드리지 말 것 (지시사항)
                 bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
             if bid_date_obj and bid_date_obj <= datetime.date.today():
                 print(f"    ⏭ 입찰일 {bid_date_obj} <= 오늘, 스킵")
