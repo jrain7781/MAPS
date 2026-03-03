@@ -195,6 +195,23 @@ def extract_smart_date(header_text, type_prefix, reg_date=None):
 
     return "000000", None
 
+def extract_date_from_dom(driver, item):
+    """경매: table.tbl_noline 6번째 td에서 입찰일자 추출
+    예: '2026-03-04(경매1일전)' → ('260304', datetime.date(2026, 3, 4))
+    """
+    try:
+        td = item.find_element(By.CSS_SELECTOR, "table.tbl_noline tbody tr td:nth-child(6)")
+        td_text = td.text.strip()          # "2026-03-04(경매1일전)"
+        date_part = td_text.split("(")[0].strip()  # "2026-03-04"
+        m = re.match(r"(20\d{2})-(\d{1,2})-(\d{1,2})", date_part)
+        if m:
+            year, month, day = m.groups()
+            bid_date = datetime.date(int(year), int(month), int(day))
+            return f"{year[2:]}{month.zfill(2)}{day.zfill(2)}", bid_date
+    except:
+        pass
+    return "000000", None
+
 # ==============================================================================
 # [함수 5] 리스트 처리
 # ==============================================================================
@@ -286,7 +303,12 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
             reg_date = extract_reg_date(header_text)
 
             # 5. 날짜 추출 + 입찰일 스킵 체크
-            bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
+            if type_prefix == "경매":
+                bid_date_str, bid_date_obj = extract_date_from_dom(driver, item)
+                if bid_date_str == "000000":
+                    bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
+            else:
+                bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
             if bid_date_obj and bid_date_obj <= datetime.date.today():
                 print(f"    ⏭ 입찰일 {bid_date_obj} <= 오늘, 스킵")
                 skipped_count += 1

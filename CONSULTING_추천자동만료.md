@@ -1,251 +1,256 @@
-# 추천 → 미정 자동 전환 (48시간) 컨설팅 리포트
+# 물건 종합 히스토리 & 추천 자동만료 설계 리포트
 
 작성일: 2026-03-03
-작성자: Claude Code (AI 분석)
+버전: v3 최종 확정
 
 ---
 
-## 1. 현재 시스템 현황 분석
+## 1. 핵심 원칙
 
-### 1-1. 현재 상태 필드 구조 (items 시트)
-
-| 컬럼 | 필드명 | 값 | 의미 |
-|------|--------|-----|------|
-| E열 | stu_member | 상품/미정/추천/입찰/변경 | 물건 상태 |
-| Q열 | chuchen_state | 신규/전달완료 | 추천 전달 상태 |
-| R열 | chuchen_date | ISO datetime | 텔레그램 전달 완료 일시 |
-
-### 1-2. 현재 문제점
-
-| 항목 | 현황 |
-|------|------|
-| 48시간 자동 전환 로직 | **없음** (미구현) |
-| '추천' 상태 진입 시각 기록 | **없음** (별도 필드 부재) |
-| 자동 전환 시 히스토리 기록 | **없음** |
-| 회원에게 만료 사전 알림 | **없음** |
-| 상태변경 감사(Audit) 로그 | **불완전** (telegram_requests만 일부 기록) |
-
-### 1-3. 현재 히스토리 기록 현황
-
-`telegram_requests` 시트에 일부 기록되나 **누락 케이스 多**:
-
-| 상태변경 경로 | 히스토리 기록 여부 |
-|--------------|-----------------|
-| 대시보드 요청 + 수동 승인 | ✓ telegram_requests |
-| 자동승인 모드 | ✓ telegram_requests |
-| 텔레그램 버튼 직접 변경 | ✗ **미기록** |
-| 관리자 일괄 상태 변경 | ✗ **미기록** |
-| **자동 48시간 만료 (예정)** | ✗ **미기록** |
+```
+물건 키          = items.id              (사건번호 ≠ 키)
+48시간 기산점     = items.chuchen_date    (텔레그램 전달완료 시각, 로딩바와 동일 기준)
+히스토리 FK      = item_id
+타임스탬프 형식   = yyMMdd HHmmss         (예: 260303 143022)
+모든 변경 = 뮤테이션 (생성/수정/삭제 구분 없음, from→to 값으로 표현)
+```
 
 ---
 
-## 2. 고려사항 정의
+## 2. 모든 변경은 뮤테이션이다
 
-### 2-1. UX 관점 문제
+```
+없다가 생김  = from_value: '' (없음)  →  to_value: '추천'       (생성)
+있다가 바뀜  = from_value: '추천'     →  to_value: '입찰'       (수정)
+있다가 없어짐 = from_value: '1109'    →  to_value: '' (없음)    (삭제)
+```
 
-> "회원화면에서 갑자기 물건이 사라지면 '어? 왜 없어졌지?' 라고 문의가 올 수 있다"
-
-**발생 시나리오:**
-1. 회원이 추천 물건을 보고 관심을 가지고 있음
-2. 48시간 후 자동으로 '미정'으로 전환
-3. 회원 화면에서 해당 물건이 사라짐 (미정은 회원 화면에서 비표시)
-4. 회원이 '왜 사라졌지?' 문의
-
-**해결 방향:**
-- 만료 **6시간 전** 텔레그램 사전 알림 발송
-- 만료 **직후** 텔레그램 알림 ("추천 기간이 만료되어 미정으로 변경되었습니다")
-- 히스토리 조회 화면 제공
-
-### 2-2. 48시간 기산점 결정
-
-두 가지 기준 중 선택 필요:
-
-| 기준 | 장점 | 단점 |
-|------|------|------|
-| **A안: 텔레그램 전달 완료 시각** (`chuchen_date`) | 이미 필드 존재, 회원이 실제로 알림받은 시점 기준 | 전달 안된 물건은 기준 없음 |
-| **B안: '추천' 상태 진입 시각** (신규 필드 필요) | 더 명확한 기준 | 필드 추가 필요, 기존 데이터 소급 불가 |
-
-**권장: A+B 혼합**
-- `chuchen_date` 있으면 (전달완료) → `chuchen_date` 기준 48시간
-- `chuchen_date` 없으면 (전달 안됨, 신규 상태) → `chuchen_recommended_at` (신규 필드) 기준 48시간
-
-### 2-3. 자동 전환 제외 케이스
-
-다음 경우는 자동 전환 **하지 않아야 함**:
-
-1. 이미 '입찰' 상태로 진행된 물건
-2. 수동으로 관리자가 '추천' 재설정한 물건 (재설정 시 시각 갱신 필요)
-3. 시스템 오류로 `chuchen_date`가 잘못된 데이터
-
-### 2-4. 트리거 주기
-
-- GAS 시간 기반 트리거: **매시간 1회** 실행
-- 48시간 체크는 정확한 시각보다 ±1시간 오차 허용
+→ CREATE / UPDATE / DELETE 모두 동일한 구조로 기록. 별도 구분 불필요.
 
 ---
 
-## 3. 히스토리 설계
+## 3. trigger_type 분류
 
-### 3-1. 신규 시트: `item_status_history`
-
-기존 `telegram_requests`는 텔레그램 요청/승인 목적이라 상태변경 이력 전용 시트가 별도로 필요.
-
-**컬럼 정의:**
-
-| 컬럼 | 필드명 | 타입 | 예시 | 설명 |
-|------|--------|------|------|------|
-| A | history_id | String | 1740999999999 | 타임스탬프 기반 고유 ID |
-| B | changed_at | DateTime | 2026-03-03 14:30:00 | 변경 발생 시각 |
-| C | item_id | String | 1234567890 | 물건 ID |
-| D | sakun_no | String | 2025타경10593 | 사건번호 (조회 편의) |
-| E | from_status | String | 추천 | 변경 전 상태 |
-| F | to_status | String | 미정 | 변경 후 상태 |
-| G | changed_by | String | system/admin/member | 변경 주체 |
-| H | changed_by_id | String | 1109 / admin | 변경 주체 ID |
-| I | reason | String | 48시간 만료 자동 전환 | 변경 사유 |
-| J | member_id | String | 1109 | 해당 물건의 회원 ID |
-| K | member_name | String | MJ 임준희 | 회원명 (조회 편의) |
-| L | notified | Boolean | TRUE/FALSE | 텔레그램 알림 발송 여부 |
-| M | notified_at | DateTime | 2026-03-03 14:30:05 | 알림 발송 시각 |
-| N | extra | String | JSON | 추가 정보 (JSON) |
-
-### 3-2. 히스토리 기록 대상 (전체 상태변경 포괄)
-
-| 변경 경로 | changed_by | reason 예시 |
-|----------|-----------|-------------|
-| 자동 48시간 만료 | system | 추천 후 48시간 만료 자동 전환 |
-| 관리자 수동 변경 | admin | 관리자 수동 변경 |
-| 텔레그램 버튼 (회원) | member | 회원 텔레그램 요청 |
-| 대시보드 승인 | admin | 관리자 대시보드 승인 |
-| 일괄 상태 변경 | admin | 일괄 처리 |
-
-### 3-3. items 시트 신규 필드 추가 (필요)
-
-| 컬럼 | 필드명 | 설명 |
-|------|--------|------|
-| S열 (idx 18) | chuchen_recommended_at | '추천' 상태 진입 시각 |
-
-→ `stu_member = '추천'` 로 변경될 때마다 현재 시각으로 갱신
+| trigger_type | 설명 | 예시 |
+|-------------|------|------|
+| `web` | 관리자 웹 대시보드 수동 조작 | 물건 저장, 상태 변경 |
+| `system` | GAS 자동 트리거 | 48시간 만료, 알림 발송 |
+| `telegram` | 회원 텔레그램 요청/응답 | 입찰 요청, 취소 요청 |
+| `bulk` | 관리자 일괄 처리 | 일괄 상태변경 |
 
 ---
 
-## 4. 자동 전환 로직 설계
+## 4. action 전체 목록
 
-### 4-1. GAS 함수: `autoExpireRecommended()`
+### 4-1. 필드 뮤테이션 (물건 저장 시 변경 감지)
+
+| action | field_name | 설명 |
+|--------|-----------|------|
+| `FIELD_CHANGE` | `stu_member` | 물건 상태 변경 (상품→추천→입찰→미정 등) |
+| `FIELD_CHANGE` | `member_id` | 담당 회원 변경 |
+| `FIELD_CHANGE` | `bidprice` | 입찰가 변경 |
+| `FIELD_CHANGE` | `m_name_id` | 입찰담당 변경 |
+
+> **생성**: from_value='' → to_value='값'
+> **수정**: from_value='이전값' → to_value='새값'
+> **삭제**: from_value='이전값' → to_value=''
+
+### 4-2. 물건 생명주기
+
+| action | 설명 |
+|--------|------|
+| `ITEM_CREATE` | 물건 신규 등록 |
+| `ITEM_DELETE` | 물건 삭제 (향후 기능) |
+
+### 4-3. 텔레그램 이벤트
+
+| action | trigger_type | 설명 |
+|--------|-------------|------|
+| `TELEGRAM_SENT` | system | 텔레그램 발송 (추천 전달, 만료 알림 등) |
+| `TELEGRAM_RECEIVED` | telegram | 텔레그램 수신 (회원 응답) |
+| `REQUEST_BID` | telegram | 회원 입찰 요청 접수 |
+| `REQUEST_CANCEL` | telegram | 회원 취소 요청 접수 |
+| `REQUEST_APPROVED` | web | 요청 승인 |
+| `REQUEST_REJECTED` | web | 요청 거절 |
+
+### 4-4. 시스템 자동화
+
+| action | trigger_type | 설명 |
+|--------|-------------|------|
+| `EXPIRY_NOTIFY` | system | 만료 사전 알림 발송 (주기 설정) |
+| `AUTO_EXPIRE` | system | 48시간 만료 → 미정 자동 전환 |
+
+---
+
+## 5. telegram_requests 최종 컬럼 설계 (16컬럼)
+
+| # | 컬럼 | 기존/신규 | 설명 | 예시 |
+|---|------|----------|------|------|
+| A | req_id | 기존 | 고유 ID (타임스탬프) | 1740999123456 |
+| B | requested_at | 기존 | 발생 시각 **yyMMdd HHmmss** | 260303 143022 |
+| C | action | 기존→확장 | 이벤트 종류 | FIELD_CHANGE |
+| D | status | 기존 | PENDING / APPROVED / REJECTED / DONE | DONE |
+| E | item_id | 기존 | **물건 키 (FK → items.id)** | 1740999000001 |
+| F | member_id | 기존 | **이벤트 시점 담당 회원 ID** | 1109 |
+| G | chat_id | 기존 | 텔레그램 chat_id (해당시만) | 7123456789 |
+| H | telegram_username | 기존 | 텔레그램 username (해당시만) | mjuser |
+| I | note | 기존 | 부가 정보 (JSON) | {"msg":"..."} |
+| J | approved_at | 기존 | 처리 완료 시각 yyMMdd HHmmss | 260303 143055 |
+| K | approved_by | 기존 | 처리 주체 | system |
+| **L** | **from_value** | 신규 | 변경 전 값 (없으면 빈 문자열) | 추천 |
+| **M** | **to_value** | 신규 | 변경 후 값 (없으면 빈 문자열) | 미정 |
+| **N** | **field_name** | 신규 | 변경된 필드명 | stu_member |
+| **O** | **trigger_type** | 신규 | web / system / telegram / bulk | system |
+| **P** | **member_name** | 신규 | 이벤트 시점 회원명 | MJ 임준희 |
+
+---
+
+## 6. 실제 타임라인 예시 (물건 하나의 히스토리)
 
 ```
-[매시간 실행]
-1. items 시트에서 stu_member = '추천' 인 모든 행 조회
-2. 각 행에 대해:
-   a. 기산점 결정:
-      - chuchen_date 있음 → chuchen_date 기준
-      - chuchen_date 없음 → chuchen_recommended_at 기준
-      - 둘 다 없음 → SKIP (데이터 이상, 로그 기록)
-   b. (현재시각 - 기산점) >= 48시간 이면:
-      - stu_member → '미정' 변경
-      - item_status_history 에 기록
-      - 회원에게 텔레그램 알림 발송
-      - chuchen_state, chuchen_date 초기화 여부 결정
-3. 처리 결과 요약 로그 출력
+item_id: 1740999000001
+
+260301 100000  ITEM_CREATE      -           -          web      ← 물건 등록
+260301 100001  FIELD_CHANGE     stu_member  '' → 상품  web      ← 상태 생성
+260301 140000  FIELD_CHANGE     stu_member  상품→추천  web      ← 추천 설정
+260301 140010  TELEGRAM_SENT    -           -          system   ← 추천 알림 발송
+260301 150000  TELEGRAM_RECEIVED -          -          telegram ← 회원 "확인" 응답
+260302 080000  EXPIRY_NOTIFY    -           -          system   ← 18시간 경과 알림
+260302 120000  FIELD_CHANGE     bidprice    ''→15000만 web      ← 입찰가 등록(생성)
+260302 120001  FIELD_CHANGE     stu_member  추천→입찰  web      ← 상태 변경
+260302 130000  REQUEST_CANCEL   -           -          telegram ← 회원 취소 요청
+260302 131000  REQUEST_APPROVED -           -          web      ← 관리자 승인
+260302 131001  FIELD_CHANGE     stu_member  입찰→미정  web      ← 상태 변경
+260302 131002  FIELD_CHANGE     member_id   1109→''    web      ← 회원 해제(삭제)
+260303 100000  FIELD_CHANGE     member_id   ''→1042    web      ← 회원 재배정(생성)
+260303 100001  FIELD_CHANGE     member_id명 ''→정지용  web
+260303 100500  FIELD_CHANGE     stu_member  미정→추천  web      ← 재추천
+260303 100510  TELEGRAM_SENT    -           -          system   ← 재추천 알림 발송
+260303 140510  EXPIRY_NOTIFY    -           -          system   ← 6시간 전 알림
+260305 100510  AUTO_EXPIRE      stu_member  추천→미정  system   ← 48시간 자동만료
+260305 100511  TELEGRAM_SENT    -           -          system   ← 만료 알림 발송
 ```
 
-### 4-2. GAS 함수: `notifyBeforeExpiry()`  (선택사항)
+---
+
+## 7. 48시간 자동만료 로직
+
+### 7-1. 기산점: chuchen_date (기존 필드, 로딩바와 동일)
 
 ```
-[매시간 실행, 또는 별도 6시간 주기]
-1. items 시트에서 stu_member = '추천' 인 행 조회
-2. (현재시각 - 기산점) >= 42시간 (48 - 6) 이고
-   notified_before_expiry = FALSE 인 행:
-   - 텔레그램 사전 알림 발송: "추천 물건이 6시간 후 만료됩니다"
-   - notified_before_expiry = TRUE 로 갱신
+items.chuchen_date = 텔레그램 추천 전달완료 시각 (R열)
+→ 로딩바(createChuchenTimerBar)가 이미 이 값으로 48h 표시 중
+→ 자동만료도 동일 기준 사용 → 화면과 서버 로직 일치
 ```
 
-### 4-3. 텔레그램 알림 메시지 (만료 직후)
+### 7-2. 알림 주기 (configurable)
+
+```javascript
+// 설정 (나중에 Settings 시트로 이관 가능)
+const EXPIRY_NOTIFY_HOURS = [24, 36, 42];  // 경과 24h, 36h, 42h 시점에 알림
+const EXPIRY_HOURS = 48;                    // 48h 경과 시 자동 미정 전환
+```
+
+### 7-3. 매시간 트리거 흐름
 
 ```
-📌 추천 물건 기간 만료 안내
+[GAS 매시간 실행: autoExpireRecommended()]
 
-안녕하세요, [회원명]님.
+1. items 시트에서 stu_member='추천' AND chuchen_date 있는 행 조회
+2. 각 물건에 대해:
+   a. elapsed = (현재시각 - chuchen_date) / 3600초
+   b. elapsed >= 48h
+      → stu_member = '미정' 변경
+      → 히스토리: AUTO_EXPIRE, FIELD_CHANGE(stu_member: 추천→미정) 기록
+      → 텔레그램 알림: TELEGRAM_SENT 기록
+   c. elapsed >= 알림 주기 (24h, 36h, 42h) AND 해당 알림 미발송
+      → 텔레그램 사전 알림 발송
+      → 히스토리: EXPIRY_NOTIFY 기록
+3. LockService로 중복 실행 방지
+```
 
-아래 추천 물건의 추천 기간(48시간)이 만료되어
+### 7-4. 텔레그램 알림 메시지
+
+**사전 알림 (예: 6시간 전)**
+```
+⏰ 추천 물건 만료 예정 안내
+
+[MJ 임준희]님, 아래 물건의 추천 기간이 6시간 후 만료됩니다.
+
+📋 2025타경10593 (서울중앙지법)
+⏳ 남은 시간: 6시간
+📅 만료 예정: 03/05 10:51
+
+입찰 진행을 원하시면 지금 바로 요청해 주세요.
+```
+
+**만료 알림**
+```
+📌 추천 물건 기간 만료
+
+[MJ 임준희]님, 아래 물건의 추천 기간(48시간)이 만료되어
 자동으로 [미정] 상태로 변경되었습니다.
 
-📋 사건번호: 2025타경10593
-📅 추천 시작: 2026-03-01 10:00
-⏰ 만료 시각: 2026-03-03 10:00
+📋 2025타경10593 (서울중앙지법)
+📅 전달 시각: 03/03 10:51
+⏰ 만료 시각: 03/05 10:51
 
 입찰을 원하시면 담당자에게 문의해 주세요.
 ```
 
 ---
 
-## 5. 구현 계획 (단계별)
-
-### Phase 1: 히스토리 기반 구축 (우선순위 높음)
-
-1. **`item_status_history` 시트 생성** (수동 or GAS로 자동 생성)
-2. **`writeItemStatusHistory_()` 함수 작성** (SheetDB.js에 추가)
-3. **기존 상태변경 함수들에 히스토리 기록 삽입**
-   - `updateData()` → 상태 변경 시
-   - `approveTelegramRequests()` → 승인/거절 시
-   - `updateItemStatusByTelegram()` → 텔레그램 버튼 시
-   - `updateBulkStatus()` → 일괄 변경 시
-
-### Phase 2: 추천 시각 기록 (Phase 1 이후)
-
-4. **items 시트 S열 추가**: `chuchen_recommended_at`
-5. **`stu_member = '추천'` 변경 시 현재 시각 자동 기록**
-
-### Phase 3: 자동 만료 트리거 (Phase 2 이후)
-
-6. **`autoExpireRecommended()` 함수 작성**
-7. **GAS 시간 기반 트리거 등록** (매시간)
-8. **만료 알림 텔레그램 메시지 구현**
-
-### Phase 4: 사전 알림 (선택)
-
-9. **`notifyBeforeExpiry()` 함수 작성** (6시간 전 알림)
-10. **items 시트에 `expiry_notified` 필드 추가**
-
-### Phase 5: 관리 화면 (선택)
-
-11. **대시보드에 히스토리 조회 기능 추가**
-    - 물건별 상태 변경 이력 조회
-    - "자동 만료" 필터링
-
----
-
-## 6. 리스크 및 유의사항
-
-| 리스크 | 내용 | 대응 |
-|--------|------|------|
-| 기존 데이터 소급 | 이미 '추천' 상태인 물건의 기산점 불명 | 구현 시점을 기산점으로 처리 |
-| GAS 실행 시간 초과 | 물건 수가 많을 경우 6분 제한 초과 | 배치 처리, 청크 단위 실행 |
-| 텔레그램 미연동 회원 | token 없는 회원은 알림 불가 | 히스토리는 기록, 알림만 SKIP |
-| 이중 실행 방지 | 트리거 중복 실행 가능성 | Lock Service 적용 |
-| 롤백 | 잘못 만료된 경우 | 히스토리 기반 수동 복구, 관리자 알림 |
-
----
-
-## 7. 최종 권장사항 요약
+## 8. 회원 관리 집계 (향후 기능)
 
 ```
-[즉시 할 것]
-✅ item_status_history 시트 설계 & 생성
-✅ 기존 상태변경 함수에 히스토리 기록 추가
-   (자동만료 전에 히스토리 기반부터 갖추는 것이 핵심)
+member_id = 1109 기준 집계:
 
-[다음 단계]
-✅ items 시트에 chuchen_recommended_at 컬럼 추가
-✅ autoExpireRecommended() 함수 구현
-✅ 매시간 GAS 트리거 등록
-✅ 만료 시 텔레그램 알림 구현
-
-[선택 사항]
-☐ 6시간 전 사전 알림
-☐ 대시보드 히스토리 조회 UI
+입찰 횟수    = REQUEST_BID    & status=APPROVED  & member_id=1109
+취소 횟수    = REQUEST_CANCEL & status=APPROVED  & member_id=1109
+자동만료 횟수 = AUTO_EXPIRE                      & member_id=1109
+담당 물건 수  = FIELD_CHANGE  & field=member_id  & to_value=1109 (배정)
+물건 해제 수  = FIELD_CHANGE  & field=member_id  & from_value=1109 (해제)
 ```
+
+> **이벤트 시점 member_id 기록** → 나중에 회원이 바뀌어도 집계 정확
 
 ---
 
-*본 리포트는 현재 코드베이스 분석 기반으로 작성됨 (2026-03-03)*
+## 9. 구현 계획
+
+### Phase 1: 컬럼 확장 + 기록 함수
+1. `ensureTelegramRequestsSheet_()` 에 L~P 컬럼 추가
+2. `writeItemHistory_(params)` 함수 작성
+3. `updateData()` 에 변경 감지 & 기록 삽입 (저장 전 기존값 읽기 → 비교 → appendRow)
+4. `createData()` 에 ITEM_CREATE 기록 삽입
+
+### Phase 2: 텔레그램 이벤트 기록
+5. 텔레그램 발송 함수 → TELEGRAM_SENT 기록
+6. 텔레그램 수신 처리 → TELEGRAM_RECEIVED 기록
+7. 요청 승인/거절 → REQUEST_APPROVED/REJECTED 기록
+
+### Phase 3: 자동만료 트리거
+8. `autoExpireRecommended()` 함수 작성
+9. `EXPIRY_NOTIFY_HOURS` 설정으로 알림 주기 관리
+10. GAS 매시간 트리거 등록 (`ScriptApp.newTrigger().everyHours(1)`)
+11. LockService 적용 (중복 실행 방지)
+
+### Phase 4: 회원 관리 집계 UI
+12. 회원 상세 화면에 집계 카드: 입찰 N건 / 취소 N건 / 만료 N건
+
+---
+
+## 10. 부하 & 운영
+
+| 항목 | 내용 |
+|------|------|
+| 쓰기 부하 | appendRow() = O(1), 스캔 없음, **부하 없음** |
+| 읽기 부하 | item_id 기준 TextFinder, 수천 행 이하 **문제없음** |
+| 시트 크기 | Google Sheets 최대 1000만 셀, 연간 수만 행도 여유 |
+| 트리거 실행 | 매시간 1회, LockService로 중복 방지 |
+| 기존 데이터 | L~P 컬럼 공백으로 하위 호환 유지 |
+| 로딩바 연동 | chuchen_date 기준 동일 → 화면·서버 완전 일치 |
+
+---
+
+*v3 2026-03-03 - trigger_type 4종, 뮤테이션 통합 설계, 로딩바 chuchen_date 연동 확정*

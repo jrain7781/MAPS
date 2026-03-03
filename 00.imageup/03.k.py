@@ -149,6 +149,24 @@ def extract_smart_date(header_text, type_prefix, reg_date=None):
     return "000000", None
 
 
+def extract_date_from_dom(driver, item):
+    """경매: table.tbl_noline 6번째 td에서 입찰일자 추출
+    예: '2026-03-04(경매1일전)' → ('260304', datetime.date(2026, 3, 4))
+    """
+    try:
+        td = item.find_element(By.CSS_SELECTOR, "table.tbl_noline tbody tr td:nth-child(6)")
+        td_text = td.text.strip()          # "2026-03-04(경매1일전)"
+        date_part = td_text.split("(")[0].strip()  # "2026-03-04"
+        m = re.match(r"(20\d{2})-(\d{1,2})-(\d{1,2})", date_part)
+        if m:
+            year, month, day = m.groups()
+            bid_date = datetime.date(int(year), int(month), int(day))
+            return f"{year[2:]}{month.zfill(2)}{day.zfill(2)}", bid_date
+    except:
+        pass
+    return "000000", None
+
+
 def get_newest_list_file():
     """건별 캡쳐 리스트 폴더에서 가장 최신 리스트 파일 경로 반환. (YYYYMMDDHHMMSS.txt 형식만, README 등 제외)"""
     if not os.path.isdir(LIST_FOLDER):
@@ -244,25 +262,49 @@ def process_list_page_capture_all(driver, save_dir, type_prefix, suffix="", mana
     # XPATH로 1차 필터링
     table_xpath = "//table[contains(., '사건번호') or contains(., '관리번호')]"
     all_tables = driver.find_elements(By.XPATH, table_xpath)
-    
+    print(f"    🔎 테이블 탐색: {len(all_tables)}개 발견")
+
     candidates = []
     for item in all_tables:
         try:
-            if not item.is_displayed(): continue
-            if item.size['height'] < 50: continue
-            
-            text = item.text
-            if not text: continue
-            
-            # [핵심] 모드 교차 검증
+            h = item.size['height']
+            disp = item.is_displayed()
+            text = item.text or ""
+            has_gamjung = "감정가" in text
+            skip_kw = next((k for k in SKIP_KEYWORDS if k in text), None)
+
+            if not disp:
+                print(f"      skip: 미표시")
+                continue
+            if h < 50:
+                print(f"      skip: 높이 {h}px < 50")
+                continue
+            if not text:
+                print(f"      skip: 텍스트 없음")
+                continue
+
             if type_prefix == "경매":
-                if "타경" not in text: continue
+                pub_match = re.search(r"20\d{2}-\d{4,}-\d+", text)
+                if pub_match:
+                    print(f"      skip: 공매번호 패턴 감지 [{pub_match.group()}]")
+                    continue
             elif type_prefix == "공매":
-                if "타경" in text: continue
-                
-            if "감정가" in text and not any(k in text for k in SKIP_KEYWORDS):
-                candidates.append(item)
-        except: continue
+                if "타경" in text:
+                    print(f"      skip: 공매모드에서 타경 감지")
+                    continue
+
+            if not has_gamjung:
+                print(f"      skip: 감정가 없음 | 텍스트 앞50자: [{text[:50]}]")
+                continue
+            if skip_kw:
+                print(f"      skip: 스킵키워드 [{skip_kw}]")
+                continue
+
+            print(f"      ✅ 후보 추가: h={h} | 앞50자: [{text[:50]}]")
+            candidates.append(item)
+        except Exception as e:
+            print(f"      skip: 예외 {e}")
+            continue
 
     count = 0
     for i, item in enumerate(candidates):
@@ -295,7 +337,12 @@ def process_list_page_capture_all(driver, save_dir, type_prefix, suffix="", mana
             reg_date = extract_reg_date(header_text)
 
             # 날짜 추출 + 입찰일 스킵 체크
-            bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
+            if type_prefix == "경매":
+                bid_date_str, bid_date_obj = extract_date_from_dom(driver, item)
+                if bid_date_str == "000000":
+                    bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
+            else:
+                bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
             if bid_date_obj and bid_date_obj <= datetime.date.today():
                 print(f"    ⏭ 입찰일 {bid_date_obj} <= 오늘, 스킵")
                 continue

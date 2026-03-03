@@ -8508,6 +8508,49 @@ MJ 이정우 팀장
         navigator.clipboard.writeText(token).then(() => showStatus('토큰이 복사되었습니다.', 'success'));
     }
 
+    // --- 텔레그램 연동 안내 메세지 관련 ---
+    function openTelegramGuideModal() {
+        const name = document.getElementById('mem-name')?.value || '회원';
+        const token = document.getElementById('mem-member_token')?.value || '(생성된 토큰이 없습니다)';
+
+        const template = `안녕하세요~ "${name}"님
+텔레그램 간단한 연동 방법 입니다. 
+
+[필독]
+소통은 카카오톡으로 해요
+텔레그램에서는 물건에대한 입찰확정, 물건조회를 합니다.
+
+
+1. 채팅방 조회 후 입장: @mjmaps_bot
+2. KEY 입력 후 엔터
+3. 스케줄 입력 후 엔터
+=============================================
+${token}
+=============================================
+3. 채팅방에 스케줄 이라고 입력 하시면 어플 활성화 되세요
+* 키입력후 제가 승인을 해야 해서 시간이 조금 필요 합니다~
+
+감사합니다.`;
+
+        document.getElementById('telegramGuideMessage').value = template;
+        document.getElementById('telegramGuideModal').classList.remove('hidden');
+    }
+
+    function closeTelegramGuideModal() {
+        document.getElementById('telegramGuideModal').classList.add('hidden');
+    }
+
+    function copyTelegramGuide() {
+        const message = document.getElementById('telegramGuideMessage').value;
+        if (!message) return;
+
+        navigator.clipboard.writeText(message).then(() => {
+            showStatus('안내 메세지가 복사되었습니다.', 'success');
+        }).catch(err => {
+            showStatus('복사 실패: ' + err.message, 'error');
+        });
+    }
+
     // --- 수업관리 함수들 ---
 
     function loadClasses() {
