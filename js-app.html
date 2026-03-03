@@ -3324,18 +3324,27 @@
         const mName = input.value.trim();
         if (!mName) return;
 
-        // 물건상태가 '미정' 또는 '상품'이면 빈 값 허용 (이미 위에서 empty 체크로 리턴됨)
-        // 입력 필드 ID에 따라 메항/모달 상태 필드 구분
         const isModal = input.id && input.id.indexOf('modal') !== -1;
+
+        // member_id가 이미 설정된 경우(자동완성으로 선택된 경우) 검증 통과
+        const memberIdEl = isModal
+            ? document.getElementById('modal-form-member-id')
+            : document.getElementById('form-member-id');
+        if (memberIdEl && memberIdEl.value) return;
+
         const stuMemberEl = isModal
             ? document.getElementById('modal-form-stu-member')
             : document.getElementById('form-stu-member');
         const stuMember = stuMemberEl ? stuMemberEl.value : '';
 
-        // "이정우 (MJ) 한한한" 형식에서 이름 부분만 추출하여 비교
-        const cleanMName = mName.split(' ')[0].split('(')[0].trim();
+        // "(MJ) 임준희" 또는 "임준희 (MJ) 한한한" 형식에서 기본 이름 추출
+        const cleanMName = mName.replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
         const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
-        const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
+        const isValidMember = memberList && memberList.some(m => {
+            const name = String(m.member_name || m.name || '').trim();
+            const cleanName = name.replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
+            return cleanName === cleanMName || name === mName;
+        });
 
         if (!isValidMember) {
             alert('등록되지 않은 회원입니다.');
@@ -4644,7 +4653,8 @@ MJ 이정우 팀장
         const bidPriceRaw = modalFormBidPrice ? modalFormBidPrice.value.replace(/[^0-9]/g, '') : '0';
 
         // [회원명 검증]
-        const cleanMName = String(mName || '').split(' ')[0].split('(')[0].trim();
+        // "(MJ) 임준희" 또는 "임준희 (MJ) 한한한" 형식에서 기본 이름 추출
+        const cleanMName = String(mName || '').replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
 
         // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과 (필수 아님)
         const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
@@ -4653,7 +4663,14 @@ MJ 이정우 팀장
             // 회원명이 없어도 등록 허용
         } else {
             const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
-            const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
+            // member_id가 있으면 ID 기반 검증, 없으면 이름 기반 검증
+            const isValidMember = memberId
+                ? memberList.some(m => String(m.member_id || '').trim() === memberId)
+                : memberList && memberList.some(m => {
+                    const name = String(m.member_name || m.name || '').trim();
+                    const cleanName = name.replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
+                    return cleanName === cleanMName || name === mName;
+                });
             if (!isValidMember) {
                 showStatus('등록된 회원이 아닙니다.', 'error');
                 if (modalFormMName) modalFormMName.focus();
@@ -4768,7 +4785,8 @@ MJ 이정우 팀장
         let rawBidPrice = formBidPrice ? formBidPrice.value.replace(/[^0-9]/g, '') : '0';
 
         // [회원명 검증]
-        const cleanMName = String(mName || '').split(' ')[0].split('(')[0].trim();
+        // "(MJ) 임준희" 또는 "임준희 (MJ) 한한한" 형식에서 기본 이름 추출
+        const cleanMName = String(mName || '').replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
 
         // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과 (필수 아님)
         const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
@@ -4777,7 +4795,14 @@ MJ 이정우 팀장
             // 회원명이 없어도 등록 허용
         } else {
             const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
-            const isValidMember = memberList && memberList.some(m => String(m.member_name || m.name || '').trim() === cleanMName);
+            // member_id가 있으면 ID 기반 검증, 없으면 이름 기반 검증
+            const isValidMember = memberId
+                ? memberList.some(m => String(m.member_id || '').trim() === memberId)
+                : memberList && memberList.some(m => {
+                    const name = String(m.member_name || m.name || '').trim();
+                    const cleanName = name.replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
+                    return cleanName === cleanMName || name === mName;
+                });
             if (!isValidMember) {
                 showStatus('등록된 회원이 아닙니다.', 'error');
                 if (formMName) formMName.focus();

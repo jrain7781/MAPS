@@ -78,10 +78,16 @@ function isAllowedCourt_(court) {
 function isValidMemberName_(mName) {
   if (!mName) return false;
   const members = readAllMembers();
-  // "이정우 (MJ) 한한한" 형식에서 이름 부분만 추출하여 비교하거나, 
-  // 전체 문자열이 member_name 중 하나를 포함하는지 확인
-  const cleanName = String(mName).split(' ')[0].split('(')[0].trim();
-  return members.some(m => String(m.member_name).trim() === cleanName);
+  const inputFull = String(mName).trim();
+  // "(MJ) 임준희" 또는 "MJ 임준희 (클래스) 명의" 형식에서 앞의 괄호 prefix 제거 후 첫 단어 추출
+  const cleanInput = inputFull.replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
+  return members.some(m => {
+    const name = String(m.member_name || '').trim();
+    // 전체 일치 또는 첫 단어 기준 일치
+    if (name === inputFull) return true;
+    const cleanName = name.replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
+    return cleanName && cleanInput && cleanName === cleanInput;
+  });
 }
 
 /**
