@@ -25,6 +25,13 @@
         return deviceId;
     }
 
+    // [Utility] 회원의 telegram_enabled 값 반환 ('Y' 또는 '')
+    function getMemberTelegramEnabled_(memberId) {
+        if (!memberId || typeof allMembersNewData === 'undefined' || !allMembersNewData.length) return '';
+        const mem = allMembersNewData.find(m => String(m.member_id) === String(memberId));
+        return (mem && mem.telegram_enabled === 'Y') ? 'Y' : '';
+    }
+
     // [Utility] HTML 이스케이프 함수 (XSS 방지)
     function escapeHtml(text) {
         if (!text) return '';
@@ -629,6 +636,12 @@
             else stopTelegramRequestsPolling_();
         } catch (e) { }
 
+        // 입찰일정 탭에 있을 때만 캘린더 자동 갱신 폴링 유지
+        try {
+            if (tabId === 'BiddingSchedule') startCalendarPolling_();
+            else stopCalendarPolling_();
+        } catch (e) { }
+
         // 대시보드로 이동 시 요청 목록 즉시 갱신
         if (tabId === 'Dashboard' && !IS_MEMBER_VIEW) {
             try { loadTelegramRequests(); } catch (e) { }
@@ -897,6 +910,40 @@
         }
     }
 
+    // [추천 전달] chuchen_date 포맷 함수: "26-02-03 14:00 59" 형식
+    function formatChuchenDate(dateStr) {
+        if (!dateStr) return '';
+        try {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return '';
+            const yy = String(d.getFullYear()).slice(2);
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mi = String(d.getMinutes()).padStart(2, '0');
+            const ss = String(d.getSeconds()).padStart(2, '0');
+            return `${yy}-${mm}-${dd} ${hh}:${mi} ${ss}`;
+        } catch (e) { return ''; }
+    }
+
+    // [추천 전달] 48시간 타이머 바: 왼쪽=빨강(경과), 오른쪽=초록(남음), 경계에 시간 뱃지
+    function createChuchenTimerBar(chuchenDate) {
+        if (!chuchenDate) return '';
+        try {
+            const sentAt = new Date(chuchenDate).getTime();
+            if (isNaN(sentAt)) return '';
+            const elapsedHours = (Date.now() - sentAt) / (1000 * 3600);
+            const MAX_HOURS = 48;
+            if (elapsedHours >= MAX_HOURS) return `<div class="chuchen-timer-bar" style="background:#ef4444"><div class="chuchen-timer-badge" style="left:94%">만료</div></div>`;
+            const elapsedPct = Math.min(100, (elapsedHours / MAX_HOURS) * 100).toFixed(2);
+            const remainHours = Math.max(0, MAX_HOURS - Math.floor(elapsedHours));
+            // 뱃지가 양 끝에서 잘리지 않도록 클램프 (6%~94%)
+            const badgePct = Math.min(94, Math.max(6, parseFloat(elapsedPct)));
+            const bg = `linear-gradient(to right, #ef4444 ${elapsedPct}%, #22c55e ${elapsedPct}%)`;
+            return `<div class="chuchen-timer-bar" style="background:${bg}"><div class="chuchen-timer-badge" style="left:${badgePct}%">${remainHours}h</div></div>`;
+        } catch (e) { return ''; }
+    }
+
     // 상태값에 따른 태그 클래스 반환
     function getStatusTagClass(status) {
         switch (status) {
@@ -946,7 +993,7 @@
             if (allBiddingData.length > 0) {
                 let msg = "검색어와 일치하는 데이터가 없습니다.";
                 if (dashboardFilter.active) msg = "해당 필터 조건에 맞는 데이터가 없습니다.";
-                dataTableBody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-gray-500">${msg}</td></tr>`;
+                dataTableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-gray-500">${msg}</td></tr>`;
             } else {
                 if (noDataMessage) noDataMessage.classList.remove('content-hidden');
             }
@@ -1005,23 +1052,37 @@
                 cell.className = 'item-col-status text-center';
                 cell = row.insertCell(6);
                 {
+                    const tEnabled = getMemberTelegramEnabled_(item.member_id);
+                    const tBidState = String(item.bid_state || '').trim();
+                    const tBadgeClass = (tBidState === '확인완료' || tBidState.includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
+                    cell.innerHTML = tEnabled === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
+                }
+                cell.className = 'item-col-telegram text-center';
+                cell = row.insertCell(7);
+                {
                     const base = String(item.m_name || '').trim();
-                    const alias = '';
-                    cell.textContent = alias ? `${base} ${alias}` : base;
+                    cell.textContent = base;
                 }
                 cell.className = 'item-col-member text-center';
-                cell = row.insertCell(7);
+                cell = row.insertCell(8);
                 cell.textContent = String(item.m_name_id || '').trim();
                 cell.className = 'item-col-manager text-center';
+                cell = row.insertCell(9);
+                {
+                    const bp = item.bidprice || 0;
+                    const bpNum = parseInt(String(bp).replace(/,/g, ''), 10);
+                    cell.textContent = (bpNum > 0) ? new Intl.NumberFormat('ko-KR').format(bpNum) + '원' : '';
+                }
+                cell.className = 'item-col-bidprice';
 
                 // 전송 컬럼이 있다면 제거 (즉시 실행)
                 const existingActionCells = row.querySelectorAll('.item-col-action');
                 existingActionCells.forEach(c => c.remove());
 
-                // 혹시 모를 추가 셀 제거 (9번째 셀 이상) - 안전하게
-                while (row.cells && row.cells.length > 8) {
+                // 혹시 모를 추가 셀 제거 (11번째 셀 이상) - 안전하게
+                while (row.cells && row.cells.length > 10) {
                     try {
-                        row.deleteCell(8);
+                        row.deleteCell(10);
                     } catch (e) {
                         break;
                     }
@@ -1349,9 +1410,31 @@
         const sakun = escapeHtml(String(item.sakun_no || ''));
         const court = escapeHtml(String(item.court || ''));
         const rawStatus = String(item.stu_member || item.status || '미정').trim();
+        const bidState = String(item.bid_state || '').trim();
         const status = escapeHtml(rawStatus);
-        const bidPrice = escapeHtml(String(item.bidprice || item['bid-price'] || '0'));
+
+        const rawBidprice = String(item.bidprice || item['bid-price'] || '').replace(/[^0-9]/g, '');
         const itemId = item.id;
+
+        // 입찰가 공개 로직 (마스킹 방식, 블러 없음)
+        // 신규/미입력 → "미정", 전달완료 → 첫자리+****원, 확인완료 → 전체공개
+        let bidPriceHtml = '';
+        let statusSpanHtml = `<span class="member-court-status">${court} / ${status}</span>`;
+
+        if (bidState === '전달완료') {
+            let maskedStr = '미정';
+            if (rawBidprice && rawBidprice.length > 0) {
+                maskedStr = rawBidprice[0] + '*'.repeat(Math.max(rawBidprice.length - 1, 3)) + '원';
+            }
+            bidPriceHtml = `<div class="member-bid-price text-gray-500 font-semibold text-sm cursor-pointer" onclick="event.stopPropagation(); handleBidPriceClick('${itemId}')" title="터치하여 입찰가 확인">${maskedStr} 👆</div>`;
+        } else if (bidState === '확인완료' || bidState.includes('확인완료')) {
+            const fullPrice = rawBidprice ? (Number(rawBidprice).toLocaleString('ko-KR') + '원') : '미입력';
+            bidPriceHtml = `<div class="member-bid-price text-blue-600 font-bold text-sm">${fullPrice}</div>`;
+            statusSpanHtml = `<span class="member-court-status">${court} / <span class="bid-state-confirmed">확인완료</span></span>`;
+        } else {
+            // 기본 상태 (신규/미전달): 미정 표시
+            bidPriceHtml = `<div class="member-bid-price text-gray-400 font-normal text-sm">미정</div>`;
+        }
 
         // 상태에 따라 버튼 구성
         // 추천: 입찰확정 + 입찰취소 버튼
@@ -1369,18 +1452,82 @@
             `;
         }
 
+        const timerBarHtml = (rawStatus === '추천' && item.chuchen_date) ? createChuchenTimerBar(item.chuchen_date) : '';
+
         return `
             <div class="member-item-card" onclick="handleMemberCardClick('${itemId}')">
-                <div class="member-card-left">
-                    <div class="member-sakun-info">
-                        <span class="member-sakun-no">${sakun}</span>
-                        <span class="member-court-status">${court} / ${status}</span>
+                <div class="member-card-row">
+                    <div class="member-card-left">
+                        <div class="member-sakun-info">
+                            <span class="member-sakun-no">${sakun}</span>
+                            ${statusSpanHtml}
+                        </div>
+                        ${bidPriceHtml}
                     </div>
-                    <div class="member-bid-price">${bidPrice} 원</div>
+                    <div class="member-card-right" onclick="event.stopPropagation()">${buttonsHtml}</div>
                 </div>
-                <div class="member-card-right" onclick="event.stopPropagation()">${buttonsHtml}</div>
+                ${timerBarHtml}
             </div>
         `;
+    }
+
+    /**
+     * 입찰가 터치 시: 텔레그램으로 가격 전송 + MAPS 확인완료 처리 + 앱 새로고침
+     */
+    function handleBidPriceClick(itemId) {
+        const mToken = APP_CTX && APP_CTX.token;
+        if (!mToken) return;
+
+        // 중복 클릭 방지: 처리 중인 itemId 기록
+        if (window._bidPriceConfirmingSet && window._bidPriceConfirmingSet.has(String(itemId))) return;
+        if (!window._bidPriceConfirmingSet) window._bidPriceConfirmingSet = new Set();
+        window._bidPriceConfirmingSet.add(String(itemId));
+
+        // ★ 해당 카드의 가격 div를 즉시 로딩 표시로 변경
+        const card = document.querySelector('[data-id="' + itemId + '"]');
+        const priceDiv = card ? card.querySelector('.ic-price') : null;
+        if (priceDiv) {
+            priceDiv.className = 'ic-price ic-price-loading';
+            priceDiv.onclick = null;
+            priceDiv.innerHTML = '<span class="ic-spin"></span> 잠시만 기다려 주세요...';
+        }
+
+        google.script.run
+            .withSuccessHandler(res => {
+                window._bidPriceConfirmingSet.delete(String(itemId));
+                if (res && res.success) {
+                    // 로컬 데이터 갱신
+                    const item = allBiddingData.find(it => String(it.id) === String(itemId));
+                    if (item) item.bid_state = '확인완료';
+                    // ★ 해당 카드 가격 div만 즉시 DOM 업데이트 (전체 재렌더 없이)
+                    if (priceDiv) {
+                        const pr = (item && item.bidprice) ? (typeof fmtP === 'function' ? fmtP(item.bidprice) : String(item.bidprice)) : '0';
+                        const fullPrice = (pr && pr !== '0') ? pr + ' 원' : '미입력';
+                        priceDiv.className = 'ic-price ic-price-confirmed';
+                        priceDiv.onclick = null;
+                        priceDiv.innerHTML = fullPrice;
+                    }
+                } else {
+                    // 실패 시 원래 상태로 복원
+                    if (priceDiv) {
+                        priceDiv.className = 'ic-price ic-price-pending';
+                        priceDiv.onclick = function (e) { e.stopPropagation(); handleBidPriceClick(itemId); };
+                        priceDiv.innerHTML = '입찰가 도착! 터치하세요 👆';
+                    }
+                    console.warn('입찰가 확인 실패: ' + (res ? res.message : '응답 없음'));
+                }
+            })
+            .withFailureHandler(err => {
+                window._bidPriceConfirmingSet.delete(String(itemId));
+                // 오류 시 원래 상태로 복원
+                if (priceDiv) {
+                    priceDiv.className = 'ic-price ic-price-pending';
+                    priceDiv.onclick = function (e) { e.stopPropagation(); handleBidPriceClick(itemId); };
+                    priceDiv.innerHTML = '입찰가 도착! 터치하세요 👆';
+                }
+                console.warn('입찰가 확인 오류: ' + err.message);
+            })
+            .confirmBidPriceWithTelegramReply(mToken, itemId);
     }
 
     /**
@@ -1715,6 +1862,8 @@
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                         const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                         const mNameValue = bid.m_name || '';
+                        const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
+                        const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
 
@@ -1745,9 +1894,15 @@
 
                         const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${(hasImages || hasAucId) ? `<span class="inline-block w-3.5 h-3.5 rounded-full ${dotClass} cursor-pointer" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="${dotTitle}"></span>` : ''}</span>`;
 
+                        // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
+                        const chuchenDateStr = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date) : '';
+                        const chuchenDateHtml = chuchenDateStr ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr}</div>` : '';
+                        const timerBarHtml = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date) : '';
+
                         const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
-                          <div class="md:hidden border-2 border-green-300 rounded-xl p-3 mb-2 bg-stone-50 shadow-sm flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<span>${bid.sakun_no || '미상'}</span></div>
+                          <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
+                            <div class="p-3 bg-stone-50 flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${bid.sakun_no || '미상'}</div>${chuchenDateHtml}</div></div>
                               <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
                                   <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
                                   <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
@@ -1755,25 +1910,30 @@
                               <div class="flex flex-col items-end w-[40%] space-y-1">
                                   <div class="flex items-center space-x-1">
                                       <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                                      <span class="text-xs font-bold text-gray-800">${mNameValue}</span>
+                                      ${tBadgeHtml}<span class="text-xs font-bold text-gray-800">${mNameValue}</span>
                                   </div>
                                   <div class="text-sm ${bidPriceMobileClass}">${bidpriceFormatted}</div>
                               </div>
+                            </div>
+                            ${timerBarHtml}
                           </div>
-                          <table class="hidden md:table bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                          <div class="hidden md:block mb-0.5">
+                          <table class="bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <tbody>
                                   <tr>
-                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<span>${bid.sakun_no || '미상'}</span></div></td>
+                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${bid.sakun_no || '미상'}</div>${chuchenDateHtml}</div></div></td>
                                       <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
                                       <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
-                                      <td class="m-name-cell" style="width: 22%;">${mNameValue}</td>
+                                      <td class="m-name-cell" style="width: 22%;">${tBadgeHtml}${mNameValue}</td>
                                   </tr>
                                   <tr>
                                       <td class="${mNameIdClass}" style="width: 21%;">${bid.m_name_id || '대표님'}</td>
                                       <td colspan="2" class="${bidPricePcClass}">${bidpriceFormatted}</td>
                                   </tr>
+                                  ${timerBarHtml ? `<tr><td colspan="4" class="chuchen-timer-td">${timerBarHtml}</td></tr>` : ''}
                               </tbody>
                           </table>
+                          </div>
                       `;
                         contentHtml += itemHtml;
                     });
@@ -1946,6 +2106,7 @@
                     const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                     const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                     const mNameValue = bid.m_name || '';
+                    const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? '<span class="telegram-badge">T</span>' : '';
                     const statusClass = getStatusTagClass(bid.stu_member);
                     const courtButtonClass = 'button-like-content';
 
@@ -1986,7 +2147,7 @@
                           <div class="flex flex-col items-end w-[40%] space-y-1">
                               <div class="flex items-center space-x-1">
                                       <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                                  <span class="text-xs font-bold text-gray-800">${mNameValue}</span>
+                                  ${tBadgeHtml}<span class="text-xs font-bold text-gray-800">${mNameValue}</span>
                               </div>
                               <div class="text-sm ${bidPriceMobileClass}">${bidpriceFormatted}</div>
                           </div>
@@ -1997,7 +2158,7 @@
                                   <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<span>${bid.sakun_no || '미상'}</span></div></td>
                                   <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
                                   <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
-                                  <td class="m-name-cell" style="width: 22%;">${mNameValue}</td>
+                                  <td class="m-name-cell" style="width: 22%;">${tBadgeHtml}${mNameValue}</td>
                               </tr>
                               <tr>
                                   <td class="${mNameIdClass}" style="width: 21%;">${bid.m_name_id || '대표님'}</td>
@@ -2411,6 +2572,8 @@
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                         const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                         const mNameValue = bid.m_name || '';
+                        const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
+                        const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
 
@@ -2426,9 +2589,15 @@
                         const hasImages = !!bid.has_images;
                         const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${hasImages ? `<span class="inline-block w-3.5 h-3.5 rounded-full bg-green-500 cursor-pointer" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="이미지 있음"></span>` : ''}</span>`;
 
+                        // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
+                        const chuchenDateStr2 = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date) : '';
+                        const chuchenDateHtml2 = chuchenDateStr2 ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr2}</div>` : '';
+                        const timerBarHtml2 = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date) : '';
+
                         const mobileHtml = `
-                          <div class="md:hidden border-2 border-green-300 rounded-xl p-3 mb-2 bg-stone-50 shadow-sm flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<span>${bid.sakun_no || '미상'}</span></div>
+                          <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
+                            <div class="p-3 bg-stone-50 flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${bid.sakun_no || '미상'}</div>${chuchenDateHtml2}</div></div>
                               <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
                                   <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
                                   <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
@@ -2436,28 +2605,33 @@
                               <div class="flex flex-col items-end w-[40%] space-y-1">
                                   <div class="flex items-center space-x-1">
                                       <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                                      <span class="text-xs font-bold text-gray-800">${mNameValue}</span>
+                                      ${tBadgeHtml}<span class="text-xs font-bold text-gray-800">${mNameValue}</span>
                                   </div>
                                   <div class="text-sm ${bidPriceMobileClass}">${bidpriceFormatted}</div>
                               </div>
+                            </div>
+                            ${timerBarHtml2}
                           </div>
                       `;
 
                         const desktopHtml = `
-                          <table class="hidden md:table bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                          <div class="hidden md:block mb-0.5">
+                          <table class="bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <tbody>
                                   <tr>
-                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<span>${bid.sakun_no || '미상'}</span></div></td>
+                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${bid.sakun_no || '미상'}</div>${chuchenDateHtml2}</div></div></td>
                                       <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
                                   <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
-                                      <td class="m-name-cell" style="width: 22%;">${mNameValue}</td>
+                                      <td class="m-name-cell" style="width: 22%;">${tBadgeHtml}${mNameValue}</td>
                                   </tr>
                                   <tr>
                                       <td class="${mNameIdClass}" style="width: 21%;">${bid.m_name_id || '대표님'}</td>
                                       <td colspan="2" class="${bidPricePcClass}">${bidpriceFormatted}</td>
                                   </tr>
+                                  ${timerBarHtml2 ? `<tr><td colspan="4" class="chuchen-timer-td">${timerBarHtml2}</td></tr>` : ''}
                               </tbody>
                           </table>
+                          </div>
                       `;
                         contentHtml += mobileHtml + desktopHtml;
                     });
@@ -2652,13 +2826,110 @@
         statusTableBody.appendChild(totalRow);
     }
 
+    // ── 자동승인 현황 ──────────────────────────────────────────
+    // ── 텔레그램 승인현황 ──────────────────────────────────────────
+    var _autoApprovalStatsCache = null; // 클라이언트 캐시: 대시보드 재진입 시 서버 호출 방지
+    function loadAutoApprovalStats(forceRefresh) {
+        var el = document.getElementById('autoApprovalBody');
+        if (!el) return;
+        // 캐시가 있으면 서버 호출 없이 바로 렌더링 (다른 카드들과 동일한 동작)
+        if (!forceRefresh && _autoApprovalStatsCache) {
+            renderAutoApprovalStats(_autoApprovalStatsCache);
+            return;
+        }
+        el.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">조회 중...</div>';
+        google.script.run
+            .withSuccessHandler(function (stats) {
+                _autoApprovalStatsCache = stats;
+                renderAutoApprovalStats(stats);
+            })
+            .withFailureHandler(function (err) {
+                if (el) el.innerHTML = '<div class="p-4 text-center text-red-500 text-sm">' + (err && err.message ? err.message : '오류 발생') + '</div>';
+            })
+            .getAutoApprovalStats();
+    }
+
+    function renderAutoApprovalStats(stats) {
+        var el = document.getElementById('autoApprovalBody');
+        if (!el) return;
+        if (!stats || stats.length === 0) {
+            el.innerHTML = '<div class="py-4 text-center text-gray-400 text-sm">데이터 없음</div>';
+            return;
+        }
+        // item_id 목록을 전역에 저장해 onclick에서 참조 (인코딩 이슈 없이 안전)
+        window._approvalStats = stats;
+        var DAYS_KO = ['일', '월', '화', '수', '목', '금', '토'];
+        var fmtDateDay = function (s) {
+            try { var p = s.split('/'); var dt = new Date(2000 + parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)); return s + ' (' + DAYS_KO[dt.getDay()] + ')'; } catch (e) { return s; }
+        };
+        var mkCell = function (count, color, rowIdx, field) {
+            if (!count) return '<td class="py-1.5 px-1 text-center text-gray-200 text-xs">-</td>';
+            // onclick에 안전한 숫자와 ASCII 문자열만 사용 → &quot; 문제 없음
+            var click = 'onclick="navigateToItemsByIds(' + rowIdx + ',\'' + field + '\')" style="cursor:pointer"';
+            return '<td class="py-1.5 px-1 text-center text-xs font-bold hover:underline ' + color + '" ' + click + '>' + count + '</td>';
+        };
+        var tbodyHtml = '';
+        stats.forEach(function (row, i) {
+            tbodyHtml += '<tr class="border-b border-gray-100 hover:bg-gray-50">'
+                + '<td class="py-1.5 px-2 whitespace-nowrap text-xs border-r bg-gray-50 font-bold text-gray-700 text-center">' + fmtDateDay(row.date) + '</td>'
+                + mkCell(row.recommend, 'text-gray-700', i, 'recommend_ids')
+                + mkCell(row.bid_approved, 'text-indigo-600', i, 'bid_approved_ids')
+                + mkCell(row.bid_pending, 'text-orange-500', i, 'bid_pending_ids')
+                + mkCell(row.cancel_approved, 'text-gray-500', i, 'cancel_approved_ids')
+                + mkCell(row.delivered, 'text-blue-600', i, 'delivered_ids')
+                + mkCell(row.confirmed, 'text-green-600', i, 'confirmed_ids')
+                + '</tr>';
+        });
+        el.innerHTML = '<div class="overflow-y-auto" style="max-height:210px">'
+            + '<table class="w-full text-xs border-collapse">'
+            + '<thead class="sticky top-0 z-10 bg-gray-50">'
+            + '<tr class="border-b border-gray-100 text-gray-600">'
+            + '<th class="py-1.5 px-2 text-center font-bold border-r" rowspan="2">날자</th>'
+            + '<th class="py-1 px-1 text-center font-bold" rowspan="2">물건<br>추천</th>'
+            + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200" colspan="2">추천물건</th>'
+            + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200">입찰물건</th>'
+            + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200" colspan="2">입찰가</th>'
+            + '</tr>'
+            + '<tr class="bg-gray-50 border-b border-gray-200 text-gray-500">'
+            + '<th class="py-1 px-1 text-center border-l border-gray-200">입찰확정</th>'
+            + '<th class="py-1 px-1 text-center">미선택</th>'
+            + '<th class="py-1 px-1 text-center border-l border-gray-200">입찰취소</th>'
+            + '<th class="py-1 px-1 text-center border-l border-gray-200">전달</th>'
+            + '<th class="py-1 px-1 text-center">확인</th>'
+            + '</tr></thead>'
+            + '<tbody>' + tbodyHtml + '</tbody>'
+            + '</table></div>';
+    }
+
+
+    function navigateToItemsByIds(rowIdx, field) {
+        var stats = window._approvalStats;
+        if (!stats || !stats[rowIdx]) return;
+        var ids = stats[rowIdx][field];
+        if (!ids || !ids.length) return;
+        dashboardFilter = { active: true, date: '', type: 'item_ids', status: ids, manager: null, label: '텔레그램 승인건' };
+        navigateTo('ItemManagement');
+    }
+
+    function navigateToItemsByStatus() {
+        var statuses = Array.prototype.slice.call(arguments);
+        dashboardFilter = { active: true, date: '', type: 'all_status', status: statuses, manager: null };
+        navigateTo('ItemManagement');
+    }
+
+    function navigateToItemsByBidState(bidState) {
+        dashboardFilter = { active: true, date: '', type: 'all_bid_state', status: bidState, manager: null };
+        navigateTo('ItemManagement');
+    }
+    // ──────────────────────────────────────────────────────────────
+
     // 차트 그리기
     function renderMemberBidChart() {
         if (!memberBidChartCanvas || !summaryText) return;
 
         const memberData = {};
         const uniqueMembers = new Set();
-        const summaryCounts = { product: 0, recommend: 0, bid: 0, change: 0, undecided: 0 };
+        const summaryCounts = { recommend: 0, bid: 0, change: 0 };
         allBiddingData.forEach(item => {
             let memberName = item.m_name;
             if (!memberName || memberName.trim() === '' || memberName === '미등록') {
@@ -2667,39 +2938,26 @@
             uniqueMembers.add(memberName);
 
             const status = item.stu_member;
-            if (status === '상품') summaryCounts.product++;
-            else if (status === '추천') summaryCounts.recommend++;
+            if (status === '추천') summaryCounts.recommend++;
             else if (status === '입찰') summaryCounts.bid++;
             else if (status === '변경') summaryCounts.change++;
-            else if (status === '미정') summaryCounts.undecided++;
 
             if (!memberData[memberName]) {
-                memberData[memberName] = { '상품': 0, '미정': 0, '추천': 0, '입찰': 0, '변경': 0 };
+                memberData[memberName] = { '추천': 0, '입찰': 0, '변경': 0 };
             }
 
-            if (['상품', '미정', '추천', '입찰', '변경'].includes(status)) {
+            if (['추천', '입찰', '변경'].includes(status)) {
                 memberData[memberName][status]++;
-            } else {
-                memberData[memberName]['미정']++;
             }
         });
         summaryText.innerHTML = `
-          전체 회원수: ${uniqueMembers.size}명 
-          (<span class="summary-item" onclick="filterCalendarByStatus('상품')">상품 ${summaryCounts.product}건</span> |
-           <span class="summary-item" onclick="filterCalendarByStatus('미정')">미정 ${summaryCounts.undecided}건</span> |
-           <span class="summary-item" onclick="filterCalendarByStatus('추천')">추천 ${summaryCounts.recommend}건</span> | 
-           <span class="summary-item" onclick="filterCalendarByStatus('입찰')">입찰 ${summaryCounts.bid}건</span> | 
+          전체 회원수: ${uniqueMembers.size}명
+          (<span class="summary-item" onclick="filterCalendarByStatus('추천')">추천 ${summaryCounts.recommend}건</span> |
+           <span class="summary-item" onclick="filterCalendarByStatus('입찰')">입찰 ${summaryCounts.bid}건</span> |
            <span class="summary-item" onclick="filterCalendarByStatus('변경')">변경 ${summaryCounts.change}건</span>)
        `;
-        let labels = Object.keys(memberData).sort();
-        const indexUndecided = labels.indexOf('미정');
-        if (indexUndecided > -1) {
-            labels.splice(indexUndecided, 1);
-            labels.unshift('미정');
-        }
+        const labels = Object.keys(memberData).sort();
 
-        const productData = labels.map(name => memberData[name]['상품']);
-        const undecidedData = labels.map(name => memberData[name]['미정']);
         const recommendData = labels.map(name => memberData[name]['추천']);
         const bidData = labels.map(name => memberData[name]['입찰']);
         const changeData = labels.map(name => memberData[name]['변경']);
@@ -2712,8 +2970,6 @@
             data: {
                 labels: labels,
                 datasets: [
-                    { label: '상품', data: productData, backgroundColor: 'rgba(253, 224, 71, 0.8)', stack: 'Stack 0' },
-                    { label: '미정', data: undecidedData, backgroundColor: 'rgba(209, 213, 219, 0.8)', stack: 'Stack 0' },
                     { label: '추천', data: recommendData, backgroundColor: 'rgba(251, 191, 36, 0.8)', stack: 'Stack 0' },
                     { label: '입찰', data: bidData, backgroundColor: 'rgba(79, 70, 229, 0.8)', stack: 'Stack 0' },
                     { label: '변경', data: changeData, backgroundColor: 'rgba(75, 85, 99, 0.8)', stack: 'Stack 0' }
@@ -3031,12 +3287,22 @@
             const currentBidState = data.bid_state || '신규'; // 기본값 신규
             setBidState(currentBidState, false); // false: 값만 세팅하고 UI 업데이트 (이벤트 발생 X)
 
+            // [추천 전달 상태] 추천 상태일 때만 chuchen_state 버튼 표시
+            const chuchenStateButtonsEl = document.getElementById('chuchen-state-buttons');
+            if (chuchenStateButtonsEl) {
+                const isChuchen = (data.stu_member === '추천');
+                chuchenStateButtonsEl.style.display = isChuchen ? '' : 'none';
+            }
+            setChuchenState(data.chuchen_state || '신규', false);
+
             currentDetailItem = data;
             // 물건 선택 시 항상 상세 탭으로 시작
             currentItemDetailTab = 'detail';
             if (typeof switchItemDetailTab === 'function') switchItemDetailTab('detail');
             // 회원 부가정보(명의/토큰/텔레그램) 표기 갱신
             try { updateMemberTokenInfo('main'); } catch (e) { }
+            // 하단 탭 초기화 (항상 비고 탭으로)
+            switchItemSubTab('note');
         }
     }
 
@@ -3106,6 +3372,249 @@
         if (updateHidden && hiddenInput) {
             hiddenInput.value = state;
         }
+    }
+
+    // ── 입찰물건관리 상세 하단 탭 ──────────────────────────────────
+    function switchItemSubTab(tab) {
+        ['note', 'history', 'info'].forEach(t => {
+            const btns = document.querySelectorAll(`.item-sub-tab-btn`);
+            btns.forEach(btn => {
+                const isTarget = btn.getAttribute('onclick') === `switchItemSubTab('${t}')`;
+                if (isTarget) {
+                    btn.className = t === tab
+                        ? 'item-sub-tab-btn px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-semibold bg-white'
+                        : 'item-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600';
+                }
+            });
+            const panel = document.getElementById(`item-sub-panel-${t}`);
+            if (panel) panel.classList.toggle('hidden', t !== tab);
+        });
+        if (tab === 'history') renderItemSubHistory();
+        if (tab === 'info') renderItemSubInfo();
+    }
+
+    function renderItemSubHistory() {
+        const el = document.getElementById('item-sub-history-list');
+        if (!el || !currentDetailItem) return;
+        const item = currentDetailItem;
+        const events = [];
+        if (item.reg_date) events.push({ dt: item.reg_date, label: '📝 물건 등록', by: item.reg_member || '' });
+        if (item.chuchen_date) events.push({ dt: item.chuchen_date, label: '📤 추천 전달', by: '' });
+        events.sort((a, b) => String(b.dt).localeCompare(String(a.dt)));
+        if (!events.length) { el.innerHTML = '<div class="text-gray-400 py-2">이력 없음</div>'; return; }
+        el.innerHTML = events.map(e => `
+            <div class="flex items-start gap-2 py-1 border-b border-gray-100">
+                <span class="text-gray-400 shrink-0 text-[10px]">${String(e.dt).slice(0, 16).replace('T', ' ')}</span>
+                <span class="font-semibold text-gray-700">${e.label}</span>
+                ${e.by ? `<span class="text-gray-400 text-[10px]">${e.by}</span>` : ''}
+            </div>`).join('');
+    }
+
+    function renderItemSubInfo() {
+        const el = document.getElementById('item-sub-info-content');
+        if (!el || !currentDetailItem) return;
+        const item = currentDetailItem;
+        const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (typeof allMemberData !== 'undefined' ? allMemberData : []);
+        const mem = memberList.find(m => String(m.member_id) === String(item.member_id)) || {};
+        el.innerHTML = `
+            <div class="space-y-4">
+                <!-- 텔레그램정보 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">텔레그램정보</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Y/N</label>
+                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
+                                ${mem.telegram_username || '-'}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">토큰</label>
+                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-xs text-gray-700 truncate">
+                                ${mem.telegram_enabled === 'Y' && mem.member_token ? '확인완료' : (mem.member_token ? '미확인/알수없음' : '-')}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">ID</label>
+                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
+                                ${mem.telegram_chat_id || '-'}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 메타데이터 정보 -->
+                <div class="border-t border-gray-100 pt-3">
+                    <div class="grid grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">이미지 ID</label>
+                            <div class="text-xs text-gray-700 truncate max-w-[100px] font-mono break-all" title="${item.image_id || ''}">${item.image_id || '-'}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">수정날짜</label>
+                            <div class="text-xs text-gray-700">${item.mod_date ? String(item.mod_date).slice(0, 10) : '-'}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">등록자</label>
+                            <div class="text-xs text-gray-700">${item.reg_member || '-'}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">등록일자</label>
+                            <div class="text-xs text-gray-700">${item.reg_date ? String(item.reg_date).slice(0, 10) : '-'}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    // ── 입찰일정 모달 하단 탭 ──────────────────────────────────────
+    function switchModalSubTab(tab) {
+        ['note', 'history', 'info'].forEach(t => {
+            const btns = document.querySelectorAll(`.modal-sub-tab-btn`);
+            btns.forEach(btn => {
+                const isTarget = btn.getAttribute('onclick') === `switchModalSubTab('${t}')`;
+                if (isTarget) {
+                    btn.className = t === tab
+                        ? 'modal-sub-tab-btn px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-semibold bg-white'
+                        : 'modal-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600';
+                }
+            });
+            const panel = document.getElementById(`modal-sub-panel-${t}`);
+            if (panel) panel.classList.toggle('hidden', t !== tab);
+        });
+        if (tab === 'history') renderModalSubHistory();
+        if (tab === 'info') renderModalSubInfo();
+    }
+
+    function renderModalSubNote(data) {
+        const memberNoteEl = document.getElementById('modal-sub-member-note');
+        const itemNoteEl = document.getElementById('modal-sub-item-note');
+        const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (typeof allMemberData !== 'undefined' ? allMemberData : []);
+        const mem = memberList.find(m => String(m.member_id) === String(data.member_id)) || {};
+        if (memberNoteEl) memberNoteEl.textContent = mem.note1 || '(없음)';
+        if (itemNoteEl) itemNoteEl.textContent = data.note || '(없음)';
+    }
+
+    function renderModalSubHistory() {
+        const el = document.getElementById('modal-sub-history-list');
+        if (!el || !currentModalItemData) return;
+        const item = currentModalItemData;
+        const events = [];
+        if (item.reg_date) events.push({ dt: item.reg_date, label: '📝 물건 등록', by: item.reg_member || '' });
+        if (item.chuchen_date) events.push({ dt: item.chuchen_date, label: '📤 추천 전달', by: '' });
+        events.sort((a, b) => String(b.dt).localeCompare(String(a.dt)));
+        if (!events.length) { el.innerHTML = '<div class="text-gray-400 py-2">이력 없음</div>'; return; }
+        el.innerHTML = events.map(e => `
+            <div class="flex items-start gap-2 py-1 border-b border-gray-100">
+                <span class="text-gray-400 shrink-0 text-[10px]">${String(e.dt).slice(0, 16).replace('T', ' ')}</span>
+                <span class="font-semibold text-gray-700">${e.label}</span>
+                ${e.by ? `<span class="text-gray-400 text-[10px]">${e.by}</span>` : ''}
+            </div>`).join('');
+    }
+
+    function renderModalSubInfo() {
+        const el = document.getElementById('modal-sub-info-content');
+        if (!el || !currentModalItemData) return;
+        const item = currentModalItemData;
+        const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (typeof allMemberData !== 'undefined' ? allMemberData : []);
+        const mem = memberList.find(m => String(m.member_id) === String(item.member_id)) || {};
+        el.innerHTML = `
+            <div class="space-y-4">
+                <!-- 텔레그램정보 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">텔레그램정보</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Y/N</label>
+                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
+                                ${mem.telegram_username || '-'}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">토큰</label>
+                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-xs text-gray-700 truncate">
+                                ${mem.telegram_enabled === 'Y' && mem.member_token ? '확인완료' : (mem.member_token ? '미확인/알수없음' : '-')}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">ID</label>
+                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
+                                ${mem.telegram_chat_id || '-'}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 메타데이터 정보 -->
+                <div class="border-t border-gray-100 pt-3">
+                    <div class="grid grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">이미지 ID</label>
+                            <div class="text-xs text-gray-700 truncate max-w-[100px] font-mono break-all" title="${item.image_id || ''}">${item.image_id || '-'}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">수정날짜</label>
+                            <div class="text-xs text-gray-700">${item.mod_date ? String(item.mod_date).slice(0, 10) : '-'}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">등록자</label>
+                            <div class="text-xs text-gray-700">${item.reg_member || '-'}</div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">등록일자</label>
+                            <div class="text-xs text-gray-700">${item.reg_date ? String(item.reg_date).slice(0, 10) : '-'}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    function setChuchenState(state, updateHidden = true) {
+        const btnNew = document.getElementById('btn-chuchen-new');
+        const btnDone = document.getElementById('btn-chuchen-done');
+        const hiddenInput = document.getElementById('form-chuchen-state');
+
+        if (state === '신규') {
+            if (btnNew) {
+                btnNew.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
+                btnNew.classList.add('bg-gray-200', 'text-gray-700', 'font-bold', 'border-gray-400');
+            }
+            if (btnDone) {
+                btnDone.classList.remove('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
+                btnDone.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
+            }
+        } else { // 전달완료
+            if (btnNew) {
+                btnNew.classList.remove('bg-gray-200', 'text-gray-700', 'font-bold', 'border-gray-400');
+                btnNew.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
+            }
+            if (btnDone) {
+                btnDone.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
+                btnDone.classList.add('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
+            }
+        }
+        if (updateHidden && hiddenInput) hiddenInput.value = state;
+    }
+
+    function setModalChuchenState(state) {
+        const btnNew = document.getElementById('modal-btn-chuchen-new');
+        const btnDone = document.getElementById('modal-btn-chuchen-done');
+        const hiddenInput = document.getElementById('modal-form-chuchen-state');
+
+        if (state === '신규') {
+            if (btnNew) {
+                btnNew.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
+                btnNew.classList.add('bg-gray-200', 'text-gray-700', 'font-bold', 'border-gray-400');
+            }
+            if (btnDone) {
+                btnDone.classList.remove('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
+                btnDone.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
+            }
+        } else {
+            if (btnNew) {
+                btnNew.classList.remove('bg-gray-200', 'text-gray-700', 'font-bold', 'border-gray-400');
+                btnNew.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
+            }
+            if (btnDone) {
+                btnDone.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
+                btnDone.classList.add('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
+            }
+        }
+        if (hiddenInput) hiddenInput.value = state;
     }
 
     function goToMemberManagement() {
@@ -3770,7 +4279,20 @@
         if (modalFormBidPrice) modalFormBidPrice.value = (price == 0 || price === '0') ? '' : new Intl.NumberFormat('ko-KR').format(price);
 
         const savedBidState = data.bid_state || '';
+        window._prevModalBidState = savedBidState; // 이중 전송 방지용: 원래 상태 기억
         setBidState(savedBidState);
+
+        // 추천상태 버튼 초기화 (추천 물건일 때만 표시)
+        const modalChuchenBtns = document.getElementById('modal-chuchen-state-buttons');
+        if (modalChuchenBtns) {
+            const isChuchen = (data.stu_member === '추천');
+            modalChuchenBtns.style.display = isChuchen ? '' : 'none';
+        }
+        setModalChuchenState(data.chuchen_state || '신규');
+
+        // 모달 하단 탭: 비고 탭으로 초기화
+        switchModalSubTab('note');
+        renderModalSubNote(data);
 
         const templateContainer = document.getElementById('template-area-container');
         if (templateContainer) templateContainer.classList.add('hidden');
@@ -3923,6 +4445,7 @@ MJ 이정우 팀장
         const hiddenInput = document.getElementById('modal-form-bid-state');
         const btnNew = document.getElementById('modal-bid-state-new-btn');
         const btnDelivered = document.getElementById('modal-bid-state-delivered-btn');
+        const btnConfirmed = document.getElementById('modal-bid-state-confirmed-btn');
 
         if (hiddenInput) hiddenInput.value = state;
 
@@ -3932,9 +4455,16 @@ MJ 이정우 팀장
             btnNew.classList.add('bg-red-100', 'text-red-700');
         }
         if (btnDelivered) {
-            btnDelivered.classList.remove('bg-blue-500', 'text-white', 'font-bold');
+            btnDelivered.classList.remove('bg-gray-900', 'text-white', 'font-bold');
             btnDelivered.classList.add('bg-gray-100', 'text-gray-700');
         }
+        if (btnConfirmed) {
+            btnConfirmed.classList.remove('bg-blue-500', 'text-white', 'font-bold');
+            btnConfirmed.classList.add('bg-gray-100', 'text-gray-700');
+        }
+
+        // 텔레그램 뱃지 초기화 (modal)
+        const modalBadge = document.getElementById('modal-telegram-badge');
 
         // 선택된 버튼 스타일 적용
         if (state === '신규') {
@@ -3943,21 +4473,43 @@ MJ 이정우 팀장
                 btnNew.classList.add('bg-red-500', 'text-white', 'font-bold');
             }
             if (bidInput) {
-                bidInput.classList.remove('text-gray-700');
+                bidInput.classList.remove('text-gray-700', 'text-blue-600');
                 bidInput.classList.add('text-red-600');
+            }
+            // 신규: T 뱃지 원래대로 (흰 바탕 파란 T)
+            if (modalBadge && modalBadge.innerHTML.trim()) {
+                modalBadge.innerHTML = '<span class="telegram-badge">T</span>';
             }
         } else if (state === '전달완료') {
             if (btnDelivered) {
                 btnDelivered.classList.remove('bg-gray-100', 'text-gray-700');
-                btnDelivered.classList.add('bg-blue-500', 'text-white', 'font-bold');
+                btnDelivered.classList.add('bg-gray-900', 'text-white', 'font-bold');
             }
             if (bidInput) {
-                bidInput.classList.remove('text-red-600');
+                bidInput.classList.remove('text-red-600', 'text-blue-600');
                 bidInput.classList.add('text-gray-700');
             }
-        } else {
+            // 전달완료: T 뱃지 원래대로 (흰 바탕 파란 T)
+            if (modalBadge && modalBadge.innerHTML.trim()) {
+                modalBadge.innerHTML = '<span class="telegram-badge">T</span>';
+            }
+        } else if (state === '확인완료') {
+            if (btnConfirmed) {
+                btnConfirmed.classList.remove('bg-gray-100', 'text-gray-700');
+                btnConfirmed.classList.add('bg-blue-500', 'text-white', 'font-bold');
+            }
             if (bidInput) {
-                bidInput.classList.remove('text-gray-700');
+                bidInput.classList.remove('text-red-600', 'text-gray-700');
+                bidInput.classList.add('text-blue-600');
+            }
+            // 확인완료: T 뱃지 → 파란 배경 흰 T
+            if (modalBadge && modalBadge.innerHTML.trim()) {
+                modalBadge.innerHTML = '<span class="telegram-badge-confirmed">T</span>';
+            }
+        } else {
+            // 빈값 기본: 입찰가 붉은색
+            if (bidInput) {
+                bidInput.classList.remove('text-gray-700', 'text-blue-600');
                 bidInput.classList.add('text-red-600');
             }
         }
@@ -4032,6 +4584,20 @@ MJ 이정우 팀장
             .withSuccessHandler(result => {
                 if (result && result.success) {
                     showStatus(result.message || '텔레그램 전송 완료', 'success');
+                    // 추천물건 안내(card) 전송 성공 시 chuchen_state='전달완료' 업데이트
+                    if (styleKey === 'card' && typeof google !== 'undefined' && google.script && google.script.run) {
+                        const now = new Date().toISOString();
+                        google.script.run
+                            .withSuccessHandler(() => {
+                                setModalChuchenState('전달완료');
+                                if (currentModalItemData) {
+                                    currentModalItemData.chuchen_state = '전달완료';
+                                    currentModalItemData.chuchen_date = now;
+                                }
+                            })
+                            .withFailureHandler(() => { })
+                            .updateChuchenStateApi([itemId], '전달완료', now);
+                    }
                 } else {
                     showStatus((result && result.message) ? result.message : '텔레그램 전송 실패', 'error');
                 }
@@ -4126,8 +4692,25 @@ MJ 이정우 팀장
                     showStatus(result.message, 'success');
                     dataCache = { data: null, timestamp: 0 };
                     closeDetailModal();
-                    // forceRefresh = true를 전달하여 서버에서 최신 데이터를 가져오도록 함
                     loadDataAndRenderCalendar(true);
+
+                    // 전달완료 상태로 "전환"될 때만 텔레그램 자동 전송 (이전 상태가 전달완료가 아닌 경우만)
+                    const prevBidState = typeof window._prevModalBidState !== 'undefined' ? window._prevModalBidState : '';
+                    window._prevModalBidState = bidState; // 저장 성공 후 갱신
+                    if (bidState === '전달완료' && prevBidState !== '전달완료' && memberId && getMemberTelegramEnabled_(memberId) === 'Y') {
+                        google.script.run
+                            .withSuccessHandler(tgResult => {
+                                if (tgResult && tgResult.success) {
+                                    showStatus('입찰가 안내를 텔레그램으로 전송했습니다.', 'success');
+                                } else {
+                                    showStatus('텔레그램 전송 실패: ' + (tgResult ? tgResult.message : ''), 'warning');
+                                }
+                            })
+                            .withFailureHandler(tgErr => {
+                                showStatus('텔레그램 전송 오류: ' + tgErr.message, 'warning');
+                            })
+                            .sendItemToMemberTelegramWithStyle(memberId, id, 'bid_price');
+                    }
                 } else {
                     showStatus(result.message, 'error');
                 }
@@ -4303,7 +4886,7 @@ MJ 이정우 팀장
     function loadData(forceRefresh = false) {
         if (typeof google === 'undefined' || !google.script || !google.script.run) {
             if (dataTableBody) {
-                dataTableBody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-red-500 font-bold">⚠️ 오류: 이 코드는 구글 앱스 스크립트 환경이 아닙니다.</td></tr>`;
+                dataTableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-red-500 font-bold">⚠️ 오류: 이 코드는 구글 앱스 스크립트 환경이 아닙니다.</td></tr>`;
             }
             return;
         }
@@ -4332,7 +4915,7 @@ MJ 이정우 팀장
                 toggleLoading(false);
                 showStatus(`데이터 로드 실패: ${error.message}`, 'error');
                 if (dataTableBody) {
-                    dataTableBody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-red-500">데이터 로드 중 오류가 발생했습니다.</td></tr>`;
+                    dataTableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-red-500">데이터 로드 중 오류가 발생했습니다.</td></tr>`;
                 }
             });
 
@@ -4395,6 +4978,7 @@ MJ 이정우 팀장
             renderMissingBidDashboard();
             renderStatusManagementDashboard();
             renderMemberBidChart();
+            if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
             return;
         }
         toggleDashboardLoading(true);
@@ -4408,8 +4992,8 @@ MJ 이정우 팀장
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
                 if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
-                if (typeof loadTelegramStats === 'function') loadTelegramStats(); // [추가] 텔레그램 연동 현황
-                toggleDashboardLoading(false);
+                if (typeof loadTelegramJoinStatsByItem === 'function') loadTelegramJoinStatsByItem(); // 텔레그램 가입현황 (물건 모드 디폴트)
+                if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
             })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
@@ -4480,6 +5064,26 @@ MJ 이정우 팀장
         if (telegramRequestsPoller_) {
             clearInterval(telegramRequestsPoller_);
             telegramRequestsPoller_ = null;
+        }
+    }
+
+    // --- [Calendar] 자동 갱신 폴링 (15초, BiddingSchedule 탭 활성 시) ---
+    let calendarPoller_ = null;
+
+    function startCalendarPolling_() {
+        if (IS_MEMBER_VIEW) return;
+        if (calendarPoller_) return; // 이미 실행 중이면 중복 방지
+        calendarPoller_ = setInterval(() => {
+            const cal = document.getElementById('BiddingSchedule');
+            if (!cal || cal.classList.contains('content-hidden')) return;
+            try { loadDataAndRenderCalendar(true); } catch (e) { } // 서버에서 최신 데이터 조용히 갱신
+        }, 15000); // 15초마다 자동 갱신
+    }
+
+    function stopCalendarPolling_() {
+        if (calendarPoller_) {
+            clearInterval(calendarPoller_);
+            calendarPoller_ = null;
         }
     }
 
@@ -4733,6 +5337,18 @@ MJ 이정우 팀장
                     filterDesc = `${niceDate} 입찰가 미입력 건`;
                 } else if (dashboardFilter.type === 'status') {
                     filterDesc = `${niceDate} [${dashboardFilter.status}] 건`;
+                } else if (dashboardFilter.type === 'auto_all') {
+                    filterDesc = `${niceDate} 물건추천 전체`;
+                } else if (dashboardFilter.type === 'bid_state') {
+                    filterDesc = `${niceDate} 입찰가 [${dashboardFilter.status}] 건`;
+                } else if (dashboardFilter.type === 'all_status') {
+                    const st = Array.isArray(dashboardFilter.status) ? dashboardFilter.status.join('/') : dashboardFilter.status;
+                    filterDesc = `전체 [${st}] 건`;
+                } else if (dashboardFilter.type === 'all_bid_state') {
+                    filterDesc = `전체 입찰가 [${dashboardFilter.status}] 건`;
+                } else if (dashboardFilter.type === 'item_ids') {
+                    const cnt = Array.isArray(dashboardFilter.status) ? dashboardFilter.status.length : 0;
+                    filterDesc = `${dashboardFilter.label || '텔레그램'} (${cnt}건)`;
                 }
             }
             activeFilterText.textContent = `${filterDesc} 필터링 중`;
@@ -4759,11 +5375,16 @@ MJ 이정우 팀장
             // 입찰일자 필터링: syncSakunFilter 활성 시 날짜 제한 없음
             const inDateStr = String(inDate || '');
             const inDateNum = inDateStr.replace(/\D/g, '');
-            const matchesIndate = syncSakunFilter.active
+            // all_status/all_bid_state/item_ids 타입은 날짜 전체 범위를 조회 (과거 날짜 포함)
+            const bypassDateFilter = dashboardFilter.active &&
+                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids');
+            const matchesIndate = bypassDateFilter
                 ? true
-                : (termIndate
-                    ? (inDateStr.includes(termIndate) || inDateNum.includes(termIndate.replace(/\D/g, '')))
-                    : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, ''))));
+                : (syncSakunFilter.active
+                    ? true
+                    : (termIndate
+                        ? (inDateStr.includes(termIndate) || inDateNum.includes(termIndate.replace(/\D/g, '')))
+                        : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, '')))));
             const matchesSakunNo = !termSakunNo || String(item.sakun_no || '').toLowerCase().includes(termSakunNo);
             // 정확한 매칭: 입력값과 정확히 일치하는 경우만 통과
             const matchesCourt = !termCourt || String(item.court || '').toLowerCase().trim() === termCourt.toLowerCase().trim();
@@ -4800,6 +5421,20 @@ MJ 이정우 팀장
                     return itemDate === dashboardFilter.date && item.stu_member === dashboardFilter.status;
                 } else if (dashboardFilter.type === 'total_status') {
                     return itemDate >= todayYYMMDD && item.stu_member === dashboardFilter.status;
+                } else if (dashboardFilter.type === 'auto_all') {
+                    return itemDate === dashboardFilter.date && ['추천', '입찰', '변경'].includes(item.stu_member);
+                } else if (dashboardFilter.type === 'bid_state') {
+                    return itemDate === dashboardFilter.date && String(item.bid_state || '') === dashboardFilter.status;
+                } else if (dashboardFilter.type === 'all_status') {
+                    const st = Array.isArray(dashboardFilter.status) ? dashboardFilter.status : [dashboardFilter.status];
+                    return st.includes(item.stu_member);
+                } else if (dashboardFilter.type === 'all_bid_state') {
+                    return String(item.bid_state || '') === dashboardFilter.status;
+                } else if (dashboardFilter.type === 'item_ids') {
+                    // 텔레그램 승인현황/가입현황 클릭: 해당 item_id 목록에 속하는 물건만
+                    var ids = Array.isArray(dashboardFilter.status) ? dashboardFilter.status : [];
+                    var itemIdStr = String(item.id || '').trim();
+                    return ids.some(function (id) { return String(id).trim() === itemIdStr; });
                 }
             } else {
                 // 입찰물건 관리 기본은 "전체"를 보여주고, 필요 시 사용자가 검색/필터로 좁히도록 함
@@ -4817,6 +5452,26 @@ MJ 이정우 팀장
             const k = itemListSort.key;
             const d = itemListSort.dir;
             filteredData = filteredData.slice().sort((a, b) => {
+                // IMG 정렬: 이미지+옥션 > 이미지만 > 옥션만 > 없음
+                if (k === 'has_images') {
+                    const va = (a.has_images && a.auction_id) ? 2 : (a.has_images ? 1.5 : (a.auction_id ? 1 : 0));
+                    const vb = (b.has_images && b.auction_id) ? 2 : (b.has_images ? 1.5 : (b.auction_id ? 1 : 0));
+                    return d * (va < vb ? -1 : va > vb ? 1 : 0);
+                }
+                // 텔레그램 T 정렬: allMembersNewData 기준
+                if (k === 'telegram_enabled') {
+                    const memA = allMembersNewData.find(m => String(m.member_id) === String(a.member_id));
+                    const memB = allMembersNewData.find(m => String(m.member_id) === String(b.member_id));
+                    const va = (memA && memA.telegram_enabled === 'Y') ? 'Y' : '';
+                    const vb = (memB && memB.telegram_enabled === 'Y') ? 'Y' : '';
+                    return d * (va < vb ? -1 : va > vb ? 1 : 0);
+                }
+                // 입찰가 정렬: 숫자 비교
+                if (k === 'bidprice') {
+                    const va = parseFloat(String(a.bidprice || 0).replace(/,/g, '')) || 0;
+                    const vb = parseFloat(String(b.bidprice || 0).replace(/,/g, '')) || 0;
+                    return d * (va < vb ? -1 : va > vb ? 1 : 0);
+                }
                 let va = a[k] != null ? String(a[k]) : '';
                 let vb = b[k] != null ? String(b[k]) : '';
                 if (k === 'in-date' || k === 'reg_date') { va = va.replace(/\D/g, ''); vb = vb.replace(/\D/g, ''); }
@@ -4868,7 +5523,32 @@ MJ 이정우 팀장
             searchManagerInput.classList.add('filter-active-input');
         }
 
-        const statusToSet = (dashboardFilter.type === 'missing') ? '입찰' : (dashboardFilter.status || '');
+        // all_status / all_bid_state / item_ids 타입: dashboardFilter가 2단계에서 처리하므로
+        // 1단계 상태 체크박스는 '전체' 로 설정 (모두 통과)
+        if (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids') {
+            const allStatusCb = document.getElementById('search-status-all');
+            if (allStatusCb) allStatusCb.checked = true;
+            document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => { cb.checked = false; });
+            const statusBtn = document.getElementById('search-status-btn');
+            const statusLabel = document.getElementById('search-status-label');
+            if (statusBtn) statusBtn.classList.add('filter-active-input');
+            if (statusLabel) {
+                if (dashboardFilter.type === 'item_ids') {
+                    const cnt = dashboardFilter.status ? dashboardFilter.status.length : 0;
+                    statusLabel.textContent = (dashboardFilter.label || '텔레그램') + ' (' + cnt + '건)';
+                } else {
+                    const label = Array.isArray(dashboardFilter.status)
+                        ? dashboardFilter.status.join('/')
+                        : String(dashboardFilter.status || '');
+                    statusLabel.textContent = label || '전체';
+                }
+            }
+            return;
+        }
+
+        const statusToSet = (dashboardFilter.type === 'missing') ? '입찰' : (
+            Array.isArray(dashboardFilter.status) ? dashboardFilter.status[0] : (dashboardFilter.status || '')
+        );
         if (statusToSet) {
             document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => {
                 cb.checked = (cb.value === statusToSet);
@@ -5000,7 +5680,22 @@ MJ 이정우 팀장
                 const done = ok + fail;
                 showStatus(`전송 중... (${done}/${ids.length})`, 'warning');
                 if (idx >= ids.length) {
-                    showStatus(`전송 완료: 성공 ${ok}건 / 실패 ${fail}건`, (fail > 0 ? 'warning' : 'success'));
+                    const statusMsg = `전송 완료: 성공 ${ok}건 / 실패 ${fail}건`;
+                    // 추천물건 안내(card) 전송 완료 시 chuchen_state='전달완료' 업데이트
+                    if (styleKey === 'card' && typeof google !== 'undefined' && google.script && google.script.run) {
+                        google.script.run
+                            .withSuccessHandler(upRes => {
+                                showStatus(statusMsg + ` (추천상태 업데이트: ${upRes ? upRes.updated : 0}건)`,
+                                    fail > 0 ? 'warning' : 'success');
+                                if (typeof loadData === 'function') loadData();
+                            })
+                            .withFailureHandler(() => {
+                                showStatus(statusMsg, fail > 0 ? 'warning' : 'success');
+                            })
+                            .updateChuchenStateApi(ids, '전달완료', new Date().toISOString());
+                    } else {
+                        showStatus(statusMsg, (fail > 0 ? 'warning' : 'success'));
+                    }
                     return;
                 }
                 const id = ids[idx++];
@@ -5880,6 +6575,200 @@ MJ 이정우 팀장
     /**
      * 대시보드 - 이미지 동기화 현황 로드 (최근 7일)
      */
+    // ── 텔레그램 가입현황 ──────────────────────────────────────────
+    function loadTelegramJoinStats() {
+        const el = document.getElementById('telegramJoinBody');
+        if (!el) return;
+        el.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">조회 중...</div>';
+        google.script.run
+            .withSuccessHandler(renderTelegramJoinStats)
+            .withFailureHandler(err => {
+                if (el) el.innerHTML = `<div class="p-4 text-center text-red-500 text-sm">${err.message}</div>`;
+            })
+            .getTelegramJoinStats();
+    }
+
+    // 라디오버튼 모드 변경: 물건 or 회원
+    function onTelegramJoinModeChange(radio) {
+        if (radio.value === 'item') {
+            loadTelegramJoinStatsByItem();
+        } else {
+            loadTelegramJoinStats();
+        }
+    }
+
+    // 물건 모드: 오늘 이후 입찰일 물건의 배정 회원 텔레그램 가입 여부 집계
+    function loadTelegramJoinStatsByItem() {
+        const el = document.getElementById('telegramJoinBody');
+        if (!el) return;
+        el.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">조회 중...</div>';
+        google.script.run
+            .withSuccessHandler(function (stats) {
+                renderTelegramJoinStatsByItem(stats);
+            })
+            .withFailureHandler(err => {
+                if (el) el.innerHTML = `<div class="p-4 text-center text-red-500 text-sm">${err.message}</div>`;
+            })
+            .getTelegramJoinStatsByItem();
+    }
+
+    function renderTelegramJoinStatsByItem(stats) {
+        const el = document.getElementById('telegramJoinBody');
+        if (!el || !stats) return;
+        if (!stats.length) {
+            el.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">오늘 이후 물건 없음</div>';
+            return;
+        }
+        window._telegramItemStats = stats;
+        const rows = stats.map((row, idx) => {
+            const isTotal = row.class_type === '합계';
+            const rate = row.total > 0 ? Math.round(row.joined / row.total * 100) + '%' : '0%';
+            const boldClass = isTotal ? 'font-bold bg-gray-50' : 'font-bold';
+
+            // 추천/입찰 클릭 -> 입찰물건관리 (합계 행 포함)
+            const onClickRecommend = `onclick="goToItemMgmtByTelegramStats(${idx},'recommend_ids')" style="cursor:pointer"`;
+            const onClickBid = `onclick="goToItemMgmtByTelegramStats(${idx},'bid_ids')" style="cursor:pointer"`;
+            // 회원수/가입수/Chat_ID 클릭 -> member_id 배열 기반 회원관리 이동 (합계 포함)
+            const onClickMemTotal = `onclick="goToMemberMgmtByTelegramItemStats(${idx},'member_ids')"`;
+            const onClickMemJoined = `onclick="goToMemberMgmtByTelegramItemStats(${idx},'joined_member_ids')"`;
+            const onClickMemChatId = `onclick="goToMemberMgmtByTelegramItemStats(${idx},'chatid_member_ids')"`;
+
+            const numClass = 'cursor-pointer text-blue-600 hover:underline';
+
+            const recCount = row.recommend_count || 0;
+            const bidCount = row.bid_count || 0;
+
+            return `<tr class="${boldClass} border-b border-gray-100 text-xs">
+                <td class="py-1.5 px-3 text-center text-gray-700">${row.class_type}</td>
+                <td class="py-1.5 px-3 text-center text-red-500">${rate}</td>
+                <td class="py-1.5 px-3 text-center ${recCount > 0 ? numClass : 'text-gray-400'}" ${recCount > 0 ? onClickRecommend : ''}>${recCount || '-'}</td>
+                <td class="py-1.5 px-3 text-center ${bidCount > 0 ? numClass : 'text-gray-400'}" ${bidCount > 0 ? onClickBid : ''}>${bidCount || '-'}</td>
+                <td class="py-1.5 px-3 text-center ${numClass}" ${row.total > 0 ? onClickMemTotal : ''}>${row.total}</td>
+                <td class="py-1.5 px-3 text-center ${numClass}" ${row.joined > 0 ? onClickMemJoined : ''}>${row.joined}</td>
+                <td class="py-1.5 px-3 text-center ${numClass}" ${row.chat_id > 0 ? onClickMemChatId : ''}>${row.chat_id}</td>
+            </tr>`;
+        });
+        el.innerHTML = `<table class="w-full text-xs border-collapse">
+            <thead><tr class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                <th class="py-1.5 px-3 text-center font-bold">수업</th>
+                <th class="py-1.5 px-3 text-center font-bold">가입율</th>
+                <th class="py-1.5 px-3 text-center font-bold text-indigo-500">추천</th>
+                <th class="py-1.5 px-3 text-center font-bold text-orange-500">입찰</th>
+                <th class="py-1.5 px-3 text-center font-bold">회원수</th>
+                <th class="py-1.5 px-3 text-center font-bold">가입수</th>
+                <th class="py-1.5 px-3 text-center font-bold">Chat_ID</th>
+            </tr></thead>
+            <tbody>${rows.join('')}</tbody>
+        </table>`;
+    }
+
+
+
+    function renderTelegramJoinStats(stats) {
+        const el = document.getElementById('telegramJoinBody');
+        if (!el || !stats) return;
+        const rows = stats.map(row => {
+            const isTotal = row.class_type === '합계';
+            const rate = row.total > 0 ? Math.round(row.joined / row.total * 100) + '%' : '0%';
+            const boldClass = isTotal ? 'font-bold bg-gray-50' : 'font-bold';
+            const onClick = isTotal ? '' : `onclick="goToMemberMgmtByTelegram('${row.class_type}', '')"`;
+            const onClickJoined = isTotal ? '' : `onclick="goToMemberMgmtByTelegram('${row.class_type}', 'Y')"`;
+            const onClickChatId = isTotal ? '' : `onclick="goToMemberMgmtByTelegram('${row.class_type}', 'C')"`;
+            const numClass = 'cursor-pointer text-blue-600 hover:underline';
+            return `<tr class="${boldClass} border-b border-gray-100 text-xs">
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : 'cursor-pointer hover:text-indigo-600'}" ${onClick}>${row.class_type}</td>
+                <td class="py-1.5 px-3 text-center text-red-500">${rate}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClick}>${row.total}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClickJoined}>${row.joined}</td>
+                <td class="py-1.5 px-3 text-center ${isTotal ? '' : numClass}" ${onClickChatId}>${row.chat_id}</td>
+            </tr>`;
+        });
+        el.innerHTML = `<table class="w-full text-xs border-collapse">
+            <thead><tr class="bg-gray-50 border-b border-gray-200 text-gray-600">
+                <th class="py-1.5 px-3 text-center font-bold">수업</th>
+                <th class="py-1.5 px-3 text-center font-bold">가입율</th>
+                <th class="py-1.5 px-3 text-center font-bold">회원수</th>
+                <th class="py-1.5 px-3 text-center font-bold">가입수</th>
+                <th class="py-1.5 px-3 text-center font-bold">Chat_ID</th>
+            </tr></thead>
+            <tbody>${rows.join('')}</tbody>
+        </table>`;
+    }
+
+    // 텔레그램 가입현황에서 회원관리로 이동 + 필터 적용
+    // telegramFilter: '' = 전체, 'Y' = 가입수(telegram_enabled=Y), 'C' = Chat_ID 있는 회원
+    function goToMemberMgmtByTelegram(classType, telegramFilter) {
+        // 필터 정보를 플래그로 저장 (loadMembersNew 완료 시 _memberMgmtPendingClassType으로 처리)
+        window._pendingTelegramNavFilter = { classType: classType, telegramFilter: telegramFilter || '' };
+        navigateTo('MemberManagement');
+    }
+
+    // 텔레그램 가입현황(물건 모드) 회원수/가입수/Chat_ID 클릭 → member_id 배열로 회원관리 이동
+    // class_type 기준이 아닌 실제 물건이 있는 회원 ID 배열로 필터링
+    function goToMemberMgmtByTelegramItemStats(rowIdx, field) {
+        var stats = window._telegramItemStats;
+        if (!stats || !stats[rowIdx]) return;
+        var memberIds = stats[rowIdx][field];
+        if (!memberIds || !memberIds.length) return;
+        window._pendingTelegramMemberIds = memberIds.map(String);
+        navigateTo('MemberManagement');
+    }
+
+    // 텔레그램 가입현황(물건 모드) 추천/입찰 숫자 클릭 → item_ids 필터로 입찰물건관리 이동
+    function goToItemMgmtByTelegramStats(rowIdx, field) {
+        var stats = window._telegramItemStats;
+        if (!stats || !stats[rowIdx]) return;
+        var ids = stats[rowIdx][field];
+        if (!ids || !ids.length) return;
+        var label = field === 'recommend_ids' ? '텔레그램 추천건' : '텔레그램 입찰건';
+        dashboardFilter = { active: true, date: '', type: 'item_ids', status: ids, manager: null, label: label };
+        navigateTo('ItemManagement');
+    }
+
+    // 텔레그램 가입현황(물건 모드)에서 입찰물건관리로 이동 + 수업 필터 적용
+    function goToItemMgmtByTelegram(classType, stuMember) {
+        // 1. 입찰물건관리 탭으로 이동
+        navigateTo('ItemManagement');
+
+        // 2. 대시보드 필터 초기화 (특정 상태 필터 끄기)
+        dashboardFilter.active = false;
+        dashboardFilter.date = '';
+        dashboardFilter.status = '';
+        dashboardFilter.type = '';
+        dashboardFilter.manager = '';
+
+        // 3. 필터 UI 초기화 후 수업(classType) + stu_member 세팅
+        setTimeout(function () {
+            // 다른 입력창 초기화
+            if (searchIndateInput) searchIndateInput.value = '';
+            if (searchSakunNoInput) searchSakunNoInput.value = '';
+            if (searchCourtInput) searchCourtInput.value = '';
+            if (searchRegDateInput) searchRegDateInput.value = '';
+            if (searchManagerInput) searchManagerInput.value = '';
+            if (searchMNameInput) searchMNameInput.value = '';
+
+            // 상태구분: stuMember가 있으면 해당 상태만 선택, 없으면 전체
+            const allStatusCb = document.getElementById('search-status-all');
+            if (stuMember) {
+                if (allStatusCb) allStatusCb.checked = false;
+                document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => { cb.checked = (cb.value === stuMember); });
+            } else {
+                if (allStatusCb) allStatusCb.checked = true;
+                document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => { cb.checked = false; });
+            }
+
+            // 수업 셋팅
+            const ctEl = document.getElementById('bid-class-type');
+            if (ctEl) {
+                ctEl.value = classType;
+                ctEl.dispatchEvent(new Event('change'));
+            }
+
+            if (typeof applyFilters === 'function') applyFilters();
+        }, 50);
+    }
+    // ─────────────────────────────────────────────────────────────
+
     function loadDashboardImageStats() {
         const tbody = document.getElementById('imageSyncStatsBody');
         if (!tbody) return;
@@ -5925,45 +6814,6 @@ MJ 이정우 팀장
                 <td class="py-1 px-1">${mk(s.aucMatch, 'text-blue-600', '옥션매칭')}</td>
                 <td class="py-1 px-1">${mk(s.aucNoMatch, 'text-orange-600', '옥션미매칭')}</td>
             </tr>`;
-        });
-        tbody.innerHTML = html;
-    }
-
-    /**
-     * 대시보드 - 텔레그램 연동 현황 로드
-     */
-    function loadTelegramStats() {
-        const tbody = document.getElementById('telegramStatsBody');
-        if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-400">데이터 조회 중...</td></tr>';
-
-        google.script.run
-            .withSuccessHandler(renderTelegramStats)
-            .withFailureHandler(err => {
-                tbody.innerHTML = `<tr><td colspan="5" class="py-4 text-center text-red-500">${err.message}</td></tr>`;
-            })
-            .getTelegramIntegrationStats();
-    }
-
-    function renderTelegramStats(stats) {
-        const tbody = document.getElementById('telegramStatsBody');
-        if (!tbody || !stats) return;
-
-        let html = '';
-        stats.forEach((s, idx) => {
-            const isTotal = s.gubun === '합계';
-            const rowClass = isTotal ? 'bg-gray-100 font-bold border-t-2 border-gray-300' : 'border-b border-gray-100 hover:bg-gray-50';
-            const gubunClass = isTotal ? 'bg-gray-200' : 'bg-gray-50';
-
-            html += `
-                <tr class="${rowClass}">
-                    <td class="py-2 px-2 text-center border-r ${gubunClass}">${s.gubun}</td>
-                    <td class="py-2 px-2 text-center font-bold text-gray-800">${s.total}</td>
-                    <td class="py-2 px-2 text-center border-l ${s.approved > 0 ? 'text-blue-600 font-bold' : 'text-gray-400'}">${s.approved || '-'}</td>
-                    <td class="py-2 px-2 text-center border-l ${s.chatId > 0 ? 'text-indigo-600 font-bold' : 'text-gray-400'}">${s.chatId || '-'}</td>
-                    <td class="py-2 px-2 text-center border-l ${s.token > 0 ? 'text-green-600 font-bold' : 'text-gray-400'}">${s.token || '-'}</td>
-                </tr>
-            `;
         });
         tbody.innerHTML = html;
     }
@@ -6169,24 +7019,24 @@ MJ 이정우 팀장
         tables.forEach(table => {
             forceRemoveNodes(table);
 
-            // 헤더가 8개를 초과하면 9번째부터 잘라내기 (담당 컬럼까지 8개 유지)
+            // 헤더가 10개를 초과하면 11번째부터 잘라내기 (입찰가 컬럼까지 10개 유지)
             const headerRow = table.querySelector('thead tr');
             if (headerRow) {
-                while (headerRow.children && headerRow.children.length > 8) {
-                    try { headerRow.removeChild(headerRow.children[8]); } catch (e) { break; }
+                while (headerRow.children && headerRow.children.length > 10) {
+                    try { headerRow.removeChild(headerRow.children[10]); } catch (e) { break; }
                 }
             }
 
-            // 바디 행도 8개 초과 셀 제거
+            // 바디 행도 10개 초과 셀 제거
             const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
             bodyRows.forEach(row => {
                 // item-col-action을 우선 제거
                 Array.from(row.querySelectorAll('td.item-col-action, th.item-col-action')).forEach(n => {
                     try { n.remove(); } catch (e) { }
                 });
-                // 남아있으면 9번째 이상을 강제로 자름 (담당 컬럼까지 8개 유지)
-                while (row.cells && row.cells.length > 8) {
-                    try { row.deleteCell(8); } catch (e) { break; }
+                // 남아있으면 11번째 이상을 강제로 자름 (입찰가 컬럼까지 10개 유지)
+                while (row.cells && row.cells.length > 10) {
+                    try { row.deleteCell(10); } catch (e) { break; }
                 }
             });
         });
@@ -6197,7 +7047,7 @@ MJ 이정우 팀장
         // 로딩 메시지 row의 colspan이 깨졌을 수 있어 보정
         const firstRowTd = document.querySelector('#dataTableBody tr td[colspan]');
         if (firstRowTd) {
-            firstRowTd.setAttribute('colspan', '8');
+            firstRowTd.setAttribute('colspan', '10');
         }
     }
 
@@ -6672,6 +7522,8 @@ MJ 이정우 팀장
                 if (telegramUsername) telegramUsername.textContent = '-';
                 if (memberTokenDisplay) memberTokenDisplay.textContent = '-';
                 if (telegramChatId) telegramChatId.textContent = '-';
+                const detailBadge = document.getElementById('detail-telegram-badge');
+                if (detailBadge) detailBadge.innerHTML = '';
             } else {
                 const telegramUsername = document.getElementById('modal-telegram-username');
                 const memberTokenDisplay = document.getElementById('modal-member-token-display');
@@ -6679,6 +7531,8 @@ MJ 이정우 팀장
                 if (telegramUsername) telegramUsername.textContent = '-';
                 if (memberTokenDisplay) memberTokenDisplay.textContent = '-';
                 if (telegramChatId) telegramChatId.textContent = '-';
+                const modalBadge = document.getElementById('modal-telegram-badge');
+                if (modalBadge) modalBadge.innerHTML = '';
             }
             return;
         }
@@ -6733,6 +7587,7 @@ MJ 이정우 팀장
             }
 
             // 물건그랩경보 표시 (회원 텔레그램 정보)
+            const telegramEnabled = member.telegram_enabled || '';
             if (targetType === 'main') {
                 const telegramUsername = document.getElementById('form-telegram-username');
                 const memberTokenDisplay = document.getElementById('form-member-token-display');
@@ -6740,11 +7595,14 @@ MJ 이정우 팀장
 
                 // telegram_enabled 값 표시 (없으면 N, N=N, Y=Y)
                 if (telegramUsername) {
-                    const enabled = member.telegram_enabled || '';
-                    telegramUsername.textContent = (enabled === 'Y') ? 'Y' : 'N';
+                    telegramUsername.textContent = (telegramEnabled === 'Y') ? 'Y' : 'N';
                 }
                 if (memberTokenDisplay) memberTokenDisplay.textContent = member.member_token || '-';
                 if (telegramChatId) telegramChatId.textContent = member.telegram_chat_id || '-';
+
+                // 상세탭 회원명 옆 T 뱃지
+                const detailBadge = document.getElementById('detail-telegram-badge');
+                if (detailBadge) detailBadge.innerHTML = (telegramEnabled === 'Y') ? '<span class="telegram-badge">T</span>' : '';
             } else {
                 const telegramUsername = document.getElementById('modal-telegram-username');
                 const memberTokenDisplay = document.getElementById('modal-member-token-display');
@@ -6752,11 +7610,14 @@ MJ 이정우 팀장
 
                 // telegram_enabled 값 표시 (없으면 N, N=N, Y=Y)
                 if (telegramUsername) {
-                    const enabled = member.telegram_enabled || '';
-                    telegramUsername.textContent = (enabled === 'Y') ? 'Y' : 'N';
+                    telegramUsername.textContent = (telegramEnabled === 'Y') ? 'Y' : 'N';
                 }
                 if (memberTokenDisplay) memberTokenDisplay.textContent = member.member_token || '-';
                 if (telegramChatId) telegramChatId.textContent = member.telegram_chat_id || '-';
+
+                // 모달 회원명 옆 T 뱃지
+                const modalBadge = document.getElementById('modal-telegram-badge');
+                if (modalBadge) modalBadge.innerHTML = (telegramEnabled === 'Y') ? '<span class="telegram-badge">T</span>' : '';
             }
 
             // display-member-id 스팬에 회원 부가정보 인라인 표시 (main 탭만)
@@ -6784,6 +7645,10 @@ MJ 이정우 팀장
             // 회원을 찾지 못한 경우
             if (formMemberId) formMemberId.value = '';
             if (targetType === 'main' && displayMemberId) displayMemberId.textContent = '';
+            // T 뱃지 초기화
+            const badgeId = targetType === 'modal' ? 'modal-telegram-badge' : 'detail-telegram-badge';
+            const badge = document.getElementById(badgeId);
+            if (badge) badge.innerHTML = '';
         }
     }
 
@@ -7127,6 +7992,18 @@ MJ 이정우 팀장
             .withSuccessHandler(data => {
                 allMembersNewData = Array.isArray(data) ? data : [];
                 loadClassDropdownOptions();
+                // 텔레그램 가입현황(회원 모드) → class_type + telegramFilter 기반 필터
+                if (window._pendingTelegramNavFilter) {
+                    var f = window._pendingTelegramNavFilter;
+                    window._pendingTelegramNavFilter = null;
+                    window._memberMgmtTelegramFilter = f.telegramFilter;
+                    window._memberMgmtPendingClassType = f.classType;
+                }
+                // 텔레그램 가입현황(물건 모드) → member_id 배열 기반 필터
+                if (window._pendingTelegramMemberIds) {
+                    window._memberMgmtPendingMemberIds = window._pendingTelegramMemberIds;
+                    window._pendingTelegramMemberIds = null;
+                }
                 filterMembersNew();
             })
             .withFailureHandler(err => {
@@ -7343,10 +8220,17 @@ MJ 이정우 팀장
         const nameKw = (document.getElementById('mem-search-name')?.value || '').toLowerCase();
         const phoneKw = (document.getElementById('mem-search-phone')?.value || '').replace(/[^0-9]/g, '');
         const gubunKw = document.getElementById('mem-search-gubun')?.value || '';
-        const classTypeKw = document.getElementById('mem-search-class-type')?.value || '';
+        const pendingClassType = window._memberMgmtPendingClassType || '';
+        if (pendingClassType) window._memberMgmtPendingClassType = '';
+        const classTypeKw = pendingClassType || document.getElementById('mem-search-class-type')?.value || '';
         const classNameKw = document.getElementById('mem-search-class-name')?.value || '';
         const classGradeKw = document.getElementById('mem-search-class-grade')?.value || '';
         const classLocKw = document.getElementById('mem-search-class-loc')?.value || '';
+        const telegramFilter = window._memberMgmtTelegramFilter || '';
+        window._memberMgmtTelegramFilter = ''; // 한 번 사용 후 초기화
+        // 물건 모드: member_id 배열 기반 필터 (class_type 필터보다 우선)
+        const pendingMemberIds = window._memberMgmtPendingMemberIds || null;
+        if (pendingMemberIds) window._memberMgmtPendingMemberIds = null;
 
         // 수업 정보 매핑
         const classMap = {};
@@ -7361,13 +8245,21 @@ MJ 이정우 팀장
             const gubun = String(m.gubun || '');
             const cls = classMap[String(m.class_id)] || {};
 
+            // 물건 모드 member_id 필터 (설정된 경우 class_type 등 수업 필터 대신 사용)
+            if (pendingMemberIds) {
+                if (!pendingMemberIds.includes(String(m.member_id || ''))) return false;
+            } else {
+                if (classTypeKw && (cls.class_type || '') !== classTypeKw) return false;
+                if (classNameKw && (cls.class_name || '') !== classNameKw) return false;
+                if (classGradeKw && (cls.class_grade || '') !== classGradeKw) return false;
+                if (classLocKw && (cls.class_loc || '') !== classLocKw) return false;
+            }
+
             if (nameKw && !name.includes(nameKw) && !name1.includes(nameKw) && !name2.includes(nameKw) && !name3.includes(nameKw)) return false;
             if (phoneKw && !phone.includes(phoneKw)) return false;
             if (gubunKw && gubun !== gubunKw) return false;
-            if (classTypeKw && (cls.class_type || '') !== classTypeKw) return false;
-            if (classNameKw && (cls.class_name || '') !== classNameKw) return false;
-            if (classGradeKw && (cls.class_grade || '') !== classGradeKw) return false;
-            if (classLocKw && (cls.class_loc || '') !== classLocKw) return false;
+            if (telegramFilter === 'Y' && String(m.telegram_enabled || '').toUpperCase() !== 'Y') return false;
+            if (telegramFilter === 'C' && !String(m.telegram_chat_id || '').trim()) return false;
             return true;
         });
 
@@ -8257,6 +9149,85 @@ MJ 이정우 팀장
         }
     }
 
+    /**
+     * [모달 회원비고 저장] 입찰일정 모달의 비고 탭 내 저장 버튼
+     */
+    function saveModalMemberNoteOnly() {
+        const item = currentModalItemData;
+        if (!item || !item.member_id) {
+            showStatus('회원이 선택되지 않았습니다.', 'error');
+            return;
+        }
+        const memberNoteEl = document.getElementById('modal-sub-member-note');
+        const note1Val = memberNoteEl ? memberNoteEl.textContent : '';
+
+        const _mList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0)
+            ? allMembersNewData : allMemberData;
+        const mem = _mList.find(m => String(m.member_id) === String(item.member_id));
+        if (!mem) {
+            showStatus('회원 데이터를 찾을 수 없습니다. 회원관리 탭에서 새로고침 후 다시 시도하세요.', 'error');
+            return;
+        }
+
+        showStatus('회원비고 저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(() => {
+                mem.note1 = note1Val;
+                showStatus('회원비고가 저장되었습니다.', 'success');
+            })
+            .withFailureHandler(err => {
+                showStatus('저장 실패: ' + (err.message || err), 'error');
+            })
+            .updateMember({ ...mem, note1: note1Val });
+    }
+
+    /**
+     * [모달 회원관리 이동] 입찰일정 모달에서 회원관리 탭으로 전환
+     */
+    function goToMemberFromModal() {
+        const item = currentModalItemData;
+        if (!item || !item.member_id) {
+            showStatus('회원이 선택되지 않았습니다.', 'error');
+            return;
+        }
+        closeDetailModal();
+        const targetMemberId = String(item.member_id);
+
+        navigateTo('MemberManagement');
+
+        function _applyFilter(memberList) {
+            const mem = memberList.find(m => String(m.member_id) === targetMemberId);
+            if (!mem) {
+                showStatus('해당 member_id의 회원을 찾을 수 없습니다.', 'error');
+                return;
+            }
+            setTimeout(() => {
+                const memberSearchInput = document.getElementById('mem-search-name');
+                if (memberSearchInput) {
+                    memberSearchInput.value = String(mem.member_name || mem.name || '').trim();
+                    if (typeof filterMembersNew === 'function') filterMembersNew();
+                }
+            }, 150);
+        }
+
+        if (typeof allMembersNewData !== 'undefined' && Array.isArray(allMembersNewData) && allMembersNewData.length > 0) {
+            _applyFilter(allMembersNewData);
+        } else {
+            showStatus('회원 데이터 로드 중...', 'info');
+            google.script.run
+                .withSuccessHandler(data => {
+                    allMembersNewData = Array.isArray(data) ? data : [];
+                    if (typeof loadClassDropdownOptions === 'function') loadClassDropdownOptions();
+                    if (typeof filterMembersNew === 'function') filterMembersNew();
+                    _applyFilter(allMembersNewData);
+                })
+                .withFailureHandler(err => {
+                    showStatus('회원 데이터 로드 실패: ' + err, 'error');
+                })
+                .readAllMembersNew();
+        }
+    }
+
     // ================================================================================================
     // 옥션 원문 링크 이동 기능
     // ================================================================================================
@@ -8480,48 +9451,41 @@ MJ 이정우 팀장
 
                 rows.forEach(function (r) {
                     const wrap = document.createElement('div');
-                    wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white capture-target'; // capture-target 추가
+                    wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white capture-target relative'; // relative 추가
                     const img = document.createElement('img');
                     img.className = 'investigation-image-max w-full cursor-pointer';
                     img.alt = r.file_name || '이미지';
-                    img.dataset.id = r.image_id; // dataset.imageId -> dataset.id로 통일
+                    img.dataset.id = r.image_id;
                     img.dataset.uploader = r.uploader || '';
 
                     if (r.image_id) {
-                        // Base64로 이미지 가져오기 시도 (로그인 권한 문제 해결)
-                        img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='; // placeholder
+                        img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
                         google.script.run
                             .withSuccessHandler(function (dataUrl) {
                                 if (dataUrl) {
                                     img.src = dataUrl;
                                 } else {
-                                    // 실패 시 기존 썸네일이라도 시도
                                     img.src = 'https://drive.google.com/thumbnail?sz=w1600&id=' + encodeURIComponent(r.image_id);
                                 }
                             })
                             .getImageDataUrl(r.image_id);
 
-                        const auctionId = currentModalItemData ? currentModalItemData.auction_id : null;
-                        let originalUrl = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id);
+                        // 이미지 클릭 시 라이트박스 열기 (새 창 대신 앱 내 확대)
+                        img.onclick = function () {
+                            openLightbox(this.src, r.file_name || '조사 이미지');
+                        };
 
-                        if (auctionId && String(auctionId).trim()) {
-                            const pid = String(auctionId).trim();
-                            const isGongmae = (currentModalItemData.court === '공매' || currentModalItemData.sakun_no.includes('-'));
-                            const pattern = isGongmae ? auctionSettingsCache.gongmae_pattern : auctionSettingsCache.auction_pattern;
-
-                            if (pattern && pattern.includes('[ID]')) {
-                                originalUrl = pattern.replace('[ID]', pid);
-                            } else if (pattern) {
-                                // [ID]가 명시되지 않았으면 기본 예시처럼 뒤에 붙임 (보험용)
-                                originalUrl = pattern + pid;
-                            } else {
-                                // 설정이 없으면 기본값 사용
-                                const defaultBase = isGongmae ? 'https://www.auction1.co.kr/auction/ca_view.php?product_id=' : 'https://www.auction1.co.kr/auction/ca_view.php?product_id=';
-                                originalUrl = defaultBase + pid;
-                            }
-                        }
-
-                        img.onclick = (function (url) { return function () { window.open(url, '_blank'); }; })(originalUrl);
+                        // 우측 상단 다운로드 버튼 추가
+                        const dlBtn = document.createElement('button');
+                        dlBtn.className = 'absolute top-2 right-2 p-1.5 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition z-10';
+                        dlBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>';
+                        dlBtn.title = '다운로드';
+                        dlBtn.onclick = function (e) {
+                            e.stopPropagation();
+                            const url = 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(r.image_id);
+                            window.open(url, '_blank');
+                        };
+                        wrap.appendChild(dlBtn);
                     }
                     wrap.appendChild(img);
 
@@ -9189,8 +10153,27 @@ MJ 이정우 팀장
         var sk = String(i.sakun_no || '');
         var ct = String(i.court || '');
         var pr = i.bidprice ? fmtP(i.bidprice) : '0';
+        var bidSt = String(i.bid_state || '').trim(); // bid_state 파악
         var m_nm = mapN(String(i.m_name_id || ''));
         var tm = String(i.reg_date || '').substring(11, 16); // 시간 추출
+
+        // bid_state에 따른 입찰가 표시 HTML 분기
+        var priceHtml;
+        var copyBtnHtml = '';
+        if (bidSt === '전달완료') {
+            // 전달완료: 클릭 유도, 마스킹
+            priceHtml = '<div class="ic-price ic-price-pending" onclick="event.stopPropagation();handleBidPriceClick(\'' + i.id + '\')">입찰가 도착! 터치하세요 👆</div>';
+        } else if (bidSt === '확인완료' || bidSt.includes('확인완료')) {
+            // 확인완료: 전체 공개 + 복사 버튼
+            var fullPrice = (pr && pr !== '0') ? pr + ' 원' : '미입력';
+            priceHtml = '<div class="ic-price ic-price-confirmed">' + fullPrice + '</div>';
+            copyBtnHtml = '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + pr + '\', event)">' +
+                '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
+                '</button>';
+        } else {
+            // 기본 (신규/미전달): 미정 표시
+            priceHtml = '<div class="ic-price ic-price-default">가격미정</div>';
+        }
 
         // [수정] 입찰일자 배지: 카드 상단에 딱 붙임 (Flush with top-left)
         var dt = String(i['in-date'] || '');
@@ -9202,11 +10185,15 @@ MJ 이정우 팀장
         var swipeIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
         var skSafe = sk.replace(/'/g, '');
 
+        var timerBar = (s === '추천' && i.chuchen_date) ? createChuchenTimerBar(i.chuchen_date) : '';
+
         var h = '<div class="' + cls + '" style="position:relative; margin-top:4px;" data-id="' + i.id + '" data-sk="' + skSafe + '">' +
             // 날짜 배지 (좌상단)
             '<div class="ic-in-date" style="' + dtStyle + '">' + dtLabel + '</div>' +
             // 이미지 버튼 (우상단 - 날짜배지와 대칭)
             '<button class="img-btn" title="조사이미지 보기" onclick="event.stopPropagation();openImgViewer(\'' + i.id + '\',\'' + skSafe + '\')">' + swipeIco + '</button>' +
+            // 콘텐츠 행 래퍼
+            '<div class="ic-body">' +
             // 좌측 정보 영역
             '<div class="ic-l" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
             '<div class="ic-copy-row">' +
@@ -9217,10 +10204,8 @@ MJ 이정우 팀장
             '</div>' +
             '<div class="ic-court">' + ct + ' / ' + m_nm + '</div>' +
             '<div class="ic-copy-row">' +
-            '<div class="ic-price">' + (pr === '0' ? '가격미정' : pr + ' 원') + '</div>' +
-            '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + pr + '\', event)">' +
-            '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
-            '</button>' +
+            priceHtml +
+            copyBtnHtml +
             '</div>' +
             '</div>' +
             // 우측 액션 영역 (입찰/추천 배지 + 시간)
@@ -9228,6 +10213,9 @@ MJ 이정우 팀장
             '<button class="' + bCls + '" onclick="setB(\'' + i.id + '\', \'' + s + '\', \'' + sk + '\')">' + bTxt + '</button>' +
             '<div class="ic-time">' + tm + '</div>' +
             '</div>' +
+            '</div>' +
+            // 48시간 타이머 바 (추천 상태만)
+            (timerBar ? '<div class="ic-timer-wrap">' + timerBar + '</div>' : '') +
             '</div>';
         return h;
     }
@@ -9273,11 +10261,27 @@ MJ 이정우 팀장
                 if (cnt) cnt.textContent = rows.length + '장';
                 rows.forEach(function (r) {
                     if (!r.image_id) return;
-                    var card = document.createElement('div'); card.className = 'img-vcard';
+                    var card = document.createElement('div'); card.className = 'img-vcard relative';
                     var img = document.createElement('img');
                     img.alt = r.file_name || '조사 이미지'; img.loading = 'lazy';
+                    img.className = 'cursor-pointer';
                     img.src = 'https://drive.google.com/thumbnail?sz=w1200&id=' + encodeURIComponent(r.image_id);
                     img.onerror = function () { this.src = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id); };
+
+                    // 라이트박스 연결
+                    img.onclick = function () {
+                        openLightbox(this.src, r.file_name || '조사 이미지');
+                    };
+
+                    // 다운로드 버튼
+                    const dlBtn = document.createElement('button');
+                    dlBtn.className = 'absolute top-2 right-2 p-1.5 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition z-10';
+                    dlBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>';
+                    dlBtn.onclick = function (e) {
+                        e.stopPropagation();
+                        window.open('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(r.image_id), '_blank');
+                    };
+                    card.appendChild(dlBtn);
                     card.appendChild(img); body.appendChild(card);
                 });
             })
@@ -9456,88 +10460,355 @@ MJ 이정우 팀장
     /**
      * 입찰 액션 처리
      */
-    var curI = null; // 현재 타겟 ID
+    var curI = null;    // 현재 타겟 물건 ID
+    var curSk = null;   // 현재 타겟 사건번호
+
+    // =====================================================================
+    // 대시보드 자동승인 토글 관리
+    // =====================================================================
+    var AUTO_APPROVE_KEY = 'mjaps_auto_approve';
+
+    function onAutoApproveToggleChange(cb) {
+        var isOn = cb.checked;
+        updateAutoApproveUI_(isOn);
+        // 서버 설정 저장
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run.withSuccessHandler(function (res) {
+                if (res && res.success) {
+                    localStorage.setItem(AUTO_APPROVE_KEY, res.autoApprove ? 'true' : 'false');
+                    showStatus('자동승인이 ' + (res.autoApprove ? '활성화' : '비활성화') + '되었습니다.');
+                }
+            }).setAutoApproveSetting(isOn);
+        } else {
+            localStorage.setItem(AUTO_APPROVE_KEY, isOn ? 'true' : 'false');
+        }
+    }
+
+    function updateAutoApproveUI_(isOn) {
+        var track = document.getElementById('auto-approve-track');
+        var thumb = document.getElementById('auto-approve-thumb');
+        var label = document.getElementById('auto-approve-label');
+        var toggle = document.getElementById('auto-approve-toggle');
+        if (track) track.style.backgroundColor = isOn ? '#22c55e' : '#d1d5db';
+        if (thumb) thumb.style.transform = isOn ? 'translateX(20px)' : 'translateX(0)';
+        if (label) {
+            label.textContent = isOn ? '자동 🟢' : '수동 🔴';
+            label.className = 'text-xs font-bold px-2 py-0.5 rounded-full ' +
+                (isOn ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500');
+        }
+        if (toggle) toggle.checked = isOn;
+    }
+
+    function initAutoApproveToggle_() {
+        var toggle = document.getElementById('auto-approve-toggle');
+        if (!toggle) return;
+
+        // 서버 설정 우선 확인
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run.withSuccessHandler(function (isOn) {
+                toggle.checked = !!isOn;
+                localStorage.setItem(AUTO_APPROVE_KEY, isOn ? 'true' : 'false');
+                updateAutoApproveUI_(!!isOn);
+            }).getAutoApproveSetting();
+        } else {
+            var saved = (localStorage.getItem(AUTO_APPROVE_KEY) === 'true');
+            toggle.checked = saved;
+            updateAutoApproveUI_(saved);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () { initAutoApproveToggle_(); });
+
+    // =====================================================================
+    // 팝업 공통 유틸
+    // showModalLoading_: 팝업 버튼 → 로딩 스피너로 변경
+    // showModalResult_: 결과 텍스트 표시 → 성공 시 1.5초 후 자동닫힘
+    // =====================================================================
+    function showModalLoading_(modalId, resultId) {
+        var modal = document.getElementById(modalId);
+        var result = document.getElementById(resultId);
+        if (!modal) return;
+        modal.querySelectorAll('button.mm').forEach(function (btn) {
+            btn.disabled = true;
+            if (!btn.dataset.origText) btn.dataset.origText = btn.textContent;
+        });
+        if (result) {
+            result.className = 'mo-result';
+            result.innerHTML = '<span class="ic-spin" style="display:inline-block;vertical-align:middle;margin-right:6px;border-top-color:#4f46e5;width:14px;height:14px;border-width:2.5px;"></span>잠시만 기다려 주세요...';
+        }
+    }
+
+    function showModalResult_(modalId, resultId, message, isError) {
+        var modal = document.getElementById(modalId);
+        var result = document.getElementById(resultId);
+        if (!modal) return;
+        // 액션 버튼 숨기기
+        modal.querySelectorAll('button.mm').forEach(function (btn) { btn.style.display = 'none'; });
+        if (result) {
+            result.className = 'mo-result ' + (isError ? 'error' : 'success');
+            result.textContent = message;
+        }
+        if (!isError) {
+            // 성공: 1.5초 후 팝업 자동닫힘 + 버튼 복원
+            setTimeout(function () {
+                var el = document.getElementById(modalId);
+                if (el) el.classList.remove('open');
+                if (modal) {
+                    modal.querySelectorAll('button.mm').forEach(function (btn) {
+                        btn.style.display = '';
+                        btn.disabled = false;
+                        if (btn.dataset.origText) btn.textContent = btn.dataset.origText;
+                    });
+                    if (result) { result.className = 'mo-result hidden'; result.textContent = ''; }
+                }
+            }, 1500);
+        } else {
+            // 오류: 버튼 다시 보이기 + 활성화
+            modal.querySelectorAll('button.mm').forEach(function (btn) {
+                btn.style.display = '';
+                btn.disabled = false;
+                if (btn.dataset.origText) btn.textContent = btn.dataset.origText;
+            });
+        }
+    }
+
+    // =====================================================================
+    // 카드 뱃지 클릭 → 자동/수동 공통으로 팝업 열기
+    // =====================================================================
     function setB(id, s, sk) {
         curI = id;
+        curSk = sk;
         if (s === '입찰') {
-            document.getElementById('mBD').textContent = '[' + sk + ']';
-            document.getElementById('mBC').classList.add('open');
+            var mBD = document.getElementById('mBD');
+            if (mBD) mBD.textContent = '[' + sk + '] 입찰 취소를 신청하시겠습니까?';
+            var mBC = document.getElementById('mBC');
+            if (mBC) {
+                mBC.querySelectorAll('button.mm').forEach(function (btn) { btn.style.display = ''; btn.disabled = false; });
+                var mBR = document.getElementById('mBR');
+                if (mBR) { mBR.className = 'mo-result hidden'; mBR.textContent = ''; }
+                mBC.classList.add('open');
+            }
         } else if (s === '추천') {
-            document.getElementById('mRT').textContent = '[' + sk + ']';
-            document.getElementById('mRA').classList.add('open');
+            var mRT = document.getElementById('mRT');
+            if (mRT) mRT.textContent = '[' + sk + ']';
+            var mRA = document.getElementById('mRA');
+            if (mRA) {
+                mRA.querySelectorAll('button.mm').forEach(function (btn) { btn.style.display = ''; btn.disabled = false; });
+                var mRR = document.getElementById('mRR');
+                if (mRR) { mRR.className = 'mo-result hidden'; mRR.textContent = ''; }
+                mRA.classList.add('open');
+            }
         }
+    }
+
+    // =====================================================================
+    // =====================================================================
+    // 팝업 버튼 핸들러
+    // 자동승인 ON  → processMemberDashboardActionDirect (DB 직접 변경)
+    // 자동승인 OFF → processMemberDashboardAction (승인대기 등록)
+    // google.script.run은 동적 메서드명 호출 불가 → if/else 완전 분리
+    // =====================================================================
+    function doBC() {
+        if (!curI || !APP_CTX.token) return;
+        var id = curI;
+        var sk = curSk || '';
+        var card = document.querySelector('[data-id="' + id + '"]');
+        var badge = card ? card.querySelector('.badge') : null;
+
+        // 팝업 즉시 닫기 + 버튼 로딩 표시
+        var mBC = document.getElementById('mBC');
+        if (mBC) mBC.classList.remove('open');
+        if (badge) {
+            badge.disabled = true;
+            badge.innerHTML = '<span class="ic-spin" style="width:12px;height:12px;border-width:2px;border-top-color:#fff;"></span>';
+        }
+
+        function onSuccess(res) {
+            if (res && res.success) {
+                if (res.autoApproved) {
+                    showStatus('입찰 취소 완료되었습니다.');
+                    allBiddingData = allBiddingData.filter(function (it) { return String(it.id) !== String(id); });
+                    if (card) {
+                        card.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+                        card.style.opacity = '0';
+                        card.style.transform = 'translateX(-30px)';
+                        setTimeout(function () {
+                            if (card.parentNode) card.parentNode.removeChild(card);
+                            renderMemberItemList();
+                        }, 500);
+                    }
+                } else {
+                    showStatus('입찰 취소 신청되었습니다.');
+                    if (badge) {
+                        badge.disabled = true;
+                        badge.innerHTML = '신청완료';
+                        badge.style.backgroundColor = '#9ca3af';
+                    }
+                    setTimeout(function () { renderMemberItemList(); }, 600);
+                }
+            } else {
+                showStatus((res && res.message) || '요청 실패', 'error');
+                if (badge) { badge.disabled = false; badge.innerHTML = '입찰'; }
+            }
+        }
+        function onFail(err) {
+            showStatus('오류: ' + (err.message || err), 'error');
+            if (badge) { badge.disabled = false; badge.innerHTML = '입찰'; }
+        }
+
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFail)
+            .processMemberDashboardAction(APP_CTX.token, id, 'cancel');
+    }
+
+    function doRC() {
+        if (!curI || !APP_CTX.token) return;
+        var id = curI;
+        var sk = curSk || '';
+        var card = document.querySelector('[data-id="' + id + '"]');
+        var badge = card ? card.querySelector('.badge') : null;
+
+        // 팝업 즉시 닫기 + 버튼 로딩 표시
+        var mRA = document.getElementById('mRA');
+        if (mRA) mRA.classList.remove('open');
+        if (badge) {
+            badge.disabled = true;
+            badge.innerHTML = '<span class="ic-spin" style="width:12px;height:12px;border-width:2px;border-top-color:#fff;"></span>';
+        }
+
+        function onSuccess(res) {
+            if (res && res.success) {
+                if (res.autoApproved) {
+                    showStatus('입찰확정 완료되었습니다.');
+                    var item = allBiddingData.find(function (it) { return String(it.id) === String(id); });
+                    if (item) item.stu_member = '입찰';
+                } else {
+                    showStatus('입찰확정 신청되었습니다.');
+                    if (badge) {
+                        badge.disabled = true;
+                        badge.innerHTML = '신청완료';
+                        badge.style.backgroundColor = '#9ca3af';
+                    }
+                }
+                // 목록 재렌더링
+                setTimeout(function () { renderMemberItemList(); }, 600);
+            } else {
+                showStatus((res && res.message) || '요청 실패', 'error');
+                if (badge) { badge.disabled = false; badge.innerHTML = '추천'; }
+            }
+        }
+        function onFail(err) {
+            showStatus('오류: ' + (err.message || err), 'error');
+            if (badge) { badge.disabled = false; badge.innerHTML = '추천'; }
+        }
+
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFail)
+            .processMemberDashboardAction(APP_CTX.token, id, 'bid');
+    }
+
+    function doRX() {
+        if (!curI || !APP_CTX.token) return;
+        var id = curI;
+        var sk = curSk || '';
+        var card = document.querySelector('[data-id="' + id + '"]');
+        var badge = card ? card.querySelector('.badge') : null;
+
+        // 팝업 즉시 닫기 + 버튼 로딩 표시
+        var mRA = document.getElementById('mRA');
+        if (mRA) mRA.classList.remove('open');
+        if (badge) {
+            badge.disabled = true;
+            badge.innerHTML = '<span class="ic-spin" style="width:12px;height:12px;border-width:2px;border-top-color:#fff;"></span>';
+        }
+
+        function onSuccess(res) {
+            if (res && res.success) {
+                if (res.autoApproved) {
+                    showStatus('입찰 취소 완료되었습니다.');
+                    allBiddingData = allBiddingData.filter(function (it) { return String(it.id) !== String(id); });
+                    if (card) {
+                        card.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+                        card.style.opacity = '0';
+                        card.style.transform = 'translateX(-30px)';
+                        setTimeout(function () {
+                            if (card.parentNode) card.parentNode.removeChild(card);
+                            renderMemberItemList();
+                        }, 500);
+                    }
+                } else {
+                    showStatus('입찰 취소 신청되었습니다.');
+                    if (badge) {
+                        badge.disabled = true;
+                        badge.innerHTML = '신청완료';
+                        badge.style.backgroundColor = '#9ca3af';
+                    }
+                    setTimeout(function () { renderMemberItemList(); }, 600);
+                }
+            } else {
+                showStatus((res && res.message) || '요청 실패', 'error');
+                if (badge) { badge.disabled = false; badge.innerHTML = '추천'; }
+            }
+        }
+        function onFail(err) {
+            showStatus('오류: ' + (err.message || err), 'error');
+            if (badge) { badge.disabled = false; badge.innerHTML = '추천'; }
+        }
+
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFail)
+            .processMemberDashboardAction(APP_CTX.token, id, 'cancel');
     }
 
     /**
-     * 서버 통신 (google.script.run 연동)
+     * 이미지 라이트박스 관련 함수 (확대/다운로드)
      */
-    // 모달 결과 표시 후 자동 닫힘
-    function showModalResult_(modalId, resultElemId, message, isError) {
-        var el = document.getElementById(resultElemId);
-        if (el) {
-            el.textContent = message;
-            el.style.background = isError ? '#fef2f2' : '#f0fdf4';
-            el.style.color = isError ? '#b91c1c' : '#0f766e';
-            el.classList.remove('hidden');
+    function openLightbox(src, caption) {
+        const lb = document.getElementById('imageLightbox');
+        const lbImg = document.getElementById('lightboxImg');
+        const lbCap = document.getElementById('lightboxCaption');
+        const dlBtn = document.getElementById('lightboxDownloadBtn');
+
+        if (!lb || !lbImg) return;
+
+        lbImg.src = src;
+        lbImg.classList.remove('zoomed');
+        lbImg.classList.replace('cursor-zoom-out', 'cursor-zoom-in');
+
+        if (lbCap) lbCap.textContent = caption || '';
+
+        // 다운로드 버튼 URL 설정
+        if (src.includes('id=')) {
+            const id = src.split('id=')[1].split('&')[0];
+            dlBtn.onclick = function (e) {
+                e.stopPropagation();
+                window.open('https://drive.google.com/uc?export=download&id=' + id, '_blank');
+            };
+        } else {
+            dlBtn.onclick = function (e) {
+                e.stopPropagation();
+                const a = document.createElement('a');
+                a.href = src;
+                a.download = caption || 'download.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
         }
-        setTimeout(function () {
-            cm(modalId);
-            if (el) { el.classList.add('hidden'); el.textContent = ''; }
-        }, isError ? 2200 : 1600);
+
+        lb.classList.remove('content-hidden');
     }
 
-    function doBC() { // 입찰 -> 취소 요청 (텔레그램 연동)
-        if (!curI) return;
-        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
-        google.script.run
-            .withSuccessHandler(function (res) {
-                if (res && res.success) {
-                    showModalResult_('mBC', 'mBR', '입찰취소 신청이 되었습니다.', false);
-                    refreshCurrentMemberView_();
-                } else {
-                    showModalResult_('mBC', 'mBR', (res && res.message) || '요청 처리에 실패했습니다.', true);
-                }
-            })
-            .withFailureHandler(function (err) {
-                showModalResult_('mBC', 'mBR', '오류: ' + (err.message || err), true);
-            })
-            .processMemberDashboardAction(APP_CTX.token, curI, 'cancel');
+    function closeLightbox() {
+        const lb = document.getElementById('imageLightbox');
+        if (lb) lb.classList.add('content-hidden');
     }
 
-    function doRC() { // 추천 -> 입찰확정 요청 (텔레그램 연동)
-        if (!curI) return;
-        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
-        google.script.run
-            .withSuccessHandler(function (res) {
-                if (res && res.success) {
-                    showModalResult_('mRA', 'mRR', '입찰확정 신청이 되었습니다.', false);
-                    refreshCurrentMemberView_();
-                } else {
-                    showModalResult_('mRA', 'mRR', (res && res.message) || '요청 처리에 실패했습니다.', true);
-                }
-            })
-            .withFailureHandler(function (err) {
-                showModalResult_('mRA', 'mRR', '오류: ' + (err.message || err), true);
-            })
-            .processMemberDashboardAction(APP_CTX.token, curI, 'bid');
+    function toggleLightboxZoom(e) {
+        const img = e.target;
+        if (img.classList.contains('zoomed')) {
+            img.classList.remove('zoomed');
+            img.classList.replace('cursor-zoom-out', 'cursor-zoom-in');
+        } else {
+            img.classList.add('zoomed');
+            img.classList.replace('cursor-zoom-in', 'cursor-zoom-out');
+        }
     }
-
-    function doRX() { // 추천 -> 입찰취소 요청 (추천→미정, 텔레그램 연동)
-        if (!curI) return;
-        if (!APP_CTX.token) { showStatus('회원 토큰이 없습니다. 링크를 다시 확인해주세요.', 'error'); return; }
-        google.script.run
-            .withSuccessHandler(function (res) {
-                if (res && res.success) {
-                    showModalResult_('mRA', 'mRR', '입찰취소 신청이 되었습니다.', false);
-                    refreshCurrentMemberView_();
-                } else {
-                    showModalResult_('mRA', 'mRR', (res && res.message) || '요청 처리에 실패했습니다.', true);
-                }
-            })
-            .withFailureHandler(function (err) {
-                showModalResult_('mRA', 'mRR', '오류: ' + (err.message || err), true);
-            })
-            .processMemberDashboardAction(APP_CTX.token, curI, 'cancel');
-    }
-
 </script>

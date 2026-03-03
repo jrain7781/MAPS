@@ -408,11 +408,13 @@ function handleTelegramWebhook_(update) {
         }
         _whLog('items 조회 완료');
 
-        var prefix = (shortDate && sakunNo)
-          ? (telegramEscapeHtml_(shortDate) + ' ' + telegramEscapeHtml_(sakunNo) + ' ')
-          : '';
+        // 2) 자동승인 여부 확인
+        var isAutoApprove = (typeof getAutoApproveSetting === 'function') ? getAutoApproveSetting() : false;
+        var reqStatus = isAutoApprove ? 'APPROVED' : 'PENDING';
+        var requestedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+        var approvedAt = isAutoApprove ? requestedAt : '';
 
-        // 2) telegram_requests 시트에 바로 등록
+        // 3) telegram_requests 시트에 등록
         var reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
         if (!reqSheet) {
           reqSheet = ss.insertSheet(TELEGRAM_REQUESTS_SHEET_NAME);
@@ -420,23 +422,38 @@ function handleTelegramWebhook_(update) {
         }
         var reqAction = isBid ? 'REQUEST_BID' : 'REQUEST_CANCEL';
         var reqId = String(new Date().getTime());
-        var requestedAt = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
         reqSheet.appendRow([
-          reqId, requestedAt, reqAction, 'PENDING',
+          reqId, requestedAt, reqAction, reqStatus,
           String(itemId), memberId, chatId, username,
           JSON.stringify({ origin_message_id: originMessageId || '' }),
-          '', ''
+          approvedAt, isAutoApprove ? 'auto' : ''
         ]);
-        _whLog('appendRow 완료');
-        // ★ flush로 즉시 반영 (대시보드에서 바로 조회 가능하도록)
+        _whLog('appendRow 완료 (' + reqStatus + ')');
+
+        // 3.5) 자동승인 시 DB 직접 업데이트
+        if (isAutoApprove) {
+          try {
+            var newStu = isBid ? '입찰' : '미정';
+            if (typeof updateItemStuMemberById_ === 'function') {
+              updateItemStuMemberById_(itemId, newStu);
+              _whLog('DB 업데이트 완료: ' + newStu);
+            }
+          } catch (dbErr) { _whLog('DB 업데이트 실패: ' + dbErr.message); }
+        }
+
+        // ★ flush로 즉시 반영
         SpreadsheetApp.flush();
         _whLog('flush 완료');
 
-        // 3) 댓글 전송 (HTML 포맷: 사건번호 굵게, 입찰확정 🔵 / 입찰취소 🔴 굵게 + MAPS 버튼)
+        // 4) 댓글 전송
         var labelHtml = isBid ? '<b>🔵 입찰확정</b>' : '<b>🔴 입찰취소</b>';
+        if (isAutoApprove) labelHtml += ' 완료';
+        else labelHtml += ' 요청';
+
         var caseHtml = sakunNo ? ('<b>' + telegramEscapeHtml_(sakunNo) + '</b>') : '';
         var dateStr = shortDate ? (telegramEscapeHtml_(shortDate) + ' ') : '';
-        var comment = dateStr + caseHtml + '\n' + labelHtml + ' 요청이 되었습니다.\n잠시만 기다려주세요~';
+
+        var comment = dateStr + caseHtml + '\n' + labelHtml + (isAutoApprove ? '되었습니다.' : '이 되었습니다.\n잠시만 기다려주세요~');
 
         // MAPS 바로가기 버튼 (회원 토큰으로 직접 진입)
         var mapsRm = null;
@@ -487,6 +504,45 @@ function handleTelegramWebhook_(update) {
         } catch (e) { }
       } else {
         try { telegramAnswerCallbackQuery_(cqId, '회원 정보를 찾을 수 없습니다', false); } catch (e) { }
+      }
+      return;
+    }
+
+    // === 입찰가 확인완료 ===
+    if (action === 'PRICE_CONFIRM') {
+      try { telegramAnswerCallbackQuery_(cqId, '입찰가를 확인합니다.', false); } catch (e) { }
+      try {
+        // chatId로 회원 조회 → member_token 획득
+        var pcMember = (typeof getMemberByTelegramChatId === 'function') ? getMemberByTelegramChatId(chatId) : null;
+        if (!pcMember || !pcMember.member_token) {
+          telegramSendMessage(chatId, '회원 정보를 확인할 수 없습니다. 관리자에게 문의해 주세요.');
+          return;
+        }
+        // 물건 정보 조회 (가격 포함)
+        var pcItem = getBidItemByIdForTelegram_(itemId);
+        // bid_state를 확인완료로 업데이트
+        var pcResult = (typeof updateBidPriceConfirmed === 'function')
+          ? updateBidPriceConfirmed(pcMember.member_token, itemId)
+          : { success: false, message: '함수 없음' };
+        if (pcResult && pcResult.success) {
+          // 가격 공개 메시지 전송
+          if (pcItem) {
+            var pcShortDate = formatShortInDate_(pcItem['in-date']);
+            var pcSakunNo = String(pcItem.sakun_no || '');
+            var pcCourt = String(pcItem.court || '');
+            var pcBidPrice = formatKrw_(pcItem.bidprice);
+            var pcSimpleLine = [pcShortDate, pcSakunNo, pcCourt].filter(Boolean).join(' / ');
+            var divider = '=============================';
+            var priceRevealMsg = divider + '\n' + pcSimpleLine + '\n' + pcBidPrice + '원 입니다.\n' + divider;
+            telegramSendMessage(chatId, priceRevealMsg);
+          } else {
+            telegramSendMessage(chatId, '✅ 입찰가 확인완료 처리되었습니다.');
+          }
+        } else {
+          telegramSendMessage(chatId, '처리 오류: ' + (pcResult ? pcResult.message : '알 수 없는 오류'));
+        }
+      } catch (e) {
+        try { telegramSendMessage(chatId, '오류: ' + (e.message || '')); } catch (e2) { }
       }
       return;
     }
@@ -609,9 +665,17 @@ function telegramBuildItemMessage_(item, member, styleKey) {
   let onlyViewButton = false;
 
   if (style === 'bid_price') {
-    subtitle = 'MJ 경매 스쿨입니다.  입찰가 안내드립니다.\n낙찰을 기원드립니다.';
-    statusValuePlain = '입찰';
-    includeBidPrice = true;
+    // 간결한 포맷: 입찰일자 / 사건번호 / 법원 + 입찰가확인 버튼 + 내물건보기 버튼
+    const shortDate = telegramEscapeHtml_(formatShortInDate_(item['in-date']));
+    const simpleLine = [shortDate, sakunNo, court].filter(Boolean).join(' / ');
+    const lines2 = [];
+    lines2.push(simpleLine);
+    lines2.push('입찰가가 도착했습니다. 확인하시겠습니까?');
+    const keyboard2 = [];
+    keyboard2.push([{ text: '입찰가확인', callback_data: 'MJ|PRICE_CONFIRM|' + itemId }]);
+    if (url) keyboard2.push([{ text: '내물건보기', web_app: { url: url } }]);
+    const replyMarkup2 = keyboard2.length > 0 ? { inline_keyboard: keyboard2 } : null;
+    return { text: lines2.join('\n'), replyMarkup: replyMarkup2 };
   } else if (style === 'status') {
     subtitle = 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.';
     statusValuePlain = '변경';
@@ -663,7 +727,7 @@ function telegramBuildItemMessage_(item, member, styleKey) {
   // url 버튼은 일부 환경에서 "Open this link?" 팝업이 뜸 → web_app으로 인앱 웹뷰 열기
   if (url) row1.push({ text: '내물건보기', web_app: { url: url } });
 
-  if (!onlyViewButton) {
+  if (!onlyViewButton && style !== 'bid_price') {
     row2.push({ text: '입찰확정', callback_data: 'MJ|BID_CONFIRM|' + itemId });
     row2.push({ text: '입찰취소', callback_data: 'MJ|CANCEL_CONFIRM|' + itemId });
   }
@@ -739,6 +803,20 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
     return { success: false, message: '해당 회원은 텔레그램 전송이 비활성화(N) 상태입니다.' };
   }
 
+  // bid_price 스타일: 60초 내 중복 전송 방지 (이중 전송 버그 방어)
+  if (styleKey === 'bid_price') {
+    try {
+      const cache = CacheService.getScriptCache();
+      const dedupeKey = 'bps_' + String(itemId).trim() + '_' + String(targetMemberId).trim();
+      if (cache.get(dedupeKey)) {
+        return { success: true, message: '이미 전송됨 (60초 내 중복 방지)' };
+      }
+      cache.put(dedupeKey, '1', 60);
+    } catch (e) {
+      // 캐시 오류는 무시하고 전송 계속
+    }
+  }
+
   // 전송 객체 구성
   const member = {
     member_id: targetMemberId,
@@ -749,6 +827,69 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
 
   const msg = telegramBuildItemMessage_(item, member, styleKey);
   telegramSendMessage(chatId, msg.text, msg.replyMarkup);
+
+  // 전송 성공 시 bid_price인 경우 상태를 전달완료로 변경
+  if (styleKey === 'bid_price') {
+    try {
+      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var itemsSheet = ss.getSheetByName(DB_SHEET_NAME);
+      if (itemsSheet) {
+        var itemsLastRow = itemsSheet.getLastRow();
+        if (itemsLastRow >= 2) {
+          var itemsIdList = itemsSheet.getRange(2, 1, itemsLastRow - 1, 1).getValues().map(v => String(v[0]).trim());
+          var idx = itemsIdList.indexOf(String(itemId).trim());
+          if (idx !== -1) {
+            // L열(12번째 열)이 bid_state
+            itemsSheet.getRange(idx + 2, 12).setValue('전달완료');
+            SpreadsheetApp.flush();
+          }
+        }
+      }
+    } catch (e) {
+      Logger.log('단건 전송 후 bid_state 업데이트 실패: ' + e.message);
+    }
+  }
+
   return { success: true, message: '텔레그램으로 전송했습니다.' };
+}
+
+/**
+ * 다수 물건을 추천 전달로 텔레그램 발송합니다.
+ * 텔레그램 전송 실패 회원도 chuchen_state는 '전달완료'로 업데이트합니다.
+ * @param {Array} itemIds - 물건 ID 배열
+ * @returns {{ sent: number, failed: number, failedItems: Array, updated: number }}
+ */
+function sendChuchenTelegramBulk(itemIds) {
+  if (!itemIds || !itemIds.length) return { sent: 0, failed: 0, failedItems: [], updated: 0 };
+  var now = new Date().toISOString();
+  var sent = 0, failed = 0;
+  var failedItems = [];
+
+  itemIds.forEach(function(itemId) {
+    try {
+      var result = sendItemToMemberTelegramWithStyle('', itemId, 'card');
+      if (result && result.success) {
+        sent++;
+      } else {
+        failed++;
+        failedItems.push({ itemId: itemId, reason: result ? result.message : '알 수 없는 오류' });
+      }
+    } catch (e) {
+      failed++;
+      failedItems.push({ itemId: itemId, reason: e.message });
+    }
+  });
+
+  // 성공/실패 무관하게 chuchen_state = '전달완료', chuchen_date = now 업데이트
+  var updateResult = (typeof updateChuchenState === 'function')
+    ? updateChuchenState(itemIds, '전달완료', now)
+    : { success: false, updated: 0 };
+
+  return {
+    sent: sent,
+    failed: failed,
+    failedItems: failedItems,
+    updated: updateResult.updated
+  };
 }
 

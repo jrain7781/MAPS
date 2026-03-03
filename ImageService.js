@@ -232,6 +232,78 @@ function ensureItemImagesSheet() {
 }
 
 /**
+ * item_images 시트에서 동일한 물건(item_id)에 대해 중복 등록된 이미지를 정리합니다.
+ * 파일명이 다르더라도 동일한 item_id라면 가장 최근에 등록된 것 하나만 남깁니다.
+ * @param {string} targetItemId - 특정 물건 ID만 처리할 경우 사용.
+ */
+function cleanupDuplicateItemImages(targetItemId = null) {
+  const sh = ensureItemImagesSheet();
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return;
+
+  const data = sh.getRange(2, 1, lastRow - 1, 5).getValues();
+  const seen = new Map(); // key: item_id, value: {rowIndex}
+  const rowsToDelete = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const itemId = String(data[i][0]).trim();
+    if (!itemId) continue;
+    if (targetItemId && itemId !== String(targetItemId)) continue;
+
+    // 동일 물건 ID에 대해 중복 발견 시 이전 행을 삭제 목록에 추가
+    if (seen.has(itemId)) {
+      rowsToDelete.push(seen.get(itemId).rowIndex);
+    }
+    seen.set(itemId, { rowIndex: i + 2 });
+  }
+
+  if (rowsToDelete.length > 0) {
+    rowsToDelete.sort((a, b) => b - a);
+    rowsToDelete.forEach(row => sh.deleteRow(row));
+    Logger.log(`[cleanupDuplicateItemImages] ${rowsToDelete.length}개의 중복 데이터를 정리했습니다. (ID: ${targetItemId || 'ALL'})`);
+  }
+}
+
+/**
+ * [관리용] 2024타경77586 사건의 중복 이미지를 정리합니다.
+ * GAS 에디터에서 이 함수를 선택하고 실행(Run)하세요.
+ */
+function fixDuplicateForSakun() {
+  const sakunNo = '2024타경77586';
+  // items 시트에서 ID 찾기
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const itemsSheet = ss.getSheetByName(DB_SHEET_NAME);
+  const data = itemsSheet.getDataRange().getValues();
+  let foundId = '';
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][2]).trim() === sakunNo) {
+      foundId = String(data[i][0]).trim();
+      break;
+    }
+  }
+
+  if (!foundId) {
+    Logger.log(`${sakunNo} 해당 사건번호를 찾을 수 없습니다.`);
+    return;
+  }
+
+  Logger.log(`${sakunNo} (ID: ${foundId}) 중복 이미지 정리를 시작합니다.`);
+  cleanupDuplicateItemImages(foundId);
+  Logger.log(`정리 완료.`);
+}
+
+/**
+ * [관리용] 모든 물건에 대해 중복된 이미지를 찾아 정리합니다.
+ * 파일명이 다르더라도 동일 사건(item_id)이면 최신 1장만 남깁니다.
+ */
+function fixAllDuplicates() {
+  Logger.log(`전체 중복 이미지 정리를 시작합니다.`);
+  cleanupDuplicateItemImages(); // targetItemId 없이 호출하면 전체 처리
+  Logger.log(`전체 정리 완료.`);
+}
+
+/**
  * 메인 리스트용: items 시트 데이터에 각 물건의 이미지 ID 목록을 콤마 구분 문자열(image_ids)로 붙여 반환합니다.
  * item_images 시트가 있으면 해당 item_id별 image_id를 created_at 순으로 이어 붙이고,
  * 없으면 items.image_id 한 개를 그대로 사용합니다.
@@ -365,7 +437,16 @@ function registerWebImage(itemId, base64DataUrl, mimeType, sakunNo, inDate, cour
 
     var imgSheet = ensureItemImagesSheet();
     var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
-    imgSheet.appendRow([String(itemId), file.getId(), 'web', now, fileName]);
+
+    // [추가] 중복 체크 (itemId + fileName)
+    var existingData = imgSheet.getRange(2, 1, Math.max(1, imgSheet.getLastRow() - 1), 5).getValues();
+    var isDup = existingData.some(row => String(row[0]).trim() === String(itemId).trim() && String(row[4]).trim() === fileName);
+
+    if (!isDup) {
+      imgSheet.appendRow([String(itemId), file.getId(), 'web', now, fileName]);
+    } else {
+      Logger.log(`[registerWebImage] 중복 등록 건너뜀: ${fileName}`);
+    }
 
     var itemsSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(IMAGE_DB_SHEET_NAME);
     if (itemsSheet && typeof ensureColumnExists === 'function') {
@@ -489,7 +570,9 @@ function syncImages(batchLimit = 100) {
     const archiveFolder = DriveApp.getFolderById(IMAGE_ARCHIVE_FOLDER_ID);
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(IMAGE_DB_SHEET_NAME);
     const logSheet = ensureSyncLogsSheet();
-    // rotateSyncLogs(); // 단계별 실행 시 로그가 계속 로테이트되는 것 방지
+
+    // 동기화 전 중복 정리 실행
+    cleanupDuplicateItemImages();
 
     if (!sheet) return {
       success: false,

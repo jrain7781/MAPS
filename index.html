@@ -27,6 +27,36 @@
         role="alert"></div>
     <div id="mobileMenuOverlay" class="mobile-menu-overlay" onclick="toggleMobileMenu()"></div>
 
+    <!-- 이미지 확대 라이트박스 모달 -->
+    <div id="imageLightbox"
+        class="fixed inset-0 z-[10000] bg-black bg-opacity-90 flex flex-col items-center justify-center content-hidden"
+        onclick="closeLightbox()">
+        <div class="absolute top-4 right-4 flex gap-4">
+            <button id="lightboxDownloadBtn" onclick="event.stopPropagation()"
+                class="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full text-white transition" title="다운로드">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+            </button>
+            <button onclick="closeLightbox()"
+                class="p-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full text-white transition">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                    </path>
+                </svg>
+            </button>
+        </div>
+        <div class="w-full h-full p-4 flex items-center justify-center" onclick="event.stopPropagation()">
+            <img id="lightboxImg" src=""
+                class="max-w-full max-h-full object-contain transition-transform duration-200 cursor-zoom-in"
+                onclick="toggleLightboxZoom(event)">
+        </div>
+        <div id="lightboxCaption"
+            class="absolute bottom-8 left-1/2 transform -translate-x-1/2 text-white text-lg font-bold bg-black bg-opacity-50 px-4 py-2 rounded-lg">
+        </div>
+    </div>
+
     <header class="bg-white shadow-md relative z-30">
         <div id="header-container" class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16 items-center">
@@ -106,11 +136,94 @@
         <div class="flex-1 overflow-y-auto pb-0">
 
             <div id="Dashboard" class="tab-content h-full p-4 md:p-8 overflow-y-auto content-hidden">
-                <!-- Row 1: 6 + 6 -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mb-6">
-                    <!-- 입찰가 미입력 현황 (lg:col-span-1 = 6/12) -->
+
+                <!-- Row 1: 입찰요청(col-7) + 자동승인(col-5) -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mb-6">
+
+                    <!-- 입찰 요청(승인 대기) 카드 -->
+                    <div id="telegram-requests-panel"
+                        class="lg:col-span-7 bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                                <svg class="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M8 12h8m-8 4h6m-6-8h8M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                    </path>
+                                </svg>입찰 요청(승인 대기)
+                            </h2>
+                            <div class="flex items-center gap-3">
+                                <!-- 자동승인 토글 -->
+                                <label class="flex items-center gap-2 cursor-pointer select-none"
+                                    title="자동승인 ON: 회원 요청 시 관리자 승인 없이 즉시 처리됩니다">
+                                    <span class="text-sm font-semibold text-gray-600">자동승인</span>
+                                    <div class="relative">
+                                        <input type="checkbox" id="auto-approve-toggle" class="sr-only"
+                                            onchange="onAutoApproveToggleChange(this)">
+                                        <div id="auto-approve-track"
+                                            class="w-11 h-6 rounded-full transition-colors duration-200 bg-gray-300">
+                                        </div>
+                                        <div id="auto-approve-thumb"
+                                            class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200">
+                                        </div>
+                                    </div>
+                                    <span id="auto-approve-label"
+                                        class="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">수동
+                                        🔴</span>
+                                </label>
+                                <button type="button" onclick="loadTelegramRequests()"
+                                    class="px-3 py-1.5 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold">새로고침</button>
+                                <button type="button" onclick="approveSelectedTelegramRequests()"
+                                    class="px-3 py-1.5 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold">선택
+                                    승인</button>
+                                <button type="button" onclick="rejectSelectedTelegramRequests()"
+                                    class="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-semibold">선택
+                                    거절</button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full text-sm border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase">
+                                        <th class="py-2 px-2 text-center w-10"><input type="checkbox"
+                                                id="tg-req-checkall" onchange="toggleAllTelegramRequestCheckboxes(this)"
+                                                class="rounded"></th>
+                                        <th class="py-2 px-2 text-left">요청시각</th>
+                                        <th class="py-2 px-2 text-left">회원</th>
+                                        <th class="py-2 px-2 text-left">사건번호</th>
+                                        <th class="py-2 px-2 text-left">법원</th>
+                                        <th class="py-2 px-2 text-center">입찰일자</th>
+                                        <th class="py-2 px-2 text-center">현재상태</th>
+                                        <th class="py-2 px-2 text-left">요청</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tg-req-tbody" class="text-gray-800">
+                                    <tr>
+                                        <td colspan="8" class="py-4 text-center text-gray-500">요청을 불러오는 중...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">회원이 텔레그램에서 <b>입찰 요청</b> 버튼을 누르면 여기에 쌓입니다. 승인 시 물건 상태가
+                            <b>입찰</b>로 변경됩니다.
+                        </p>
+                    </div>
+
+                    <!-- 텔레그램 승인현황 -->
+                    <div id="auto-approval-panel"
+                        class="lg:col-span-5 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
+                        <div class="bg-white border-b border-gray-200 px-4 py-3">
+                            <h2 class="text-sm font-bold text-gray-800">텔레그램 승인현황</h2>
+                        </div>
+                        <div id="autoApprovalBody" class="text-center text-gray-400 text-sm">데이터 로딩 중...</div>
+                    </div>
+
+                </div>
+
+                <!-- Row 2: 미입력(col-3) + 상태관리(col-4) + 텔레그램+자동물건(col-5) -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mb-6">
                     <div
-                        class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden min-h-[500px] flex flex-col">
+                        class="lg:col-span-3 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden min-h-[680px] flex flex-col">
                         <div class="bg-white border-b border-gray-200 px-4 py-3">
                             <div class="flex justify-between items-center mb-1">
                                 <h2 class="text-sm font-bold text-gray-800">입찰가 미입력 현황</h2>
@@ -121,9 +234,9 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="p-0 flex-1 overflow-auto">
+                        <div class="p-0 flex-1">
                             <table class="w-full text-left border-collapse">
-                                <thead class="sticky top-0 z-10">
+                                <thead>
                                     <tr
                                         class="bg-gray-50 border-b border-gray-200 text-gray-600 text-sm uppercase leading-normal">
                                         <th class="py-2 px-3 text-center font-bold">날짜</th>
@@ -139,9 +252,8 @@
                         </div>
                     </div>
 
-                    <!-- 물건 상태 관리 (lg:col-span-1 = 6/12) -->
                     <div
-                        class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden min-h-[500px] flex flex-col">
+                        class="lg:col-span-4 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden min-h-[680px] flex flex-col">
                         <div class="bg-white border-b border-gray-200 px-4 py-3">
                             <div class="flex justify-between items-center mb-1">
                                 <h2 class="text-sm font-bold text-gray-800">물건 상태 관리</h2>
@@ -152,9 +264,9 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="overflow-auto flex-1">
+                        <div class="overflow-x-auto flex-1">
                             <table class="w-full text-center border-collapse text-xs">
-                                <thead class="sticky top-0 z-10">
+                                <thead>
                                     <tr
                                         class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
                                         <th class="py-1 px-2 font-bold border-r">날짜</th>
@@ -173,86 +285,81 @@
                             </table>
                         </div>
                     </div>
-                </div>
 
-                <!-- Row 2: 6 + 6 -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mb-6">
-                    <!-- 자동 물건 등록/매칭 현황 -->
-                    <div
-                        class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden min-h-[200px] flex flex-col">
-                        <div
-                            class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
-                            <h2 class="text-sm font-bold text-gray-800">자동 물건 등록/매칭 현황</h2>
-                            <button onclick="loadDashboardImageStats()"
-                                class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-medium px-3 py-1 rounded-lg transition duration-150">새로고침</button>
+                    <!-- Row 2 오른쪽: 텔레그램가입 + 자동물건등록/매칭 -->
+                    <div class="lg:col-span-5 flex flex-col gap-6">
+
+                        <!-- 텔레그램 가입현황 (Phase 3에서 구현) -->
+                        <div id="telegram-join-panel"
+                            class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
+                            <div class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+                                <h2 class="text-sm font-bold text-gray-800">텔레그램 가입현황</h2>
+                                <div class="flex items-center gap-3 text-xs">
+                                    <label class="flex items-center gap-1 cursor-pointer">
+                                        <input type="radio" name="telegram-join-mode" id="tjm-item" value="item"
+                                            onchange="onTelegramJoinModeChange(this)" checked>
+                                        <span class="font-semibold text-gray-600">물건</span>
+                                    </label>
+                                    <label class="flex items-center gap-1 cursor-pointer">
+                                        <input type="radio" name="telegram-join-mode" id="tjm-member" value="member"
+                                            onchange="onTelegramJoinModeChange(this)">
+                                        <span class="font-semibold text-gray-600">회원</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="telegramJoinBody" class="p-4 text-center text-gray-400 text-sm">데이터 로딩 중...</div>
                         </div>
-                        <div class="overflow-auto flex-1">
-                            <table class="w-full text-xs text-center border-collapse table-fixed">
-                                <colgroup>
-                                    <col style="width:16%">
-                                    <col style="width:12%">
-                                    <col style="width:12%">
-                                    <col style="width:12%">
-                                    <col style="width:12%">
-                                    <col style="width:12%">
-                                    <col style="width:12%">
-                                    <col style="width:12%">
-                                </colgroup>
-                                <thead class="sticky top-0 z-10">
-                                    <tr
-                                        class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
-                                        <th class="py-1 px-1 font-bold">실행시간</th>
-                                        <th class="py-1 px-1 font-bold">담당자</th>
-                                        <th class="py-1 px-1 font-bold"><span class="cursor-help"
-                                                onmouseenter="showConflictTooltip(event)"
-                                                onmouseleave="hideConflictTooltip()">충돌 ⓘ</span></th>
-                                        <th class="py-1 px-1 font-bold">전체</th>
-                                        <th class="py-1 px-1 font-bold">신규등록</th>
-                                        <th class="py-1 px-1 font-bold">매칭<br>(이미지)</th>
-                                        <th class="py-1 px-1 font-bold">매칭<br>(옥션ID)</th>
-                                        <th class="py-1 px-1 font-bold">매칭X<br>(옥션ID)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="imageSyncStatsBody" class="text-gray-700">
-                                    <tr>
-                                        <td colspan="8" class="py-4 text-center text-gray-400">데이터 로딩 중...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+
+                        <!-- 자동물건등록/매칭현황 -->
+                        <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
+                            <div
+                                class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
+                                <h2 class="text-sm font-bold text-gray-800">자동 물건 등록/매칭 현황</h2>
+                                <button onclick="loadDashboardImageStats()"
+                                    class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-medium px-3 py-1 rounded-lg transition duration-150">새로고침</button>
+                            </div>
+                            <div class="overflow-auto">
+                                <table class="w-full text-xs text-center border-collapse table-fixed">
+                                    <colgroup>
+                                        <col style="width:16%">
+                                        <col style="width:12%">
+                                        <col style="width:12%">
+                                        <col style="width:12%">
+                                        <col style="width:12%">
+                                        <col style="width:12%">
+                                        <col style="width:12%">
+                                        <col style="width:12%">
+                                    </colgroup>
+                                    <thead class="sticky top-0 z-10">
+                                        <tr
+                                            class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
+                                            <th class="py-1 px-1 font-bold">실행시간</th>
+                                            <th class="py-1 px-1 font-bold">담당자</th>
+                                            <th class="py-1 px-1 font-bold"><span class="cursor-help"
+                                                    onmouseenter="showConflictTooltip(event)"
+                                                    onmouseleave="hideConflictTooltip()">충돌 ⓘ</span></th>
+                                            <th class="py-1 px-1 font-bold">전체</th>
+                                            <th class="py-1 px-1 font-bold">신규등록</th>
+                                            <th class="py-1 px-1 font-bold">매칭<br>(이미지)</th>
+                                            <th class="py-1 px-1 font-bold">매칭<br>(옥션ID)</th>
+                                            <th class="py-1 px-1 font-bold">매칭X<br>(옥션ID)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="imageSyncStatsBody" class="text-gray-700">
+                                        <tr>
+                                            <td colspan="8" class="py-4 text-center text-gray-400">데이터 로딩 중...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
+
                     </div>
 
-                    <!-- 텔레그램 연동 현황 -->
-                    <div
-                        class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden min-h-[200px] flex flex-col">
-                        <div
-                            class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
-                            <h2 class="text-sm font-bold text-gray-800">텔레그램 연동 현황</h2>
-                            <button onclick="loadTelegramStats()"
-                                class="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1 rounded-lg transition duration-150">새로고침</button>
-                        </div>
-                        <div class="overflow-auto flex-1">
-                            <table class="w-full text-xs text-center border-collapse">
-                                <thead class="sticky top-0 z-10">
-                                    <tr
-                                        class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
-                                        <th class="py-2 px-2 font-bold bg-gray-100 border-r">구분</th>
-                                        <th class="py-2 px-2 font-bold">전체</th>
-                                        <th class="py-2 px-2 font-bold border-l bg-blue-50">승인(token)</th>
-                                        <th class="py-2 px-2 font-bold border-l bg-indigo-50">ID(chat_id)</th>
-                                        <th class="py-2 px-2 font-bold border-l bg-green-50">토큰(enabled)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="telegramStatsBody" class="text-gray-700">
-                                    <tr>
-                                        <td colspan="5" class="py-4 text-center text-gray-400">데이터 로딩 중...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
                 </div>
-                <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+
+                <!-- 회원별 입찰 물건 현황 -->
+                <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-6 mb-6">
                     <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
                         <svg class="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -267,60 +374,14 @@
                     <div class="h-80"><canvas id="memberBidChart"></canvas></div>
                 </div>
 
-                <!-- 텔레그램 양방향 요청(승인 필요) -->
-                <div id="telegram-requests-panel" class="bg-white rounded-xl shadow-lg border border-gray-200 p-6 mt-6">
-                    <div class="flex items-center justify-between gap-3 mb-3">
-                        <h2 class="text-xl font-bold text-gray-800 flex items-center">
-                            <svg class="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M8 12h8m-8 4h6m-6-8h8M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
-                                </path>
-                            </svg>입찰 요청(승인 대기)
-                        </h2>
-                        <div class="flex gap-2">
-                            <button type="button" onclick="loadTelegramRequests()"
-                                class="px-3 py-1.5 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold">새로고침</button>
-                            <button type="button" onclick="approveSelectedTelegramRequests()"
-                                class="px-3 py-1.5 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold">선택
-                                승인</button>
-                            <button type="button" onclick="rejectSelectedTelegramRequests()"
-                                class="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-semibold">선택
-                                거절</button>
-                        </div>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full text-sm border-collapse">
-                            <thead>
-                                <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase">
-                                    <th class="py-2 px-2 text-center w-10"><input type="checkbox" id="tg-req-checkall"
-                                            onchange="toggleAllTelegramRequestCheckboxes(this)" class="rounded"></th>
-                                    <th class="py-2 px-2 text-left">요청시각</th>
-                                    <th class="py-2 px-2 text-left">회원</th>
-                                    <th class="py-2 px-2 text-left">사건번호</th>
-                                    <th class="py-2 px-2 text-left">법원</th>
-                                    <th class="py-2 px-2 text-center">입찰일자</th>
-                                    <th class="py-2 px-2 text-center">현재상태</th>
-                                    <th class="py-2 px-2 text-left">요청</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tg-req-tbody" class="text-gray-800">
-                                <tr>
-                                    <td colspan="8" class="py-4 text-center text-gray-500">요청을 불러오는 중...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-2">회원이 텔레그램에서 <b>입찰 요청</b> 버튼을 누르면 여기에 쌓입니다. 승인 시 물건 상태가
-                        <b>입찰</b>로 변경됩니다.
-                    </p>
-                </div>
                 <div id="dashboard-loading" class="text-center p-8 content-hidden">
                     <div
                         class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 mx-auto mb-3">
                     </div>데이터를 불러오는 중...
                 </div>
             </div>
+
+
 
             <!-- ==================== 회원 대시보드 (오퍼스 v2) ==================== -->
             <div id="MemberDashboard" class="tab-content h-full p-0 overflow-y-auto content-hidden">
@@ -616,7 +677,8 @@
                             class="text-indigo-600 hover:text-indigo-900 focus:outline-none"><svg class="w-4 h-4"
                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M6 18L18 6M6 6l12 12"></path>
+                                    d="M6 18L18 6M6 6l12 12">
+                                </path>
                             </svg></button>
                     </div>
                     <div id="syncFilterBanner"
@@ -626,7 +688,8 @@
                             class="text-violet-600 hover:text-violet-900 focus:outline-none"><svg class="w-4 h-4"
                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M6 18L18 6M6 6l12 12"></path>
+                                    d="M6 18L18 6M6 6l12 12">
+                                </path>
                             </svg></button>
                     </div>
                     <div
@@ -783,8 +846,8 @@
                             </div>
                         </div>
                     </div>
-                    <div class="flex-1 overflow-y-auto">
-                        <table class="item-list-table min-w-full divide-y divide-gray-200">
+                    <div class="flex-1 overflow-auto" style="min-width:0;">
+                        <table class="item-list-table divide-y divide-gray-200">
                             <thead class="bg-gray-50 sticky top-0 z-10">
                                 <tr>
                                     <th class="item-col-check px-1 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-default flex-shrink-0"
@@ -797,8 +860,9 @@
                                     <th data-sort="in-date" onclick="sortItemList('in-date')"
                                         class="item-col-date px-2 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none">
                                         일자</th>
-                                    <th
-                                        class="item-col-img list-th-img px-1 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-default">
+                                    <th data-sort="has_images" onclick="sortItemList('has_images')"
+                                        class="item-col-img list-th-img px-1 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none"
+                                        title="IMG 정렬">
                                         IMG</th>
                                     <th data-sort="sakun_no" onclick="sortItemList('sakun_no')"
                                         class="item-col-sakun px-2 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none">
@@ -809,17 +873,24 @@
                                     <th data-sort="stu_member" onclick="sortItemList('stu_member')"
                                         class="item-col-status px-1 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none">
                                         상태</th>
+                                    <th data-sort="telegram_enabled" onclick="sortItemList('telegram_enabled')"
+                                        class="item-col-telegram px-1 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none"
+                                        title="텔레그램 연동">
+                                        T</th>
                                     <th data-sort="m_name" onclick="sortItemList('m_name')"
                                         class="item-col-member px-1 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none">
                                         회원</th>
                                     <th data-sort="m_name_id" onclick="sortItemList('m_name_id')"
                                         class="item-col-manager px-2 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none">
                                         담당</th>
+                                    <th data-sort="bidprice" onclick="sortItemList('bidprice')"
+                                        class="item-col-bidprice px-2 py-3 text-right text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none">
+                                        입찰가</th>
                                 </tr>
                             </thead>
                             <tbody id="dataTableBody" class="bg-white divide-y divide-gray-100">
                                 <tr>
-                                    <td colspan="8" class="p-4 text-center text-gray-500">
+                                    <td colspan="10" class="p-4 text-center text-gray-500">
                                         <div id="loadingIndicator" class="flex justify-center items-center p-4">
                                             <div
                                                 class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 mr-3">
@@ -871,7 +942,8 @@
                             <div id="formContainer" class="p-3 md:p-4">
                                 <div class="flex justify-between items-center mb-6 border-b pb-4">
                                     <h3 id="formTitle"
-                                        class="detail-form-title font-semibold text-gray-800 flex-shrink-0">입찰정보상세 및 수정
+                                        class="detail-form-title font-semibold text-gray-800 flex-shrink-0">
+                                        입찰정보상세 및 수정
                                     </h3>
                                     <div class="flex space-x-2 flex-shrink-0 items-center detail-form-actions">
                                         <!-- [추가] 상세탭에서도 텔레그램 전송 및 옥션원 가기 제공 -->
@@ -902,6 +974,7 @@
                                     <input type="hidden" id="form-member-id" name="member_id">
 
                                     <input type="hidden" id="form-bid-state" name="bid_state">
+                                    <input type="hidden" id="form-chuchen-state" name="chuchen_state">
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div class="mb-4"><label for="form-in-date"
                                                 class="block text-sm font-medium text-gray-700 mb-1">입찰일자
@@ -923,21 +996,34 @@
                                                 onchange="validateCourt(this)"
                                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                         </div>
-                                        <div class="mb-4"><label for="form-stu-member"
-                                                class="block text-sm font-medium text-gray-700 mb-1">물건상태</label><select
-                                                id="form-stu-member" name="stu_member" required
+                                        <div class="mb-4">
+                                            <div class="flex justify-between items-center mb-1">
+                                                <label for="form-stu-member"
+                                                    class="block text-sm font-medium text-gray-700">물건상태</label>
+                                                <div class="space-x-1" id="chuchen-state-buttons">
+                                                    <button type="button" onclick="setChuchenState('신규')"
+                                                        id="btn-chuchen-new"
+                                                        class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
+                                                    <button type="button" onclick="setChuchenState('전달완료')"
+                                                        id="btn-chuchen-done"
+                                                        class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
+                                                </div>
+                                            </div>
+                                            <select id="form-stu-member" name="stu_member" required
                                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                                 <option value="상품">상품</option>
                                                 <option value="미정">미정</option>
                                                 <option value="추천">추천</option>
                                                 <option value="입찰">입찰</option>
                                                 <option value="변경">변경</option>
-                                            </select></div>
+                                            </select>
+                                        </div>
                                         <div class="col-span-1 md:col-span-2">
                                             <div class="mb-4">
                                                 <label for="form-m-name"
                                                     class="block text-sm font-medium text-gray-700 mb-1">
                                                     회원명
+                                                    <span id="detail-telegram-badge" class="ml-1"></span>
                                                     <span id="display-member-id"
                                                         class="ml-1 text-xs text-blue-600 font-normal leading-snug break-words"></span>
                                                 </label>
@@ -955,7 +1041,8 @@
                                         </div>
                                         <div class="mb-4">
                                             <label for="form-bidprice"
-                                                class="block text-sm font-medium text-gray-700 mb-1">입찰가 (원)</label>
+                                                class="block text-sm font-medium text-gray-700 mb-1">입찰가
+                                                (원)</label>
                                             <input type="text" id="form-bidprice" name="bidprice"
                                                 placeholder="예: 100,000,000" oninput="formatNumber(this)"
                                                 onfocus="this.select()"
@@ -976,78 +1063,55 @@
                                     <!-- 이미지 ID 및 물건그랩경보 -->
 
 
-                                    <!-- 텔레그램정보 (회원 텔레그램 정보 - 읽기 전용) -->
-                                    <div class="mb-4 md:col-span-2 border-t pt-4">
-                                        <label class="block text-sm font-medium text-gray-700 mb-3">텔레그램정보</label>
-                                        <div class="grid grid-cols-3 gap-3">
-                                            <div>
-                                                <label class="block text-xs font-medium text-gray-600 mb-1">Y/N</label>
-                                                <div id="form-telegram-username"
-                                                    class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
-                                                    -</div>
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-gray-600 mb-1">토큰</label>
-                                                <div id="form-member-token-display"
-                                                    class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-xs text-gray-700 truncate">
-                                                    -</div>
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-gray-600 mb-1">ID</label>
-                                                <div id="form-telegram-chat-id"
-                                                    class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
-                                                    -</div>
-                                            </div>
-                                        </div>
-                                    </div>
 
-                                    <!-- 메타데이터 정보 -->
-                                    <div class="mb-4 md:col-span-2 border-t pt-4">
-                                        <div class="grid grid-cols-4 gap-4">
-                                            <div>
-                                                <label class="block text-xs font-medium text-gray-600 mb-1">이미지
-                                                    ID</label>
-                                                <div class="text-sm text-gray-700 truncate max-w-[100px]"
-                                                    id="currentIdDisplay-moved" title="">-</div>
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-gray-600 mb-1">수정날짜</label>
-                                                <div class="text-sm text-gray-700" id="currentModDate">-</div>
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-gray-600 mb-1">등록자</label>
-                                                <div class="text-sm text-gray-700" id="currentRegMember">-</div>
-                                            </div>
-                                            <div>
-                                                <label class="block text-xs font-medium text-gray-600 mb-1">등록일자</label>
-                                                <div class="text-sm text-gray-700" id="currentRegDate">-</div>
-                                            </div>
+                                    <!-- 하단 탭: 비고 / 히스토리 / 정보 -->
+                                    <div class="md:col-span-2 mt-3 border border-gray-200 rounded-lg overflow-hidden">
+                                        <!-- 탭 버튼 -->
+                                        <div class="flex border-b border-gray-200 bg-gray-50 text-xs">
+                                            <button type="button"
+                                                class="item-sub-tab-btn px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-semibold bg-white"
+                                                onclick="switchItemSubTab('note')">비고</button>
+                                            <button type="button"
+                                                class="item-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
+                                                onclick="switchItemSubTab('history')">히스토리</button>
+                                            <button type="button"
+                                                class="item-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
+                                                onclick="switchItemSubTab('info')">정보</button>
                                         </div>
-                                    </div>
-
-                                    <!-- 비고 2분할: 회원비고(좌) + 물건비고(우) -->
-                                    <div class="md:col-span-2 grid grid-cols-2 gap-3 mt-2">
-                                        <!-- 왼쪽: 회원비고 -->
-                                        <div class="flex flex-col">
-                                            <div class="flex items-center justify-between mb-1">
-                                                <label class="block text-sm font-medium text-gray-700">회원비고</label>
-                                                <div class="flex gap-1">
-                                                    <button type="button" onclick="goToMemberFromDetail()"
-                                                        class="text-xs px-2 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded transition font-medium">회원관리</button>
-                                                    <button type="button" onclick="saveMemberNoteOnly()"
-                                                        class="text-xs px-2 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded transition font-medium">회원비고
-                                                        저장</button>
+                                        <!-- 비고 탭 -->
+                                        <div id="item-sub-panel-note" class="p-3">
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <div class="flex flex-col">
+                                                    <div class="flex items-center justify-between mb-1">
+                                                        <label
+                                                            class="block text-xs font-semibold text-gray-600">회원비고</label>
+                                                        <div class="flex gap-1">
+                                                            <button type="button" onclick="goToMemberFromDetail()"
+                                                                class="text-xs px-2 py-0.5 bg-gray-500 hover:bg-gray-600 text-white rounded transition">회원관리</button>
+                                                            <button type="button" onclick="saveMemberNoteOnly()"
+                                                                class="text-xs px-2 py-0.5 bg-teal-600 hover:bg-teal-700 text-white rounded transition">저장</button>
+                                                        </div>
+                                                    </div>
+                                                    <textarea id="form-member-note" rows="6" placeholder="회원 비고 없음"
+                                                        class="flex-1 w-full px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 resize-none text-sm bg-teal-50"></textarea>
+                                                </div>
+                                                <div class="flex flex-col">
+                                                    <label for="form-note"
+                                                        class="block text-xs font-semibold text-gray-600 mb-1">물건비고</label>
+                                                    <textarea id="form-note" name="note" rows="6"
+                                                        placeholder="메모나 비고사항을 입력하세요"
+                                                        class="flex-1 w-full px-2 py-1.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 resize-none text-sm"></textarea>
                                                 </div>
                                             </div>
-                                            <textarea id="form-member-note" rows="6" placeholder="회원 비고 없음"
-                                                class="flex-1 w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 resize-none text-sm bg-teal-50"></textarea>
                                         </div>
-                                        <!-- 오른쪽: 물건비고 -->
-                                        <div class="flex flex-col">
-                                            <label for="form-note"
-                                                class="block text-sm font-medium text-gray-700 mb-1">물건비고</label>
-                                            <textarea id="form-note" name="note" rows="6" placeholder="메모나 비고사항을 입력하세요"
-                                                class="flex-1 w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 resize-none text-sm"></textarea>
+                                        <!-- 히스토리 탭 -->
+                                        <div id="item-sub-panel-history" class="p-3 hidden">
+                                            <div id="item-sub-history-list"
+                                                class="text-xs space-y-1 max-h-52 overflow-y-auto"></div>
+                                        </div>
+                                        <!-- 정보 탭 -->
+                                        <div id="item-sub-panel-info" class="p-3 hidden">
+                                            <div id="item-sub-info-content" class="text-xs space-y-1"></div>
                                         </div>
                                     </div>
 
@@ -1064,7 +1128,8 @@
                             <div id="investigationImageContainer"
                                 class="investigation-image-wrap flex-1 min-h-0 bg-gray-100 overflow-y-auto flex flex-col items-start">
                                 <p id="investigationPlaceholder"
-                                    class="text-gray-500 text-center py-8 self-center w-full">매칭된 이미지 없음</p>
+                                    class="text-gray-500 text-center py-8 self-center w-full">
+                                    매칭된 이미지 없음</p>
                                 <div id="investigationImageList" class="w-full flex flex-col gap-4 p-1 content-hidden">
                                 </div>
                             </div>
@@ -1637,11 +1702,14 @@
                         <div id="classD1MemberDetail" class="mt-4 p-4 bg-gray-50 rounded-lg content-hidden">
                             <div class="grid grid-cols-2 gap-3 text-sm">
                                 <div><span class="text-gray-500">구분:</span> <span id="d1m-gubun"
-                                        class="font-medium">-</span></div>
+                                        class="font-medium">-</span>
+                                </div>
                                 <div><span class="text-gray-500">이름:</span> <span id="d1m-name"
-                                        class="font-medium">-</span></div>
+                                        class="font-medium">-</span>
+                                </div>
                                 <div><span class="text-gray-500">전화번호:</span> <span id="d1m-phone"
-                                        class="font-medium">-</span></div>
+                                        class="font-medium">-</span>
+                                </div>
                                 <div><span class="text-gray-500">가입일:</span> <span id="d1m-kaib_date"
                                         class="font-medium">-</span></div>
                                 <div class="flex gap-2">
@@ -1968,6 +2036,7 @@
                     <input type="hidden" id="modal-form-m-name2">
                     <input type="hidden" id="modal-form-reg-member">
                     <input type="hidden" id="modal-form-bid-state">
+                    <input type="hidden" id="modal-form-chuchen-state">
                     <input type="hidden" id="modal-form-image-id">
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1990,7 +2059,17 @@
                             <datalist id="modal-court-datalist"></datalist>
                         </div>
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">물건상태</label>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="block text-sm font-medium text-gray-700">물건상태</label>
+                                <div class="flex items-center gap-1" id="modal-chuchen-state-buttons">
+                                    <button type="button" onclick="setModalChuchenState('신규')"
+                                        id="modal-btn-chuchen-new"
+                                        class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
+                                    <button type="button" onclick="setModalChuchenState('전달완료')"
+                                        id="modal-btn-chuchen-done"
+                                        class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
+                                </div>
+                            </div>
                             <select id="modal-form-stu-member"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
                                 <option value="상품">상품</option>
@@ -2002,7 +2081,8 @@
                         </div>
                         <div class="mb-4 md:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">회원명 <span
-                                    id="modal-display-member-id" class="ml-2 text-xs text-blue-600"></span></label>
+                                    id="modal-telegram-badge" class="ml-1"></span><span id="modal-display-member-id"
+                                    class="ml-2 text-xs text-blue-600"></span></label>
                             <div class="flex items-center">
                                 <input type="text" id="modal-form-m-name" list="modal-member-datalist"
                                     onfocus="this.select()" autocomplete="off" spellcheck="false"
@@ -2021,6 +2101,9 @@
                                     <button type="button" onclick="setBidState('전달완료')"
                                         id="modal-bid-state-delivered-btn"
                                         class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded border border-gray-300 transition">전달완료</button>
+                                    <button type="button" onclick="setBidState('확인완료')"
+                                        id="modal-bid-state-confirmed-btn"
+                                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded border border-gray-300 transition">확인완료</button>
                                 </div>
                             </div>
                             <input type="text" id="modal-form-bidprice" oninput="formatNumber(this)"
@@ -2036,51 +2119,53 @@
                             </select>
                         </div>
 
-                        <!-- 텔레그램 정보 (회원 텔레그램 정보 - 읽기 전용) -->
-                        <div id="modal-detail-telegram-section" class="mb-4 md:col-span-2 border-t pt-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-3">텔레그램 정보</label>
-                            <div class="grid grid-cols-3 gap-3">
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">Y/N</label>
-                                    <div id="modal-telegram-username"
-                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
-                                        -</div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">토큰</label>
-                                    <div id="modal-member-token-display"
-                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-xs text-gray-700 truncate">
-                                        -</div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">ID</label>
-                                    <div id="modal-telegram-chat-id"
-                                        class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
-                                        -</div>
+
+                        <!-- 하단 탭: 비고 / 히스토리 / 정보 -->
+                        <div class="mb-4 md:col-span-2 border border-gray-200 rounded-lg overflow-hidden">
+                            <div class="flex border-b border-gray-200 bg-gray-50 text-xs">
+                                <button type="button"
+                                    class="modal-sub-tab-btn px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-semibold bg-white"
+                                    onclick="switchModalSubTab('note')">비고</button>
+                                <button type="button"
+                                    class="modal-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
+                                    onclick="switchModalSubTab('history')">히스토리</button>
+                                <button type="button"
+                                    class="modal-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
+                                    onclick="switchModalSubTab('info')">정보</button>
+                            </div>
+                            <!-- 비고 탭 -->
+                            <div id="modal-sub-panel-note" class="p-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="block text-xs font-semibold text-gray-600">회원비고</label>
+                                            <div class="flex gap-1">
+                                                <button type="button" onclick="goToMemberFromModal()"
+                                                    class="text-xs px-2 py-0.5 bg-gray-500 hover:bg-gray-600 text-white rounded transition">회원관리</button>
+                                                <button type="button" onclick="saveModalMemberNoteOnly()"
+                                                    class="text-xs px-2 py-0.5 bg-teal-600 hover:bg-teal-700 text-white rounded transition">저장</button>
+                                            </div>
+                                        </div>
+                                        <div id="modal-sub-member-note"
+                                            class="bg-teal-50 rounded p-2 text-xs text-gray-700 min-h-[60px] whitespace-pre-wrap max-h-32 overflow-y-auto">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-600 mb-1">물건비고</label>
+                                        <div id="modal-sub-item-note"
+                                            class="bg-gray-50 rounded p-2 text-xs text-gray-700 min-h-[60px] whitespace-pre-wrap max-h-32 overflow-y-auto">
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <!-- 메타데이터 정보 (이미지 ID, 수정날짜, 등록자, 등록일자) -->
-                        <div id="modal-detail-metadata-section" class="mb-4 md:col-span-2 border-t pt-4">
-                            <div class="grid grid-cols-4 gap-4">
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">이미지 ID</label>
-                                    <div class="text-sm text-gray-700 truncate max-w-[100px]"
-                                        id="modal-image-id-display" title="">-</div>
+                            <!-- 히스토리 탭 -->
+                            <div id="modal-sub-panel-history" class="p-3 hidden">
+                                <div id="modal-sub-history-list" class="text-xs space-y-1 max-h-52 overflow-y-auto">
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">수정날짜</label>
-                                    <div class="text-sm text-gray-700" id="modal-mod-date">-</div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">등록자</label>
-                                    <div class="text-sm text-gray-700" id="modal-reg-member">-</div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-gray-600 mb-1">등록일자</label>
-                                    <div class="text-sm text-gray-700" id="modal-reg-date">-</div>
-                                </div>
+                            </div>
+                            <!-- 정보 탭 -->
+                            <div id="modal-sub-panel-info" class="p-3 hidden">
+                                <div id="modal-sub-info-content" class="text-xs space-y-1"></div>
                             </div>
                         </div>
 

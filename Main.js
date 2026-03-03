@@ -13,6 +13,18 @@ function doGet(e) {
   const adminKey = params.admin || '';
   const memberToken = params.t || params.token || '';
 
+  // [추가] items 시트 Q1, R1 컬럼 자동 추가 (사용자 요청: 컬럼 추가 너가 해주고)
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (sheet) {
+      if (sheet.getRange("Q1").getValue() !== "chuchen_state") sheet.getRange("Q1").setValue("chuchen_state");
+      if (sheet.getRange("R1").getValue() !== "chuchen_date") sheet.getRange("R1").setValue("chuchen_date");
+    }
+  } catch (err) {
+    Logger.log("컬럼 추가 오류: " + err);
+  }
+
   // 1. 관리자 KEY 확인
   if (adminKey) {
     const validAdminKey = getAdminSecretKey_();
