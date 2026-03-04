@@ -3246,7 +3246,7 @@ function autoExpireRecommended() {
             trigger_type : 'system',
             note         : 'elapsed=' + Math.floor(elapsed) + 'h'
           });
-          // TODO: sendExpiryNotification_(memberId, itemId, 'done');
+          sendExpiryNotification_(memberId, itemId, 'done');
         }
 
       } else if (elapsed >= 47 && !isAlreadyNotified_(itemId, 'EXPIRY_NOTIFY', '47h')) {
@@ -3259,7 +3259,7 @@ function autoExpireRecommended() {
             trigger_type : 'system',
             note         : '47h'
           });
-          // TODO: sendExpiryNotification_(memberId, itemId, '1h');
+          sendExpiryNotification_(memberId, itemId, '1h');
         }
 
       } else if (elapsed >= 24 && !isAlreadyNotified_(itemId, 'EXPIRY_NOTIFY', '24h')) {
@@ -3272,7 +3272,7 @@ function autoExpireRecommended() {
             trigger_type : 'system',
             note         : '24h'
           });
-          // TODO: sendExpiryNotification_(memberId, itemId, '24h');
+          sendExpiryNotification_(memberId, itemId, '24h');
         }
       }
     });
@@ -3372,21 +3372,21 @@ function sendBidDateReminders() {
         if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-3')) {
           writeItemHistory_({ action: 'BID_DATE_NOTIFY', item_id: itemId,
             member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-3' });
-          // TODO: sendBidDateNotification_(memberId, itemId, 'D-3');
+          sendBidDateNotification_(memberId, itemId, 'D-3');
         }
       }
       if (getSetting_('BID_NOTIFY_D2', 'true') === 'true' && inDate === d2str) {
         if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-2')) {
           writeItemHistory_({ action: 'BID_DATE_NOTIFY', item_id: itemId,
             member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-2' });
-          // TODO: sendBidDateNotification_(memberId, itemId, 'D-2');
+          sendBidDateNotification_(memberId, itemId, 'D-2');
         }
       }
       if (getSetting_('BID_NOTIFY_D1', 'true') === 'true' && inDate === d1str) {
         if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-1')) {
           writeItemHistory_({ action: 'BID_DATE_NOTIFY', item_id: itemId,
             member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-1' });
-          // TODO: sendBidDateNotification_(memberId, itemId, 'D-1');
+          sendBidDateNotification_(memberId, itemId, 'D-1');
         }
       }
     });
@@ -3664,4 +3664,101 @@ function resetMsgTemplate(key) {
   const defVal = DEFAULTS[key];
   if (!defVal) return { success: false, message: '기본값 없음: ' + key };
   return saveMsgTemplate(key, defVal);
+}
+
+// ------------------------------------------------------------------------------------------------
+// [PHASE 2/3] 텔레그램 알림 발송 헬퍼
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * 추천 만료 사전/만료 알림을 텔레그램으로 발송합니다.
+ * @param {string} memberId
+ * @param {string} itemId
+ * @param {'24h'|'1h'|'done'} type
+ */
+function sendExpiryNotification_(memberId, itemId, type) {
+  try {
+    const member = getMemberById_(memberId);
+    if (!member) { Logger.log('[sendExpiryNotification_] 회원 없음: ' + memberId); return; }
+
+    const chatId = String(member.telegram_chat_id || '').trim();
+    if (!chatId) { Logger.log('[sendExpiryNotification_] chat_id 없음: ' + memberId); return; }
+
+    const enabled = String(member.telegram_enabled || '').toUpperCase();
+    if (enabled === 'N') return;
+
+    // 물건 정보 조회
+    const item = (typeof getItemLiteById_ === 'function') ? getItemLiteById_(itemId) : null;
+    const sakunNo  = item ? String(item.sakun_no || '') : '';
+    const memberName = String(member.member_name || '');
+
+    const keyMap = { '24h': 'notify.expiry_24h', '1h': 'notify.expiry_1h', 'done': 'notify.expiry_done' };
+    const msgKey = keyMap[type] || 'notify.expiry_24h';
+    const text = getMessageTemplate_(msgKey, { member_name: memberName, sakun_no: sakunNo })
+              || memberName + '님, 추천 물건 알림입니다. [' + sakunNo + ']';
+
+    if (typeof telegramSendMessage === 'function') {
+      telegramSendMessage(chatId, text, null);
+    }
+
+    // TELEGRAM_SENT 이력
+    writeItemHistory_({
+      action           : 'TELEGRAM_SENT',
+      item_id          : itemId,
+      member_id        : memberId,
+      member_name      : memberName,
+      chat_id          : chatId,
+      telegram_username: String(member.telegram_username || ''),
+      trigger_type     : 'system',
+      note             : msgKey
+    });
+  } catch (e) {
+    Logger.log('[sendExpiryNotification_] 오류: ' + e.toString());
+  }
+}
+
+/**
+ * 입찰일 D-N 알림을 텔레그램으로 발송합니다.
+ * @param {string} memberId
+ * @param {string} itemId
+ * @param {'D-3'|'D-2'|'D-1'} dTag
+ */
+function sendBidDateNotification_(memberId, itemId, dTag) {
+  try {
+    const member = getMemberById_(memberId);
+    if (!member) { Logger.log('[sendBidDateNotification_] 회원 없음: ' + memberId); return; }
+
+    const chatId = String(member.telegram_chat_id || '').trim();
+    if (!chatId) { Logger.log('[sendBidDateNotification_] chat_id 없음: ' + memberId); return; }
+
+    const enabled = String(member.telegram_enabled || '').toUpperCase();
+    if (enabled === 'N') return;
+
+    const item = (typeof getItemLiteById_ === 'function') ? getItemLiteById_(itemId) : null;
+    const sakunNo    = item ? String(item.sakun_no || '') : '';
+    const inDate     = item ? String(item['in-date'] || '') : '';
+    const memberName = String(member.member_name || '');
+
+    const keyMap = { 'D-3': 'notify.bid_d3', 'D-2': 'notify.bid_d2', 'D-1': 'notify.bid_d1' };
+    const msgKey = keyMap[dTag] || 'notify.bid_d1';
+    const text = getMessageTemplate_(msgKey, { member_name: memberName, sakun_no: sakunNo, in_date: inDate })
+              || memberName + '님, [' + sakunNo + '] 입찰일 ' + dTag + ' 알림입니다.';
+
+    if (typeof telegramSendMessage === 'function') {
+      telegramSendMessage(chatId, text, null);
+    }
+
+    writeItemHistory_({
+      action           : 'TELEGRAM_SENT',
+      item_id          : itemId,
+      member_id        : memberId,
+      member_name      : memberName,
+      chat_id          : chatId,
+      telegram_username: String(member.telegram_username || ''),
+      trigger_type     : 'system',
+      note             : msgKey
+    });
+  } catch (e) {
+    Logger.log('[sendBidDateNotification_] 오류: ' + e.toString());
+  }
 }
