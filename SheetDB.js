@@ -194,14 +194,41 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
   // appendRow는 열이 부족하면 알아서 늘려주므로 안전
   sheet.appendRow([id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, regDate, regMember, bidState, imageId, note || '', '']);
 
-  // [PHASE 1-4] 물건 생성 이력 기록
+  // [PHASE 1-4] 물건 생성 이력 기록 (본문)
   writeItemHistory_({
-    action       : 'ITEM_CREATE',
-    item_id      : id,
-    member_id    : String(memberId || ''),
-    member_name  : String(mName || ''),
-    trigger_type : 'web',
-    note         : court + ' ' + sakunNo
+    action: 'ITEM_CREATE',
+    item_id: id,
+    member_id: String(memberId || ''),
+    member_name: String(mName || ''),
+    trigger_type: 'web',
+    note: court + ' ' + sakunNo
+  });
+
+  // [수정] 물건 등록 시 입력된 초기값들도 히스토리에 남겨서 테이블에 표시되게 함
+  const initialValues = {
+    stu_member: String(stuMember || '').trim(),
+    m_name_id: String(mNameId || '').trim(),
+    m_name: String(mName || '').trim(),
+    bidprice: String(bidPrice || '').trim(),
+    member_id: String(memberId || '').trim(),
+    bid_state: String(bidState || '').trim()
+  };
+
+  const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state'];
+  trackFields.forEach(function (field) {
+    if (initialValues[field] !== '') {
+      writeItemHistory_({
+        action: 'ITEM_CREATE',
+        item_id: String(id),
+        member_id: initialValues.member_id,
+        member_name: initialValues.m_name,
+        field_name: field,
+        from_value: '',
+        to_value: initialValues[field],
+        trigger_type: 'web',
+        note: '최초 등록 값'
+      });
+    }
   });
 
   return { success: true, message: '성공적으로 등록되었습니다.' };
@@ -239,12 +266,12 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
   // [PHASE 1-3] 저장 전: 기존 값 읽기 (변경 감지용)
   const oldRow = sheet.getRange(realRowIndex, 1, 1, 15).getValues()[0];
   const oldValues = {
-    stu_member : String(oldRow[4]  || '').trim(),  // E열(5)
-    m_name_id  : String(oldRow[5]  || '').trim(),  // F열(6)
-    m_name     : String(oldRow[6]  || '').trim(),  // G열(7)
-    bidprice   : String(oldRow[7]  || '').trim(),  // H열(8)
-    member_id  : String(oldRow[8]  || '').trim(),  // I열(9)
-    bid_state  : String(oldRow[11] || '').trim(),  // L열(12)
+    stu_member: String(oldRow[4] || '').trim(),  // E열(5)
+    m_name_id: String(oldRow[5] || '').trim(),  // F열(6)
+    m_name: String(oldRow[6] || '').trim(),  // G열(7)
+    bidprice: String(oldRow[7] || '').trim(),  // H열(8)
+    member_id: String(oldRow[8] || '').trim(),  // I열(9)
+    bid_state: String(oldRow[11] || '').trim(),  // L열(12)
   };
   const oldBidState = oldValues.bid_state; // 기존 코드 호환
 
@@ -269,26 +296,26 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
 
   // [PHASE 1-3] 저장 후: 변경된 필드마다 이력 기록
   const newValues = {
-    stu_member : String(stuMember || '').trim(),
-    m_name_id  : String(mNameId   || '').trim(),
-    m_name     : String(mName     || '').trim(),
-    bidprice   : String(bidPrice  || '').trim(),
-    member_id  : String(memberId  || '').trim(),
-    bid_state  : String(bidState  || '').trim(),
+    stu_member: String(stuMember || '').trim(),
+    m_name_id: String(mNameId || '').trim(),
+    m_name: String(mName || '').trim(),
+    bidprice: String(bidPrice || '').trim(),
+    member_id: String(memberId || '').trim(),
+    bid_state: String(bidState || '').trim(),
   };
   const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state'];
-  trackFields.forEach(function(field) {
+  trackFields.forEach(function (field) {
     if (oldValues[field] !== newValues[field]) {
       writeItemHistory_({
-        action       : 'FIELD_CHANGE',
-        item_id      : String(id),
-        member_id    : newValues.member_id || oldValues.member_id,
-        member_name  : newValues.m_name    || oldValues.m_name,
-        field_name   : field,
-        from_value   : oldValues[field],
-        to_value     : newValues[field],
-        trigger_type : 'web',
-        note         : field + ' 변경'
+        action: 'FIELD_CHANGE',
+        item_id: String(id),
+        member_id: newValues.member_id || oldValues.member_id,
+        member_name: newValues.m_name || oldValues.m_name,
+        field_name: field,
+        from_value: oldValues[field],
+        to_value: newValues[field],
+        trigger_type: 'web',
+        note: field + ' 변경'
       });
     }
   });
@@ -1538,14 +1565,14 @@ function approveTelegramRequests(reqIds, approvedBy) {
     var memberId_req = String(values[i][5] || '').trim();
     var memberName_req = (it && it.m_name) ? String(it.m_name) : '';
     writeItemHistory_({
-      action       : 'REQUEST_APPROVED',
-      item_id      : itemId,
-      member_id    : memberId_req,
-      member_name  : memberName_req,
-      chat_id      : chatId,
-      approved_by  : by,
-      trigger_type : 'system',
-      note         : action + ' 승인'
+      action: 'REQUEST_APPROVED',
+      item_id: itemId,
+      member_id: memberId_req,
+      member_name: memberName_req,
+      chat_id: chatId,
+      approved_by: by,
+      trigger_type: 'system',
+      note: action + ' 승인'
     });
 
     // items 시트 상태 변경 (같은 ss 재사용, openById 추가 없음)
@@ -1661,14 +1688,14 @@ function rejectTelegramRequests(reqIds, rejectedBy) {
     var memberIdRej = String(values[i][5] || '').trim();
     var itRej = itemMap[itemIdRej] || null;
     writeItemHistory_({
-      action       : 'REQUEST_REJECTED',
-      item_id      : itemIdRej,
-      member_id    : memberIdRej,
-      member_name  : itRej ? String(itRej.m_name || '') : '',
-      chat_id      : chatId,
-      approved_by  : by,
-      trigger_type : 'web',
-      note         : actionRej + ' 거절'
+      action: 'REQUEST_REJECTED',
+      item_id: itemIdRej,
+      member_id: memberIdRej,
+      member_name: itRej ? String(itRej.m_name || '') : '',
+      chat_id: chatId,
+      approved_by: by,
+      trigger_type: 'web',
+      note: actionRej + ' 거절'
     });
 
     // 텔레그램 알림 전송
@@ -3117,14 +3144,14 @@ function ensureSettingsSheet_() {
     sheet.getRange(1, 1, 1, 3).setValues([['key', 'value', 'description']]);
     // 기본값
     const defaults = [
-      ['BID_NOTIFY_ENABLED', 'true',  '입찰일 알림 전체 ON/OFF'],
-      ['BID_NOTIFY_D3',      'true',  'D-3 알림 활성화'],
-      ['BID_NOTIFY_D2',      'true',  'D-2 알림 활성화'],
-      ['BID_NOTIFY_D1',      'true',  'D-1 알림 활성화'],
-      ['BID_NOTIFY_HOUR',    '10',    '발송 시각 (시 단위)'],
-      ['EXPIRY_NOTIFY_24H',  'true',  '추천 24h 알림'],
-      ['EXPIRY_NOTIFY_1H',   'true',  '추천 47h(만료 1시간 전) 알림'],
-      ['EXPIRY_NOTIFY_DONE', 'true',  '만료 알림'],
+      ['BID_NOTIFY_ENABLED', 'true', '입찰일 알림 전체 ON/OFF'],
+      ['BID_NOTIFY_D3', 'true', 'D-3 알림 활성화'],
+      ['BID_NOTIFY_D2', 'true', 'D-2 알림 활성화'],
+      ['BID_NOTIFY_D1', 'true', 'D-1 알림 활성화'],
+      ['BID_NOTIFY_HOUR', '10', '발송 시각 (시 단위)'],
+      ['EXPIRY_NOTIFY_24H', 'true', '추천 24h 알림'],
+      ['EXPIRY_NOTIFY_1H', 'true', '추천 47h(만료 1시간 전) 알림'],
+      ['EXPIRY_NOTIFY_DONE', 'true', '만료 알림'],
     ];
     sheet.getRange(2, 1, defaults.length, 3).setValues(defaults);
     SpreadsheetApp.flush();
@@ -3207,14 +3234,14 @@ function autoExpireRecommended() {
     if (lastRow < 2) return;
     const data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
 
-    data.forEach(function(row, i) {
+    data.forEach(function (row, i) {
       const realRow = i + 2;
-      const itemId     = String(row[0] || '').trim();
-      const stuMember  = String(row[4] || '').trim();
-      const memberId   = String(row[8] || '').trim();
-      const mName      = String(row[6] || '').trim();
+      const itemId = String(row[0] || '').trim();
+      const stuMember = String(row[4] || '').trim();
+      const memberId = String(row[8] || '').trim();
+      const mName = String(row[6] || '').trim();
       const chuchenState = String(row[16] || '').trim();  // Q열: chuchen_state
-      const chuchenDate  = row[17];                        // R열: chuchen_date
+      const chuchenDate = row[17];                        // R열: chuchen_date
 
       if (stuMember !== '추천') return;
       if (chuchenState !== '전달완료') return;
@@ -3236,15 +3263,15 @@ function autoExpireRecommended() {
         if (getSetting_('EXPIRY_NOTIFY_DONE', 'true') === 'true') {
           sheet.getRange(realRow, 5).setValue('미정');
           writeItemHistory_({
-            action       : 'AUTO_EXPIRE',
-            item_id      : itemId,
-            member_id    : memberId,
-            member_name  : mName,
-            field_name   : 'stu_member',
-            from_value   : '추천',
-            to_value     : '미정',
-            trigger_type : 'system',
-            note         : 'elapsed=' + Math.floor(elapsed) + 'h'
+            action: 'AUTO_EXPIRE',
+            item_id: itemId,
+            member_id: memberId,
+            member_name: mName,
+            field_name: 'stu_member',
+            from_value: '추천',
+            to_value: '미정',
+            trigger_type: 'system',
+            note: 'elapsed=' + Math.floor(elapsed) + 'h'
           });
           sendExpiryNotification_(memberId, itemId, 'done');
         }
@@ -3252,12 +3279,12 @@ function autoExpireRecommended() {
       } else if (elapsed >= 47 && !isAlreadyNotified_(itemId, 'EXPIRY_NOTIFY', '47h')) {
         if (getSetting_('EXPIRY_NOTIFY_1H', 'true') === 'true') {
           writeItemHistory_({
-            action       : 'EXPIRY_NOTIFY',
-            item_id      : itemId,
-            member_id    : memberId,
-            member_name  : mName,
-            trigger_type : 'system',
-            note         : '47h'
+            action: 'EXPIRY_NOTIFY',
+            item_id: itemId,
+            member_id: memberId,
+            member_name: mName,
+            trigger_type: 'system',
+            note: '47h'
           });
           sendExpiryNotification_(memberId, itemId, '1h');
         }
@@ -3265,12 +3292,12 @@ function autoExpireRecommended() {
       } else if (elapsed >= 24 && !isAlreadyNotified_(itemId, 'EXPIRY_NOTIFY', '24h')) {
         if (getSetting_('EXPIRY_NOTIFY_24H', 'true') === 'true') {
           writeItemHistory_({
-            action       : 'EXPIRY_NOTIFY',
-            item_id      : itemId,
-            member_id    : memberId,
-            member_name  : mName,
-            trigger_type : 'system',
-            note         : '24h'
+            action: 'EXPIRY_NOTIFY',
+            item_id: itemId,
+            member_id: memberId,
+            member_name: mName,
+            trigger_type: 'system',
+            note: '24h'
           });
           sendExpiryNotification_(memberId, itemId, '24h');
         }
@@ -3299,10 +3326,10 @@ function isAlreadyNotified_(itemId, action, noteKey) {
       .getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return false;
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues(); // A~I열
-    return data.some(function(r) {
+    return data.some(function (r) {
       return String(r[2]).trim() === action &&
-             String(r[4]).trim() === itemId &&
-             String(r[8]).indexOf(noteKey) >= 0;
+        String(r[4]).trim() === itemId &&
+        String(r[8]).indexOf(noteKey) >= 0;
     });
   } catch (e) {
     Logger.log('[isAlreadyNotified_] 오류: ' + e.toString());
@@ -3320,7 +3347,7 @@ function isAlreadyNotified_(itemId, action, noteKey) {
  */
 function setupAutoExpireTrigger() {
   // 기존 동명 트리거 삭제 (중복 방지)
-  ScriptApp.getProjectTriggers().forEach(function(t) {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'autoExpireRecommended') ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('autoExpireRecommended').timeBased().everyHours(1).create();
@@ -3342,7 +3369,7 @@ function sendBidDateReminders() {
   if (!lock.tryLock(10000)) return;
 
   try {
-    const tz    = Session.getScriptTimeZone();
+    const tz = Session.getScriptTimeZone();
     const today = new Date();
     const d3 = new Date(today); d3.setDate(d3.getDate() + 3);
     const d2 = new Date(today); d2.setDate(d2.getDate() + 2);
@@ -3358,34 +3385,40 @@ function sendBidDateReminders() {
     if (lastRow < 2) return;
     const data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
 
-    data.forEach(function(row) {
-      const itemId    = String(row[0] || '').trim();
-      const inDate    = String(row[1] || '').trim();   // B열: in-date (yyMMdd)
+    data.forEach(function (row) {
+      const itemId = String(row[0] || '').trim();
+      const inDate = String(row[1] || '').trim();   // B열: in-date (yyMMdd)
       const stuMember = String(row[4] || '').trim();   // E열
-      const mName     = String(row[6] || '').trim();   // G열
-      const memberId  = String(row[8] || '').trim();   // I열
+      const mName = String(row[6] || '').trim();   // G열
+      const memberId = String(row[8] || '').trim();   // I열
 
       if (stuMember !== '입찰') return;
       if (!memberId || !inDate) return;
 
       if (getSetting_('BID_NOTIFY_D3', 'true') === 'true' && inDate === d3str) {
         if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-3')) {
-          writeItemHistory_({ action: 'BID_DATE_NOTIFY', item_id: itemId,
-            member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-3' });
+          writeItemHistory_({
+            action: 'BID_DATE_NOTIFY', item_id: itemId,
+            member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-3'
+          });
           sendBidDateNotification_(memberId, itemId, 'D-3');
         }
       }
       if (getSetting_('BID_NOTIFY_D2', 'true') === 'true' && inDate === d2str) {
         if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-2')) {
-          writeItemHistory_({ action: 'BID_DATE_NOTIFY', item_id: itemId,
-            member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-2' });
+          writeItemHistory_({
+            action: 'BID_DATE_NOTIFY', item_id: itemId,
+            member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-2'
+          });
           sendBidDateNotification_(memberId, itemId, 'D-2');
         }
       }
       if (getSetting_('BID_NOTIFY_D1', 'true') === 'true' && inDate === d1str) {
         if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-1')) {
-          writeItemHistory_({ action: 'BID_DATE_NOTIFY', item_id: itemId,
-            member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-1' });
+          writeItemHistory_({
+            action: 'BID_DATE_NOTIFY', item_id: itemId,
+            member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-1'
+          });
           sendBidDateNotification_(memberId, itemId, 'D-1');
         }
       }
@@ -3403,7 +3436,7 @@ function sendBidDateReminders() {
  * GAS 에디터에서 1회 실행하세요.
  */
 function setupBidDateTrigger() {
-  ScriptApp.getProjectTriggers().forEach(function(t) {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'sendBidDateReminders') ScriptApp.deleteTrigger(t);
   });
   const hour = parseInt(getSetting_('BID_NOTIFY_HOUR', '10'), 10) || 10;
@@ -3424,9 +3457,9 @@ function setupBidDateTrigger() {
 function getCancelHistory(memberId, limit) {
   const CANCEL_ACTIONS = ['AUTO_EXPIRE', 'REQUEST_CANCEL_CHUCHEN', 'REQUEST_CANCEL_BID'];
   const ACTION_LABEL = {
-    'AUTO_EXPIRE'            : '추천시간 만기',
-    'REQUEST_CANCEL_CHUCHEN' : '회원요청(추천취소)',
-    'REQUEST_CANCEL_BID'     : '회원요청(입찰취소)'
+    'AUTO_EXPIRE': '추천시간 만기',
+    'REQUEST_CANCEL_CHUCHEN': '회원요청(추천취소)',
+    'REQUEST_CANCEL_BID': '회원요청(입찰취소)'
   };
   const maxRows = parseInt(limit, 10) || 100;
 
@@ -3443,7 +3476,7 @@ function getCancelHistory(memberId, limit) {
     const itemMap = {};
     if (itemSheet && itemSheet.getLastRow() >= 2) {
       const iData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 5).getValues(); // A~E열
-      iData.forEach(function(r) {
+      iData.forEach(function (r) {
         const id = String(r[0] || '').trim();
         if (id) itemMap[id] = { inDate: String(r[1] || ''), sakunNo: String(r[2] || ''), court: String(r[3] || '') };
       });
@@ -3452,24 +3485,24 @@ function getCancelHistory(memberId, limit) {
     const result = [];
     // 최신순(역순)
     for (let i = data.length - 1; i >= 0 && result.length < maxRows; i--) {
-      const action    = String(data[i][2]  || '').trim();
-      const reqMember = String(data[i][5]  || '').trim(); // F열: member_id
+      const action = String(data[i][2] || '').trim();
+      const reqMember = String(data[i][5] || '').trim(); // F열: member_id
       if (CANCEL_ACTIONS.indexOf(action) === -1) continue;
       if (memberId && reqMember !== String(memberId).trim()) continue;
 
       const itemId = String(data[i][4] || '').trim();
-      const item   = itemMap[itemId] || {};
+      const item = itemMap[itemId] || {};
       result.push({
-        req_id      : String(data[i][0]  || ''),
-        cancel_date : String(data[i][1]  || ''),   // B: requested_at
-        action      : action,
+        req_id: String(data[i][0] || ''),
+        cancel_date: String(data[i][1] || ''),   // B: requested_at
+        action: action,
         action_label: ACTION_LABEL[action] || action,
-        item_id     : itemId,
-        member_id   : reqMember,
-        member_name : String(data[i][15] || ''),   // P: member_name
-        in_date     : item.inDate  || '',
-        sakun_no    : item.sakunNo || '',
-        court       : item.court   || ''
+        item_id: itemId,
+        member_id: reqMember,
+        member_name: String(data[i][15] || ''),   // P: member_name
+        in_date: item.inDate || '',
+        sakun_no: item.sakunNo || '',
+        court: item.court || ''
       });
     }
     return result;
@@ -3498,29 +3531,29 @@ function ensureMsgTemplatesSheet_() {
       ['msg_key', 'category', 'description', 'template', 'variables', 'updated_at', 'updated_by']
     ]);
     const defaults = [
-      ['item_card.card',          'item_card', '추천 물건 카드 인사말',
+      ['item_card.card', 'item_card', '추천 물건 카드 인사말',
         'MJ 경매 스쿨입니다. 추천 물건드립니다.', '', '', ''],
       ['item_card.check_request', 'item_card', '입찰 여부 회신 요청',
         'MJ 경매 스쿨입니다. 입찰 여부 회신 요청드립니다.', '', '', ''],
-      ['item_card.status',        'item_card', '입찰불가 안내',
+      ['item_card.status', 'item_card', '입찰불가 안내',
         'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.', '', '', ''],
-      ['item_card.warning',       'item_card', '대출 주의 안내',
+      ['item_card.warning', 'item_card', '대출 주의 안내',
         '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!', '', '', ''],
-      ['item_card.staff_1',       'item_card', '담당자 안내1',
+      ['item_card.staff_1', 'item_card', '담당자 안내1',
         '1. 입찰가 관리: 이정우: (010-4238-7781)', '', '', ''],
-      ['item_card.staff_2',       'item_card', '담당자 안내2',
+      ['item_card.staff_2', 'item_card', '담당자 안내2',
         '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)', '', '', ''],
       ['notify.expiry_24h', 'notify', '추천 24h 경과 알림',
         '{{member_name}}님, 추천드린 [{{sakun_no}}] 물건 전달 후 24시간이 경과했습니다.\n입찰확정/취소를 선택해 주세요.', 'member_name,sakun_no', '', ''],
-      ['notify.expiry_1h',  'notify', '추천 만료 1시간 전 알림',
+      ['notify.expiry_1h', 'notify', '추천 만료 1시간 전 알림',
         '{{member_name}}님, [{{sakun_no}}] 추천 물건이 1시간 후 자동 만료됩니다.\n지금 확정해 주세요!', 'member_name,sakun_no', '', ''],
-      ['notify.expiry_done','notify', '추천 만료 알림',
+      ['notify.expiry_done', 'notify', '추천 만료 알림',
         '{{member_name}}님, [{{sakun_no}}] 추천 물건이 만료되어 미정 처리되었습니다.', 'member_name,sakun_no', '', ''],
-      ['notify.bid_d3',     'notify', '입찰 D-3 알림',
+      ['notify.bid_d3', 'notify', '입찰 D-3 알림',
         '{{member_name}}님, [{{sakun_no}}] 입찰일이 3일 후입니다. ({{in_date}})', 'member_name,sakun_no,in_date', '', ''],
-      ['notify.bid_d2',     'notify', '입찰 D-2 알림',
+      ['notify.bid_d2', 'notify', '입찰 D-2 알림',
         '{{member_name}}님, [{{sakun_no}}] 입찰일이 2일 후입니다. ({{in_date}})', 'member_name,sakun_no,in_date', '', ''],
-      ['notify.bid_d1',     'notify', '입찰 D-1 알림',
+      ['notify.bid_d1', 'notify', '입찰 D-1 알림',
         '{{member_name}}님, [{{sakun_no}}] 내일이 입찰일입니다. ({{in_date}}) 준비 잘 되셨나요?', 'member_name,sakun_no,in_date', '', ''],
     ];
     sheet.getRange(2, 1, defaults.length, 7).setValues(defaults);
@@ -3557,7 +3590,7 @@ function getMessageTemplate_(key, vars) {
  * {{변수명}} 치환 헬퍼
  */
 function replaceVars_(template, vars) {
-  return template.replace(/\{\{(\w+)\}\}/g, function(_, name) {
+  return template.replace(/\{\{(\w+)\}\}/g, function (_, name) {
     return vars[name] !== undefined ? String(vars[name]) : '';
   });
 }
@@ -3596,14 +3629,62 @@ function saveMsgTemplate(key, template) {
 
 // ─── 클라이언트 공개 API (google.script.run 용) ─────────────────────────────
 
+// ------------------------------------------------------------------------------------------------
+// [PHASE 1-3] 물건 히스토리 조회 (상세 화면 히스토리 탭)
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * 특정 물건의 이력을 telegram_requests 시트에서 조회합니다.
+ * @param {string} itemId - 물건 ID
+ * @param {number} [limit=200] - 최대 행 수
+ * @returns {Array<Object>} 이력 목록 (오래된 순)
+ */
+function getItemHistory(itemId, limit) {
+  const maxRows = parseInt(limit, 10) || 200;
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return [];
+
+    const lastRow = sheet.getLastRow();
+    const data = sheet.getRange(2, 1, lastRow - 1, 16).getValues(); // A~P열
+
+    const result = [];
+    for (let i = 0; i < data.length && result.length < maxRows; i++) {
+      const rowItemId = String(data[i][4] || '').trim(); // E열: item_id
+      if (rowItemId !== String(itemId).trim()) continue;
+
+      result.push({
+        req_id: String(data[i][0] || ''),   // A: req_id
+        requested_at: String(data[i][1] || ''),   // B: requested_at (yyMMdd HHmmss)
+        action: String(data[i][2] || ''),   // C: action
+        status: String(data[i][3] || ''),   // D: status
+        item_id: rowItemId,                    // E: item_id
+        member_id: String(data[i][5] || ''),   // F: member_id
+        note: String(data[i][8] || ''),   // I: note
+        from_value: String(data[i][11] || ''),   // L: from_value
+        to_value: String(data[i][12] || ''),   // M: to_value
+        field_name: String(data[i][13] || ''),   // N: field_name
+        trigger_type: String(data[i][14] || ''),   // O: trigger_type
+        member_name: String(data[i][15] || '')    // P: member_name
+      });
+    }
+    return result; // 오래된 순(시트 저장 순)
+  } catch (e) {
+    Logger.log('[getItemHistory] 오류: ' + e.toString());
+    return [];
+  }
+}
+
+
 /**
  * 알림 설정값 전체 반환 (프론트 환경설정 탭 로드용)
  */
 function getNotifySettings() {
-  const keys = ['BID_NOTIFY_ENABLED','BID_NOTIFY_D3','BID_NOTIFY_D2','BID_NOTIFY_D1',
-                 'BID_NOTIFY_HOUR','EXPIRY_NOTIFY_24H','EXPIRY_NOTIFY_1H','EXPIRY_NOTIFY_DONE'];
+  const keys = ['BID_NOTIFY_ENABLED', 'BID_NOTIFY_D3', 'BID_NOTIFY_D2', 'BID_NOTIFY_D1',
+    'BID_NOTIFY_HOUR', 'EXPIRY_NOTIFY_24H', 'EXPIRY_NOTIFY_1H', 'EXPIRY_NOTIFY_DONE'];
   const result = {};
-  keys.forEach(function(k) { result[k] = getSetting_(k, 'true'); });
+  keys.forEach(function (k) { result[k] = getSetting_(k, 'true'); });
   result['BID_NOTIFY_HOUR'] = getSetting_('BID_NOTIFY_HOUR', '10');
   return result;
 }
@@ -3626,15 +3707,15 @@ function getAllMsgTemplates() {
     const sheet = ss.getSheetByName(MSG_TEMPLATES_SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return [];
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues(); // A~E열
-    return data.map(function(r) {
+    return data.map(function (r) {
       return {
-        msg_key    : String(r[0] || ''),
-        category   : String(r[1] || ''),
+        msg_key: String(r[0] || ''),
+        category: String(r[1] || ''),
         description: String(r[2] || ''),
-        template   : String(r[3] || ''),
-        variables  : String(r[4] || '')
+        template: String(r[3] || ''),
+        variables: String(r[4] || '')
       };
-    }).filter(function(r) { return r.msg_key; });
+    }).filter(function (r) { return r.msg_key; });
   } catch (e) {
     Logger.log('[getAllMsgTemplates] 오류: ' + e.toString());
     return [];
@@ -3648,18 +3729,18 @@ function getAllMsgTemplates() {
 function resetMsgTemplate(key) {
   // defaults 맵 (ensureMsgTemplatesSheet_ 와 동기화 유지)
   const DEFAULTS = {
-    'item_card.card'         : 'MJ 경매 스쿨입니다. 추천 물건드립니다.',
+    'item_card.card': 'MJ 경매 스쿨입니다. 추천 물건드립니다.',
     'item_card.check_request': 'MJ 경매 스쿨입니다. 입찰 여부 회신 요청드립니다.',
-    'item_card.status'       : 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.',
-    'item_card.warning'      : '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!',
-    'item_card.staff_1'      : '1. 입찰가 관리: 이정우: (010-4238-7781)',
-    'item_card.staff_2'      : '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)',
-    'notify.expiry_24h'      : '{{member_name}}님, 추천드린 [{{sakun_no}}] 물건 전달 후 24시간이 경과했습니다.\n입찰확정/취소를 선택해 주세요.',
-    'notify.expiry_1h'       : '{{member_name}}님, [{{sakun_no}}] 추천 물건이 1시간 후 자동 만료됩니다.\n지금 확정해 주세요!',
-    'notify.expiry_done'     : '{{member_name}}님, [{{sakun_no}}] 추천 물건이 만료되어 미정 처리되었습니다.',
-    'notify.bid_d3'          : '{{member_name}}님, [{{sakun_no}}] 입찰일이 3일 후입니다. ({{in_date}})',
-    'notify.bid_d2'          : '{{member_name}}님, [{{sakun_no}}] 입찰일이 2일 후입니다. ({{in_date}})',
-    'notify.bid_d1'          : '{{member_name}}님, [{{sakun_no}}] 내일이 입찰일입니다. ({{in_date}}) 준비 잘 되셨나요?'
+    'item_card.status': 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.',
+    'item_card.warning': '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!',
+    'item_card.staff_1': '1. 입찰가 관리: 이정우: (010-4238-7781)',
+    'item_card.staff_2': '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)',
+    'notify.expiry_24h': '{{member_name}}님, 추천드린 [{{sakun_no}}] 물건 전달 후 24시간이 경과했습니다.\n입찰확정/취소를 선택해 주세요.',
+    'notify.expiry_1h': '{{member_name}}님, [{{sakun_no}}] 추천 물건이 1시간 후 자동 만료됩니다.\n지금 확정해 주세요!',
+    'notify.expiry_done': '{{member_name}}님, [{{sakun_no}}] 추천 물건이 만료되어 미정 처리되었습니다.',
+    'notify.bid_d3': '{{member_name}}님, [{{sakun_no}}] 입찰일이 3일 후입니다. ({{in_date}})',
+    'notify.bid_d2': '{{member_name}}님, [{{sakun_no}}] 입찰일이 2일 후입니다. ({{in_date}})',
+    'notify.bid_d1': '{{member_name}}님, [{{sakun_no}}] 내일이 입찰일입니다. ({{in_date}}) 준비 잘 되셨나요?'
   };
   const defVal = DEFAULTS[key];
   if (!defVal) return { success: false, message: '기본값 없음: ' + key };
@@ -3689,13 +3770,13 @@ function sendExpiryNotification_(memberId, itemId, type) {
 
     // 물건 정보 조회
     const item = (typeof getItemLiteById_ === 'function') ? getItemLiteById_(itemId) : null;
-    const sakunNo  = item ? String(item.sakun_no || '') : '';
+    const sakunNo = item ? String(item.sakun_no || '') : '';
     const memberName = String(member.member_name || '');
 
     const keyMap = { '24h': 'notify.expiry_24h', '1h': 'notify.expiry_1h', 'done': 'notify.expiry_done' };
     const msgKey = keyMap[type] || 'notify.expiry_24h';
     const text = getMessageTemplate_(msgKey, { member_name: memberName, sakun_no: sakunNo })
-              || memberName + '님, 추천 물건 알림입니다. [' + sakunNo + ']';
+      || memberName + '님, 추천 물건 알림입니다. [' + sakunNo + ']';
 
     if (typeof telegramSendMessage === 'function') {
       telegramSendMessage(chatId, text, null);
@@ -3703,14 +3784,14 @@ function sendExpiryNotification_(memberId, itemId, type) {
 
     // TELEGRAM_SENT 이력
     writeItemHistory_({
-      action           : 'TELEGRAM_SENT',
-      item_id          : itemId,
-      member_id        : memberId,
-      member_name      : memberName,
-      chat_id          : chatId,
+      action: 'TELEGRAM_SENT',
+      item_id: itemId,
+      member_id: memberId,
+      member_name: memberName,
+      chat_id: chatId,
       telegram_username: String(member.telegram_username || ''),
-      trigger_type     : 'system',
-      note             : msgKey
+      trigger_type: 'system',
+      note: msgKey
     });
   } catch (e) {
     Logger.log('[sendExpiryNotification_] 오류: ' + e.toString());
@@ -3735,28 +3816,28 @@ function sendBidDateNotification_(memberId, itemId, dTag) {
     if (enabled === 'N') return;
 
     const item = (typeof getItemLiteById_ === 'function') ? getItemLiteById_(itemId) : null;
-    const sakunNo    = item ? String(item.sakun_no || '') : '';
-    const inDate     = item ? String(item['in-date'] || '') : '';
+    const sakunNo = item ? String(item.sakun_no || '') : '';
+    const inDate = item ? String(item['in-date'] || '') : '';
     const memberName = String(member.member_name || '');
 
     const keyMap = { 'D-3': 'notify.bid_d3', 'D-2': 'notify.bid_d2', 'D-1': 'notify.bid_d1' };
     const msgKey = keyMap[dTag] || 'notify.bid_d1';
     const text = getMessageTemplate_(msgKey, { member_name: memberName, sakun_no: sakunNo, in_date: inDate })
-              || memberName + '님, [' + sakunNo + '] 입찰일 ' + dTag + ' 알림입니다.';
+      || memberName + '님, [' + sakunNo + '] 입찰일 ' + dTag + ' 알림입니다.';
 
     if (typeof telegramSendMessage === 'function') {
       telegramSendMessage(chatId, text, null);
     }
 
     writeItemHistory_({
-      action           : 'TELEGRAM_SENT',
-      item_id          : itemId,
-      member_id        : memberId,
-      member_name      : memberName,
-      chat_id          : chatId,
+      action: 'TELEGRAM_SENT',
+      item_id: itemId,
+      member_id: memberId,
+      member_name: memberName,
+      chat_id: chatId,
       telegram_username: String(member.telegram_username || ''),
-      trigger_type     : 'system',
-      note             : msgKey
+      trigger_type: 'system',
+      note: msgKey
     });
   } catch (e) {
     Logger.log('[sendBidDateNotification_] 오류: ' + e.toString());
