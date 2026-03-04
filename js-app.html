@@ -3565,9 +3565,6 @@
             if (!seen[key].member_name && r.member_name) seen[key].member_name = r.member_name;
         });
 
-        // 최신순
-        groups.reverse();
-
         var FIELD_COLS = ['stu_member', 'bidprice', 'm_name', 'm_name_id'];
 
         // groups are currently from oldest to newest.
@@ -3594,7 +3591,7 @@
             // 2. 이 그룹의 변경사항(from -> to)을 보고, 
             // 이 액션이 일어나기 이전 시점(더 오래된 과거)의 상태로 currentState를 되돌림(Rollback)
             FIELD_COLS.forEach(function (col) {
-                if (g.changes[col] && g.changes[col].from) { // from 필드가 존재한다면
+                if (g.changes[col] && g.changes[col].from !== undefined) { // from이 빈 문자열인 경우도 롤백 적용
                     currentState[col] = g.changes[col].from;
                 }
             });
@@ -3675,7 +3672,8 @@
             // 텔레그램 기록 상세 2줄 표시
             if ((g.action === 'TELEGRAM_SENT' || g.action === 'TELEGRAM_RECEIVED') && g.note) {
                 var dispNote = noteMap[g.note] || g.note;
-                actionLabel += '<br><span class="text-[10px] text-gray-400 leading-tight block">(' + escapeHtml(dispNote) + ')</span>';
+                var prefix = g.action === 'TELEGRAM_SENT' ? '텔레그램' : '텔레그램회신';
+                actionLabel = prefix + '<br><span class="text-[10px] text-gray-500">(' + escapeHtml(dispNote) + ')</span>';
             }
 
             var trig = g.trigger || 'sys';
