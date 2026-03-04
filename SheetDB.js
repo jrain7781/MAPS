@@ -3498,14 +3498,18 @@ function ensureMsgTemplatesSheet_() {
       ['msg_key', 'category', 'description', 'template', 'variables', 'updated_at', 'updated_by']
     ]);
     const defaults = [
-      ['item_card.card',    'item_card', '추천 물건 카드 인사말',
+      ['item_card.card',          'item_card', '추천 물건 카드 인사말',
         'MJ 경매 스쿨입니다. 추천 물건드립니다.', '', '', ''],
-      ['item_card.warning', 'item_card', '서울/수도권 담당 안내',
-        '서울/수도권(경기,인천) 및 지방 물건 담당자가 별도로 배정되어 있습니다.', '', '', ''],
-      ['item_card.staff_1', 'item_card', '담당자 안내1',
-        '서울/수도권 담당: 이준우 010-7175-7974', '', '', ''],
-      ['item_card.staff_2', 'item_card', '담당자 안내2',
-        '지방 담당: 이준우 010-7175-7974', '', '', ''],
+      ['item_card.check_request', 'item_card', '입찰 여부 회신 요청',
+        'MJ 경매 스쿨입니다. 입찰 여부 회신 요청드립니다.', '', '', ''],
+      ['item_card.status',        'item_card', '입찰불가 안내',
+        'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.', '', '', ''],
+      ['item_card.warning',       'item_card', '대출 주의 안내',
+        '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!', '', '', ''],
+      ['item_card.staff_1',       'item_card', '담당자 안내1',
+        '1. 입찰가 관리: 이정우: (010-4238-7781)', '', '', ''],
+      ['item_card.staff_2',       'item_card', '담당자 안내2',
+        '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)', '', '', ''],
       ['notify.expiry_24h', 'notify', '추천 24h 경과 알림',
         '{{member_name}}님, 추천드린 [{{sakun_no}}] 물건 전달 후 24시간이 경과했습니다.\n입찰확정/취소를 선택해 주세요.', 'member_name,sakun_no', '', ''],
       ['notify.expiry_1h',  'notify', '추천 만료 1시간 전 알림',
@@ -3588,4 +3592,76 @@ function saveMsgTemplate(key, template) {
     Logger.log('[saveMsgTemplate] 오류: ' + e.toString());
     return { success: false, message: e.toString() };
   }
+}
+
+// ─── 클라이언트 공개 API (google.script.run 용) ─────────────────────────────
+
+/**
+ * 알림 설정값 전체 반환 (프론트 환경설정 탭 로드용)
+ */
+function getNotifySettings() {
+  const keys = ['BID_NOTIFY_ENABLED','BID_NOTIFY_D3','BID_NOTIFY_D2','BID_NOTIFY_D1',
+                 'BID_NOTIFY_HOUR','EXPIRY_NOTIFY_24H','EXPIRY_NOTIFY_1H','EXPIRY_NOTIFY_DONE'];
+  const result = {};
+  keys.forEach(function(k) { result[k] = getSetting_(k, 'true'); });
+  result['BID_NOTIFY_HOUR'] = getSetting_('BID_NOTIFY_HOUR', '10');
+  return result;
+}
+
+/**
+ * 설정 저장 공개 API (프론트에서 saveSetting_ 직접 호출 불가 → 래퍼)
+ */
+function saveSettingPublic(key, value) {
+  saveSetting_(key, value);
+  return { success: true };
+}
+
+/**
+ * msg_templates 전체 반환 (메시지 편집 팝업용)
+ * @returns {Array<Object>} {msg_key, category, description, template, variables}
+ */
+function getAllMsgTemplates() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(MSG_TEMPLATES_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return [];
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues(); // A~E열
+    return data.map(function(r) {
+      return {
+        msg_key    : String(r[0] || ''),
+        category   : String(r[1] || ''),
+        description: String(r[2] || ''),
+        template   : String(r[3] || ''),
+        variables  : String(r[4] || '')
+      };
+    }).filter(function(r) { return r.msg_key; });
+  } catch (e) {
+    Logger.log('[getAllMsgTemplates] 오류: ' + e.toString());
+    return [];
+  }
+}
+
+/**
+ * 메시지 템플릿 초기화 (기본값으로 복원)
+ * - ensureMsgTemplatesSheet_의 defaults 배열 기준으로 복원
+ */
+function resetMsgTemplate(key) {
+  // defaults 맵 (ensureMsgTemplatesSheet_ 와 동기화 유지)
+  const DEFAULTS = {
+    'item_card.card'         : 'MJ 경매 스쿨입니다. 추천 물건드립니다.',
+    'item_card.check_request': 'MJ 경매 스쿨입니다. 입찰 여부 회신 요청드립니다.',
+    'item_card.status'       : 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.',
+    'item_card.warning'      : '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!',
+    'item_card.staff_1'      : '1. 입찰가 관리: 이정우: (010-4238-7781)',
+    'item_card.staff_2'      : '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)',
+    'notify.expiry_24h'      : '{{member_name}}님, 추천드린 [{{sakun_no}}] 물건 전달 후 24시간이 경과했습니다.\n입찰확정/취소를 선택해 주세요.',
+    'notify.expiry_1h'       : '{{member_name}}님, [{{sakun_no}}] 추천 물건이 1시간 후 자동 만료됩니다.\n지금 확정해 주세요!',
+    'notify.expiry_done'     : '{{member_name}}님, [{{sakun_no}}] 추천 물건이 만료되어 미정 처리되었습니다.',
+    'notify.bid_d3'          : '{{member_name}}님, [{{sakun_no}}] 입찰일이 3일 후입니다. ({{in_date}})',
+    'notify.bid_d2'          : '{{member_name}}님, [{{sakun_no}}] 입찰일이 2일 후입니다. ({{in_date}})',
+    'notify.bid_d1'          : '{{member_name}}님, [{{sakun_no}}] 내일이 입찰일입니다. ({{in_date}}) 준비 잘 되셨나요?'
+  };
+  const defVal = DEFAULTS[key];
+  if (!defVal) return { success: false, message: '기본값 없음: ' + key };
+  return saveMsgTemplate(key, defVal);
 }

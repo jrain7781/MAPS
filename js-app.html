@@ -647,6 +647,11 @@
             try { loadTelegramRequests(); } catch (e) { }
         }
 
+        // [PHASE 5-3] 환경설정 탭 이동 시 알림 설정 자동 로드
+        if (tabId === 'Preferences') {
+            try { loadNotifySettings(); } catch (e) { }
+        }
+
         // 회원 대시보드 탭 이동 시 렌더링
         if (tabId === 'MemberDashboard') {
             try {
@@ -7025,6 +7030,165 @@ MJ 이정우 팀장
     /**
      * 옥션 URL 설정 저장
      */
+    // ─── [PHASE 5-3] 알림 설정 로드/저장 ────────────────────────────────────────
+    const NOTIFY_KEYS = ['BID_NOTIFY_ENABLED','BID_NOTIFY_D3','BID_NOTIFY_D2','BID_NOTIFY_D1',
+                         'BID_NOTIFY_HOUR','EXPIRY_NOTIFY_24H','EXPIRY_NOTIFY_1H','EXPIRY_NOTIFY_DONE'];
+
+    function loadNotifySettings() {
+        const statusEl = document.getElementById('notifySettingsStatus');
+        if (statusEl) statusEl.textContent = '불러오는 중...';
+        google.script.run
+            .withSuccessHandler(function(settings) {
+                NOTIFY_KEYS.forEach(function(key) {
+                    const el = document.getElementById('pref-' + key);
+                    if (!el) return;
+                    const val = settings[key] !== undefined ? String(settings[key]) : 'true';
+                    if (el.type === 'checkbox') el.checked = (val === 'true');
+                    else el.value = val;
+                });
+                if (statusEl) statusEl.textContent = '로드 완료';
+            })
+            .withFailureHandler(function(e) {
+                if (statusEl) statusEl.textContent = '로드 실패: ' + e;
+            })
+            .getNotifySettings();
+    }
+
+    function saveNotifySetting(key, val) {
+        const value = typeof val === 'boolean' ? String(val) : String(val);
+        const statusEl = document.getElementById('notifySettingsStatus');
+        google.script.run
+            .withSuccessHandler(function() { if (statusEl) statusEl.textContent = key + ' 저장 완료'; })
+            .withFailureHandler(function(e) { if (statusEl) statusEl.textContent = '저장 실패: ' + e; })
+            .saveSettingPublic(key, value);
+    }
+
+    // ─── [PHASE 5-2] 메시지 편집 팝업 ───────────────────────────────────────────
+    let _msgTemplates = [];
+    let _msgSelectedKey = null;
+    let _msgOriginals = {};   // 원본 기본값 캐시 (초기화용)
+
+    const MSG_SAMPLE_VARS = {
+        member_name: '홍길동', sakun_no: '2024타경1234', in_date: '260410', court: '서울중앙지방법원'
+    };
+
+    function openMsgEditor() {
+        const modal = document.getElementById('msgEditorModal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        loadMsgTemplates_();
+    }
+
+    function closeMsgEditor() {
+        const modal = document.getElementById('msgEditorModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function loadMsgTemplates_() {
+        const tree = document.getElementById('msgEditorTree');
+        if (tree) tree.innerHTML = '<div class="text-gray-400 text-xs p-2">불러오는 중...</div>';
+        google.script.run
+            .withSuccessHandler(function(rows) {
+                _msgTemplates = rows || [];
+                renderMsgTree_();
+            })
+            .withFailureHandler(function(e) {
+                if (tree) tree.innerHTML = '<div class="text-red-400 text-xs p-2">오류: ' + e + '</div>';
+            })
+            .getAllMsgTemplates();
+    }
+
+    function renderMsgTree_() {
+        const tree = document.getElementById('msgEditorTree');
+        if (!tree) return;
+        // 카테고리별 그룹핑
+        const groups = {};
+        _msgTemplates.forEach(function(t) {
+            const cat = t.category || '기타';
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(t);
+        });
+        let html = '';
+        Object.keys(groups).forEach(function(cat) {
+            html += '<div class="mb-2">';
+            html += '<div class="text-xs font-bold text-gray-500 uppercase px-2 py-1">' + escapeHtml(cat) + '</div>';
+            groups[cat].forEach(function(t) {
+                const active = t.msg_key === _msgSelectedKey ? ' bg-purple-100 text-purple-700 font-bold' : ' hover:bg-gray-100 text-gray-700';
+                html += '<button onclick="selectMsgTemplate(' + JSON.stringify(t.msg_key) + ')" '
+                    + 'class="w-full text-left px-2 py-1.5 rounded text-xs' + active + '">'
+                    + escapeHtml(t.msg_key) + '</button>';
+            });
+            html += '</div>';
+        });
+        tree.innerHTML = html || '<div class="text-gray-400 text-xs p-2">템플릿 없음</div>';
+    }
+
+    function selectMsgTemplate(key) {
+        _msgSelectedKey = key;
+        const t = _msgTemplates.find(function(x) { return x.msg_key === key; });
+        if (!t) return;
+
+        document.getElementById('msgEditorEmpty').style.display = 'none';
+        const form = document.getElementById('msgEditorForm');
+        form.style.display = 'flex';
+
+        document.getElementById('msgEditorKey').textContent  = t.msg_key;
+        document.getElementById('msgEditorDesc').textContent = t.description || '';
+        document.getElementById('msgEditorTemplate').value   = t.template || '';
+        const vars = t.variables ? t.variables.split(',').filter(Boolean) : [];
+        document.getElementById('msgEditorVars').textContent = vars.length ? '변수: ' + vars.join(', ') : '';
+
+        updateMsgPreview_();
+        renderMsgTree_();  // 선택 상태 갱신
+    }
+
+    function updateMsgPreview_() {
+        const tmpl = (document.getElementById('msgEditorTemplate') || {}).value || '';
+        const preview = document.getElementById('msgEditorPreview');
+        if (!preview) return;
+        const replaced = tmpl.replace(/\{\{(\w+)\}\}/g, function(_, name) {
+            return MSG_SAMPLE_VARS[name] !== undefined ? MSG_SAMPLE_VARS[name] : ('{{' + name + '}}');
+        });
+        preview.textContent = replaced;
+    }
+
+    function saveMsgTemplateUI() {
+        if (!_msgSelectedKey) return;
+        const template = document.getElementById('msgEditorTemplate').value;
+        google.script.run
+            .withSuccessHandler(function(r) {
+                if (r && r.success) {
+                    showStatusMessage('메시지 저장 완료', 'success');
+                    // 캐시 업데이트
+                    const t = _msgTemplates.find(function(x) { return x.msg_key === _msgSelectedKey; });
+                    if (t) t.template = template;
+                } else {
+                    showStatusMessage('저장 실패: ' + (r && r.message || ''), 'error');
+                }
+            })
+            .withFailureHandler(function(e) { showStatusMessage('저장 실패: ' + e, 'error'); })
+            .saveMsgTemplate(_msgSelectedKey, template);
+    }
+
+    function resetMsgTemplate() {
+        if (!_msgSelectedKey) return;
+        if (!confirm(_msgSelectedKey + ' 템플릿을 기본값으로 초기화하시겠습니까?')) return;
+        google.script.run
+            .withSuccessHandler(function(r) {
+                if (r && r.success) {
+                    const t = _msgTemplates.find(function(x) { return x.msg_key === _msgSelectedKey; });
+                    if (t) {
+                        document.getElementById('msgEditorTemplate').value = t.default_template || t.template || '';
+                        updateMsgPreview_();
+                    }
+                    showStatusMessage('초기화 완료', 'success');
+                }
+            })
+            .withFailureHandler(function(e) { showStatusMessage('초기화 실패: ' + e, 'error'); })
+            .resetMsgTemplate(_msgSelectedKey);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     function handleSaveAuctionSettings() {
         const auction = document.getElementById('setting-auction-pattern').value;
         const gongmae = document.getElementById('setting-gongmae-pattern').value;

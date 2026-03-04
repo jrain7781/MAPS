@@ -655,13 +655,21 @@ function telegramBuildItemMessage_(item, member, styleKey) {
   const 담당 = telegramEscapeHtml_(item.m_name_id || '');
   const bidPriceFormatted = telegramEscapeHtml_(formatKrw_(item.bidprice)) + '원';
 
-  const warningLine = '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!';
-  const staffLines = [
-    '업무별 담당자 안내 드립니다.',
-    '1. 입찰가 관리: 이정우: (010-4238-7781)',
-    '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)',
-    '3. PT 관리: 장정아님 (010-9838-8035)'
-  ];
+  // [PHASE 4-3] 메시지 템플릿 적용 (폴백: 기존 하드코딩 값)
+  const warningLine = (typeof getMessageTemplate_ === 'function')
+    ? (getMessageTemplate_('item_card.warning') || '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!')
+    : '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!';
+  const staffLines = (typeof getMessageTemplate_ === 'function')
+    ? [
+        getMessageTemplate_('item_card.staff_1') || '1. 입찰가 관리: 이정우: (010-4238-7781)',
+        getMessageTemplate_('item_card.staff_2') || '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)'
+      ].filter(Boolean)
+    : [
+        '업무별 담당자 안내 드립니다.',
+        '1. 입찰가 관리: 이정우: (010-4238-7781)',
+        '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)',
+        '3. PT 관리: 장정아님 (010-9838-8035)'
+      ];
 
   let subtitle = '';
   let statusValuePlain = '';
@@ -681,18 +689,24 @@ function telegramBuildItemMessage_(item, member, styleKey) {
     const replyMarkup2 = keyboard2.length > 0 ? { inline_keyboard: keyboard2 } : null;
     return { text: lines2.join('\n'), replyMarkup: replyMarkup2 };
   } else if (style === 'status') {
-    subtitle = 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.';
+    // [PHASE 4-3] 템플릿 적용
+    subtitle = (typeof getMessageTemplate_ === 'function')
+      ? (getMessageTemplate_('item_card.status') || 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.')
+      : 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.';
     statusValuePlain = '변경';
     includeBidPrice = true;
     onlyViewButton = true;
   } else if (style === 'check_request') {
-    // 기존 스타일은 유지하되, 이모지는 제거한 간단 문구로 정리
-    subtitle = 'MJ 경매 스쿨입니다. 입찰 여부 회신 요청드립니다.';
+    subtitle = (typeof getMessageTemplate_ === 'function')
+      ? (getMessageTemplate_('item_card.check_request') || 'MJ 경매 스쿨입니다. 입찰 여부 회신 요청드립니다.')
+      : 'MJ 경매 스쿨입니다. 입찰 여부 회신 요청드립니다.';
     statusValuePlain = '입찰';
     includeBidPrice = true;
   } else {
     // card (기본): 추천물건 안내
-    subtitle = 'MJ 경매 스쿨입니다. 추천 물건드립니다.';
+    subtitle = (typeof getMessageTemplate_ === 'function')
+      ? (getMessageTemplate_('item_card.card') || 'MJ 경매 스쿨입니다. 추천 물건드립니다.')
+      : 'MJ 경매 스쿨입니다. 추천 물건드립니다.';
     statusValuePlain = '추천';
     includeBidPrice = false;
   }
