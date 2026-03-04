@@ -799,6 +799,7 @@ function initAllSheets() {
   ensureClassD1Sheet();
   ensureMemberClassDetailsSheet();
   ensureTelegramRequestsSheet_(); // 기존 존재
+  ensureSettingsSheet_();         // [PHASE 3-1] settings 시트
   return "All sheets initialized.";
 }
 
@@ -3093,4 +3094,234 @@ function writeItemHistory_(p) {
   } catch (e) {
     Logger.log('[writeItemHistory_] 오류: ' + e.toString());
   }
+}
+
+// ------------------------------------------------------------------------------------------------
+// [PHASE 3-1] settings 시트 관리
+// ------------------------------------------------------------------------------------------------
+
+const SETTINGS_SHEET_NAME = 'settings';
+
+/**
+ * settings 시트를 초기화합니다. 없으면 생성하고 기본값을 입력합니다.
+ * GAS 에디터에서 1회 실행하거나 initSheets()에서 호출합니다.
+ */
+function ensureSettingsSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(SETTINGS_SHEET_NAME);
+
+  if (sheet.getLastRow() < 1) {
+    // 헤더
+    sheet.getRange(1, 1, 1, 3).setValues([['key', 'value', 'description']]);
+    // 기본값
+    const defaults = [
+      ['BID_NOTIFY_ENABLED', 'true',  '입찰일 알림 전체 ON/OFF'],
+      ['BID_NOTIFY_D3',      'true',  'D-3 알림 활성화'],
+      ['BID_NOTIFY_D2',      'true',  'D-2 알림 활성화'],
+      ['BID_NOTIFY_D1',      'true',  'D-1 알림 활성화'],
+      ['BID_NOTIFY_HOUR',    '10',    '발송 시각 (시 단위)'],
+      ['EXPIRY_NOTIFY_24H',  'true',  '추천 24h 알림'],
+      ['EXPIRY_NOTIFY_1H',   'true',  '추천 47h(만료 1시간 전) 알림'],
+      ['EXPIRY_NOTIFY_DONE', 'true',  '만료 알림'],
+    ];
+    sheet.getRange(2, 1, defaults.length, 3).setValues(defaults);
+    SpreadsheetApp.flush();
+  }
+  return sheet;
+}
+
+/**
+ * settings 시트에서 키에 해당하는 값을 반환합니다.
+ * @param {string} key
+ * @param {string} [defaultValue=''] 키 없을 때 반환값
+ * @returns {string}
+ */
+function getSetting_(key, defaultValue) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return defaultValue !== undefined ? String(defaultValue) : '';
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][0]).trim() === key) return String(data[i][1]).trim();
+    }
+    return defaultValue !== undefined ? String(defaultValue) : '';
+  } catch (e) {
+    Logger.log('[getSetting_] 오류: ' + e.toString());
+    return defaultValue !== undefined ? String(defaultValue) : '';
+  }
+}
+
+/**
+ * settings 시트의 키 값을 변경합니다.
+ * @param {string} key
+ * @param {string} value
+ */
+function saveSetting_(key, value) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+    if (!sheet) return;
+    const lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      const keys = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (let i = 0; i < keys.length; i++) {
+        if (String(keys[i][0]).trim() === key) {
+          sheet.getRange(i + 2, 2).setValue(String(value));
+          SpreadsheetApp.flush();
+          return;
+        }
+      }
+    }
+    // 없으면 추가
+    sheet.appendRow([key, String(value), '']);
+    SpreadsheetApp.flush();
+  } catch (e) {
+    Logger.log('[saveSetting_] 오류: ' + e.toString());
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// [PHASE 2-1] 추천 자동 만료 + 알림
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * 추천 물건 자동 만료 처리 (매시간 트리거로 실행)
+ * - chuchen_state='전달완료' + elapsed >= 48h → stu_member='미정' 전환
+ * - elapsed >= 47h → 만료 1시간 전 알림 (중복 방지)
+ * - elapsed >= 24h → 24시간 경과 알림 (중복 방지)
+ */
+function autoExpireRecommended() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return; // 중복 실행 방지
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return;
+    const now = new Date();
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+    const data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
+
+    data.forEach(function(row, i) {
+      const realRow = i + 2;
+      const itemId     = String(row[0] || '').trim();
+      const stuMember  = String(row[4] || '').trim();
+      const memberId   = String(row[8] || '').trim();
+      const mName      = String(row[6] || '').trim();
+      const chuchenState = String(row[16] || '').trim();  // Q열: chuchen_state
+      const chuchenDate  = row[17];                        // R열: chuchen_date
+
+      if (stuMember !== '추천') return;
+      if (chuchenState !== '전달완료') return;
+      if (!chuchenDate) return;
+
+      // chuchen_date가 Date 객체거나 ISO 문자열일 수 있음
+      let dateObj;
+      if (chuchenDate instanceof Date) {
+        dateObj = chuchenDate;
+      } else {
+        dateObj = new Date(chuchenDate);
+      }
+      if (isNaN(dateObj.getTime())) return;
+
+      const elapsed = (now - dateObj) / (1000 * 3600); // 시간 단위
+
+      if (elapsed >= 48) {
+        // 미정 전환 (만료)
+        if (getSetting_('EXPIRY_NOTIFY_DONE', 'true') === 'true') {
+          sheet.getRange(realRow, 5).setValue('미정');
+          writeItemHistory_({
+            action       : 'AUTO_EXPIRE',
+            item_id      : itemId,
+            member_id    : memberId,
+            member_name  : mName,
+            field_name   : 'stu_member',
+            from_value   : '추천',
+            to_value     : '미정',
+            trigger_type : 'system',
+            note         : 'elapsed=' + Math.floor(elapsed) + 'h'
+          });
+          // TODO: sendExpiryNotification_(memberId, itemId, 'done');
+        }
+
+      } else if (elapsed >= 47 && !isAlreadyNotified_(itemId, 'EXPIRY_NOTIFY', '47h')) {
+        if (getSetting_('EXPIRY_NOTIFY_1H', 'true') === 'true') {
+          writeItemHistory_({
+            action       : 'EXPIRY_NOTIFY',
+            item_id      : itemId,
+            member_id    : memberId,
+            member_name  : mName,
+            trigger_type : 'system',
+            note         : '47h'
+          });
+          // TODO: sendExpiryNotification_(memberId, itemId, '1h');
+        }
+
+      } else if (elapsed >= 24 && !isAlreadyNotified_(itemId, 'EXPIRY_NOTIFY', '24h')) {
+        if (getSetting_('EXPIRY_NOTIFY_24H', 'true') === 'true') {
+          writeItemHistory_({
+            action       : 'EXPIRY_NOTIFY',
+            item_id      : itemId,
+            member_id    : memberId,
+            member_name  : mName,
+            trigger_type : 'system',
+            note         : '24h'
+          });
+          // TODO: sendExpiryNotification_(memberId, itemId, '24h');
+        }
+      }
+    });
+
+    if (lastRow >= 2) SpreadsheetApp.flush();
+
+  } catch (e) {
+    Logger.log('[autoExpireRecommended] 오류: ' + e.toString());
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 이미 해당 알림을 발송했는지 확인 (중복 방지)
+ * @param {string} itemId
+ * @param {string} action  - 'EXPIRY_NOTIFY' 등
+ * @param {string} noteKey - '24h' | '47h' 등 note에 포함된 키
+ * @returns {boolean}
+ */
+function isAlreadyNotified_(itemId, action, noteKey) {
+  try {
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID)
+      .getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return false;
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues(); // A~I열
+    return data.some(function(r) {
+      return String(r[2]).trim() === action &&
+             String(r[4]).trim() === itemId &&
+             String(r[8]).indexOf(noteKey) >= 0;
+    });
+  } catch (e) {
+    Logger.log('[isAlreadyNotified_] 오류: ' + e.toString());
+    return false;
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// [PHASE 2-2] 자동 만료 트리거 등록
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * autoExpireRecommended 매시간 트리거를 등록합니다.
+ * GAS 에디터에서 1회 실행하세요.
+ */
+function setupAutoExpireTrigger() {
+  // 기존 동명 트리거 삭제 (중복 방지)
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'autoExpireRecommended') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('autoExpireRecommended').timeBased().everyHours(1).create();
+  Logger.log('autoExpireRecommended 매시간 트리거 등록 완료');
 }
