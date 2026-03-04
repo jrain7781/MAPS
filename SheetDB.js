@@ -800,6 +800,7 @@ function initAllSheets() {
   ensureMemberClassDetailsSheet();
   ensureTelegramRequestsSheet_(); // 기존 존재
   ensureSettingsSheet_();         // [PHASE 3-1] settings 시트
+  ensureMsgTemplatesSheet_();     // [PHASE 4-1] msg_templates 시트
   return "All sheets initialized.";
 }
 
@@ -3324,4 +3325,267 @@ function setupAutoExpireTrigger() {
   });
   ScriptApp.newTrigger('autoExpireRecommended').timeBased().everyHours(1).create();
   Logger.log('autoExpireRecommended 매시간 트리거 등록 완료');
+}
+
+// ------------------------------------------------------------------------------------------------
+// [PHASE 3-2] 입찰일 D-3/D-2/D-1 알림
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * 입찰일 D-3/D-2/D-1 알림 (매일 BID_NOTIFY_HOUR 시에 트리거로 실행)
+ * stu_member='입찰' 물건 대상, in-date 기준 D-3/D-2/D-1 해당 시 이력 기록
+ */
+function sendBidDateReminders() {
+  if (getSetting_('BID_NOTIFY_ENABLED', 'true') !== 'true') return;
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return;
+
+  try {
+    const tz    = Session.getScriptTimeZone();
+    const today = new Date();
+    const d3 = new Date(today); d3.setDate(d3.getDate() + 3);
+    const d2 = new Date(today); d2.setDate(d2.getDate() + 2);
+    const d1 = new Date(today); d1.setDate(d1.getDate() + 1);
+
+    const d3str = Utilities.formatDate(d3, tz, 'yyMMdd');
+    const d2str = Utilities.formatDate(d2, tz, 'yyMMdd');
+    const d1str = Utilities.formatDate(d1, tz, 'yyMMdd');
+
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return;
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+    const data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
+
+    data.forEach(function(row) {
+      const itemId    = String(row[0] || '').trim();
+      const inDate    = String(row[1] || '').trim();   // B열: in-date (yyMMdd)
+      const stuMember = String(row[4] || '').trim();   // E열
+      const mName     = String(row[6] || '').trim();   // G열
+      const memberId  = String(row[8] || '').trim();   // I열
+
+      if (stuMember !== '입찰') return;
+      if (!memberId || !inDate) return;
+
+      if (getSetting_('BID_NOTIFY_D3', 'true') === 'true' && inDate === d3str) {
+        if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-3')) {
+          writeItemHistory_({ action: 'BID_DATE_NOTIFY', item_id: itemId,
+            member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-3' });
+          // TODO: sendBidDateNotification_(memberId, itemId, 'D-3');
+        }
+      }
+      if (getSetting_('BID_NOTIFY_D2', 'true') === 'true' && inDate === d2str) {
+        if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-2')) {
+          writeItemHistory_({ action: 'BID_DATE_NOTIFY', item_id: itemId,
+            member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-2' });
+          // TODO: sendBidDateNotification_(memberId, itemId, 'D-2');
+        }
+      }
+      if (getSetting_('BID_NOTIFY_D1', 'true') === 'true' && inDate === d1str) {
+        if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-1')) {
+          writeItemHistory_({ action: 'BID_DATE_NOTIFY', item_id: itemId,
+            member_id: memberId, member_name: mName, trigger_type: 'system', note: 'D-1' });
+          // TODO: sendBidDateNotification_(memberId, itemId, 'D-1');
+        }
+      }
+    });
+
+  } catch (e) {
+    Logger.log('[sendBidDateReminders] 오류: ' + e.toString());
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * sendBidDateReminders 매일 트리거 등록
+ * GAS 에디터에서 1회 실행하세요.
+ */
+function setupBidDateTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'sendBidDateReminders') ScriptApp.deleteTrigger(t);
+  });
+  const hour = parseInt(getSetting_('BID_NOTIFY_HOUR', '10'), 10) || 10;
+  ScriptApp.newTrigger('sendBidDateReminders').timeBased().everyDays(1).atHour(hour).create();
+  Logger.log('sendBidDateReminders 매일 ' + hour + '시 트리거 등록 완료');
+}
+
+// ------------------------------------------------------------------------------------------------
+// [PHASE 3-3] 취소건 조회 서버 함수
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * 회원별 취소 이력 조회
+ * @param {string} memberId - 회원 ID (빈 문자열이면 전체)
+ * @param {number} [limit=100]
+ * @returns {Array<Object>}
+ */
+function getCancelHistory(memberId, limit) {
+  const CANCEL_ACTIONS = ['AUTO_EXPIRE', 'REQUEST_CANCEL_CHUCHEN', 'REQUEST_CANCEL_BID'];
+  const ACTION_LABEL = {
+    'AUTO_EXPIRE'            : '추천시간 만기',
+    'REQUEST_CANCEL_CHUCHEN' : '회원요청(추천취소)',
+    'REQUEST_CANCEL_BID'     : '회원요청(입찰취소)'
+  };
+  const maxRows = parseInt(limit, 10) || 100;
+
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+    if (!reqSheet || reqSheet.getLastRow() < 2) return [];
+
+    const lastRow = reqSheet.getLastRow();
+    const data = reqSheet.getRange(2, 1, lastRow - 1, 16).getValues(); // A~P열
+
+    // items 시트에서 사건번호/입찰일/법원 매핑
+    const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
+    const itemMap = {};
+    if (itemSheet && itemSheet.getLastRow() >= 2) {
+      const iData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 5).getValues(); // A~E열
+      iData.forEach(function(r) {
+        const id = String(r[0] || '').trim();
+        if (id) itemMap[id] = { inDate: String(r[1] || ''), sakunNo: String(r[2] || ''), court: String(r[3] || '') };
+      });
+    }
+
+    const result = [];
+    // 최신순(역순)
+    for (let i = data.length - 1; i >= 0 && result.length < maxRows; i--) {
+      const action    = String(data[i][2]  || '').trim();
+      const reqMember = String(data[i][5]  || '').trim(); // F열: member_id
+      if (CANCEL_ACTIONS.indexOf(action) === -1) continue;
+      if (memberId && reqMember !== String(memberId).trim()) continue;
+
+      const itemId = String(data[i][4] || '').trim();
+      const item   = itemMap[itemId] || {};
+      result.push({
+        req_id      : String(data[i][0]  || ''),
+        cancel_date : String(data[i][1]  || ''),   // B: requested_at
+        action      : action,
+        action_label: ACTION_LABEL[action] || action,
+        item_id     : itemId,
+        member_id   : reqMember,
+        member_name : String(data[i][15] || ''),   // P: member_name
+        in_date     : item.inDate  || '',
+        sakun_no    : item.sakunNo || '',
+        court       : item.court   || ''
+      });
+    }
+    return result;
+  } catch (e) {
+    Logger.log('[getCancelHistory] 오류: ' + e.toString());
+    return [];
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// [PHASE 4-1/4-2] 메시지 템플릿 시스템
+// ------------------------------------------------------------------------------------------------
+
+const MSG_TEMPLATES_SHEET_NAME = 'msg_templates';
+
+/**
+ * msg_templates 시트 초기화 (없으면 생성 + 기본 메시지 입력)
+ */
+function ensureMsgTemplatesSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(MSG_TEMPLATES_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(MSG_TEMPLATES_SHEET_NAME);
+
+  if (sheet.getLastRow() < 1) {
+    sheet.getRange(1, 1, 1, 7).setValues([
+      ['msg_key', 'category', 'description', 'template', 'variables', 'updated_at', 'updated_by']
+    ]);
+    const defaults = [
+      ['item_card.card',    'item_card', '추천 물건 카드 인사말',
+        'MJ 경매 스쿨입니다. 추천 물건드립니다.', '', '', ''],
+      ['item_card.warning', 'item_card', '서울/수도권 담당 안내',
+        '서울/수도권(경기,인천) 및 지방 물건 담당자가 별도로 배정되어 있습니다.', '', '', ''],
+      ['item_card.staff_1', 'item_card', '담당자 안내1',
+        '서울/수도권 담당: 이준우 010-7175-7974', '', '', ''],
+      ['item_card.staff_2', 'item_card', '담당자 안내2',
+        '지방 담당: 이준우 010-7175-7974', '', '', ''],
+      ['notify.expiry_24h', 'notify', '추천 24h 경과 알림',
+        '{{member_name}}님, 추천드린 [{{sakun_no}}] 물건 전달 후 24시간이 경과했습니다.\n입찰확정/취소를 선택해 주세요.', 'member_name,sakun_no', '', ''],
+      ['notify.expiry_1h',  'notify', '추천 만료 1시간 전 알림',
+        '{{member_name}}님, [{{sakun_no}}] 추천 물건이 1시간 후 자동 만료됩니다.\n지금 확정해 주세요!', 'member_name,sakun_no', '', ''],
+      ['notify.expiry_done','notify', '추천 만료 알림',
+        '{{member_name}}님, [{{sakun_no}}] 추천 물건이 만료되어 미정 처리되었습니다.', 'member_name,sakun_no', '', ''],
+      ['notify.bid_d3',     'notify', '입찰 D-3 알림',
+        '{{member_name}}님, [{{sakun_no}}] 입찰일이 3일 후입니다. ({{in_date}})', 'member_name,sakun_no,in_date', '', ''],
+      ['notify.bid_d2',     'notify', '입찰 D-2 알림',
+        '{{member_name}}님, [{{sakun_no}}] 입찰일이 2일 후입니다. ({{in_date}})', 'member_name,sakun_no,in_date', '', ''],
+      ['notify.bid_d1',     'notify', '입찰 D-1 알림',
+        '{{member_name}}님, [{{sakun_no}}] 내일이 입찰일입니다. ({{in_date}}) 준비 잘 되셨나요?', 'member_name,sakun_no,in_date', '', ''],
+    ];
+    sheet.getRange(2, 1, defaults.length, 7).setValues(defaults);
+    SpreadsheetApp.flush();
+  }
+  return sheet;
+}
+
+/**
+ * 메시지 템플릿 조회 + 변수 치환
+ * @param {string} key       - msg_key
+ * @param {Object} [vars={}] - 치환 변수 (예: {member_name:'홍길동', sakun_no:'2024타경1234'})
+ * @returns {string}
+ */
+function getMessageTemplate_(key, vars) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(MSG_TEMPLATES_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return '';
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues(); // A~D열
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][0]).trim() === key) {
+        return replaceVars_(String(data[i][3] || ''), vars || {});
+      }
+    }
+    return '';
+  } catch (e) {
+    Logger.log('[getMessageTemplate_] 오류: ' + e.toString());
+    return '';
+  }
+}
+
+/**
+ * {{변수명}} 치환 헬퍼
+ */
+function replaceVars_(template, vars) {
+  return template.replace(/\{\{(\w+)\}\}/g, function(_, name) {
+    return vars[name] !== undefined ? String(vars[name]) : '';
+  });
+}
+
+/**
+ * 메시지 템플릿 저장/업데이트 (설정 화면에서 호출)
+ * @param {string} key      - msg_key
+ * @param {string} template - 새 템플릿
+ * @returns {{ success: boolean, message?: string }}
+ */
+function saveMsgTemplate(key, template) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(MSG_TEMPLATES_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'msg_templates 시트 없음' };
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    const lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      const keys = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (let i = 0; i < keys.length; i++) {
+        if (String(keys[i][0]).trim() === key) {
+          sheet.getRange(i + 2, 4).setValue(template);  // D: template
+          sheet.getRange(i + 2, 6).setValue(now);        // F: updated_at
+          sheet.getRange(i + 2, 7).setValue('admin');    // G: updated_by
+          SpreadsheetApp.flush();
+          return { success: true };
+        }
+      }
+    }
+    return { success: false, message: '키를 찾을 수 없습니다: ' + key };
+  } catch (e) {
+    Logger.log('[saveMsgTemplate] 오류: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
 }

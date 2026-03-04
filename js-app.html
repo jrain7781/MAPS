@@ -8403,6 +8403,69 @@ MJ 이정우 팀장
         showMemberFormNew('edit', member);
     }
 
+    // ─── [PHASE 3-3] 회원 상세 탭 전환 ─────────────────────────────────────────
+    function switchMemberDetailTab(tabName) {
+        ['info', 'cancel'].forEach(function(t) {
+            const btn = document.getElementById('memberTab-' + t);
+            const panel = document.getElementById('memberTabPanel-' + t);
+            if (!btn || !panel) return;
+            const active = (t === tabName);
+            btn.classList.toggle('active', active);
+            panel.classList.toggle('hidden', !active);
+        });
+        if (tabName === 'cancel') loadMemberCancelHistory();
+    }
+
+    /**
+     * 현재 선택된 회원의 취소 이력을 서버에서 조회하여 테이블에 렌더링
+     */
+    function loadMemberCancelHistory() {
+        const statusEl = document.getElementById('cancelHistoryStatus');
+        const tbody = document.getElementById('cancelHistoryTableBody');
+        if (!tbody) return;
+
+        // 현재 선택된 회원 ID
+        const memberId = (document.getElementById('mem-member_id') || {}).value || '';
+        if (!memberId) {
+            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td></tr>';
+            return;
+        }
+
+        if (statusEl) statusEl.textContent = '조회 중...';
+        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
+
+        google.script.run
+            .withSuccessHandler(function(rows) {
+                if (!rows || rows.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">취소 이력이 없습니다.</td></tr>';
+                    if (statusEl) statusEl.textContent = '총 0건';
+                    return;
+                }
+                if (statusEl) statusEl.textContent = '총 ' + rows.length + '건';
+                tbody.innerHTML = rows.map(function(r, i) {
+                    const dateStr = String(r.cancel_date || '').substring(0, 16);
+                    const inDate  = String(r.in_date  || '');
+                    const sakunNo = String(r.sakun_no || '');
+                    const court   = String(r.court    || '');
+                    const label   = String(r.action_label || r.action || '');
+                    return '<tr class="hover:bg-gray-50">' +
+                        '<td class="px-2 py-1.5 text-center text-gray-500">' + (i + 1) + '</td>' +
+                        '<td class="px-2 py-1.5 text-center text-gray-700">' + escapeHtml(dateStr) + '</td>' +
+                        '<td class="px-2 py-1.5 text-center text-gray-700">' + escapeHtml(inDate)  + '</td>' +
+                        '<td class="px-2 py-1.5 text-center font-medium text-gray-800">' + escapeHtml(sakunNo) + '</td>' +
+                        '<td class="px-2 py-1.5 text-center text-gray-600">' + escapeHtml(court)   + '</td>' +
+                        '<td class="px-2 py-1.5 text-center"><span class="px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-700">' + escapeHtml(label) + '</span></td>' +
+                        '</tr>';
+                }).join('');
+            })
+            .withFailureHandler(function(e) {
+                tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-red-400">조회 오류: ' + escapeHtml(String(e)) + '</td></tr>';
+                if (statusEl) statusEl.textContent = '';
+            })
+            .getCancelHistory(memberId, 100);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     function showMemberFormNew(mode, member) {
         const form = document.getElementById('memberForm');
         const title = document.getElementById('memberFormTitle');
@@ -8445,6 +8508,11 @@ MJ 이정우 팀장
         // 모바일에서 상세 패널 표시
         const detailPane = document.getElementById('memberDetailPane');
         if (detailPane) detailPane.classList.remove('mobile-hidden');
+
+        // [PHASE 3-3] 회원 변경 시 탭을 '회원정보'로 초기화
+        switchMemberDetailTab('info');
+        const cancelBody = document.getElementById('cancelHistoryTableBody');
+        if (cancelBody) cancelBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">취소건 조회 탭을 클릭하세요.</td></tr>';
     }
 
     function handleMemberFormSubmitNew() {
