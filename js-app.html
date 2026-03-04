@@ -3410,18 +3410,25 @@
     function renderItemSubHistory() {
         const el = document.getElementById('item-sub-history-list');
         if (!el || !currentDetailItem) return;
-        const item = currentDetailItem;
-        const events = [];
-        if (item.reg_date) events.push({ dt: item.reg_date, label: '📝 물건 등록', by: item.reg_member || '' });
-        if (item.chuchen_date) events.push({ dt: item.chuchen_date, label: '📤 추천 전달', by: '' });
-        events.sort((a, b) => String(b.dt).localeCompare(String(a.dt)));
-        if (!events.length) { el.innerHTML = '<div class="text-gray-400 py-2">이력 없음</div>'; return; }
-        el.innerHTML = events.map(e => `
-            <div class="flex items-start gap-2 py-1 border-b border-gray-100">
-                <span class="text-gray-400 shrink-0 text-[10px]">${String(e.dt).slice(0, 16).replace('T', ' ')}</span>
-                <span class="font-semibold text-gray-700">${e.label}</span>
-                ${e.by ? `<span class="text-gray-400 text-[10px]">${e.by}</span>` : ''}
-            </div>`).join('');
+        el.innerHTML = '<div class="text-gray-400 py-1 text-xs">불러오는 중...</div>';
+
+        const itemId = currentDetailItem.id;
+        if (typeof google === 'undefined' || !google.script || !google.script.run) {
+            el.innerHTML = '<div class="text-gray-400 py-1 text-xs">GAS 환경에서만 지원됩니다.</div>';
+            return;
+        }
+
+        console.log('[ItemHistory] itemId=', itemId, 'type=', typeof itemId);
+        google.script.run
+            .withSuccessHandler(function (rows) {
+                console.log('[ItemHistory] rows=', rows);
+                renderHistoryTable_(rows, el);
+            })
+            .withFailureHandler(function (err) {
+                console.error('[ItemHistory] error=', err);
+                el.innerHTML = '<div class="text-red-400 py-1 text-xs">오류: ' + (err && err.message ? err.message : String(err)) + '</div>';
+            })
+            .getItemHistory(String(itemId), 200);
     }
 
     function renderItemSubInfo() {
@@ -3506,21 +3513,142 @@
         if (itemNoteEl) itemNoteEl.textContent = data.note || '(없음)';
     }
 
+    // action 한국어 라벨
+    const HISTORY_ACTION_LABEL = {
+        'ITEM_CREATE': '물건 등록',
+        'ITEM_DELETE': '물건 삭제',
+        'FIELD_CHANGE': '필드 변경',
+        'TELEGRAM_SENT': '텔레그램 발송',
+        'TELEGRAM_RECEIVED': '텔레그램 수신',
+        'REQUEST_BID': '입찰 요청',
+        'REQUEST_CANCEL_CHUCHEN': '추천 취소 요청',
+        'REQUEST_CANCEL_BID': '입찰 취소 요청',
+        'REQUEST_APPROVED': '요청 승인',
+        'REQUEST_REJECTED': '요청 거절',
+        'EXPIRY_NOTIFY': '만료 사전 알림',
+        'AUTO_EXPIRE': '자동 만료',
+        'BID_DATE_NOTIFY': '입찰일 알림'
+    };
+    // field_name 한국어 라벨
+    const HISTORY_FIELD_LABEL = {
+        'stu_member': '물건상태',
+        'member_id': '담당회원ID',
+        'm_name': '회원명',
+        'bidprice': '입찰가',
+        'm_name_id': '입찰담당'
+    };
+
+    // ── 히스토리 테이블 렌더러 ──────────────────────────────────────
+    function renderHistoryTable_(rows, el) {
+        if (!rows || !rows.length) {
+            el.innerHTML = '<div class="text-gray-400 py-1 text-xs">이력 없음</div>';
+            return;
+        }
+
+        // 같은 분+액션+트리거 단위로 그룹화
+        var groups = [];
+        var seen = {};
+        rows.forEach(function (r) {
+            var key = r.requested_at.substring(0, 11) + '|' + r.action + '|' + r.trigger_type;
+            if (!seen[key]) {
+                seen[key] = {
+                    dt: r.requested_at, action: r.action,
+                    trigger: r.trigger_type, member_name: r.member_name,
+                    note: r.note, changes: {}
+                };
+                groups.push(seen[key]);
+            }
+            if (r.field_name) {
+                seen[key].changes[r.field_name] = { from: r.from_value || '', to: r.to_value || '' };
+            }
+            if (!seen[key].member_name && r.member_name) seen[key].member_name = r.member_name;
+        });
+
+        // 최신순
+        groups.reverse();
+
+        var FIELD_COLS = ['stu_member', 'bidprice', 'm_name', 'm_name_id'];
+
+        function fmtDt(dt) {
+            var s = String(dt);
+            if (s.length < 13) return { d: s, t: '' };
+            // YYMMDD HHMMSS
+            return {
+                d: '20' + s.substr(0, 2) + '-' + s.substr(2, 2) + '-' + s.substr(4, 2),
+                t: s.substr(7, 2) + ':' + s.substr(9, 2) + ' ' + s.substr(11, 2)
+            };
+        }
+
+        function renderCell(change) {
+            if (!change) return '<td class="px-1.5 py-1 text-center text-gray-300 text-[11px] border-r border-gray-100">-</td>';
+            var fv = change.from !== '' ? change.from : '(없음)';
+            var tv = change.to !== '' ? change.to : '(없음)';
+            if (fv === tv) {
+                return '<td class="px-1.5 py-1 text-center text-gray-800 text-[11px] border-r border-gray-100">' + escapeHtml(tv) + '</td>';
+            }
+            return '<td class="px-1.5 py-1 text-center text-[11px] border-r border-gray-100">'
+                + '<div class="text-gray-400 text-[10px] line-through">' + escapeHtml(fv) + '</div>'
+                + '<div class="text-red-600 font-bold">' + escapeHtml(tv) + '</div>'
+                + '</td>';
+        }
+
+        var html = '<div class="overflow-x-auto"><table class="w-full text-xs border-collapse">'
+            + '<thead><tr class="bg-gray-100 border-b-2 border-gray-300">'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200">#</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-left border-r border-gray-200">날자</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-left border-r border-gray-200">시간</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200">변경자</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200">작업</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200">상태</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200">입찰가</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200">회원</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center">담당자</th>'
+            + '</tr></thead><tbody>';
+
+        groups.forEach(function (g, i) {
+            var dt = fmtDt(g.dt);
+            var actionLabel = HISTORY_ACTION_LABEL[g.action] || g.action;
+            var triggerDisp = g.trigger === 'web'
+                ? '<span class="text-red-500 font-bold">Web</span>'
+                : '<span class="text-gray-500">' + escapeHtml(g.trigger || 'sys') + '</span>';
+            var bgClass = i % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
+            html += '<tr class="border-b border-gray-100 ' + bgClass + '">';
+            html += '<td class="px-1.5 py-1 text-gray-300 font-mono text-[10px] text-center border-r border-gray-100">' + (i + 1) + '</td>';
+            html += '<td class="px-1.5 py-1 text-gray-600 whitespace-nowrap border-r border-gray-100">' + dt.d + '</td>';
+            html += '<td class="px-1.5 py-1 text-gray-600 whitespace-nowrap font-mono border-r border-gray-100">' + dt.t + '</td>';
+            html += '<td class="px-1.5 py-1 text-center border-r border-gray-100">' + triggerDisp + '</td>';
+            html += '<td class="px-1.5 py-1 text-gray-700 text-center whitespace-nowrap border-r border-gray-100">' + escapeHtml(actionLabel) + '</td>';
+            FIELD_COLS.forEach(function (col) { html += renderCell(g.changes[col]); });
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        el.innerHTML = html;
+    }
+
     function renderModalSubHistory() {
         const el = document.getElementById('modal-sub-history-list');
         if (!el || !currentModalItemData) return;
-        const item = currentModalItemData;
-        const events = [];
-        if (item.reg_date) events.push({ dt: item.reg_date, label: '📝 물건 등록', by: item.reg_member || '' });
-        if (item.chuchen_date) events.push({ dt: item.chuchen_date, label: '📤 추천 전달', by: '' });
-        events.sort((a, b) => String(b.dt).localeCompare(String(a.dt)));
-        if (!events.length) { el.innerHTML = '<div class="text-gray-400 py-2">이력 없음</div>'; return; }
-        el.innerHTML = events.map(e => `
-            <div class="flex items-start gap-2 py-1 border-b border-gray-100">
-                <span class="text-gray-400 shrink-0 text-[10px]">${String(e.dt).slice(0, 16).replace('T', ' ')}</span>
-                <span class="font-semibold text-gray-700">${e.label}</span>
-                ${e.by ? `<span class="text-gray-400 text-[10px]">${e.by}</span>` : ''}
-            </div>`).join('');
+        el.innerHTML = '<div class="text-gray-400 py-1 text-xs">불러오는 중...</div>';
+
+        const itemId = currentModalItemData.id;
+        if (typeof google === 'undefined' || !google.script || !google.script.run) {
+            el.innerHTML = '<div class="text-gray-400 py-1 text-xs">GAS 환경에서만 지원됩니다.</div>';
+            return;
+        }
+
+        console.log('[History] itemId=', itemId, 'type=', typeof itemId);
+        google.script.run
+            .withSuccessHandler(function (rows) {
+                console.log('[History] rows=', rows);
+                renderHistoryTable_(rows, el);
+            })
+            .withFailureHandler(function (err) {
+                console.error('[History] error=', err);
+                el.innerHTML = '<div class="text-red-400 py-1 text-xs">오류: ' + (err && err.message ? err.message : String(err)) + '</div>';
+            })
+            .getItemHistory(String(itemId), 200);
     }
 
     function renderModalSubInfo() {
@@ -7031,15 +7159,15 @@ MJ 이정우 팀장
      * 옥션 URL 설정 저장
      */
     // ─── [PHASE 5-3] 알림 설정 로드/저장 ────────────────────────────────────────
-    const NOTIFY_KEYS = ['BID_NOTIFY_ENABLED','BID_NOTIFY_D3','BID_NOTIFY_D2','BID_NOTIFY_D1',
-                         'BID_NOTIFY_HOUR','EXPIRY_NOTIFY_24H','EXPIRY_NOTIFY_1H','EXPIRY_NOTIFY_DONE'];
+    const NOTIFY_KEYS = ['BID_NOTIFY_ENABLED', 'BID_NOTIFY_D3', 'BID_NOTIFY_D2', 'BID_NOTIFY_D1',
+        'BID_NOTIFY_HOUR', 'EXPIRY_NOTIFY_24H', 'EXPIRY_NOTIFY_1H', 'EXPIRY_NOTIFY_DONE'];
 
     function loadNotifySettings() {
         const statusEl = document.getElementById('notifySettingsStatus');
         if (statusEl) statusEl.textContent = '불러오는 중...';
         google.script.run
-            .withSuccessHandler(function(settings) {
-                NOTIFY_KEYS.forEach(function(key) {
+            .withSuccessHandler(function (settings) {
+                NOTIFY_KEYS.forEach(function (key) {
                     const el = document.getElementById('pref-' + key);
                     if (!el) return;
                     const val = settings[key] !== undefined ? String(settings[key]) : 'true';
@@ -7048,7 +7176,7 @@ MJ 이정우 팀장
                 });
                 if (statusEl) statusEl.textContent = '로드 완료';
             })
-            .withFailureHandler(function(e) {
+            .withFailureHandler(function (e) {
                 if (statusEl) statusEl.textContent = '로드 실패: ' + e;
             })
             .getNotifySettings();
@@ -7058,8 +7186,8 @@ MJ 이정우 팀장
         const value = typeof val === 'boolean' ? String(val) : String(val);
         const statusEl = document.getElementById('notifySettingsStatus');
         google.script.run
-            .withSuccessHandler(function() { if (statusEl) statusEl.textContent = key + ' 저장 완료'; })
-            .withFailureHandler(function(e) { if (statusEl) statusEl.textContent = '저장 실패: ' + e; })
+            .withSuccessHandler(function () { if (statusEl) statusEl.textContent = key + ' 저장 완료'; })
+            .withFailureHandler(function (e) { if (statusEl) statusEl.textContent = '저장 실패: ' + e; })
             .saveSettingPublic(key, value);
     }
 
@@ -7088,11 +7216,11 @@ MJ 이정우 팀장
         const tree = document.getElementById('msgEditorTree');
         if (tree) tree.innerHTML = '<div class="text-gray-400 text-xs p-2">불러오는 중...</div>';
         google.script.run
-            .withSuccessHandler(function(rows) {
+            .withSuccessHandler(function (rows) {
                 _msgTemplates = rows || [];
                 renderMsgTree_();
             })
-            .withFailureHandler(function(e) {
+            .withFailureHandler(function (e) {
                 if (tree) tree.innerHTML = '<div class="text-red-400 text-xs p-2">오류: ' + e + '</div>';
             })
             .getAllMsgTemplates();
@@ -7103,16 +7231,16 @@ MJ 이정우 팀장
         if (!tree) return;
         // 카테고리별 그룹핑
         const groups = {};
-        _msgTemplates.forEach(function(t) {
+        _msgTemplates.forEach(function (t) {
             const cat = t.category || '기타';
             if (!groups[cat]) groups[cat] = [];
             groups[cat].push(t);
         });
         let html = '';
-        Object.keys(groups).forEach(function(cat) {
+        Object.keys(groups).forEach(function (cat) {
             html += '<div class="mb-2">';
             html += '<div class="text-xs font-bold text-gray-500 uppercase px-2 py-1">' + escapeHtml(cat) + '</div>';
-            groups[cat].forEach(function(t) {
+            groups[cat].forEach(function (t) {
                 const active = t.msg_key === _msgSelectedKey ? ' bg-purple-100 text-purple-700 font-bold' : ' hover:bg-gray-100 text-gray-700';
                 html += '<button onclick="selectMsgTemplate(' + JSON.stringify(t.msg_key) + ')" '
                     + 'class="w-full text-left px-2 py-1.5 rounded text-xs' + active + '">'
@@ -7125,16 +7253,16 @@ MJ 이정우 팀장
 
     function selectMsgTemplate(key) {
         _msgSelectedKey = key;
-        const t = _msgTemplates.find(function(x) { return x.msg_key === key; });
+        const t = _msgTemplates.find(function (x) { return x.msg_key === key; });
         if (!t) return;
 
         document.getElementById('msgEditorEmpty').style.display = 'none';
         const form = document.getElementById('msgEditorForm');
         form.style.display = 'flex';
 
-        document.getElementById('msgEditorKey').textContent  = t.msg_key;
+        document.getElementById('msgEditorKey').textContent = t.msg_key;
         document.getElementById('msgEditorDesc').textContent = t.description || '';
-        document.getElementById('msgEditorTemplate').value   = t.template || '';
+        document.getElementById('msgEditorTemplate').value = t.template || '';
         const vars = t.variables ? t.variables.split(',').filter(Boolean) : [];
         document.getElementById('msgEditorVars').textContent = vars.length ? '변수: ' + vars.join(', ') : '';
 
@@ -7146,7 +7274,7 @@ MJ 이정우 팀장
         const tmpl = (document.getElementById('msgEditorTemplate') || {}).value || '';
         const preview = document.getElementById('msgEditorPreview');
         if (!preview) return;
-        const replaced = tmpl.replace(/\{\{(\w+)\}\}/g, function(_, name) {
+        const replaced = tmpl.replace(/\{\{(\w+)\}\}/g, function (_, name) {
             return MSG_SAMPLE_VARS[name] !== undefined ? MSG_SAMPLE_VARS[name] : ('{{' + name + '}}');
         });
         preview.textContent = replaced;
@@ -7156,17 +7284,17 @@ MJ 이정우 팀장
         if (!_msgSelectedKey) return;
         const template = document.getElementById('msgEditorTemplate').value;
         google.script.run
-            .withSuccessHandler(function(r) {
+            .withSuccessHandler(function (r) {
                 if (r && r.success) {
                     showStatusMessage('메시지 저장 완료', 'success');
                     // 캐시 업데이트
-                    const t = _msgTemplates.find(function(x) { return x.msg_key === _msgSelectedKey; });
+                    const t = _msgTemplates.find(function (x) { return x.msg_key === _msgSelectedKey; });
                     if (t) t.template = template;
                 } else {
                     showStatusMessage('저장 실패: ' + (r && r.message || ''), 'error');
                 }
             })
-            .withFailureHandler(function(e) { showStatusMessage('저장 실패: ' + e, 'error'); })
+            .withFailureHandler(function (e) { showStatusMessage('저장 실패: ' + e, 'error'); })
             .saveMsgTemplate(_msgSelectedKey, template);
     }
 
@@ -7174,9 +7302,9 @@ MJ 이정우 팀장
         if (!_msgSelectedKey) return;
         if (!confirm(_msgSelectedKey + ' 템플릿을 기본값으로 초기화하시겠습니까?')) return;
         google.script.run
-            .withSuccessHandler(function(r) {
+            .withSuccessHandler(function (r) {
                 if (r && r.success) {
-                    const t = _msgTemplates.find(function(x) { return x.msg_key === _msgSelectedKey; });
+                    const t = _msgTemplates.find(function (x) { return x.msg_key === _msgSelectedKey; });
                     if (t) {
                         document.getElementById('msgEditorTemplate').value = t.default_template || t.template || '';
                         updateMsgPreview_();
@@ -7184,7 +7312,7 @@ MJ 이정우 팀장
                     showStatusMessage('초기화 완료', 'success');
                 }
             })
-            .withFailureHandler(function(e) { showStatusMessage('초기화 실패: ' + e, 'error'); })
+            .withFailureHandler(function (e) { showStatusMessage('초기화 실패: ' + e, 'error'); })
             .resetMsgTemplate(_msgSelectedKey);
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -8569,7 +8697,7 @@ MJ 이정우 팀장
 
     // ─── [PHASE 3-3] 회원 상세 탭 전환 ─────────────────────────────────────────
     function switchMemberDetailTab(tabName) {
-        ['info', 'cancel'].forEach(function(t) {
+        ['info', 'cancel'].forEach(function (t) {
             const btn = document.getElementById('memberTab-' + t);
             const panel = document.getElementById('memberTabPanel-' + t);
             if (!btn || !panel) return;
@@ -8599,30 +8727,30 @@ MJ 이정우 팀장
         tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
 
         google.script.run
-            .withSuccessHandler(function(rows) {
+            .withSuccessHandler(function (rows) {
                 if (!rows || rows.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">취소 이력이 없습니다.</td></tr>';
                     if (statusEl) statusEl.textContent = '총 0건';
                     return;
                 }
                 if (statusEl) statusEl.textContent = '총 ' + rows.length + '건';
-                tbody.innerHTML = rows.map(function(r, i) {
+                tbody.innerHTML = rows.map(function (r, i) {
                     const dateStr = String(r.cancel_date || '').substring(0, 16);
-                    const inDate  = String(r.in_date  || '');
+                    const inDate = String(r.in_date || '');
                     const sakunNo = String(r.sakun_no || '');
-                    const court   = String(r.court    || '');
-                    const label   = String(r.action_label || r.action || '');
+                    const court = String(r.court || '');
+                    const label = String(r.action_label || r.action || '');
                     return '<tr class="hover:bg-gray-50">' +
                         '<td class="px-2 py-1.5 text-center text-gray-500">' + (i + 1) + '</td>' +
                         '<td class="px-2 py-1.5 text-center text-gray-700">' + escapeHtml(dateStr) + '</td>' +
-                        '<td class="px-2 py-1.5 text-center text-gray-700">' + escapeHtml(inDate)  + '</td>' +
+                        '<td class="px-2 py-1.5 text-center text-gray-700">' + escapeHtml(inDate) + '</td>' +
                         '<td class="px-2 py-1.5 text-center font-medium text-gray-800">' + escapeHtml(sakunNo) + '</td>' +
-                        '<td class="px-2 py-1.5 text-center text-gray-600">' + escapeHtml(court)   + '</td>' +
+                        '<td class="px-2 py-1.5 text-center text-gray-600">' + escapeHtml(court) + '</td>' +
                         '<td class="px-2 py-1.5 text-center"><span class="px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-700">' + escapeHtml(label) + '</span></td>' +
                         '</tr>';
                 }).join('');
             })
-            .withFailureHandler(function(e) {
+            .withFailureHandler(function (e) {
                 tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-red-400">조회 오류: ' + escapeHtml(String(e)) + '</td></tr>';
                 if (statusEl) statusEl.textContent = '';
             })
