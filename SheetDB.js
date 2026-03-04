@@ -425,8 +425,28 @@ function updateBidPriceConfirmed(memberToken, itemId) {
 
   // 4. 상태 업데이트
   // 12번째 열(L열)이 bid_state
+  const oldState = String(sheet.getRange(rowIndex, 12).getValue() || '').trim();
   sheet.getRange(rowIndex, 12).setValue('확인완료');
   SpreadsheetApp.flush();
+
+  // 5. 히스토리 로깅 (PRICE_CONFIRMED)
+  if (oldState !== '확인완료' && typeof writeItemHistory_ === 'function') {
+    try {
+      writeItemHistory_({
+        action: 'PRICE_CONFIRMED',
+        item_id: String(itemId),
+        member_id: member.member_id,
+        member_name: member.member_name,
+        trigger_type: 'web',
+        field_name: 'bid_state',
+        from_value: oldState,
+        to_value: '확인완료',
+        note: '입찰가 확인'
+      });
+    } catch (e) {
+      Logger.log('입찰가확인 로깅 실패: ' + e.toString());
+    }
+  }
 
   return { success: true, message: '입찰가 확인 처리가 완료되었습니다.' };
 }
@@ -465,8 +485,30 @@ function confirmBidPriceWithTelegramReply(memberToken, itemId) {
   if (!match) {
     return { success: false, message: '해당 물건을 찾을 수 없습니다.' };
   }
-  sheet.getRange(match.getRow(), 12).setValue('확인완료');
+
+  const rowIndex = match.getRow();
+  const oldState = String(sheet.getRange(rowIndex, 12).getValue() || '').trim();
+  sheet.getRange(rowIndex, 12).setValue('확인완료');
   SpreadsheetApp.flush();
+
+  // 3.5 히스토리 로깅 (PRICE_CONFIRMED)
+  if (oldState !== '확인완료' && typeof writeItemHistory_ === 'function') {
+    try {
+      writeItemHistory_({
+        action: 'PRICE_CONFIRMED',
+        item_id: String(itemId),
+        member_id: member.member_id,
+        member_name: member.member_name,
+        trigger_type: 'member-telegram',
+        field_name: 'bid_state',
+        from_value: oldState,
+        to_value: '확인완료',
+        note: '입찰가 확인 (빠른답장)'
+      });
+    } catch (e) {
+      Logger.log('입찰가확인(봇) 로깅 실패: ' + e.toString());
+    }
+  }
 
   // 4. 텔레그램으로 가격 공개 메시지 전송 (chatId 있을 때만)
   const chatId = String(member.telegram_chat_id || '').trim();
@@ -3650,7 +3692,8 @@ function getItemHistory(itemId, limit) {
     const data = sheet.getRange(2, 1, lastRow - 1, 16).getValues(); // A~P열
 
     const result = [];
-    for (let i = 0; i < data.length && result.length < maxRows; i++) {
+    // 뒤에서부터(최신부터) 역순으로 탐색하여 limit 개수를 빠르게 채움
+    for (let i = data.length - 1; i >= 0 && result.length < maxRows; i--) {
       const rowItemId = String(data[i][4] || '').trim(); // E열: item_id
       if (rowItemId !== String(itemId).trim()) continue;
 
@@ -3669,7 +3712,8 @@ function getItemHistory(itemId, limit) {
         member_name: String(data[i][15] || '')    // P: member_name
       });
     }
-    return result; // 오래된 순(시트 저장 순)
+    // 최신부터 수집했으므로 시간 오름차순(오래된 순) 유지를 위해 리버스 반환
+    return result.reverse();
   } catch (e) {
     Logger.log('[getItemHistory] 오류: ' + e.toString());
     return [];

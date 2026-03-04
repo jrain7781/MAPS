@@ -3422,7 +3422,7 @@
         google.script.run
             .withSuccessHandler(function (rows) {
                 console.log('[ItemHistory] rows=', rows);
-                renderHistoryTable_(rows, el);
+                renderHistoryTable_(rows, el, currentDetailItem);
             })
             .withFailureHandler(function (err) {
                 console.error('[ItemHistory] error=', err);
@@ -3523,11 +3523,12 @@
         'REQUEST_BID': '입찰 요청',
         'REQUEST_CANCEL_CHUCHEN': '추천 취소 요청',
         'REQUEST_CANCEL_BID': '입찰 취소 요청',
-        'REQUEST_APPROVED': '요청 승인',
-        'REQUEST_REJECTED': '요청 거절',
-        'EXPIRY_NOTIFY': '만료 사전 알림',
-        'AUTO_EXPIRE': '자동 만료',
-        'BID_DATE_NOTIFY': '입찰일 알림'
+        'REQUEST_APPROVED': '요청 승인 (자동/수동)',
+        'REQUEST_REJECTED': '요청 반려',
+        'EXPIRY_NOTIFY': '만료 예정 알림',
+        'AUTO_EXPIRE': '자동 추천 만료',
+        'BID_DATE_NOTIFY': '입찰일 알림',
+        'PRICE_CONFIRMED': '입찰가확인'
     };
     // field_name 한국어 라벨
     const HISTORY_FIELD_LABEL = {
@@ -3539,7 +3540,7 @@
     };
 
     // ── 히스토리 테이블 렌더러 ──────────────────────────────────────
-    function renderHistoryTable_(rows, el) {
+    function renderHistoryTable_(rows, el, currentItem) {
         if (!rows || !rows.length) {
             el.innerHTML = '<div class="text-gray-400 py-1 text-xs">이력 없음</div>';
             return;
@@ -3569,18 +3570,76 @@
 
         var FIELD_COLS = ['stu_member', 'bidprice', 'm_name', 'm_name_id'];
 
+        // 역산 기반 당대 스냅샷 구축
+        var currentState = undefined;
+        if (currentItem) {
+            currentState = {
+                'stu_member': currentItem.stu_member || '',
+                'bidprice': currentItem.bidprice || '',
+                'm_name': currentItem.m_name || '',
+                'm_name_id': currentItem.m_name_id || ''
+            };
+        } else {
+            currentState = { 'stu_member': '', 'bidprice': '', 'm_name': '', 'm_name_id': '' };
+        }
+
+        // groups are currently from oldest to newest
+        groups.reverse(); // Now newest to oldest
+
+        groups.forEach(function (g) {
+            // 1) g_snapshot = current state logic AFTER this action happened
+            g.snapshot = Object.assign({}, currentState);
+
+            // 2) Rollback state for the NEXT older group
+            FIELD_COLS.forEach(function (col) {
+                if (g.changes[col] && g.changes[col].from !== '') {
+                    currentState[col] = g.changes[col].from;
+                }
+            });
+        });
+
         function fmtDt(dt) {
             var s = String(dt);
+            // 텔레그램 수신 날짜 파싱 오류 대응
+            if (s.includes(' ') || s.includes('-') || s.includes(':')) {
+                var d = new Date(s);
+                if (!isNaN(d.getTime())) {
+                    var yy = String(d.getFullYear()).substr(-2);
+                    var MM = String(d.getMonth() + 1).padStart(2, '0');
+                    var dd = String(d.getDate()).padStart(2, '0');
+                    var HH = String(d.getHours()).padStart(2, '0');
+                    var mm = String(d.getMinutes()).padStart(2, '0');
+                    return { d: '20' + yy + '-' + MM + '-' + dd, t: HH + ':' + mm };
+                }
+            }
+            // 일반 포맷 (YYMMDD HHMMSS)
             if (s.length < 13) return { d: s, t: '' };
-            // YYMMDD HHMMSS
             return {
                 d: '20' + s.substr(0, 2) + '-' + s.substr(2, 2) + '-' + s.substr(4, 2),
                 t: s.substr(7, 2) + ':' + s.substr(9, 2) + ' ' + s.substr(11, 2)
             };
         }
 
-        function renderCell(change) {
-            if (!change) return '<td class="px-1.5 py-1 text-center text-gray-300 text-[11px] border-r border-gray-100">-</td>';
+        function renderCell(change, snapshotVal, isCreate) {
+            var snap = (snapshotVal !== undefined && snapshotVal !== '') ? snapshotVal : '-';
+
+            // 최초등록(ITEM_CREATE) 일 때 처리
+            if (isCreate) {
+                if (change && change.to !== '') {
+                    return '<td class="px-1.5 py-1 text-center text-blue-600 font-bold text-[11px] border-r border-gray-100">' + escapeHtml(change.to) + '</td>';
+                } else if (snap !== '-') {
+                    return '<td class="px-1.5 py-1 text-center text-blue-600 font-bold text-[11px] border-r border-gray-100">' + escapeHtml(snap) + '</td>';
+                }
+                return '<td class="px-1.5 py-1 text-center text-gray-300 text-[11px] border-r border-gray-100">-</td>';
+            }
+
+            // 미변경 값일 때 검은색
+            if (!change) {
+                var colorClass = snap !== '-' ? 'text-gray-900' : 'text-gray-300';
+                return '<td class="px-1.5 py-1 text-center ' + colorClass + ' text-[11px] border-r border-gray-100">' + escapeHtml(snap) + '</td>';
+            }
+
+            // 일반 FIELD_CHANGE
             var fv = change.from !== '' ? change.from : '(없음)';
             var tv = change.to !== '' ? change.to : '(없음)';
             if (fv === tv) {
@@ -3608,18 +3667,39 @@
         groups.forEach(function (g, i) {
             var dt = fmtDt(g.dt);
             var actionLabel = HISTORY_ACTION_LABEL[g.action] || g.action;
-            var triggerDisp = g.trigger === 'web'
-                ? '<span class="text-red-500 font-bold">Web</span>'
-                : '<span class="text-gray-500">' + escapeHtml(g.trigger || 'sys') + '</span>';
+
+            // 텔레그램 기록 상세 2줄 표시
+            if ((g.action === 'TELEGRAM_SENT' || g.action === 'TELEGRAM_RECEIVED') && g.note) {
+                // remove redundant text often seen
+                actionLabel += '<br><span class="text-[10px] text-gray-400 leading-tight block">(' + escapeHtml(g.note) + ')</span>';
+            }
+
+            var trig = g.trigger || 'sys';
+            if (trig === 'member-telegram') trig = 'mem-tele';
+
+            var triggerDisp = '';
+            if (trig.toLowerCase() === 'web') {
+                triggerDisp = '<span class="text-red-500 font-bold">Web</span>';
+            } else if (trig.toLowerCase().indexOf('tele') !== -1) {
+                triggerDisp = '<span class="text-blue-500 font-bold">' + escapeHtml(trig) + '</span>';
+            } else {
+                triggerDisp = '<span class="text-gray-500">' + escapeHtml(trig) + '</span>';
+            }
+
             var bgClass = i % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            var isCreate = (g.action === 'ITEM_CREATE');
 
             html += '<tr class="border-b border-gray-100 ' + bgClass + '">';
-            html += '<td class="px-1.5 py-1 text-gray-400 font-mono text-[10px] text-center border-r border-gray-100">' + (i + 1) + '</td>';
+            html += '<td class="px-1.5 py-1 text-gray-400 font-mono text-[10px] text-center border-r border-gray-100">' + (groups.length - i) + '</td>';
             html += '<td class="px-1.5 py-1 text-gray-600 text-center whitespace-nowrap border-r border-gray-100">' + dt.d + '</td>';
             html += '<td class="px-1.5 py-1 text-gray-600 text-center whitespace-nowrap font-mono border-r border-gray-100">' + dt.t + '</td>';
             html += '<td class="px-1.5 py-1 text-center whitespace-nowrap border-r border-gray-100">' + triggerDisp + '</td>';
-            html += '<td class="px-1.5 py-1 text-gray-700 text-center whitespace-nowrap border-r border-gray-100">' + escapeHtml(actionLabel) + '</td>';
-            FIELD_COLS.forEach(function (col) { html += renderCell(g.changes[col]); });
+            // action 칸에는 직접 html을 만들 수 있어서 escape 제외하고 actionLabel 그대로 출력 (안에 <br> span 등 있음)
+            html += '<td class="px-1.5 py-1 text-gray-700 text-center whitespace-nowrap border-r border-gray-100">' + actionLabel + '</td>';
+
+            FIELD_COLS.forEach(function (col) {
+                html += renderCell(g.changes[col], g.snapshot[col], isCreate);
+            });
             html += '</tr>';
         });
 
@@ -3642,7 +3722,7 @@
         google.script.run
             .withSuccessHandler(function (rows) {
                 console.log('[History] rows=', rows);
-                renderHistoryTable_(rows, el);
+                renderHistoryTable_(rows, el, currentModalItemData);
             })
             .withFailureHandler(function (err) {
                 console.error('[History] error=', err);
