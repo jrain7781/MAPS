@@ -3570,29 +3570,31 @@
 
         var FIELD_COLS = ['stu_member', 'bidprice', 'm_name', 'm_name_id'];
 
-        // 역산 기반 당대 스냅샷 구축
-        var currentState = undefined;
-        if (currentItem) {
-            currentState = {
-                'stu_member': currentItem.stu_member || '',
-                'bidprice': currentItem.bidprice || '',
-                'm_name': currentItem.m_name || '',
-                'm_name_id': currentItem.m_name_id || ''
-            };
-        } else {
-            currentState = { 'stu_member': '', 'bidprice': '', 'm_name': '', 'm_name_id': '' };
-        }
+        // groups are currently from oldest to newest.
+        // 역산 기반 당대 스냅샷 구축 시작. 최신값을 모른다면 빈칸.
+        var currentState = {
+            'stu_member': currentItem && currentItem.stu_member ? currentItem.stu_member : '',
+            'bidprice': currentItem && currentItem.bidprice ? currentItem.bidprice : '',
+            'm_name': currentItem && currentItem.m_name ? currentItem.m_name : '',
+            'm_name_id': currentItem && currentItem.m_name_id ? currentItem.m_name_id : ''
+        };
 
-        // groups are currently from oldest to newest
-        groups.reverse(); // Now newest to oldest
+        // 뒤집어서 (가장 최신 -> 가장 오래된 순) 역산 진행
+        groups.reverse();
 
         groups.forEach(function (g) {
-            // 1) g_snapshot = current state logic AFTER this action happened
+            // 1. 현재 이 액션이 완료된 직후(더 최신)의 상태가 currentState
+            // 즉, 현재 액션이 일어난 "이후 결과" = currentState
+            // 그러나 이 화면(해당 시점 줄)에 보여줄 "당시 스냅샷"은, 액션이 일어난 "결과" 상태입니다.
+            // 다만, 여기서 표시할 것은 "변경 후의 값"과 "변경되지 않은 나머지 값"입니다.
+
+            // 당시 해당 컬럼의 스냅샷 = currentState
             g.snapshot = Object.assign({}, currentState);
 
-            // 2) Rollback state for the NEXT older group
+            // 2. 이 그룹의 변경사항(from -> to)을 보고, 
+            // 이 액션이 일어나기 이전 시점(더 오래된 과거)의 상태로 currentState를 되돌림(Rollback)
             FIELD_COLS.forEach(function (col) {
-                if (g.changes[col] && g.changes[col].from !== '') {
+                if (g.changes[col] && g.changes[col].from) { // from 필드가 존재한다면
                     currentState[col] = g.changes[col].from;
                 }
             });
@@ -3664,18 +3666,21 @@
             + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center min-w-[50px]">담당자</th>'
             + '</tr></thead><tbody>';
 
+        var noteMap = { 'card': '추천물건전달', 'bid_price': '입찰가전달', 'status': '진행상태전달', 'check_request': '확인요청전달' };
+
         groups.forEach(function (g, i) {
             var dt = fmtDt(g.dt);
             var actionLabel = HISTORY_ACTION_LABEL[g.action] || g.action;
 
             // 텔레그램 기록 상세 2줄 표시
             if ((g.action === 'TELEGRAM_SENT' || g.action === 'TELEGRAM_RECEIVED') && g.note) {
-                // remove redundant text often seen
-                actionLabel += '<br><span class="text-[10px] text-gray-400 leading-tight block">(' + escapeHtml(g.note) + ')</span>';
+                var dispNote = noteMap[g.note] || g.note;
+                actionLabel += '<br><span class="text-[10px] text-gray-400 leading-tight block">(' + escapeHtml(dispNote) + ')</span>';
             }
 
             var trig = g.trigger || 'sys';
             if (trig === 'member-telegram') trig = 'mem-tele';
+            if (trig === 'mem-belegram') trig = 'mem-tele'; // 오타 방어
 
             var triggerDisp = '';
             if (trig.toLowerCase() === 'web') {
