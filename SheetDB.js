@@ -193,6 +193,17 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
   const regMember = '';
   // appendRow는 열이 부족하면 알아서 늘려주므로 안전
   sheet.appendRow([id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, regDate, regMember, bidState, imageId, note || '', '']);
+
+  // [PHASE 1-4] 물건 생성 이력 기록
+  writeItemHistory_({
+    action       : 'ITEM_CREATE',
+    item_id      : id,
+    member_id    : String(memberId || ''),
+    member_name  : String(mName || ''),
+    trigger_type : 'web',
+    note         : court + ' ' + sakunNo
+  });
+
   return { success: true, message: '성공적으로 등록되었습니다.' };
 }
 
@@ -225,8 +236,17 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
 
   const realRowIndex = rowIndex + 2;
 
-  // 기존 상태값(bid_state) 확인
-  const oldBidState = String(sheet.getRange(realRowIndex, 12).getValue() || '').trim();
+  // [PHASE 1-3] 저장 전: 기존 값 읽기 (변경 감지용)
+  const oldRow = sheet.getRange(realRowIndex, 1, 1, 15).getValues()[0];
+  const oldValues = {
+    stu_member : String(oldRow[4]  || '').trim(),  // E열(5)
+    m_name_id  : String(oldRow[5]  || '').trim(),  // F열(6)
+    m_name     : String(oldRow[6]  || '').trim(),  // G열(7)
+    bidprice   : String(oldRow[7]  || '').trim(),  // H열(8)
+    member_id  : String(oldRow[8]  || '').trim(),  // I열(9)
+    bid_state  : String(oldRow[11] || '').trim(),  // L열(12)
+  };
+  const oldBidState = oldValues.bid_state; // 기존 코드 호환
 
   // 데이터 업데이트 (개별 셀 업데이트로 정확성 확보)
   sheet.getRange(realRowIndex, 2).setValue(inDate);
@@ -246,6 +266,32 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
   sheet.getRange(realRowIndex, 14).setValue(note || '');
   // [추가] 15번째 열(O열)에 m_name2(명의 표시값) 저장
   sheet.getRange(realRowIndex, 15).setValue(mName2 || '');
+
+  // [PHASE 1-3] 저장 후: 변경된 필드마다 이력 기록
+  const newValues = {
+    stu_member : String(stuMember || '').trim(),
+    m_name_id  : String(mNameId   || '').trim(),
+    m_name     : String(mName     || '').trim(),
+    bidprice   : String(bidPrice  || '').trim(),
+    member_id  : String(memberId  || '').trim(),
+    bid_state  : String(bidState  || '').trim(),
+  };
+  const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state'];
+  trackFields.forEach(function(field) {
+    if (oldValues[field] !== newValues[field]) {
+      writeItemHistory_({
+        action       : 'FIELD_CHANGE',
+        item_id      : String(id),
+        member_id    : newValues.member_id || oldValues.member_id,
+        member_name  : newValues.m_name    || oldValues.m_name,
+        field_name   : field,
+        from_value   : oldValues[field],
+        to_value     : newValues[field],
+        trigger_type : 'web',
+        note         : field + ' 변경'
+      });
+    }
+  });
 
   // [기능 추가] 상태가 '전달완료'로 변경될 때 텔레그램 자동 발송
   if (bidState === '전달완료' && oldBidState !== '전달완료') {
@@ -1142,15 +1188,20 @@ function ensureTelegramRequestsSheet_() {
   const headers = [
     'req_id',
     'requested_at',
-    'action',           // REQUEST_BID 등
-    'status',           // PENDING | APPROVED | REJECTED
+    'action',           // FIELD_CHANGE / TELEGRAM_SENT / REQUEST_BID 등
+    'status',           // PENDING | APPROVED | REJECTED | DONE
     'item_id',
     'member_id',
     'chat_id',
     'telegram_username',
     'note',
     'approved_at',
-    'approved_by'
+    'approved_by',
+    'from_value',       // 변경 전 값
+    'to_value',         // 변경 후 값
+    'field_name',       // 변경된 필드명
+    'trigger_type',     // web / web-telegram / web-다중 / member-telegram / system
+    'member_name'       // 이벤트 시점 회원명 (집계 편의)
   ];
   if (sheet.getLastRow() < 1) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1481,6 +1532,20 @@ function approveTelegramRequests(reqIds, approvedBy) {
     reqSheet.getRange(rowNum, 10, 1, 2).setValues([[now, by]]);
     approved++;
 
+    // [PHASE 1-5] REQUEST_APPROVED 이력 기록
+    var memberId_req = String(values[i][5] || '').trim();
+    var memberName_req = (it && it.m_name) ? String(it.m_name) : '';
+    writeItemHistory_({
+      action       : 'REQUEST_APPROVED',
+      item_id      : itemId,
+      member_id    : memberId_req,
+      member_name  : memberName_req,
+      chat_id      : chatId,
+      approved_by  : by,
+      trigger_type : 'system',
+      note         : action + ' 승인'
+    });
+
     // items 시트 상태 변경 (같은 ss 재사용, openById 추가 없음)
     if (action === 'REQUEST_BID') {
       try {
@@ -1502,7 +1567,8 @@ function approveTelegramRequests(reqIds, approvedBy) {
       } catch (e) { }
     }
 
-    if (action === 'REQUEST_CANCEL') {
+    // [PHASE 1-5] REQUEST_CANCEL → REQUEST_CANCEL_BID 호환 처리
+    if (action === 'REQUEST_CANCEL_BID' || action === 'REQUEST_CANCEL') {
       try {
         if (itemsSheet && itemId) {
           var finder2 = itemsSheet.getRange(2, 1, itemsSheet.getLastRow() - 1, 1)
@@ -1586,6 +1652,22 @@ function rejectTelegramRequests(reqIds, rejectedBy) {
     reqSheet.getRange(rowNum, 4).setValue('REJECTED');
     reqSheet.getRange(rowNum, 10, 1, 2).setValues([[now, by]]);
     rejected++;
+
+    // [PHASE 1-5] REQUEST_REJECTED 이력 기록
+    var actionRej = String(values[i][2] || '').trim();
+    var itemIdRej = String(values[i][4] || '').trim();
+    var memberIdRej = String(values[i][5] || '').trim();
+    var itRej = itemMap[itemIdRej] || null;
+    writeItemHistory_({
+      action       : 'REQUEST_REJECTED',
+      item_id      : itemIdRej,
+      member_id    : memberIdRej,
+      member_name  : itRej ? String(itRej.m_name || '') : '',
+      chat_id      : chatId,
+      approved_by  : by,
+      trigger_type : 'web',
+      note         : actionRej + ' 거절'
+    });
 
     // 텔레그램 알림 전송
     if (chatId && typeof telegramSendMessage === 'function') {
@@ -2960,5 +3042,55 @@ function updateChuchenState(itemIds, state, dateStr) {
   } catch (e) {
     Logger.log('updateChuchenState 오류: ' + e.message);
     return { success: false, updated: 0 };
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// [PHASE 1-2] 이력 기록 공통 함수
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * telegram_requests 시트에 이력 1건을 기록합니다.
+ * @param {Object} p
+ * @param {string} p.action        - FIELD_CHANGE | ITEM_CREATE | TELEGRAM_SENT | TELEGRAM_RECEIVED |
+ *                                   REQUEST_BID | REQUEST_CANCEL_CHUCHEN | REQUEST_CANCEL_BID |
+ *                                   REQUEST_APPROVED | REQUEST_REJECTED | EXPIRY_NOTIFY | AUTO_EXPIRE | BID_DATE_NOTIFY
+ * @param {string} [p.status]      - PENDING | DONE (기본: DONE)
+ * @param {string} [p.item_id]     - 물건 ID
+ * @param {string} [p.member_id]   - 회원 ID
+ * @param {string} [p.chat_id]     - 텔레그램 chat_id
+ * @param {string} [p.telegram_username]
+ * @param {string} [p.note]        - 메모
+ * @param {string} [p.approved_by] - 처리자 (기본: system)
+ * @param {string} [p.from_value]  - 변경 전 값 (FIELD_CHANGE 시)
+ * @param {string} [p.to_value]    - 변경 후 값 (FIELD_CHANGE 시)
+ * @param {string} [p.field_name]  - 변경 필드명 (FIELD_CHANGE 시)
+ * @param {string} [p.trigger_type]- web | web-telegram | web-다중 | member-telegram | system (기본: system)
+ * @param {string} [p.member_name] - 이벤트 시점 회원명
+ */
+function writeItemHistory_(p) {
+  try {
+    const sheet = ensureTelegramRequestsSheet_();
+    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMdd HHmmss');
+    sheet.appendRow([
+      String(new Date().getTime()),   // A: req_id (타임스탬프 기반 고유 ID)
+      now,                            // B: requested_at
+      p.action || '',                 // C: action
+      p.status || 'DONE',             // D: status
+      p.item_id || '',                // E: item_id
+      p.member_id || '',              // F: member_id
+      p.chat_id || '',                // G: chat_id
+      p.telegram_username || '',      // H: telegram_username
+      p.note || '',                   // I: note
+      now,                            // J: approved_at
+      p.approved_by || 'system',      // K: approved_by
+      p.from_value || '',             // L: from_value
+      p.to_value || '',               // M: to_value
+      p.field_name || '',             // N: field_name
+      p.trigger_type || 'system',     // O: trigger_type
+      p.member_name || ''             // P: member_name
+    ]);
+  } catch (e) {
+    Logger.log('[writeItemHistory_] 오류: ' + e.toString());
   }
 }

@@ -415,18 +415,22 @@ function handleTelegramWebhook_(update) {
         var approvedAt = isAutoApprove ? requestedAt : '';
 
         // 3) telegram_requests 시트에 등록
-        var reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+        var reqSheet = (typeof ensureTelegramRequestsSheet_ === 'function')
+          ? ensureTelegramRequestsSheet_()
+          : ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
         if (!reqSheet) {
           reqSheet = ss.insertSheet(TELEGRAM_REQUESTS_SHEET_NAME);
-          reqSheet.getRange(1, 1, 1, 11).setValues([['req_id', 'requested_at', 'action', 'status', 'item_id', 'member_id', 'chat_id', 'telegram_username', 'note', 'approved_at', 'approved_by']]);
         }
-        var reqAction = isBid ? 'REQUEST_BID' : 'REQUEST_CANCEL';
+        // [PHASE 1-5] REQUEST_CANCEL → REQUEST_CANCEL_BID (입찰취소 / 추천취소는 별도)
+        var reqAction = isBid ? 'REQUEST_BID' : 'REQUEST_CANCEL_BID';
         var reqId = String(new Date().getTime());
         reqSheet.appendRow([
           reqId, requestedAt, reqAction, reqStatus,
           String(itemId), memberId, chatId, username,
           JSON.stringify({ origin_message_id: originMessageId || '' }),
-          approvedAt, isAutoApprove ? 'auto' : ''
+          approvedAt, isAutoApprove ? 'auto' : '',
+          '', '', '',                  // L: from_value, M: to_value, N: field_name
+          'member-telegram', ''        // O: trigger_type, P: member_name
         ]);
         _whLog('appendRow 완료 (' + reqStatus + ')');
 
@@ -848,6 +852,24 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
     } catch (e) {
       Logger.log('단건 전송 후 bid_state 업데이트 실패: ' + e.message);
     }
+  }
+
+  // [PHASE 1-5] 텔레그램 전송 이력 기록
+  try {
+    if (typeof writeItemHistory_ === 'function') {
+      writeItemHistory_({
+        action           : 'TELEGRAM_SENT',
+        item_id          : String(itemId),
+        member_id        : targetMemberId,
+        member_name      : String(memberRow.member_name || ''),
+        chat_id          : chatId,
+        telegram_username: String(memberRow.telegram_username || ''),
+        trigger_type     : 'web-telegram',
+        note             : styleKey
+      });
+    }
+  } catch (e) {
+    Logger.log('[PHASE1-5] TELEGRAM_SENT 기록 오류: ' + e.toString());
   }
 
   return { success: true, message: '텔레그램으로 전송했습니다.' };
