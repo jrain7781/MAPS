@@ -3677,13 +3677,15 @@
             }
 
             var trig = g.trigger || 'sys';
-            if (trig === 'member-telegram') trig = 'mem-tele';
-            if (trig === 'mem-belegram') trig = 'mem-tele'; // 오타 방어
+            if (trig === 'member-telegram' || trig === 'mem-belegram') trig = 'mem-telegram'; // 사용자가 원한 표기로 변경
 
             var triggerDisp = '';
-            if (trig.toLowerCase() === 'web') {
+            var trigLower = trig.toLowerCase();
+            if (trigLower === 'web') {
                 triggerDisp = '<span class="text-red-500 font-bold">Web</span>';
-            } else if (trig.toLowerCase().indexOf('tele') !== -1) {
+            } else if (trigLower.indexOf('web') !== -1) {
+                triggerDisp = '<span class="text-red-500 font-bold">' + escapeHtml(trig) + '</span>';
+            } else if (trigLower.indexOf('tele') !== -1) {
                 triggerDisp = '<span class="text-blue-500 font-bold">' + escapeHtml(trig) + '</span>';
             } else {
                 triggerDisp = '<span class="text-gray-500">' + escapeHtml(trig) + '</span>';

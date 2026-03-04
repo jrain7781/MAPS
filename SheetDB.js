@@ -437,7 +437,7 @@ function updateBidPriceConfirmed(memberToken, itemId) {
         item_id: String(itemId),
         member_id: member.member_id,
         member_name: member.member_name,
-        trigger_type: 'web',
+        trigger_type: 'member-telegram',
         field_name: 'bid_state',
         from_value: oldState,
         to_value: '확인완료',
