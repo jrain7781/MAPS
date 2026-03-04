@@ -126,10 +126,12 @@ stu_member = '입찰' 인 물건만 발송
 
 | 알림 | 발송 시각 | 조건 |
 |------|---------|------|
+| D-3 알림 | 해당일 오전 10:00 | (in-date - 오늘) = 3일 AND stu_member='입찰' |
 | D-2 알림 | 해당일 오전 10:00 | (in-date - 오늘) = 2일 AND stu_member='입찰' |
 | D-1 알림 | 해당일 오전 10:00 | (in-date - 오늘) = 1일 AND stu_member='입찰' |
 
 예시) in-date=260313, 현재 stu_member='입찰':
+- 3월 10일 10:00 → D-3 알림
 - 3월 11일 10:00 → D-2 알림
 - 3월 12일 10:00 → D-1 알림
 
@@ -140,17 +142,17 @@ stu_member = '입찰' 인 물건만 발송
 ```
 설정 키                    기본값    설명
 BID_NOTIFY_ENABLED         true     입찰일 알림 ON/OFF 전체
-BID_NOTIFY_D2_ENABLED      true     D-2 알림 활성화
-BID_NOTIFY_D1_ENABLED      true     D-1 알림 활성화
+BID_NOTIFY_D3              true     D-3 알림 활성화
+BID_NOTIFY_D2              true     D-2 알림 활성화
+BID_NOTIFY_D1              true     D-1 알림 활성화
 BID_NOTIFY_HOUR            10       알림 발송 시각 (시 단위, 기본 오전 10시)
-BID_NOTIFY_STATUS_FILTER   입찰     알림 대상 stu_member 값 (콤마 구분 가능)
 ```
 
 **관리 화면**: 환경설정 탭에 "알림 설정" 섹션 추가 (메시지 편집 팝업과 별도 또는 동일 팝업 내 탭)
 
 ### 2-4. GAS 함수명
 ```javascript
-sendBidDateReminders()  // 매일 설정된 시각 트리거
+sendBidDateReminders()  // 매일 설정된 시각 트리거 (D-3, D-2, D-1)
 ```
 
 ### 2-5. in-date 날짜 계산 방법 (GAS)
@@ -263,9 +265,10 @@ line 1593 요청 반려 reply
   item_card.staff_3       ← TelegramService.js:659
 
 카테고리: 자동알림 (신규)
-  notify.expiry_24h       ← 신규 구현
-  notify.expiry_1h        ← 신규 구현
-  notify.expiry_done      ← 신규 구현
+  notify.expiry_24h       ← 신규 구현 (추천 24시간 경과)
+  notify.expiry_1h        ← 신규 구현 (추천 만료 1시간 전 = 47h 경과)
+  notify.expiry_done      ← 신규 구현 (추천 48h 자동만료)
+  notify.bid_d3           ← 신규 구현
   notify.bid_d2           ← 신규 구현
   notify.bid_d1           ← 신규 구현
 
@@ -374,6 +377,7 @@ getMessageTemplate_('notify.bid_d1', {memberName: 'MJ 임준희', inDate: '26-03
 │                                              │
 │ 입찰일 알림                                   │
 │  ☑ 전체 활성화                               │
+│  ☑ D-3 알림 활성화                          │
 │  ☑ D-2 알림 활성화                          │
 │  ☑ D-1 알림 활성화                          │
 │  발송 시각: [10] 시  (0~23)                  │
@@ -391,6 +395,7 @@ getMessageTemplate_('notify.bid_d1', {memberName: 'MJ 임준희', inDate: '26-03
 | EXPIRY_NOTIFY_1H | true | 추천 1h 전 알림 |
 | EXPIRY_NOTIFY_DONE | true | 만료 알림 |
 | BID_NOTIFY_ENABLED | true | 입찰일 알림 전체 |
+| BID_NOTIFY_D3 | true | D-3 알림 |
 | BID_NOTIFY_D2 | true | D-2 알림 |
 | BID_NOTIFY_D1 | true | D-1 알림 |
 | BID_NOTIFY_HOUR | 10 | 발송 시각 |
@@ -425,3 +430,4 @@ BID_DATE_NOTIFY → 입찰일 알림 (note에 'D-2'/'D-1' 표시)
 ---
 
 *v2 2026-03-03 수정 - 입찰일 알림 대상 stu_member='입찰'만, 설정화면 추가*
+*v3 2026-03-04 수정 - 입찰일 알림 D-3 추가, 메시지 키 notify.bid_d3 추가, settings BID_NOTIFY_D3 추가*

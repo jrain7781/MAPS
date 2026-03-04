@@ -28,7 +28,7 @@
 L: from_value    (변경 전 값)
 M: to_value      (변경 후 값)
 N: field_name    (변경된 필드명: stu_member/member_id/bidprice/m_name_id/bid_state/chuchen_state)
-O: trigger_type  (web/system/telegram/bulk)
+O: trigger_type  (web / web-telegram / web-다중 / member-telegram / system)
 P: member_name   (이벤트 시점 회원명, 집계 편의)
 ```
 
@@ -120,13 +120,16 @@ trigger_type 결정:
 
 **수정 파일**: `TelegramService.js`, `SheetDB.js`
 
-| 함수 | 추가할 기록 |
-|------|-----------|
-| `sendChuchenTelegramBulk()` (TelegramService.js:862) | TELEGRAM_SENT 기록 |
-| `sendItemToMemberTelegramWithStyle()` (TelegramService.js:763) | TELEGRAM_SENT 기록 |
-| `handleTelegramWebhook_()` 수신 처리 | TELEGRAM_RECEIVED 기록 |
-| `approveTelegramRequests()` 승인 | REQUEST_APPROVED 기록 |
-| `approveTelegramRequests()` 거절 | REQUEST_REJECTED 기록 |
+| 함수 | 추가할 기록 | trigger_type |
+|------|-----------|-------------|
+| `sendChuchenTelegramBulk()` (TelegramService.js:862) | TELEGRAM_SENT | web-telegram |
+| `sendItemToMemberTelegramWithStyle()` (TelegramService.js:763) | TELEGRAM_SENT | web-telegram |
+| `handleTelegramWebhook_()` 수신 처리 | TELEGRAM_RECEIVED | member-telegram |
+| 회원 입찰 요청 수신 | REQUEST_BID | member-telegram |
+| 회원 추천 취소 요청 수신 | REQUEST_CANCEL_CHUCHEN | member-telegram |
+| 회원 입찰 취소 요청 수신 | REQUEST_CANCEL_BID | member-telegram |
+| `approveTelegramRequests()` 자동승인 | REQUEST_APPROVED | system |
+| `approveTelegramRequests()` 거절 | REQUEST_REJECTED | web |
 
 작업:
 - 🔲 각 함수에 writeItemHistory_() 추가
@@ -241,11 +244,12 @@ function setupAutoExpireTrigger() {
 | A (key) | B (value) | C (description) |
 |---------|---------|----------------|
 | BID_NOTIFY_ENABLED | true | 입찰일 알림 전체 ON/OFF |
+| BID_NOTIFY_D3 | true | D-3 알림 활성화 |
 | BID_NOTIFY_D2 | true | D-2 알림 활성화 |
 | BID_NOTIFY_D1 | true | D-1 알림 활성화 |
 | BID_NOTIFY_HOUR | 10 | 발송 시각 (시 단위) |
 | EXPIRY_NOTIFY_24H | true | 추천 24h 알림 |
-| EXPIRY_NOTIFY_1H | true | 추천 1h 전 알림 |
+| EXPIRY_NOTIFY_1H | true | 추천 47h(만료 1시간 전) 알림 |
 | EXPIRY_NOTIFY_DONE | true | 만료 알림 |
 
 작업:
@@ -263,9 +267,11 @@ function sendBidDateReminders() {
 
   const tz = Session.getScriptTimeZone();
   const today = new Date();
+  const d3 = new Date(today); d3.setDate(d3.getDate() + 3);
   const d2 = new Date(today); d2.setDate(d2.getDate() + 2);
   const d1 = new Date(today); d1.setDate(d1.getDate() + 1);
 
+  const d3str = Utilities.formatDate(d3, tz, 'yyMMdd');
   const d2str = Utilities.formatDate(d2, tz, 'yyMMdd');
   const d1str = Utilities.formatDate(d1, tz, 'yyMMdd');
 
@@ -283,6 +289,13 @@ function sendBidDateReminders() {
     if (stuMember !== '입찰') return;  // ★ 입찰 상태만 대상
     if (!memberId) return;
 
+    if (getSetting_('BID_NOTIFY_D3','true') === 'true' && inDate === d3str) {
+      if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-3')) {
+        // sendBidDateNotification_(memberId, itemId, 'D-3');
+        writeItemHistory_({action:'BID_DATE_NOTIFY', item_id:itemId,
+          member_id:memberId, trigger_type:'system', note:'D-3'});
+      }
+    }
     if (getSetting_('BID_NOTIFY_D2','true') === 'true' && inDate === d2str) {
       if (!isAlreadyNotified_(itemId, 'BID_DATE_NOTIFY', 'D-2')) {
         // sendBidDateNotification_(memberId, itemId, 'D-2');
@@ -302,9 +315,32 @@ function sendBidDateReminders() {
 ```
 
 작업:
-- 🔲 위 함수 작성
-- 🔲 sendBidDateNotification_() 작성 (메시지 템플릿 사용)
+- 🔲 위 함수 작성 (D-3, D-2, D-1 포함)
+- 🔲 sendBidDateNotification_() 작성 (메시지 템플릿 사용, notify.bid_d3/d2/d1)
 - 🔲 GAS 매일 10시 트리거 등록 (setupBidDateTrigger() 함수)
+
+---
+
+## PHASE 3-3. 취소건 조회 UI
+
+**수정 파일**: `js-app.html`, `index.html`, `SheetDB.js`
+
+기능: 텔레그램 회원관리 화면에 **"취소건 조회"** 탭 추가
+
+표시 컬럼: 순번 / 입찰일자 / 사건번호 / 법원 / 취소일자 / 취소사유
+
+취소사유 매핑:
+```
+AUTO_EXPIRE             → 추천시간 만기
+REQUEST_CANCEL_CHUCHEN  → 회원요청(추천취소)
+REQUEST_CANCEL_BID      → 회원요청(입찰취소)
+```
+
+작업:
+- 🔲 GAS: `getCancelHistory(memberId)` 서버함수 작성 (telegram_requests 시트 조회)
+- 🔲 index.html: 회원관리 화면에 "취소건 조회" 탭 버튼 추가
+- 🔲 js-app.html: 취소건 목록 렌더링 함수 작성
+- 🔲 회원별 필터 지원 (특정 회원 취소 이력 조회)
 
 ---
 
@@ -344,6 +380,8 @@ TelegramService.js:654  '서울/수도권(경기,인천)...'
 TelegramService.js:657~659  담당자 안내
 → getMessageTemplate_('item_card.staff_1') 등
 ```
+
+> **메시지 키 전체 목록**: CONSULTING_알림자동화_메시지관리.md 3-3절 참조 (32개, notify.bid_d3 포함)
 
 작업:
 - 🔲 TelegramService.js 19개 메시지 교체
@@ -431,15 +469,16 @@ Day 1 (내일):
 
 Day 2:
   [4] PHASE 1-4,1-5: createData(), 텔레그램 이벤트 기록
-  [5] PHASE 3-1: settings 시트 생성
+  [5] PHASE 3-1: settings 시트 생성 (D-3 포함)
   [6] PHASE 2-1: autoExpireRecommended() 작성 + 트리거
 
 Day 3:
-  [7] PHASE 3-2: sendBidDateReminders() 작성 + 트리거
-  [8] PHASE 4: msg_templates 시트 + getMessageTemplate_()
+  [7] PHASE 3-2: sendBidDateReminders() 작성 + 트리거 (D-3/D-2/D-1)
+  [8] PHASE 3-3: 취소건 조회 UI
+  [9] PHASE 4: msg_templates 시트 + getMessageTemplate_()
 
 Day 4+:
-  [9] PHASE 5: 메시지 편집 UI
+  [10] PHASE 5: 메시지 편집 UI
 ```
 
 ---
@@ -456,3 +495,4 @@ Day 4+:
 ---
 
 *2026-03-03 작성 - 내일 개발 시작 전 이 문서와 CONSULTING 2개 문서 읽고 시작*
+*2026-03-04 업데이트 - trigger_type 5종 확정, REQUEST_CANCEL 분리(추천/입찰), D-3 알림 추가, 취소건 조회 UI(PHASE 3-3) 추가*

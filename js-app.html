@@ -4269,19 +4269,7 @@
         const modalRegMember = document.getElementById('modal-form-reg-member');
         if (modalRegMember) modalRegMember.value = data.reg_member || '';
 
-        const modalDisplayMemberId = document.getElementById('modal-display-member-id');
-        if (modalDisplayMemberId) {
-            if (data.member_id) {
-                let displayId = data.member_id;
-                if (displayId === 'b69b381b-0f36-429d-a110-876c5c2d7598') {
-                    displayId = '이정우';
-                }
-                const regDate = data.reg_date ? data.reg_date : '';
-                modalDisplayMemberId.textContent = `(${regDate}, ${displayId})`;
-            } else {
-                modalDisplayMemberId.textContent = '';
-            }
-        }
+        // modal-display-member-id는 위의 updateMemberTokenInfo('modal')에서 처리
 
         if (modalFormMNameId) modalFormMNameId.value = data.m_name_id || '대표님';
         const price = data.bidprice;
@@ -4952,7 +4940,7 @@ MJ 이정우 팀장
         }
     }
 
-    function loadDataAndRenderCalendar(forceRefresh = false) {
+    function loadDataAndRenderCalendar(forceRefresh = false, preserveScroll = false) {
         if (typeof google === 'undefined' || !google.script || !google.script.run) {
             showStatus('Google Apps Script 환경이 아닙니다.', 'error');
             return;
@@ -4969,7 +4957,17 @@ MJ 이정우 팀장
                 allBiddingData = data.sort(dataComparator);
                 dataCache = { data: allBiddingData, timestamp: Date.now() };
                 updateDashboardFilterOptions();
+                // 자동 새로고침 시 현재 스크롤 위치 저장
+                const _calWV = document.getElementById('calendar-week-view');
+                const _savedScroll = (preserveScroll && _calWV) ? _calWV.scrollTop : null;
                 renderCalendar();
+                // 저장된 스크롤 위치 복원 (renderCalendarWeek의 100ms setTimeout 이후에 실행)
+                if (_savedScroll !== null) {
+                    setTimeout(() => {
+                        const v = document.getElementById('calendar-week-view');
+                        if (v) v.scrollTop = _savedScroll;
+                    }, 150);
+                }
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
             })
             .withFailureHandler(error => {
@@ -5101,7 +5099,7 @@ MJ 이정우 팀장
         calendarPoller_ = setInterval(() => {
             const cal = document.getElementById('BiddingSchedule');
             if (!cal || cal.classList.contains('content-hidden')) return;
-            try { loadDataAndRenderCalendar(true); } catch (e) { } // 서버에서 최신 데이터 조용히 갱신
+            try { loadDataAndRenderCalendar(true, true); } catch (e) { } // 서버에서 최신 데이터 조용히 갱신 (스크롤 위치 유지)
         }, 15000); // 15초마다 자동 갱신
     }
 
@@ -5649,7 +5647,7 @@ MJ 이정우 팀장
         cbs.forEach(cb => { cb.checked = !!headerCheckbox.checked; });
     }
 
-    function handleItemCaptureListDownload() {
+    async function handleItemCaptureListDownload() {
         const cbs = dataTableBody ? dataTableBody.querySelectorAll('input.item-row-cb:checked') : [];
         const list = Array.from(cbs).map(cb => (cb.getAttribute('data-sakun-no') || cb.dataset.sakunNo || '').trim()).filter(Boolean);
         if (list.length === 0) {
@@ -5664,7 +5662,28 @@ MJ 이정우 팀장
         const min = String(now.getMinutes()).padStart(2, '0');
         const sec = String(now.getSeconds()).padStart(2, '0');
         const filename = '' + y + m + d + h + min + sec + '.txt';
-        const blob = new Blob([list.join('\n')], { type: 'text/plain;charset=utf-8' });
+        const content = list.join('\n');
+
+        // File System Access API: 저장 위치 선택 다이얼로그 (Chrome 86+)
+        if (window.showSaveFilePicker) {
+            try {
+                const fileHandle = await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{ description: '텍스트 파일', accept: { 'text/plain': ['.txt'] } }]
+                });
+                const writable = await fileHandle.createWritable();
+                await writable.write(content);
+                await writable.close();
+                if (typeof showStatusMessage === 'function') showStatusMessage('파일(' + fileHandle.name + ') 저장 완료. 건변등록.bat을 실행하세요.', 'success');
+                return;
+            } catch (err) {
+                if (err.name === 'AbortError') return; // 취소 시 아무것도 안 함
+                // 기타 오류 시 기존 방식으로 폴백
+            }
+        }
+
+        // 폴백: 브라우저 기본 다운로드 폴더에 저장
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = filename;
@@ -7645,8 +7664,8 @@ MJ 이정우 팀장
                 if (modalBadge) modalBadge.innerHTML = (telegramEnabled === 'Y') ? '<span class="telegram-badge">T</span>' : '';
             }
 
-            // display-member-id 스팬에 회원 부가정보 인라인 표시 (main 탭만)
-            if (targetType === 'main' && displayMemberId) {
+            // display-member-id 스팬에 회원 부가정보 인라인 표시 (main 탭, modal 공통)
+            if (displayMemberId) {
                 const parts = [];
                 if (member.member_id) parts.push(`ID: ${member.member_id}`);
                 if (member.phone) parts.push(member.phone);
@@ -7669,7 +7688,7 @@ MJ 이정우 팀장
         } else {
             // 회원을 찾지 못한 경우
             if (formMemberId) formMemberId.value = '';
-            if (targetType === 'main' && displayMemberId) displayMemberId.textContent = '';
+            if (displayMemberId) displayMemberId.textContent = '';
             // T 뱃지 초기화
             const badgeId = targetType === 'modal' ? 'modal-telegram-badge' : 'detail-telegram-badge';
             const badge = document.getElementById(badgeId);
