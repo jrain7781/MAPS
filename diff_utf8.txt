@@ -1,0 +1,30 @@
+﻿diff --git a/TelegramService.js b/TelegramService.js
+index ac106d8..1b9bd8b 100644
+--- a/TelegramService.js
++++ b/TelegramService.js
+@@ -231,10 +231,14 @@ function revertTelegramWebhookToDirect() {
+ }
+ 
+ function extractMemberTokenFromText_(text) {
+-  const s = String(text || '').trim();
++  let s = String(text || '').trim();
+   if (!s) return '';
++  
++  // 蹂댁씠吏 ?딅뒗 臾몄옄(Zero-width ?? 諛?紐⑤뱺 ?곗냽??怨듬갚 ?꾩쟾???쒓굅
++  s = s.replace(/[\s\u200B-\u200D\uFEFF]+/g, '');
++
+   // 1) "?몄쬆 <token>" ?뺥깭 吏??-  const m1 = s.match(/^(?:?몄쬆|auth)\s+([0-9a-f]{32,128})$/i);
++  const m1 = s.match(/^(?:?몄쬆|auth)([0-9a-f]{32,128})$/i);
+   if (m1 && m1[1]) return m1[1];
+   // 2) ?좏겙留??⑤룆?쇰줈 ??寃쎌슦 (湲곕낯 ?좏겙? 64 hex)
+   const m2 = s.match(/([0-9a-f]{64})/i);
+@@ -312,6 +316,9 @@ function handleTelegramWebhook_(update) {
+     // ?좏겙???꾨땶 ?쇰컲 硫붿떆吏: ?덈궡(?ㅽ뙵 諛⑹? ?꾪빐 理쒖냼 ?묐떟)
+     if (text && /^\/start/i.test(text)) {
+       telegramSendMessage(chatId, '?덈뀞?섏꽭?? MJMAPS 遊뉗엯?덈떎.\n愿由ъ옄?먭쾶 諛쏆? "?몄쬆 ?좏겙"????梨꾪똿??洹몃?濡?遺숈뿬?ｌ뼱 蹂대궡二쇱꽭??\n?? ?몄쬆 abcd... ?먮뒗 ?좏겙留??꾩넚');
++    } else if (text && text.length > 20) {
++      // 20???댁긽??湲??띿뒪?몄씤 寃쎌슦 ?좏겙???ㅽ????щ㎎ ?ㅻ쪟?쇨퀬 媛꾩＜
++      telegramSendMessage(chatId, '???좏겙 ?뺤떇???몄떇?????놁뒿?덈떎.\n以묎컙???꾩뼱?곌린???ㅽ?媛 ?녿뒗吏 ?뺤씤?섏떆怨??ㅼ떆 ?꾩넚?댁＜?몄슂.\n(?? ?욌뮘 怨듬갚 ?놁씠 ?좏겙留??꾩넚)');
+     }
+     return;
+   }
