@@ -558,10 +558,74 @@ function deleteItemImage(itemId, imageId) {
 }
 
 /**
- * 앱 시작 시 이미지 동기화 트리거를 자동으로 제거합니다.
+ * 앱 시작 시 수동으로 동기화 트리거를 세팅할 때 사용할 수 있습니다.
+ * (매일 오전 9시 30분에 syncImages 실행)
+ */
+function setupDailyImageSync() {
+  // 기존 트리거 모두 제거
+  removeImageSyncTriggers();
+
+  // 매일 09:30 경에 실행되는 시간 기반 트리거 생성 (GMT+9 기준)
+  ScriptApp.newTrigger('autoSyncImagesWrapper')
+    .timeBased()
+    .everyDays(1)
+    .atHour(9) // 09:00 ~ 10:00 사이에 실행되나, nearMinute로 조정 불가하므로 대략 09시경
+    .nearMinute(30)
+    .create();
+
+  Logger.log('매일 오전 09:30 자동 동기화 트리거 설정 완료');
+}
+
+/**
+ * 9:30 자동 동기화 트리거 설정 켜기/끄기
+ */
+function setAutoSyncSetting(enabled) {
+  removeImageSyncTriggers();
+  if (enabled) {
+    setupDailyImageSync();
+  } else {
+    Logger.log('매일 오전 09:30 자동 동기화 트리거 해제 완료');
+  }
+}
+
+/**
+ * 현재 자동 동기화 트리거가 설정되어 있는지 여부 조회
+ */
+function getAutoSyncSetting() {
+  const triggers = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'autoSyncImagesWrapper') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 주말 필터링 로직이 추가된 스케줄러 전용 래퍼 함수
+ */
+function autoSyncImagesWrapper() {
+  const today = new Date();
+  const day = today.getDay(); // 0(일) ~ 6(토)
+
+  if (day === 0 || day === 6) {
+    Logger.log('주말(토/일)이므로 동기화를 건너뜁니다.');
+    return;
+  }
+
+  // 평일이면 동기화 실행
+  Logger.log('자동 스케줄러에 의한 이미지 동기화 시작');
+  syncImages();
+}
+
+/**
+ * 앱 시작 시 기존 트리거를 모두 지우는 로직 유지 (안전장치)
+ * 단, 자동화를 원한다면 여기서 setupDailyImageSync()를 호출해도 됨.
+ * 여기서는 사용자가 수동 설정할 수 있도록 놔둡니다.
  */
 function onOpen() {
-  removeImageSyncTriggers();
+  // 자동화가 필요하면 setupDailyImageSync()를 주석 해제하여 사용
+  // setupDailyImageSync();
 }
 
 function syncImages(batchLimit = 100) {

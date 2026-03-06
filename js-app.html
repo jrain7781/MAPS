@@ -650,6 +650,7 @@
         // [PHASE 5-3] 환경설정 탭 이동 시 알림 설정 자동 로드
         if (tabId === 'Preferences') {
             try { loadNotifySettings(); } catch (e) { }
+            try { loadAutoSyncSetting(); } catch (e) { }
         }
 
         // 회원 대시보드 탭 이동 시 렌더링
@@ -7246,6 +7247,65 @@ MJ 이정우 팀장
     // ─── [PHASE 5-3] 알림 설정 로드/저장 ────────────────────────────────────────
     const NOTIFY_KEYS = ['BID_NOTIFY_ENABLED', 'BID_NOTIFY_D3', 'BID_NOTIFY_D2', 'BID_NOTIFY_D1',
         'BID_NOTIFY_HOUR', 'EXPIRY_NOTIFY_24H', 'EXPIRY_NOTIFY_1H', 'EXPIRY_NOTIFY_DONE'];
+
+    // --- 환경설정: 매일 자동 이미지 동기화 토글 ---
+    function loadAutoSyncSetting() {
+        google.script.run
+            .withSuccessHandler(function (enabled) {
+                const toggle = document.getElementById('auto-sync-toggle');
+                const label = document.getElementById('auto-sync-label');
+                const track = document.getElementById('auto-sync-track');
+                const thumb = document.getElementById('auto-sync-thumb');
+                if (toggle) toggle.checked = enabled;
+                updateAutoSyncToggleUI(enabled, label, track, thumb);
+            })
+            .withFailureHandler(function (e) {
+                console.error('자동 동기화 설정 로드 실패:', e);
+            })
+            .getAutoSyncSetting();
+    }
+
+    function onAutoSyncToggleChange(el) {
+        const enabled = el.checked;
+        const label = document.getElementById('auto-sync-label');
+        const track = document.getElementById('auto-sync-track');
+        const thumb = document.getElementById('auto-sync-thumb');
+
+        // UI 즉시 반영 (낙관적 UI 업데이트)
+        updateAutoSyncToggleUI(enabled, label, track, thumb);
+        if (label) label.textContent = "저장 중...";
+
+        google.script.run
+            .withSuccessHandler(function () {
+                updateAutoSyncToggleUI(enabled, label, track, thumb);
+                showStatus('자동 동기화 설정이 저장되었습니다.', 'success');
+            })
+            .withFailureHandler(function (e) {
+                console.error("오류:", e);
+                // 실패 시 원래 상태로 복구
+                el.checked = !enabled;
+                updateAutoSyncToggleUI(!enabled, label, track, thumb);
+                showStatus('저장에 실패했습니다: ' + e.message, 'error');
+            })
+            .setAutoSyncSetting(enabled);
+    }
+
+    function updateAutoSyncToggleUI(enabled, label, track, thumb) {
+        if (!label || !track || !thumb) return;
+        if (enabled) {
+            track.classList.replace('bg-gray-300', 'bg-indigo-500');
+            thumb.classList.add('translate-x-5');
+            label.textContent = 'ON';
+            label.classList.replace('bg-gray-200', 'bg-indigo-100');
+            label.classList.replace('text-gray-500', 'text-indigo-700');
+        } else {
+            track.classList.replace('bg-indigo-500', 'bg-gray-300');
+            thumb.classList.remove('translate-x-5');
+            label.textContent = 'OFF';
+            label.classList.replace('bg-indigo-100', 'bg-gray-200');
+            label.classList.replace('text-indigo-700', 'text-gray-500');
+        }
+    }
 
     function loadNotifySettings() {
         const statusEl = document.getElementById('notifySettingsStatus');
