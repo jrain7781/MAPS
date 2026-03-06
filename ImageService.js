@@ -602,19 +602,11 @@ function getAutoSyncSetting() {
 }
 
 /**
- * 주말 필터링 로직이 추가된 스케줄러 전용 래퍼 함수
+ * 매일 동기화 실행 (스케줄러 전용 래퍼 함수)
+ * - 기존 주말/공휴일 스킵 로직은 제거됨 (매일 실행)
  */
 function autoSyncImagesWrapper() {
-  const today = new Date();
-  const day = today.getDay(); // 0(일) ~ 6(토)
-
-  if (day === 0 || day === 6) {
-    Logger.log('주말(토/일)이므로 동기화를 건너뜁니다.');
-    return;
-  }
-
-  // 평일이면 동기화 실행
-  Logger.log('자동 스케줄러에 의한 이미지 동기화 시작');
+  Logger.log('자동 스케줄러에 의한 이미지 동기화 시작 (매일 작동)');
   syncImages();
 }
 
