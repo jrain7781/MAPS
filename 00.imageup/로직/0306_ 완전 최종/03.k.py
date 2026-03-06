@@ -372,7 +372,7 @@ def process_list_page_capture_all(driver, save_dir, type_prefix, suffix="", mana
             # 등록일 파싱
             reg_date = extract_reg_date(header_text)
 
-            # 날짜 추출 (스킵 로직 삭제)
+            # 날짜 추출 + 입찰일 스킵 체크
             if type_prefix == "경매":
                 bid_date_str, bid_date_obj = extract_date_from_dom(driver, item)
                 if bid_date_str == "000000":
@@ -380,6 +380,9 @@ def process_list_page_capture_all(driver, save_dir, type_prefix, suffix="", mana
             else:
                 # 공매는 입찰일자 로직 절대 건드리지 말 것 (지시사항)
                 bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
+            if bid_date_obj and bid_date_obj <= datetime.date.today():
+                print(f"    ⏭ 입찰일 {bid_date_obj} <= 오늘, 스킵")
+                continue
 
             court_name = "공매" if type_prefix == "공매" else get_court_from_text(full_text)
 

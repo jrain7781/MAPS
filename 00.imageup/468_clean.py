@@ -1,4 +1,4 @@
-print("📢 MJ경매 최종 완결 (법원명수정 + 공매강제 + 괄호인식 + 합체캡처)...")
+﻿print("?뱼 MJ寃쎈ℓ 理쒖쥌 ?꾧껐 (踰뺤썝紐낆닔??+ 怨듬ℓ媛뺤젣 + 愿꾪샇?몄떇 + ?⑹껜罹≪쿂)...")
 
 import base64
 import time
@@ -15,19 +15,19 @@ from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 
 # ==============================================================================
-# [설정] 계정 및 경로
+# [?ㅼ젙] 怨꾩젙 諛?寃쎈줈
 # ==============================================================================
 ACCOUNTS = [
-    {"id": "mjgold",   "pw": "28471296",    "manager": "대표님"},
-    {"id": "mjjang1",  "pw": "28471298",    "manager": "대표님"},
-#    {"id": "jjhsm81",  "pw": "marlboro81!!", "manager": "전제혁"}
+    {"id": "mjgold",   "pw": "28471296",    "manager": "??쒕떂"},
+    {"id": "mjjang1",  "pw": "28471298",    "manager": "??쒕떂"},
+#    {"id": "jjhsm81",  "pw": "marlboro81!!", "manager": "?꾩젣??}
 ]
 
-# 저장 경로: 구글 드라이브 (웹 등록과 동일하게 유지)
-BASE_SAVE_DIR = r"G:\내 드라이브\MAPS\mapsimage"
+# ???寃쎈줈: 援ш? ?쒕씪?대툕 (???깅줉怨??숈씪?섍쾶 ?좎?)
+BASE_SAVE_DIR = r"G:\???쒕씪?대툕\MAPS\mapsimage"
 
 # ==============================================================================
-# [설정] 법원 관할 매칭 (재미나이 정리 스크립트 기반 - court_jurisdiction 모듈 사용)
+# [?ㅼ젙] 踰뺤썝 愿??留ㅼ묶 (?щ??섏씠 ?뺣━ ?ㅽ겕由쏀듃 湲곕컲 - court_jurisdiction 紐⑤뱢 ?ъ슜)
 # ==============================================================================
 from court_jurisdiction import get_court_from_text
 
@@ -38,17 +38,16 @@ SELECTOR_LOGIN_BTN = "//div[@id='login_btn_area']//a | //input[@type='image' and
 SELECTOR_RADIO_GONGMAE = '//*[@id="itype2"]'
 SELECTOR_SEARCH_BTN = '//*[@id="btnSrch"]'
 
-SKIP_KEYWORDS = ["나의 분류관리", "엑셀저장", "매각기일 변경공지", "정렬/보기", "검색"]
+SKIP_KEYWORDS = ["?섏쓽 遺꾨쪟愿由?, "?묒????, "留ㅺ컖湲곗씪 蹂寃쎄났吏", "?뺣젹/蹂닿린", "寃??]
 
 # ==============================================================================
-# [함수 2] 팝업 제거
+# [?⑥닔 2] ?앹뾽 ?쒓굅
 # ==============================================================================
 def remove_popups_css(driver):
     try:
         driver.execute_script("""
             var styles = `
-                #inter_popup, .layer, .popup, div[id^='layer'], div[class*='popup'], #div_pop_back,
-                #header_wrap, .gnb_wrap, #header, .top_menu, #quick_menu { 
+                #inter_popup, .layer, .popup, div[id^='layer'], div[class*='popup'], #div_pop_back { 
                     display: none !important; 
                     visibility: hidden !important; 
                     opacity: 0 !important;
@@ -65,11 +64,11 @@ def remove_popups_css(driver):
         pass
 
 # ==============================================================================
-# [함수 2-1] 정렬/개수 선택 후 검색 (캡처 직전)
+# [?⑥닔 2-1] ?뺣젹/媛쒖닔 ?좏깮 ??寃??(罹≪쿂 吏곸쟾)
 # ==============================================================================
 def wait_for_ajax(driver, timeout=15):
-    """AJAX 완료 대기 - jQuery 여부 무관, 최소 3초 보장"""
-    time.sleep(0.5)  # AJAX 시작 보장
+    """AJAX ?꾨즺 ?湲?- jQuery ?щ? 臾닿?, 理쒖냼 3珥?蹂댁옣"""
+    time.sleep(0.5)  # AJAX ?쒖옉 蹂댁옣
     _start = time.time()
     try:
         WebDriverWait(driver, timeout).until(
@@ -79,29 +78,29 @@ def wait_for_ajax(driver, timeout=15):
         )
     except:
         pass
-    # 비 jQuery AJAX 대비: 총 3초 보장 (0.5s 초기 + 최소 2.5s 추가)
+    # 鍮?jQuery AJAX ?鍮? 珥?3珥?蹂댁옣 (0.5s 珥덇린 + 理쒖냼 2.5s 異붽?)
     _elapsed = time.time() - _start
     if _elapsed < 2.5:
         time.sleep(2.5 - _elapsed)
 
 def apply_list_options_and_search(driver):
-    """정렬: 등록일↓(#order_type=idx desc), 개수: 20(#list_scale=20), 검색(#btnSrch) 클릭"""
-    # order_type: 등록일↓ 옵션을 텍스트로 찾아서 설정 (value가 경매/공매마다 다름)
+    """?뺣젹: ?깅줉?쇄넃(#order_type=idx desc), 媛쒖닔: 20(#list_scale=20), 寃??#btnSrch) ?대┃"""
+    # order_type: ?깅줉?쇄넃 ?듭뀡???띿뒪?몃줈 李얠븘???ㅼ젙 (value媛 寃쎈ℓ/怨듬ℓ留덈떎 ?ㅻ쫫)
     try:
         r = driver.execute_script("""
             var s = document.getElementById('order_type');
-            if(!s) return '없음';
-            var opt = Array.from(s.options).find(o => o.text.includes('등록일') && o.text.includes('↓'));
-            if(!opt) return '옵션없음';
+            if(!s) return '?놁쓬';
+            var opt = Array.from(s.options).find(o => o.text.includes('?깅줉??) && o.text.includes('??));
+            if(!opt) return '?듭뀡?놁쓬';
             s.value = opt.value;
             s.dispatchEvent(new Event('change', {bubbles:true}));
             return s.value;
         """)
-        print(f"    ✓ 정렬(order_type) 설정: {r}")
+        print(f"    ???뺣젹(order_type) ?ㅼ젙: {r}")
         time.sleep(0.3)
     except:
         pass
-    # list_scale: JS 직접 설정
+    # list_scale: JS 吏곸젒 ?ㅼ젙
     try:
         driver.execute_script("""
             var s = document.getElementById('list_scale');
@@ -110,44 +109,23 @@ def apply_list_options_and_search(driver):
         time.sleep(0.3)
     except:
         pass
-    # btnSrch: JS 강제 클릭
+    # btnSrch: JS 媛뺤젣 ?대┃
     try:
         btn = WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "btnSrch")))
         driver.execute_script("arguments[0].click();", btn)
         time.sleep(2)
     except Exception as e:
-        print(f"  ⚠ 검색 버튼 클릭 실패: {e}")
+        print(f"  ??寃??踰꾪듉 ?대┃ ?ㅽ뙣: {e}")
 
 # ==============================================================================
-# [함수 3] [핵심] 헤더+테이블 합체 캡처
+# [?⑥닔 3] [?듭떖] ?ㅻ뜑+?뚯씠釉??⑹껜 罹≪쿂
 # ==============================================================================
 def capture_combined_element(driver, header_element, table_element, file_path):
     try:
-        # [추가 보완] 검색메뉴, 네비게이션바 등 화면을 가리는 고정 요소(fixed/sticky)를 캡처 직전에 다시 한번 완벽하게 숨김
-        driver.execute_script("""
-            try {
-                var all = document.querySelectorAll('*');
-                for(var i=0; i<all.length; i++) {
-                    var el = all[i];
-                    var pos = window.getComputedStyle(el).position;
-                    if((pos === 'fixed' || pos === 'sticky') && (!el.id || el.id.indexOf('tr_') !== 0)) {
-                        el.style.setProperty('display', 'none', 'important');
-                    }
-                }
-                var selectors = ['#header', '#header_wrap', '.gnb_wrap', '.top_menu', '#quick_menu', '#top_bg'];
-                selectors.forEach(function(sel) {
-                    var els = document.querySelectorAll(sel);
-                    els.forEach(function(e) { e.style.setProperty('display', 'none', 'important'); });
-                });
-            } catch(e) {}
-        """)
-        time.sleep(0.3)
-
-        # 1. 헤더 위치로 스크롤
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", header_element)
+        # 1. ?ㅻ뜑 ?꾩튂濡??ㅽ겕濡?        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", header_element)
         time.sleep(0.2)
 
-        # 2. 좌표 계산
+        # 2. 醫뚰몴 怨꾩궛
         rect_h = driver.execute_script("return arguments[0].getBoundingClientRect();", header_element)
         rect_t = driver.execute_script("return arguments[0].getBoundingClientRect();", table_element)
         scroll_x = driver.execute_script("return window.pageXOffset;")
@@ -156,16 +134,16 @@ def capture_combined_element(driver, header_element, table_element, file_path):
         x = rect_t['left'] + scroll_x
         y = rect_h['top'] + scroll_y
         width = rect_t['width']
-        # 높이 = (테이블 바닥) - (헤더 천장)
+        # ?믪씠 = (?뚯씠釉?諛붾떏) - (?ㅻ뜑 泥쒖옣)
         height = (rect_t['top'] + rect_t['height']) - rect_h['top']
 
         if width <= 0 or height <= 0:
-            print(f"      ⚠ 캡처 실패: 크기 이상 (width={width:.1f}, height={height:.1f})")
+            print(f"      ??罹≪쿂 ?ㅽ뙣: ?ш린 ?댁긽 (width={width:.1f}, height={height:.1f})")
             return False
 
-        # 3. 캡처 (scale=2로 고해상도 유지)
+        # 3. 罹≪쿂
         screenshot_base64 = driver.execute_cdp_cmd("Page.captureScreenshot", {
-            "clip": { "x": x, "y": y, "width": width, "height": height, "scale": 2 },
+            "clip": { "x": x, "y": y, "width": width, "height": height, "scale": 1 },
             "captureBeyondViewport": True, "format": "png"
         })
 
@@ -177,14 +155,14 @@ def capture_combined_element(driver, header_element, table_element, file_path):
             f.write(base64.b64decode(screenshot_base64['data']))
         return True
     except Exception as e:
-        print(f"      ⚠ 캡처 오류: {type(e).__name__}: {e}")
+        print(f"      ??罹≪쿂 ?ㅻ쪟: {type(e).__name__}: {e}")
         return False
 
 # ==============================================================================
-# [함수 4] 날짜 추출 로직 (헤더 텍스트 기반)
+# [?⑥닔 4] ?좎쭨 異붿텧 濡쒖쭅 (?ㅻ뜑 ?띿뒪??湲곕컲)
 # ==============================================================================
 def extract_reg_date(header_text):
-    """헤더에서 등록일(YY.MM.DD) 파싱 → datetime.date 반환"""
+    """?ㅻ뜑?먯꽌 ?깅줉??YY.MM.DD) ?뚯떛 ??datetime.date 諛섑솚"""
     m = re.search(r"(\d{2})\.(\d{2})\.(\d{2})", header_text)
     if m:
         yy, mm, dd = m.groups()
@@ -195,15 +173,15 @@ def extract_reg_date(header_text):
     return None
 
 def extract_smart_date(header_text, type_prefix, reg_date=None):
-    """날짜 추출 → (파일명용 문자열 YYMMDD, datetime.date or None) 반환"""
+    """?좎쭨 異붿텧 ??(?뚯씪紐낆슜 臾몄옄??YYMMDD, datetime.date or None) 諛섑솚"""
     today_year = datetime.datetime.now().year
 
-    # [공매 전용] "02.23 14:00~02.25 17:00" → ~ 뒤 종료일 사용
-    if type_prefix == "공매":
+    # [怨듬ℓ ?꾩슜] "02.23 14:00~02.25 17:00" ??~ ??醫낅즺???ъ슜
+    if type_prefix == "怨듬ℓ":
         end_match = re.search(r"~\s*(\d{1,2})[\./](\d{1,2})", header_text)
         if end_match:
             em, ed = int(end_match.group(1)), int(end_match.group(2))
-            # 년도 확정: 등록일 월 > 입찰 종료월이면 다음 연도
+            # ?꾨룄 ?뺤젙: ?깅줉????> ?낆같 醫낅즺?붿씠硫??ㅼ쓬 ?곕룄
             if reg_date:
                 year = (reg_date.year + 1) if reg_date.month > em else reg_date.year
             else:
@@ -213,13 +191,13 @@ def extract_smart_date(header_text, type_prefix, reg_date=None):
                 return f"{str(year)[2:]}{str(em).zfill(2)}{str(ed).zfill(2)}", bid_date
             except:
                 pass
-        # fallback: 첫 번째 시간 패턴
+        # fallback: 泥?踰덉㎏ ?쒓컙 ?⑦꽩
         gm = re.search(r"(\d{1,2})[\./](\d{1,2})\s+\d{1,2}:\d{1,2}", header_text)
         if gm:
             month, day = gm.group(1), gm.group(2)
             return f"{str(today_year)[2:]}{month.zfill(2)}{day.zfill(2)}", None
 
-    # [경매 전용] "2026-02-26" 또는 "2025.02.14" 형태
+    # [寃쎈ℓ ?꾩슜] "2026-02-26" ?먮뒗 "2025.02.14" ?뺥깭
     k_auction_pattern = re.search(r"(20\d{2})[\.-](\d{1,2})[\.-](\d{1,2})", header_text)
     if k_auction_pattern:
         year, month, day = k_auction_pattern.groups()
@@ -232,8 +210,8 @@ def extract_smart_date(header_text, type_prefix, reg_date=None):
     return "000000", None
 
 def extract_sakun_from_dom(driver, container):
-    """사건번호/관리번호 추출 (경매/공매 공통)
-    위치: table.tbl_grid.hand tbody tr:nth-child(1) td:nth-child(2)
+    """?ш굔踰덊샇/愿由щ쾲??異붿텧 (寃쎈ℓ/怨듬ℓ 怨듯넻)
+    ?꾩튂: table.tbl_grid.hand tbody tr:nth-child(1) td:nth-child(2)
     """
     try:
         td = container.find_element(By.CSS_SELECTOR, "table.tbl_grid.hand tbody tr:nth-child(1) td:nth-child(2)")
@@ -243,13 +221,13 @@ def extract_sakun_from_dom(driver, container):
 
 
 def extract_date_from_dom(driver, container):
-    """경매 전용: table.tbl_noline 6번째 td에서 입찰일자 추출
-    위치: table.tbl_noline tbody tr td:nth-child(6)
-    예: '2026-03-04(경매1일전)' → ('260304', datetime.date(2026, 3, 4))
+    """寃쎈ℓ ?꾩슜: table.tbl_noline 6踰덉㎏ td?먯꽌 ?낆같?쇱옄 異붿텧
+    ?꾩튂: table.tbl_noline tbody tr td:nth-child(6)
+    ?? '2026-03-04(寃쎈ℓ1?쇱쟾)' ??('260304', datetime.date(2026, 3, 4))
     """
     try:
         td = container.find_element(By.CSS_SELECTOR, "table.tbl_noline tbody tr td:nth-child(6)")
-        td_text = td.text.strip()          # "2026-03-04(경매1일전)"
+        td_text = td.text.strip()          # "2026-03-04(寃쎈ℓ1?쇱쟾)"
         date_part = td_text.split("(")[0].strip()  # "2026-03-04"
         m = re.match(r"(20\d{2})-(\d{1,2})-(\d{1,2})", date_part)
         if m:
@@ -261,10 +239,10 @@ def extract_date_from_dom(driver, container):
     return "000000", None
 
 # ==============================================================================
-# [함수 5] 리스트 처리
+# [?⑥닔 5] 由ъ뒪??泥섎━
 # ==============================================================================
 def process_list_page(driver, save_dir, type_prefix, manager=""):
-    print(f"\n  ▶ [{type_prefix}] 리스트 분석 시작...")
+    print(f"\n  ??[{type_prefix}] 由ъ뒪??遺꾩꽍 ?쒖옉...")
     remove_popups_css(driver)
     
     try:
@@ -286,13 +264,18 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                     if k in text: is_skip = True; break
                 if is_skip: continue
 
-                # [필터] 사건번호 또는 관리번호 (공매 포함)
-                if ("사건번호" in text or "관리번호" in text) and "감정가" in text:
+                # [?꾪꽣] ?ш굔踰덊샇 ?먮뒗 愿由щ쾲??(怨듬ℓ ?ы븿)
+                if ("?ш굔踰덊샇" in text or "愿由щ쾲?? in text) and "媛먯젙媛" in text:
+                    # [紐⑤뱶 援먯감 寃利? ?섏씠??媛쒖닔 湲곗?: 寃쎈ℓ=1媛? 怨듬ℓ=2媛?                    _cn = re.search(r"20\d{2}-[\d-]+", text)
+                    if _cn:
+                        _dash = _cn.group().count("-")
+                        if type_prefix == "寃쎈ℓ" and _dash >= 2: continue
+                        if type_prefix == "怨듬ℓ" and _dash < 2: continue
                     candidates.append(item)
         except: continue
     
     if not candidates:
-        print(f"    - [{type_prefix}] 처리할 물건이 없습니다.")
+        print(f"    - [{type_prefix}] 泥섎━??臾쇨굔???놁뒿?덈떎.")
         return
 
     count = 0
@@ -302,28 +285,27 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
         try:
             full_text = item.text
             
-            # 1. 메모 체크
+            # 1. 硫붾え 泥댄겕
             has_memo = False
-            if "메모" in full_text:
+            if "硫붾え" in full_text:
                 for line in full_text.split('\n'):
-                    if "메모" in line:
-                        clean = line.replace("메모", "").replace(":", "").strip()
+                    if "硫붾え" in line:
+                        clean = line.replace("硫붾え", "").replace(":", "").strip()
                         if len(clean) > 0: has_memo = True; break
             
             if not has_memo:
                 skipped_count += 1
                 continue
 
-            # 2. 헤더 찾기 (형제 요소 중 가장 가까운 헤더)
+            # 2. ?ㅻ뜑 李얘린 (?뺤젣 ?붿냼)
             try:
-                header_element = item.find_element(By.XPATH, "preceding-sibling::*[not(starts-with(@id, 'tr_'))][1]")
+                header_element = item.find_element(By.XPATH, "preceding-sibling::*[1]")
                 header_text = header_element.text + " " + full_text.split('\n')[0]
             except:
                 header_text = full_text.split('\n')[0]
                 header_element = item 
 
-            # 3. 사건번호 추출 + 하이픈 개수 검증
-            # DOM에서 사건번호 추출 시도
+            # 3. ?ш굔踰덊샇 異붿텧 + ?섏씠??媛쒖닔 寃利?            # DOM?먯꽌 ?ш굔踰덊샇 異붿텧 ?쒕룄
             dom_sakun = extract_sakun_from_dom(driver, item)
             if dom_sakun:
                 raw_sakun = dom_sakun
@@ -331,42 +313,48 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                 pattern = r"20\d{2}-\d+[\d-]*(?:\(\d+\))?"
                 match = re.search(pattern, full_text)
                 if not match: match = re.search(pattern, header_text)
-                raw_sakun = match.group() if match else f"번호미상{i}"
+                raw_sakun = match.group() if match else f"踰덊샇誘몄긽{i}"
             
             dash_count = raw_sakun.count("-")
 
-            if type_prefix == "경매":
-                sakun_no = raw_sakun.replace("-", "타경")  # 2025-1234 → 2025타경1234
-            else:  # 공매
-                sakun_no = raw_sakun.split()[0] if " " in raw_sakun else raw_sakun
-
-            # 4. 등록일 파싱
-            reg_date = extract_reg_date(header_text)
-
-            # 5. 날짜 추출 + 입찰일 스킵 체크
-            if type_prefix == "경매":
-                bid_date_str, bid_date_obj = extract_date_from_dom(driver, item)
-                if bid_date_str == "000000":
-                    print(f"    ❌ [{i+1}] 경매 입찰일자 추출 실패 (DOM 추출 강제: td:nth-child(6))")
+            if type_prefix == "寃쎈ℓ":
+                if dash_count >= 2:
+                    print(f"    ??寃쎈ℓ ?ш굔踰덊샇 ?섏씠??2媛??댁긽 ???ㅽ궢: {raw_sakun}")
                     skipped_count += 1
                     continue
+                sakun_no = raw_sakun.replace("-", "?寃?)  # 2025-1234 ??2025?寃?234
+            else:  # 怨듬ℓ
+                if dash_count < 2:
+                    print(f"    ??怨듬ℓ ?ш굔踰덊샇 ?섏씠??1媛??댄븯 ???ㅽ궢: {raw_sakun}")
+                    skipped_count += 1
+                    continue
+                sakun_no = raw_sakun.split()[0] if " " in raw_sakun else raw_sakun
+
+            # 4. ?깅줉???뚯떛
+            reg_date = extract_reg_date(header_text)
+
+            # 5. ?좎쭨 異붿텧 + ?낆같???ㅽ궢 泥댄겕
+            if type_prefix == "寃쎈ℓ":
+                bid_date_str, bid_date_obj = extract_date_from_dom(driver, item)
+                if bid_date_str == "000000":
+                    bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
             else:
-                # 공매는 입찰일자 로직 절대 건드리지 말 것 (지시사항)
+                # 怨듬ℓ???낆같?쇱옄 濡쒖쭅 ?덈? 嫄대뱶由ъ? 留?寃?(吏?쒖궗??
                 bid_date_str, bid_date_obj = extract_smart_date(header_text, type_prefix, reg_date)
             if bid_date_obj and bid_date_obj <= datetime.date.today():
-                print(f"    ⏭ 입찰일 {bid_date_obj} <= 오늘, 스킵")
+                print(f"    ???낆같??{bid_date_obj} <= ?ㅻ뒛, ?ㅽ궢")
                 skipped_count += 1
                 continue
 
-            # 6. 법원명 추출
-            court_name = "공매" if type_prefix == "공매" else get_court_from_text(full_text)
+            # 6. 踰뺤썝紐?異붿텧
+            court_name = "怨듬ℓ" if type_prefix == "怨듬ℓ" else get_court_from_text(full_text)
 
-            # 6-1. 옥션 product_id 추출 (이미지 src 패턴: 경매=Thumnail/m/.../m{ID}_, 공매=PubAuct/...//{ID}_)
+            # 6-1. ?μ뀡 product_id 異붿텧 (?대?吏 src ?⑦꽩: 寃쎈ℓ=Thumnail/m/.../m{ID}_, 怨듬ℓ=PubAuct/...//{ID}_)
             product_id = ""
             try:
                 product_id = driver.execute_script("""
                     var tbl = arguments[0], hdr = arguments[1];
-                    // 1. 이미지 src/onerror에서 추출
+                    // 1. ?대?吏 src/onerror?먯꽌 異붿텧
                     var imgs = tbl.querySelectorAll('img');
                     for(var i=0; i<imgs.length; i++){
                         var src = imgs[i].getAttribute('src') || '';
@@ -376,7 +364,7 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                         var m2 = oe.match(/Thumnail\/m\/\d+\/m(\d+)_/) || oe.match(/PubAuct\/\d+\/\d+\/(\d+)_/);
                         if(m2) return m2[1];
                     }
-                    // 2. href/onclick fallback (테이블→헤더)
+                    // 2. href/onclick fallback (?뚯씠釉붴넂?ㅻ뜑)
                     var sources = [tbl, hdr];
                     for(var s=0; s<sources.length; s++){
                         var link = sources[s].querySelector('a[href*="product_id="]');
@@ -387,7 +375,7 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                             if(m) return m[1];
                         }
                     }
-                    // 3. 부모 방향 속성 탐색
+                    // 3. 遺紐?諛⑺뼢 ?띿꽦 ?먯깋
                     var el = tbl.parentElement;
                     for(var i=0; i<10; i++){
                         if(!el || el===document.body) break;
@@ -402,9 +390,9 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                 """, item, header_element) or ""
             except:
                 pass
-            print(f"    🔍 product_id: {product_id or '미추출'}")
+            print(f"    ?뵇 product_id: {product_id or '誘몄텛異?}")
 
-            # 7. 저장 (합체 캡처)
+            # 7. ???(?⑹껜 罹≪쿂)
             safe_sakun = re.sub(r'[\\/*?:"<>|]', "", sakun_no)
             safe_court = re.sub(r'[\\/*?:"<>|]', "", court_name)
             pid_suffix = f"_{product_id}" if product_id else ""
@@ -412,19 +400,19 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
             file_path = os.path.join(save_dir, filename)
 
             if capture_combined_element(driver, header_element, item, file_path):
-                print(f"    - ({i+1}) 📸 저장: {filename}")
+                print(f"    - ({i+1}) ?벝 ??? {filename}")
                 count += 1
             else:
-                print(f"    - ({i+1}) ❌ 캡처 실패")
+                print(f"    - ({i+1}) ??罹≪쿂 ?ㅽ뙣")
             
         except Exception as e:
-            print(f"    ⚠ 물건 처리 오류 ({i+1}번째): {type(e).__name__}: {e}")
+            print(f"    ??臾쇨굔 泥섎━ ?ㅻ쪟 ({i+1}踰덉㎏): {type(e).__name__}: {e}")
             continue
 
-    print(f"  ✅ [{type_prefix}] {count}건 저장 완료 (메모없음 제외: {skipped_count}건)")
+    print(f"  ??[{type_prefix}] {count}嫄?????꾨즺 (硫붾え?놁쓬 ?쒖쇅: {skipped_count}嫄?")
 
 # ==============================================================================
-# 메인 실행부 (안정 로그인 + 공매 강제진입)
+# 硫붿씤 ?ㅽ뻾遺 (?덉젙 濡쒓렇??+ 怨듬ℓ 媛뺤젣吏꾩엯)
 # ==============================================================================
 def run_macro(account):
     user_id = account['id']
@@ -433,19 +421,19 @@ def run_macro(account):
     save_dir = BASE_SAVE_DIR
     os.makedirs(save_dir, exist_ok=True)
 
-    print(f"\n🚀 계정 [{user_id}] 작업 시작")
-    print(f"📂 저장 경로: {save_dir}")
+    print(f"\n?? 怨꾩젙 [{user_id}] ?묒뾽 ?쒖옉")
+    print(f"?뱛 ???寃쎈줈: {save_dir}")
 
     options = webdriver.ChromeOptions()
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("--force-device-scale-factor=2")
     options.add_experimental_option("detach", True)
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     wait = WebDriverWait(driver, 15)
 
     try:
-        # 로그인
-        driver.get("https://www.auction1.co.kr/common/login_box.php")
+        # 濡쒓렇??        driver.get("https://www.auction1.co.kr/common/login_box.php")
         remove_popups_css(driver)
         wait.until(EC.presence_of_element_located((By.ID, SELECTOR_ID)))
         
@@ -465,37 +453,36 @@ def run_macro(account):
         
         time.sleep(2)
 
-        # 경매 (관심물건 진입 → 팝업 제거 → 정렬/개수/검색 → 캡처)
+        # 寃쎈ℓ (愿?щЪ嫄?吏꾩엯 ???앹뾽 ?쒓굅 ???뺣젹/媛쒖닔/寃????罹≪쿂)
         driver.get("https://www.auction1.co.kr/member/inter_list.php")
         remove_popups_css(driver)
         time.sleep(1)
         apply_list_options_and_search(driver)
-        process_list_page(driver, save_dir, "경매", manager)
+        process_list_page(driver, save_dir, "寃쎈ℓ", manager)
 
-        # [수정] 공매 강제 진입 (에러 무시하지 않고 돌파)
+        # [?섏젙] 怨듬ℓ 媛뺤젣 吏꾩엯 (?먮윭 臾댁떆?섏? ?딄퀬 ?뚰뙆)
         try:
-            print("  ▶ [공매] 페이지 전환 시도...")
-            # 1. 라디오 버튼 강제 클릭
+            print("  ??[怨듬ℓ] ?섏씠吏 ?꾪솚 ?쒕룄...")
+            # 1. ?쇰뵒??踰꾪듉 媛뺤젣 ?대┃
             driver.execute_script("if(document.querySelector('#itype2')) document.querySelector('#itype2').click();")
-            wait_for_ajax(driver)  # 공매 전환 AJAX 완료까지 대기 (조회 끝났는지 확인)
+            wait_for_ajax(driver)  # 怨듬ℓ ?꾪솚 AJAX ?꾨즺源뚯? ?湲?(議고쉶 ?앸궗?붿? ?뺤씤)
             remove_popups_css(driver)
-            # 2. 정렬(등록일↓) / 개수(20) / 검색
-            apply_list_options_and_search(driver)
-            # 3. 분석 시작
-            process_list_page(driver, save_dir, "공매", manager)
+            # 2. ?뺣젹(?깅줉?쇄넃) / 媛쒖닔(20) / 寃??            apply_list_options_and_search(driver)
+            # 3. 遺꾩꽍 ?쒖옉
+            process_list_page(driver, save_dir, "怨듬ℓ", manager)
             
         except Exception as e:
-            print(f"  ❌ 공매 진입 중 오류: {e}")
+            print(f"  ??怨듬ℓ 吏꾩엯 以??ㅻ쪟: {e}")
 
     except Exception as e:
-        print(f"\n❌ 오류 발생:")
+        print(f"\n???ㅻ쪟 諛쒖깮:")
         traceback.print_exc() 
     finally:
-        print(f"👋 [{user_id}] 종료")
+        print(f"?몝 [{user_id}] 醫낅즺")
         driver.quit()
 
 if __name__ == "__main__":
     for acc in ACCOUNTS:
         run_macro(acc)
         time.sleep(3)
-    print("\n🎉 모든 작업 완료!")
+    print("\n?럦 紐⑤뱺 ?묒뾽 ?꾨즺!")
