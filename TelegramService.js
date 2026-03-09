@@ -713,6 +713,11 @@ function telegramBuildItemMessage_(item, member, styleKey) {
   let onlyViewButton = false;
 
   if (style === 'bid_price') {
+    // 입찰 상태인 경우에만 입찰가 전송 허용
+    if (String(item.stu_member || '').trim() !== '입찰') {
+      Logger.log('[telegramBuildItemMessage_] bid_price 전송 차단: 물건상태=' + item.stu_member + ', itemId=' + itemId);
+      return null;
+    }
     // 간결한 포맷: 입찰일자 / 사건번호 / 법원 + 입찰가확인 버튼 + 내물건보기 버튼
     const shortDate = telegramEscapeHtml_(formatShortInDate_(item['in-date']));
     const simpleLine = [shortDate, sakunNo, court].filter(Boolean).join(' / ');
@@ -880,6 +885,9 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
   };
 
   const msg = telegramBuildItemMessage_(item, member, styleKey);
+  if (!msg) {
+    return { success: false, message: '현재 물건 상태에서는 해당 메시지를 전송할 수 없습니다. (물건상태: ' + String(item.stu_member || '') + ')' };
+  }
   telegramSendMessage(chatId, msg.text, msg.replyMarkup);
 
   // 전송 성공 시 bid_price인 경우 상태를 전달완료로 변경

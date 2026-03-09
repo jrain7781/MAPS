@@ -474,6 +474,12 @@ function confirmBidPriceWithTelegramReply(memberToken, itemId) {
     return { success: false, message: '물건 정보를 찾을 수 없습니다.' };
   }
 
+  // 2-1. 물건 상태 검증: 입찰 상태인 경우에만 입찰가 확인 허용
+  const itemStatus = String(item.stu_member || '').trim();
+  if (itemStatus !== '입찰') {
+    return { success: false, message: '입찰 상태인 물건만 입찰가를 확인할 수 있습니다.' };
+  }
+
   // 3. 시트에서 해당 물건 찾아 bid_state 확인완료로 업데이트
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
