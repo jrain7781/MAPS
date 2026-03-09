@@ -131,6 +131,9 @@
             <button id="menu-MemberDashboard" onclick="navigateTo('MemberDashboard')"
                 class="py-4 px-6 text-base text-left text-gray-700 hover:bg-gray-100 transition duration-150 content-hidden member-only-menu">📊
                 월별조회</button>
+            <button id="menu-MemberCancelHistory" onclick="navigateTo('MemberCancelHistory')"
+                class="py-4 px-6 text-base text-left text-gray-700 hover:bg-gray-100 transition duration-150 content-hidden member-only-menu">📋
+                취소이력</button>
         </nav>
 
         <div class="flex-1 overflow-y-auto pb-0">
@@ -465,6 +468,38 @@
                     <!-- 카드 리스트 -->
                     <div class="lc">
                         <div class="lb-body" id="iL2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 회원 취소이력 탭 -->
+            <div id="MemberCancelHistory" class="tab-content h-full p-0 overflow-y-auto content-hidden">
+                <div class="member-dashboard-v2">
+                    <div class="top-bar">
+                        <div class="top-bar-inner">
+                            <span class="text-sm font-semibold text-gray-600 px-2">취소 이력 (읽기 전용)</span>
+                        </div>
+                    </div>
+                    <div class="lc">
+                        <div id="memberCancelHistoryStatus" class="text-xs text-gray-400 px-4 pt-2"></div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 border-b border-gray-200">
+                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">순번</th>
+                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">입찰일자</th>
+                                        <th class="px-3 py-2 text-left text-xs text-gray-500 font-semibold">사건번호</th>
+                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">법원</th>
+                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">추천일자</th>
+                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">입찰확정일자</th>
+                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">취소일자</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="memberCancelHistoryBody">
+                                    <tr><td colspan="7" class="p-8 text-center text-gray-400 text-sm">취소이력 메뉴를 클릭하면 불러옵니다.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1853,8 +1888,22 @@
                 </div>
             </div>
 
-            <div id="Preferences" class="tab-content h-full p-4 md:p-8 overflow-y-auto content-hidden">
-                <h1 class="text-3xl font-bold text-gray-800 mb-6">환경설정</h1>
+            <div id="Preferences" class="tab-content h-full p-0 overflow-y-auto content-hidden flex flex-col">
+                <!-- 환경설정 상단 탭 -->
+                <div class="flex-shrink-0 border-b border-gray-200 bg-white px-4 pt-4">
+                    <h1 class="text-xl font-bold text-gray-800 mb-3">환경설정</h1>
+                    <div class="flex gap-1">
+                        <button id="pref-tab-btn-image" onclick="switchPrefTab('image')"
+                            class="pref-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-indigo-500 text-indigo-600 bg-white">이미지동기화/옥션연동</button>
+                        <button id="pref-tab-btn-telegram" onclick="switchPrefTab('telegram')"
+                            class="pref-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">텔레그램</button>
+                        <button id="pref-tab-btn-appinfo" onclick="switchPrefTab('appinfo')"
+                            class="pref-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">앱정보</button>
+                    </div>
+                </div>
+
+                <!-- ── 탭 1: 이미지동기화/옥션연동 ─────────────────────────────── -->
+                <div id="pref-panel-image" class="pref-panel flex-1 overflow-y-auto p-4 md:p-8">
 
                 <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-indigo-200">
                     <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">이미지 동기화</h2>
@@ -2009,120 +2058,30 @@
                     </div>
                 </div>
 
-                <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-blue-200">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">텔레그램 웹훅</h2>
-                    <p class="text-gray-600 mb-4 text-sm">
-                        텔레그램의 <b>입찰 요청 버튼</b> 같은 “양방향 기능”은 웹훅 설정이 필요합니다.
-                        아래 버튼을 1번만 눌러서 연결해 주세요.
-                    </p>
-                    <div class="flex items-center space-x-4 mb-2">
-                        <button id="setTelegramWebhookButton" onclick="handleSetTelegramWebhook()"
-                            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 flex items-center">
-                            웹훅 설정
-                        </button>
-                        <div id="telegramWebhookStatus" class="text-sm text-gray-600"></div>
-                    </div>
-                    <p class="text-gray-500 text-xs">
-                        필요 조건: 스크립트 속성 <code class="bg-gray-100 px-1.5 py-0.5 rounded">TELEGRAM_BOT_TOKEN</code> 설정.
-                    </p>
-                </div>
+                </div><!-- /pref-panel-image -->
 
-                <!-- [PHASE 5-3] 알림 설정 섹션 -->
-                <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-green-200">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">텔레그램 알림 설정</h2>
-                    <div id="notifySettingsStatus" class="text-xs text-gray-400 mb-3"></div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- 입찰일 알림 -->
-                        <div class="border border-gray-200 rounded-lg p-4">
-                            <h3 class="text-sm font-bold text-gray-700 mb-3">입찰일 알림</h3>
-                            <div class="space-y-2">
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" id="pref-BID_NOTIFY_ENABLED"
-                                        onchange="saveNotifySetting('BID_NOTIFY_ENABLED',this.checked)">
-                                    전체 ON/OFF
-                                </label>
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" id="pref-BID_NOTIFY_D3"
-                                        onchange="saveNotifySetting('BID_NOTIFY_D3',this.checked)">
-                                    D-3 알림
-                                </label>
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" id="pref-BID_NOTIFY_D2"
-                                        onchange="saveNotifySetting('BID_NOTIFY_D2',this.checked)">
-                                    D-2 알림
-                                </label>
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" id="pref-BID_NOTIFY_D1"
-                                        onchange="saveNotifySetting('BID_NOTIFY_D1',this.checked)">
-                                    D-1 알림
-                                </label>
-                                <div class="flex items-center gap-2 text-sm mt-2">
-                                    <label class="text-gray-600">발송 시각:</label>
-                                    <input type="number" id="pref-BID_NOTIFY_HOUR" min="0" max="23"
-                                        onchange="saveNotifySetting('BID_NOTIFY_HOUR',this.value)"
-                                        class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
-                                    <span class="text-gray-500">시</span>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- 추천 만료 알림 -->
-                        <div class="border border-gray-200 rounded-lg p-4">
-                            <h3 class="text-sm font-bold text-gray-700 mb-3">추천 만료 알림</h3>
-                            <div class="space-y-2">
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" id="pref-EXPIRY_NOTIFY_24H"
-                                        onchange="saveNotifySetting('EXPIRY_NOTIFY_24H',this.checked)">
-                                    24시간 경과 알림
-                                </label>
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" id="pref-EXPIRY_NOTIFY_1H"
-                                        onchange="saveNotifySetting('EXPIRY_NOTIFY_1H',this.checked)">
-                                    만료 1시간 전(47h) 알림
-                                </label>
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" id="pref-EXPIRY_NOTIFY_DONE"
-                                        onchange="saveNotifySetting('EXPIRY_NOTIFY_DONE',this.checked)">
-                                    만료 처리 알림
-                                </label>
-                            </div>
+                <!-- ── 탭 2: 텔레그램 ──────────────────────────────────────────── -->
+                <div id="pref-panel-telegram" class="pref-panel flex-1 overflow-hidden flex-col" style="display:none">
+                    <!-- 텔레그램 하위 탭 -->
+                    <div class="flex-shrink-0 border-b border-gray-100 bg-gray-50 px-4 pt-3">
+                        <div class="flex gap-1">
+                            <button id="pref-sub-btn-msgEditor" onclick="switchPrefSubTab('msgEditor')"
+                                class="pref-sub-btn px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 border-purple-500 text-purple-600 bg-white">메시지편집</button>
+                            <button id="pref-sub-btn-notify" onclick="switchPrefSubTab('notify')"
+                                class="pref-sub-btn px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">알림설정</button>
+                            <button id="pref-sub-btn-webhook" onclick="switchPrefSubTab('webhook')"
+                                class="pref-sub-btn px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">웹훅</button>
                         </div>
                     </div>
-                    <div class="mt-3 flex justify-end">
-                        <button onclick="loadNotifySettings()"
-                            class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
-                    </div>
-                </div>
 
-                <!-- [PHASE 5-1/5-2] 텔레그램 메시지 편집 섹션 -->
-                <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-purple-200">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">텔레그램 메시지 편집</h2>
-                    <p class="text-gray-500 text-sm mb-4">텔레그램 자동 발송 메시지 내용을 수정합니다. <code
-                            class="bg-gray-100 px-1 rounded">&#123;&#123;변수명&#125;&#125;</code> 형식으로 동적 값이 치환됩니다.</p>
-                    <button onclick="openMsgEditor()"
-                        class="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150">
-                        메시지 편집 열기
-                    </button>
-                </div>
+                    <!-- 하위 탭 패널 컨테이너 -->
+                    <div class="flex-1 overflow-y-auto">
 
-                <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">앱 정보</h2>
-                    <p class="text-gray-600">현재 버전: 1.25.0 (Form Layout Reverted)</p>
-                </div>
-            </div>
-
-            <!-- [PHASE 5-2] 메시지 편집 팝업 모달 -->
-            <div id="msgEditorModal"
-                class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center content-hidden"
-                style="display:none">
-                <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl mx-4 flex flex-col" style="height:85vh">
-                    <div class="flex items-center justify-between p-4 border-b">
-                        <h2 class="text-lg font-bold text-gray-800">텔레그램 메시지 편집</h2>
-                        <button onclick="closeMsgEditor()"
-                            class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
-                    </div>
-                    <div class="flex flex-1 min-h-0">
+                    <!-- 하위탭: 메시지편집 (인라인) -->
+                    <div id="pref-sub-panel-msgEditor" class="pref-sub-panel h-full flex" style="min-height:500px">
                         <!-- 좌측: 카테고리 + 키 목록 -->
-                        <div class="w-56 flex-shrink-0 border-r overflow-y-auto bg-gray-50 p-2">
+                        <div class="w-52 flex-shrink-0 border-r overflow-y-auto bg-gray-50 p-2">
+                            <div class="text-xs text-gray-400 px-2 pb-2">자동 발송 메시지를 수정합니다.<br><span class="text-gray-300">&#123;&#123;변수&#125;&#125; 형식으로 치환됩니다.</span></div>
                             <div id="msgEditorTree" class="space-y-1 text-sm"></div>
                         </div>
                         <!-- 우측: 편집 영역 -->
@@ -2153,8 +2112,117 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
+
+                    <!-- 하위탭: 알림설정 -->
+                    <div id="pref-sub-panel-notify" class="pref-sub-panel p-4 md:p-6" style="display:none">
+                        <div id="notifySettingsStatus" class="text-xs text-gray-400 mb-3"></div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- 입찰일 알림 -->
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <h3 class="text-sm font-bold text-gray-700 mb-3">입찰일 알림</h3>
+                                <div class="space-y-2">
+                                    <label class="flex items-center gap-2 text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1.5 rounded-md border border-blue-200">
+                                        <input type="checkbox" id="pref-BID_NOTIFY_ENABLED"
+                                            onchange="onBidNotifyMasterChange(this)">
+                                        전체 ON/OFF
+                                    </label>
+                                    <div id="bid-notify-subs" class="space-y-2 ml-1 pt-1">
+                                        <label class="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" id="pref-BID_NOTIFY_D3"
+                                                onchange="saveNotifySetting('BID_NOTIFY_D3',this.checked)">
+                                            D-3 알림
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" id="pref-BID_NOTIFY_D2"
+                                                onchange="saveNotifySetting('BID_NOTIFY_D2',this.checked)">
+                                            D-2 알림
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" id="pref-BID_NOTIFY_D1"
+                                                onchange="saveNotifySetting('BID_NOTIFY_D1',this.checked)">
+                                            D-1 알림
+                                        </label>
+                                        <div class="flex items-center gap-2 text-sm mt-2">
+                                            <label class="text-gray-600">발송 시각:</label>
+                                            <input type="number" id="pref-BID_NOTIFY_HOUR" min="0" max="23"
+                                                onchange="saveNotifySetting('BID_NOTIFY_HOUR',this.value)"
+                                                class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
+                                            <span class="text-gray-500">시</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 추천 만료 알림 -->
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <h3 class="text-sm font-bold text-gray-700 mb-3">추천 만료 알림</h3>
+                                <div class="space-y-2">
+                                    <label class="flex items-center gap-2 text-sm font-semibold text-orange-700 bg-orange-50 px-2 py-1.5 rounded-md border border-orange-200">
+                                        <input type="checkbox" id="pref-AUTO_EXPIRE_ENABLED"
+                                            onchange="saveNotifySetting('AUTO_EXPIRE_ENABLED',this.checked)">
+                                        추천물건 48시간 후 자동 미정 전환
+                                    </label>
+                                    <p class="text-xs text-gray-400 ml-6">OFF 시 48시간이 지나도 상태가 자동 변경되지 않습니다.</p>
+                                    <hr class="my-1 border-gray-100">
+                                    <label class="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" id="pref-EXPIRY_NOTIFY_24H"
+                                            onchange="saveNotifySetting('EXPIRY_NOTIFY_24H',this.checked)">
+                                        24시간 경과 알림
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" id="pref-EXPIRY_NOTIFY_1H"
+                                            onchange="saveNotifySetting('EXPIRY_NOTIFY_1H',this.checked)">
+                                        만료 1시간 전(47h) 알림
+                                    </label>
+                                    <label class="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" id="pref-EXPIRY_NOTIFY_DONE"
+                                            onchange="saveNotifySetting('EXPIRY_NOTIFY_DONE',this.checked)">
+                                        만료 처리 알림
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3 flex justify-end">
+                            <button onclick="loadNotifySettings()"
+                                class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
+                        </div>
+                    </div>
+
+                    <!-- 하위탭: 웹훅 -->
+                    <div id="pref-sub-panel-webhook" class="pref-sub-panel p-4 md:p-6" style="display:none">
+                <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-blue-200">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">텔레그램 웹훅</h2>
+                    <p class="text-gray-600 mb-4 text-sm">
+                        텔레그램의 <b>입찰 요청 버튼</b> 같은 “양방향 기능”은 웹훅 설정이 필요합니다.
+                        아래 버튼을 1번만 눌러서 연결해 주세요.
+                    </p>
+                    <div class="flex items-center space-x-4 mb-2">
+                        <button id="setTelegramWebhookButton" onclick="handleSetTelegramWebhook()"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 flex items-center">
+                            웹훅 설정
+                        </button>
+                        <div id="telegramWebhookStatus" class="text-sm text-gray-600"></div>
+                    </div>
+                    <p class="text-gray-500 text-xs">
+                        필요 조건: 스크립트 속성 <code class="bg-gray-100 px-1.5 py-0.5 rounded">TELEGRAM_BOT_TOKEN</code> 설정.
+                    </p>
+                    </div><!-- /pref-sub-panel-webhook -->
+
+                    </div><!-- /하위 탭 패널 컨테이너 -->
+                </div><!-- /pref-panel-telegram -->
+
+                <!-- ── 탭 3: 앱정보 ─────────────────────────────────────────── -->
+                <div id="pref-panel-appinfo" class="pref-panel flex-1 overflow-y-auto p-4 md:p-8" style="display:none">
+                    <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200 max-w-lg">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">앱 정보</h2>
+                        <dl class="space-y-2 text-sm text-gray-700">
+                            <div class="flex gap-2"><dt class="font-semibold text-gray-500 w-24">버전</dt><dd>1.25.0</dd></div>
+                            <div class="flex gap-2"><dt class="font-semibold text-gray-500 w-24">플랫폼</dt><dd>Google Apps Script (GAS)</dd></div>
+                            <div class="flex gap-2"><dt class="font-semibold text-gray-500 w-24">데이터</dt><dd>Google Spreadsheet</dd></div>
+                        </dl>
+                    </div>
+                </div><!-- /pref-panel-appinfo -->
+
+            </div><!-- /Preferences -->
 
         </div>
     </div>

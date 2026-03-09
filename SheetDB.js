@@ -3191,9 +3191,10 @@ function ensureSettingsSheet_() {
       ['BID_NOTIFY_D2', 'true', 'D-2 알림 활성화'],
       ['BID_NOTIFY_D1', 'true', 'D-1 알림 활성화'],
       ['BID_NOTIFY_HOUR', '10', '발송 시각 (시 단위)'],
+      ['AUTO_EXPIRE_ENABLED', 'true', '추천물건 48시간 후 자동 미정 전환 ON/OFF'],
       ['EXPIRY_NOTIFY_24H', 'true', '추천 24h 알림'],
       ['EXPIRY_NOTIFY_1H', 'true', '추천 47h(만료 1시간 전) 알림'],
-      ['EXPIRY_NOTIFY_DONE', 'true', '만료 알림'],
+      ['EXPIRY_NOTIFY_DONE', 'true', '만료 처리 알림'],
     ];
     sheet.getRange(2, 1, defaults.length, 3).setValues(defaults);
     SpreadsheetApp.flush();
@@ -3301,8 +3302,8 @@ function autoExpireRecommended() {
       const elapsed = (now - dateObj) / (1000 * 3600); // 시간 단위
 
       if (elapsed >= 48) {
-        // 미정 전환 (만료)
-        if (getSetting_('EXPIRY_NOTIFY_DONE', 'true') === 'true') {
+        // 미정 전환 (만료): AUTO_EXPIRE_ENABLED 설정이 true일 때만 실행
+        if (getSetting_('AUTO_EXPIRE_ENABLED', 'true') === 'true') {
           sheet.getRange(realRow, 5).setValue('미정');
           writeItemHistory_({
             action: 'AUTO_EXPIRE',
@@ -3315,7 +3316,10 @@ function autoExpireRecommended() {
             trigger_type: 'system',
             note: 'elapsed=' + Math.floor(elapsed) + 'h'
           });
-          sendExpiryNotification_(memberId, itemId, 'done');
+          // 만료 처리 알림 (별도 토글)
+          if (getSetting_('EXPIRY_NOTIFY_DONE', 'true') === 'true') {
+            sendExpiryNotification_(memberId, itemId, 'done');
+          }
         }
 
       } else if (elapsed >= 47 && !isAlreadyNotified_(itemId, 'EXPIRY_NOTIFY', '47h')) {
@@ -3513,15 +3517,29 @@ function getCancelHistory(memberId, limit) {
     const lastRow = reqSheet.getLastRow();
     const data = reqSheet.getRange(2, 1, lastRow - 1, 16).getValues(); // A~P열
 
-    // items 시트에서 사건번호/입찰일/법원 매핑
+    // items 시트에서 사건번호/입찰일/법원/추천일자 매핑 (A~R열)
     const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
     const itemMap = {};
     if (itemSheet && itemSheet.getLastRow() >= 2) {
-      const iData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 5).getValues(); // A~E열
+      const iData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 18).getValues(); // A~R열
       iData.forEach(function (r) {
         const id = String(r[0] || '').trim();
-        if (id) itemMap[id] = { inDate: String(r[1] || ''), sakunNo: String(r[2] || ''), court: String(r[3] || '') };
+        if (id) itemMap[id] = {
+          inDate: String(r[1] || ''),
+          sakunNo: String(r[2] || ''),
+          court: String(r[3] || ''),
+          chuchenDate: r[17] ? String(r[17]) : ''  // R열: chuchen_date
+        };
       });
+    }
+
+    // telegram_requests에서 입찰확정(REQUEST_BID APPROVED) 날짜 매핑: item_id → approved_at
+    const bidConfirmMap = {};
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][2]).trim() === 'REQUEST_BID' && String(data[i][3]).trim() === 'APPROVED') {
+        const iid = String(data[i][4] || '').trim();
+        if (iid && !bidConfirmMap[iid]) bidConfirmMap[iid] = String(data[i][9] || ''); // J열: approved_at
+      }
     }
 
     const result = [];
@@ -3544,12 +3562,30 @@ function getCancelHistory(memberId, limit) {
         member_name: String(data[i][15] || ''),   // P: member_name
         in_date: item.inDate || '',
         sakun_no: item.sakunNo || '',
-        court: item.court || ''
+        court: item.court || '',
+        chuchen_date: item.chuchenDate || '',
+        bid_confirm_date: bidConfirmMap[itemId] || ''
       });
     }
     return result;
   } catch (e) {
     Logger.log('[getCancelHistory] 오류: ' + e.toString());
+    return [];
+  }
+}
+
+/**
+ * 회원 토큰으로 취소이력 조회 (회원 화면 공개 API)
+ * @param {string} token - 회원 member_token
+ * @returns {Array<Object>}
+ */
+function getCancelHistoryByToken(token) {
+  try {
+    const member = (typeof getMemberByToken === 'function') ? getMemberByToken(token) : null;
+    if (!member || !member.id) return [];
+    return getCancelHistory(String(member.id), 100);
+  } catch (e) {
+    Logger.log('[getCancelHistoryByToken] 오류: ' + e.toString());
     return [];
   }
 }
@@ -3726,7 +3762,8 @@ function getItemHistory(itemId, limit) {
  */
 function getNotifySettings() {
   const keys = ['BID_NOTIFY_ENABLED', 'BID_NOTIFY_D3', 'BID_NOTIFY_D2', 'BID_NOTIFY_D1',
-    'BID_NOTIFY_HOUR', 'EXPIRY_NOTIFY_24H', 'EXPIRY_NOTIFY_1H', 'EXPIRY_NOTIFY_DONE'];
+    'BID_NOTIFY_HOUR', 'AUTO_EXPIRE_ENABLED',
+    'EXPIRY_NOTIFY_24H', 'EXPIRY_NOTIFY_1H', 'EXPIRY_NOTIFY_DONE'];
   const result = {};
   keys.forEach(function (k) { result[k] = getSetting_(k, 'true'); });
   result['BID_NOTIFY_HOUR'] = getSetting_('BID_NOTIFY_HOUR', '10');

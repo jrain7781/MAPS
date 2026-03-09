@@ -422,8 +422,8 @@
         const fsBtn = document.getElementById('btn-fullscreen');
         if (fsBtn) fsBtn.classList.add('content-hidden');
 
-        // 회원에게 허용되지 않는 탭 숨김 (MemberDashboard + MemberItemList만 허용)
-        const allowedTabs = ['MemberDashboard', 'MemberItemList'];
+        // 회원에게 허용되지 않는 탭 숨김 (MemberDashboard + MemberItemList + MemberCancelHistory만 허용)
+        const allowedTabs = ['MemberDashboard', 'MemberItemList', 'MemberCancelHistory'];
         document.querySelectorAll('.tab-content').forEach(content => {
             if (content && !allowedTabs.includes(content.id)) {
                 content.classList.add('content-hidden');
@@ -557,13 +557,14 @@
         'BiddingSchedule': 'block',
         'Preferences': 'block',
         'MemberDashboard': 'block',
-        'MemberItemList': 'block'
+        'MemberItemList': 'block',
+        'MemberCancelHistory': 'block'
         // 새 메뉴 추가 시 여기에 레이아웃 타입 추가
     };
 
     function navigateTo(tabId) {
-        // 회원 전용 링크에서는 입찰리스트 + 월별조회만 허용
-        if (IS_MEMBER_VIEW && !['MemberItemList', 'MemberDashboard'].includes(tabId)) {
+        // 회원 전용 링크에서는 입찰리스트 + 월별조회 + 취소이력만 허용
+        if (IS_MEMBER_VIEW && !['MemberItemList', 'MemberDashboard', 'MemberCancelHistory'].includes(tabId)) {
             tabId = 'MemberItemList';
         }
 
@@ -647,10 +648,14 @@
             try { loadTelegramRequests(); } catch (e) { }
         }
 
-        // [PHASE 5-3] 환경설정 탭 이동 시 알림 설정 자동 로드
+        // 환경설정 탭 이동 시 초기 탭 렌더
         if (tabId === 'Preferences') {
-            try { loadNotifySettings(); } catch (e) { }
-            try { loadAutoSyncSetting(); } catch (e) { }
+            try { switchPrefTab('image'); } catch (e) { }
+        }
+
+        // 회원 취소이력 탭 이동 시 로드
+        if (tabId === 'MemberCancelHistory') {
+            try { loadMemberCancelHistory(); } catch (e) { console.error('MemberCancelHistory load error:', e); }
         }
 
         // 회원 대시보드 탭 이동 시 렌더링
@@ -7246,7 +7251,8 @@ MJ 이정우 팀장
      */
     // ─── [PHASE 5-3] 알림 설정 로드/저장 ────────────────────────────────────────
     const NOTIFY_KEYS = ['BID_NOTIFY_ENABLED', 'BID_NOTIFY_D3', 'BID_NOTIFY_D2', 'BID_NOTIFY_D1',
-        'BID_NOTIFY_HOUR', 'EXPIRY_NOTIFY_24H', 'EXPIRY_NOTIFY_1H', 'EXPIRY_NOTIFY_DONE'];
+        'BID_NOTIFY_HOUR', 'AUTO_EXPIRE_ENABLED',
+        'EXPIRY_NOTIFY_24H', 'EXPIRY_NOTIFY_1H', 'EXPIRY_NOTIFY_DONE'];
 
     // --- 환경설정: 매일 자동 이미지 동기화 토글 ---
     function loadAutoSyncSetting() {
@@ -7319,12 +7325,23 @@ MJ 이정우 팀장
                     if (el.type === 'checkbox') el.checked = (val === 'true');
                     else el.value = val;
                 });
+                // BID_NOTIFY_ENABLED에 따라 하위 체크박스 비활성화 시각화
+                updateBidNotifySubsState_();
                 if (statusEl) statusEl.textContent = '로드 완료';
             })
             .withFailureHandler(function (e) {
                 if (statusEl) statusEl.textContent = '로드 실패: ' + e;
             })
             .getNotifySettings();
+    }
+
+    /** BID_NOTIFY_ENABLED 상태에 따라 하위 체크박스 시각적 비활성화 */
+    function updateBidNotifySubsState_() {
+        var master = document.getElementById('pref-BID_NOTIFY_ENABLED');
+        var subsDiv = document.getElementById('bid-notify-subs');
+        if (!master || !subsDiv) return;
+        subsDiv.style.opacity = master.checked ? '1' : '0.4';
+        subsDiv.style.pointerEvents = master.checked ? '' : 'none';
     }
 
     function saveNotifySetting(key, val) {
@@ -7336,7 +7353,67 @@ MJ 이정우 팀장
             .saveSettingPublic(key, value);
     }
 
-    // ─── [PHASE 5-2] 메시지 편집 팝업 ───────────────────────────────────────────
+    // ─── 환경설정 탭 전환 ────────────────────────────────────────────────────────
+    function switchPrefTab(tab) {
+        // 상단 탭 버튼 스타일
+        ['image', 'telegram', 'appinfo'].forEach(function (t) {
+            var btn = document.getElementById('pref-tab-btn-' + t);
+            var panel = document.getElementById('pref-panel-' + t);
+            if (!btn || !panel) return;
+            var isActive = (t === tab);
+            btn.className = 'pref-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 bg-white '
+                + (isActive ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700');
+            panel.style.display = isActive ? (t === 'telegram' ? 'flex' : 'block') : 'none';
+            if (isActive && t === 'telegram') {
+                panel.style.flexDirection = 'column';
+            }
+        });
+        // 텔레그램 탭 진입 시 첫 하위탭 활성화
+        if (tab === 'telegram') {
+            switchPrefSubTab('msgEditor');
+        }
+        // 이미지 탭 진입 시 자동 동기화 설정 로드
+        if (tab === 'image') {
+            try { loadAutoSyncSetting(); } catch (e) { }
+        }
+    }
+
+    function switchPrefSubTab(sub) {
+        ['msgEditor', 'notify', 'webhook'].forEach(function (s) {
+            var btn = document.getElementById('pref-sub-btn-' + s);
+            var panel = document.getElementById('pref-sub-panel-' + s);
+            if (!btn || !panel) return;
+            var isActive = (s === sub);
+            btn.className = 'pref-sub-btn px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 bg-white '
+                + (isActive ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700');
+            panel.style.display = isActive ? (s === 'msgEditor' ? 'flex' : 'block') : 'none';
+        });
+        // 메시지편집 탭 진입 시 템플릿 로드
+        if (sub === 'msgEditor') {
+            if (_msgTemplates.length === 0) loadMsgTemplates_();
+        }
+        // 알림설정 탭 진입 시 설정 로드
+        if (sub === 'notify') {
+            try { loadNotifySettings(); } catch (e) { }
+        }
+    }
+
+    // ─── 입찰일 알림 전체 ON/OFF master toggle ──────────────────────────────────
+    function onBidNotifyMasterChange(el) {
+        var checked = el.checked;
+        // 하위 체크박스 일괄 설정
+        ['BID_NOTIFY_D3', 'BID_NOTIFY_D2', 'BID_NOTIFY_D1'].forEach(function (key) {
+            var sub = document.getElementById('pref-' + key);
+            if (sub) {
+                sub.checked = checked;
+                saveNotifySetting(key, checked);
+            }
+        });
+        saveNotifySetting('BID_NOTIFY_ENABLED', checked);
+        updateBidNotifySubsState_();
+    }
+
+    // ─── [PHASE 5-2] 메시지 편집 인라인 ─────────────────────────────────────────
     let _msgTemplates = [];
     let _msgSelectedKey = null;
     let _msgOriginals = {};   // 원본 기본값 캐시 (초기화용)
@@ -7345,16 +7422,15 @@ MJ 이정우 팀장
         member_name: '홍길동', sakun_no: '2024타경1234', in_date: '260410', court: '서울중앙지방법원'
     };
 
+    // openMsgEditor: 환경설정 > 텔레그램 > 메시지편집 탭으로 이동 (인라인)
     function openMsgEditor() {
-        const modal = document.getElementById('msgEditorModal');
-        if (!modal) return;
-        modal.style.display = 'flex';
-        loadMsgTemplates_();
+        navigateTo('Preferences');
+        switchPrefTab('telegram');
+        switchPrefSubTab('msgEditor');
     }
 
     function closeMsgEditor() {
-        const modal = document.getElementById('msgEditorModal');
-        if (modal) modal.style.display = 'none';
+        // 인라인이므로 별도 닫기 불필요 (다른 탭으로 이동)
     }
 
     function loadMsgTemplates_() {
@@ -10657,6 +10733,87 @@ ${token}
                 showStatus('데이터 로드에 실패했습니다.', 'error');
             })
             .readDataWithImageIdsByMemberToken(APP_CTX.token);
+    }
+
+    // =============================================================================
+    // 회원 취소이력 (MemberCancelHistory) - 읽기 전용 리스트
+    // =============================================================================
+
+    var _cancelHistoryLoaded = false;
+
+    /** 날짜 문자열 포맷 변환 (yyMMdd HHmmss 또는 ISO → MM/DD 표시) */
+    function _formatCancelDate(v) {
+        if (!v) return '-';
+        var s = String(v).trim();
+        // yyMMdd HHmmss 형식
+        var m1 = s.match(/^(\d{2})(\d{2})(\d{2})/);
+        if (m1) return m1[2] + '/' + m1[3];
+        // ISO 형식 (yyyy-MM-dd...)
+        var m2 = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+        if (m2) return m2[2] + '/' + m2[3];
+        return s.slice(0, 10);
+    }
+
+    /** 입찰일자 포맷 (YYMMDD → YY/MM/DD) */
+    function _formatInDate(v) {
+        if (!v) return '-';
+        var s = String(v).trim();
+        if (s.length === 6) return s.slice(0, 2) + '/' + s.slice(2, 4) + '/' + s.slice(4, 6);
+        return s;
+    }
+
+    /** 추천일자/입찰확정일자 포맷 (ISO 또는 yyMMdd HHmmss → MM/DD HH:mm) */
+    function _formatDatetime(v) {
+        if (!v) return '-';
+        var s = String(v).trim();
+        // yyMMdd HHmmss
+        var m1 = s.match(/^(\d{2})(\d{2})(\d{2})\s*(\d{2})(\d{2})/);
+        if (m1) return m1[2] + '/' + m1[3] + ' ' + m1[4] + ':' + m1[5];
+        // ISO
+        var m2 = s.match(/(\d{4})-(\d{2})-(\d{2})T?(\d{2}):(\d{2})/);
+        if (m2) return m2[2] + '/' + m2[3] + ' ' + m2[4] + ':' + m2[5];
+        return s.slice(0, 16);
+    }
+
+    /** 취소이력 로드 및 렌더링 */
+    function loadMemberCancelHistory() {
+        if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+        if (!APP_CTX.token) return;
+
+        var statusEl = document.getElementById('memberCancelHistoryStatus');
+        var tbody = document.getElementById('memberCancelHistoryBody');
+        if (statusEl) statusEl.textContent = '불러오는 중...';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-400">로딩 중...</td></tr>';
+
+        google.script.run
+            .withSuccessHandler(function (rows) {
+                _cancelHistoryLoaded = true;
+                if (statusEl) statusEl.textContent = '총 ' + (rows ? rows.length : 0) + '건';
+                if (!tbody) return;
+                if (!rows || rows.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 text-sm">취소이력이 없습니다.</td></tr>';
+                    return;
+                }
+                var html = '';
+                rows.forEach(function (r, idx) {
+                    var actionColor = r.action === 'AUTO_EXPIRE' ? 'text-orange-500' : 'text-red-500';
+                    html += '<tr class="border-b border-gray-100 hover:bg-gray-50">'
+                        + '<td class="px-3 py-2 text-center text-gray-400 text-xs">' + (idx + 1) + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs">' + _formatInDate(r.in_date) + '</td>'
+                        + '<td class="px-3 py-2 text-left text-xs font-medium text-gray-700">' + (r.sakun_no || '-') + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs text-gray-500">' + (r.court || '-') + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs">' + _formatDatetime(r.chuchen_date) + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs">' + _formatDatetime(r.bid_confirm_date) + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs ' + actionColor + '">' + _formatCancelDate(r.cancel_date) + '<br><span class="text-gray-400">' + (r.action_label || '') + '</span></td>'
+                        + '</tr>';
+                });
+                tbody.innerHTML = html;
+            })
+            .withFailureHandler(function (e) {
+                if (statusEl) statusEl.textContent = '로드 실패: ' + e;
+                if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-red-400">데이터 로드에 실패했습니다.</td></tr>';
+            })
+            .getCancelHistoryByToken(APP_CTX.token);
     }
 
     /** 현재 활성 회원 뷰를 새로고침 */

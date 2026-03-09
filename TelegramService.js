@@ -351,6 +351,13 @@ function handleTelegramWebhook_(update) {
     const messageId = cq.message && cq.message.message_id ? Number(cq.message.message_id) : null;
 
     if (action === 'BID' || action === 'BID_CONFIRM') {
+      // MAPS 실제 상태 확인: 추천 상태만 입찰확정 가능
+      var bidItemStatus = checkItemStatus_(itemId);
+      if (bidItemStatus !== '추천') {
+        try { telegramAnswerCallbackQuery_(cqId, '현재 물건상태 변경이 불가능 합니다.', true); } catch (e) { }
+        telegramSendMessage(chatId, '⚠️ 현재 물건상태 변경이 불가능 합니다.\n(현재 상태: ' + (bidItemStatus || '확인불가') + ')');
+        return;
+      }
       try { telegramAnswerCallbackQuery_(cqId, '확인', false); } catch (e) { }
       if (!messageId) return;
       const replyMarkup = {
@@ -365,6 +372,13 @@ function handleTelegramWebhook_(update) {
     }
 
     if (action === 'CANCEL' || action === 'CANCEL_CONFIRM') {
+      // MAPS 실제 상태 확인: 추천/입찰 상태만 취소 가능
+      var cancelItemStatus = checkItemStatus_(itemId);
+      if (cancelItemStatus !== '추천' && cancelItemStatus !== '입찰') {
+        try { telegramAnswerCallbackQuery_(cqId, '현재 물건상태 변경이 불가능 합니다.', true); } catch (e) { }
+        telegramSendMessage(chatId, '⚠️ 현재 물건상태 변경이 불가능 합니다.\n(현재 상태: ' + (cancelItemStatus || '확인불가') + ')');
+        return;
+      }
       try { telegramAnswerCallbackQuery_(cqId, '확인', false); } catch (e) { }
       if (!messageId) return;
       const replyMarkup = {
@@ -606,6 +620,28 @@ function formatShortInDate_(yymmddOrIso) {
   // 20260211 -> 26-02-11
   if (/^\d{8}$/.test(s)) return s.slice(2, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
   return s;
+}
+
+/**
+ * 아이템의 현재 stu_member 상태를 조회합니다.
+ * BID_CONFIRM/CANCEL_CONFIRM 시 MAPS 실제 상태 검증에 사용.
+ * @param {string} itemId
+ * @returns {string} stu_member 값 ('추천'|'입찰'|'미정'|'상품'|'변경'|'') 또는 '' (조회 실패)
+ */
+function checkItemStatus_(itemId) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return '';
+    var finder = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1)
+      .createTextFinder(String(itemId)).matchEntireCell(true);
+    var match = finder.findNext();
+    if (!match) return '';
+    return String(sheet.getRange(match.getRow(), 5).getValue() || '').trim(); // E열: stu_member
+  } catch (e) {
+    Logger.log('[checkItemStatus_] 오류: ' + e.toString());
+    return '';
+  }
 }
 
 function getBidItemByIdForTelegram_(itemId) {
