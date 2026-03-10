@@ -491,12 +491,16 @@
                                         <th class="px-3 py-2 text-left text-xs text-gray-500 font-semibold">사건번호</th>
                                         <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">법원</th>
                                         <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">추천일자</th>
-                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">입찰확정일자</th>
+                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">입찰확정일자
+                                        </th>
                                         <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">취소일자</th>
                                     </tr>
                                 </thead>
                                 <tbody id="memberCancelHistoryBody">
-                                    <tr><td colspan="7" class="p-8 text-center text-gray-400 text-sm">취소이력 메뉴를 클릭하면 불러옵니다.</td></tr>
+                                    <tr>
+                                        <td colspan="7" class="p-8 text-center text-gray-400 text-sm">취소이력 메뉴를 클릭하면
+                                            불러옵니다.</td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -728,10 +732,10 @@
                             </svg></button>
                     </div>
                     <div
-                        class="list-title-strip flex flex-col md:flex-row items-start md:items-center bg-gray-50 border-b shadow-sm gap-4">
+                        class="list-title-strip flex flex-col md:flex-row items-start md:items-center bg-gray-50 border-b shadow-sm gap-2">
                         <h2 class="list-title-strip-heading text-xl font-semibold text-gray-800 flex-shrink-0">입찰 목록
                         </h2>
-                        <div class="flex-1 flex flex-wrap items-center gap-x-4 gap-y-2 py-1">
+                        <div class="flex-1 flex flex-wrap items-center gap-x-2 gap-y-2 py-1">
                             <!-- Group 1: 요청 관련 -->
                             <button type="button" onclick="handleItemCaptureListDownload()"
                                 class="list-title-strip-btn flex items-center justify-center text-blue-600 hover:text-blue-800 transition duration-200 border border-blue-200 rounded-md hover:bg-blue-50"
@@ -757,6 +761,7 @@
                             <div class="flex items-center gap-1 flex-shrink-0">
                                 <select id="bulk-action-type" class="bulk-action-select">
                                     <option value="">일괄작업 선택</option>
+                                    <option value="multi_recommend">다중추천메세지</option>
                                     <option value="status">물건상태 변경</option>
                                     <option value="delete">일괄 삭제</option>
                                 </select>
@@ -1112,6 +1117,9 @@
                                                 onclick="switchItemSubTab('history')">히스토리</button>
                                             <button type="button"
                                                 class="item-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
+                                                onclick="switchItemSubTab('message')">메시지</button>
+                                            <button type="button"
+                                                class="item-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
                                                 onclick="switchItemSubTab('info')">정보</button>
                                         </div>
                                         <!-- 비고 탭 -->
@@ -1148,6 +1156,27 @@
                                         <!-- 정보 탭 -->
                                         <div id="item-sub-panel-info" class="p-3 hidden">
                                             <div id="item-sub-info-content" class="text-xs space-y-1"></div>
+                                        </div>
+                                        <!-- 메시지 탭 -->
+                                        <div id="item-sub-panel-message" class="p-3 hidden">
+                                            <div class="flex justify-between items-end mb-0 border-b border-gray-200">
+                                                <div class="flex space-x-1">
+                                                    <button type="button" id="item-tab-bid-check"
+                                                        onclick="switchTemplateTab('check')"
+                                                        class="px-4 py-2 text-sm font-bold text-indigo-700 border-b-2 border-indigo-700 bg-indigo-50 rounded-t-lg hover:bg-indigo-100 transition">추천물건안내</button>
+                                                    <button type="button" id="item-tab-bid-guide"
+                                                        onclick="switchTemplateTab('guide')"
+                                                        class="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-indigo-600 hover:bg-gray-50 rounded-t-lg transition">입찰가
+                                                        안내</button>
+                                                </div>
+                                                <button type="button" onclick="copyTemplateText('item')"
+                                                    class="mb-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">복사하기</button>
+                                            </div>
+                                            <div class="mt-2 text-xs">
+                                                <textarea id="item-template-textarea" rows="12"
+                                                    class="w-full px-3 py-2 border border-blue-200 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm font-mono bg-blue-50"
+                                                    readonly></textarea>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1905,158 +1934,159 @@
                 <!-- ── 탭 1: 이미지동기화/옥션연동 ─────────────────────────────── -->
                 <div id="pref-panel-image" class="pref-panel flex-1 overflow-y-auto p-4 md:p-8">
 
-                <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-indigo-200">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">이미지 동기화</h2>
-                    <p class="text-gray-600 mb-4 text-sm">Google Drive 업로드 폴더의 이미지를 자동으로 매칭하고 시트에 등록합니다.</p>
-                    <p class="text-gray-500 mb-4 text-xs">파일명 형식: <code
-                            class="bg-gray-100 px-2 py-1 rounded">사건번호_날짜_법원명.확장자</code> (예:
-                        2024타경1234_251102_서울중앙지방법원.jpg)</p>
-                    <p class="text-gray-500 mb-4 text-xs">최대 100개 파일씩 처리됩니다.</p>
-                    <div class="flex items-center flex-wrap gap-4 mb-4">
-                        <button id="syncImagesButton" onclick="handleSyncImages()"
-                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 flex items-center">
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
-                                </path>
-                            </svg>
-                            이미지 동기화 실행
-                        </button>
-
-                        <div class="flex items-center ml-2 border-l border-gray-300 pl-4">
-                            <label class="flex items-center gap-2 cursor-pointer select-none"
-                                title="켜두면 매일 오전 9시 30분에 자동으로 이미지 동기화가 실행됩니다">
-                                <span class="text-sm font-semibold text-gray-700">매일 09:30 자동 동기화</span>
-                                <div class="relative">
-                                    <input type="checkbox" id="auto-sync-toggle" class="sr-only"
-                                        onchange="onAutoSyncToggleChange(this)">
-                                    <div id="auto-sync-track"
-                                        class="w-11 h-6 rounded-full transition-colors duration-200 bg-gray-300">
-                                    </div>
-                                    <div id="auto-sync-thumb"
-                                        class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200">
-                                    </div>
-                                </div>
-                                <span id="auto-sync-label"
-                                    class="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">OFF</span>
-                            </label>
-                        </div>
-
-                        <div id="syncImagesStatus" class="text-sm text-gray-600 mt-2 w-full"></div>
-                    </div>
-
-                    <!-- 동기화 이력 검색 -->
-                    <div class="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200">
-                        <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center">
-                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                            </svg>
-                            이미지 동기화 이력 조회 (최근 3일)
-                        </h3>
-                        <div class="flex flex-wrap gap-2 items-end">
-                            <div class="flex-1 min-w-[120px]">
-                                <label class="block text-[10px] text-gray-500 mb-1">사건번호</label>
-                                <input type="text" id="sync-search-sakunno" placeholder="사건번호"
-                                    class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none">
-                            </div>
-                            <div class="flex-1 min-w-[120px]">
-                                <label class="block text-[10px] text-gray-500 mb-1">입찰일자</label>
-                                <input type="text" id="sync-search-indate" placeholder="예: 250212"
-                                    class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none">
-                            </div>
-                            <div class="flex-1 min-w-[120px]">
-                                <label class="block text-[10px] text-gray-500 mb-1">법원명</label>
-                                <input type="text" id="sync-search-court" placeholder="법원명"
-                                    class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none">
-                            </div>
-                            <button onclick="handleSearchSyncLogs()"
-                                class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-1.5 rounded text-sm font-bold shadow transition">
-                                조회
+                    <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-indigo-200">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">이미지 동기화</h2>
+                        <p class="text-gray-600 mb-4 text-sm">Google Drive 업로드 폴더의 이미지를 자동으로 매칭하고 시트에 등록합니다.</p>
+                        <p class="text-gray-500 mb-4 text-xs">파일명 형식: <code
+                                class="bg-gray-100 px-2 py-1 rounded">사건번호_날짜_법원명.확장자</code> (예:
+                            2024타경1234_251102_서울중앙지방법원.jpg)</p>
+                        <p class="text-gray-500 mb-4 text-xs">최대 100개 파일씩 처리됩니다.</p>
+                        <div class="flex items-center flex-wrap gap-4 mb-4">
+                            <button id="syncImagesButton" onclick="handleSyncImages()"
+                                class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 flex items-center">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                                    </path>
+                                </svg>
+                                이미지 동기화 실행
                             </button>
+
+                            <div class="flex items-center ml-2 border-l border-gray-300 pl-4">
+                                <label class="flex items-center gap-2 cursor-pointer select-none"
+                                    title="켜두면 매일 오전 9시 30분에 자동으로 이미지 동기화가 실행됩니다">
+                                    <span class="text-sm font-semibold text-gray-700">매일 09:30 자동 동기화</span>
+                                    <div class="relative">
+                                        <input type="checkbox" id="auto-sync-toggle" class="sr-only"
+                                            onchange="onAutoSyncToggleChange(this)">
+                                        <div id="auto-sync-track"
+                                            class="w-11 h-6 rounded-full transition-colors duration-200 bg-gray-300">
+                                        </div>
+                                        <div id="auto-sync-thumb"
+                                            class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200">
+                                        </div>
+                                    </div>
+                                    <span id="auto-sync-label"
+                                        class="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">OFF</span>
+                                </label>
+                            </div>
+
+                            <div id="syncImagesStatus" class="text-sm text-gray-600 mt-2 w-full"></div>
+                        </div>
+
+                        <!-- 동기화 이력 검색 -->
+                        <div class="bg-gray-50 p-4 rounded-lg mb-4 border border-gray-200">
+                            <h3 class="text-sm font-bold text-gray-700 mb-3 flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                                이미지 동기화 이력 조회 (최근 3일)
+                            </h3>
+                            <div class="flex flex-wrap gap-2 items-end">
+                                <div class="flex-1 min-w-[120px]">
+                                    <label class="block text-[10px] text-gray-500 mb-1">사건번호</label>
+                                    <input type="text" id="sync-search-sakunno" placeholder="사건번호"
+                                        class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none">
+                                </div>
+                                <div class="flex-1 min-w-[120px]">
+                                    <label class="block text-[10px] text-gray-500 mb-1">입찰일자</label>
+                                    <input type="text" id="sync-search-indate" placeholder="예: 250212"
+                                        class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none">
+                                </div>
+                                <div class="flex-1 min-w-[120px]">
+                                    <label class="block text-[10px] text-gray-500 mb-1">법원명</label>
+                                    <input type="text" id="sync-search-court" placeholder="법원명"
+                                        class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none">
+                                </div>
+                                <button onclick="handleSearchSyncLogs()"
+                                    class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-1.5 rounded text-sm font-bold shadow transition">
+                                    조회
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="syncImagesDetails" class="mt-4 space-y-2 content-hidden"></div>
+
+                        <div id="syncLogsListContainer" class="mt-4 overflow-x-auto border rounded-lg content-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            시간</th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            상태(결과)</th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            사건번호</th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            입찰일</th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            법원</th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            기존담당자</th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            파일담당자</th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            메시지</th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            image_id</th>
+                                        <th
+                                            class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            auction_id</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="syncLogsTableBody" class="bg-white divide-y divide-gray-100 text-xs">
+                                    <!-- 로그 데이터 삽입 -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </div>
+
+                    <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-blue-200">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">옥션 원문 링크 설정</h2>
+                        <p class="text-sm text-gray-600 mb-2">옥션 상세 페이지 주소 패턴을 설정합니다. 숫자가 들어갈 자리에 <b>[ID]</b>를 입력해 주세요.
+                        </p>
+                        <div
+                            class="text-xs text-blue-600 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100 leading-relaxed">
+                            <b>💡 설정 로직 안내:</b><br>
+                            - 주소 전체를 복사해서 넣으신 후, <b>숫자 부분만 [ID]로 갈아 끼우시면</b> 됩니다.<br>
+                            - [ID] 뒤에 오는 주소값들도 <b>모두 잘리지 않고 그대로 연결</b>됩니다.<br>
+                            - 예: ...product_id=<b>[ID]</b>&list_ctrl=0... (뒤쪽 파라미터도 유지됨)
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">경매 URL 패턴</label>
+                                <input type="text" id="setting-auction-pattern" oninput="updateAuctionUrlPreview()"
+                                    class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    placeholder="https://.../view.php?product_id=[ID]">
+                                <p id="preview-auction-url"
+                                    class="mt-1 text-[11px] text-gray-400 break-all bg-gray-50 p-1 rounded italic"></p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">공매 URL 패턴</label>
+                                <input type="text" id="setting-gongmae-pattern" oninput="updateAuctionUrlPreview()"
+                                    class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    placeholder="https://.../view.php?product_id=[ID]">
+                                <p id="preview-gongmae-url"
+                                    class="mt-1 text-[11px] text-gray-400 break-all bg-gray-50 p-1 rounded italic"></p>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button onclick="handleSaveAuctionSettings()"
+                                class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md font-bold">URL
+                                설정 저장</button>
                         </div>
                     </div>
-
-                    <div id="syncImagesDetails" class="mt-4 space-y-2 content-hidden"></div>
-
-                    <div id="syncLogsListContainer" class="mt-4 overflow-x-auto border rounded-lg content-hidden">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        시간</th>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        상태(결과)</th>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        사건번호</th>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        입찰일</th>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        법원</th>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        기존담당자</th>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        파일담당자</th>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        메시지</th>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        image_id</th>
-                                    <th
-                                        class="px-3 py-2 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                        auction_id</th>
-                                </tr>
-                            </thead>
-                            <tbody id="syncLogsTableBody" class="bg-white divide-y divide-gray-100 text-xs">
-                                <!-- 로그 데이터 삽입 -->
-                            </tbody>
-                        </table>
-                    </div>
-
-                </div>
-
-                <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-blue-200">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">옥션 원문 링크 설정</h2>
-                    <p class="text-sm text-gray-600 mb-2">옥션 상세 페이지 주소 패턴을 설정합니다. 숫자가 들어갈 자리에 <b>[ID]</b>를 입력해 주세요.</p>
-                    <div
-                        class="text-xs text-blue-600 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100 leading-relaxed">
-                        <b>💡 설정 로직 안내:</b><br>
-                        - 주소 전체를 복사해서 넣으신 후, <b>숫자 부분만 [ID]로 갈아 끼우시면</b> 됩니다.<br>
-                        - [ID] 뒤에 오는 주소값들도 <b>모두 잘리지 않고 그대로 연결</b>됩니다.<br>
-                        - 예: ...product_id=<b>[ID]</b>&list_ctrl=0... (뒤쪽 파라미터도 유지됨)
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">경매 URL 패턴</label>
-                            <input type="text" id="setting-auction-pattern" oninput="updateAuctionUrlPreview()"
-                                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                placeholder="https://.../view.php?product_id=[ID]">
-                            <p id="preview-auction-url"
-                                class="mt-1 text-[11px] text-gray-400 break-all bg-gray-50 p-1 rounded italic"></p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">공매 URL 패턴</label>
-                            <input type="text" id="setting-gongmae-pattern" oninput="updateAuctionUrlPreview()"
-                                class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                placeholder="https://.../view.php?product_id=[ID]">
-                            <p id="preview-gongmae-url"
-                                class="mt-1 text-[11px] text-gray-400 break-all bg-gray-50 p-1 rounded italic"></p>
-                        </div>
-                    </div>
-                    <div class="flex justify-end">
-                        <button onclick="handleSaveAuctionSettings()"
-                            class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md font-bold">URL
-                            설정 저장</button>
-                    </div>
-                </div>
 
                 </div><!-- /pref-panel-image -->
 
@@ -2079,627 +2109,679 @@
                     <!-- 하위 탭 패널 컨테이너 -->
                     <div class="flex-1 overflow-y-auto">
 
-                    <!-- 하위탭: 메시지편집 V2 (인라인) -->
-                    <div id="pref-sub-panel-msgEditor" class="pref-sub-panel min-h-full flex" style="min-height:500px">
-                        <!-- 좌측: 흐름 기반 목차 (엑셀 A~E 순서) -->
-                        <div class="w-64 flex-shrink-0 border-r overflow-y-auto bg-gray-50 py-2 px-1.5">
-                            <div id="msgFlowNav">
-                                <div class="text-gray-400 text-xs p-2">불러오는 중...</div>
+                        <!-- 하위탭: 메시지편집 V2 (인라인) -->
+                        <div id="pref-sub-panel-msgEditor" class="pref-sub-panel min-h-full flex"
+                            style="min-height:500px">
+                            <!-- 좌측: 흐름 기반 목차 (엑셀 A~E 순서) -->
+                            <div class="w-64 flex-shrink-0 border-r overflow-y-auto bg-gray-50 py-2 px-1.5">
+                                <div id="msgFlowNav">
+                                    <div class="text-gray-400 text-xs p-2">불러오는 중...</div>
+                                </div>
+                            </div>
+                            <!-- 우측: 편집 영역 (동적 렌더링) -->
+                            <div class="flex-1 flex flex-col overflow-y-auto min-w-0">
+                                <div id="msgEditorEmpty"
+                                    class="text-gray-400 flex flex-col items-center justify-center p-8 text-center"
+                                    style="min-height:200px">
+                                    <div class="text-3xl mb-2">📋</div>
+                                    <div class="font-medium text-sm">← 왼쪽에서 메세지를 선택하세요</div>
+                                    <div class="text-xs mt-1 text-gray-300">엑셀 순서대로 목차가 구성되어 있습니다</div>
+                                </div>
+                                <div id="msgEditorForm" style="display:none"
+                                    class="flex flex-col p-4 gap-2 overflow-y-auto">
+                                </div>
                             </div>
                         </div>
-                        <!-- 우측: 편집 영역 (동적 렌더링) -->
-                        <div class="flex-1 flex flex-col overflow-y-auto min-w-0">
-                            <div id="msgEditorEmpty" class="text-gray-400 flex flex-col items-center justify-center p-8 text-center" style="min-height:200px">
-                                <div class="text-3xl mb-2">📋</div>
-                                <div class="font-medium text-sm">← 왼쪽에서 메세지를 선택하세요</div>
-                                <div class="text-xs mt-1 text-gray-300">엑셀 순서대로 목차가 구성되어 있습니다</div>
-                            </div>
-                            <div id="msgEditorForm" style="display:none" class="flex flex-col p-4 gap-2 overflow-y-auto">
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- 하위탭: 알림설정 -->
-                    <div id="pref-sub-panel-notify" class="pref-sub-panel p-4 md:p-6" style="display:none">
-                        <div id="notifySettingsStatus" class="text-xs text-gray-400 mb-3"></div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- 입찰일 알림 -->
-                            <div class="border border-gray-200 rounded-lg p-4">
-                                <h3 class="text-sm font-bold text-gray-700 mb-3">입찰일 알림</h3>
-                                <div class="space-y-2">
-                                    <label class="flex items-center gap-2 text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1.5 rounded-md border border-blue-200">
-                                        <input type="checkbox" id="pref-BID_NOTIFY_ENABLED"
-                                            onchange="onBidNotifyMasterChange(this)">
-                                        전체 ON/OFF
-                                    </label>
-                                    <div id="bid-notify-subs" class="space-y-2 ml-1 pt-1">
-                                        <label class="flex items-center gap-2 text-sm">
-                                            <input type="checkbox" id="pref-BID_NOTIFY_D3"
-                                                onchange="saveNotifySetting('BID_NOTIFY_D3',this.checked)">
-                                            D-3 알림
+                        <!-- 하위탭: 알림설정 -->
+                        <div id="pref-sub-panel-notify" class="pref-sub-panel p-4 md:p-6" style="display:none">
+                            <div id="notifySettingsStatus" class="text-xs text-gray-400 mb-3"></div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- 입찰일 알림 -->
+                                <div class="border border-gray-200 rounded-lg p-4">
+                                    <h3 class="text-sm font-bold text-gray-700 mb-3">입찰일 알림</h3>
+                                    <div class="space-y-2">
+                                        <label
+                                            class="flex items-center gap-2 text-sm font-semibold text-blue-700 bg-blue-50 px-2 py-1.5 rounded-md border border-blue-200">
+                                            <input type="checkbox" id="pref-BID_NOTIFY_ENABLED"
+                                                onchange="onBidNotifyMasterChange(this)">
+                                            전체 ON/OFF
                                         </label>
-                                        <label class="flex items-center gap-2 text-sm">
-                                            <input type="checkbox" id="pref-BID_NOTIFY_D2"
-                                                onchange="saveNotifySetting('BID_NOTIFY_D2',this.checked)">
-                                            D-2 알림
-                                        </label>
-                                        <label class="flex items-center gap-2 text-sm">
-                                            <input type="checkbox" id="pref-BID_NOTIFY_D1"
-                                                onchange="saveNotifySetting('BID_NOTIFY_D1',this.checked)">
-                                            D-1 알림
-                                        </label>
-                                        <div class="flex items-center gap-2 text-sm mt-2">
-                                            <label class="text-gray-600">발송 시각:</label>
-                                            <input type="number" id="pref-BID_NOTIFY_HOUR" min="0" max="23"
-                                                onchange="saveNotifySetting('BID_NOTIFY_HOUR',this.value)"
-                                                class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
-                                            <span class="text-gray-500">시</span>
+                                        <div id="bid-notify-subs" class="space-y-2 ml-1 pt-1">
+                                            <label class="flex items-center gap-2 text-sm">
+                                                <input type="checkbox" id="pref-BID_NOTIFY_D3"
+                                                    onchange="saveNotifySetting('BID_NOTIFY_D3',this.checked)">
+                                                D-3 알림
+                                            </label>
+                                            <label class="flex items-center gap-2 text-sm">
+                                                <input type="checkbox" id="pref-BID_NOTIFY_D2"
+                                                    onchange="saveNotifySetting('BID_NOTIFY_D2',this.checked)">
+                                                D-2 알림
+                                            </label>
+                                            <label class="flex items-center gap-2 text-sm">
+                                                <input type="checkbox" id="pref-BID_NOTIFY_D1"
+                                                    onchange="saveNotifySetting('BID_NOTIFY_D1',this.checked)">
+                                                D-1 알림
+                                            </label>
+                                            <div class="flex items-center gap-2 text-sm mt-2">
+                                                <label class="text-gray-600">발송 시각:</label>
+                                                <input type="number" id="pref-BID_NOTIFY_HOUR" min="0" max="23"
+                                                    onchange="saveNotifySetting('BID_NOTIFY_HOUR',this.value)"
+                                                    class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
+                                                <span class="text-gray-500">시</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            <!-- 추천 만료 알림 -->
-                            <div class="border border-gray-200 rounded-lg p-4">
-                                <h3 class="text-sm font-bold text-gray-700 mb-3">추천 만료 알림</h3>
-                                <div class="space-y-2">
-                                    <label class="flex items-center gap-2 text-sm font-semibold text-orange-700 bg-orange-50 px-2 py-1.5 rounded-md border border-orange-200">
-                                        <input type="checkbox" id="pref-AUTO_EXPIRE_ENABLED"
-                                            onchange="saveNotifySetting('AUTO_EXPIRE_ENABLED',this.checked)">
-                                        추천물건 48시간 후 자동 미정 전환
-                                    </label>
-                                    <p class="text-xs text-gray-400 ml-6">OFF 시 48시간이 지나도 상태가 자동 변경되지 않습니다.</p>
-                                    <hr class="my-1 border-gray-100">
-                                    <label class="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" id="pref-EXPIRY_NOTIFY_24H"
-                                            onchange="saveNotifySetting('EXPIRY_NOTIFY_24H',this.checked)">
-                                        24시간 경과 알림
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" id="pref-EXPIRY_NOTIFY_1H"
-                                            onchange="saveNotifySetting('EXPIRY_NOTIFY_1H',this.checked)">
-                                        만료 1시간 전(47h) 알림
-                                    </label>
-                                    <label class="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" id="pref-EXPIRY_NOTIFY_DONE"
-                                            onchange="saveNotifySetting('EXPIRY_NOTIFY_DONE',this.checked)">
-                                        만료 처리 알림
-                                    </label>
+                                <!-- 추천 만료 알림 -->
+                                <div class="border border-gray-200 rounded-lg p-4">
+                                    <h3 class="text-sm font-bold text-gray-700 mb-3">추천 만료 알림</h3>
+                                    <div class="space-y-2">
+                                        <label
+                                            class="flex items-center gap-2 text-sm font-semibold text-orange-700 bg-orange-50 px-2 py-1.5 rounded-md border border-orange-200">
+                                            <input type="checkbox" id="pref-AUTO_EXPIRE_ENABLED"
+                                                onchange="saveNotifySetting('AUTO_EXPIRE_ENABLED',this.checked)">
+                                            추천물건 48시간 후 자동 미정 전환
+                                        </label>
+                                        <p class="text-xs text-gray-400 ml-6">OFF 시 48시간이 지나도 상태가 자동 변경되지 않습니다.</p>
+                                        <hr class="my-1 border-gray-100">
+                                        <label class="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" id="pref-EXPIRY_NOTIFY_24H"
+                                                onchange="saveNotifySetting('EXPIRY_NOTIFY_24H',this.checked)">
+                                            24시간 경과 알림
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" id="pref-EXPIRY_NOTIFY_1H"
+                                                onchange="saveNotifySetting('EXPIRY_NOTIFY_1H',this.checked)">
+                                            만료 1시간 전(47h) 알림
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm">
+                                            <input type="checkbox" id="pref-EXPIRY_NOTIFY_DONE"
+                                                onchange="saveNotifySetting('EXPIRY_NOTIFY_DONE',this.checked)">
+                                            만료 처리 알림
+                                        </label>
+                                    </div>
                                 </div>
+                            </div>
+                            <div class="mt-3 flex justify-end">
+                                <button onclick="loadNotifySettings()"
+                                    class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
                             </div>
                         </div>
-                        <div class="mt-3 flex justify-end">
-                            <button onclick="loadNotifySettings()"
-                                class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
+
+                        <!-- 하위탭: 웹훅 -->
+                        <div id="pref-sub-panel-webhook" class="pref-sub-panel p-4 md:p-6" style="display:none">
+                            <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-blue-200">
+                                <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">텔레그램 웹훅</h2>
+                                <p class="text-gray-600 mb-4 text-sm">
+                                    텔레그램의 <b>입찰 요청 버튼</b> 같은 “양방향 기능”은 웹훅 설정이 필요합니다.
+                                    아래 버튼을 1번만 눌러서 연결해 주세요.
+                                </p>
+                                <div class="flex items-center space-x-4 mb-2">
+                                    <button id="setTelegramWebhookButton" onclick="handleSetTelegramWebhook()"
+                                        class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 flex items-center">
+                                        웹훅 설정
+                                    </button>
+                                    <div id="telegramWebhookStatus" class="text-sm text-gray-600"></div>
+                                </div>
+                                <p class="text-gray-500 text-xs">
+                                    필요 조건: 스크립트 속성 <code
+                                        class="bg-gray-100 px-1.5 py-0.5 rounded">TELEGRAM_BOT_TOKEN</code> 설정.
+                                </p>
+                            </div><!-- /pref-sub-panel-webhook -->
+
+                            <!-- 하위탭: 표시명 설정 -->
+                            <div id="pref-sub-panel-dispName" class="pref-sub-panel p-4 md:p-6" style="display:none">
+                                <div class="max-w-lg">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h3 class="text-sm font-bold text-gray-800">👤 표시명 설정</h3>
+                                            <p class="text-xs text-gray-500 mt-0.5">텔레그램 메세지에서 회원에게 보이는 이름을 변경합니다. (담당자
+                                                이름 등)</p>
+                                        </div>
+                                        <button onclick="addDispNameEntry()"
+                                            class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 font-semibold">+
+                                            추가</button>
+                                    </div>
+                                    <div class="bg-white border border-gray-200 rounded-xl overflow-hidden mb-4">
+                                        <div
+                                            class="grid grid-cols-[1fr_1fr_40px] text-[11px] font-bold text-gray-500 bg-gray-50 px-4 py-2 border-b">
+                                            <span>실제 이름 (데이터 저장값)</span>
+                                            <span>표시 이름 (회원에게 보임)</span>
+                                            <span></span>
+                                        </div>
+                                        <div id="dispNameList" class="divide-y min-h-[60px]">
+                                            <div class="text-gray-400 text-xs p-4 text-center">불러오는 중...</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-end gap-2">
+                                        <button onclick="loadDispNameMap_()"
+                                            class="px-3 py-1.5 border border-gray-300 rounded text-xs hover:bg-gray-100">새로고침</button>
+                                        <button onclick="saveDispNameMapUI()"
+                                            class="px-4 py-1.5 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 font-semibold">전체
+                                            저장</button>
+                                    </div>
+                                    <div class="mt-4 text-[11px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                                        💡 예시: 실제이름 <code class="bg-white px-1 rounded border">대표님</code> → 표시이름 <code
+                                            class="bg-white px-1 rounded border">MJ</code>
+                                    </div>
+                                </div>
+                            </div><!-- /pref-sub-panel-dispName -->
+
+                        </div><!-- /하위 탭 패널 컨테이너 -->
+                    </div><!-- /pref-panel-telegram -->
+
+                    <!-- ── 탭 3: 앱정보 ─────────────────────────────────────────── -->
+                    <div id="pref-panel-appinfo" class="pref-panel flex-1 overflow-y-auto p-4 md:p-8"
+                        style="display:none">
+                        <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200 max-w-lg">
+                            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">앱 정보</h2>
+                            <dl class="space-y-2 text-sm text-gray-700">
+                                <div class="flex gap-2">
+                                    <dt class="font-semibold text-gray-500 w-24">버전</dt>
+                                    <dd>1.25.0</dd>
+                                </div>
+                                <div class="flex gap-2">
+                                    <dt class="font-semibold text-gray-500 w-24">플랫폼</dt>
+                                    <dd>Google Apps Script (GAS)</dd>
+                                </div>
+                                <div class="flex gap-2">
+                                    <dt class="font-semibold text-gray-500 w-24">데이터</dt>
+                                    <dd>Google Spreadsheet</dd>
+                                </div>
+                            </dl>
                         </div>
-                    </div>
+                    </div><!-- /pref-panel-appinfo -->
 
-                    <!-- 하위탭: 웹훅 -->
-                    <div id="pref-sub-panel-webhook" class="pref-sub-panel p-4 md:p-6" style="display:none">
-                <div class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-blue-200">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">텔레그램 웹훅</h2>
-                    <p class="text-gray-600 mb-4 text-sm">
-                        텔레그램의 <b>입찰 요청 버튼</b> 같은 “양방향 기능”은 웹훅 설정이 필요합니다.
-                        아래 버튼을 1번만 눌러서 연결해 주세요.
-                    </p>
-                    <div class="flex items-center space-x-4 mb-2">
-                        <button id="setTelegramWebhookButton" onclick="handleSetTelegramWebhook()"
-                            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 flex items-center">
-                            웹훅 설정
-                        </button>
-                        <div id="telegramWebhookStatus" class="text-sm text-gray-600"></div>
-                    </div>
-                    <p class="text-gray-500 text-xs">
-                        필요 조건: 스크립트 속성 <code class="bg-gray-100 px-1.5 py-0.5 rounded">TELEGRAM_BOT_TOKEN</code> 설정.
-                    </p>
-                    </div><!-- /pref-sub-panel-webhook -->
+                </div><!-- /Preferences -->
 
-                    <!-- 하위탭: 표시명 설정 -->
-                    <div id="pref-sub-panel-dispName" class="pref-sub-panel p-4 md:p-6" style="display:none">
-                        <div class="max-w-lg">
-                            <div class="flex items-center justify-between mb-4">
-                                <div>
-                                    <h3 class="text-sm font-bold text-gray-800">👤 표시명 설정</h3>
-                                    <p class="text-xs text-gray-500 mt-0.5">텔레그램 메세지에서 회원에게 보이는 이름을 변경합니다. (담당자 이름 등)</p>
-                                </div>
-                                <button onclick="addDispNameEntry()" class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 font-semibold">+ 추가</button>
-                            </div>
-                            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden mb-4">
-                                <div class="grid grid-cols-[1fr_1fr_40px] text-[11px] font-bold text-gray-500 bg-gray-50 px-4 py-2 border-b">
-                                    <span>실제 이름 (데이터 저장값)</span>
-                                    <span>표시 이름 (회원에게 보임)</span>
-                                    <span></span>
-                                </div>
-                                <div id="dispNameList" class="divide-y min-h-[60px]">
-                                    <div class="text-gray-400 text-xs p-4 text-center">불러오는 중...</div>
-                                </div>
-                            </div>
-                            <div class="flex justify-end gap-2">
-                                <button onclick="loadDispNameMap_()" class="px-3 py-1.5 border border-gray-300 rounded text-xs hover:bg-gray-100">새로고침</button>
-                                <button onclick="saveDispNameMapUI()" class="px-4 py-1.5 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 font-semibold">전체 저장</button>
-                            </div>
-                            <div class="mt-4 text-[11px] text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                                💡 예시: 실제이름 <code class="bg-white px-1 rounded border">대표님</code> → 표시이름 <code class="bg-white px-1 rounded border">MJ</code>
-                            </div>
-                        </div>
-                    </div><!-- /pref-sub-panel-dispName -->
-
-                    </div><!-- /하위 탭 패널 컨테이너 -->
-                </div><!-- /pref-panel-telegram -->
-
-                <!-- ── 탭 3: 앱정보 ─────────────────────────────────────────── -->
-                <div id="pref-panel-appinfo" class="pref-panel flex-1 overflow-y-auto p-4 md:p-8" style="display:none">
-                    <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200 max-w-lg">
-                        <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">앱 정보</h2>
-                        <dl class="space-y-2 text-sm text-gray-700">
-                            <div class="flex gap-2"><dt class="font-semibold text-gray-500 w-24">버전</dt><dd>1.25.0</dd></div>
-                            <div class="flex gap-2"><dt class="font-semibold text-gray-500 w-24">플랫폼</dt><dd>Google Apps Script (GAS)</dd></div>
-                            <div class="flex gap-2"><dt class="font-semibold text-gray-500 w-24">데이터</dt><dd>Google Spreadsheet</dd></div>
-                        </dl>
-                    </div>
-                </div><!-- /pref-panel-appinfo -->
-
-            </div><!-- /Preferences -->
-
+            </div>
         </div>
-    </div>
 
-    <div id="itemDetailModal" class="modal content-hidden" onclick="closeDetailModal(event)">
-        <div class="modal-content" style="max-width: 800px;" onclick="event.stopPropagation()">
-            <div class="flex justify-between items-center mb-6 border-b pb-4">
-                <h3 class="text-2xl font-bold text-gray-800">입찰 물건 상세</h3>
+        <div id="itemDetailModal" class="modal content-hidden" onclick="closeDetailModal(event)">
+            <div class="modal-content" style="max-width: 800px;" onclick="event.stopPropagation()">
+                <div class="flex justify-between items-center mb-6 border-b pb-4">
+                    <h3 class="text-2xl font-bold text-gray-800">입찰 물건 상세</h3>
 
-                <div class="flex items-center space-x-2">
-                    <!-- 상세/조사 공용 툴바 스타일 통합 -->
-                    <div id="modal-header-actions" class="flex items-center gap-2">
-                        <!-- 텔레그램 섹션 -->
-                        <div id="modal-telegram-toolbar" class="flex items-center gap-1">
-                            <select id="telegram-style-select"
-                                class="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white">
-                                <option value="card" selected>추천물건 안내</option>
-                                <option value="bid_price">입찰가 안내</option>
-                                <option value="status">입찰불가 안내</option>
-                            </select>
-                            <button type="button" onclick="sendTelegramForCurrentItem()"
-                                class="detail-form-btn bg-blue-600 hover:bg-blue-700 text-white rounded transition font-bold flex items-center whitespace-nowrap">
-                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="flex items-center space-x-2">
+                        <!-- 상세/조사 공용 툴바 스타일 통합 -->
+                        <div id="modal-header-actions" class="flex items-center gap-2">
+                            <!-- 텔레그램 섹션 -->
+                            <div id="modal-telegram-toolbar" class="flex items-center gap-1">
+                                <select id="telegram-style-select"
+                                    class="px-2 py-1.5 border border-gray-300 rounded-md text-xs bg-white">
+                                    <option value="card" selected>추천물건 안내</option>
+                                    <option value="bid_price">입찰가 안내</option>
+                                    <option value="status">입찰불가 안내</option>
+                                </select>
+                                <button type="button" onclick="sendTelegramForCurrentItem()"
+                                    class="detail-form-btn bg-blue-600 hover:bg-blue-700 text-white rounded transition font-bold flex items-center whitespace-nowrap">
+                                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M3 11l18-8-8 18-2-7-8-3z"></path>
+                                    </svg>텔레그램
+                                </button>
+                            </div>
+
+                            <!-- [추가] 상세탭 옥션원 버튼 -->
+                            <button type="button" id="btnModalDetailAuctionGo" onclick="openAuctionUrl()"
+                                class="detail-form-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition">옥션원
+                                가기</button>
+
+                            <!-- 조사 섹션 -->
+                            <div id="modal-investigation-toolbar" class="content-hidden flex items-center gap-1">
+                                <!-- [삭제] 중복 버튼 제거(상단 공용 버튼 활용) -->
+                                <button type="button" onclick="handleModalInvestigationDelete()"
+                                    class="detail-form-btn bg-red-500 hover:bg-red-600 text-white rounded transition font-medium member-hidden">삭제</button>
+                                <button type="button" onclick="handleModalInvestigationPrint()"
+                                    class="detail-form-btn bg-blue-600 hover:bg-blue-700 text-white rounded transition font-medium member-hidden">인쇄</button>
+                                <button type="button" onclick="handleModalInvestigationCopy()"
+                                    class="detail-form-btn bg-blue-600 hover:bg-blue-700 text-white rounded transition font-medium member-hidden">복사</button>
+                            </div>
+
+                            <!-- 일반 액션 -->
+                            <button type="button" onclick="handleModalUpdate()" id="modal-update-btn"
+                                class="detail-form-btn bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-bold shadow-md transition">수정</button>
+                            <button type="button" onclick="handleModalDelete()"
+                                class="detail-form-btn bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition">삭제</button>
+                            <button type="button" onclick="closeDetailModal()"
+                                class="detail-form-btn bg-gray-400 hover:bg-gray-500 text-white rounded-lg font-semibold transition">취소</button>
+                        </div>
+
+                        <button onclick="closeDetailModal()"
+                            class="text-gray-500 hover:text-gray-700 focus:outline-none ml-2">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 탭 버튼 -->
+                <div class="flex gap-2 mb-4 border-b">
+                    <button type="button" id="modal-tab-detail" onclick="switchModalTab('detail')"
+                        class="px-4 py-2 text-sm font-bold text-indigo-700 border-b-2 border-indigo-700 bg-indigo-50">상세</button>
+                    <button type="button" id="modal-tab-investigation" onclick="switchModalTab('investigation')"
+                        class="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-indigo-600">조사</button>
+                </div>
+
+                <!-- 상세 탭 내용 -->
+                <div id="modal-detail-content" class="modal-tab-container">
+                    <form id="modalForm">
+                        <input type="hidden" id="modalFormId">
+                        <input type="hidden" id="modal-form-member-id">
+                        <input type="hidden" id="modal-form-m-name2">
+                        <input type="hidden" id="modal-form-reg-member">
+                        <input type="hidden" id="modal-form-bid-state">
+                        <input type="hidden" id="modal-form-chuchen-state">
+                        <input type="hidden" id="modal-form-image-id">
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">입찰일자</label>
+                                <input type="text" id="modal-form-in-date" onfocus="this.select()"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-gray-50">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">사건번호</label>
+                                <input type="text" id="modal-form-sakun-no" onfocus="this.select()"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">법원명</label>
+                                <input type="text" id="modal-form-court" list="modal-court-datalist"
+                                    onfocus="this.select()" oninput="fillCourtDatalistFiltered(this.value)"
+                                    autocomplete="off" spellcheck="false" onchange="validateCourt(this)"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
+                                <datalist id="modal-court-datalist"></datalist>
+                            </div>
+                            <div class="mb-4">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block text-sm font-medium text-gray-700">물건상태</label>
+                                    <div class="flex items-center gap-1" id="modal-chuchen-state-buttons">
+                                        <button type="button" onclick="setModalChuchenState('신규')"
+                                            id="modal-btn-chuchen-new"
+                                            class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
+                                        <button type="button" onclick="setModalChuchenState('전달완료')"
+                                            id="modal-btn-chuchen-done"
+                                            class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
+                                    </div>
+                                </div>
+                                <select id="modal-form-stu-member"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
+                                    <option value="상품">상품</option>
+                                    <option value="미정">미정</option>
+                                    <option value="추천">추천</option>
+                                    <option value="입찰">입찰</option>
+                                    <option value="변경">변경</option>
+                                </select>
+                            </div>
+                            <div class="mb-4 md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">회원명 <span
+                                        id="modal-telegram-badge" class="ml-1"></span><span id="modal-display-member-id"
+                                        class="ml-2 text-xs text-blue-600"></span></label>
+                                <div class="flex items-center">
+                                    <input type="text" id="modal-form-m-name" list="modal-member-datalist"
+                                        onfocus="this.select()" autocomplete="off" spellcheck="false"
+                                        onchange="validateMember(this)"
+                                        class="w-1/2 px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
+                                    <datalist id="modal-member-datalist"></datalist>
+                                    <span id="modal-display-member-myungui" class="ml-2 text-xs text-gray-500"></span>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="block text-sm font-medium text-gray-700">입찰가</label>
+                                    <div class="space-x-1" id="modal-bid-state-buttons">
+                                        <button type="button" onclick="setBidState('신규')" id="modal-bid-state-new-btn"
+                                            class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-2 py-0.5 rounded border border-red-300 transition">신규</button>
+                                        <button type="button" onclick="setBidState('전달완료')"
+                                            id="modal-bid-state-delivered-btn"
+                                            class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded border border-gray-300 transition">전달완료</button>
+                                        <button type="button" onclick="setBidState('확인완료')"
+                                            id="modal-bid-state-confirmed-btn"
+                                            class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded border border-gray-300 transition">확인완료</button>
+                                    </div>
+                                </div>
+                                <input type="text" id="modal-form-bidprice" oninput="formatNumber(this)"
+                                    onfocus="this.select()"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm text-right font-bold text-gray-700">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">입찰가담당</label>
+                                <select id="modal-form-m-name-id"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-white">
+                                    <option value="대표님">대표님</option>
+                                    <option value="전제혁">전제혁</option>
+                                    <option value="박대원">박대원</option>
+                                </select>
+                            </div>
+
+
+                            <!-- 하단 탭: 비고 / 히스토리 / 정보 -->
+                            <div class="mb-4 md:col-span-2 border border-gray-200 rounded-lg overflow-hidden">
+                                <div class="flex border-b border-gray-200 bg-gray-50 text-xs">
+                                    <button type="button"
+                                        class="modal-sub-tab-btn px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-semibold bg-white"
+                                        onclick="switchModalSubTab('note')">비고</button>
+                                    <button type="button"
+                                        class="modal-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
+                                        onclick="switchModalSubTab('history')">히스토리</button>
+                                    <button type="button"
+                                        class="modal-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
+                                        onclick="switchModalSubTab('info')">정보</button>
+                                </div>
+                                <!-- 비고 탭 -->
+                                <div id="modal-sub-panel-note" class="p-3">
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <div class="flex items-center justify-between mb-1">
+                                                <label class="block text-xs font-semibold text-gray-600">회원비고</label>
+                                                <div class="flex gap-1">
+                                                    <button type="button" onclick="goToMemberFromModal()"
+                                                        class="text-xs px-2 py-0.5 bg-gray-500 hover:bg-gray-600 text-white rounded transition">회원관리</button>
+                                                    <button type="button" onclick="saveModalMemberNoteOnly()"
+                                                        class="text-xs px-2 py-0.5 bg-teal-600 hover:bg-teal-700 text-white rounded transition">저장</button>
+                                                </div>
+                                            </div>
+                                            <div id="modal-sub-member-note"
+                                                class="bg-teal-50 rounded p-2 text-xs text-gray-700 min-h-[60px] whitespace-pre-wrap max-h-32 overflow-y-auto">
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-semibold text-gray-600 mb-1">물건비고</label>
+                                            <div id="modal-sub-item-note"
+                                                class="bg-gray-50 rounded p-2 text-xs text-gray-700 min-h-[60px] whitespace-pre-wrap max-h-32 overflow-y-auto">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 히스토리 탭 -->
+                                <div id="modal-sub-panel-history" class="p-3 hidden">
+                                    <div id="modal-sub-history-list" class="text-xs space-y-1 max-h-52 overflow-y-auto">
+                                    </div>
+                                </div>
+                                <!-- 정보 탭 -->
+                                <div id="modal-sub-panel-info" class="p-3 hidden">
+                                    <div id="modal-sub-info-content" class="text-xs space-y-1"></div>
+                                </div>
+                            </div>
+
+                            <div id="modal-detail-template-section" class="mb-4 md:col-span-2 border-t pt-4">
+                                <div class="flex justify-between items-end mb-0 border-b border-gray-200">
+                                    <div class="flex space-x-1">
+                                        <button type="button" id="tab-bid-check" onclick="switchTemplateTab('check')"
+                                            class="px-4 py-2 text-sm font-bold text-indigo-700 border-b-2 border-indigo-700 bg-indigo-50 rounded-t-lg hover:bg-indigo-100 transition">추천물건안내</button>
+                                        <button type="button" id="tab-bid-guide" onclick="switchTemplateTab('guide')"
+                                            class="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-indigo-600 hover:bg-gray-50 rounded-t-lg transition">입찰가
+                                            안내</button>
+                                    </div>
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <button type="button" onclick="copyTemplateText()"
+                                            class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">복사하기</button>
+                                        <button type="button" onclick="toggleTemplateArea()"
+                                            class="text-xs text-gray-500 underline">접기/펴기</button>
+                                    </div>
+                                </div>
+                                <div id="template-area-container" class="hidden">
+                                    <textarea id="template-textarea"
+                                        class="w-full px-3 py-2 border border-blue-50 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-xs font-mono leading-tight bg-blue-50"
+                                        rows="8"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 조사 탭 내용 -->
+                <div id="modal-investigation-content" class="modal-tab-container content-hidden flex flex-col">
+                    <div class="flex flex-col investigation-image-container-modal">
+                        <div id="modal-investigation-image-container"
+                            class="investigation-image-wrap flex-1 min-h-0 bg-gray-100 overflow-y-auto flex flex-col items-start">
+                            <p id="modal-investigation-placeholder"
+                                class="text-gray-500 text-center py-8 self-center w-full">매칭된 이미지 없음</p>
+                            <div id="modal-investigation-image-list"
+                                class="w-full flex flex-col gap-4 p-1 content-hidden">
+                            </div>
+                        </div>
+                        <div id="modal-investigation-image-ids-footer"
+                            class="flex-shrink-0 border-t border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 font-mono overflow-x-auto">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="printInvestigationArea"><img id="printInvestigationImg" alt="조사 이미지" src="" style="display:none;">
+            <p id="printInvestigationNoImage" style="display:none; padding:2rem;">매칭된 이미지 없음</p>
+        </div>
+        <?!= include('js-app'); ?>
+        <!-- 일괄 상태 변경 모달 -->
+        <div id="bulkStatusModal" class="fixed inset-0 z-[60] content-hidden overflow-y-auto"
+            aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
+                    onclick="closeBulkStatusModal()"></div>
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                <div
+                    class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="sm:flex sm:items-start">
+                            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                <h3 class="text-lg leading-6 font-bold text-gray-900" id="modal-title">물건상태 일괄 변경</h3>
+                                <div class="mt-4">
+                                    <p class="text-sm text-gray-500 mb-2">선택된 물건 목록 (총 <span id="bulk-status-count"
+                                            class="font-bold text-indigo-600">0</span>건):</p>
+                                    <div id="bulk-status-list"
+                                        class="max-h-40 overflow-y-auto border border-gray-200 rounded-md p-2 text-xs text-gray-600 mb-4 bg-gray-50">
+                                        <!-- 선택된 물건 리스트가 여기에 동적으로 추가됨 -->
+                                    </div>
+                                    <div class="flex flex-col gap-2">
+                                        <label class="text-sm font-medium text-gray-700">변경할 상태 선택:</label>
+                                        <select id="bulk-new-status"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                                            <option value="상품">상품</option>
+                                            <option value="미정">미정</option>
+                                            <option value="추천">추천</option>
+                                            <option value="입찰">입찰</option>
+                                            <option value="변경">변경</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                        <button type="button" onclick="applyBulkStatusUpdate()"
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:w-auto sm:text-sm">변경
+                            적용</button>
+                        <button type="button" onclick="closeBulkStatusModal()"
+                            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm">취소</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 중복 이미지 일괄 해결 모달 -->
+        <div id="syncConflictBulkModal" class="fixed inset-0 z-[60] content-hidden overflow-y-auto" role="dialog"
+            aria-modal="true">
+            <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+                    onclick="closeSyncConflictBulkModal()"></div>
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+                <div
+                    class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-red-100">
+                    <div class="bg-white px-6 pt-6 pb-4">
+                        <div class="flex items-center mb-4">
+                            <div class="bg-red-100 p-2 rounded-full mr-3 text-red-600">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M3 11l18-8-8 18-2-7-8-3z"></path>
-                                </svg>텔레그램
+                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
+                                    </path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-900">중복 이미지 일괄 처리</h3>
+                        </div>
+                        <div class="mb-6">
+                            <p class="text-sm text-gray-600">선택한 <span id="bulk-sync-count"
+                                    class="font-extrabold text-red-600">0</span>건의 이미지를 어떻게 처리하시겠습니까?</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <!-- 기존 유지 옵션 -->
+                            <button type="button" onclick="executeBulkSyncResolve('keep_existing')"
+                                class="w-full text-left p-4 rounded-xl border-2 border-gray-100 hover:border-gray-300 hover:bg-gray-50 transition-all group">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-base font-bold text-gray-800">기존유지 (기존 데이터 보존)</span>
+                                    <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">유지</span>
+                                </div>
+                                <p class="text-xs text-gray-500 leading-relaxed">이미지ID, 옥션ID가 이 이미지의 정보로 업데이트 됩니다.
+                                    (입찰가담당자는
+                                    변경되지 않습니다.)</p>
+                            </button>
+
+                            <!-- 신규 교체 옵션 -->
+                            <button type="button" onclick="executeBulkSyncResolve('replace_with_new')"
+                                class="w-full text-left p-4 rounded-xl border-2 border-red-100 hover:border-red-300 hover:bg-red-50 transition-all">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-base font-bold text-red-700">신규교체 (담당자 정보 덮어쓰기)</span>
+                                    <span
+                                        class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold">교체</span>
+                                </div>
+                                <p class="text-xs text-red-600/70 leading-relaxed font-medium">입찰가담당자, 이미지ID, 옥션ID가 이
+                                    이미지의
+                                    정보로 업데이트 됩니다.</p>
                             </button>
                         </div>
-
-                        <!-- [추가] 상세탭 옥션원 버튼 -->
-                        <button type="button" id="btnModalDetailAuctionGo" onclick="openAuctionUrl()"
-                            class="detail-form-btn bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition">옥션원
-                            가기</button>
-
-                        <!-- 조사 섹션 -->
-                        <div id="modal-investigation-toolbar" class="content-hidden flex items-center gap-1">
-                            <!-- [삭제] 중복 버튼 제거(상단 공용 버튼 활용) -->
-                            <button type="button" onclick="handleModalInvestigationDelete()"
-                                class="detail-form-btn bg-red-500 hover:bg-red-600 text-white rounded transition font-medium member-hidden">삭제</button>
-                            <button type="button" onclick="handleModalInvestigationPrint()"
-                                class="detail-form-btn bg-blue-600 hover:bg-blue-700 text-white rounded transition font-medium member-hidden">인쇄</button>
-                            <button type="button" onclick="handleModalInvestigationCopy()"
-                                class="detail-form-btn bg-blue-600 hover:bg-blue-700 text-white rounded transition font-medium member-hidden">복사</button>
-                        </div>
-
-                        <!-- 일반 액션 -->
-                        <button type="button" onclick="handleModalUpdate()" id="modal-update-btn"
-                            class="detail-form-btn bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-bold shadow-md transition">수정</button>
-                        <button type="button" onclick="handleModalDelete()"
-                            class="detail-form-btn bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition">삭제</button>
-                        <button type="button" onclick="closeDetailModal()"
-                            class="detail-form-btn bg-gray-400 hover:bg-gray-500 text-white rounded-lg font-semibold transition">취소</button>
                     </div>
+                    <div class="bg-gray-50 px-6 py-4 flex flex-row-reverse">
+                        <button type="button" onclick="closeSyncConflictBulkModal()"
+                            class="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-100 transition shadow-sm">
+                            닫기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                    <button onclick="closeDetailModal()"
-                        class="text-gray-500 hover:text-gray-700 focus:outline-none ml-2">
+        <!-- ===== 공유 UI 레이어 (회원 탭 공통 - 최상위로 배치) ===== -->
+        <!-- 조사 이미지 뷰어 (position:fixed - 어느 탭에서든 작동) -->
+        <div class="img-viewer" id="imgViewer">
+            <div class="img-vh">
+                <button class="img-vback" onclick="closeImgViewer()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                    뒤로
+                </button>
+                <span class="img-vtitle" id="imgVTitle"></span>
+                <span class="img-vcnt" id="imgVCnt"></span>
+            </div>
+            <div class="img-vbody" id="imgVBody">
+                <div class="img-vph" id="imgVLoad">이미지 불러오는 중...</div>
+            </div>
+        </div>
+        <!-- 복사 토스트 -->
+        <div class="copy-toast" id="copyToast">복사되었습니다!</div>
+        <!-- 입찰취소 모달 -->
+        <div class="mo" id="mBC">
+            <div class="mx">
+                <button class="mo-x" onclick="cm('mBC')">✕</button>
+                <h3>입찰 취소 신청</h3>
+                <p id="mBD" class="mo-sub"></p>
+                <p id="mBR" class="mo-result hidden"></p>
+                <div class="ma">
+                    <button class="mm d" onclick="doBC()">예</button>
+                </div>
+            </div>
+        </div>
+        <!-- 추천 액션 모달 -->
+        <div class="mo" id="mRA">
+            <div class="mx">
+                <button class="mo-x" onclick="cm('mRA')">✕</button>
+                <p class="mo-label">액션을 선택하세요</p>
+                <h3 id="mRT" class="mo-case"></h3>
+                <p id="mRR" class="mo-result hidden"></p>
+                <div class="ma">
+                    <button class="mm o" onclick="doRC()">입찰확정</button>
+                    <button class="mm d" onclick="doRX()">입찰취소</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 전역 충돌 말풍선 툴팁 -->
+        <div id="g-conflict-tooltip"></div>
+
+        <!-- 텔레그램 연동 안내 메세지 모달 -->
+        <div id="telegramGuideModal" class="fixed inset-0 z-[1001] hidden overflow-y-auto" aria-labelledby="modal-title"
+            role="dialog" aria-modal="true">
+            <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
+                    onclick="closeTelegramGuideModal()"></div>
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                <div
+                    class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="sm:flex sm:items-start">
+                            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                <h3 class="text-lg leading-6 font-bold text-gray-900" id="modal-title">
+                                    텔레그램 연동 안내 메세지
+                                </h3>
+                                <div class="mt-4">
+                                    <p class="text-xs text-gray-500 mb-2">아래 내용을 복사해서 회원님께 전달해주세요.</p>
+                                    <textarea id="telegramGuideMessage" rows="15"
+                                        class="w-full px-3 py-2 border border-indogo-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 font-sans leading-relaxed"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                        <button type="button" onclick="copyTelegramGuide()"
+                            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                            복사하기
+                        </button>
+                        <button type="button" onclick="closeTelegramGuideModal()"
+                            class="mt-3 bunk-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            닫기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 다중 추천 메시지 모달 -->
+        <div id="bulkMessageModal"
+            class="content-hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-[100] flex justify-center items-center p-4">
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in duration-200"
+                onclick="event.stopPropagation()">
+                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-indigo-50">
+                    <h3 class="text-lg font-bold text-indigo-900">다중 추천 메시지 생성</h3>
+                    <button type="button" onclick="closeBulkMessageModal()" class="text-gray-400 hover:text-gray-600">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12"></path>
+                                d="M6 18L18 6M6 6l12 12">
+                            </path>
                         </svg>
                     </button>
                 </div>
-            </div>
-
-            <!-- 탭 버튼 -->
-            <div class="flex gap-2 mb-4 border-b">
-                <button type="button" id="modal-tab-detail" onclick="switchModalTab('detail')"
-                    class="px-4 py-2 text-sm font-bold text-indigo-700 border-b-2 border-indigo-700 bg-indigo-50">상세</button>
-                <button type="button" id="modal-tab-investigation" onclick="switchModalTab('investigation')"
-                    class="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-indigo-600">조사</button>
-            </div>
-
-            <!-- 상세 탭 내용 -->
-            <div id="modal-detail-content" class="modal-tab-container">
-                <form id="modalForm">
-                    <input type="hidden" id="modalFormId">
-                    <input type="hidden" id="modal-form-member-id">
-                    <input type="hidden" id="modal-form-m-name2">
-                    <input type="hidden" id="modal-form-reg-member">
-                    <input type="hidden" id="modal-form-bid-state">
-                    <input type="hidden" id="modal-form-chuchen-state">
-                    <input type="hidden" id="modal-form-image-id">
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">입찰일자</label>
-                            <input type="text" id="modal-form-in-date" onfocus="this.select()"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-gray-50">
-                        </div>
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">사건번호</label>
-                            <input type="text" id="modal-form-sakun-no" onfocus="this.select()"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
-                        </div>
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">법원명</label>
-                            <input type="text" id="modal-form-court" list="modal-court-datalist" onfocus="this.select()"
-                                oninput="fillCourtDatalistFiltered(this.value)" autocomplete="off" spellcheck="false"
-                                onchange="validateCourt(this)"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
-                            <datalist id="modal-court-datalist"></datalist>
-                        </div>
-                        <div class="mb-4">
-                            <div class="flex justify-between items-center mb-1">
-                                <label class="block text-sm font-medium text-gray-700">물건상태</label>
-                                <div class="flex items-center gap-1" id="modal-chuchen-state-buttons">
-                                    <button type="button" onclick="setModalChuchenState('신규')"
-                                        id="modal-btn-chuchen-new"
-                                        class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
-                                    <button type="button" onclick="setModalChuchenState('전달완료')"
-                                        id="modal-btn-chuchen-done"
-                                        class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
-                                </div>
-                            </div>
-                            <select id="modal-form-stu-member"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
-                                <option value="상품">상품</option>
-                                <option value="미정">미정</option>
-                                <option value="추천">추천</option>
-                                <option value="입찰">입찰</option>
-                                <option value="변경">변경</option>
-                            </select>
-                        </div>
-                        <div class="mb-4 md:col-span-2">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">회원명 <span
-                                    id="modal-telegram-badge" class="ml-1"></span><span id="modal-display-member-id"
-                                    class="ml-2 text-xs text-blue-600"></span></label>
-                            <div class="flex items-center">
-                                <input type="text" id="modal-form-m-name" list="modal-member-datalist"
-                                    onfocus="this.select()" autocomplete="off" spellcheck="false"
-                                    onchange="validateMember(this)"
-                                    class="w-1/2 px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
-                                <datalist id="modal-member-datalist"></datalist>
-                                <span id="modal-display-member-myungui" class="ml-2 text-xs text-gray-500"></span>
-                            </div>
-                        </div>
-                        <div class="mb-4">
-                            <div class="flex justify-between items-center mb-1">
-                                <label class="block text-sm font-medium text-gray-700">입찰가</label>
-                                <div class="space-x-1" id="modal-bid-state-buttons">
-                                    <button type="button" onclick="setBidState('신규')" id="modal-bid-state-new-btn"
-                                        class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-2 py-0.5 rounded border border-red-300 transition">신규</button>
-                                    <button type="button" onclick="setBidState('전달완료')"
-                                        id="modal-bid-state-delivered-btn"
-                                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded border border-gray-300 transition">전달완료</button>
-                                    <button type="button" onclick="setBidState('확인완료')"
-                                        id="modal-bid-state-confirmed-btn"
-                                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded border border-gray-300 transition">확인완료</button>
-                                </div>
-                            </div>
-                            <input type="text" id="modal-form-bidprice" oninput="formatNumber(this)"
-                                onfocus="this.select()"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm text-right font-bold text-gray-700">
-                        </div>
-                        <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">입찰가담당</label>
-                            <select id="modal-form-m-name-id"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-white">
-                                <option value="대표님">대표님</option>
-                                <option value="전제혁">전제혁</option>
-                                <option value="박대원">박대원</option>
-                            </select>
-                        </div>
-
-
-                        <!-- 하단 탭: 비고 / 히스토리 / 정보 -->
-                        <div class="mb-4 md:col-span-2 border border-gray-200 rounded-lg overflow-hidden">
-                            <div class="flex border-b border-gray-200 bg-gray-50 text-xs">
-                                <button type="button"
-                                    class="modal-sub-tab-btn px-4 py-2 border-b-2 border-indigo-600 text-indigo-700 font-semibold bg-white"
-                                    onclick="switchModalSubTab('note')">비고</button>
-                                <button type="button"
-                                    class="modal-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
-                                    onclick="switchModalSubTab('history')">히스토리</button>
-                                <button type="button"
-                                    class="modal-sub-tab-btn px-4 py-2 border-b-2 border-transparent text-gray-500 hover:text-indigo-600"
-                                    onclick="switchModalSubTab('info')">정보</button>
-                            </div>
-                            <!-- 비고 탭 -->
-                            <div id="modal-sub-panel-note" class="p-3">
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <div class="flex items-center justify-between mb-1">
-                                            <label class="block text-xs font-semibold text-gray-600">회원비고</label>
-                                            <div class="flex gap-1">
-                                                <button type="button" onclick="goToMemberFromModal()"
-                                                    class="text-xs px-2 py-0.5 bg-gray-500 hover:bg-gray-600 text-white rounded transition">회원관리</button>
-                                                <button type="button" onclick="saveModalMemberNoteOnly()"
-                                                    class="text-xs px-2 py-0.5 bg-teal-600 hover:bg-teal-700 text-white rounded transition">저장</button>
-                                            </div>
-                                        </div>
-                                        <div id="modal-sub-member-note"
-                                            class="bg-teal-50 rounded p-2 text-xs text-gray-700 min-h-[60px] whitespace-pre-wrap max-h-32 overflow-y-auto">
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-semibold text-gray-600 mb-1">물건비고</label>
-                                        <div id="modal-sub-item-note"
-                                            class="bg-gray-50 rounded p-2 text-xs text-gray-700 min-h-[60px] whitespace-pre-wrap max-h-32 overflow-y-auto">
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- 히스토리 탭 -->
-                            <div id="modal-sub-panel-history" class="p-3 hidden">
-                                <div id="modal-sub-history-list" class="text-xs space-y-1 max-h-52 overflow-y-auto">
-                                </div>
-                            </div>
-                            <!-- 정보 탭 -->
-                            <div id="modal-sub-panel-info" class="p-3 hidden">
-                                <div id="modal-sub-info-content" class="text-xs space-y-1"></div>
-                            </div>
-                        </div>
-
-                        <div id="modal-detail-template-section" class="mb-4 md:col-span-2 border-t pt-4">
-                            <div class="flex justify-between items-end mb-0">
-                                <div class="flex space-x-1">
-                                    <button type="button" id="tab-bid-guide" onclick="switchTemplateTab('guide')"
-                                        class="px-4 py-2 text-sm font-bold text-indigo-700 border-b-2 border-indigo-700 bg-indigo-50 rounded-t-lg hover:bg-indigo-100 transition">입찰가
-                                        안내</button>
-                                    <button type="button" id="tab-bid-check" onclick="switchTemplateTab('check')"
-                                        class="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-indigo-600 hover:bg-gray-50 rounded-t-lg transition">입찰여부확인</button>
-                                </div>
-                                <div class="flex items-center gap-2 mb-2">
-                                    <button type="button" onclick="toggleTemplateArea()"
-                                        class="text-xs text-gray-500 underline">접기/펴기</button>
-                                </div>
-                            </div>
-                            <div id="template-area-container" class="hidden">
-                                <div class="flex justify-end gap-2 mb-1">
-                                    <button type="button" onclick="copyTemplateText()"
-                                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs px-3 py-1.5 rounded transition font-medium flex items-center">
-                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3">
-                                            </path>
-                                        </svg>전체 복사
-                                    </button>
-                                </div>
-                                <textarea id="template-textarea"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-xs font-mono leading-tight"
-                                    rows="8"></textarea>
-                            </div>
-                        </div>
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-sm font-semibold text-gray-700">생성된 메시지 (복사해서 사용하세요)</span>
+                        <button type="button" onclick="copyBulkMessageText()"
+                            class="px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-bold shadow-sm">복사하기</button>
                     </div>
-                </form>
-            </div>
-
-            <!-- 조사 탭 내용 -->
-            <div id="modal-investigation-content" class="modal-tab-container content-hidden flex flex-col">
-                <div class="flex flex-col investigation-image-container-modal">
-                    <div id="modal-investigation-image-container"
-                        class="investigation-image-wrap flex-1 min-h-0 bg-gray-100 overflow-y-auto flex flex-col items-start">
-                        <p id="modal-investigation-placeholder"
-                            class="text-gray-500 text-center py-8 self-center w-full">매칭된 이미지 없음</p>
-                        <div id="modal-investigation-image-list" class="w-full flex flex-col gap-4 p-1 content-hidden">
-                        </div>
-                    </div>
-                    <div id="modal-investigation-image-ids-footer"
-                        class="flex-shrink-0 border-t border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 font-mono overflow-x-auto">
-                    </div>
+                    <textarea id="bulk-message-textarea" rows="15"
+                        class="w-full px-4 py-3 border border-blue-200 rounded-xl shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-mono leading-relaxed bg-blue-50"
+                        readonly></textarea>
+                </div>
+                <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50">
+                    <button type="button" onclick="closeBulkMessageModal()"
+                        class="px-5 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition font-medium">닫기</button>
                 </div>
             </div>
         </div>
-    </div>
-
-    <div id="printInvestigationArea"><img id="printInvestigationImg" alt="조사 이미지" src="" style="display:none;">
-        <p id="printInvestigationNoImage" style="display:none; padding:2rem;">매칭된 이미지 없음</p>
-    </div>
-    <?!= include('js-app'); ?>
-    <!-- 일괄 상태 변경 모달 -->
-    <div id="bulkStatusModal" class="fixed inset-0 z-[60] content-hidden overflow-y-auto" aria-labelledby="modal-title"
-        role="dialog" aria-modal="true">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
-                onclick="closeBulkStatusModal()"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div
-                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <div class="sm:flex sm:items-start">
-                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                            <h3 class="text-lg leading-6 font-bold text-gray-900" id="modal-title">물건상태 일괄 변경</h3>
-                            <div class="mt-4">
-                                <p class="text-sm text-gray-500 mb-2">선택된 물건 목록 (총 <span id="bulk-status-count"
-                                        class="font-bold text-indigo-600">0</span>건):</p>
-                                <div id="bulk-status-list"
-                                    class="max-h-40 overflow-y-auto border border-gray-200 rounded-md p-2 text-xs text-gray-600 mb-4 bg-gray-50">
-                                    <!-- 선택된 물건 리스트가 여기에 동적으로 추가됨 -->
-                                </div>
-                                <div class="flex flex-col gap-2">
-                                    <label class="text-sm font-medium text-gray-700">변경할 상태 선택:</label>
-                                    <select id="bulk-new-status"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                                        <option value="상품">상품</option>
-                                        <option value="미정">미정</option>
-                                        <option value="추천">추천</option>
-                                        <option value="입찰">입찰</option>
-                                        <option value="변경">변경</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
-                    <button type="button" onclick="applyBulkStatusUpdate()"
-                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:w-auto sm:text-sm">변경
-                        적용</button>
-                    <button type="button" onclick="closeBulkStatusModal()"
-                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm">취소</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 중복 이미지 일괄 해결 모달 -->
-    <div id="syncConflictBulkModal" class="fixed inset-0 z-[60] content-hidden overflow-y-auto" role="dialog"
-        aria-modal="true">
-        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-                onclick="closeSyncConflictBulkModal()"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
-            <div
-                class="inline-block align-bottom bg-white rounded-xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-red-100">
-                <div class="bg-white px-6 pt-6 pb-4">
-                    <div class="flex items-center mb-4">
-                        <div class="bg-red-100 p-2 rounded-full mr-3 text-red-600">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
-                                </path>
-                            </svg>
-                        </div>
-                        <h3 class="text-xl font-bold text-gray-900">중복 이미지 일괄 처리</h3>
-                    </div>
-                    <div class="mb-6">
-                        <p class="text-sm text-gray-600">선택한 <span id="bulk-sync-count"
-                                class="font-extrabold text-red-600">0</span>건의 이미지를 어떻게 처리하시겠습니까?</p>
-                    </div>
-
-                    <div class="space-y-3">
-                        <!-- 기존 유지 옵션 -->
-                        <button type="button" onclick="executeBulkSyncResolve('keep_existing')"
-                            class="w-full text-left p-4 rounded-xl border-2 border-gray-100 hover:border-gray-300 hover:bg-gray-50 transition-all group">
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-base font-bold text-gray-800">기존유지 (기존 데이터 보존)</span>
-                                <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">유지</span>
-                            </div>
-                            <p class="text-xs text-gray-500 leading-relaxed">이미지ID, 옥션ID가 이 이미지의 정보로 업데이트 됩니다. (입찰가담당자는
-                                변경되지 않습니다.)</p>
-                        </button>
-
-                        <!-- 신규 교체 옵션 -->
-                        <button type="button" onclick="executeBulkSyncResolve('replace_with_new')"
-                            class="w-full text-left p-4 rounded-xl border-2 border-red-100 hover:border-red-300 hover:bg-red-50 transition-all">
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-base font-bold text-red-700">신규교체 (담당자 정보 덮어쓰기)</span>
-                                <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold">교체</span>
-                            </div>
-                            <p class="text-xs text-red-600/70 leading-relaxed font-medium">입찰가담당자, 이미지ID, 옥션ID가 이 이미지의
-                                정보로 업데이트 됩니다.</p>
-                        </button>
-                    </div>
-                </div>
-                <div class="bg-gray-50 px-6 py-4 flex flex-row-reverse">
-                    <button type="button" onclick="closeSyncConflictBulkModal()"
-                        class="px-5 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-100 transition shadow-sm">
-                        닫기
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ===== 공유 UI 레이어 (회원 탭 공통 - 최상위로 배치) ===== -->
-    <!-- 조사 이미지 뷰어 (position:fixed - 어느 탭에서든 작동) -->
-    <div class="img-viewer" id="imgViewer">
-        <div class="img-vh">
-            <button class="img-vback" onclick="closeImgViewer()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="15 18 9 12 15 6" />
-                </svg>
-                뒤로
-            </button>
-            <span class="img-vtitle" id="imgVTitle"></span>
-            <span class="img-vcnt" id="imgVCnt"></span>
-        </div>
-        <div class="img-vbody" id="imgVBody">
-            <div class="img-vph" id="imgVLoad">이미지 불러오는 중...</div>
-        </div>
-    </div>
-    <!-- 복사 토스트 -->
-    <div class="copy-toast" id="copyToast">복사되었습니다!</div>
-    <!-- 입찰취소 모달 -->
-    <div class="mo" id="mBC">
-        <div class="mx">
-            <button class="mo-x" onclick="cm('mBC')">✕</button>
-            <h3>입찰 취소 신청</h3>
-            <p id="mBD" class="mo-sub"></p>
-            <p id="mBR" class="mo-result hidden"></p>
-            <div class="ma">
-                <button class="mm d" onclick="doBC()">예</button>
-            </div>
-        </div>
-    </div>
-    <!-- 추천 액션 모달 -->
-    <div class="mo" id="mRA">
-        <div class="mx">
-            <button class="mo-x" onclick="cm('mRA')">✕</button>
-            <p class="mo-label">액션을 선택하세요</p>
-            <h3 id="mRT" class="mo-case"></h3>
-            <p id="mRR" class="mo-result hidden"></p>
-            <div class="ma">
-                <button class="mm o" onclick="doRC()">입찰확정</button>
-                <button class="mm d" onclick="doRX()">입찰취소</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 전역 충돌 말풍선 툴팁 -->
-    <div id="g-conflict-tooltip"></div>
-
-    <!-- 텔레그램 연동 안내 메세지 모달 -->
-    <div id="telegramGuideModal" class="fixed inset-0 z-[1001] hidden overflow-y-auto" aria-labelledby="modal-title"
-        role="dialog" aria-modal="true">
-        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"
-                onclick="closeTelegramGuideModal()"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div
-                class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <div class="sm:flex sm:items-start">
-                        <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-                            <h3 class="text-lg leading-6 font-bold text-gray-900" id="modal-title">
-                                텔레그램 연동 안내 메세지
-                            </h3>
-                            <div class="mt-4">
-                                <p class="text-xs text-gray-500 mb-2">아래 내용을 복사해서 회원님께 전달해주세요.</p>
-                                <textarea id="telegramGuideMessage" rows="15"
-                                    class="w-full px-3 py-2 border border-indogo-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 font-sans leading-relaxed"></textarea>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
-                    <button type="button" onclick="copyTelegramGuide()"
-                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
-                        복사하기
-                    </button>
-                    <button type="button" onclick="closeTelegramGuideModal()"
-                        class="mt-3 bunk-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-                        닫기
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
 </body>
 
 </html>

@@ -3399,7 +3399,7 @@
 
     // ── 입찰물건관리 상세 하단 탭 ──────────────────────────────────
     function switchItemSubTab(tab) {
-        ['note', 'history', 'info'].forEach(t => {
+        ['note', 'history', 'message', 'info'].forEach(t => {
             const btns = document.querySelectorAll(`.item-sub-tab-btn`);
             btns.forEach(btn => {
                 const isTarget = btn.getAttribute('onclick') === `switchItemSubTab('${t}')`;
@@ -3414,6 +3414,10 @@
         });
         if (tab === 'history') renderItemSubHistory();
         if (tab === 'info') renderItemSubInfo();
+        if (tab === 'message') {
+            // 상세 탭에서의 메시지 템플릿 기본값(추천물건안내) 표시
+            switchTemplateTab('check', false);
+        }
     }
 
     function renderItemSubHistory() {
@@ -4521,7 +4525,7 @@
         const templateContainer = document.getElementById('template-area-container');
         if (templateContainer) templateContainer.classList.add('hidden');
 
-        switchTemplateTab('guide', false);
+        switchTemplateTab('check', false);
 
         // 기본적으로 상세 탭 표시
         switchModalTab('detail');
@@ -4565,75 +4569,97 @@
         if (itemDetailModal) itemDetailModal.classList.remove('content-hidden');
     }
 
+    function copyTemplateText(context = 'modal') {
+        const id = context === 'item' ? 'item-template-textarea' : 'template-textarea';
+        const textarea = document.getElementById(id);
+        if (!textarea) return;
+        textarea.select();
+        document.execCommand('copy');
+        alert('메시지가 클립보드에 복사되었습니다.');
+    }
+
     function switchTemplateTab(type, showContent = true) {
+        // Modal tabs
         const guideTab = document.getElementById('tab-bid-guide');
         const checkTab = document.getElementById('tab-bid-check');
-        const templateContainer = document.getElementById('template-area-container');
+        // Item detail tabs
+        const itemGuideTab = document.getElementById('item-tab-bid-guide');
+        const itemCheckTab = document.getElementById('item-tab-bid-check');
 
         const activeClass = ['text-indigo-700', 'border-indigo-700', 'bg-indigo-50', 'font-bold'];
         const inactiveClass = ['text-gray-500', 'border-transparent', 'hover:text-indigo-600', 'hover:bg-gray-50', 'font-medium'];
 
-        if (type === 'guide') {
-            if (guideTab) {
-                guideTab.classList.add(...activeClass);
-                guideTab.classList.remove(...inactiveClass);
+        // Update Modal Tabs if match
+        if (guideTab && checkTab) {
+            if (type === 'guide') {
+                guideTab.classList.add(...activeClass); guideTab.classList.remove(...inactiveClass);
+                checkTab.classList.add(...inactiveClass); checkTab.classList.remove(...activeClass);
+            } else {
+                checkTab.classList.add(...activeClass); checkTab.classList.remove(...inactiveClass);
+                guideTab.classList.add(...inactiveClass); guideTab.classList.remove(...activeClass);
             }
-            if (checkTab) {
-                checkTab.classList.add(...inactiveClass);
-                checkTab.classList.remove(...activeClass);
-            }
-            updateMessageTemplate('guide');
-        } else if (type === 'check') {
-            if (checkTab) {
-                checkTab.classList.add(...activeClass);
-                checkTab.classList.remove(...inactiveClass);
-            }
-            if (guideTab) {
-                guideTab.classList.add(...inactiveClass);
-                guideTab.classList.remove(...activeClass);
-            }
-            updateMessageTemplate('check');
         }
 
+        // Update Item Detail Tabs if match
+        if (itemGuideTab && itemCheckTab) {
+            if (type === 'guide') {
+                itemGuideTab.classList.add(...activeClass); itemGuideTab.classList.remove(...inactiveClass);
+                itemCheckTab.classList.add(...inactiveClass); itemCheckTab.classList.remove(...activeClass);
+            } else {
+                itemCheckTab.classList.add(...activeClass); itemCheckTab.classList.remove(...inactiveClass);
+                itemGuideTab.classList.add(...inactiveClass); itemGuideTab.classList.remove(...activeClass);
+            }
+        }
+
+        updateMessageTemplate(type);
+
+        const templateContainer = document.getElementById('template-area-container');
         if (showContent && templateContainer && templateContainer.classList.contains('hidden')) {
             templateContainer.classList.remove('hidden');
         }
     }
 
     function updateMessageTemplate(type) {
-        const textarea = document.getElementById('template-textarea');
-        if (!textarea || !currentModalItemData) return;
+        const modalTextarea = document.getElementById('template-textarea');
+        const itemTextarea = document.getElementById('item-template-textarea');
 
-        const data = currentModalItemData;
+        // Modal context
+        if (modalTextarea && currentModalItemData) {
+            modalTextarea.value = generateTemplateContent(type, currentModalItemData);
+        }
+
+        // Item Detail Context
+        if (itemTextarea && currentDetailItem) {
+            itemTextarea.value = generateTemplateContent(type, currentDetailItem);
+        }
+    }
+
+    function generateTemplateContent(type, data) {
+        if (!data) return '';
         const price = data.bidprice;
-
         let dateStr = String(data['in-date'] || '').trim();
         let formattedDate = dateStr;
         if (dateStr.length === 6) {
             formattedDate = `20${dateStr.substring(0, 2)}년 ${dateStr.substring(2, 4)}월 ${dateStr.substring(4, 6)}일`;
         }
-
         let formattedPrice = (price == 0 || price === '0') ? '0' : new Intl.NumberFormat('ko-KR').format(price);
 
-        let templateContent = '';
-
         if (type === 'guide') {
-            templateContent = `안녕하세요 엠제이경매스쿨입니다.    
-입찰가 전달드립니다.      
+            return `안녕하세요? 
+엠제이경매스쿨입니다.    
+
+입찰가 전달드립니다. 회원님의 낙찰을 기원드립니다!      
    
+====================================
 회 원 명:    ${data.m_name || ''}
 입찰일자:   ${formattedDate}
 사건번호:   ${data.sakun_no || ''}
 법     원:   ${data.court || ''}
-   
+====================================   
 입 찰 가:    ${formattedPrice}원
+====================================
    
-확인 부탁 드립니다.    
-감사합니다.    
-   
-
-
-* 참고사항
+[참고사항]
 서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!
 
 앞으로 원할한 소통을 위해 제 번호 연락처 등록 요청 드립니다.    
@@ -4641,27 +4667,63 @@
 카카오톡으로 받으시는 분께서는 신경안쓰셔도 됩니다~   
    
 MJ 이정우 팀장
- 
-======================
+감사합니다~ 
+====================================
 *업무별 담당자 안내 드립니다.    
-1. 입찰가 관리: 이정우    
+1. 입찰가 관리: 이정우(010-4238-7781)   
 2. 단기투자클럽 관리: 이경미님 (010-3448-8035)    
 3. PT 관리: 장정아님 (010-9838-8035)  
-======================`;
+4. 돈버는클래스 담당: 김재휘님 (010-3448-8035)   
+   - 입찰관련 문의는 저에게 주시고 물건관련 문의는
+   - 1. 돈버는클래스 오픈채팅방 MJ스태프 1:1 카톡 (김재휘님)
+   - 2. 돈버는클래스 담당: 김재휘님 (010-3448-8035)  
+====================================`;
 
         } else if (type === 'check') {
-            templateContent = `안녕하세요? 
-입찰여부 확인 및 회신 부탁드립니다. 
+            return `안녕하세요? 
+엠제이경매스쿨입니다. 
 
+추천물건 전달드립니다.
+입찰 여부 회신 부탁드려요~ (48시간 이후 자동취소)
+
+====================================
 회 원 명:    ${data.m_name || ''}
 입찰일자:   ${formattedDate}
 사건번호:   ${data.sakun_no || ''}
 법     원:   ${data.court || ''}
+====================================
 
-감사합니다.`;
+[필독]
+ - 48시간 이내에 확정해 주지 않으시면 자동취소 되세요~ 부탁드립니다 ^^;;
+ - 돈클회원님께서는 아래 담당자 확인후 문의 부탁드려요~
+ - 텔레그램 계정으로 어플이용하여 훨씬 편리하게 물건 관리 하실 수 있습니다 .^^
+   (필요하신분은 카톡으로 요청 주세요~ 텔레그램 가입후 "텔레그램 신청" 이라고 주세요)
+
+[입찰가 전달]
+ - 입찰확정을 하신 물건에 대해서만 전달 드립니다. 
+ - 워킹데이로(주말,공휴일제외) 입찰일자 -7 부터 -1일 까지 사이에 전달 드립니다.  
+
+[참고사항]
+서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!
+
+앞으로 원할한 소통을 위해 제 번호 연락처 등록 요청 드립니다.    
+향후 카카오톡으로 전달 드리겠습니다.    
+카카오톡으로 받으시는 분께서는 신경안쓰셔도 됩니다~   
+   
+MJ 이정우 팀장
+감사합니다~
+====================================
+*업무별 담당자 안내 드립니다.    
+1. 입찰가 관리: 이정우(010-4238-7781)   
+2. 단기투자클럽 관리: 이경미님 (010-3448-8035)    
+3. PT 관리: 장정아님 (010-9838-8035)  
+4. 돈버는클래스 담당: 김재휘님 (010-3448-8035)   
+   - 입찰관련 문의는 저에게 주시고 물건관련 문의는
+   - 1. 돈버는클래스 오픈채팅방 MJ스태프 1:1 카톡 (김재휘님)
+   - 2. 돈버는클래스 담당: 김재휘님 (010-3448-8035)  
+====================================`;
         }
-
-        textarea.value = templateContent;
+        return '';
     }
 
     function setBidState(state) {
@@ -7424,46 +7486,46 @@ MJ 이정우 팀장
 
     // ── 흐름 정의: 엑셀 A~E 컬럼 순서대로 ────────────────────────────────────────
     var _MSG_FLOW = [
-        { seq: 1,  actor: 'MAPS', color: 'blue',   subject: '추천물건전달',  action: '텔레그램 [추천물건안내] 선택 전송',    condition: '물건상태: 추천일경우',         type: 'maps_card',  mainKey: 'item_card.card',            note: '48시간 이내 입찰확정 부탁드리며, 이후 자동 취소됩니다.' },
-        { seq: 2,  actor: '회원', color: 'green',  subject: '입찰확정',      action: '입찰확정 버튼 선택',                   condition: '물건상태: 추천일경우',         type: 'simple',     mainKey: 'member.bid_confirm_ask',    note: '입찰확정 여부를 확인하는 메세지입니다.' },
-        { seq: 3,  actor: '회원', color: 'green',  subject: '입찰확정 불가', action: '입찰확정 버튼 선택',                   condition: '물건상태: 추천 아닐경우',      type: 'simple',     mainKey: 'member.bid_confirm_invalid', note: '' },
-        { seq: 4,  actor: 'SYS',  color: 'purple', subject: '입찰확정 완료', action: '입찰확정 선택 후 자동 메시지',         condition: '물건상태: 추천일경우',         type: 'sys_reply',  mainKey: 'sys.bid_confirmed',          note: '원본메세지에 댓글(reply)로 자동 전송됩니다.' },
-        { seq: 5,  actor: '회원', color: 'green',  subject: '입찰취소',      action: '입찰취소 버튼 선택',                   condition: '물건상태: 추천, 입찰일경우',   type: 'simple',     mainKey: 'member.bid_cancel_ask',      note: '입찰취소 여부를 확인하는 메세지입니다.' },
-        { seq: 6,  actor: '회원', color: 'green',  subject: '입찰취소 불가', action: '입찰취소 버튼 선택',                   condition: '물건상태: 입찰 아닐경우',      type: 'simple',     mainKey: 'member.bid_cancel_invalid',  note: '' },
-        { seq: 7,  actor: 'SYS',  color: 'purple', subject: '입찰취소 완료', action: '입찰취소 선택 후 자동 메시지',         condition: '물건상태: 입찰일경우',         type: 'sys_reply',  mainKey: 'sys.bid_cancelled',          note: '원본메세지에 댓글(reply)로 자동 전송됩니다.' },
-        { seq: 8,  actor: 'MAPS', color: 'blue',   subject: '입찰가전달',    action: '텔레그램 [입찰가안내] 선택 전송',      condition: '물건상태: 입찰일경우',         type: 'maps_card',  mainKey: 'item_card.check_request',    note: '' },
-        { seq: 9,  actor: '회원', color: 'green',  subject: '입찰가확인',    action: '입찰가 확인 버튼 선택',                condition: '물건상태: 입찰일경우',         type: 'bid_price',  mainKey: 'member.bid_price_view',      note: '입찰가 확인 버튼 클릭 시 표시되는 메세지입니다.' },
-        { seq: 10, actor: 'MAPS', color: 'blue',   subject: '입찰불가안내',  action: '텔레그램 [입찰불가안내] 선택 전송',    condition: '물건상태: 변경일경우',         type: 'maps_card',  mainKey: 'item_card.status',           note: '' }
+        { seq: 1, actor: 'MAPS', color: 'blue', subject: '추천물건전달', action: '텔레그램 [추천물건안내] 선택 전송', condition: '물건상태: 추천일경우', type: 'maps_card', mainKey: 'item_card.card', note: '48시간 이내 입찰확정 부탁드리며, 이후 자동 취소됩니다.' },
+        { seq: 2, actor: '회원', color: 'green', subject: '입찰확정', action: '입찰확정 버튼 선택', condition: '물건상태: 추천일경우', type: 'simple', mainKey: 'member.bid_confirm_ask', note: '입찰확정 여부를 확인하는 메세지입니다.' },
+        { seq: 3, actor: '회원', color: 'green', subject: '입찰확정 불가', action: '입찰확정 버튼 선택', condition: '물건상태: 추천 아닐경우', type: 'simple', mainKey: 'member.bid_confirm_invalid', note: '' },
+        { seq: 4, actor: 'SYS', color: 'purple', subject: '입찰확정 완료', action: '입찰확정 선택 후 자동 메시지', condition: '물건상태: 추천일경우', type: 'sys_reply', mainKey: 'sys.bid_confirmed', note: '원본메세지에 댓글(reply)로 자동 전송됩니다.' },
+        { seq: 5, actor: '회원', color: 'green', subject: '입찰취소', action: '입찰취소 버튼 선택', condition: '물건상태: 추천, 입찰일경우', type: 'simple', mainKey: 'member.bid_cancel_ask', note: '입찰취소 여부를 확인하는 메세지입니다.' },
+        { seq: 6, actor: '회원', color: 'green', subject: '입찰취소 불가', action: '입찰취소 버튼 선택', condition: '물건상태: 입찰 아닐경우', type: 'simple', mainKey: 'member.bid_cancel_invalid', note: '' },
+        { seq: 7, actor: 'SYS', color: 'purple', subject: '입찰취소 완료', action: '입찰취소 선택 후 자동 메시지', condition: '물건상태: 입찰일경우', type: 'sys_reply', mainKey: 'sys.bid_cancelled', note: '원본메세지에 댓글(reply)로 자동 전송됩니다.' },
+        { seq: 8, actor: 'MAPS', color: 'blue', subject: '입찰가전달', action: '텔레그램 [입찰가안내] 선택 전송', condition: '물건상태: 입찰일경우', type: 'maps_card', mainKey: 'item_card.check_request', note: '' },
+        { seq: 9, actor: '회원', color: 'green', subject: '입찰가확인', action: '입찰가 확인 버튼 선택', condition: '물건상태: 입찰일경우', type: 'bid_price', mainKey: 'member.bid_price_view', note: '입찰가 확인 버튼 클릭 시 표시되는 메세지입니다.' },
+        { seq: 10, actor: 'MAPS', color: 'blue', subject: '입찰불가안내', action: '텔레그램 [입찰불가안내] 선택 전송', condition: '물건상태: 변경일경우', type: 'maps_card', mainKey: 'item_card.status', note: '' }
     ];
     var _MSG_NOTIFY = [
-        { seq: 'D-3', subject: 'D-3 입찰일 알림',   mainKey: 'notify.bid_d3',       type: 'notify' },
-        { seq: 'D-2', subject: 'D-2 입찰일 알림',   mainKey: 'notify.bid_d2',       type: 'notify' },
-        { seq: 'D-1', subject: 'D-1 입찰일 알림',   mainKey: 'notify.bid_d1',       type: 'notify' },
-        { seq: 'N1',  subject: '24h 만료 알림',      mainKey: 'notify.expiry_24h',   type: 'notify' },
-        { seq: 'N2',  subject: '1h 만료 전 알림',    mainKey: 'notify.expiry_1h',    type: 'notify' },
-        { seq: 'N3',  subject: '만료 완료 알림',     mainKey: 'notify.expiry_done',  type: 'notify' }
+        { seq: 'D-3', subject: 'D-3 입찰일 알림', mainKey: 'notify.bid_d3', type: 'notify' },
+        { seq: 'D-2', subject: 'D-2 입찰일 알림', mainKey: 'notify.bid_d2', type: 'notify' },
+        { seq: 'D-1', subject: 'D-1 입찰일 알림', mainKey: 'notify.bid_d1', type: 'notify' },
+        { seq: 'N1', subject: '24h 만료 알림', mainKey: 'notify.expiry_24h', type: 'notify' },
+        { seq: 'N2', subject: '1h 만료 전 알림', mainKey: 'notify.expiry_1h', type: 'notify' },
+        { seq: 'N3', subject: '만료 완료 알림', mainKey: 'notify.expiry_done', type: 'notify' }
     ];
 
     // ── 버튼 기본 설정 ────────────────────────────────────────────────────────────
     var _BTN_DEFAULTS = {
-        'item_card.card':         [{ text:'내물건보기', action:'VIEW', enabled:true, row:0 }, { text:'입찰확정', action:'BID_CONFIRM', enabled:true, row:1 }, { text:'입찰취소', action:'CANCEL_CONFIRM', enabled:true, row:1 }],
-        'item_card.check_request':[{ text:'입찰가확인', action:'PRICE_CONFIRM', enabled:true, row:0 }, { text:'내물건보기', action:'VIEW', enabled:true, row:1 }],
-        'item_card.status':       [{ text:'내물건보기', action:'VIEW', enabled:true, row:0 }],
-        'sys.bid_confirmed':      [{ text:'🏠 MAPS 바로가기', action:'MAPS_LINK', enabled:true, row:0 }],
-        'sys.bid_cancelled':      [{ text:'🏠 MAPS 바로가기', action:'MAPS_LINK', enabled:true, row:0 }],
-        'member.bid_confirm_ask': [{ text:'예', action:'BID_YES', enabled:true, row:0 }, { text:'아니오', action:'BID_NO', enabled:true, row:0 }],
-        'member.bid_cancel_ask':  [{ text:'예', action:'CANCEL_YES', enabled:true, row:0 }, { text:'아니오', action:'CANCEL_NO', enabled:true, row:0 }]
+        'item_card.card': [{ text: '내물건보기', action: 'VIEW', enabled: true, row: 0 }, { text: '입찰확정', action: 'BID_CONFIRM', enabled: true, row: 1 }, { text: '입찰취소', action: 'CANCEL_CONFIRM', enabled: true, row: 1 }],
+        'item_card.check_request': [{ text: '입찰가확인', action: 'PRICE_CONFIRM', enabled: true, row: 0 }, { text: '내물건보기', action: 'VIEW', enabled: true, row: 1 }],
+        'item_card.status': [{ text: '내물건보기', action: 'VIEW', enabled: true, row: 0 }],
+        'sys.bid_confirmed': [{ text: '🏠 MAPS 바로가기', action: 'MAPS_LINK', enabled: true, row: 0 }],
+        'sys.bid_cancelled': [{ text: '🏠 MAPS 바로가기', action: 'MAPS_LINK', enabled: true, row: 0 }],
+        'member.bid_confirm_ask': [{ text: '예', action: 'BID_YES', enabled: true, row: 0 }, { text: '아니오', action: 'BID_NO', enabled: true, row: 0 }],
+        'member.bid_cancel_ask': [{ text: '예', action: 'CANCEL_YES', enabled: true, row: 0 }, { text: '아니오', action: 'CANCEL_NO', enabled: true, row: 0 }]
     };
 
     // ── 데이터 필드 정의 ──────────────────────────────────────────────────────────
     var _DATA_FIELDS_ALL = [
-        { key:'status',      label:'물건상태', icon:'🔴', sample:'추천' },
-        { key:'in_date',     label:'입찰일자', icon:'📅', sample:'26/04/10' },
-        { key:'sakun_no',    label:'사건번호', icon:'📄', sample:'2024타경1234' },
-        { key:'court',       label:'법원',     icon:'🏛️', sample:'서울중앙지방법원' },
-        { key:'member_name', label:'회원',     icon:'👤', sample:'홍길동' },
-        { key:'manager',     label:'담당',     icon:'👨‍💼', sample:'대표님' },
-        { key:'bid_price',   label:'입찰가',   icon:'💰', sample:'323,000,000원', onlyFor:['item_card.check_request','item_card.status'] }
+        { key: 'status', label: '물건상태', icon: '🔴', sample: '추천' },
+        { key: 'in_date', label: '입찰일자', icon: '📅', sample: '26/04/10' },
+        { key: 'sakun_no', label: '사건번호', icon: '📄', sample: '2024타경1234' },
+        { key: 'court', label: '법원', icon: '🏛️', sample: '서울중앙지방법원' },
+        { key: 'member_name', label: '회원', icon: '👤', sample: '홍길동' },
+        { key: 'manager', label: '담당', icon: '👨‍💼', sample: '대표님' },
+        { key: 'bid_price', label: '입찰가', icon: '💰', sample: '323,000,000원', onlyFor: ['item_card.check_request', 'item_card.status'] }
     ];
 
     // ── 상태 변수 ─────────────────────────────────────────────────────────────────
@@ -7475,18 +7537,18 @@ MJ 이정우 팀장
     var _msgCurrentDataCfg = null;// 현재 편집 중인 데이터 필드 설정
 
     var MSG_SAMPLE_VARS = {
-        member_name:'홍길동', sakun_no:'2024타경1234', in_date:'26/04/10',
-        court:'서울중앙지방법원', manager:'대표님', bid_price:'323,000,000', status:'추천'
+        member_name: '홍길동', sakun_no: '2024타경1234', in_date: '26/04/10',
+        court: '서울중앙지방법원', manager: '대표님', bid_price: '323,000,000', status: '추천'
     };
 
     // ── 공용 헬퍼 ─────────────────────────────────────────────────────────────────
     function _getTpl(key) {
-        var t = _msgTemplates.find(function(x){ return x.msg_key === key; });
+        var t = _msgTemplates.find(function (x) { return x.msg_key === key; });
         return t ? (t.template || '') : '';
     }
     function _fillVarsMsg(text) {
-        return (text||'').replace(/\{\{(\w+)\}\}/g, function(_,n){
-            return MSG_SAMPLE_VARS[n] !== undefined ? MSG_SAMPLE_VARS[n] : ('{{'+n+'}}');
+        return (text || '').replace(/\{\{(\w+)\}\}/g, function (_, n) {
+            return MSG_SAMPLE_VARS[n] !== undefined ? MSG_SAMPLE_VARS[n] : ('{{' + n + '}}');
         });
     }
 
@@ -7496,27 +7558,27 @@ MJ 이정우 팀장
         switchPrefTab('telegram');
         switchPrefSubTab('msgEditor');
     }
-    function closeMsgEditor() {}
+    function closeMsgEditor() { }
 
     // ── 데이터 로드 ───────────────────────────────────────────────────────────────
     function loadMsgTemplates_() {
         var nav = document.getElementById('msgFlowNav');
         if (nav) nav.innerHTML = '<div class="text-gray-400 text-xs p-3">불러오는 중...</div>';
         google.script.run
-            .withSuccessHandler(function(rows) {
+            .withSuccessHandler(function (rows) {
                 _msgTemplates = rows || [];
                 google.script.run
-                    .withSuccessHandler(function(cfgs) {
+                    .withSuccessHandler(function (cfgs) {
                         _msgBtnConfigs = cfgs || {};
                         google.script.run
-                            .withSuccessHandler(function(dcfgs) { _msgDataConfigs = dcfgs || {}; renderMsgNav_(); })
-                            .withFailureHandler(function()       { _msgDataConfigs = {};        renderMsgNav_(); })
+                            .withSuccessHandler(function (dcfgs) { _msgDataConfigs = dcfgs || {}; renderMsgNav_(); })
+                            .withFailureHandler(function () { _msgDataConfigs = {}; renderMsgNav_(); })
                             .getAllDataConfigs();
                     })
-                    .withFailureHandler(function() { _msgBtnConfigs = {}; _msgDataConfigs = {}; renderMsgNav_(); })
+                    .withFailureHandler(function () { _msgBtnConfigs = {}; _msgDataConfigs = {}; renderMsgNav_(); })
                     .getAllBtnConfigs();
             })
-            .withFailureHandler(function(e) {
+            .withFailureHandler(function (e) {
                 if (nav) nav.innerHTML = '<div class="text-red-400 text-xs p-3">오류: ' + e + '</div>';
             })
             .getAllMsgTemplates();
@@ -7526,31 +7588,31 @@ MJ 이정우 팀장
     function renderMsgNav_() {
         var nav = document.getElementById('msgFlowNav');
         if (!nav) return;
-        var colorMap = { 'MAPS':'bg-blue-100 text-blue-700', '회원':'bg-green-100 text-green-700', 'SYS':'bg-purple-100 text-purple-700' };
+        var colorMap = { 'MAPS': 'bg-blue-100 text-blue-700', '회원': 'bg-green-100 text-green-700', 'SYS': 'bg-purple-100 text-purple-700' };
         var html = '<div class="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide">메세지 흐름</div>';
-        _MSG_FLOW.forEach(function(item) {
+        _MSG_FLOW.forEach(function (item) {
             var active = (_msgSelectedSeq === item.seq);
             var ac = colorMap[item.actor] || 'bg-gray-100 text-gray-600';
-            html += '<button onclick="selectMsgFlow('+item.seq+')" class="w-full text-left px-2 py-2 rounded-lg mb-0.5 border transition-all '
+            html += '<button onclick="selectMsgFlow(' + item.seq + ')" class="w-full text-left px-2 py-2 rounded-lg mb-0.5 border transition-all '
                 + (active ? 'bg-purple-50 border-purple-300 shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200')
                 + '">'
                 + '<div class="flex items-center gap-1.5 mb-0.5">'
-                + '<span class="text-[10px] font-bold text-gray-300 w-4 text-right flex-shrink-0">'+item.seq+'</span>'
-                + '<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 '+ac+'">'+item.actor+'</span>'
-                + '<span class="text-xs font-semibold text-gray-800 truncate">'+escapeHtml(item.subject)+'</span>'
+                + '<span class="text-[10px] font-bold text-gray-300 w-4 text-right flex-shrink-0">' + item.seq + '</span>'
+                + '<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ' + ac + '">' + item.actor + '</span>'
+                + '<span class="text-xs font-semibold text-gray-800 truncate">' + escapeHtml(item.subject) + '</span>'
                 + '</div>'
-                + '<div class="text-[10px] text-gray-400 pl-5 leading-tight truncate">'+escapeHtml(item.condition)+'</div>'
+                + '<div class="text-[10px] text-gray-400 pl-5 leading-tight truncate">' + escapeHtml(item.condition) + '</div>'
                 + '</button>';
         });
         html += '<div class="px-2 pt-3 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide border-t mt-1">알림 메세지</div>';
-        _MSG_NOTIFY.forEach(function(item) {
+        _MSG_NOTIFY.forEach(function (item) {
             var active = (_msgSelectedSeq === item.mainKey);
-            html += '<button onclick="selectMsgNotify(\''+item.mainKey+'\')" class="w-full text-left px-2 py-1.5 rounded-lg mb-0.5 border transition-all '
+            html += '<button onclick="selectMsgNotify(\'' + item.mainKey + '\')" class="w-full text-left px-2 py-1.5 rounded-lg mb-0.5 border transition-all '
                 + (active ? 'bg-purple-50 border-purple-300' : 'border-transparent hover:bg-white hover:border-gray-200')
                 + '">'
                 + '<div class="flex items-center gap-1.5">'
-                + '<span class="text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0">'+item.seq+'</span>'
-                + '<span class="text-xs text-gray-700">'+escapeHtml(item.subject)+'</span>'
+                + '<span class="text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0">' + item.seq + '</span>'
+                + '<span class="text-xs text-gray-700">' + escapeHtml(item.subject) + '</span>'
                 + '</div>'
                 + '</button>';
         });
@@ -7561,14 +7623,14 @@ MJ 이정우 팀장
     function selectMsgFlow(seq) {
         _msgSelectedSeq = seq;
         _msgCurrentBtns = null;
-        var item = _MSG_FLOW.find(function(x){ return x.seq === seq; });
+        var item = _MSG_FLOW.find(function (x) { return x.seq === seq; });
         if (!item) return;
         renderMsgNav_();
         _renderFlowEditor_(item);
     }
     function selectMsgNotify(mainKey) {
         _msgSelectedSeq = mainKey;
-        var item = _MSG_NOTIFY.find(function(x){ return x.mainKey === mainKey; });
+        var item = _MSG_NOTIFY.find(function (x) { return x.mainKey === mainKey; });
         if (!item) return;
         renderMsgNav_();
         _renderNotifyEditor_(item);
@@ -7576,16 +7638,16 @@ MJ 이정우 팀장
 
     // ── 에디터 공통 헤더 ──────────────────────────────────────────────────────────
     function _editorHeader_(item) {
-        var colorMap = { 'MAPS':'bg-blue-100 text-blue-700', '회원':'bg-green-100 text-green-700', 'SYS':'bg-purple-100 text-purple-700' };
+        var colorMap = { 'MAPS': 'bg-blue-100 text-blue-700', '회원': 'bg-green-100 text-green-700', 'SYS': 'bg-purple-100 text-purple-700' };
         var ac = colorMap[item.actor] || 'bg-gray-100 text-gray-600';
         var html = '<div class="mb-3 pb-3 border-b">'
             + '<div class="flex items-center gap-2 mb-1">'
-            + '<span class="text-[11px] font-bold px-2 py-0.5 rounded '+ac+'">'+escapeHtml(item.actor||'')+'</span>'
-            + '<span class="font-bold text-sm text-gray-800">'+escapeHtml(item.seq+'. '+item.subject)+'</span>'
+            + '<span class="text-[11px] font-bold px-2 py-0.5 rounded ' + ac + '">' + escapeHtml(item.actor || '') + '</span>'
+            + '<span class="font-bold text-sm text-gray-800">' + escapeHtml(item.seq + '. ' + item.subject) + '</span>'
             + '</div>'
-            + '<div class="text-[11px] text-gray-500">'+escapeHtml(item.action||'')+'</div>'
-            + '<div class="text-[11px] text-blue-500 mt-0.5">조건: '+escapeHtml(item.condition||'')+'</div>';
-        if (item.note) html += '<div class="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1.5">💡 '+escapeHtml(item.note)+'</div>';
+            + '<div class="text-[11px] text-gray-500">' + escapeHtml(item.action || '') + '</div>'
+            + '<div class="text-[11px] text-blue-500 mt-0.5">조건: ' + escapeHtml(item.condition || '') + '</div>';
+        if (item.note) html += '<div class="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1.5">💡 ' + escapeHtml(item.note) + '</div>';
         html += '</div>';
         return html;
     }
@@ -7599,7 +7661,7 @@ MJ 이정우 팀장
     // ── MAPS 카드 에디터 (maps_card) — 좌우 분리 레이아웃 ────────────────────────
     function _renderFlowEditor_(item) {
         var empty = document.getElementById('msgEditorEmpty');
-        var form  = document.getElementById('msgEditorForm');
+        var form = document.getElementById('msgEditorForm');
         if (empty) empty.style.display = 'none';
         if (!form) return;
 
@@ -7616,18 +7678,18 @@ MJ 이정우 팀장
             form.className = 'flex flex-col p-4 gap-2 overflow-y-auto';
             form.style.minHeight = '';
             var html = _editorHeader_(item);
-            if      (item.type === 'sys_reply') html += _buildSysReplyEditor_(item);
+            if (item.type === 'sys_reply') html += _buildSysReplyEditor_(item);
             else if (item.type === 'bid_price') html += _buildBidPriceEditor_(item);
-            else                                html += _buildSimpleEditor_(item);
+            else html += _buildSimpleEditor_(item);
             form.innerHTML = html;
-            if (item.type === 'sys_reply')      _updateSysReplyPreview_();
+            if (item.type === 'sys_reply') _updateSysReplyPreview_();
             else if (item.type === 'bid_price') _updateBidPricePreview_();
-            else                                _updateSimplePreview_('msgFlowPreviewText');
+            else _updateSimplePreview_('msgFlowPreviewText');
         }
     }
 
     function _buildMapsCardEditor_(item) {
-        var statusMap = { 'item_card.card':'추천', 'item_card.check_request':'입찰', 'item_card.status':'변경' };
+        var statusMap = { 'item_card.card': '추천', 'item_card.check_request': '입찰', 'item_card.status': '변경' };
         var status = statusMap[item.mainKey] || '추천';
         var hasBidPrice = (item.mainKey !== 'item_card.card');
 
@@ -7649,7 +7711,7 @@ MJ 이정우 팀장
             + '</div>'
             + '<div class="p-3">'
             + '<div class="text-[10px] text-gray-400 mb-1.5 font-mono bg-gray-50 rounded px-2 py-1">MJMAPS  ← 고정</div>'
-            + '<textarea id="msgFlowTmpl_main" rows="4" data-key="'+item.mainKey+'" oninput="_updateMapsCardPreview_()" '
+            + '<textarea id="msgFlowTmpl_main" rows="4" data-key="' + item.mainKey + '" oninput="_updateMapsCardPreview_()" '
             + 'class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono resize-y focus:ring-2 focus:ring-blue-400 outline-none leading-relaxed">'
             + escapeHtml(_getTpl(item.mainKey)) + '</textarea>'
             + '</div>'
@@ -7709,16 +7771,16 @@ MJ 이정우 팀장
             + '<div class="text-[10px] text-gray-400 mb-2">체크한 항목만 메세지에 포함됩니다</div>'
             + '<div class="space-y-1.5">';
 
-        _DATA_FIELDS_ALL.forEach(function(field) {
+        _DATA_FIELDS_ALL.forEach(function (field) {
             // bid_price는 hasBidPrice인 경우만 표시
             if (field.onlyFor && !hasBidPrice) return;
             // 기본값: 저장된 값 없으면 true
             var enabled = (savedCfg && savedCfg[field.key] !== undefined) ? savedCfg[field.key] : true;
             html += '<label class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-green-50 transition-colors" '
-                + 'onclick="toggleDataField(\''+field.key+'\',document.getElementById(\'dc_'+field.key+'_'+msgKey.replace(/\./g,'_')+'\').checked)">'
-                + '<input type="checkbox" id="dc_'+field.key+'_'+msgKey.replace(/\./g,'_')+'" '
+                + 'onclick="toggleDataField(\'' + field.key + '\',document.getElementById(\'dc_' + field.key + '_' + msgKey.replace(/\./g, '_') + '\').checked)">'
+                + '<input type="checkbox" id="dc_' + field.key + '_' + msgKey.replace(/\./g, '_') + '" '
                 + (enabled ? 'checked' : '') + ' '
-                + 'onchange="toggleDataField(\''+field.key+'\',this.checked)" class="accent-green-600 w-3.5 h-3.5 flex-shrink-0">'
+                + 'onchange="toggleDataField(\'' + field.key + '\',this.checked)" class="accent-green-600 w-3.5 h-3.5 flex-shrink-0">'
                 + '<span class="text-sm">' + field.icon + '</span>'
                 + '<span class="text-xs font-medium text-gray-700 w-16 flex-shrink-0">' + field.label + '</span>'
                 + '<span class="text-[11px] text-gray-400 font-mono truncate">' + escapeHtml(field.sample) + '</span>'
@@ -7733,73 +7795,73 @@ MJ 이정우 팀장
         if (!_msgCurrentDataCfg) {
             // 기본값(모두 true)으로 초기화
             _msgCurrentDataCfg = {};
-            _DATA_FIELDS_ALL.forEach(function(f) { _msgCurrentDataCfg[f.key] = true; });
+            _DATA_FIELDS_ALL.forEach(function (f) { _msgCurrentDataCfg[f.key] = true; });
         }
         _msgCurrentDataCfg[fieldKey] = enabled;
         _updateMapsCardPreview_();
     }
 
     function saveDataConfigUI() {
-        var item = _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; });
+        var item = _MSG_FLOW.find(function (x) { return x.seq === _msgSelectedSeq; });
         if (!item || item.type !== 'maps_card') return;
         // 현재 체크박스 상태 수집
         var cfg = {};
-        _DATA_FIELDS_ALL.forEach(function(field) {
-            var el = document.getElementById('dc_'+field.key+'_'+item.mainKey.replace(/\./g,'_'));
+        _DATA_FIELDS_ALL.forEach(function (field) {
+            var el = document.getElementById('dc_' + field.key + '_' + item.mainKey.replace(/\./g, '_'));
             if (el) cfg[field.key] = el.checked;
         });
         var cfgJson = JSON.stringify(cfg);
         showStatus('데이터 설정 저장 중...', 'info');
         google.script.run
-            .withSuccessHandler(function(r) {
+            .withSuccessHandler(function (r) {
                 if (r && r.success) {
                     _msgDataConfigs[item.mainKey] = cfg;
                     _msgCurrentDataCfg = cfg;
                     showStatus('데이터 설정 저장 완료', 'success');
-                } else showStatus('저장 실패: '+(r&&r.message||''), 'error');
+                } else showStatus('저장 실패: ' + (r && r.message || ''), 'error');
             })
-            .withFailureHandler(function(e){ showStatus('저장 실패: '+e, 'error'); })
+            .withFailureHandler(function (e) { showStatus('저장 실패: ' + e, 'error'); })
             .saveDataConfig(item.mainKey, cfgJson);
     }
 
     function _updateMapsCardPreview_() {
         var preview = document.getElementById('msgFlowPreview');
         if (!preview) return;
-        var item = _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; });
+        var item = _MSG_FLOW.find(function (x) { return x.seq === _msgSelectedSeq; });
         if (!item) return;
-        var getVal = function(id, fallback) { var el = document.getElementById(id); return el ? el.value : fallback; };
-        var bottomKey  = item.mainKey + '.bottom';
-        var mainTpl    = getVal('msgFlowTmpl_main',   _getTpl(item.mainKey));
-        var bottomTpl  = getVal('msgFlowTmpl_bottom', _getTpl(bottomKey));
-        var statusMap = { 'item_card.card':'추천', 'item_card.check_request':'입찰', 'item_card.status':'변경' };
+        var getVal = function (id, fallback) { var el = document.getElementById(id); return el ? el.value : fallback; };
+        var bottomKey = item.mainKey + '.bottom';
+        var mainTpl = getVal('msgFlowTmpl_main', _getTpl(item.mainKey));
+        var bottomTpl = getVal('msgFlowTmpl_bottom', _getTpl(bottomKey));
+        var statusMap = { 'item_card.card': '추천', 'item_card.check_request': '입찰', 'item_card.status': '변경' };
         var status = statusMap[item.mainKey] || '추천';
         var statusIcon = status === '입찰' ? '🔵' : '🔴';
         var hasBidPrice = (item.mainKey !== 'item_card.card');
         var v = MSG_SAMPLE_VARS;
 
         // 체크박스 상태 읽기 (UI 우선, 없으면 저장된 값, 없으면 기본 true)
-        var sf = function(field) {
-            var el = document.getElementById('dc_'+field+'_'+item.mainKey.replace(/\./g,'_'));
+        var sf = function (field) {
+            var el = document.getElementById('dc_' + field + '_' + item.mainKey.replace(/\./g, '_'));
             if (el) return el.checked;
             if (_msgCurrentDataCfg && _msgCurrentDataCfg[field] !== undefined) return _msgCurrentDataCfg[field];
             return true;
         };
 
         var lines = ['MJMAPS', _fillVarsMsg(mainTpl), ''];
-        if (sf('status'))      lines.push(statusIcon + ' 물건상태: ' + status);
-        if (sf('in_date'))     lines.push('📅 입찰일자: ' + v.in_date);
-        if (sf('sakun_no'))    lines.push('📄 사건번호: ' + v.sakun_no);
-        if (sf('court'))       lines.push('🏛️ 법원: ' + v.court);
+        if (sf('status')) lines.push(statusIcon + ' 물건상태: ' + status);
+        if (sf('in_date')) lines.push('📅 입찰일자: ' + v.in_date);
+        if (sf('sakun_no')) lines.push('📄 사건번호: ' + v.sakun_no);
+        if (sf('court')) lines.push('🏛️ 법원: ' + v.court);
         if (sf('member_name')) lines.push('👤 회원: ' + v.member_name);
-        if (sf('manager'))     lines.push('👨‍💼 담당: ' + v.manager);
+        if (sf('manager')) lines.push('👨‍💼 담당: ' + v.manager);
         if (hasBidPrice && sf('bid_price')) { lines.push(''); lines.push('💰 입찰가: ' + v.bid_price + '원'); }
         lines.push('');
-        if (bottomTpl) bottomTpl.split('\n').forEach(function(l) { lines.push(_fillVarsMsg(l)); });
+        if (bottomTpl) bottomTpl.split('\n').forEach(function (l) { lines.push(_fillVarsMsg(l)); });
         lines.push('');
         // 버튼
         var btns = _msgCurrentBtns || _msgBtnConfigs[item.mainKey] || _BTN_DEFAULTS[item.mainKey] || [];
-        var enabled = btns.filter(function(b){ return b.enabled !== false; });
-        if (enabled.length) lines.push(enabled.map(function(b){ return '[ '+b.text+' ]'; }).join('  '));
+        var enabled = btns.filter(function (b) { return b.enabled !== false; });
+        if (enabled.length) lines.push(enabled.map(function (b) { return '[ ' + b.text + ' ]'; }).join('  '));
         preview.textContent = lines.join('\n');
     }
 
@@ -7828,8 +7890,8 @@ MJ 이정우 팀장
             + '</div>'
             + '</div>';
         html += '<div class="mb-3">'
-            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 결과 메세지 <span class="text-gray-400 font-normal text-[10px]">('+item.mainKey+')</span></label>'
-            + '<textarea id="msgFlowTmpl_main" rows="3" data-key="'+item.mainKey+'" oninput="_updateSysReplyPreview_()" '
+            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 결과 메세지 <span class="text-gray-400 font-normal text-[10px]">(' + item.mainKey + ')</span></label>'
+            + '<textarea id="msgFlowTmpl_main" rows="3" data-key="' + item.mainKey + '" oninput="_updateSysReplyPreview_()" '
             + 'class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono resize-none focus:ring-1 focus:ring-purple-400 outline-none">'
             + escapeHtml(_getTpl(item.mainKey)) + '</textarea>'
             + '</div>'
@@ -7848,7 +7910,7 @@ MJ 이정우 팀장
 
     // ── 단순 메세지 에디터 (simple) ───────────────────────────────────────────────
     function _buildSimpleEditor_(item) {
-        var t = _msgTemplates.find(function(x){ return x.msg_key === item.mainKey; });
+        var t = _msgTemplates.find(function (x) { return x.msg_key === item.mainKey; });
         var vars = (t && t.variables) ? t.variables.split(',').filter(Boolean) : [];
         var btns = _BTN_DEFAULTS[item.mainKey] || [];
         var html = '';
@@ -7858,16 +7920,16 @@ MJ 이정우 팀장
             + '<div class="border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm">'
             + '<div class="p-3 bg-white"><pre id="msgFlowPreviewText" class="text-sm font-mono whitespace-pre-wrap text-gray-800"></pre></div>'
             + (btns.length ? '<div class="px-3 py-2 bg-gray-50 border-t flex gap-2 flex-wrap">'
-                + btns.map(function(b){ return '<span class="text-[11px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">'+escapeHtml(b.text)+'</span>'; }).join('')
+                + btns.map(function (b) { return '<span class="text-[11px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">' + escapeHtml(b.text) + '</span>'; }).join('')
                 + '</div>' : '')
             + '</div>'
             + '</div>';
         html += '<div class="mb-3">'
-            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 메세지 텍스트 <span class="text-gray-400 font-normal text-[10px]">('+item.mainKey+')</span></label>'
-            + '<textarea id="msgFlowTmpl_main" rows="3" data-key="'+item.mainKey+'" oninput="_updateSimplePreview_(\'msgFlowPreviewText\')" '
+            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 메세지 텍스트 <span class="text-gray-400 font-normal text-[10px]">(' + item.mainKey + ')</span></label>'
+            + '<textarea id="msgFlowTmpl_main" rows="3" data-key="' + item.mainKey + '" oninput="_updateSimplePreview_(\'msgFlowPreviewText\')" '
             + 'class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono resize-none focus:ring-1 focus:ring-purple-400 outline-none">'
             + escapeHtml(_getTpl(item.mainKey)) + '</textarea>';
-        if (vars.length) html += '<div class="text-[11px] text-gray-400 mt-1">변수: '+vars.map(function(v){ return '<code class="bg-gray-100 px-1 rounded">{{'+v+'}}</code>'; }).join(', ')+'</div>';
+        if (vars.length) html += '<div class="text-[11px] text-gray-400 mt-1">변수: ' + vars.map(function (v) { return '<code class="bg-gray-100 px-1 rounded">{{' + v + '}}</code>'; }).join(', ') + '</div>';
         html += '</div>';
         html += _saveResetBtns_();
         return html;
@@ -7901,8 +7963,8 @@ MJ 이정우 팀장
             + '</div>'
             // 템플릿 편집
             + '<div class="mb-3">'
-            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 본문 메세지 <span class="text-gray-400 font-normal text-[10px]">('+item.mainKey+')</span></label>'
-            + '<textarea id="msgFlowTmpl_main" rows="3" data-key="'+item.mainKey+'" oninput="_updateBidPricePreview_()" '
+            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 본문 메세지 <span class="text-gray-400 font-normal text-[10px]">(' + item.mainKey + ')</span></label>'
+            + '<textarea id="msgFlowTmpl_main" rows="3" data-key="' + item.mainKey + '" oninput="_updateBidPricePreview_()" '
             + 'class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono resize-y focus:ring-1 focus:ring-purple-400 outline-none">'
             + escapeHtml(_getTpl(item.mainKey)) + '</textarea>'
             + '<div class="text-[10px] text-gray-400 mt-1">변수 없음 — 고정 텍스트로 전송됩니다.</div>'
@@ -7911,7 +7973,7 @@ MJ 이정우 팀장
         return html;
     }
     function _updateBidPricePreview_() {
-        var el   = document.getElementById('msgFlowTmpl_main');
+        var el = document.getElementById('msgFlowTmpl_main');
         var prev = document.getElementById('msgFlowPreview');
         if (!el || !prev) return;
         var v = MSG_SAMPLE_VARS;
@@ -7922,20 +7984,20 @@ MJ 이정우 팀장
     // ── 알림 메세지 에디터 (notify) ───────────────────────────────────────────────
     function _renderNotifyEditor_(item) {
         var empty = document.getElementById('msgEditorEmpty');
-        var form  = document.getElementById('msgEditorForm');
+        var form = document.getElementById('msgEditorForm');
         if (empty) empty.style.display = 'none';
         if (!form) return;
         form.style.display = 'flex';
         form.className = 'flex flex-col p-4 gap-2 overflow-y-auto';
         form.style.minHeight = '';
-        var t = _msgTemplates.find(function(x){ return x.msg_key === item.mainKey; });
+        var t = _msgTemplates.find(function (x) { return x.msg_key === item.mainKey; });
         var vars = (t && t.variables) ? t.variables.split(',').filter(Boolean) : [];
         var html = '<div class="mb-3 pb-3 border-b">'
             + '<div class="flex items-center gap-2 mb-0.5">'
             + '<span class="text-[11px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">알림</span>'
-            + '<span class="font-bold text-sm text-gray-800">'+escapeHtml(item.subject)+'</span>'
+            + '<span class="font-bold text-sm text-gray-800">' + escapeHtml(item.subject) + '</span>'
             + '</div>'
-            + '<div class="text-[10px] text-gray-400 font-mono">'+item.mainKey+'</div>'
+            + '<div class="text-[10px] text-gray-400 font-mono">' + item.mainKey + '</div>'
             + '</div>';
         html += '<div class="mb-3">'
             + '<label class="text-xs font-semibold text-gray-600 mb-1 block">미리보기</label>'
@@ -7943,10 +8005,10 @@ MJ 이정우 팀장
             + '</div>';
         html += '<div class="mb-3">'
             + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 메세지 템플릿</label>'
-            + '<textarea id="msgFlowTmpl_main" rows="4" data-key="'+item.mainKey+'" oninput="_updateNotifyPreview_()" '
+            + '<textarea id="msgFlowTmpl_main" rows="4" data-key="' + item.mainKey + '" oninput="_updateNotifyPreview_()" '
             + 'class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono resize-none focus:ring-1 focus:ring-purple-400 outline-none">'
             + escapeHtml(_getTpl(item.mainKey)) + '</textarea>';
-        if (vars.length) html += '<div class="text-[11px] text-gray-400 mt-1">사용 변수: '+vars.map(function(v){ return '<code class="bg-gray-100 px-1 rounded">{{'+v+'}}</code>'; }).join(', ')+'</div>';
+        if (vars.length) html += '<div class="text-[11px] text-gray-400 mt-1">사용 변수: ' + vars.map(function (v) { return '<code class="bg-gray-100 px-1 rounded">{{' + v + '}}</code>'; }).join(', ') + '</div>';
         html += '</div>';
         html += _saveResetBtns_();
         form.innerHTML = html;
@@ -7974,15 +8036,15 @@ MJ 이정우 팀장
             + '<label class="text-xs font-semibold text-gray-700 mb-1 block">🔘 인라인 버튼 설정</label>'
             + '<div class="border border-gray-200 rounded-lg overflow-hidden">'
             + '<div id="btnEditorList" class="divide-y">';
-        btns.forEach(function(btn, idx) {
+        btns.forEach(function (btn, idx) {
             var rowLabel = (btn.row === 0) ? '1행' : ((btn.row + 1) + '행');
-            html += '<div class="flex items-center gap-2 px-3 py-2 bg-white" data-btn-idx="'+idx+'">'
-                + '<input type="checkbox" '+(btn.enabled!==false?'checked':'')+' onchange="toggleBtnItem('+idx+',this.checked)" class="accent-purple-500 flex-shrink-0">'
-                + '<span class="text-xs font-mono flex-1 '+(btn.enabled===false?'text-gray-400 line-through':'text-gray-800')+'">'+escapeHtml(btn.text)+'</span>'
-                + '<span class="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0">'+rowLabel+'</span>'
+            html += '<div class="flex items-center gap-2 px-3 py-2 bg-white" data-btn-idx="' + idx + '">'
+                + '<input type="checkbox" ' + (btn.enabled !== false ? 'checked' : '') + ' onchange="toggleBtnItem(' + idx + ',this.checked)" class="accent-purple-500 flex-shrink-0">'
+                + '<span class="text-xs font-mono flex-1 ' + (btn.enabled === false ? 'text-gray-400 line-through' : 'text-gray-800') + '">' + escapeHtml(btn.text) + '</span>'
+                + '<span class="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0">' + rowLabel + '</span>'
                 + '<div class="flex gap-0.5 flex-shrink-0">'
-                + (idx > 0 ? '<button onclick="moveBtnItem('+idx+',-1)" class="text-gray-400 hover:text-gray-700 w-5 h-5 flex items-center justify-center text-xs rounded hover:bg-gray-100" title="위로">↑</button>' : '<span class="w-5"></span>')
-                + (idx < btns.length-1 ? '<button onclick="moveBtnItem('+idx+',1)" class="text-gray-400 hover:text-gray-700 w-5 h-5 flex items-center justify-center text-xs rounded hover:bg-gray-100" title="아래로">↓</button>' : '<span class="w-5"></span>')
+                + (idx > 0 ? '<button onclick="moveBtnItem(' + idx + ',-1)" class="text-gray-400 hover:text-gray-700 w-5 h-5 flex items-center justify-center text-xs rounded hover:bg-gray-100" title="위로">↑</button>' : '<span class="w-5"></span>')
+                + (idx < btns.length - 1 ? '<button onclick="moveBtnItem(' + idx + ',1)" class="text-gray-400 hover:text-gray-700 w-5 h-5 flex items-center justify-center text-xs rounded hover:bg-gray-100" title="아래로">↓</button>' : '<span class="w-5"></span>')
                 + '</div>'
                 + '</div>';
         });
@@ -7999,7 +8061,7 @@ MJ 이정우 팀장
     function toggleBtnItem(idx, enabled) {
         if (!_msgCurrentBtns || !_msgCurrentBtns[idx]) return;
         _msgCurrentBtns[idx].enabled = enabled;
-        var row = document.querySelector('[data-btn-idx="'+idx+'"]');
+        var row = document.querySelector('[data-btn-idx="' + idx + '"]');
         if (row) {
             var lbl = row.querySelector('span.font-mono');
             if (lbl) lbl.className = 'text-xs font-mono flex-1 ' + (enabled ? 'text-gray-800' : 'text-gray-400 line-through');
@@ -8011,8 +8073,8 @@ MJ 이정우 팀장
         var newIdx = idx + dir;
         if (newIdx < 0 || newIdx >= _msgCurrentBtns.length) return;
         var tmp = _msgCurrentBtns[idx]; _msgCurrentBtns[idx] = _msgCurrentBtns[newIdx]; _msgCurrentBtns[newIdx] = tmp;
-        _msgCurrentBtns.forEach(function(b, i){ b.order = i; });
-        var item = _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; });
+        _msgCurrentBtns.forEach(function (b, i) { b.order = i; });
+        var item = _MSG_FLOW.find(function (x) { return x.seq === _msgSelectedSeq; });
         if (item) {
             var currentBtns = _msgCurrentBtns; // swap된 배열 보존
             var sec = document.getElementById('btnEditorSection');
@@ -8020,24 +8082,24 @@ MJ 이정우 팀장
         }
     }
     function saveBtnConfigUI() {
-        var item = _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; });
+        var item = _MSG_FLOW.find(function (x) { return x.seq === _msgSelectedSeq; });
         if (!item || !_msgCurrentBtns) return;
         var btnsJson = JSON.stringify(_msgCurrentBtns);
         showStatus('버튼 설정 저장 중...', 'info');
         google.script.run
-            .withSuccessHandler(function(r) {
+            .withSuccessHandler(function (r) {
                 if (r && r.success) { _msgBtnConfigs[item.mainKey] = JSON.parse(btnsJson); showStatus('버튼 설정 저장 완료', 'success'); }
-                else showStatus('저장 실패: '+(r&&r.message||''), 'error');
+                else showStatus('저장 실패: ' + (r && r.message || ''), 'error');
             })
-            .withFailureHandler(function(e){ showStatus('저장 실패: '+e, 'error'); })
+            .withFailureHandler(function (e) { showStatus('저장 실패: ' + e, 'error'); })
             .saveBtnConfig(item.mainKey, btnsJson);
     }
 
     // ── 저장 / 초기화 ─────────────────────────────────────────────────────────────
     function saveMsgFlowUI() {
         var item = (typeof _msgSelectedSeq === 'number')
-            ? _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; })
-            : _MSG_NOTIFY.find(function(x){ return x.mainKey === _msgSelectedSeq; });
+            ? _MSG_FLOW.find(function (x) { return x.seq === _msgSelectedSeq; })
+            : _MSG_NOTIFY.find(function (x) { return x.mainKey === _msgSelectedSeq; });
         if (!item) return;
         var pairs = [];
         var mainEl = document.getElementById('msgFlowTmpl_main');
@@ -8049,52 +8111,52 @@ MJ 이정우 팀장
         if (!pairs.length) return;
         showStatus('저장 중...', 'info');
         google.script.run
-            .withSuccessHandler(function(r) {
+            .withSuccessHandler(function (r) {
                 if (r && r.success) {
-                    pairs.forEach(function(p){
-                        var t = _msgTemplates.find(function(x){ return x.msg_key === p.key; });
+                    pairs.forEach(function (p) {
+                        var t = _msgTemplates.find(function (x) { return x.msg_key === p.key; });
                         if (t) t.template = p.template;
                     });
-                    showStatus('저장 완료 ('+(r.saved||pairs.length)+'개)', 'success');
-                } else showStatus('저장 실패: '+(r&&r.message||''), 'error');
+                    showStatus('저장 완료 (' + (r.saved || pairs.length) + '개)', 'success');
+                } else showStatus('저장 실패: ' + (r && r.message || ''), 'error');
             })
-            .withFailureHandler(function(e){ showStatus('저장 실패: '+e, 'error'); })
+            .withFailureHandler(function (e) { showStatus('저장 실패: ' + e, 'error'); })
             .saveMsgTemplatesBatch(pairs);
     }
 
     function resetMsgFlowUI() {
         var item = (typeof _msgSelectedSeq === 'number')
-            ? _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; })
-            : _MSG_NOTIFY.find(function(x){ return x.mainKey === _msgSelectedSeq; });
+            ? _MSG_FLOW.find(function (x) { return x.seq === _msgSelectedSeq; })
+            : _MSG_NOTIFY.find(function (x) { return x.mainKey === _msgSelectedSeq; });
         if (!item) return;
         if (!confirm(item.subject + ' 메세지를 기본값으로 초기화하시겠습니까?')) return;
         showStatus('초기화 중...', 'info');
         google.script.run
-            .withSuccessHandler(function(r) {
+            .withSuccessHandler(function (r) {
                 if (r && r.success) {
                     showStatus('초기화 완료', 'success');
                     _msgTemplates = [];  // 재로드 강제
                     loadMsgTemplates_();
                     var savedSeq = _msgSelectedSeq;
-                    setTimeout(function() {
+                    setTimeout(function () {
                         if (typeof savedSeq === 'number') selectMsgFlow(savedSeq);
                         else selectMsgNotify(savedSeq);
                     }, 400);
-                } else showStatus('초기화 실패: '+(r&&r.message||''), 'error');
+                } else showStatus('초기화 실패: ' + (r && r.message || ''), 'error');
             })
-            .withFailureHandler(function(e){ showStatus('초기화 실패: '+e, 'error'); })
+            .withFailureHandler(function (e) { showStatus('초기화 실패: ' + e, 'error'); })
             .resetMsgTemplate(item.mainKey);
     }
 
     // ── 하위 호환 스텁 (기존 참조 대응) ──────────────────────────────────────────
     function saveMsgTemplateUI() { saveMsgFlowUI(); }
-    function resetMsgTemplate()  { resetMsgFlowUI(); }
-    function renderMsgTree_()    { renderMsgNav_(); }
+    function resetMsgTemplate() { resetMsgFlowUI(); }
+    function renderMsgTree_() { renderMsgNav_(); }
     function selectMsgTemplate(key) {
         // 기존 msg_key로 호출 시 해당 흐름 항목으로 자동 연결
-        var flowItem = _MSG_FLOW.find(function(x){ return x.mainKey === key || (x.sharedKeys && x.sharedKeys.indexOf(key) !== -1); });
+        var flowItem = _MSG_FLOW.find(function (x) { return x.mainKey === key || (x.sharedKeys && x.sharedKeys.indexOf(key) !== -1); });
         if (flowItem) selectMsgFlow(flowItem.seq);
-        else { var ni = _MSG_NOTIFY.find(function(x){ return x.mainKey === key; }); if (ni) selectMsgNotify(ni.mainKey); }
+        else { var ni = _MSG_NOTIFY.find(function (x) { return x.mainKey === key; }); if (ni) selectMsgNotify(ni.mainKey); }
     }
     function updateMsgPreview_() { _updateMapsCardPreview_(); }
     // ─────────────────────────────────────────────────────────────────────────
@@ -8107,12 +8169,12 @@ MJ 이정우 팀장
         var list = document.getElementById('dispNameList');
         if (list) list.innerHTML = '<div class="text-xs text-gray-400 py-2">불러오는 중...</div>';
         google.script.run
-            .withSuccessHandler(function(map) {
+            .withSuccessHandler(function (map) {
                 _dispNameMap = (map && typeof map === 'object') ? map : {};
                 _dispNameLoaded = true;
                 renderDispNameList_(_dispNameMap);
             })
-            .withFailureHandler(function(e) {
+            .withFailureHandler(function (e) {
                 var list = document.getElementById('dispNameList');
                 if (list) list.innerHTML = '<div class="text-xs text-red-500 py-2">불러오기 실패: ' + e.message + '</div>';
             })
@@ -8127,7 +8189,7 @@ MJ 이정우 팀장
             list.innerHTML = '<div class="text-xs text-gray-400 py-2 text-center">등록된 표시명이 없습니다.</div>';
             return;
         }
-        list.innerHTML = keys.map(function(k, i) {
+        list.innerHTML = keys.map(function (k, i) {
             return '<div class="dispName-row grid grid-cols-[1fr_1fr_auto] gap-2 items-center py-1">'
                 + '<input type="text" class="dn-real border border-gray-200 rounded px-2 py-1 text-xs" value="' + _esc(k) + '">'
                 + '<input type="text" class="dn-disp border border-gray-200 rounded px-2 py-1 text-xs" value="' + _esc(map[k]) + '">'
@@ -8137,7 +8199,7 @@ MJ 이정우 팀장
     }
 
     function _esc(str) {
-        return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function addDispNameEntry() {
@@ -8163,18 +8225,18 @@ MJ 이정우 팀장
         var list = document.getElementById('dispNameList');
         if (!list) return;
         var map = {};
-        list.querySelectorAll('.dispName-row').forEach(function(row) {
+        list.querySelectorAll('.dispName-row').forEach(function (row) {
             var real = (row.querySelector('.dn-real') || {}).value || '';
             var disp = (row.querySelector('.dn-disp') || {}).value || '';
             if (real.trim()) map[real.trim()] = disp.trim();
         });
         showStatus('저장 중...', 'info');
         google.script.run
-            .withSuccessHandler(function() {
+            .withSuccessHandler(function () {
                 _dispNameMap = map;
                 showStatus('표시명 설정이 저장되었습니다.', 'success');
             })
-            .withFailureHandler(function(e) {
+            .withFailureHandler(function (e) {
                 showStatus('저장 실패: ' + e.message, 'error');
             })
             .saveDisplayNameMap(JSON.stringify(map));
@@ -10895,11 +10957,91 @@ ${token}
 
         if (type === 'status') {
             openBulkStatusModal(cbs);
+        } else if (type === 'multi_recommend') {
+            openBulkMessageModal(cbs);
         } else if (type === 'delete') {
             handleBulkDelete(idsFromCbs(cbs));
         } else {
             if (typeof showStatusMessage === 'function') showStatusMessage('작업 유형을 선택해 주세요.', 'warning');
         }
+    }
+
+    function openBulkMessageModal(selectedCbs) {
+        const modal = document.getElementById('bulkMessageModal');
+        const textarea = document.getElementById('bulk-message-textarea');
+        if (!modal || !textarea) return;
+
+        const ids = idsFromCbs(selectedCbs);
+        const selectedItems = allBiddingData.filter(item => ids.includes(String(item.id)));
+
+        // 사용자 요청 포맷에 맞춰 데이터 정렬 및 번호 부여
+        let itemLines = "";
+        selectedItems.forEach((item, index) => {
+            const dateStr = String(item['in-date'] || '').trim();
+            const sakunNo = String(item.sakun_no || '').trim();
+            const court = String(item.court || '').trim();
+            const status = String(item.stu_member || '추천').trim();
+            const member = String(item.m_name || '').trim();
+            const manager = String(item.m_name_id || '').trim();
+
+            // 왼쪽 정렬을 위해 고정 폭 스타일은 텍스트에서 한계가 있으므로 적절한 공백 추가
+            itemLines += `${index + 1}. ${dateStr} ${sakunNo.padEnd(18)} ${court.padEnd(6)}  ${status}  ${member.padEnd(4)}  ${manager}\n`;
+        });
+
+        const message = `안녕하세요? 
+엠제이경매스쿨입니다. 
+
+추천물건 전달드립니다.
+입찰 여부 회신 부탁드려요~ (48시간 이후 자동취소)
+번호 앞에 O,X 표시해서 회신 주시면 됩니다.
+============================================
+${itemLines}============================================
+
+[필독]
+ - 48시간 이내에 확정해 주지 않으시면 자동취소 되세요~ 부탁드립니다 ^^;;
+ - 돈클회원님께서는 아래 담당자 확인후 문의 부탁드려요~
+ - 텔레그램 계정으로 어플이하여 훨씬 편리하게 물건 관리 하실 수 있습니다 .^^
+   (필요하신분은 카톡으로 요청 주세요~ 텔레그램 가입후 "텔레그램 신청" 이라고 주세요)
+
+[입찰가 전달]
+ - 입찰확정을 하신 물건에 대해서만 전달 드립니다. 
+ - 워킹데이로(주말,공휴일제외) 입찰일자 -7 부터 -1일 까지 사이에 전달 드립니다.  
+
+[참고사항]
+서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!
+
+앞으로 원할한 소통을 위해 제 번호 연락처 등록 요청 드립니다.    
+향후 카카오톡으로 전달 드리겠습니다.    
+카카오톡으로 받으시는 분께서는 신경안쓰셔도 됩니다~   
+   
+MJ 이정우 팀장
+감사합니다~
+====================================
+*업무별 담당자 안내 드립니다.    
+1. 입찰가 관리: 이정우(010-4238-7781)   
+2. 단기투자클럽 관리: 이경미님 (010-3448-8035)    
+3. PT 관리: 장정아님 (010-9838-8035)  
+4. 돈버는클래스 담당: 김재휘님 (010-3448-8035)   
+   - 입찰관련 문의는 저에게 주시고 물건관련 문의는
+   - 1. 돈버는클래스 오픈채팅방 MJ스태프 1:1 카톡 (김재휘님)
+   - 2. 돈버는클래스 담당: 김재휘님 (010-3448-8035)  
+====================================`;
+
+        textarea.value = message;
+        modal.classList.remove('content-hidden');
+    }
+
+    function closeBulkMessageModal() {
+        const modal = document.getElementById('bulkMessageModal');
+        if (modal) modal.classList.add('content-hidden');
+    }
+
+    function copyBulkMessageText() {
+        const textarea = document.getElementById('bulk-message-textarea');
+        if (!textarea) return;
+        textarea.select();
+        document.execCommand('copy');
+        alert('다중 추천 메시지가 클립보드에 복사되었습니다.');
     }
 
     function openBulkStatusModal(selectedCbs) {
