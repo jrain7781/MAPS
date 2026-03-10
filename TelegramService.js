@@ -688,24 +688,15 @@ function telegramBuildItemMessage_(item, member, styleKey) {
   const sakunNo = telegramEscapeHtml_(item.sakun_no || '');
   const court = telegramEscapeHtml_(item.court || '');
   const memberName = telegramEscapeHtml_(item.m_name || '');
-  const 담당 = telegramEscapeHtml_(item.m_name_id || '');
+  const _rawDamjang = String(item.m_name_id || '').trim();
+  const 담당 = telegramEscapeHtml_((typeof getDisplayName_ === 'function') ? getDisplayName_(_rawDamjang) : _rawDamjang);
   const bidPriceFormatted = telegramEscapeHtml_(formatKrw_(item.bidprice)) + '원';
 
-  // [PHASE 4-3] 메시지 템플릿 적용 (폴백: 기존 하드코딩 값)
-  const warningLine = (typeof getMessageTemplate_ === 'function')
-    ? (getMessageTemplate_('item_card.warning') || '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!')
-    : '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!';
-  const staffLines = (typeof getMessageTemplate_ === 'function')
-    ? [
-        getMessageTemplate_('item_card.staff_1') || '1. 입찰가 관리: 이정우: (010-4238-7781)',
-        getMessageTemplate_('item_card.staff_2') || '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)'
-      ].filter(Boolean)
-    : [
-        '업무별 담당자 안내 드립니다.',
-        '1. 입찰가 관리: 이정우: (010-4238-7781)',
-        '2. 단기투자클럽 관리: 이경미님 (010-3448-8035)',
-        '3. PT 관리: 장정아님 (010-9838-8035)'
-      ];
+  // [하단 메세지 개별 관리] 각 maps_card 스타일별 독립 하단 키
+  const _bottomFallback = '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!\n1. 입찰가 관리: 이정우: (010-4238-7781)\n2. 단기투자클럽 관리: 이경미님 (010-3448-8035)';
+  const bottomTpl = (typeof getMessageTemplate_ === 'function')
+    ? (getMessageTemplate_('item_card.' + (style || 'card') + '.bottom') || _bottomFallback)
+    : _bottomFallback;
 
   let subtitle = '';
   let statusValuePlain = '';
@@ -723,7 +714,10 @@ function telegramBuildItemMessage_(item, member, styleKey) {
     const simpleLine = [shortDate, sakunNo, court].filter(Boolean).join(' / ');
     const lines2 = [];
     lines2.push(simpleLine);
-    lines2.push('입찰가가 도착했습니다. 확인하시겠습니까?');
+    const _bidViewMsg = (typeof getMessageTemplate_ === 'function')
+      ? (getMessageTemplate_('member.bid_price_view') || '입찰가가 도착했습니다. 확인하시겠습니까?')
+      : '입찰가가 도착했습니다. 확인하시겠습니까?';
+    lines2.push(telegramEscapeHtml_(_bidViewMsg));
     const keyboard2 = [];
     keyboard2.push([{ text: '입찰가확인', callback_data: 'MJ|PRICE_CONFIRM|' + itemId }]);
     if (url) keyboard2.push([{ text: '내물건보기', web_app: { url: url } }]);
@@ -761,38 +755,64 @@ function telegramBuildItemMessage_(item, member, styleKey) {
   const actualStatus = String(item.stu_member || '').trim();
   const statusToShow = telegramEscapeHtml_(actualStatus || statusValuePlain);
 
-  lines.push('🔴 물건상태: ' + statusToShow);
-  lines.push('📅 입찰일자: ' + inDate);
-  lines.push('📄 사건번호: ' + sakunNo);
-  lines.push('🏛️ 법원: ' + court);
-  lines.push('👤 회원: ' + memberName);
-  lines.push('👨‍💼 담당: ' + 담당);
+  // [MSG EDITOR V2] 데이터 필드 표시 설정 (저장된 설정 없으면 기존 동작 완전 유지)
+  const _dcKey = 'item_card.' + (style || 'card');
+  const _dataCfg = (typeof getDataConfig_ === 'function') ? getDataConfig_(_dcKey) : null;
+  const _sf = function(field) { return !_dataCfg || _dataCfg[field] !== false; };
 
-  if (includeBidPrice) {
+  if (_sf('status'))      lines.push('🔴 물건상태: ' + statusToShow);
+  if (_sf('in_date'))     lines.push('📅 입찰일자: ' + inDate);
+  if (_sf('sakun_no'))    lines.push('📄 사건번호: ' + sakunNo);
+  if (_sf('court'))       lines.push('🏛️ 법원: ' + court);
+  if (_sf('member_name')) lines.push('👤 회원: ' + memberName);
+  if (_sf('manager'))     lines.push('👨‍💼 담당: ' + 담당);
+
+  if (includeBidPrice && _sf('bid_price')) {
     lines.push('');
     lines.push('💰 입찰가: ' + bidPriceFormatted);
   }
 
   lines.push('');
-  lines.push(warningLine);
-  lines.push(...staffLines);
+  bottomTpl.split('\n').forEach(function(l) { lines.push(telegramEscapeHtml_(l)); });
 
   // 버튼 구성
   const keyboard = [];
   const row1 = [];
   const row2 = [];
 
-  // 내물건보기: URL 버튼으로 바로 열기(링크 메시지 전송 X)
-  // url 버튼은 일부 환경에서 "Open this link?" 팝업이 뜸 → web_app으로 인앱 웹뷰 열기
-  if (url) row1.push({ text: '내물건보기', web_app: { url: url } });
+  // [MSG EDITOR V2] 저장된 버튼 설정이 있으면 우선 적용, 없으면 기존 하드코딩 폴백
+  const _btnCfgKey = (style === 'bid_price') ? null : ('item_card.' + (style || 'card'));
+  const _customBtns = (_btnCfgKey && typeof getMsgBtnConfig_ === 'function') ? getMsgBtnConfig_(_btnCfgKey) : null;
 
-  if (!onlyViewButton && style !== 'bid_price') {
-    row2.push({ text: '입찰확정', callback_data: 'MJ|BID_CONFIRM|' + itemId });
-    row2.push({ text: '입찰취소', callback_data: 'MJ|CANCEL_CONFIRM|' + itemId });
+  if (_customBtns && _customBtns.length > 0) {
+    // 커스텀 버튼 설정 적용 (enabled:false인 버튼 제외, row 기준 그룹핑)
+    const _rowMap = {};
+    _customBtns.forEach(function(btn) {
+      if (btn.enabled === false) return;
+      const r = btn.row || 0;
+      if (!_rowMap[r]) _rowMap[r] = [];
+      let obj;
+      if (btn.action === 'VIEW' && url)        obj = { text: btn.text, web_app: { url: url } };
+      else if (btn.action === 'BID_CONFIRM')   obj = { text: btn.text, callback_data: 'MJ|BID_CONFIRM|' + itemId };
+      else if (btn.action === 'CANCEL_CONFIRM') obj = { text: btn.text, callback_data: 'MJ|CANCEL_CONFIRM|' + itemId };
+      else if (btn.action === 'PRICE_CONFIRM') obj = { text: btn.text, callback_data: 'MJ|PRICE_CONFIRM|' + itemId };
+      if (obj) _rowMap[r].push(obj);
+    });
+    Object.keys(_rowMap).sort(function(a, b) { return Number(a) - Number(b); }).forEach(function(r) {
+      if (_rowMap[r].length > 0) keyboard.push(_rowMap[r]);
+    });
+  } else {
+    // 기존 하드코딩 폴백 (기존 동작 완전 유지)
+    // 내물건보기: URL 버튼으로 바로 열기(링크 메시지 전송 X)
+    // url 버튼은 일부 환경에서 "Open this link?" 팝업이 뜸 → web_app으로 인앱 웹뷰 열기
+    if (url) row1.push({ text: '내물건보기', web_app: { url: url } });
+    if (!onlyViewButton && style !== 'bid_price') {
+      row2.push({ text: '입찰확정', callback_data: 'MJ|BID_CONFIRM|' + itemId });
+      row2.push({ text: '입찰취소', callback_data: 'MJ|CANCEL_CONFIRM|' + itemId });
+    }
+    if (row1.length > 0) keyboard.push(row1);
+    if (row2.length > 0) keyboard.push(row2);
   }
-
-  if (row1.length > 0) keyboard.push(row1);
-  if (row2.length > 0) keyboard.push(row2);
 
   const replyMarkup = (keyboard.length > 0) ? { inline_keyboard: keyboard } : null;
   return { text: lines.join('\n'), replyMarkup: replyMarkup };

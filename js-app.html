@@ -7382,7 +7382,7 @@ MJ 이정우 팀장
     }
 
     function switchPrefSubTab(sub) {
-        ['msgEditor', 'notify', 'webhook'].forEach(function (s) {
+        ['msgEditor', 'notify', 'webhook', 'dispName'].forEach(function (s) {
             var btn = document.getElementById('pref-sub-btn-' + s);
             var panel = document.getElementById('pref-sub-panel-' + s);
             if (!btn || !panel) return;
@@ -7398,6 +7398,10 @@ MJ 이정우 팀장
         // 알림설정 탭 진입 시 설정 로드
         if (sub === 'notify') {
             try { loadNotifySettings(); } catch (e) { }
+        }
+        // 표시명 탭 진입 시 설정 로드
+        if (sub === 'dispName') {
+            if (!_dispNameLoaded) loadDispNameMap_();
         }
     }
 
@@ -7416,185 +7420,764 @@ MJ 이정우 팀장
         updateBidNotifySubsState_();
     }
 
-    // ─── [PHASE 5-2] 메시지 편집 인라인 ─────────────────────────────────────────
-    let _msgTemplates = [];
-    let _msgSelectedKey = null;
-    let _msgOriginals = {};   // 원본 기본값 캐시 (초기화용)
+    // ─── [MSG EDITOR V2] 텔레그램 메세지 편집 (엑셀 흐름 기반) ──────────────────
 
-    const MSG_SAMPLE_VARS = {
-        member_name: '홍길동', sakun_no: '2024타경1234', in_date: '26/04/10', court: '서울중앙지방법원', manager: '대표님'
+    // ── 흐름 정의: 엑셀 A~E 컬럼 순서대로 ────────────────────────────────────────
+    var _MSG_FLOW = [
+        { seq: 1,  actor: 'MAPS', color: 'blue',   subject: '추천물건전달',  action: '텔레그램 [추천물건안내] 선택 전송',    condition: '물건상태: 추천일경우',         type: 'maps_card',  mainKey: 'item_card.card',            note: '48시간 이내 입찰확정 부탁드리며, 이후 자동 취소됩니다.' },
+        { seq: 2,  actor: '회원', color: 'green',  subject: '입찰확정',      action: '입찰확정 버튼 선택',                   condition: '물건상태: 추천일경우',         type: 'simple',     mainKey: 'member.bid_confirm_ask',    note: '입찰확정 여부를 확인하는 메세지입니다.' },
+        { seq: 3,  actor: '회원', color: 'green',  subject: '입찰확정 불가', action: '입찰확정 버튼 선택',                   condition: '물건상태: 추천 아닐경우',      type: 'simple',     mainKey: 'member.bid_confirm_invalid', note: '' },
+        { seq: 4,  actor: 'SYS',  color: 'purple', subject: '입찰확정 완료', action: '입찰확정 선택 후 자동 메시지',         condition: '물건상태: 추천일경우',         type: 'sys_reply',  mainKey: 'sys.bid_confirmed',          note: '원본메세지에 댓글(reply)로 자동 전송됩니다.' },
+        { seq: 5,  actor: '회원', color: 'green',  subject: '입찰취소',      action: '입찰취소 버튼 선택',                   condition: '물건상태: 추천, 입찰일경우',   type: 'simple',     mainKey: 'member.bid_cancel_ask',      note: '입찰취소 여부를 확인하는 메세지입니다.' },
+        { seq: 6,  actor: '회원', color: 'green',  subject: '입찰취소 불가', action: '입찰취소 버튼 선택',                   condition: '물건상태: 입찰 아닐경우',      type: 'simple',     mainKey: 'member.bid_cancel_invalid',  note: '' },
+        { seq: 7,  actor: 'SYS',  color: 'purple', subject: '입찰취소 완료', action: '입찰취소 선택 후 자동 메시지',         condition: '물건상태: 입찰일경우',         type: 'sys_reply',  mainKey: 'sys.bid_cancelled',          note: '원본메세지에 댓글(reply)로 자동 전송됩니다.' },
+        { seq: 8,  actor: 'MAPS', color: 'blue',   subject: '입찰가전달',    action: '텔레그램 [입찰가안내] 선택 전송',      condition: '물건상태: 입찰일경우',         type: 'maps_card',  mainKey: 'item_card.check_request',    note: '' },
+        { seq: 9,  actor: '회원', color: 'green',  subject: '입찰가확인',    action: '입찰가 확인 버튼 선택',                condition: '물건상태: 입찰일경우',         type: 'bid_price',  mainKey: 'member.bid_price_view',      note: '입찰가 확인 버튼 클릭 시 표시되는 메세지입니다.' },
+        { seq: 10, actor: 'MAPS', color: 'blue',   subject: '입찰불가안내',  action: '텔레그램 [입찰불가안내] 선택 전송',    condition: '물건상태: 변경일경우',         type: 'maps_card',  mainKey: 'item_card.status',           note: '' }
+    ];
+    var _MSG_NOTIFY = [
+        { seq: 'D-3', subject: 'D-3 입찰일 알림',   mainKey: 'notify.bid_d3',       type: 'notify' },
+        { seq: 'D-2', subject: 'D-2 입찰일 알림',   mainKey: 'notify.bid_d2',       type: 'notify' },
+        { seq: 'D-1', subject: 'D-1 입찰일 알림',   mainKey: 'notify.bid_d1',       type: 'notify' },
+        { seq: 'N1',  subject: '24h 만료 알림',      mainKey: 'notify.expiry_24h',   type: 'notify' },
+        { seq: 'N2',  subject: '1h 만료 전 알림',    mainKey: 'notify.expiry_1h',    type: 'notify' },
+        { seq: 'N3',  subject: '만료 완료 알림',     mainKey: 'notify.expiry_done',  type: 'notify' }
+    ];
+
+    // ── 버튼 기본 설정 ────────────────────────────────────────────────────────────
+    var _BTN_DEFAULTS = {
+        'item_card.card':         [{ text:'내물건보기', action:'VIEW', enabled:true, row:0 }, { text:'입찰확정', action:'BID_CONFIRM', enabled:true, row:1 }, { text:'입찰취소', action:'CANCEL_CONFIRM', enabled:true, row:1 }],
+        'item_card.check_request':[{ text:'입찰가확인', action:'PRICE_CONFIRM', enabled:true, row:0 }, { text:'내물건보기', action:'VIEW', enabled:true, row:1 }],
+        'item_card.status':       [{ text:'내물건보기', action:'VIEW', enabled:true, row:0 }],
+        'sys.bid_confirmed':      [{ text:'🏠 MAPS 바로가기', action:'MAPS_LINK', enabled:true, row:0 }],
+        'sys.bid_cancelled':      [{ text:'🏠 MAPS 바로가기', action:'MAPS_LINK', enabled:true, row:0 }],
+        'member.bid_confirm_ask': [{ text:'예', action:'BID_YES', enabled:true, row:0 }, { text:'아니오', action:'BID_NO', enabled:true, row:0 }],
+        'member.bid_cancel_ask':  [{ text:'예', action:'CANCEL_YES', enabled:true, row:0 }, { text:'아니오', action:'CANCEL_NO', enabled:true, row:0 }]
     };
 
-    // openMsgEditor: 환경설정 > 텔레그램 > 메시지편집 탭으로 이동 (인라인)
+    // ── 데이터 필드 정의 ──────────────────────────────────────────────────────────
+    var _DATA_FIELDS_ALL = [
+        { key:'status',      label:'물건상태', icon:'🔴', sample:'추천' },
+        { key:'in_date',     label:'입찰일자', icon:'📅', sample:'26/04/10' },
+        { key:'sakun_no',    label:'사건번호', icon:'📄', sample:'2024타경1234' },
+        { key:'court',       label:'법원',     icon:'🏛️', sample:'서울중앙지방법원' },
+        { key:'member_name', label:'회원',     icon:'👤', sample:'홍길동' },
+        { key:'manager',     label:'담당',     icon:'👨‍💼', sample:'대표님' },
+        { key:'bid_price',   label:'입찰가',   icon:'💰', sample:'323,000,000원', onlyFor:['item_card.check_request','item_card.status'] }
+    ];
+
+    // ── 상태 변수 ─────────────────────────────────────────────────────────────────
+    var _msgTemplates = [];       // getAllMsgTemplates() 결과
+    var _msgBtnConfigs = {};      // getAllBtnConfigs() 결과
+    var _msgDataConfigs = {};     // getAllDataConfigs() 결과
+    var _msgSelectedSeq = null;   // 선택된 seq (숫자 or 알림 mainKey)
+    var _msgCurrentBtns = null;   // 현재 편집 중인 버튼 배열
+    var _msgCurrentDataCfg = null;// 현재 편집 중인 데이터 필드 설정
+
+    var MSG_SAMPLE_VARS = {
+        member_name:'홍길동', sakun_no:'2024타경1234', in_date:'26/04/10',
+        court:'서울중앙지방법원', manager:'대표님', bid_price:'323,000,000', status:'추천'
+    };
+
+    // ── 공용 헬퍼 ─────────────────────────────────────────────────────────────────
+    function _getTpl(key) {
+        var t = _msgTemplates.find(function(x){ return x.msg_key === key; });
+        return t ? (t.template || '') : '';
+    }
+    function _fillVarsMsg(text) {
+        return (text||'').replace(/\{\{(\w+)\}\}/g, function(_,n){
+            return MSG_SAMPLE_VARS[n] !== undefined ? MSG_SAMPLE_VARS[n] : ('{{'+n+'}}');
+        });
+    }
+
+    // ── 탭 진입 함수 ──────────────────────────────────────────────────────────────
     function openMsgEditor() {
         navigateTo('Preferences');
         switchPrefTab('telegram');
         switchPrefSubTab('msgEditor');
     }
+    function closeMsgEditor() {}
 
-    function closeMsgEditor() {
-        // 인라인이므로 별도 닫기 불필요 (다른 탭으로 이동)
-    }
-
+    // ── 데이터 로드 ───────────────────────────────────────────────────────────────
     function loadMsgTemplates_() {
-        const tree = document.getElementById('msgEditorTree');
-        if (tree) tree.innerHTML = '<div class="text-gray-400 text-xs p-2">불러오는 중...</div>';
+        var nav = document.getElementById('msgFlowNav');
+        if (nav) nav.innerHTML = '<div class="text-gray-400 text-xs p-3">불러오는 중...</div>';
         google.script.run
-            .withSuccessHandler(function (rows) {
+            .withSuccessHandler(function(rows) {
                 _msgTemplates = rows || [];
-                renderMsgTree_();
+                google.script.run
+                    .withSuccessHandler(function(cfgs) {
+                        _msgBtnConfigs = cfgs || {};
+                        google.script.run
+                            .withSuccessHandler(function(dcfgs) { _msgDataConfigs = dcfgs || {}; renderMsgNav_(); })
+                            .withFailureHandler(function()       { _msgDataConfigs = {};        renderMsgNav_(); })
+                            .getAllDataConfigs();
+                    })
+                    .withFailureHandler(function() { _msgBtnConfigs = {}; _msgDataConfigs = {}; renderMsgNav_(); })
+                    .getAllBtnConfigs();
             })
-            .withFailureHandler(function (e) {
-                if (tree) tree.innerHTML = '<div class="text-red-400 text-xs p-2">오류: ' + e + '</div>';
+            .withFailureHandler(function(e) {
+                if (nav) nav.innerHTML = '<div class="text-red-400 text-xs p-3">오류: ' + e + '</div>';
             })
             .getAllMsgTemplates();
     }
 
-    function renderMsgTree_() {
-        const tree = document.getElementById('msgEditorTree');
-        if (!tree) return;
-        // 카테고리별 그룹핑
-        const groups = {};
-        _msgTemplates.forEach(function (t) {
-            const cat = t.category || '기타';
-            if (!groups[cat]) groups[cat] = [];
-            groups[cat].push(t);
+    // ── 좌측 목차 렌더링 ──────────────────────────────────────────────────────────
+    function renderMsgNav_() {
+        var nav = document.getElementById('msgFlowNav');
+        if (!nav) return;
+        var colorMap = { 'MAPS':'bg-blue-100 text-blue-700', '회원':'bg-green-100 text-green-700', 'SYS':'bg-purple-100 text-purple-700' };
+        var html = '<div class="px-2 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide">메세지 흐름</div>';
+        _MSG_FLOW.forEach(function(item) {
+            var active = (_msgSelectedSeq === item.seq);
+            var ac = colorMap[item.actor] || 'bg-gray-100 text-gray-600';
+            html += '<button onclick="selectMsgFlow('+item.seq+')" class="w-full text-left px-2 py-2 rounded-lg mb-0.5 border transition-all '
+                + (active ? 'bg-purple-50 border-purple-300 shadow-sm' : 'border-transparent hover:bg-white hover:border-gray-200')
+                + '">'
+                + '<div class="flex items-center gap-1.5 mb-0.5">'
+                + '<span class="text-[10px] font-bold text-gray-300 w-4 text-right flex-shrink-0">'+item.seq+'</span>'
+                + '<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 '+ac+'">'+item.actor+'</span>'
+                + '<span class="text-xs font-semibold text-gray-800 truncate">'+escapeHtml(item.subject)+'</span>'
+                + '</div>'
+                + '<div class="text-[10px] text-gray-400 pl-5 leading-tight truncate">'+escapeHtml(item.condition)+'</div>'
+                + '</button>';
         });
-        let html = '';
-        Object.keys(groups).forEach(function (cat) {
-            html += '<div class="mb-2">';
-            html += '<div class="text-xs font-bold text-gray-500 uppercase px-2 py-1">' + escapeHtml(cat) + '</div>';
-            groups[cat].forEach(function (t) {
-                const active = t.msg_key === _msgSelectedKey ? ' bg-purple-100 text-purple-700 font-bold' : ' hover:bg-gray-100 text-gray-700';
-                html += '<button onclick="selectMsgTemplate(\'' + t.msg_key + '\')" '
-                    + 'class="w-full text-left px-2 py-1.5 rounded text-xs' + active + '">'
-                    + escapeHtml(t.msg_key) + '</button>';
-            });
-            html += '</div>';
+        html += '<div class="px-2 pt-3 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide border-t mt-1">알림 메세지</div>';
+        _MSG_NOTIFY.forEach(function(item) {
+            var active = (_msgSelectedSeq === item.mainKey);
+            html += '<button onclick="selectMsgNotify(\''+item.mainKey+'\')" class="w-full text-left px-2 py-1.5 rounded-lg mb-0.5 border transition-all '
+                + (active ? 'bg-purple-50 border-purple-300' : 'border-transparent hover:bg-white hover:border-gray-200')
+                + '">'
+                + '<div class="flex items-center gap-1.5">'
+                + '<span class="text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded flex-shrink-0">'+item.seq+'</span>'
+                + '<span class="text-xs text-gray-700">'+escapeHtml(item.subject)+'</span>'
+                + '</div>'
+                + '</button>';
         });
-        tree.innerHTML = html || '<div class="text-gray-400 text-xs p-2">템플릿 없음</div>';
+        nav.innerHTML = html;
     }
 
-    function selectMsgTemplate(key) {
-        _msgSelectedKey = key;
-        const t = _msgTemplates.find(function (x) { return x.msg_key === key; });
-        if (!t) return;
-
-        document.getElementById('msgEditorEmpty').style.display = 'none';
-        const form = document.getElementById('msgEditorForm');
-        form.style.display = 'flex';
-
-        document.getElementById('msgEditorKey').textContent = t.msg_key;
-        document.getElementById('msgEditorDesc').textContent = t.description || '';
-        document.getElementById('msgEditorTemplate').value = t.template || '';
-        const vars = t.variables ? t.variables.split(',').filter(Boolean) : [];
-        document.getElementById('msgEditorVars').textContent = vars.length ? '변수: ' + vars.join(', ') : '';
-
-        updateMsgPreview_();
-        renderMsgTree_();  // 선택 상태 갱신
+    // ── 선택 핸들러 ───────────────────────────────────────────────────────────────
+    function selectMsgFlow(seq) {
+        _msgSelectedSeq = seq;
+        _msgCurrentBtns = null;
+        var item = _MSG_FLOW.find(function(x){ return x.seq === seq; });
+        if (!item) return;
+        renderMsgNav_();
+        _renderFlowEditor_(item);
+    }
+    function selectMsgNotify(mainKey) {
+        _msgSelectedSeq = mainKey;
+        var item = _MSG_NOTIFY.find(function(x){ return x.mainKey === mainKey; });
+        if (!item) return;
+        renderMsgNav_();
+        _renderNotifyEditor_(item);
     }
 
-    function updateMsgPreview_() {
-        var tmpl = (document.getElementById('msgEditorTemplate') || {}).value || '';
-        var preview = document.getElementById('msgEditorPreview');
-        if (!preview) return;
+    // ── 에디터 공통 헤더 ──────────────────────────────────────────────────────────
+    function _editorHeader_(item) {
+        var colorMap = { 'MAPS':'bg-blue-100 text-blue-700', '회원':'bg-green-100 text-green-700', 'SYS':'bg-purple-100 text-purple-700' };
+        var ac = colorMap[item.actor] || 'bg-gray-100 text-gray-600';
+        var html = '<div class="mb-3 pb-3 border-b">'
+            + '<div class="flex items-center gap-2 mb-1">'
+            + '<span class="text-[11px] font-bold px-2 py-0.5 rounded '+ac+'">'+escapeHtml(item.actor||'')+'</span>'
+            + '<span class="font-bold text-sm text-gray-800">'+escapeHtml(item.seq+'. '+item.subject)+'</span>'
+            + '</div>'
+            + '<div class="text-[11px] text-gray-500">'+escapeHtml(item.action||'')+'</div>'
+            + '<div class="text-[11px] text-blue-500 mt-0.5">조건: '+escapeHtml(item.condition||'')+'</div>';
+        if (item.note) html += '<div class="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-1.5">💡 '+escapeHtml(item.note)+'</div>';
+        html += '</div>';
+        return html;
+    }
+    function _saveResetBtns_() {
+        return '<div class="flex gap-2 justify-end border-t pt-3 mt-2">'
+            + '<button onclick="resetMsgFlowUI()" class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-100">초기화</button>'
+            + '<button onclick="saveMsgFlowUI()" class="px-4 py-1.5 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 font-semibold">저장</button>'
+            + '</div>';
+    }
 
-        function fillVars(text) {
-            return (text || '').replace(/\{\{(\w+)\}\}/g, function (_, name) {
-                return MSG_SAMPLE_VARS[name] !== undefined ? MSG_SAMPLE_VARS[name] : ('{{' + name + '}}');
-            });
-        }
-        function getCachedTmpl(key) {
-            var t = _msgTemplates.find(function (x) { return x.msg_key === key; });
-            return fillVars(t ? (t.template || '') : '');
-        }
+    // ── MAPS 카드 에디터 (maps_card) — 좌우 분리 레이아웃 ────────────────────────
+    function _renderFlowEditor_(item) {
+        var empty = document.getElementById('msgEditorEmpty');
+        var form  = document.getElementById('msgEditorForm');
+        if (empty) empty.style.display = 'none';
+        if (!form) return;
 
-        var key = _msgSelectedKey || '';
-        var isItemCard = key.indexOf('item_card.') === 0;
-
-        if (isItemCard) {
-            // 서브타이틀 키 (card/check_request/status) vs 푸터 키 (warning/staff_*)
-            var footerKeys = ['item_card.warning', 'item_card.staff_1', 'item_card.staff_2'];
-            var isFooterKey = footerKeys.indexOf(key) !== -1;
-            var subtitleKey = isFooterKey ? 'item_card.card' : key;
-
-            var statusMap = {
-                'item_card.card': '추천',
-                'item_card.check_request': '입찰',
-                'item_card.status': '변경'
-            };
-            var status = statusMap[subtitleKey] || '추천';
-            var includeBidPrice = (subtitleKey === 'item_card.check_request' || subtitleKey === 'item_card.status');
-
-            var subtitle  = (key === subtitleKey)               ? fillVars(tmpl) : getCachedTmpl(subtitleKey);
-            var warning   = (key === 'item_card.warning')       ? fillVars(tmpl) : getCachedTmpl('item_card.warning');
-            var staff1    = (key === 'item_card.staff_1')       ? fillVars(tmpl) : getCachedTmpl('item_card.staff_1');
-            var staff2    = (key === 'item_card.staff_2')       ? fillVars(tmpl) : getCachedTmpl('item_card.staff_2');
-
-            var v = MSG_SAMPLE_VARS;
-            var lines = [];
-            lines.push('MJMAPS');
-            lines.push(subtitle);
-            lines.push('');
-            lines.push('🔴 물건상태: ' + status);
-            lines.push('📅 입찰일자: ' + v.in_date);
-            lines.push('📄 사건번호: ' + v.sakun_no);
-            lines.push('🏛️ 법원: ' + v.court);
-            lines.push('👤 회원: ' + v.member_name);
-            lines.push('👨‍💼 담당: ' + v.manager);
-            if (includeBidPrice) {
-                lines.push('');
-                lines.push('💰 입찰가: 2억 3,450만원');
-            }
-            lines.push('');
-            if (warning) lines.push(warning);
-            if (staff1)  lines.push(staff1);
-            if (staff2)  lines.push(staff2);
-            lines.push('');
-            lines.push('[ 내물건보기 ]');
-            if (status !== '변경') lines.push('[ 입찰확정 ]  [ 입찰취소 ]');
-
-            preview.textContent = lines.join('\n');
+        if (item.type === 'maps_card') {
+            // 좌우 분리 레이아웃
+            form.style.display = 'flex';
+            form.className = 'flex overflow-hidden';
+            form.style.minHeight = '560px';
+            form.innerHTML = _buildMapsCardEditor_(item);
+            _updateMapsCardPreview_();
         } else {
-            // notify.* 등 단독 메시지 → 변수만 치환해서 표시
-            preview.textContent = fillVars(tmpl);
+            // 기존 단일 컬럼 레이아웃
+            form.style.display = 'flex';
+            form.className = 'flex flex-col p-4 gap-2 overflow-y-auto';
+            form.style.minHeight = '';
+            var html = _editorHeader_(item);
+            if      (item.type === 'sys_reply') html += _buildSysReplyEditor_(item);
+            else if (item.type === 'bid_price') html += _buildBidPriceEditor_(item);
+            else                                html += _buildSimpleEditor_(item);
+            form.innerHTML = html;
+            if (item.type === 'sys_reply')      _updateSysReplyPreview_();
+            else if (item.type === 'bid_price') _updateBidPricePreview_();
+            else                                _updateSimplePreview_('msgFlowPreviewText');
         }
     }
 
-    function saveMsgTemplateUI() {
-        if (!_msgSelectedKey) return;
-        const template = document.getElementById('msgEditorTemplate').value;
-        google.script.run
-            .withSuccessHandler(function (r) {
-                if (r && r.success) {
-                    showStatus('메시지 저장 완료', 'success');
-                    // 캐시 업데이트
-                    const t = _msgTemplates.find(function (x) { return x.msg_key === _msgSelectedKey; });
-                    if (t) t.template = template;
-                } else {
-                    showStatus('저장 실패: ' + (r && r.message || ''), 'error');
-                }
-            })
-            .withFailureHandler(function (e) { showStatus('저장 실패: ' + e, 'error'); })
-            .saveMsgTemplate(_msgSelectedKey, template);
+    function _buildMapsCardEditor_(item) {
+        var statusMap = { 'item_card.card':'추천', 'item_card.check_request':'입찰', 'item_card.status':'변경' };
+        var status = statusMap[item.mainKey] || '추천';
+        var hasBidPrice = (item.mainKey !== 'item_card.card');
+
+        // 현재 데이터 설정 초기화
+        var savedDCfg = _msgDataConfigs[item.mainKey] || null;
+        _msgCurrentDataCfg = savedDCfg ? JSON.parse(JSON.stringify(savedDCfg)) : null;
+
+        // ─ 왼쪽: 편집 패널 ─
+        var lhtml = '<div class="flex-1 overflow-y-auto px-4 py-4 space-y-4 border-r" style="max-width:420px;min-width:280px;">';
+
+        // 헤더
+        lhtml += _editorHeader_(item);
+
+        // [1] 상단 메세지
+        lhtml += '<div class="border border-blue-200 rounded-xl overflow-hidden">'
+            + '<div class="bg-blue-50 px-3 py-2 flex items-center gap-2 border-b border-blue-200">'
+            + '<span class="text-xs font-bold text-blue-700">🔷 상단 메세지</span>'
+            + '<span class="text-[10px] text-blue-400 font-mono">' + item.mainKey + '</span>'
+            + '</div>'
+            + '<div class="p-3">'
+            + '<div class="text-[10px] text-gray-400 mb-1.5 font-mono bg-gray-50 rounded px-2 py-1">MJMAPS  ← 고정</div>'
+            + '<textarea id="msgFlowTmpl_main" rows="4" data-key="'+item.mainKey+'" oninput="_updateMapsCardPreview_()" '
+            + 'class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono resize-y focus:ring-2 focus:ring-blue-400 outline-none leading-relaxed">'
+            + escapeHtml(_getTpl(item.mainKey)) + '</textarea>'
+            + '</div>'
+            + '</div>';
+
+        // [2] 데이터 연동
+        lhtml += _buildDataFieldsSection_(item.mainKey, hasBidPrice);
+
+        // [3] 하단 메세지 (각 메세지별 개별 관리)
+        var bottomKey = item.mainKey + '.bottom';
+        lhtml += '<div class="border border-amber-200 rounded-xl overflow-hidden">'
+            + '<div class="bg-amber-50 px-3 py-2 flex items-center gap-2 border-b border-amber-200">'
+            + '<span class="text-xs font-bold text-amber-700">🔶 하단 메세지</span>'
+            + '<span class="text-[10px] text-amber-400 font-mono">' + bottomKey + '</span>'
+            + '</div>'
+            + '<div class="p-3">'
+            + '<textarea id="msgFlowTmpl_bottom" rows="5" data-key="' + bottomKey + '" oninput="_updateMapsCardPreview_()" '
+            + 'class="w-full px-3 py-2 border border-amber-200 bg-amber-50 rounded-lg text-sm font-mono resize-y focus:ring-2 focus:ring-amber-400 outline-none leading-relaxed">'
+            + escapeHtml(_getTpl(bottomKey)) + '</textarea>'
+            + '<div class="text-[10px] text-gray-400 mt-1">줄바꿈(Enter)으로 여러 줄 입력 가능</div>'
+            + '</div>'
+            + '</div>';
+
+        // [4] 버튼 편집
+        lhtml += _buildBtnEditor_(item.mainKey);
+
+        // [5] 저장/초기화
+        lhtml += '<div class="flex gap-2 justify-end pt-2">'
+            + '<button onclick="resetMsgFlowUI()" class="px-3 py-1.5 border border-gray-300 rounded text-sm hover:bg-gray-100">초기화</button>'
+            + '<button onclick="saveMsgFlowUI()" class="px-4 py-1.5 bg-purple-600 text-white rounded text-sm hover:bg-purple-700 font-semibold">저장</button>'
+            + '</div>';
+
+        lhtml += '</div>';  // end 왼쪽
+
+        // ─ 오른쪽: 미리보기 패널 ─
+        var rhtml = '<div class="flex-1 overflow-y-auto px-4 py-4 bg-gray-50 min-w-[200px]">'
+            + '<div class="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">'
+            + '<span>📱 실시간 미리보기</span>'
+            + '<span class="text-[10px] text-gray-300 font-normal">(샘플 데이터)</span>'
+            + '</div>'
+            + '<div id="msgFlowPreview" class="bg-white border-2 border-gray-200 rounded-2xl px-4 py-4 text-[13px] font-sans whitespace-pre-wrap text-gray-800 leading-6 shadow-sm min-h-[200px]">'
+            + '</div>'
+            + '</div>';
+
+        return lhtml + rhtml;
     }
 
-    function resetMsgTemplate() {
-        if (!_msgSelectedKey) return;
-        if (!confirm(_msgSelectedKey + ' 템플릿을 기본값으로 초기화하시겠습니까?')) return;
+    // ── 데이터 연동 섹션 빌더 ─────────────────────────────────────────────────────
+    function _buildDataFieldsSection_(msgKey, hasBidPrice) {
+        var savedCfg = _msgCurrentDataCfg || {};
+        var html = '<div class="border border-green-200 rounded-xl overflow-hidden" id="dataFieldsSection">'
+            + '<div class="bg-green-50 px-3 py-2 flex items-center justify-between border-b border-green-200">'
+            + '<span class="text-xs font-bold text-green-700">📊 데이터 연동</span>'
+            + '<button onclick="saveDataConfigUI()" class="text-[11px] bg-green-600 text-white px-2.5 py-1 rounded hover:bg-green-700">설정 저장</button>'
+            + '</div>'
+            + '<div class="p-3">'
+            + '<div class="text-[10px] text-gray-400 mb-2">체크한 항목만 메세지에 포함됩니다</div>'
+            + '<div class="space-y-1.5">';
+
+        _DATA_FIELDS_ALL.forEach(function(field) {
+            // bid_price는 hasBidPrice인 경우만 표시
+            if (field.onlyFor && !hasBidPrice) return;
+            // 기본값: 저장된 값 없으면 true
+            var enabled = (savedCfg && savedCfg[field.key] !== undefined) ? savedCfg[field.key] : true;
+            html += '<label class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-green-50 transition-colors" '
+                + 'onclick="toggleDataField(\''+field.key+'\',document.getElementById(\'dc_'+field.key+'_'+msgKey.replace(/\./g,'_')+'\').checked)">'
+                + '<input type="checkbox" id="dc_'+field.key+'_'+msgKey.replace(/\./g,'_')+'" '
+                + (enabled ? 'checked' : '') + ' '
+                + 'onchange="toggleDataField(\''+field.key+'\',this.checked)" class="accent-green-600 w-3.5 h-3.5 flex-shrink-0">'
+                + '<span class="text-sm">' + field.icon + '</span>'
+                + '<span class="text-xs font-medium text-gray-700 w-16 flex-shrink-0">' + field.label + '</span>'
+                + '<span class="text-[11px] text-gray-400 font-mono truncate">' + escapeHtml(field.sample) + '</span>'
+                + '</label>';
+        });
+
+        html += '</div></div></div>';
+        return html;
+    }
+
+    function toggleDataField(fieldKey, enabled) {
+        if (!_msgCurrentDataCfg) {
+            // 기본값(모두 true)으로 초기화
+            _msgCurrentDataCfg = {};
+            _DATA_FIELDS_ALL.forEach(function(f) { _msgCurrentDataCfg[f.key] = true; });
+        }
+        _msgCurrentDataCfg[fieldKey] = enabled;
+        _updateMapsCardPreview_();
+    }
+
+    function saveDataConfigUI() {
+        var item = _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; });
+        if (!item || item.type !== 'maps_card') return;
+        // 현재 체크박스 상태 수집
+        var cfg = {};
+        _DATA_FIELDS_ALL.forEach(function(field) {
+            var el = document.getElementById('dc_'+field.key+'_'+item.mainKey.replace(/\./g,'_'));
+            if (el) cfg[field.key] = el.checked;
+        });
+        var cfgJson = JSON.stringify(cfg);
+        showStatus('데이터 설정 저장 중...', 'info');
         google.script.run
-            .withSuccessHandler(function (r) {
+            .withSuccessHandler(function(r) {
                 if (r && r.success) {
-                    const t = _msgTemplates.find(function (x) { return x.msg_key === _msgSelectedKey; });
-                    if (t) {
-                        document.getElementById('msgEditorTemplate').value = t.default_template || t.template || '';
-                        updateMsgPreview_();
-                    }
-                    showStatus('초기화 완료', 'success');
-                }
+                    _msgDataConfigs[item.mainKey] = cfg;
+                    _msgCurrentDataCfg = cfg;
+                    showStatus('데이터 설정 저장 완료', 'success');
+                } else showStatus('저장 실패: '+(r&&r.message||''), 'error');
             })
-            .withFailureHandler(function (e) { showStatus('초기화 실패: ' + e, 'error'); })
-            .resetMsgTemplate(_msgSelectedKey);
+            .withFailureHandler(function(e){ showStatus('저장 실패: '+e, 'error'); })
+            .saveDataConfig(item.mainKey, cfgJson);
+    }
+
+    function _updateMapsCardPreview_() {
+        var preview = document.getElementById('msgFlowPreview');
+        if (!preview) return;
+        var item = _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; });
+        if (!item) return;
+        var getVal = function(id, fallback) { var el = document.getElementById(id); return el ? el.value : fallback; };
+        var bottomKey  = item.mainKey + '.bottom';
+        var mainTpl    = getVal('msgFlowTmpl_main',   _getTpl(item.mainKey));
+        var bottomTpl  = getVal('msgFlowTmpl_bottom', _getTpl(bottomKey));
+        var statusMap = { 'item_card.card':'추천', 'item_card.check_request':'입찰', 'item_card.status':'변경' };
+        var status = statusMap[item.mainKey] || '추천';
+        var statusIcon = status === '입찰' ? '🔵' : '🔴';
+        var hasBidPrice = (item.mainKey !== 'item_card.card');
+        var v = MSG_SAMPLE_VARS;
+
+        // 체크박스 상태 읽기 (UI 우선, 없으면 저장된 값, 없으면 기본 true)
+        var sf = function(field) {
+            var el = document.getElementById('dc_'+field+'_'+item.mainKey.replace(/\./g,'_'));
+            if (el) return el.checked;
+            if (_msgCurrentDataCfg && _msgCurrentDataCfg[field] !== undefined) return _msgCurrentDataCfg[field];
+            return true;
+        };
+
+        var lines = ['MJMAPS', _fillVarsMsg(mainTpl), ''];
+        if (sf('status'))      lines.push(statusIcon + ' 물건상태: ' + status);
+        if (sf('in_date'))     lines.push('📅 입찰일자: ' + v.in_date);
+        if (sf('sakun_no'))    lines.push('📄 사건번호: ' + v.sakun_no);
+        if (sf('court'))       lines.push('🏛️ 법원: ' + v.court);
+        if (sf('member_name')) lines.push('👤 회원: ' + v.member_name);
+        if (sf('manager'))     lines.push('👨‍💼 담당: ' + v.manager);
+        if (hasBidPrice && sf('bid_price')) { lines.push(''); lines.push('💰 입찰가: ' + v.bid_price + '원'); }
+        lines.push('');
+        if (bottomTpl) bottomTpl.split('\n').forEach(function(l) { lines.push(_fillVarsMsg(l)); });
+        lines.push('');
+        // 버튼
+        var btns = _msgCurrentBtns || _msgBtnConfigs[item.mainKey] || _BTN_DEFAULTS[item.mainKey] || [];
+        var enabled = btns.filter(function(b){ return b.enabled !== false; });
+        if (enabled.length) lines.push(enabled.map(function(b){ return '[ '+b.text+' ]'; }).join('  '));
+        preview.textContent = lines.join('\n');
+    }
+
+    // ── SYS 자동 댓글 에디터 (sys_reply) ─────────────────────────────────────────
+    function _buildSysReplyEditor_(item) {
+        var isBid = (item.mainKey === 'sys.bid_confirmed');
+        var label = isBid ? '🔵 입찰확정' : '🔴 입찰취소';
+        var html = '';
+        // 미리보기: 원본 메세지 참조 스타일
+        html += '<div class="mb-3">'
+            + '<label class="text-xs font-semibold text-gray-600 mb-1 block">미리보기 <span class="text-gray-300 font-normal">(2번째 이미지 스타일)</span></label>'
+            + '<div class="border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm">'
+            // 원본 메세지 참조 블록
+            + '<div class="bg-gray-100 border-l-4 border-gray-400 px-3 py-2">'
+            + '<div class="text-[10px] font-bold text-gray-600">MJMAPS</div>'
+            + '<div class="text-[10px] text-gray-500 truncate">MJ 경매 스쿨입니다. 추천 물건드립니다...</div>'
+            + '</div>'
+            // 실제 메세지
+            + '<div class="p-3 bg-white">'
+            + '<div class="text-[10px] text-gray-500 mb-1">26-03-17 TEST4</div>'
+            + '<div id="msgFlowPreview" class="text-xs font-mono whitespace-pre-wrap text-gray-800"></div>'
+            + '</div>'
+            + '<div class="px-3 py-2 bg-gray-50 border-t">'
+            + '<span class="text-[11px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">🏠 MAPS 바로가기</span>'
+            + '</div>'
+            + '</div>'
+            + '</div>';
+        html += '<div class="mb-3">'
+            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 결과 메세지 <span class="text-gray-400 font-normal text-[10px]">('+item.mainKey+')</span></label>'
+            + '<textarea id="msgFlowTmpl_main" rows="3" data-key="'+item.mainKey+'" oninput="_updateSysReplyPreview_()" '
+            + 'class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono resize-none focus:ring-1 focus:ring-purple-400 outline-none">'
+            + escapeHtml(_getTpl(item.mainKey)) + '</textarea>'
+            + '</div>'
+            + '<div class="text-[11px] text-gray-400 bg-blue-50 border border-blue-100 rounded px-2 py-1.5 mb-3">'
+            + '📎 원본 메세지에 댓글(reply)로 자동 전송됩니다. 🏠 MAPS 바로가기 버튼은 자동 포함됩니다.'
+            + '</div>';
+        html += _saveResetBtns_();
+        return html;
+    }
+    function _updateSysReplyPreview_() {
+        var el = document.getElementById('msgFlowTmpl_main');
+        var prev = document.getElementById('msgFlowPreview');
+        if (!el || !prev) return;
+        prev.textContent = _fillVarsMsg(el.value);
+    }
+
+    // ── 단순 메세지 에디터 (simple) ───────────────────────────────────────────────
+    function _buildSimpleEditor_(item) {
+        var t = _msgTemplates.find(function(x){ return x.msg_key === item.mainKey; });
+        var vars = (t && t.variables) ? t.variables.split(',').filter(Boolean) : [];
+        var btns = _BTN_DEFAULTS[item.mainKey] || [];
+        var html = '';
+        // 미리보기
+        html += '<div class="mb-3">'
+            + '<label class="text-xs font-semibold text-gray-600 mb-1 block">미리보기</label>'
+            + '<div class="border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm">'
+            + '<div class="p-3 bg-white"><pre id="msgFlowPreviewText" class="text-sm font-mono whitespace-pre-wrap text-gray-800"></pre></div>'
+            + (btns.length ? '<div class="px-3 py-2 bg-gray-50 border-t flex gap-2 flex-wrap">'
+                + btns.map(function(b){ return '<span class="text-[11px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">'+escapeHtml(b.text)+'</span>'; }).join('')
+                + '</div>' : '')
+            + '</div>'
+            + '</div>';
+        html += '<div class="mb-3">'
+            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 메세지 텍스트 <span class="text-gray-400 font-normal text-[10px]">('+item.mainKey+')</span></label>'
+            + '<textarea id="msgFlowTmpl_main" rows="3" data-key="'+item.mainKey+'" oninput="_updateSimplePreview_(\'msgFlowPreviewText\')" '
+            + 'class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono resize-none focus:ring-1 focus:ring-purple-400 outline-none">'
+            + escapeHtml(_getTpl(item.mainKey)) + '</textarea>';
+        if (vars.length) html += '<div class="text-[11px] text-gray-400 mt-1">변수: '+vars.map(function(v){ return '<code class="bg-gray-100 px-1 rounded">{{'+v+'}}</code>'; }).join(', ')+'</div>';
+        html += '</div>';
+        html += _saveResetBtns_();
+        return html;
+    }
+    function _updateSimplePreview_(previewId) {
+        var el = document.getElementById('msgFlowTmpl_main');
+        var prev = document.getElementById(previewId || 'msgFlowPreviewText');
+        if (!el || !prev) return;
+        prev.textContent = _fillVarsMsg(el.value);
+    }
+
+    // ── 입찰가확인 에디터 (bid_price) ─────────────────────────────────────────────
+    function _buildBidPriceEditor_(item) {
+        var html = ''
+            // 미리보기
+            + '<div class="mb-3">'
+            + '<label class="text-xs font-semibold text-gray-600 mb-1 block">미리보기 <span class="text-[10px] text-gray-400 font-normal">(샘플 데이터)</span></label>'
+            + '<div class="bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm">'
+            + '<div class="p-3">'
+            + '<pre id="msgFlowPreview" class="text-xs whitespace-pre-wrap text-gray-800"></pre>'
+            + '</div>'
+            + '<div class="px-3 py-2 bg-gray-50 border-t flex gap-2">'
+            + '<span class="text-[11px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-medium">입찰가확인</span>'
+            + '<span class="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded">내물건보기</span>'
+            + '</div>'
+            + '</div>'
+            + '</div>'
+            // 고정 헤더 안내
+            + '<div class="mb-2 text-[11px] bg-blue-50 border border-blue-100 rounded px-3 py-2 text-blue-700">'
+            + '📌 첫 줄은 자동 생성됩니다: <code class="bg-white px-1 rounded border border-blue-200 font-mono">입찰일 / 사건번호 / 법원</code>'
+            + '</div>'
+            // 템플릿 편집
+            + '<div class="mb-3">'
+            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 본문 메세지 <span class="text-gray-400 font-normal text-[10px]">('+item.mainKey+')</span></label>'
+            + '<textarea id="msgFlowTmpl_main" rows="3" data-key="'+item.mainKey+'" oninput="_updateBidPricePreview_()" '
+            + 'class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono resize-y focus:ring-1 focus:ring-purple-400 outline-none">'
+            + escapeHtml(_getTpl(item.mainKey)) + '</textarea>'
+            + '<div class="text-[10px] text-gray-400 mt-1">변수 없음 — 고정 텍스트로 전송됩니다.</div>'
+            + '</div>';
+        html += _saveResetBtns_();
+        return html;
+    }
+    function _updateBidPricePreview_() {
+        var el   = document.getElementById('msgFlowTmpl_main');
+        var prev = document.getElementById('msgFlowPreview');
+        if (!el || !prev) return;
+        var v = MSG_SAMPLE_VARS;
+        var header = (v.in_date || '26-03-17') + ' / ' + (v.sakun_no || '2025타경00000') + ' / ' + (v.court || '서울동부');
+        prev.textContent = header + '\n' + (el.value || '');
+    }
+
+    // ── 알림 메세지 에디터 (notify) ───────────────────────────────────────────────
+    function _renderNotifyEditor_(item) {
+        var empty = document.getElementById('msgEditorEmpty');
+        var form  = document.getElementById('msgEditorForm');
+        if (empty) empty.style.display = 'none';
+        if (!form) return;
+        form.style.display = 'flex';
+        form.className = 'flex flex-col p-4 gap-2 overflow-y-auto';
+        form.style.minHeight = '';
+        var t = _msgTemplates.find(function(x){ return x.msg_key === item.mainKey; });
+        var vars = (t && t.variables) ? t.variables.split(',').filter(Boolean) : [];
+        var html = '<div class="mb-3 pb-3 border-b">'
+            + '<div class="flex items-center gap-2 mb-0.5">'
+            + '<span class="text-[11px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">알림</span>'
+            + '<span class="font-bold text-sm text-gray-800">'+escapeHtml(item.subject)+'</span>'
+            + '</div>'
+            + '<div class="text-[10px] text-gray-400 font-mono">'+item.mainKey+'</div>'
+            + '</div>';
+        html += '<div class="mb-3">'
+            + '<label class="text-xs font-semibold text-gray-600 mb-1 block">미리보기</label>'
+            + '<pre id="msgFlowPreview" class="bg-white border-2 border-gray-200 rounded-xl p-3 text-xs whitespace-pre-wrap text-gray-700 min-h-[40px]"></pre>'
+            + '</div>';
+        html += '<div class="mb-3">'
+            + '<label class="text-xs font-semibold text-gray-700 mb-0.5 block">📝 메세지 템플릿</label>'
+            + '<textarea id="msgFlowTmpl_main" rows="4" data-key="'+item.mainKey+'" oninput="_updateNotifyPreview_()" '
+            + 'class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono resize-none focus:ring-1 focus:ring-purple-400 outline-none">'
+            + escapeHtml(_getTpl(item.mainKey)) + '</textarea>';
+        if (vars.length) html += '<div class="text-[11px] text-gray-400 mt-1">사용 변수: '+vars.map(function(v){ return '<code class="bg-gray-100 px-1 rounded">{{'+v+'}}</code>'; }).join(', ')+'</div>';
+        html += '</div>';
+        html += _saveResetBtns_();
+        form.innerHTML = html;
+        _updateNotifyPreview_();
+    }
+    function _updateNotifyPreview_() {
+        var el = document.getElementById('msgFlowTmpl_main');
+        var prev = document.getElementById('msgFlowPreview');
+        if (!el || !prev) return;
+        prev.textContent = _fillVarsMsg(el.value);
+    }
+
+    // ── 버튼 편집기 ───────────────────────────────────────────────────────────────
+    function _buildBtnEditor_(msgKey, existingBtns) {
+        var btns;
+        if (existingBtns) {
+            btns = existingBtns;
+        } else {
+            var saved = _msgBtnConfigs[msgKey];
+            btns = saved ? JSON.parse(JSON.stringify(saved)) : JSON.parse(JSON.stringify(_BTN_DEFAULTS[msgKey] || []));
+        }
+        _msgCurrentBtns = btns;
+        if (!btns.length) return '';
+        var html = '<div class="mb-3" id="btnEditorSection">'
+            + '<label class="text-xs font-semibold text-gray-700 mb-1 block">🔘 인라인 버튼 설정</label>'
+            + '<div class="border border-gray-200 rounded-lg overflow-hidden">'
+            + '<div id="btnEditorList" class="divide-y">';
+        btns.forEach(function(btn, idx) {
+            var rowLabel = (btn.row === 0) ? '1행' : ((btn.row + 1) + '행');
+            html += '<div class="flex items-center gap-2 px-3 py-2 bg-white" data-btn-idx="'+idx+'">'
+                + '<input type="checkbox" '+(btn.enabled!==false?'checked':'')+' onchange="toggleBtnItem('+idx+',this.checked)" class="accent-purple-500 flex-shrink-0">'
+                + '<span class="text-xs font-mono flex-1 '+(btn.enabled===false?'text-gray-400 line-through':'text-gray-800')+'">'+escapeHtml(btn.text)+'</span>'
+                + '<span class="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded flex-shrink-0">'+rowLabel+'</span>'
+                + '<div class="flex gap-0.5 flex-shrink-0">'
+                + (idx > 0 ? '<button onclick="moveBtnItem('+idx+',-1)" class="text-gray-400 hover:text-gray-700 w-5 h-5 flex items-center justify-center text-xs rounded hover:bg-gray-100" title="위로">↑</button>' : '<span class="w-5"></span>')
+                + (idx < btns.length-1 ? '<button onclick="moveBtnItem('+idx+',1)" class="text-gray-400 hover:text-gray-700 w-5 h-5 flex items-center justify-center text-xs rounded hover:bg-gray-100" title="아래로">↓</button>' : '<span class="w-5"></span>')
+                + '</div>'
+                + '</div>';
+        });
+        html += '</div>'
+            + '<div class="px-3 py-2 bg-gray-50 border-t flex justify-between items-center">'
+            + '<span class="text-[10px] text-gray-400">ON/OFF 및 순서 변경 후 저장하세요</span>'
+            + '<button onclick="saveBtnConfigUI()" class="text-[11px] bg-purple-600 text-white px-2.5 py-1 rounded hover:bg-purple-700">버튼 설정 저장</button>'
+            + '</div>'
+            + '</div>'
+            + '</div>';
+        return html;
+    }
+
+    function toggleBtnItem(idx, enabled) {
+        if (!_msgCurrentBtns || !_msgCurrentBtns[idx]) return;
+        _msgCurrentBtns[idx].enabled = enabled;
+        var row = document.querySelector('[data-btn-idx="'+idx+'"]');
+        if (row) {
+            var lbl = row.querySelector('span.font-mono');
+            if (lbl) lbl.className = 'text-xs font-mono flex-1 ' + (enabled ? 'text-gray-800' : 'text-gray-400 line-through');
+        }
+        _updateMapsCardPreview_();
+    }
+    function moveBtnItem(idx, dir) {
+        if (!_msgCurrentBtns) return;
+        var newIdx = idx + dir;
+        if (newIdx < 0 || newIdx >= _msgCurrentBtns.length) return;
+        var tmp = _msgCurrentBtns[idx]; _msgCurrentBtns[idx] = _msgCurrentBtns[newIdx]; _msgCurrentBtns[newIdx] = tmp;
+        _msgCurrentBtns.forEach(function(b, i){ b.order = i; });
+        var item = _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; });
+        if (item) {
+            var currentBtns = _msgCurrentBtns; // swap된 배열 보존
+            var sec = document.getElementById('btnEditorSection');
+            if (sec) sec.outerHTML = _buildBtnEditor_(item.mainKey, currentBtns);
+        }
+    }
+    function saveBtnConfigUI() {
+        var item = _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; });
+        if (!item || !_msgCurrentBtns) return;
+        var btnsJson = JSON.stringify(_msgCurrentBtns);
+        showStatus('버튼 설정 저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function(r) {
+                if (r && r.success) { _msgBtnConfigs[item.mainKey] = JSON.parse(btnsJson); showStatus('버튼 설정 저장 완료', 'success'); }
+                else showStatus('저장 실패: '+(r&&r.message||''), 'error');
+            })
+            .withFailureHandler(function(e){ showStatus('저장 실패: '+e, 'error'); })
+            .saveBtnConfig(item.mainKey, btnsJson);
+    }
+
+    // ── 저장 / 초기화 ─────────────────────────────────────────────────────────────
+    function saveMsgFlowUI() {
+        var item = (typeof _msgSelectedSeq === 'number')
+            ? _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; })
+            : _MSG_NOTIFY.find(function(x){ return x.mainKey === _msgSelectedSeq; });
+        if (!item) return;
+        var pairs = [];
+        var mainEl = document.getElementById('msgFlowTmpl_main');
+        if (mainEl) pairs.push({ key: item.mainKey, template: mainEl.value });
+        if (item.type === 'maps_card') {
+            var bEl = document.getElementById('msgFlowTmpl_bottom');
+            if (bEl) pairs.push({ key: item.mainKey + '.bottom', template: bEl.value });
+        }
+        if (!pairs.length) return;
+        showStatus('저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function(r) {
+                if (r && r.success) {
+                    pairs.forEach(function(p){
+                        var t = _msgTemplates.find(function(x){ return x.msg_key === p.key; });
+                        if (t) t.template = p.template;
+                    });
+                    showStatus('저장 완료 ('+(r.saved||pairs.length)+'개)', 'success');
+                } else showStatus('저장 실패: '+(r&&r.message||''), 'error');
+            })
+            .withFailureHandler(function(e){ showStatus('저장 실패: '+e, 'error'); })
+            .saveMsgTemplatesBatch(pairs);
+    }
+
+    function resetMsgFlowUI() {
+        var item = (typeof _msgSelectedSeq === 'number')
+            ? _MSG_FLOW.find(function(x){ return x.seq === _msgSelectedSeq; })
+            : _MSG_NOTIFY.find(function(x){ return x.mainKey === _msgSelectedSeq; });
+        if (!item) return;
+        if (!confirm(item.subject + ' 메세지를 기본값으로 초기화하시겠습니까?')) return;
+        showStatus('초기화 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function(r) {
+                if (r && r.success) {
+                    showStatus('초기화 완료', 'success');
+                    _msgTemplates = [];  // 재로드 강제
+                    loadMsgTemplates_();
+                    var savedSeq = _msgSelectedSeq;
+                    setTimeout(function() {
+                        if (typeof savedSeq === 'number') selectMsgFlow(savedSeq);
+                        else selectMsgNotify(savedSeq);
+                    }, 400);
+                } else showStatus('초기화 실패: '+(r&&r.message||''), 'error');
+            })
+            .withFailureHandler(function(e){ showStatus('초기화 실패: '+e, 'error'); })
+            .resetMsgTemplate(item.mainKey);
+    }
+
+    // ── 하위 호환 스텁 (기존 참조 대응) ──────────────────────────────────────────
+    function saveMsgTemplateUI() { saveMsgFlowUI(); }
+    function resetMsgTemplate()  { resetMsgFlowUI(); }
+    function renderMsgTree_()    { renderMsgNav_(); }
+    function selectMsgTemplate(key) {
+        // 기존 msg_key로 호출 시 해당 흐름 항목으로 자동 연결
+        var flowItem = _MSG_FLOW.find(function(x){ return x.mainKey === key || (x.sharedKeys && x.sharedKeys.indexOf(key) !== -1); });
+        if (flowItem) selectMsgFlow(flowItem.seq);
+        else { var ni = _MSG_NOTIFY.find(function(x){ return x.mainKey === key; }); if (ni) selectMsgNotify(ni.mainKey); }
+    }
+    function updateMsgPreview_() { _updateMapsCardPreview_(); }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ─── [표시명 설정] 담당자 이름 → 표시명 매핑 관리 ───────────────────────────────
+    var _dispNameLoaded = false;
+    var _dispNameMap = {};
+
+    function loadDispNameMap_() {
+        var list = document.getElementById('dispNameList');
+        if (list) list.innerHTML = '<div class="text-xs text-gray-400 py-2">불러오는 중...</div>';
+        google.script.run
+            .withSuccessHandler(function(map) {
+                _dispNameMap = (map && typeof map === 'object') ? map : {};
+                _dispNameLoaded = true;
+                renderDispNameList_(_dispNameMap);
+            })
+            .withFailureHandler(function(e) {
+                var list = document.getElementById('dispNameList');
+                if (list) list.innerHTML = '<div class="text-xs text-red-500 py-2">불러오기 실패: ' + e.message + '</div>';
+            })
+            .getDisplayNameMap();
+    }
+
+    function renderDispNameList_(map) {
+        var list = document.getElementById('dispNameList');
+        if (!list) return;
+        var keys = Object.keys(map || {});
+        if (keys.length === 0) {
+            list.innerHTML = '<div class="text-xs text-gray-400 py-2 text-center">등록된 표시명이 없습니다.</div>';
+            return;
+        }
+        list.innerHTML = keys.map(function(k, i) {
+            return '<div class="dispName-row grid grid-cols-[1fr_1fr_auto] gap-2 items-center py-1">'
+                + '<input type="text" class="dn-real border border-gray-200 rounded px-2 py-1 text-xs" value="' + _esc(k) + '">'
+                + '<input type="text" class="dn-disp border border-gray-200 rounded px-2 py-1 text-xs" value="' + _esc(map[k]) + '">'
+                + '<button onclick="removeDispNameEntry(this.closest(\'.dispName-row\'))" class="text-red-400 hover:text-red-600 text-xs px-1">✕</button>'
+                + '</div>';
+        }).join('');
+    }
+
+    function _esc(str) {
+        return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function addDispNameEntry() {
+        var list = document.getElementById('dispNameList');
+        if (!list) return;
+        // 빈 목록 안내 텍스트 제거
+        var empty = list.querySelector('div.text-center');
+        if (empty) empty.remove();
+        var row = document.createElement('div');
+        row.className = 'dispName-row grid grid-cols-[1fr_1fr_auto] gap-2 items-center py-1';
+        row.innerHTML = '<input type="text" class="dn-real border border-gray-200 rounded px-2 py-1 text-xs" placeholder="실제 이름">'
+            + '<input type="text" class="dn-disp border border-gray-200 rounded px-2 py-1 text-xs" placeholder="표시 이름">'
+            + '<button onclick="removeDispNameEntry(this.closest(\'.dispName-row\'))" class="text-red-400 hover:text-red-600 text-xs px-1">✕</button>';
+        list.appendChild(row);
+        row.querySelector('.dn-real').focus();
+    }
+
+    function removeDispNameEntry(rowEl) {
+        if (rowEl && rowEl.parentNode) rowEl.parentNode.removeChild(rowEl);
+    }
+
+    function saveDispNameMapUI() {
+        var list = document.getElementById('dispNameList');
+        if (!list) return;
+        var map = {};
+        list.querySelectorAll('.dispName-row').forEach(function(row) {
+            var real = (row.querySelector('.dn-real') || {}).value || '';
+            var disp = (row.querySelector('.dn-disp') || {}).value || '';
+            if (real.trim()) map[real.trim()] = disp.trim();
+        });
+        showStatus('저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function() {
+                _dispNameMap = map;
+                showStatus('표시명 설정이 저장되었습니다.', 'success');
+            })
+            .withFailureHandler(function(e) {
+                showStatus('저장 실패: ' + e.message, 'error');
+            })
+            .saveDisplayNameMap(JSON.stringify(map));
     }
     // ─────────────────────────────────────────────────────────────────────────
 

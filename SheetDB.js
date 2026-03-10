@@ -3790,6 +3790,7 @@ function saveSettingPublic(key, value) {
  */
 function getAllMsgTemplates() {
   try {
+    migrateMsgTemplatesNewKeys_(); // [MSG EDITOR V2] 빠진 키 자동 추가
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(MSG_TEMPLATES_SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return [];
@@ -3827,11 +3828,240 @@ function resetMsgTemplate(key) {
     'notify.expiry_done': '{{member_name}}님, [{{sakun_no}}] 추천 물건이 만료되어 미정 처리되었습니다.',
     'notify.bid_d3': '{{member_name}}님, [{{sakun_no}}] 입찰일이 3일 후입니다. ({{in_date}})',
     'notify.bid_d2': '{{member_name}}님, [{{sakun_no}}] 입찰일이 2일 후입니다. ({{in_date}})',
-    'notify.bid_d1': '{{member_name}}님, [{{sakun_no}}] 내일이 입찰일입니다. ({{in_date}}) 준비 잘 되셨나요?'
+    'notify.bid_d1': '{{member_name}}님, [{{sakun_no}}] 내일이 입찰일입니다. ({{in_date}}) 준비 잘 되셨나요?',
+    // [MSG EDITOR V2] 새로운 메세지 키
+    'member.bid_confirm_ask': '입찰확정 하시겠습니까?',
+    'member.bid_confirm_invalid': '⚠️ 현재 물건상태 변경이 불가능 합니다.\n(현재 상태: {{status}})',
+    'sys.bid_confirmed': '입찰확정 완료되었습니다.',
+    'member.bid_cancel_ask': '입찰취소 하시겠습니까?',
+    'member.bid_cancel_invalid': '⚠️ 현재 물건상태 변경이 불가능 합니다.\n(현재 상태: {{status}})',
+    'sys.bid_cancelled': '입찰취소 완료되었습니다.',
+    'member.bid_price_view': '입찰가가 도착했습니다. 확인하시겠습니까?',
+    // [하단 메세지 개별 관리] 각 maps_card 타입별 독립 하단 메세지
+    'item_card.card.bottom': '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!\n1. 입찰가 관리: 이정우: (010-4238-7781)\n2. 단기투자클럽 관리: 이경미님 (010-3448-8035)',
+    'item_card.check_request.bottom': '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!\n1. 입찰가 관리: 이정우: (010-4238-7781)\n2. 단기투자클럽 관리: 이경미님 (010-3448-8035)',
+    'item_card.status.bottom': '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!\n1. 입찰가 관리: 이정우: (010-4238-7781)\n2. 단기투자클럽 관리: 이경미님 (010-3448-8035)'
   };
   const defVal = DEFAULTS[key];
   if (!defVal) return { success: false, message: '기본값 없음: ' + key };
   return saveMsgTemplate(key, defVal);
+}
+
+// ------------------------------------------------------------------------------------------------
+// [MSG EDITOR V2] 새 메세지 키 마이그레이션 + 배치 저장 + 버튼 설정
+// ------------------------------------------------------------------------------------------------
+
+/**
+ * 기존 msg_templates 시트에 빠진 키가 있으면 자동 추가 (멱등 마이그레이션)
+ */
+function migrateMsgTemplatesNewKeys_() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(MSG_TEMPLATES_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 1) return;
+    const lastRow = sheet.getLastRow();
+    const existingKeys = lastRow >= 2
+      ? sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(function(r) { return String(r[0]); })
+      : [];
+    const newDefaults = [
+      ['member.bid_confirm_ask', 'member', '입찰확정 요청', '입찰확정 하시겠습니까?', '', '', ''],
+      ['member.bid_confirm_invalid', 'member', '입찰확정 불가', '⚠️ 현재 물건상태 변경이 불가능 합니다.\n(현재 상태: {{status}})', 'status', '', ''],
+      ['sys.bid_confirmed', 'sys', '입찰확정 완료 자동 메시지', '입찰확정 완료되었습니다.', '', '', ''],
+      ['member.bid_cancel_ask', 'member', '입찰취소 요청', '입찰취소 하시겠습니까?', '', '', ''],
+      ['member.bid_cancel_invalid', 'member', '입찰취소 불가', '⚠️ 현재 물건상태 변경이 불가능 합니다.\n(현재 상태: {{status}})', 'status', '', ''],
+      ['sys.bid_cancelled', 'sys', '입찰취소 완료 자동 메시지', '입찰취소 완료되었습니다.', '', '', ''],
+      ['member.bid_price_view', 'member', '입찰가 확인', '입찰가가 도착했습니다. 확인하시겠습니까?', '', '', ''],
+      ['item_card.card.bottom', 'item_card', '추천물건 하단 메세지', '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!\n1. 입찰가 관리: 이정우: (010-4238-7781)\n2. 단기투자클럽 관리: 이경미님 (010-3448-8035)', '', '', ''],
+      ['item_card.check_request.bottom', 'item_card', '입찰가전달 하단 메세지', '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!\n1. 입찰가 관리: 이정우: (010-4238-7781)\n2. 단기투자클럽 관리: 이경미님 (010-3448-8035)', '', '', ''],
+      ['item_card.status.bottom', 'item_card', '입찰불가 하단 메세지', '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!\n1. 입찰가 관리: 이정우: (010-4238-7781)\n2. 단기투자클럽 관리: 이경미님 (010-3448-8035)', '', '', '']
+    ];
+    let added = 0;
+    newDefaults.forEach(function(row) {
+      if (!existingKeys.includes(row[0])) {
+        sheet.appendRow(row);
+        added++;
+      }
+    });
+    if (added > 0) SpreadsheetApp.flush();
+  } catch (e) {
+    Logger.log('[migrateMsgTemplatesNewKeys_] 오류: ' + e.toString());
+  }
+}
+
+/**
+ * 여러 메시지 템플릿 일괄 저장 (maps_card 편집 시 여러 키 동시 저장)
+ * @param {Array<{key:string, template:string}>} pairs
+ */
+function saveMsgTemplatesBatch(pairs) {
+  try {
+    if (!Array.isArray(pairs) || pairs.length === 0) return { success: false, message: '저장할 항목이 없습니다.' };
+    var saved = 0;
+    for (var i = 0; i < pairs.length; i++) {
+      var r = saveMsgTemplate(pairs[i].key, pairs[i].template);
+      if (!r || !r.success) return { success: false, message: pairs[i].key + ': ' + (r && r.message || '저장 실패') };
+      saved++;
+    }
+    return { success: true, saved: saved };
+  } catch (e) {
+    Logger.log('[saveMsgTemplatesBatch] 오류: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * 버튼 설정 저장 (settings 시트에 BTN_CFG.{msgKey} 키로 저장)
+ * @param {string} msgKey
+ * @param {string} btnsJson  - JSON 배열 문자열
+ */
+function saveBtnConfig(msgKey, btnsJson) {
+  try {
+    saveSetting_('BTN_CFG.' + msgKey, btnsJson);
+    return { success: true };
+  } catch (e) {
+    Logger.log('[saveBtnConfig] 오류: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * 버튼 설정 전체 반환 (BTN_CFG.* 키만 추출)
+ * @returns {Object}  key → parsed array
+ */
+function getAllBtnConfigs() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return {};
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    const result = {};
+    data.forEach(function(row) {
+      const k = String(row[0] || '');
+      if (k.indexOf('BTN_CFG.') === 0) {
+        const msgKey = k.slice('BTN_CFG.'.length);
+        try { result[msgKey] = JSON.parse(String(row[1] || '')); } catch (e) {}
+      }
+    });
+    return result;
+  } catch (e) {
+    Logger.log('[getAllBtnConfigs] 오류: ' + e.toString());
+    return {};
+  }
+}
+
+/**
+ * 특정 메시지 키의 버튼 설정 반환 (TelegramService 내부 호출용)
+ * @param {string} msgKey
+ * @returns {Array|null}
+ */
+function getMsgBtnConfig_(msgKey) {
+  try {
+    const val = getSetting_('BTN_CFG.' + msgKey, '');
+    if (!val) return null;
+    const parsed = JSON.parse(val);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * 표시명 맵 저장 (settings 시트 DISPLAY_NAME_MAP 키에 JSON 저장)
+ * @param {string} mapJson  예: '{"대표님":"MJ","전제혁":"전부쌤"}'
+ */
+function saveDisplayNameMap(mapJson) {
+  try {
+    saveSetting_('DISPLAY_NAME_MAP', mapJson);
+    return { success: true };
+  } catch (e) {
+    Logger.log('[saveDisplayNameMap] 오류: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * 표시명 맵 전체 반환 (프론트 관리 UI용)
+ * @returns {Object}  예: {"대표님":"MJ","전제혁":"전부쌤"}
+ */
+function getDisplayNameMap() {
+  try {
+    const val = getSetting_('DISPLAY_NAME_MAP', '');
+    if (!val) return { '대표님': 'MJ' };  // 기본값
+    const parsed = JSON.parse(val);
+    return (typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+/**
+ * 이름 하나를 표시명으로 변환 (TelegramService 내부 호출용)
+ * @param {string} name
+ * @returns {string}
+ */
+function getDisplayName_(name) {
+  try {
+    if (!name) return name;
+    const map = getDisplayNameMap();
+    return (map && map[name]) ? map[name] : name;
+  } catch (e) {
+    return name;
+  }
+}
+
+/**
+ * 데이터 필드 표시 설정 저장 (settings 시트에 DATA_CFG.{msgKey} 키로 저장)
+ * @param {string} msgKey
+ * @param {string} configJson  예: '{"status":true,"in_date":false,...}'
+ */
+function saveDataConfig(msgKey, configJson) {
+  try {
+    saveSetting_('DATA_CFG.' + msgKey, configJson);
+    return { success: true };
+  } catch (e) {
+    Logger.log('[saveDataConfig] 오류: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * 데이터 필드 표시 설정 전체 반환 (DATA_CFG.* 키만)
+ * @returns {Object}  msgKey → {status:bool, in_date:bool, ...}
+ */
+function getAllDataConfigs() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return {};
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+    const result = {};
+    data.forEach(function(row) {
+      const k = String(row[0] || '');
+      if (k.indexOf('DATA_CFG.') === 0) {
+        const msgKey = k.slice('DATA_CFG.'.length);
+        try { result[msgKey] = JSON.parse(String(row[1] || '')); } catch (e) {}
+      }
+    });
+    return result;
+  } catch (e) {
+    Logger.log('[getAllDataConfigs] 오류: ' + e.toString());
+    return {};
+  }
+}
+
+/**
+ * 특정 메시지 키의 데이터 필드 설정 반환 (TelegramService 내부 호출용)
+ * @param {string} msgKey
+ * @returns {Object|null}  null → 기본값(모두 표시)
+ */
+function getDataConfig_(msgKey) {
+  try {
+    const val = getSetting_('DATA_CFG.' + msgKey, '');
+    if (!val) return null;
+    const parsed = JSON.parse(val);
+    return (typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // ------------------------------------------------------------------------------------------------
