@@ -4573,9 +4573,38 @@
         const id = context === 'item' ? 'item-template-textarea' : 'template-textarea';
         const textarea = document.getElementById(id);
         if (!textarea) return;
-        textarea.select();
-        document.execCommand('copy');
-        alert('메시지가 클립보드에 복사되었습니다.');
+
+        const textToCopy = textarea.value;
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    showStatus('내용이 클립보드에 복사되었습니다.', 'success');
+                }).catch(err => {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopyText(textarea);
+                });
+            } else {
+                fallbackCopyText(textarea);
+            }
+        } catch (err) {
+            fallbackCopyText(textarea);
+        }
+    }
+
+    function fallbackCopyText(textarea) {
+        try {
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+            const successful = document.execCommand('copy');
+            if (successful) {
+                showStatus('내용이 클립보드에 복사되었습니다.', 'success');
+            } else {
+                showStatus('복사에 실패했습니다.', 'error');
+            }
+        } catch (err) {
+            showStatus('복사 중 오류 발생: ' + err, 'error');
+        }
     }
 
     function switchTemplateTab(type, showContent = true) {
@@ -4824,32 +4853,6 @@ MJ 이정우 팀장
         }
     }
 
-    function copyTemplateText() {
-        const textarea = document.getElementById('template-textarea');
-        if (!textarea) return;
-
-        try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(textarea.value).then(() => {
-                    showStatus('내용이 클립보드에 복사되었습니다.', 'success');
-                }).catch(err => {
-                    showStatus('복사 실패 (권한 확인 필요)', 'error');
-                });
-            } else {
-                const wasHidden = textarea.parentElement.classList.contains('hidden');
-                if (wasHidden) textarea.parentElement.classList.remove('hidden');
-
-                textarea.select();
-                textarea.setSelectionRange(0, 99999);
-                document.execCommand('copy');
-
-                if (wasHidden) textarea.parentElement.classList.add('hidden');
-                showStatus('내용이 클립보드에 복사되었습니다.', 'success');
-            }
-        } catch (err) {
-            showStatus('복사 중 오류 발생: ' + err, 'error');
-        }
-    }
 
     // --- [Telegram] 물건 1건 텔레그램 전송 (관리자) ---
     function sendTelegramForCurrentItem() {
