@@ -3122,6 +3122,45 @@ function updateChuchenState(itemIds, state, dateStr) {
   }
 }
 
+/**
+ * 물건의 특정 필드 하나를 일괄 업데이트합니다.
+ * @param {Array} ids - 물건 ID 배열
+ * @param {string} field - 필드명 (e.g., 'note', 'stu_member'...)
+ * @param {any} value - 저장할 값
+ */
+function updateDataField(ids, field, value) {
+  try {
+    if (!ids || !ids.length) return { success: false, message: 'ID 목록이 없습니다.' };
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
+
+    // 필드 인덱스 찾기
+    const colIndex = ITEM_HEADERS.indexOf(field);
+    if (colIndex === -1) return { success: false, message: '유효하지 않은 필드명입니다: ' + field };
+    const realColNum = colIndex + 1;
+
+    const allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    let updatedCount = 0;
+
+    ids.forEach(id => {
+      const idx = allIds.findIndex(v => String(v) === String(id));
+      if (idx >= 0) {
+        sheet.getRange(idx + 2, realColNum).setValue(value);
+        updatedCount++;
+      }
+    });
+
+    SpreadsheetApp.flush();
+    return { success: true, message: `${updatedCount}건의 [${field}] 필드가 수정되었습니다.`, updated: updatedCount };
+  } catch (e) {
+    Logger.log('[updateDataField] 오류: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
 // ------------------------------------------------------------------------------------------------
 // [PHASE 1-2] 이력 기록 공통 함수
 // ------------------------------------------------------------------------------------------------

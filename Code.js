@@ -527,3 +527,13 @@ function sendChuchenTelegramBulkApi(itemIds) {
 function updateChuchenStateApi(itemIds, state, dateStr) {
   return updateChuchenState(itemIds, state, dateStr);
 }
+
+/**
+ * [범용] 물건의 특정 필드를 업데이트합니다.
+ * @param {Array} ids - 물건 ID 배열
+ * @param {string} field - 필드명 (ITEM_HEADERS 기준)
+ * @param {any} value - 변경할 값
+ */
+function updateDataApi(ids, field, value) {
+  return updateDataField(ids, field, value);
+}

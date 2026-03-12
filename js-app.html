@@ -3522,8 +3522,8 @@
         const itemNoteEl = document.getElementById('modal-sub-item-note');
         const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (typeof allMemberData !== 'undefined' ? allMemberData : []);
         const mem = memberList.find(m => String(m.member_id) === String(data.member_id)) || {};
-        if (memberNoteEl) memberNoteEl.textContent = mem.note1 || '(없음)';
-        if (itemNoteEl) itemNoteEl.textContent = data.note || '(없음)';
+        if (memberNoteEl) memberNoteEl.value = mem.note1 || '';
+        if (itemNoteEl) itemNoteEl.value = data.note || '';
     }
 
     // action 한국어 라벨
@@ -4960,6 +4960,7 @@ MJ 이정우 팀장
         const bidPrice = bidPriceRaw === '' ? '0' : bidPriceRaw;
         const bidState = document.getElementById('modal-form-bid-state') ? document.getElementById('modal-form-bid-state').value : '';
         const imageId = modalFormImageId ? modalFormImageId.value : '';
+        const note = document.getElementById('modal-sub-item-note') ? document.getElementById('modal-sub-item-note').value : '';
 
         if (!inDate || !sakunNo || !court) {
             showStatus('필수 입력 항목(입찰일자, 사건번호, 법원명)을 확인해 주세요.', 'error');
@@ -5015,7 +5016,7 @@ MJ 이정우 팀장
             .withFailureHandler(error => {
                 showStatus(`수정 오류: ${error.message}`, 'error');
             })
-            .updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, '', mName2);
+            .updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2);
     }
 
     function handleModalDelete() {
@@ -10535,7 +10536,7 @@ ${token}
             return;
         }
         const memberNoteEl = document.getElementById('modal-sub-member-note');
-        const note1Val = memberNoteEl ? memberNoteEl.textContent : '';
+        const note1Val = memberNoteEl ? memberNoteEl.value : '';
 
         const _mList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0)
             ? allMembersNewData : allMemberData;
@@ -10555,6 +10556,35 @@ ${token}
                 showStatus('저장 실패: ' + (err.message || err), 'error');
             })
             .updateMember({ ...mem, note1: note1Val });
+    }
+
+    /**
+     * [모달 물건비고 저장] 입찰일정 모달의 비고 탭 내 저장 버튼
+     */
+    function saveModalItemNoteOnly() {
+        const item = currentModalItemData;
+        if (!item || !item.id) {
+            showStatus('물건 정보를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        const itemNoteEl = document.getElementById('modal-sub-item-note');
+        const noteVal = itemNoteEl ? itemNoteEl.value : '';
+
+        showStatus('물건비고 저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res && res.success) {
+                    item.note = noteVal; // 캐시 갱신
+                    showStatus('물건비고가 저장되었습니다.', 'success');
+                } else {
+                    showStatus('저장 실패: ' + (res ? res.message : '알 수 없는 오류'), 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                showStatus('저장 실패: ' + (err.message || err), 'error');
+            })
+            // updateDataApi(ids, field, value) 사용
+            .updateDataApi([item.id], 'note', noteVal);
     }
 
     /**
