@@ -237,7 +237,7 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
 /**
  * 기존 입찰 물건 데이터를 수정합니다.
  */
-function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2) {
+function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
 
   // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과
@@ -247,8 +247,8 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
   }
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
-  // [방어 코드] 15번째 열(m_name2)까지 확보
-  ensureColumnExists(sheet, 15);
+  // [방어 코드] 17번째 열(chuchen_state)까지 확보
+  ensureColumnExists(sheet, 17);
 
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
@@ -263,15 +263,16 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
 
   const realRowIndex = rowIndex + 2;
 
-  // [PHASE 1-3] 저장 전: 기존 값 읽기 (변경 감지용)
-  const oldRow = sheet.getRange(realRowIndex, 1, 1, 15).getValues()[0];
+  // [PHASE 1-3] 저장 전: 기존 값 읽기 (변경 감지용) - 17열(chuchen_state)까지 읽기
+  const oldRow = sheet.getRange(realRowIndex, 1, 1, 17).getValues()[0];
   const oldValues = {
-    stu_member: String(oldRow[4] || '').trim(),  // E열(5)
-    m_name_id: String(oldRow[5] || '').trim(),  // F열(6)
-    m_name: String(oldRow[6] || '').trim(),  // G열(7)
-    bidprice: String(oldRow[7] || '').trim(),  // H열(8)
-    member_id: String(oldRow[8] || '').trim(),  // I열(9)
-    bid_state: String(oldRow[11] || '').trim(),  // L열(12)
+    stu_member:    String(oldRow[4]  || '').trim(),  // E열(5)
+    m_name_id:     String(oldRow[5]  || '').trim(),  // F열(6)
+    m_name:        String(oldRow[6]  || '').trim(),  // G열(7)
+    bidprice:      String(oldRow[7]  || '').trim(),  // H열(8)
+    member_id:     String(oldRow[8]  || '').trim(),  // I열(9)
+    bid_state:     String(oldRow[11] || '').trim(),  // L열(12)
+    chuchen_state: String(oldRow[16] || '').trim(),  // Q열(17)
   };
   const oldBidState = oldValues.bid_state; // 기존 코드 호환
 
@@ -284,7 +285,6 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
   sheet.getRange(realRowIndex, 7).setValue(mName);
   sheet.getRange(realRowIndex, 8).setValue(bidPrice);
   sheet.getRange(realRowIndex, 9).setValue(memberId);
-
   // 12번째 열(L열)에 상태값 저장
   sheet.getRange(realRowIndex, 12).setValue(bidState);
   // [추가] 13번째 열(M열)에 이미지 URL 저장
@@ -293,17 +293,23 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
   sheet.getRange(realRowIndex, 14).setValue(note || '');
   // [추가] 15번째 열(O열)에 m_name2(명의 표시값) 저장
   sheet.getRange(realRowIndex, 15).setValue(mName2 || '');
+  // [추가] 17번째 열(Q열) chuchen_state - 값이 전달된 경우에만 업데이트
+  const newChuchenState = String(chuchenState || '').trim();
+  if (newChuchenState) {
+    sheet.getRange(realRowIndex, 17).setValue(newChuchenState);
+  }
 
   // [PHASE 1-3] 저장 후: 변경된 필드마다 이력 기록
   const newValues = {
-    stu_member: String(stuMember || '').trim(),
-    m_name_id: String(mNameId || '').trim(),
-    m_name: String(mName || '').trim(),
-    bidprice: String(bidPrice || '').trim(),
-    member_id: String(memberId || '').trim(),
-    bid_state: String(bidState || '').trim(),
+    stu_member:    String(stuMember || '').trim(),
+    m_name_id:     String(mNameId || '').trim(),
+    m_name:        String(mName || '').trim(),
+    bidprice:      String(bidPrice || '').trim(),
+    member_id:     String(memberId || '').trim(),
+    bid_state:     String(bidState || '').trim(),
+    chuchen_state: newChuchenState || oldValues.chuchen_state,
   };
-  const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state'];
+  const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state', 'chuchen_state'];
   trackFields.forEach(function (field) {
     if (oldValues[field] !== newValues[field]) {
       writeItemHistory_({
@@ -2451,93 +2457,173 @@ function debugTelegramJoinItemStats() {
   return { today: today, totalItems: data.length, memberCount: members.length, samples: samples, headers: ITEM_HEADERS };
 }
 
-function getAutoApprovalStats() {
+function getAutoApprovalStats(testMode) {
+  // testMode=true: 직원/관리자 건만 조회 / testMode=false(기본): 직원/관리자 제외
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
   if (!reqSheet || reqSheet.getLastRow() < 2) return [];
 
-  // 회원 gubun 맵 (관리자 제외용)
-  var members = readAllMembersNew();
+  // members 시트 gubun 맵 (member_id → gubun): 직원/관리자 필터용
   var memberGubunMap = {};
-  members.forEach(function (m) {
-    memberGubunMap[String(m.member_id)] = String(m.gubun || '').trim();
-  });
-
-  // 아이템 bid_state 맵
-  var itemsSheet = ss.getSheetByName(DB_SHEET_NAME);
-  var itemBidStateMap = {};
-  if (itemsSheet && itemsSheet.getLastRow() >= 2) {
-    var iLastRow = itemsSheet.getLastRow();
-    var iCols = Math.min(itemsSheet.getMaxColumns(), 12);
-    var iData = itemsSheet.getRange(2, 1, iLastRow - 1, iCols).getValues();
-    iData.forEach(function (r) {
-      var id = String(r[0] || '').trim();
-      if (id) itemBidStateMap[id] = String(r[11] || '');
-    });
-  }
+  try {
+    var mSheet = ss.getSheetByName(MEMBERS_SHEET_NAME);
+    if (mSheet && mSheet.getLastRow() > 1) {
+      var mRows = mSheet.getRange(2, 1, mSheet.getLastRow() - 1, 3).getValues();
+      mRows.forEach(function(mr) { if (mr[0]) memberGubunMap[String(mr[0]).trim()] = String(mr[2] || '').trim(); });
+    }
+  } catch(e) {}
 
   var lastRow = reqSheet.getLastRow();
-  var rows = reqSheet.getRange(2, 1, lastRow - 1, 11).getValues();
-  // [0]req_id [1]requested_at [2]action [3]status [4]item_id [5]member_id [6]chat_id [7]username [8]note [9]approved_at [10]approved_by
+  var totalCols = Math.min(reqSheet.getMaxColumns(), 16);
+  var rows = reqSheet.getRange(2, 1, lastRow - 1, totalCols).getValues();
+  // [0]req_id [1]requested_at [2]action [3]status [4]item_id [5]member_id
+  // [6]chat_id [7]username [8]note [9]approved_at [10]approved_by
+  // [11]from_value [12]to_value [13]field_name [14]trigger_type [15]member_name
 
   var dateStats = {};
-  rows.forEach(function (row) {
-    var action = String(row[2] || '').trim();
-    var status = String(row[3] || '').trim();
-    var itemId = String(row[4] || '').trim();
-    var memberId = String(row[5] || '').trim();
-    var reqAt = row[1];
-    var appAt = row[9];
-
-    if (memberGubunMap[memberId] === '관리자') return;
-    if (!itemId) return;
-
-    var dateToUse = (status === 'APPROVED' && appAt) ? appAt : reqAt;
-    if (!dateToUse) return;
-    var d = new Date(dateToUse);
-    if (isNaN(d.getTime())) return;
-
-    var dateKey = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yy/MM/dd');
+  function getOrCreate(dateKey) {
     if (!dateStats[dateKey]) {
       dateStats[dateKey] = {
         date: dateKey,
-        items: {},
-        bid_approved_ids: [], bid_pending_ids: [], cancel_ids: [],
-        delivered_ids: [], confirmed_ids: []
+        // 텔레그램(tele) / 수작업(web) 분리 카운팅 → 표시: "합계 (tele, web)"
+        recommend_tele: [],      // 11번: TELEGRAM_SENT note='card'
+        recommend_web: [],       // 9번: FIELD_CHANGE chuchen_state→전달완료
+        bid_approved_tele: [],   // 17번: REQUEST_BID APPROVED
+        bid_approved_web: [],    // 8번: FIELD_CHANGE stu_member→입찰
+        bid_pending_tele: [],    // 18번: REQUEST_CANCEL_CHUCHEN APPROVED
+        bid_pending_web: [],     // 8번: FIELD_CHANGE stu_member 추천→미정/상품
+        cancel_approved_tele: [],// 19번: REQUEST_CANCEL_BID APPROVED
+        cancel_approved_web: [], // 8번: FIELD_CHANGE stu_member 입찰→추천/미정/상품
+        delivered_tele: [],      // 10번: TELEGRAM_SENT note='bid_price'
+        delivered_web: [],       // 3번: FIELD_CHANGE bid_state→전달완료
+        confirmed_tele: [],      // 20번: PRICE_CONFIRMED
+        confirmed_web: [],       // 3번: FIELD_CHANGE bid_state→확인완료
+        status_tele: [],         // 12번: TELEGRAM_SENT note='status'
+        status_web: []           // 8번: FIELD_CHANGE stu_member→변경
       };
     }
-    var ds = dateStats[dateKey];
-    ds.items[itemId] = true;
+    return dateStats[dateKey];
+  }
+  function addId(arr, id) {
+    if (arr.indexOf(id) < 0) arr.push(id);
+  }
+  // 텔레+수작업 합산 (중복 제거)
+  function mergeIds(tele, web) {
+    var all = tele.slice();
+    web.forEach(function(id) { if (all.indexOf(id) < 0) all.push(id); });
+    return all;
+  }
 
-    if (action === 'REQUEST_BID' && status === 'APPROVED') {
-      if (ds.bid_approved_ids.indexOf(itemId) < 0) ds.bid_approved_ids.push(itemId);
-      var bs = String(itemBidStateMap[itemId] || '');
-      if (bs === '전달완료') { if (ds.delivered_ids.indexOf(itemId) < 0) ds.delivered_ids.push(itemId); }
-      else if (bs === '확인완료') { if (ds.confirmed_ids.indexOf(itemId) < 0) ds.confirmed_ids.push(itemId); }
-    } else if (action === 'REQUEST_BID' && status === 'PENDING') {
-      if (ds.bid_pending_ids.indexOf(itemId) < 0) ds.bid_pending_ids.push(itemId);
-    } else if (action === 'REQUEST_CANCEL' && status === 'APPROVED') {
-      if (ds.cancel_ids.indexOf(itemId) < 0) ds.cancel_ids.push(itemId);
+  rows.forEach(function (row) {
+    var action     = String(row[2]  || '').trim();
+    var status     = String(row[3]  || '').trim();
+    var itemId     = String(row[4]  || '').trim();
+    var note       = String(row[8]  || '').trim();
+    var reqAt      = row[1];
+    var appAt      = row[9];
+    var fromVal    = String(row[11] || '').trim();
+    var toVal      = String(row[12] || '').trim();
+    var fieldName  = String(row[13] || '').trim();
+    var triggerType = String(row[14] || '').trim();
+
+    if (!itemId) return;
+
+    // 테스트모드: members.gubun이 직원/관리자인 건만 / 일반모드: 직원/관리자 제외
+    var memberId  = String(row[5] || '').trim();
+    var gubun     = memberGubunMap[memberId] || '';
+    var isStaff   = (gubun === '직원' || gubun === '관리자');
+    if (testMode && !isStaff) return;
+    if (!testMode && isStaff) return;
+
+    // 날짜 기준: APPROVED 건은 approved_at, 나머지는 requested_at
+    var dateToUse = (status === 'APPROVED' && appAt) ? appAt : reqAt;
+    if (!dateToUse) return;
+    // yyMMdd HHmmss 포맷('260316 111356') 및 Date 객체 모두 처리
+    var d;
+    if (dateToUse instanceof Date) {
+      d = dateToUse;
+    } else {
+      var s = String(dateToUse).trim();
+      if (/^\d{6} \d{6}$/.test(s)) {
+        d = new Date(2000 + parseInt(s.substring(0,2),10), parseInt(s.substring(2,4),10)-1,
+                     parseInt(s.substring(4,6),10), parseInt(s.substring(7,9),10),
+                     parseInt(s.substring(9,11),10), parseInt(s.substring(11,13),10));
+      } else {
+        d = new Date(s);
+      }
+    }
+    if (!d || isNaN(d.getTime())) return;
+
+    var dateKey = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yy/MM/dd');
+    var ds = getOrCreate(dateKey);
+
+    // ── 물건추천 ─────────────────────────────────────────────────────
+    if (action === 'TELEGRAM_SENT' && note === 'card') {
+      addId(ds.recommend_tele, itemId);                                          // 11번
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'chuchen_state' && toVal === '전달완료'
+               && triggerType !== 'web-telegram') {
+      addId(ds.recommend_web, itemId);                                           // 9번 (수작업만)
+
+    // ── 추천물건-입찰확정 ─────────────────────────────────────────────
+    } else if (action === 'REQUEST_BID' && status === 'APPROVED') {
+      addId(ds.bid_approved_tele, itemId);                                       // 17번
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '입찰') {
+      addId(ds.bid_approved_web, itemId);                                        // 8번
+
+    // ── 입찰물건-입찰취소 (미선택보다 먼저) ─────────────────────────────
+    } else if (action === 'REQUEST_CANCEL_BID' && status === 'APPROVED') {
+      addId(ds.cancel_approved_tele, itemId);                                    // 19번
+    // 수작업: 입찰→추천/미정/상품 (엑셀 로직수정: 구체적 값 명시)
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && fromVal === '입찰'
+               && (toVal === '추천' || toVal === '미정' || toVal === '상품')) {
+      addId(ds.cancel_approved_web, itemId);                                     // 8번
+
+    // ── 추천물건-미선택 ───────────────────────────────────────────────
+    } else if (action === 'REQUEST_CANCEL_CHUCHEN' && status === 'APPROVED') {
+      addId(ds.bid_pending_tele, itemId);                                        // 18번
+    // 수작업: 추천→미정/상품 (엑셀 로직수정: from='추천' 조건 추가)
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && fromVal === '추천'
+               && (toVal === '미정' || toVal === '상품')) {
+      addId(ds.bid_pending_web, itemId);                                         // 8번
+
+    // ── 입찰가-전달 ──────────────────────────────────────────────────
+    } else if (action === 'TELEGRAM_SENT' && note === 'bid_price') {
+      addId(ds.delivered_tele, itemId);                                          // 10번
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'bid_state' && toVal === '전달완료') {
+      addId(ds.delivered_web, itemId);                                           // 3번
+
+    // ── 입찰가-확인 ──────────────────────────────────────────────────
+    } else if (action === 'PRICE_CONFIRMED') {
+      addId(ds.confirmed_tele, itemId);                                          // 20번
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'bid_state' && toVal === '확인완료') {
+      addId(ds.confirmed_web, itemId);                                           // 3번
+
+    // ── 변경/취소 안내 ────────────────────────────────────────────────
+    } else if (action === 'TELEGRAM_SENT' && note === 'status') {
+      addId(ds.status_tele, itemId);                                             // 12번
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '변경') {
+      addId(ds.status_web, itemId);                                              // 8번
     }
   });
 
   var result = Object.keys(dateStats).map(function (k) {
     var s = dateStats[k];
-    var allIds = Object.keys(s.items);
+    var rec = mergeIds(s.recommend_tele, s.recommend_web);
+    var bapr = mergeIds(s.bid_approved_tele, s.bid_approved_web);
+    var bpnd = mergeIds(s.bid_pending_tele, s.bid_pending_web);
+    var capr = mergeIds(s.cancel_approved_tele, s.cancel_approved_web);
+    var dlvr = mergeIds(s.delivered_tele, s.delivered_web);
+    var conf = mergeIds(s.confirmed_tele, s.confirmed_web);
+    var stat = mergeIds(s.status_tele, s.status_web);
     return {
       date: s.date,
-      recommend: allIds.length,
-      recommend_ids: allIds,
-      bid_approved: s.bid_approved_ids.length,
-      bid_approved_ids: s.bid_approved_ids,
-      bid_pending: s.bid_pending_ids.length,
-      bid_pending_ids: s.bid_pending_ids,
-      cancel_approved: s.cancel_ids.length,
-      cancel_approved_ids: s.cancel_ids,
-      delivered: s.delivered_ids.length,
-      delivered_ids: s.delivered_ids,
-      confirmed: s.confirmed_ids.length,
-      confirmed_ids: s.confirmed_ids
+      recommend: rec.length, recommend_tele: s.recommend_tele.length, recommend_web: s.recommend_web.length, recommend_ids: rec,
+      bid_approved: bapr.length, bid_approved_tele: s.bid_approved_tele.length, bid_approved_web: s.bid_approved_web.length, bid_approved_ids: bapr,
+      bid_pending: bpnd.length, bid_pending_tele: s.bid_pending_tele.length, bid_pending_web: s.bid_pending_web.length, bid_pending_ids: bpnd,
+      cancel_approved: capr.length, cancel_approved_tele: s.cancel_approved_tele.length, cancel_approved_web: s.cancel_approved_web.length, cancel_approved_ids: capr,
+      delivered: dlvr.length, delivered_tele: s.delivered_tele.length, delivered_web: s.delivered_web.length, delivered_ids: dlvr,
+      confirmed: conf.length, confirmed_tele: s.confirmed_tele.length, confirmed_web: s.confirmed_web.length, confirmed_ids: conf,
+      status_notify: stat.length, status_notify_tele: s.status_tele.length, status_notify_web: s.status_web.length, status_notify_ids: stat
     };
   });
   result.sort(function (a, b) { return b.date.localeCompare(a.date); });
@@ -3095,29 +3181,89 @@ function saveItemData(data, silent = false) {
  * @param {string} dateStr - ISO date string (선택, state='전달완료'일 때 기록)
  * @returns {{ success: boolean, updated: number }}
  */
-function updateChuchenState(itemIds, state, dateStr) {
+function updateChuchenState(itemIds, state, dateStr, triggerType) {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sheet = ss.getSheetByName(DB_SHEET_NAME);
     if (!sheet) return { success: false, updated: 0 };
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, updated: 0 };
-    var idCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(function (v) { return String(v[0]).trim(); });
+    // 17열까지 읽어 chuchen_state(Q), m_name(G), member_id(I) 확보
+    var allData = sheet.getRange(2, 1, lastRow - 1, 17).getValues();
     var updated = 0;
     var idsStr = itemIds.map(String);
-    idCol.forEach(function (id, i) {
-      if (idsStr.indexOf(id) !== -1) {
-        sheet.getRange(i + 2, 17).setValue(state); // Q열: chuchen_state
-        if (state === '전달완료' && dateStr) {
-          sheet.getRange(i + 2, 18).setValue(dateStr); // R열: chuchen_date
-        }
-        updated++;
+    allData.forEach(function (row, i) {
+      var rowId = String(row[0] || '').trim();
+      if (idsStr.indexOf(rowId) === -1) return;
+      var oldState = String(row[16] || '').trim(); // Q열(idx 16): chuchen_state
+      sheet.getRange(i + 2, 17).setValue(state);
+      if (state === '전달완료' && dateStr) {
+        sheet.getRange(i + 2, 18).setValue(dateStr); // R열: chuchen_date
       }
+      // FIELD_CHANGE 로깅 (변경이 실제 발생한 경우만)
+      if (oldState !== state) {
+        writeItemHistory_({
+          action: 'FIELD_CHANGE',
+          item_id: rowId,
+          member_id: String(row[8] || '').trim(),   // I열: member_id
+          member_name: String(row[6] || '').trim(),  // G열: m_name
+          field_name: 'chuchen_state',
+          from_value: oldState,
+          to_value: state,
+          trigger_type: triggerType || 'web-telegram',
+          note: 'chuchen_state 변경'
+        });
+      }
+      updated++;
     });
     if (updated > 0) SpreadsheetApp.flush();
     return { success: true, updated: updated };
   } catch (e) {
     Logger.log('updateChuchenState 오류: ' + e.message);
+    return { success: false, updated: 0 };
+  }
+}
+
+/**
+ * 다수 물건의 bid_state를 일괄 업데이트합니다. (FIELD_CHANGE 로깅 포함)
+ * @param {Array} itemIds - 물건 ID 배열
+ * @param {string} state - '신규' | '전달완료' | '확인완료'
+ */
+function updateBidState(itemIds, state) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, updated: 0 };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, updated: 0 };
+    var allData = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
+    // [0]id [6]m_name [8]member_id [11]bid_state
+    var updated = 0;
+    var idsStr = itemIds.map(String);
+    allData.forEach(function(row, i) {
+      var rowId = String(row[0] || '').trim();
+      if (idsStr.indexOf(rowId) === -1) return;
+      var oldState = String(row[11] || '').trim();
+      sheet.getRange(i + 2, 12).setValue(state);
+      if (oldState !== state) {
+        writeItemHistory_({
+          action: 'FIELD_CHANGE',
+          item_id: rowId,
+          member_id: String(row[8] || '').trim(),
+          member_name: String(row[6] || '').trim(),
+          field_name: 'bid_state',
+          from_value: oldState,
+          to_value: state,
+          trigger_type: 'web',
+          note: 'bid_state 변경'
+        });
+      }
+      updated++;
+    });
+    if (updated > 0) SpreadsheetApp.flush();
+    return { success: true, updated: updated };
+  } catch(e) {
+    Logger.log('updateBidState 오류: ' + e.message);
     return { success: false, updated: 0 };
   }
 }
@@ -3187,9 +3333,9 @@ function updateDataField(ids, field, value) {
 function writeItemHistory_(p) {
   try {
     const sheet = ensureTelegramRequestsSheet_();
-    const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMdd HHmmss');
+    const now = new Date(); // Date 객체로 저장 → Sheets가 날짜 시리얼로 저장 후 getValues()에서 Date 객체 반환
     sheet.appendRow([
-      String(new Date().getTime()),   // A: req_id (타임스탬프 기반 고유 ID)
+      String(now.getTime()),          // A: req_id (타임스탬프 기반 고유 ID)
       now,                            // B: requested_at
       p.action || '',                 // C: action
       p.status || 'DONE',             // D: status
@@ -3546,11 +3692,12 @@ function setupBidDateTrigger() {
  * @returns {Array<Object>}
  */
 function getCancelHistory(memberId, limit) {
-  const CANCEL_ACTIONS = ['AUTO_EXPIRE', 'REQUEST_CANCEL_CHUCHEN', 'REQUEST_CANCEL_BID'];
+  const CANCEL_ACTIONS = ['AUTO_EXPIRE', 'REQUEST_CANCEL_CHUCHEN', 'REQUEST_CANCEL_BID', 'CANCEL_BID'];
   const ACTION_LABEL = {
-    'AUTO_EXPIRE': '추천시간 만기',
-    'REQUEST_CANCEL_CHUCHEN': '회원요청(추천취소)',
-    'REQUEST_CANCEL_BID': '회원요청(입찰취소)'
+    'AUTO_EXPIRE': '미선택',
+    'REQUEST_CANCEL_CHUCHEN': '미선택',
+    'REQUEST_CANCEL_BID': '입찰취소',
+    'CANCEL_BID': '입찰취소'
   };
   const maxRows = parseInt(limit, 10) || 100;
 
@@ -3581,27 +3728,59 @@ function getCancelHistory(memberId, limit) {
     // telegram_requests에서 입찰확정(REQUEST_BID APPROVED) 날짜 매핑: item_id → approved_at
     const bidConfirmMap = {};
     for (let i = 0; i < data.length; i++) {
-      if (String(data[i][2]).trim() === 'REQUEST_BID' && String(data[i][3]).trim() === 'APPROVED') {
-        const iid = String(data[i][4] || '').trim();
-        if (iid && !bidConfirmMap[iid]) bidConfirmMap[iid] = String(data[i][9] || ''); // J열: approved_at
-      }
+        const actionStr = String(data[i][2]).trim();
+        const stateStr = String(data[i][3]).trim();
+        if ((actionStr === 'REQUEST_BID' || actionStr === 'BID') && stateStr === 'APPROVED') {
+            const iid = String(data[i][4] || '').trim();
+            if (iid && !bidConfirmMap[iid]) bidConfirmMap[iid] = String(data[i][9] || ''); // J열: approved_at
+        }
     }
 
     const result = [];
+    const seenItemIds = {}; // 중복 방지를 위한 객체 (Set 대체)
+
     // 최신순(역순)
     for (let i = data.length - 1; i >= 0 && result.length < maxRows; i--) {
-      const action = String(data[i][2] || '').trim();
       const reqMember = String(data[i][5] || '').trim(); // F열: member_id
-      if (CANCEL_ACTIONS.indexOf(action) === -1) continue;
+      const fieldName = String(data[i][13] || '').trim(); // N열: field_name
+      const fromValue = String(data[i][11] || '').trim(); // L열: from_value
+      const toValue = String(data[i][12] || '').trim();   // M열: to_value
+      const action = String(data[i][2] || '').trim();
+
+      // 조건: 기존 CANCEL_ACTIONS 이거나, 상태가 '미정'으로 바뀐 모든 경우
+      const isLegacyCancel = CANCEL_ACTIONS.indexOf(action) !== -1;
+      const isStateChangeToMidjung = (fieldName === 'stu_member' && toValue === '미정');
+
+      if (!isLegacyCancel && !isStateChangeToMidjung) continue;
       if (memberId && reqMember !== String(memberId).trim()) continue;
 
       const itemId = String(data[i][4] || '').trim();
+      
+      // 동일 물건 번호 1번 카운팅 로직 (이미 추가된 물건은 스킵)
+      if (itemId && seenItemIds[itemId]) continue;
+      if (itemId) seenItemIds[itemId] = true;
+
+      // 사유 자동 판별 (직전 상태 기준)
+      let finalLabel = '미선택'; // 기본값
+      if (isStateChangeToMidjung) {
+        if (fromValue.indexOf('입찰') !== -1) {
+          finalLabel = '입찰취소';
+        } else if (fromValue.indexOf('추천') !== -1) {
+          finalLabel = '미선택';
+        } else {
+          finalLabel = '미선택';
+        }
+      } else {
+        // 기존 텔레그램 요청 등(레거시) 매핑
+        finalLabel = ACTION_LABEL[action] || action;
+      }
+
       const item = itemMap[itemId] || {};
       result.push({
         req_id: String(data[i][0] || ''),
         cancel_date: String(data[i][1] || ''),   // B: requested_at
-        action: action,
-        action_label: ACTION_LABEL[action] || action,
+        action: action, // 프론트 컬러링 용도 유지
+        action_label: finalLabel,
         item_id: itemId,
         member_id: reqMember,
         member_name: String(data[i][15] || ''),   // P: member_name
@@ -3618,6 +3797,7 @@ function getCancelHistory(memberId, limit) {
     return [];
   }
 }
+
 
 /**
  * 회원 토큰으로 취소이력 조회 (회원 화면 공개 API)

@@ -111,10 +111,10 @@
     function syncCalendarMonthNavOffset() {
         try {
             if (!calendarTitleContainer) return;
-            const managerSelect = calSearchManager || document.getElementById('cal-search-manager');
+            const managerSelect = document.getElementById('cal-search-manager-wrap');
             if (!managerSelect) return;
-            const wrap = managerSelect.closest('div') || managerSelect;
-            const w = (wrap && wrap.offsetWidth) ? wrap.offsetWidth : (managerSelect.offsetWidth || 0);
+            const wrap = managerSelect;
+            const w = (wrap && wrap.offsetWidth) ? wrap.offsetWidth : 80;
             if (w && w > 0) {
                 calendarTitleContainer.style.setProperty('--cal-manager-width', `${w}px`);
             } else {
@@ -294,6 +294,7 @@
     let currentDetailItem = null;  // 입찰물건 상세/조사 탭용 (선택된 행 데이터)
     var currentItemDetailTab = 'detail';  // 리스트에서 다른 물건 선택 시 유지할 탭
     let allBiddingData = [];
+    var _dupMap = null; // 중복 감지 캐시: {in-date_sakun_no_court} → [m_name_id, ...]
     let allMemberData = [];
     let allMembersData = [];  // 회원 자동완성용 데이터
     // 오늘 날짜가 포함된 주의 월요일로 초기화
@@ -435,7 +436,7 @@
         const hideIds = [
             'calendar-tab-week', 'calendar-tab-month-summary',
             'calendar-btn-week', 'calendar-btn-month-summary',
-            'cal-search-court', 'cal-search-status-wrap', 'cal-search-member', 'cal-search-manager'
+            'cal-search-court', 'cal-search-status-wrap', 'cal-search-member', 'cal-search-manager-wrap'
         ];
         hideIds.forEach(id => {
             const el = document.getElementById(id);
@@ -997,6 +998,7 @@
     // --- [1] 입찰 목록 테이블 렌더링 ---
     function renderFilteredData(data) {
         if (!dataTableBody) return;
+        _dupMap = null; // 렌더 전 dupMap 초기화
         dataTableBody.innerHTML = '';
         let selectedItemStillExists = false;
 
@@ -1052,7 +1054,15 @@
                     cell.textContent = '';
                 }
                 cell = row.insertCell(3);
-                cell.textContent = String(item.sakun_no || '').trim();
+                {
+                    const sakunStr = String(item.sakun_no || '').trim();
+                    const dupMgrs = getDupManagers(item);
+                    if (dupMgrs) {
+                        cell.innerHTML = `<span class="text-red-600 font-bold cursor-help" title="중복 등록되었습니다. (${dupMgrs.join(', ')})">${sakunStr}</span>`;
+                    } else {
+                        cell.textContent = sakunStr;
+                    }
+                }
                 cell.className = 'item-col-sakun text-left';
                 cell = row.insertCell(4);
                 cell.textContent = String(item.court || '').trim();
@@ -1286,7 +1296,7 @@
         const allCalStatusCb = document.getElementById('cal-search-status-all');
         const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
         const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
-        const fManager = calSearchManager ? calSearchManager.value : '';
+        // fManager: matchesCalManager(item) 사용으로 대체됨
         // 수업 필터 (입찰일정)
         const fCalClassType = document.getElementById('cal-class-type')?.value || '';
         const fCalClassName = document.getElementById('cal-class-name')?.value || '';
@@ -1316,7 +1326,7 @@
                 const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                 if (!memberDisp.includes(fMember)) pass = false;
             }
-            if (fManager && item.m_name_id !== fManager) pass = false;
+            if (!matchesCalManager(item)) pass = false;
             // 수업 필터: member_id → allMembersNewData → class_id → allClassesData
             if (fCalClassType || fCalClassName || fCalClassGrade) {
                 const mem = allMembersNewData.find(m => String(m.member_id) === String(item.member_id));
@@ -1648,7 +1658,7 @@
             const fSakunno = calSearchSakunno ? String(calSearchSakunno.value || '').trim() : '';
             const fCourt = calSearchCourt ? String(calSearchCourt.value || '').trim() : '';
             const fMember = calSearchMember ? String(calSearchMember.value || '').trim() : '';
-            const fManager = calSearchManager ? String(calSearchManager.value || '').trim() : '';
+            // fManager: matchesCalManager(item) 사용으로 대체됨
             const selected = getSelectedCalendarStatusValues();
             const allCalStatusCb = document.getElementById('cal-search-status-all');
             const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
@@ -1657,7 +1667,8 @@
             if (calSearchSakunno) calSearchSakunno.classList.toggle('filter-active-input', !!fSakunno);
             if (calSearchCourt) calSearchCourt.classList.toggle('filter-active-input', !!fCourt);
             if (calSearchMember) calSearchMember.classList.toggle('filter-active-input', !!fMember);
-            if (calSearchManager) calSearchManager.classList.toggle('filter-active-input', !!fManager);
+            const calMgrBtn = document.getElementById('cal-search-manager-btn');
+            if (calMgrBtn) { const allCalMgrCb = document.getElementById('cal-search-manager-all'); calMgrBtn.classList.toggle('filter-active-input', !(allCalMgrCb && allCalMgrCb.checked)); }
             // 수업 필터 강조
             const calClassTypeSel = document.getElementById('cal-class-type');
             const calClassNameSel = document.getElementById('cal-class-name');
@@ -1842,7 +1853,7 @@
                 const allCalStatusCb = document.getElementById('cal-search-status-all');
                 const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
                 const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
-                const fManager = calSearchManager ? calSearchManager.value : '';
+                // fManager: matchesCalManager(item) 사용으로 대체됨
 
                 const bids = filteredData.filter(item => {
                     if (fSakunno && !String(item.sakun_no || '').toLowerCase().includes(fSakunno)) return false;
@@ -1858,7 +1869,7 @@
                         const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                         if (!memberDisp.includes(fMember)) return false;
                     }
-                    if (fManager && item.m_name_id !== fManager) return false;
+                    if (!matchesCalManager(item)) return false;
                     // 수업 필터
                     if (fCalClassType || fCalClassName || fCalClassGrade) {
                         const mem = allMembersNewData.find(m => String(m.member_id) === String(item.member_id));
@@ -1916,7 +1927,7 @@
                         const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="p-3 bg-stone-50 flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${bid.sakun_no || '미상'}</div>${chuchenDateHtml}</div></div>
+                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div>
                               <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
                                   <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
                                   <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
@@ -1935,7 +1946,7 @@
                           <table class="bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <tbody>
                                   <tr>
-                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${bid.sakun_no || '미상'}</div>${chuchenDateHtml}</div></div></td>
+                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div></td>
                                       <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
                                       <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
                                       <td class="m-name-cell" style="width: 22%;">${tBadgeHtml}${mNameValue}</td>
@@ -2153,7 +2164,7 @@
 
                     const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
                       <div class="md:hidden border-2 border-green-300 rounded-xl p-3 mb-2 bg-stone-50 shadow-sm flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                          <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<span>${bid.sakun_no || '미상'}</span></div>
+                          <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<span>${dupSakunHtml(bid)}</span></div>
                           <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
                               <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
                               <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
@@ -2169,7 +2180,7 @@
                       <table class="hidden md:table bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                           <tbody>
                               <tr>
-                                  <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<span>${bid.sakun_no || '미상'}</span></div></td>
+                                  <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<span>${dupSakunHtml(bid)}</span></div></td>
                                   <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
                                   <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
                                   <td class="m-name-cell" style="width: 22%;">${tBadgeHtml}${mNameValue}</td>
@@ -2224,7 +2235,7 @@
         const allCalStatusCb = document.getElementById('cal-search-status-all');
         const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
         const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
-        const fManager = calSearchManager ? calSearchManager.value : '';
+        // fManager: matchesCalManager(item) 사용으로 대체됨
         // 수업 필터 (입찰일정)
         const fCalClassType = document.getElementById('cal-class-type')?.value || '';
         const fCalClassName = document.getElementById('cal-class-name')?.value || '';
@@ -2253,7 +2264,7 @@
                 const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                 if (!memberDisp.includes(fMember)) pass = false;
             }
-            if (fManager && item.m_name_id !== fManager) pass = false;
+            if (!matchesCalManager(item)) pass = false;
             // 수업 필터: member_id → allMembersNewData → class_id → allClassesData
             if (fCalClassType || fCalClassName || fCalClassGrade) {
                 const mem = allMembersNewData.find(m => String(m.member_id) === String(item.member_id));
@@ -2552,7 +2563,7 @@
                 const allCalStatusCb = document.getElementById('cal-search-status-all');
                 const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
                 const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
-                const fManager = calSearchManager ? calSearchManager.value : '';
+                // fManager: matchesCalManager(item) 사용으로 대체됨
 
                 const bids = filteredData.filter(item => {
                     if (fSakunno && !String(item.sakun_no || '').toLowerCase().includes(fSakunno)) return false;
@@ -2568,7 +2579,7 @@
                         const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                         if (!memberDisp.includes(fMember)) return false;
                     }
-                    if (fManager && item.m_name_id !== fManager) return false;
+                    if (!matchesCalManager(item)) return false;
                     // 수업 필터
                     if (fCalClassType || fCalClassName || fCalClassGrade) {
                         const mem = allMembersNewData.find(m => String(m.member_id) === String(item.member_id));
@@ -2611,7 +2622,7 @@
                         const mobileHtml = `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="p-3 bg-stone-50 flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${bid.sakun_no || '미상'}</div>${chuchenDateHtml2}</div></div>
+                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div>
                               <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
                                   <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
                                   <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
@@ -2633,7 +2644,7 @@
                           <table class="bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <tbody>
                                   <tr>
-                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${bid.sakun_no || '미상'}</div>${chuchenDateHtml2}</div></div></td>
+                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div></td>
                                       <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
                                   <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
                                       <td class="m-name-cell" style="width: 22%;">${tBadgeHtml}${mNameValue}</td>
@@ -2685,6 +2696,7 @@
                 members.add(item.m_name_id);
             }
         });
+        members.delete('개인'); // '개인'은 드롭다운에서 제외
         let optionsHtml = `<option value="">전체</option>`;
         if (members.has('대표님')) members.delete('대표님');
         optionsHtml += `<option value="대표님">대표님</option>`;
@@ -2701,18 +2713,33 @@
             }
         });
 
-        // 입찰일정 메뉴의 입찰가 담당 드롭다운도 업데이트
-        if (calSearchManager) {
-            const currentVal = calSearchManager.value;
-            calSearchManager.innerHTML = optionsHtml;
-            calSearchManager.value = currentVal || '';
+        // 입찰일정 메뉴의 입찰가 담당 → 체크박스 드롭다운으로 채우기
+        const calManagerDropdown = document.getElementById('cal-search-manager-dropdown');
+        if (calManagerDropdown) {
+            const calCurSel = getSelectedCalManagerValues();
+            const calAllChecked = calCurSel.length === 0;
+            let calCbHtml = `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="cal-search-manager-all" value="All" ${calAllChecked ? 'checked' : ''} onchange="handleCalManagerAll(this); renderCalendar()" class="rounded"> 전체</label>`;
+            calCbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="cal-search-manager-cb" value="대표님" ${calCurSel.includes('대표님') ? 'checked' : ''} onchange="handleCalManagerOther(this); updateCalManagerLabel(); renderCalendar()" class="rounded"> 대표님</label>`;
+            [...members].sort().filter(m => m !== '대표님').forEach(function(member) {
+                calCbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="cal-search-manager-cb" value="${member}" ${calCurSel.includes(member) ? 'checked' : ''} onchange="handleCalManagerOther(this); updateCalManagerLabel(); renderCalendar()" class="rounded"> ${member}</label>`;
+            });
+            calManagerDropdown.innerHTML = calCbHtml;
+            updateCalManagerLabel();
         }
-        // 입찰물건관리 메뉴의 입찰가 담당 드롭다운도 업데이트 (동일 로직)
-        const searchManagerSel = document.getElementById('search-manager');
-        if (searchManagerSel) {
-            const currentVal = searchManagerSel.value;
-            searchManagerSel.innerHTML = optionsHtml;
-            searchManagerSel.value = currentVal || '';
+        // 입찰물건관리 메뉴의 입찰가 담당 → 체크박스 드롭다운으로 채우기
+        const searchManagerDropdown = document.getElementById('search-manager-dropdown');
+        if (searchManagerDropdown) {
+            const currentSelected = getSelectedManagerValues();
+            const allChecked = currentSelected.length === 0;
+            let cbHtml = `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="search-manager-all" value="All" ${allChecked ? 'checked' : ''} onchange="handleManagerAll(this); applyFilters()" class="rounded"> 전체</label>`;
+            const memberArr = [...members].sort();
+            // 대표님 항상 맨 위 (데이터 유무 관계없이)
+            cbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="search-manager-cb" value="대표님" ${currentSelected.includes('대표님') ? 'checked' : ''} onchange="handleManagerOther(this); updateManagerLabel(); applyFilters()" class="rounded"> 대표님</label>`;
+            memberArr.filter(m => m !== '대표님').forEach(function(member) {
+                cbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="search-manager-cb" value="${member}" ${currentSelected.includes(member) ? 'checked' : ''} onchange="handleManagerOther(this); updateManagerLabel(); applyFilters()" class="rounded"> ${member}</label>`;
+            });
+            searchManagerDropdown.innerHTML = cbHtml;
+            updateManagerLabel();
         }
     }
 
@@ -2840,27 +2867,27 @@
         statusTableBody.appendChild(totalRow);
     }
 
-    // ── 자동승인 현황 ──────────────────────────────────────────
-    // ── 텔레그램 승인현황 ──────────────────────────────────────────
-    var _autoApprovalStatsCache = null; // 클라이언트 캐시: 대시보드 재진입 시 서버 호출 방지
+    // ── 업무현황 ──────────────────────────────────────────
+    var _autoApprovalStatsCache = null;
     function loadAutoApprovalStats(forceRefresh) {
         var el = document.getElementById('autoApprovalBody');
         if (!el) return;
-        // 캐시가 있으면 서버 호출 없이 바로 렌더링 (다른 카드들과 동일한 동작)
-        if (!forceRefresh && _autoApprovalStatsCache) {
+        var testMode = !!(document.getElementById('approvalTestMode') && document.getElementById('approvalTestMode').checked);
+        if (!forceRefresh && _autoApprovalStatsCache && _autoApprovalStatsCache._testMode === testMode) {
             renderAutoApprovalStats(_autoApprovalStatsCache);
             return;
         }
         el.innerHTML = '<div class="p-4 text-center text-gray-400 text-sm">조회 중...</div>';
         google.script.run
             .withSuccessHandler(function (stats) {
+                if (stats) stats._testMode = testMode;
                 _autoApprovalStatsCache = stats;
                 renderAutoApprovalStats(stats);
             })
             .withFailureHandler(function (err) {
                 if (el) el.innerHTML = '<div class="p-4 text-center text-red-500 text-sm">' + (err && err.message ? err.message : '오류 발생') + '</div>';
             })
-            .getAutoApprovalStats();
+            .getAutoApprovalStats(testMode);
     }
 
     function renderAutoApprovalStats(stats) {
@@ -2876,25 +2903,30 @@
         var fmtDateDay = function (s) {
             try { var p = s.split('/'); var dt = new Date(2000 + parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)); return s + ' (' + DAYS_KO[dt.getDay()] + ')'; } catch (e) { return s; }
         };
-        var mkCell = function (count, color, rowIdx, field) {
-            if (!count) return '<td class="py-1.5 px-1 text-center text-gray-200 text-xs">-</td>';
-            // onclick에 안전한 숫자와 ASCII 문자열만 사용 → &quot; 문제 없음
-            var click = 'onclick="navigateToItemsByIds(' + rowIdx + ',\'' + field + '\')" style="cursor:pointer"';
-            return '<td class="py-1.5 px-1 text-center text-xs font-bold hover:underline ' + color + '" ' + click + '>' + count + '</td>';
+        // "합계 (텔레, 수작업)" 형식 셀 렌더링
+        var mkCell = function (row, baseField, color, rowIdx) {
+            var total = row[baseField] || 0;
+            if (!total) return '<td class="py-1.5 px-1 text-center text-gray-200 text-xs">-</td>';
+            var tele = row[baseField + '_tele'] || 0;
+            var web  = row[baseField + '_web']  || 0;
+            var text = (tele > 0 || web > 0) ? total + '<span class="font-normal text-gray-400"> (' + tele + ', ' + web + ')</span>' : total;
+            var click = 'onclick="navigateToItemsByIds(' + rowIdx + ',\'' + baseField + '_ids\')" style="cursor:pointer"';
+            return '<td class="py-1.5 px-1 text-center text-xs font-bold hover:underline ' + color + '" ' + click + '>' + text + '</td>';
         };
         var tbodyHtml = '';
         stats.forEach(function (row, i) {
             tbodyHtml += '<tr class="border-b border-gray-100 hover:bg-gray-50">'
                 + '<td class="py-1.5 px-2 whitespace-nowrap text-xs border-r bg-gray-50 font-bold text-gray-700 text-center">' + fmtDateDay(row.date) + '</td>'
-                + mkCell(row.recommend, 'text-gray-700', i, 'recommend_ids')
-                + mkCell(row.bid_approved, 'text-indigo-600', i, 'bid_approved_ids')
-                + mkCell(row.bid_pending, 'text-orange-500', i, 'bid_pending_ids')
-                + mkCell(row.cancel_approved, 'text-gray-500', i, 'cancel_approved_ids')
-                + mkCell(row.delivered, 'text-blue-600', i, 'delivered_ids')
-                + mkCell(row.confirmed, 'text-green-600', i, 'confirmed_ids')
+                + mkCell(row, 'recommend',       'text-gray-700',   i)
+                + mkCell(row, 'bid_approved',    'text-indigo-600', i)
+                + mkCell(row, 'bid_pending',     'text-orange-500', i)
+                + mkCell(row, 'cancel_approved', 'text-gray-500',   i)
+                + mkCell(row, 'delivered',       'text-blue-600',   i)
+                + mkCell(row, 'confirmed',       'text-green-600',  i)
+                + mkCell(row, 'status_notify',   'text-red-500',    i)
                 + '</tr>';
         });
-        el.innerHTML = '<div class="overflow-y-auto" style="max-height:210px">'
+        el.innerHTML = '<div class="overflow-y-auto" style="max-height:280px; min-height:120px">'
             + '<table class="w-full text-xs border-collapse">'
             + '<thead class="sticky top-0 z-10 bg-gray-50">'
             + '<tr class="border-b border-gray-100 text-gray-600">'
@@ -2903,6 +2935,7 @@
             + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200" colspan="2">추천물건</th>'
             + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200">입찰물건</th>'
             + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200" colspan="2">입찰가</th>'
+            + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200" rowspan="2">변경<br>취소</th>'
             + '</tr>'
             + '<tr class="bg-gray-50 border-b border-gray-200 text-gray-500">'
             + '<th class="py-1 px-1 text-center border-l border-gray-200">입찰확정</th>'
@@ -3217,6 +3250,19 @@
             if (formId) formId.value = safeId;
             if (formInDate) formInDate.value = data['in-date'] || '';
             if (formSakunNo) formSakunNo.value = data.sakun_no || '';
+            {
+                const formDupWarn = document.getElementById('form-dup-warning');
+                if (formDupWarn) {
+                    const dupMgrs = getDupManagers(data);
+                    if (dupMgrs) {
+                        formDupWarn.textContent = '중복 등록 (' + dupMgrs.join(', ') + ')';
+                        formDupWarn.classList.remove('hidden');
+                    } else {
+                        formDupWarn.textContent = '';
+                        formDupWarn.classList.add('hidden');
+                    }
+                }
+            }
             if (formCourt) formCourt.value = data.court || '';
             if (formStuMember) formStuMember.value = data.stu_member || '미정';
             if (formMemberId) formMemberId.value = data.member_id || '';
@@ -4246,18 +4292,18 @@
     }
     function uploadInvestigationBlobAsDataUrl(dataUrl, mimeType) {
         if (!currentDetailItem || !currentDetailItem.id) return;
-        if (typeof showStatusMessage === 'function') showStatusMessage('이미지 등록 중...', 'info');
+        if (typeof showStatus === 'function') showStatus('이미지 등록 중...', 'info');
         google.script.run
             .withSuccessHandler(function (res) {
                 if (res && res.success) {
-                    if (typeof showStatusMessage === 'function') showStatusMessage('이미지가 등록되었습니다.', 'success');
+                    if (typeof showStatus === 'function') showStatus('이미지가 등록되었습니다.', 'success');
                     loadInvestigationImages();
                 } else {
-                    if (typeof showStatusMessage === 'function') showStatusMessage(res && res.message ? res.message : '등록 실패', 'error');
+                    if (typeof showStatus === 'function') showStatus(res && res.message ? res.message : '등록 실패', 'error');
                 }
             })
             .withFailureHandler(function (err) {
-                if (typeof showStatusMessage === 'function') showStatusMessage('등록 실패: ' + (err && err.message ? err.message : '오류'), 'error');
+                if (typeof showStatus === 'function') showStatus('등록 실패: ' + (err && err.message ? err.message : '오류'), 'error');
             })
             .registerWebImage(
                 currentDetailItem.id,
@@ -4273,14 +4319,14 @@
         google.script.run
             .withSuccessHandler(function (res) {
                 if (res && res.success) {
-                    if (typeof showStatusMessage === 'function') showStatusMessage('이미지를 삭제했습니다.', 'success');
+                    if (typeof showStatus === 'function') showStatus('이미지를 삭제했습니다.', 'success');
                     loadInvestigationImages();
                 } else {
-                    if (typeof showStatusMessage === 'function') showStatusMessage(res && res.message ? res.message : '삭제 실패', 'error');
+                    if (typeof showStatus === 'function') showStatus(res && res.message ? res.message : '삭제 실패', 'error');
                 }
             })
             .withFailureHandler(function () {
-                if (typeof showStatusMessage === 'function') showStatusMessage('삭제에 실패했습니다.', 'error');
+                if (typeof showStatus === 'function') showStatus('삭제에 실패했습니다.', 'error');
             })
             .deleteWebImage(itemId, imageId);
     }
@@ -4292,33 +4338,33 @@
         google.script.run
             .withSuccessHandler(function (res) {
                 if (res && res.success) {
-                    if (typeof showStatusMessage === 'function') showStatusMessage('이미지를 삭제했습니다.', 'success');
+                    if (typeof showStatus === 'function') showStatus('이미지를 삭제했습니다.', 'success');
                     loadInvestigationImages();
                 } else {
-                    if (typeof showStatusMessage === 'function') showStatusMessage(res && res.message ? res.message : '삭제 실패', 'error');
+                    if (typeof showStatus === 'function') showStatus(res && res.message ? res.message : '삭제 실패', 'error');
                 }
             })
             .withFailureHandler(function (err) {
-                if (typeof showStatusMessage === 'function') showStatusMessage('삭제 실패: ' + (err.message || err), 'error');
+                if (typeof showStatus === 'function') showStatus('삭제 실패: ' + (err.message || err), 'error');
             })
             .deleteItemImage(itemId, imageId);
     }
 
     function handleInvestigationImageReg() {
         switchItemDetailTab('investigation');
-        if (typeof showStatusMessage === 'function') showStatusMessage('이미지를 영역에 놓거나 Ctrl+V로 붙여넣으세요.', 'info');
+        if (typeof showStatus === 'function') showStatus('이미지를 영역에 놓거나 Ctrl+V로 붙여넣으세요.', 'info');
     }
 
     function handleInvestigationDelete() {
         if (!currentDetailItem || !currentDetailItem.id) {
-            if (typeof showStatusMessage === 'function') showStatusMessage('물건을 먼저 선택해주세요.', 'error');
+            if (typeof showStatus === 'function') showStatus('물건을 먼저 선택해주세요.', 'error');
             return;
         }
 
         google.script.run
             .withSuccessHandler(function (images) {
                 if (!images || images.length === 0) {
-                    if (typeof showStatusMessage === 'function') showStatusMessage('삭제할 이미지가 없습니다.', 'error');
+                    if (typeof showStatus === 'function') showStatus('삭제할 이미지가 없습니다.', 'error');
                     return;
                 }
 
@@ -4328,7 +4374,7 @@
                 handleDeleteItemImage(currentDetailItem.id, firstImageId);
             })
             .withFailureHandler(function (err) {
-                if (typeof showStatusMessage === 'function') showStatusMessage('이미지 조회 실패: ' + (err.message || err), 'error');
+                if (typeof showStatus === 'function') showStatus('이미지 조회 실패: ' + (err.message || err), 'error');
             })
             .getItemImages(currentDetailItem.id);
     }
@@ -4467,6 +4513,19 @@
         if (modalFormId) modalFormId.value = data.id;
         if (modalFormInDate) modalFormInDate.value = data['in-date'] || '';
         if (modalFormSakunNo) modalFormSakunNo.value = data.sakun_no || '';
+        {
+            const modalDupWarn = document.getElementById('modal-dup-warning');
+            if (modalDupWarn) {
+                const dupMgrs = getDupManagers(data);
+                if (dupMgrs) {
+                    modalDupWarn.textContent = '중복 등록 (' + dupMgrs.join(', ') + ')';
+                    modalDupWarn.classList.remove('hidden');
+                } else {
+                    modalDupWarn.textContent = '';
+                    modalDupWarn.classList.add('hidden');
+                }
+            }
+        }
         if (modalFormCourt) modalFormCourt.value = data.court || '';
         if (modalFormStuMember) modalFormStuMember.value = data.stu_member || '미정';
         if (modalFormMemberId) modalFormMemberId.value = data.member_id || '';
@@ -4961,6 +5020,7 @@ MJ 이정우 팀장
         const bidState = document.getElementById('modal-form-bid-state') ? document.getElementById('modal-form-bid-state').value : '';
         const imageId = modalFormImageId ? modalFormImageId.value : '';
         const note = document.getElementById('modal-sub-item-note') ? document.getElementById('modal-sub-item-note').value : '';
+        const chuchenState = document.getElementById('modal-form-chuchen-state') ? document.getElementById('modal-form-chuchen-state').value : '';
 
         if (!inDate || !sakunNo || !court) {
             showStatus('필수 입력 항목(입찰일자, 사건번호, 법원명)을 확인해 주세요.', 'error');
@@ -5016,7 +5076,7 @@ MJ 이정우 팀장
             .withFailureHandler(error => {
                 showStatus(`수정 오류: ${error.message}`, 'error');
             })
-            .updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2);
+            .updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState);
     }
 
     function handleModalDelete() {
@@ -5151,7 +5211,8 @@ MJ 이정우 팀장
             showStatus(`작업 처리 중 오류: ${error.message}`, 'error');
         };
 
-        const dataArgs = [processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2];
+        const panelChuchenState = document.getElementById('form-chuchen-state') ? document.getElementById('form-chuchen-state').value : '';
+        const dataArgs = [processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, panelChuchenState];
         if (currentMode === 'create') {
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler).createData(...dataArgs);
         } else if (currentMode === 'edit') {
@@ -5547,6 +5608,52 @@ MJ 이정우 팀장
         updateStatusLabel();
     }
 
+    // --- 입찰담당자 다중선택 드롭다운 ---
+    function getSelectedManagerValues() {
+        const cbs = document.querySelectorAll('input[name="search-manager-cb"]:checked');
+        return Array.from(cbs).map(el => el.value);
+    }
+    function toggleManagerDropdown(ev) {
+        ev.stopPropagation();
+        const dd = document.getElementById('search-manager-dropdown');
+        const btn = document.getElementById('search-manager-btn');
+        if (!dd || !btn) return;
+        const isHidden = dd.classList.contains('content-hidden');
+        dd.classList.toggle('content-hidden', !isHidden);
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (isHidden) document.addEventListener('click', closeManagerDropdownOnce);
+    }
+    function closeManagerDropdownOnce() {
+        const dd = document.getElementById('search-manager-dropdown');
+        if (dd) dd.classList.add('content-hidden');
+        const btn = document.getElementById('search-manager-btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', closeManagerDropdownOnce);
+        updateManagerLabel();
+    }
+    function updateManagerLabel() {
+        const allCb = document.getElementById('search-manager-all');
+        const isAll = (allCb && allCb.checked);
+        const selected = getSelectedManagerValues();
+        const label = document.getElementById('search-manager-label');
+        if (label) {
+            if (isAll) label.textContent = '담당자';
+            else if (selected.length === 0) label.textContent = '미선택';
+            else label.textContent = selected.join(',');
+        }
+    }
+    function handleManagerAll(allCb) {
+        if (allCb.checked) {
+            document.querySelectorAll('input[name="search-manager-cb"]').forEach(cb => cb.checked = false);
+        }
+    }
+    function handleManagerOther(otherCb) {
+        if (otherCb.checked) {
+            const allCb = document.getElementById('search-manager-all');
+            if (allCb) allCb.checked = false;
+        }
+    }
+
     function updateStatusLabel() {
         const allCb = document.getElementById('search-status-all');
         const isAllStatus = (allCb && allCb.checked);
@@ -5576,6 +5683,84 @@ MJ 이정우 팀장
         }, 100);
     });
 
+    // --- 입찰일정 담당자 다중선택 드롭다운 ---
+    function getSelectedCalManagerValues() {
+        const cbs = document.querySelectorAll('input[name="cal-search-manager-cb"]:checked');
+        return Array.from(cbs).map(el => el.value);
+    }
+    function toggleCalManagerDropdown(ev) {
+        ev.stopPropagation();
+        const dd = document.getElementById('cal-search-manager-dropdown');
+        const btn = document.getElementById('cal-search-manager-btn');
+        if (!dd || !btn) return;
+        const isHidden = dd.classList.contains('content-hidden');
+        dd.classList.toggle('content-hidden', !isHidden);
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (isHidden) document.addEventListener('click', closeCalManagerDropdownOnce);
+    }
+    function closeCalManagerDropdownOnce() {
+        const dd = document.getElementById('cal-search-manager-dropdown');
+        if (dd) dd.classList.add('content-hidden');
+        const btn = document.getElementById('cal-search-manager-btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', closeCalManagerDropdownOnce);
+        updateCalManagerLabel();
+    }
+    function updateCalManagerLabel() {
+        const allCb = document.getElementById('cal-search-manager-all');
+        const isAll = (allCb && allCb.checked);
+        const selected = getSelectedCalManagerValues();
+        const label = document.getElementById('cal-search-manager-label');
+        if (label) {
+            if (isAll) label.textContent = '담당자';
+            else if (selected.length === 0) label.textContent = '미선택';
+            else label.textContent = selected.join(',');
+        }
+    }
+    function handleCalManagerAll(allCb) {
+        if (allCb.checked) {
+            document.querySelectorAll('input[name="cal-search-manager-cb"]').forEach(cb => cb.checked = false);
+        }
+    }
+    function handleCalManagerOther(otherCb) {
+        if (otherCb.checked) {
+            const allCb = document.getElementById('cal-search-manager-all');
+            if (allCb) allCb.checked = false;
+        }
+    }
+    function matchesCalManager(item) {
+        const allCb = document.getElementById('cal-search-manager-all');
+        if (allCb && allCb.checked) return true;
+        const selected = getSelectedCalManagerValues();
+        if (selected.length === 0) return true;
+        return selected.includes(String(item.m_name_id || '').trim());
+    }
+
+    // --- 중복 감지 헬퍼 ---
+    function _getDupMap() {
+        if (!_dupMap) {
+            _dupMap = {};
+            allBiddingData.forEach(function(item) {
+                var key = String(item['in-date'] || '') + '_' + String(item.sakun_no || '') + '_' + String(item.court || '');
+                if (!_dupMap[key]) _dupMap[key] = [];
+                var mgr = String(item.m_name_id || '').trim();
+                if (mgr && !_dupMap[key].includes(mgr)) _dupMap[key].push(mgr);
+            });
+        }
+        return _dupMap;
+    }
+    function getDupManagers(item) {
+        var key = String(item['in-date'] || '') + '_' + String(item.sakun_no || '') + '_' + String(item.court || '');
+        var mgrs = _getDupMap()[key];
+        return (mgrs && mgrs.length > 1) ? mgrs : null;
+    }
+    function dupSakunHtml(bid) {
+        var sakun = String(bid.sakun_no || '미상');
+        var dupMgrs = getDupManagers(bid);
+        if (!dupMgrs) return escapeHtml(sakun);
+        return '<span class="text-red-600 font-bold cursor-help" title="중복 등록되었습니다. (' + escapeHtml(dupMgrs.join(', ')) + ')">' + escapeHtml(sakun) + '</span>';
+    }
+
     // --- [4] 필터링 로직 ---
     function handleStatusAll(allCb) {
         if (allCb.checked) {
@@ -5603,7 +5788,9 @@ MJ 이정우 팀장
         const allStatusCb = document.getElementById('search-status-all');
         const isAllStatus = (allStatusCb && allStatusCb.checked);
         const termRegDate = (searchRegDateInput && searchRegDateInput.value) ? searchRegDateInput.value.trim() : '';
-        const termManager = (searchManagerInput && searchManagerInput.value) ? String(searchManagerInput.value).trim() : '';
+        const allManagerCb = document.getElementById('search-manager-all');
+        const isAllManager = (allManagerCb && allManagerCb.checked);
+        const selectedManagers = getSelectedManagerValues();
         const termMName = (searchMNameInput && searchMNameInput.value) ? searchMNameInput.value.toLowerCase().trim() : '';
         // 수업 필터 (입찰물건관리)
         const termBidClassType = document.getElementById('bid-class-type')?.value || '';
@@ -5615,7 +5802,8 @@ MJ 이정우 팀장
         if (searchSakunNoInput) searchSakunNoInput.classList.toggle('filter-active-input', !!termSakunNo);
         if (searchCourtInput) searchCourtInput.classList.toggle('filter-active-input', !!termCourt);
         if (searchRegDateInput) searchRegDateInput.classList.toggle('filter-active-input', !!termRegDate);
-        if (searchManagerInput) searchManagerInput.classList.toggle('filter-active-input', !!termManager);
+        const mgrBtn = document.getElementById('search-manager-btn');
+        if (mgrBtn) mgrBtn.classList.toggle('filter-active-input', !isAllManager);
         if (searchMNameInput) searchMNameInput.classList.toggle('filter-active-input', !!termMName);
         if (searchMNameInput) searchMNameInput.classList.toggle('filter-active-input', !!termMName);
         // 수업 필터 강조
@@ -5707,7 +5895,7 @@ MJ 이정우 팀장
             // 상태 필터링: "전체" 체크 시 모든 상태 통과, 아무것도 선택 안 하면 조회 안 됨
             const matchesStatus = isAllStatus ? true : (selectedStatuses.length > 0 && selectedStatuses.includes(String(item.stu_member || '').trim()));
             const matchesRegDate = !termRegDate || regDate.includes(termRegDate) || regDate.replace(/\D/g, '').includes(String(termRegDate).replace(/\D/g, ''));
-            const matchesManager = !termManager || String(item.m_name_id || '').trim() === termManager;
+            const matchesManager = isAllManager || (selectedManagers.length > 0 && selectedManagers.includes(String(item.m_name_id || '').trim()));
             const matchesMName = !termMName || `${String(item.m_name || '')} ${String(item.m_name2 || '')}`.toLowerCase().includes(termMName);
             // 수업 필터: member_id → allMembersNewData → class_id → allClassesData
             let matchesClass = true;
@@ -5802,7 +5990,7 @@ MJ 이정우 팀장
         setTimeout(removeSendColumn, 50);
         setTimeout(removeSendColumn, 100);
 
-        const searchIds = ['search-indate', 'search-sakunno', 'search-court', 'search-regdate', 'search-manager', 'search-mname'];
+        const searchIds = ['search-indate', 'search-sakunno', 'search-court', 'search-regdate', 'search-mname'];
         if (searchIds.indexOf(currentFocusId) !== -1) {
             setTimeout(() => {
                 const el = document.getElementById(currentFocusId);
@@ -5834,9 +6022,15 @@ MJ 이정우 팀장
             searchIndateInput.classList.add('filter-active-input');
         }
 
-        if (searchManagerInput && dashboardFilter.manager) {
-            searchManagerInput.value = dashboardFilter.manager === 'All' ? '' : dashboardFilter.manager;
-            searchManagerInput.classList.add('filter-active-input');
+        if (dashboardFilter.manager && dashboardFilter.manager !== 'All') {
+            const allMgrCb = document.getElementById('search-manager-all');
+            if (allMgrCb) allMgrCb.checked = false;
+            document.querySelectorAll('input[name="search-manager-cb"]').forEach(cb => {
+                cb.checked = (cb.value === dashboardFilter.manager);
+            });
+            updateManagerLabel();
+            const mgrBtn2 = document.getElementById('search-manager-btn');
+            if (mgrBtn2) mgrBtn2.classList.add('filter-active-input');
         }
 
         // all_status / all_bid_state / item_ids 타입: dashboardFilter가 2단계에서 처리하므로
@@ -5944,7 +6138,7 @@ MJ 이정우 팀장
         const cbs = dataTableBody ? dataTableBody.querySelectorAll('input.item-row-cb:checked') : [];
         const list = Array.from(cbs).map(cb => (cb.getAttribute('data-sakun-no') || cb.dataset.sakunNo || '').trim()).filter(Boolean);
         if (list.length === 0) {
-            if (typeof showStatusMessage === 'function') showStatusMessage('캡처할 항목을 체크해 주세요.', 'warning');
+            if (typeof showStatus === 'function') showStatus('캡처할 항목을 체크해 주세요.', 'warning');
             return;
         }
         const now = new Date();
@@ -5967,7 +6161,7 @@ MJ 이정우 팀장
                 const writable = await fileHandle.createWritable();
                 await writable.write(content);
                 await writable.close();
-                if (typeof showStatusMessage === 'function') showStatusMessage('파일(' + fileHandle.name + ') 저장 완료. 건변등록.bat을 실행하세요.', 'success');
+                if (typeof showStatus === 'function') showStatus('파일(' + fileHandle.name + ') 저장 완료. 건변등록.bat을 실행하세요.', 'success');
                 return;
             } catch (err) {
                 if (err.name === 'AbortError') return; // 취소 시 아무것도 안 함
@@ -5982,7 +6176,7 @@ MJ 이정우 팀장
         a.download = filename;
         a.click();
         URL.revokeObjectURL(a.href);
-        if (typeof showStatusMessage === 'function') showStatusMessage('파일(' + filename + ')이 다운로드 폴더에 저장됩니다. 해당 파일을 아래 폴더로 이동한 뒤 건변등록.bat을 실행하세요. → C:\\LJW\\MAPS_TEST\\00.imageup\\건별 캡쳐 리스트', 'success');
+        if (typeof showStatus === 'function') showStatus('파일(' + filename + ')이 다운로드 폴더에 저장됩니다. 해당 파일을 아래 폴더로 이동한 뒤 건변등록.bat을 실행하세요. → C:\\LJW\\MAPS_TEST\\00.imageup\\건별 캡쳐 리스트', 'success');
     }
 
     // --- [Telegram] 입찰물건 관리: 체크된 항목 다중 전송 ---
@@ -6152,7 +6346,7 @@ MJ 이정우 팀장
         const calStatusDd = document.getElementById('cal-search-status-dropdown');
         if (calStatusDd) calStatusDd.classList.add('content-hidden');
         if (calSearchMember) calSearchMember.value = '';
-        if (calSearchManager) calSearchManager.value = '';
+        { const allCalMgrCbR = document.getElementById('cal-search-manager-all'); if (allCalMgrCbR) allCalMgrCbR.checked = true; document.querySelectorAll('input[name="cal-search-manager-cb"]').forEach(cb => cb.checked = false); if (typeof updateCalManagerLabel === 'function') updateCalManagerLabel(); }
         loadDataAndRenderCalendar();
     }
 
@@ -7202,8 +7396,10 @@ MJ 이정우 팀장
             // 모든 검색 필드 초기화
             const allStatusCb = document.getElementById('search-status-all');
             if (allStatusCb) { allStatusCb.checked = true; if (typeof handleStatusAll === 'function') handleStatusAll(allStatusCb); }
-            const managerSelect = document.getElementById('search-manager');
-            if (managerSelect) managerSelect.value = '';
+            const allMgrCbR = document.getElementById('search-manager-all');
+            if (allMgrCbR) allMgrCbR.checked = true;
+            document.querySelectorAll('input[name="search-manager-cb"]').forEach(cb => cb.checked = false);
+            if (typeof updateManagerLabel === 'function') updateManagerLabel();
             const sakunInput = document.getElementById('search-sakunno');
             if (sakunInput) sakunInput.value = '';
             const indateInput = document.getElementById('search-indate');
@@ -7222,8 +7418,10 @@ MJ 이정우 팀장
         setTimeout(() => {
             const allStatusCb = document.getElementById('search-status-all');
             if (allStatusCb) { allStatusCb.checked = true; if (typeof handleStatusAll === 'function') handleStatusAll(allStatusCb); }
-            const managerSelect = document.getElementById('search-manager');
-            if (managerSelect) managerSelect.value = manager;
+            const allMgrCbN = document.getElementById('search-manager-all');
+            if (allMgrCbN) allMgrCbN.checked = !manager;
+            document.querySelectorAll('input[name="search-manager-cb"]').forEach(cb => { cb.checked = (!!manager && cb.value === manager); });
+            if (typeof updateManagerLabel === 'function') updateManagerLabel();
             const sakunInput = document.getElementById('search-sakunno');
             if (sakunInput) sakunInput.value = '';
             if (typeof applyFilters === 'function') applyFilters();
@@ -9670,13 +9868,18 @@ MJ 이정우 팀장
                     const sakunNo = String(r.sakun_no || '');
                     const court = String(r.court || '');
                     const label = String(r.action_label || r.action || '');
+                    const isMissing = r.action === 'AUTO_EXPIRE' || r.action === 'REQUEST_CANCEL_CHUCHEN';
+                    const labelCols = isMissing 
+                        ? '<span class="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-700">' + escapeHtml(label) + '</span>'
+                        : '<span class="px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-700">' + escapeHtml(label) + '</span>';
+
                     return '<tr class="hover:bg-gray-50">' +
                         '<td class="px-2 py-1.5 text-center text-gray-500">' + (i + 1) + '</td>' +
                         '<td class="px-2 py-1.5 text-center text-gray-700">' + escapeHtml(dateStr) + '</td>' +
                         '<td class="px-2 py-1.5 text-center text-gray-700">' + escapeHtml(inDate) + '</td>' +
                         '<td class="px-2 py-1.5 text-center font-medium text-gray-800">' + escapeHtml(sakunNo) + '</td>' +
                         '<td class="px-2 py-1.5 text-center text-gray-600">' + escapeHtml(court) + '</td>' +
-                        '<td class="px-2 py-1.5 text-center"><span class="px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-700">' + escapeHtml(label) + '</span></td>' +
+                        '<td class="px-2 py-1.5 text-center">' + labelCols + '</td>' +
                         '</tr>';
                 }).join('');
             })
@@ -10989,7 +11192,7 @@ ${token}
         }
 
         if (cbs.length === 0) {
-            if (typeof showStatusMessage === 'function') showStatusMessage('항목을 먼저 선택해 주세요.', 'warning');
+            if (typeof showStatus === 'function') showStatus('항목을 먼저 선택해 주세요.', 'warning');
             return;
         }
 
@@ -10999,9 +11202,75 @@ ${token}
             openBulkMessageModal(cbs);
         } else if (type === 'delete') {
             handleBulkDelete(idsFromCbs(cbs));
+        } else if (type === 'chuchen_new' || type === 'chuchen_done') {
+            handleBulkChuchenState(cbs, type === 'chuchen_done' ? '전달완료' : '신규');
+        } else if (type === 'bid_state_new' || type === 'bid_state_done' || type === 'bid_state_confirmed') {
+            var stateMap = { bid_state_new: '신규', bid_state_done: '전달완료', bid_state_confirmed: '확인완료' };
+            handleBulkBidState(cbs, stateMap[type]);
         } else {
-            if (typeof showStatusMessage === 'function') showStatusMessage('작업 유형을 선택해 주세요.', 'warning');
+            if (typeof showStatus === 'function') showStatus('작업 유형을 선택해 주세요.', 'warning');
         }
+    }
+
+    function openBulkApplyConfirmModal(items, desc, onConfirm) {
+        const modal = document.getElementById('bulkApplyConfirmModal');
+        const descEl = document.getElementById('bulk-apply-confirm-desc');
+        const tbody = document.getElementById('bulk-apply-confirm-tbody');
+        const okBtn = document.getElementById('bulk-apply-confirm-ok');
+        if (!modal || !tbody || !okBtn) return;
+        if (descEl) descEl.textContent = desc;
+        tbody.innerHTML = items.map(function(it) {
+            return '<tr class="hover:bg-gray-50"><td class="px-2 py-1">' + (it['in-date'] || '') +
+                '</td><td class="px-2 py-1">' + (it.sakun_no || '') +
+                '</td><td class="px-2 py-1">' + (it.court || '') +
+                '</td><td class="px-2 py-1">' + (it.m_name || '') +
+                '</td><td class="px-2 py-1">' + (it.m_name_id || '') +
+                '</td><td class="px-2 py-1 text-center"><span class="px-1.5 py-0.5 rounded text-xs bg-gray-100">' + (it.stu_member || '') + '</span></td></tr>';
+        }).join('');
+        okBtn.onclick = function() { closeBulkApplyConfirmModal(); onConfirm(); };
+        modal.classList.remove('content-hidden');
+    }
+    function closeBulkApplyConfirmModal() {
+        const modal = document.getElementById('bulkApplyConfirmModal');
+        if (modal) modal.classList.add('content-hidden');
+    }
+
+    function handleBulkChuchenState(cbs, state) {
+        var filtered = Array.from(cbs).filter(cb => (cb.getAttribute('data-status') || '') === '추천');
+        var ids = filtered.map(cb => cb.getAttribute('data-id'));
+        if (ids.length === 0) { showStatus('추천 상태인 항목이 없습니다.', 'warning'); return; }
+        var items = ids.map(function(id) { return allBiddingData.find(function(d) { return String(d.id) === String(id); }) || { id: id }; });
+        openBulkApplyConfirmModal(items,
+            '다음 ' + ids.length + '건의 추천상태를 [' + state + ']으로 변경합니다.',
+            function() {
+                showStatus('처리 중...', 'info');
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        showStatus((res && res.updated ? res.updated : 0) + '건 변경완료', 'success');
+                        loadData(); _autoApprovalStatsCache = null;
+                    })
+                    .withFailureHandler(function(err) { showStatus('오류: ' + (err && err.message || ''), 'error'); })
+                    .updateChuchenStateApi(ids, state, new Date().toISOString());
+            });
+    }
+
+    function handleBulkBidState(cbs, state) {
+        var filtered = Array.from(cbs).filter(cb => (cb.getAttribute('data-status') || '') === '입찰');
+        var ids = filtered.map(cb => cb.getAttribute('data-id'));
+        if (ids.length === 0) { showStatus('입찰 상태인 항목이 없습니다.', 'warning'); return; }
+        var items = ids.map(function(id) { return allBiddingData.find(function(d) { return String(d.id) === String(id); }) || { id: id }; });
+        openBulkApplyConfirmModal(items,
+            '다음 ' + ids.length + '건의 입찰상태를 [' + state + ']으로 변경합니다.',
+            function() {
+                showStatus('처리 중...', 'info');
+                google.script.run
+                    .withSuccessHandler(function(res) {
+                        showStatus((res && res.updated ? res.updated : 0) + '건 변경완료', 'success');
+                        loadData(); _autoApprovalStatsCache = null;
+                    })
+                    .withFailureHandler(function(err) { showStatus('오류: ' + (err && err.message || ''), 'error'); })
+                    .updateBidStateApi(ids, state);
+            });
     }
 
     function openBidRequestModal() {
@@ -11175,21 +11444,21 @@ MJ 이정우 팀장
 
         if (ids.length === 0 || !newStatus) return;
 
-        if (typeof showStatusMessage === 'function') showStatusMessage(`${ids.length}건의 상태를 '${newStatus}'(으)로 변경 중...`, 'info');
+        if (typeof showStatus === 'function') showStatus(`${ids.length}건의 상태를 '${newStatus}'(으)로 변경 중...`, 'info');
 
         google.script.run
             .withSuccessHandler(res => {
                 if (res && res.success) {
-                    if (typeof showStatusMessage === 'function') showStatusMessage(res.message || '일괄 변경이 완료되었습니다.', 'success');
+                    if (typeof showStatus === 'function') showStatus(res.message || '일괄 변경이 완료되었습니다.', 'success');
                 } else {
-                    if (typeof showStatusMessage === 'function') showStatusMessage((res && res.message) ? res.message : '변경 중 일부 오류가 발생했습니다.', 'warning');
+                    if (typeof showStatus === 'function') showStatus((res && res.message) ? res.message : '변경 중 일부 오류가 발생했습니다.', 'warning');
                 }
                 closeBulkStatusModal();
                 loadData(true);
             })
             .withFailureHandler(err => {
                 console.error('Bulk update error:', err);
-                if (typeof showStatusMessage === 'function') showStatusMessage('서버 통신 중 오류가 발생했습니다.', 'error');
+                if (typeof showStatus === 'function') showStatus('서버 통신 중 오류가 발생했습니다.', 'error');
                 loadData(true);
             })
             .updateBulkStatus(ids, newStatus);
@@ -11200,21 +11469,21 @@ MJ 이정우 팀장
             return;
         }
 
-        if (typeof showStatusMessage === 'function') showStatusMessage(`${ids.length}건 삭제 중...`, 'info');
+        if (typeof showStatus === 'function') showStatus(`${ids.length}건 삭제 중...`, 'info');
 
         // 단일 서버 호출로 일괄 삭제 (Race Condition 방지)
         google.script.run
             .withSuccessHandler(res => {
                 if (res && res.success) {
-                    if (typeof showStatusMessage === 'function') showStatusMessage(res.message || '일괄 삭제가 완료되었습니다.', 'success');
+                    if (typeof showStatus === 'function') showStatus(res.message || '일괄 삭제가 완료되었습니다.', 'success');
                 } else {
-                    if (typeof showStatusMessage === 'function') showStatusMessage((res && res.message) ? res.message : '삭제 중 오류가 발생했습니다.', 'error');
+                    if (typeof showStatus === 'function') showStatus((res && res.message) ? res.message : '삭제 중 오류가 발생했습니다.', 'error');
                 }
                 loadData(true);
             })
             .withFailureHandler(err => {
                 console.error('Bulk delete error:', err);
-                if (typeof showStatusMessage === 'function') showStatusMessage('삭제 중 오류가 발생했습니다.', 'error');
+                if (typeof showStatus === 'function') showStatus('삭제 중 오류가 발생했습니다.', 'error');
                 loadData(true);
             })
             .deleteBulkData(ids);
@@ -11679,15 +11948,15 @@ MJ 이정우 팀장
                 }
                 var html = '';
                 rows.forEach(function (r, idx) {
-                    var actionColor = r.action === 'AUTO_EXPIRE' ? 'text-orange-500' : 'text-red-500';
+                    var actionColor = r.action === 'AUTO_EXPIRE' || r.action === 'REQUEST_CANCEL_CHUCHEN' ? 'text-gray-500' : 'text-red-500';
+                    var cancelReason = r.action_label || '';
                     html += '<tr class="border-b border-gray-100 hover:bg-gray-50">'
                         + '<td class="px-3 py-2 text-center text-gray-400 text-xs">' + (idx + 1) + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs ' + actionColor + '">' + _formatCancelDate(r.cancel_date) + '</td>'
                         + '<td class="px-3 py-2 text-center text-xs">' + _formatInDate(r.in_date) + '</td>'
                         + '<td class="px-3 py-2 text-left text-xs font-medium text-gray-700">' + (r.sakun_no || '-') + '</td>'
                         + '<td class="px-3 py-2 text-center text-xs text-gray-500">' + (r.court || '-') + '</td>'
-                        + '<td class="px-3 py-2 text-center text-xs">' + _formatDatetime(r.chuchen_date) + '</td>'
-                        + '<td class="px-3 py-2 text-center text-xs">' + _formatDatetime(r.bid_confirm_date) + '</td>'
-                        + '<td class="px-3 py-2 text-center text-xs ' + actionColor + '">' + _formatCancelDate(r.cancel_date) + '<br><span class="text-gray-400">' + (r.action_label || '') + '</span></td>'
+                        + '<td class="px-3 py-2 text-center text-xs ' + actionColor + '">' + cancelReason + '</td>'
                         + '</tr>';
                 });
                 tbody.innerHTML = html;
