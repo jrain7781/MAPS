@@ -3624,15 +3624,17 @@
             if (!seen[key].member_name && r.member_name) seen[key].member_name = r.member_name;
         });
 
-        var FIELD_COLS = ['stu_member', 'bidprice', 'm_name', 'm_name_id'];
+        var FIELD_COLS = ['stu_member', 'chuchen_state', 'bidprice', 'bid_state', 'm_name', 'm_name_id'];
 
         // groups are currently from oldest to newest.
         // 역산 기반 당대 스냅샷 구축 시작. 최신값을 모른다면 빈칸.
         var currentState = {
-            'stu_member': currentItem && currentItem.stu_member ? currentItem.stu_member : '',
-            'bidprice': currentItem && currentItem.bidprice ? currentItem.bidprice : '',
-            'm_name': currentItem && currentItem.m_name ? currentItem.m_name : '',
-            'm_name_id': currentItem && currentItem.m_name_id ? currentItem.m_name_id : ''
+            'stu_member':    currentItem && currentItem.stu_member    ? currentItem.stu_member    : '',
+            'chuchen_state': currentItem && currentItem.chuchen_state ? currentItem.chuchen_state : '',
+            'bidprice':      currentItem && currentItem.bidprice      ? currentItem.bidprice      : '',
+            'bid_state':     currentItem && currentItem.bid_state     ? currentItem.bid_state     : '',
+            'm_name':        currentItem && currentItem.m_name        ? currentItem.m_name        : '',
+            'm_name_id':     currentItem && currentItem.m_name_id     ? currentItem.m_name_id     : ''
         };
 
         // 뒤집어서 (가장 최신 -> 가장 오래된 순) 역산 진행
@@ -3717,12 +3719,23 @@
             + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200 w-[1%] whitespace-nowrap">변경자</th>'
             + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200 w-[1%] whitespace-nowrap">작업</th>'
             + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200 min-w-[50px]">상태</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200 min-w-[40px]">전달</th>'
             + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200 min-w-[80px] w-auto">입찰가</th>'
+            + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200 min-w-[40px]">전달</th>'
             + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center border-r border-gray-200 min-w-[50px]">회원</th>'
             + '<th class="px-1.5 py-1 text-gray-600 font-semibold text-center min-w-[50px]">담당자</th>'
             + '</tr></thead><tbody>';
 
         var noteMap = { 'card': '추천물건전달', 'bid_price': '입찰가전달', 'status': '진행상태전달', 'check_request': '확인요청전달' };
+        var FIELD_DISP_ = {
+            chuchen_state: { '전달완료': '전달' },
+            bid_state:     { '전달완료': '전달', '확인완료': '확인', '신규': '' }
+        };
+        function applyFieldDisp_(col, v) {
+            var dm = FIELD_DISP_[col];
+            if (!dm) return v;
+            return dm[v] !== undefined ? dm[v] : v;
+        }
 
         groups.forEach(function (g, i) {
             var dt = fmtDt(g.dt);
@@ -3762,7 +3775,10 @@
             html += '<td class="px-1.5 py-1 text-gray-700 text-center whitespace-nowrap border-r border-gray-100">' + actionLabel + '</td>';
 
             FIELD_COLS.forEach(function (col) {
-                html += renderCell(g.changes[col], g.snapshot[col], isCreate);
+                var chg = g.changes[col];
+                var snap = applyFieldDisp_(col, g.snapshot[col]);
+                if (chg) chg = { from: applyFieldDisp_(col, chg.from), to: applyFieldDisp_(col, chg.to) };
+                html += renderCell(chg, snap, isCreate);
             });
             html += '</tr>';
         });

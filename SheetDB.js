@@ -3200,8 +3200,8 @@ function updateChuchenState(itemIds, state, dateStr, triggerType) {
       if (state === '전달완료' && dateStr) {
         sheet.getRange(i + 2, 18).setValue(dateStr); // R열: chuchen_date
       }
-      // FIELD_CHANGE 로깅 (변경이 실제 발생한 경우만)
-      if (oldState !== state) {
+      // FIELD_CHANGE 로깅 (변경이 실제 발생한 경우만, 텔레그램 자동경로 제외)
+      if (oldState !== state && (triggerType || 'web-telegram') !== 'web-telegram') {
         writeItemHistory_({
           action: 'FIELD_CHANGE',
           item_id: rowId,
