@@ -525,7 +525,7 @@ function sendChuchenTelegramBulkApi(itemIds) {
   return sendChuchenTelegramBulk(itemIds);
 }
 function updateChuchenStateApi(itemIds, state, dateStr) {
-  return updateChuchenState(itemIds, state, dateStr, 'web');
+  return updateChuchenState(itemIds, state, dateStr, 'web-telegram');
 }
 function updateBidStateApi(itemIds, state) {
   return updateBidState(itemIds, state);

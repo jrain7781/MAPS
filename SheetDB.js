@@ -293,13 +293,13 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
   sheet.getRange(realRowIndex, 14).setValue(note || '');
   // [추가] 15번째 열(O열)에 m_name2(명의 표시값) 저장
   sheet.getRange(realRowIndex, 15).setValue(mName2 || '');
-  // [추가] 17번째 열(Q열) chuchen_state - 값이 전달된 경우에만 업데이트
+  // [추가] 17번째 열(Q열) chuchen_state - '전달완료'는 updateChuchenState()가 전담, 웹 폼에서는 저장 안 함
   const newChuchenState = String(chuchenState || '').trim();
-  if (newChuchenState) {
+  if (newChuchenState && newChuchenState !== '전달완료') {
     sheet.getRange(realRowIndex, 17).setValue(newChuchenState);
   }
 
-  // [PHASE 1-3] 저장 후: 변경된 필드마다 이력 기록
+  // [PHASE 1-3] 저장 후: 변경된 필드마다 이력 기록 (chuchen_state 제외 - updateChuchenState 전담)
   const newValues = {
     stu_member:    String(stuMember || '').trim(),
     m_name_id:     String(mNameId || '').trim(),
@@ -307,9 +307,8 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
     bidprice:      String(bidPrice || '').trim(),
     member_id:     String(memberId || '').trim(),
     bid_state:     String(bidState || '').trim(),
-    chuchen_state: newChuchenState || oldValues.chuchen_state,
   };
-  const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state', 'chuchen_state'];
+  const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state'];
   trackFields.forEach(function (field) {
     if (oldValues[field] !== newValues[field]) {
       writeItemHistory_({
@@ -3200,8 +3199,8 @@ function updateChuchenState(itemIds, state, dateStr, triggerType) {
       if (state === '전달완료' && dateStr) {
         sheet.getRange(i + 2, 18).setValue(dateStr); // R열: chuchen_date
       }
-      // FIELD_CHANGE 로깅 (변경이 실제 발생한 경우만, 텔레그램 자동경로 제외)
-      if (oldState !== state && (triggerType || 'web-telegram') !== 'web-telegram') {
+      // FIELD_CHANGE 로깅 (변경이 실제 발생한 경우만)
+      if (oldState !== state) {
         writeItemHistory_({
           action: 'FIELD_CHANGE',
           item_id: rowId,
