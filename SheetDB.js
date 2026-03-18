@@ -195,13 +195,15 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
   sheet.appendRow([id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, regDate, regMember, bidState, imageId, note || '', '']);
 
   // [PHASE 1-4] 물건 생성 이력 기록 (본문)
+  const createBatchTs = String(new Date().getTime()); // ITEM_CREATE 전체를 하나의 그룹으로
   writeItemHistory_({
     action: 'ITEM_CREATE',
     item_id: id,
     member_id: String(memberId || ''),
     member_name: String(mName || ''),
     trigger_type: 'web',
-    note: court + ' ' + sakunNo
+    note: court + ' ' + sakunNo,
+    req_id: createBatchTs
   });
 
   // [수정] 물건 등록 시 입력된 초기값들도 히스토리에 남겨서 테이블에 표시되게 함
@@ -226,7 +228,8 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
         from_value: '',
         to_value: initialValues[field],
         trigger_type: 'web',
-        note: '최초 등록 값'
+        note: '최초 등록 값',
+        req_id: createBatchTs  // 같은 등록 이벤트 = 같은 그룹
       });
     }
   });
@@ -309,6 +312,7 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
     bid_state:     String(bidState || '').trim(),
   };
   const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state'];
+  const batchTs = String(new Date().getTime()); // 이 호출 내 모든 FIELD_CHANGE가 같은 그룹으로 묶임
   trackFields.forEach(function (field) {
     if (oldValues[field] !== newValues[field]) {
       writeItemHistory_({
@@ -320,7 +324,8 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
         from_value: oldValues[field],
         to_value: newValues[field],
         trigger_type: 'web',
-        note: field + ' 변경'
+        note: field + ' 변경',
+        req_id: batchTs  // 같은 updateData 호출 = 같은 req_id = 같은 그룹
       });
     }
   });
@@ -1155,8 +1160,9 @@ function linkTelegramByMemberToken(memberToken, chatId, telegramUsername) {
   sheet.getRange(rowNum, chatCol).setValue(c);
   if (userCol > 0) sheet.getRange(rowNum, userCol).setValue(String(telegramUsername || '').trim());
   if (enabledCol > 0) {
+    const autoApprove = getSetting_('TELEGRAM_CHATID_AUTO_APPROVE', 'false') === 'true';
     const cur = String(sheet.getRange(rowNum, enabledCol).getValue() || '').trim();
-    if (!cur) sheet.getRange(rowNum, enabledCol).setValue('Y');
+    if (autoApprove || !cur) sheet.getRange(rowNum, enabledCol).setValue('Y');
   }
   SpreadsheetApp.flush();
 
@@ -3334,7 +3340,7 @@ function writeItemHistory_(p) {
     const sheet = ensureTelegramRequestsSheet_();
     const now = new Date(); // Date 객체로 저장 → Sheets가 날짜 시리얼로 저장 후 getValues()에서 Date 객체 반환
     sheet.appendRow([
-      String(now.getTime()),          // A: req_id (타임스탬프 기반 고유 ID)
+      p.req_id || String(now.getTime()), // A: req_id (배치 공유 ID 또는 개별 타임스탬프)
       now,                            // B: requested_at
       p.action || '',                 // C: action
       p.status || 'DONE',             // D: status
@@ -4000,6 +4006,36 @@ function getNotifySettings() {
 function saveSettingPublic(key, value) {
   saveSetting_(key, value);
   return { success: true };
+}
+
+/**
+ * chat_id 수취 시 telegram_enabled 자동승인 설정 조회
+ */
+function getTelegramChatIdAutoApprove() {
+  return getSetting_('TELEGRAM_CHATID_AUTO_APPROVE', 'false') === 'true';
+}
+
+/**
+ * chat_id 수취 시 telegram_enabled 자동승인 설정 저장
+ */
+function setTelegramChatIdAutoApprove(isOn) {
+  saveSetting_('TELEGRAM_CHATID_AUTO_APPROVE', isOn ? 'true' : 'false');
+  return { success: true };
+}
+
+/**
+ * 환경설정 모든 설정 한 번에 반환 (초기 로딩 속도 개선용)
+ */
+function getAllPrefSettings() {
+  const notifyKeys = ['BID_NOTIFY_ENABLED', 'BID_NOTIFY_D3', 'BID_NOTIFY_D2', 'BID_NOTIFY_D1',
+    'BID_NOTIFY_HOUR', 'AUTO_EXPIRE_ENABLED', 'EXPIRY_NOTIFY_24H', 'EXPIRY_NOTIFY_1H', 'EXPIRY_NOTIFY_DONE'];
+  const result = { notify: {}, autoApprove: false, autoSync: false, chatIdAutoApprove: false };
+  notifyKeys.forEach(function (k) { result.notify[k] = getSetting_(k, 'true'); });
+  result.notify['BID_NOTIFY_HOUR'] = getSetting_('BID_NOTIFY_HOUR', '10');
+  try { result.autoApprove = getAutoApproveSetting(); } catch (e) { }
+  try { result.autoSync = getAutoSyncSetting(); } catch (e) { }
+  result.chatIdAutoApprove = getSetting_('TELEGRAM_CHATID_AUTO_APPROVE', 'false') === 'true';
+  return result;
 }
 
 /**

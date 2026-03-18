@@ -3609,7 +3609,11 @@
         var groups = [];
         var seen = {};
         rows.forEach(function (r) {
-            var key = r.requested_at.substring(0, 11) + '|' + r.action + '|' + r.trigger_type;
+            // ITEM_CREATE: 날짜 기반(같은 날 1줄 유지). 나머지: req_id 앞 10자리(초 단위)로 분리
+            var tsKey = (r.action === 'ITEM_CREATE')
+                ? r.requested_at.substring(0, 11)
+                : ((r.req_id && r.req_id.length >= 10) ? r.req_id.substring(0, 10) : r.requested_at.substring(0, 11));
+            var key = tsKey + '|' + r.action + '|' + r.trigger_type;
             if (!seen[key]) {
                 seen[key] = {
                     dt: r.requested_at, action: r.action,
@@ -3718,10 +3722,10 @@
             + '<col style="width:40px">'
             + '<col style="width:88px">'
             + '<col style="width:90px">'
+            + '<col style="width:41px">'
             + '<col style="width:34px">'
-            + '<col style="width:28px">'
             + '<col style="width:100px">'
-            + '<col style="width:28px">'
+            + '<col style="width:34px">'
             + '<col style="width:110px">'
             + '<col style="width:36px">'
             + '</colgroup>'
@@ -3741,10 +3745,14 @@
 
         var noteMap = { 'card': '추천물건전달', 'bid_price': '입찰가전달', 'status': '진행상태전달', 'check_request': '확인요청전달' };
         var FIELD_DISP_ = {
-            chuchen_state: { '전달완료': '전달' },
+            chuchen_state: { '전달완료': '전달', '신규': '' },
             bid_state:     { '전달완료': '전달', '확인완료': '확인', '신규': '' }
         };
         function applyFieldDisp_(col, v) {
+            if (col === 'bidprice' && v && v !== '') {
+                var num = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+                if (!isNaN(num) && num > 0) return num.toLocaleString('ko-KR');
+            }
             var dm = FIELD_DISP_[col];
             if (!dm) return v;
             return dm[v] !== undefined ? dm[v] : v;
@@ -3766,7 +3774,7 @@
 
             var triggerDisp = '';
             var trigLower = trig.toLowerCase();
-            if (trigLower === 'web') {
+            if (trigLower === 'web' || (g.action === 'FIELD_CHANGE' && trigLower === 'web-telegram')) {
                 triggerDisp = '<span class="text-red-500 font-bold">Web</span>';
             } else if (trigLower.indexOf('web') !== -1) {
                 triggerDisp = '<span class="text-red-500 font-bold">' + escapeHtml(trig) + '</span>';
@@ -7550,6 +7558,75 @@ MJ 이정우 팀장
         'BID_NOTIFY_HOUR', 'AUTO_EXPIRE_ENABLED',
         'EXPIRY_NOTIFY_24H', 'EXPIRY_NOTIFY_1H', 'EXPIRY_NOTIFY_DONE'];
 
+    // ─── 환경설정 통합 사전 로딩 캐시 ───────────────────────────────────────────
+    var _prefSettingsCache = null;
+
+    function loadAllPrefSettings_() {
+        if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+        google.script.run
+            .withSuccessHandler(function (data) {
+                if (!data) return;
+                _prefSettingsCache = data;
+                // 자동승인 토글 즉시 적용
+                if (data.autoApprove !== undefined) {
+                    var toggle = document.getElementById('auto-approve-toggle');
+                    if (toggle) { toggle.checked = !!data.autoApprove; updateAutoApproveUI_(!!data.autoApprove); }
+                    localStorage.setItem(AUTO_APPROVE_KEY, data.autoApprove ? 'true' : 'false');
+                }
+                // 알림설정 DOM에 미리 적용 (탭 열기 전에도 즉시 반영)
+                if (data.notify) applyNotifySettingsFromCache_(data.notify);
+            })
+            .withFailureHandler(function () { })
+            .getAllPrefSettings();
+    }
+
+    function applyNotifySettingsFromCache_(notifyData) {
+        if (!notifyData) return;
+        NOTIFY_KEYS.forEach(function (key) {
+            var el = document.getElementById('pref-' + key);
+            if (!el) return;
+            var val = notifyData[key] !== undefined ? String(notifyData[key]) : 'true';
+            if (el.type === 'checkbox') el.checked = (val === 'true');
+            else el.value = val;
+        });
+        updateBidNotifySubsState_();
+        var statusEl = document.getElementById('notifySettingsStatus');
+        if (statusEl) statusEl.textContent = '';
+    }
+
+    function applyChatIdAutoApproveUI_(isOn) {
+        var toggle = document.getElementById('chatid-auto-approve-toggle');
+        var track = document.getElementById('chatid-auto-approve-track');
+        var thumb = document.getElementById('chatid-auto-approve-thumb');
+        var label = document.getElementById('chatid-auto-approve-label');
+        var enabled = !!isOn;
+        if (toggle) toggle.checked = enabled;
+        if (track) track.style.backgroundColor = enabled ? '#6366f1' : '#d1d5db';
+        if (thumb) thumb.style.transform = enabled ? 'translateX(20px)' : 'translateX(0)';
+        if (label) {
+            label.textContent = enabled ? 'ON' : 'OFF';
+            label.className = 'ml-2 text-xs font-bold px-2 py-0.5 rounded-full ' +
+                (enabled ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-500');
+        }
+        // 캐시에 없으면 GAS에서 로드
+        if (isOn === null && typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run.withSuccessHandler(function (val) {
+                if (_prefSettingsCache) _prefSettingsCache.chatIdAutoApprove = val;
+                applyChatIdAutoApproveUI_(val);
+            }).getTelegramChatIdAutoApprove();
+        }
+    }
+
+    function onChatIdAutoApproveChange(el) {
+        var isOn = el.checked;
+        applyChatIdAutoApproveUI_(isOn);
+        if (_prefSettingsCache) _prefSettingsCache.chatIdAutoApprove = isOn;
+        google.script.run
+            .withSuccessHandler(function () { showStatus('자동승인 설정이 저장되었습니다.', 'success'); })
+            .withFailureHandler(function (e) { showStatus('저장 실패: ' + e, 'error'); el.checked = !isOn; applyChatIdAutoApproveUI_(!isOn); })
+            .setTelegramChatIdAutoApprove(isOn);
+    }
+
     // --- 환경설정: 매일 자동 이미지 동기화 토글 ---
     function loadAutoSyncSetting() {
         google.script.run
@@ -7668,14 +7745,23 @@ MJ 이정우 팀장
         if (tab === 'telegram') {
             switchPrefSubTab('msgEditor');
         }
-        // 이미지 탭 진입 시 자동 동기화 설정 로드
+        // 이미지 탭 진입 시 캐시 즉시 적용, 없으면 GAS 호출
         if (tab === 'image') {
-            try { loadAutoSyncSetting(); } catch (e) { }
+            if (_prefSettingsCache && _prefSettingsCache.autoSync !== undefined) {
+                const toggle = document.getElementById('auto-sync-toggle');
+                const label = document.getElementById('auto-sync-label');
+                const track = document.getElementById('auto-sync-track');
+                const thumb = document.getElementById('auto-sync-thumb');
+                if (toggle) toggle.checked = _prefSettingsCache.autoSync;
+                updateAutoSyncToggleUI(_prefSettingsCache.autoSync, label, track, thumb);
+            } else {
+                try { loadAutoSyncSetting(); } catch (e) { }
+            }
         }
     }
 
     function switchPrefSubTab(sub) {
-        ['msgEditor', 'notify', 'webhook', 'dispName'].forEach(function (s) {
+        ['msgEditor', 'notify', 'webhook', 'chatId'].forEach(function (s) {
             var btn = document.getElementById('pref-sub-btn-' + s);
             var panel = document.getElementById('pref-sub-panel-' + s);
             if (!btn || !panel) return;
@@ -7688,13 +7774,17 @@ MJ 이정우 팀장
         if (sub === 'msgEditor') {
             if (_msgTemplates.length === 0) loadMsgTemplates_();
         }
-        // 알림설정 탭 진입 시 설정 로드
+        // 알림설정 탭: 캐시 즉시 적용, 없으면 GAS 호출
         if (sub === 'notify') {
-            try { loadNotifySettings(); } catch (e) { }
+            if (_prefSettingsCache && _prefSettingsCache.notify) {
+                applyNotifySettingsFromCache_(_prefSettingsCache.notify);
+            } else {
+                try { loadNotifySettings(); } catch (e) { }
+            }
         }
-        // 표시명 탭 진입 시 설정 로드
-        if (sub === 'dispName') {
-            if (!_dispNameLoaded) loadDispNameMap_();
+        // chat_id 연동 탭: 캐시 즉시 적용
+        if (sub === 'chatId') {
+            applyChatIdAutoApproveUI_(_prefSettingsCache ? _prefSettingsCache.chatIdAutoApprove : null);
         }
     }
 
@@ -11302,19 +11392,21 @@ ${token}
             });
     }
 
-    function openBidRequestModal(cbs) {
+    function openBidRequestModal(selectedCbs) {
         const modal = document.getElementById('bulkMessageModal');
         const textarea = document.getElementById('bulk-message-textarea');
+        const titleEl = document.getElementById('bulk-message-title');
         if (!modal || !textarea) return;
 
-        if (!cbs || cbs.length === 0) {
+        if (titleEl) titleEl.textContent = '입찰가 확인 및 요청';
+
+        const ids = idsFromCbs(selectedCbs);
+        if (ids.length === 0) {
             showStatus('항목을 먼저 체크해 주세요.', 'warning');
             return;
         }
 
-        const selectedIds = Array.from(cbs).map(cb => String(cb.getAttribute('data-id')));
-        const targetItems = allBiddingData.filter(item => selectedIds.indexOf(String(item.id)) !== -1);
-
+        const targetItems = allBiddingData.filter(item => ids.includes(String(item.id)));
         if (targetItems.length === 0) {
             showStatus('조건에 맞는 물건이 없습니다.', 'info');
             return;
@@ -11323,17 +11415,15 @@ ${token}
         // 날짜순 정렬
         targetItems.sort((a, b) => String(a['in-date']).localeCompare(String(b['in-date'])));
 
-        // 3. 메시지 생성
+        // 메시지 생성
         let message = "대표님 입찰가 전달 부탁드립니다.\n\n";
         let lastDate = "";
 
-        targetItems.forEach((item, index) => {
+        targetItems.forEach((item) => {
             const dt = String(item['in-date'] || '');
-            // 일별로 한 칸씩 띄우기 (날짜가 바뀌면 빈 줄 추가)
             if (lastDate && lastDate !== dt) {
                 message += "\n";
             }
-            
             const sakunNo = String(item.sakun_no || '').trim();
             const court = String(item.court || '').trim();
             const status = String(item.stu_member || '').trim();
@@ -11353,7 +11443,10 @@ ${token}
     function openBulkMessageModal(selectedCbs) {
         const modal = document.getElementById('bulkMessageModal');
         const textarea = document.getElementById('bulk-message-textarea');
+        const titleEl = document.getElementById('bulk-message-title');
         if (!modal || !textarea) return;
+
+        if (titleEl) titleEl.textContent = '다중 추천 메시지 생성';
 
         const ids = idsFromCbs(selectedCbs);
         const selectedItems = allBiddingData.filter(item => ids.includes(String(item.id)));
@@ -11418,6 +11511,11 @@ MJ 이정우 팀장
     function closeBulkMessageModal() {
         const modal = document.getElementById('bulkMessageModal');
         if (modal) modal.classList.add('content-hidden');
+        // 모달 닫을 때 체크박스 전체 해제
+        const tbody = document.getElementById('dataTableBody');
+        if (tbody) {
+            tbody.querySelectorAll('input.item-row-cb:checked').forEach(cb => { cb.checked = false; });
+        }
     }
 
     function copyBulkMessageText() {
@@ -12439,7 +12537,17 @@ MJ 이정우 팀장
         }
     }
 
-    document.addEventListener('DOMContentLoaded', function () { initAutoApproveToggle_(); });
+    document.addEventListener('DOMContentLoaded', function () {
+        // localStorage로 자동승인 토글 즉시 표시 (GAS 응답 전 깜빡임 방지)
+        var toggle = document.getElementById('auto-approve-toggle');
+        if (toggle) {
+            var saved = (localStorage.getItem(AUTO_APPROVE_KEY) === 'true');
+            toggle.checked = saved;
+            updateAutoApproveUI_(saved);
+        }
+        // 모든 설정 한 번에 사전 로딩
+        loadAllPrefSettings_();
+    });
 
     // =====================================================================
     // 팝업 공통 유틸

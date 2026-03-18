@@ -11,6 +11,6 @@ Set-Location $Root
 # $env:HOME = $Root
 clasp push
 if ($LASTEXITCODE -eq 0) {
-    clasp deploy -i "AKfycbya2qB-fW1uihP-LVZSDo4DB2AsWrDJRwpT0L3UyTBI_hNcvmp8aUet3SX71hZOh7u5eQ"
+    clasp deploy -i "AKfycby1SnLYJmPQ9PU0JlEZC5rG3e9y9s6wMVrsPeG_gqgDBnK9FMkyVPb3v5V0DFI14ETZiA"
 }
 exit $LASTEXITCODE
