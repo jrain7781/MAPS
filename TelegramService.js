@@ -453,8 +453,26 @@ function handleTelegramWebhook_(update) {
           try {
             var newStu = isBid ? '입찰' : '미정';
             if (typeof updateItemStuMemberById_ === 'function') {
+              var oldStu = (typeof getItemLiteById_ === 'function') ? (getItemLiteById_(itemId).stu_member || '') : '';
               updateItemStuMemberById_(itemId, newStu);
               _whLog('DB 업데이트 완료: ' + newStu);
+
+              // [추가] 상태 변경 FIELD_CHANGE 로그 기록 (역산 렌더링용)
+              if (oldStu !== newStu && typeof writeItemHistory_ === 'function') {
+                var mObjForLog = (typeof getMemberByTelegramChatId === 'function') ? getMemberByTelegramChatId(chatId) : null;
+                writeItemHistory_({
+                  action: 'FIELD_CHANGE',
+                  item_id: String(itemId),
+                  member_id: memberId,
+                  member_name: mObjForLog ? (mObjForLog.member_name || mObjForLog.name || '') : (username || ''),
+                  field_name: 'stu_member',
+                  from_value: oldStu,
+                  to_value: newStu,
+                  trigger_type: 'system',
+                  note: (isBid ? '입찰요청' : '입찰취소') + ' 자동승인',
+                  req_id: reqId // 텔레그램 요청 로그와 동일한 req_id로 묶음
+                });
+              }
             }
           } catch (dbErr) { _whLog('DB 업데이트 실패: ' + dbErr.message); }
         }
@@ -910,32 +928,36 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
   }
   telegramSendMessage(chatId, msg.text, msg.replyMarkup);
 
-  // 전송 성공 시 bid_price인 경우 상태를 전달완료로 변경
-  if (styleKey === 'bid_price') {
-    try {
-      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-      var itemsSheet = ss.getSheetByName(DB_SHEET_NAME);
-      if (itemsSheet) {
-        var itemsLastRow = itemsSheet.getLastRow();
-        if (itemsLastRow >= 2) {
-          var itemsIdList = itemsSheet.getRange(2, 1, itemsLastRow - 1, 1).getValues().map(v => String(v[0]).trim());
-          var idx = itemsIdList.indexOf(String(itemId).trim());
-          if (idx !== -1) {
-            // L열(12번째 열)이 bid_state
-            itemsSheet.getRange(idx + 2, 12).setValue('전달완료');
-            SpreadsheetApp.flush();
+  // 전송 성공 시 상태 업데이트
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var itemsSheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (itemsSheet) {
+      var itemsLastRow = itemsSheet.getLastRow();
+      if (itemsLastRow >= 2) {
+        var itemsIdList = itemsSheet.getRange(2, 1, itemsLastRow - 1, 1).getValues().map(v => String(v[0]).trim());
+        var idx = itemsIdList.indexOf(String(itemId).trim());
+        if (idx !== -1) {
+          const rowNum = idx + 2;
+          if (styleKey === 'bid_price') {
+            itemsSheet.getRange(rowNum, 12).setValue('전달완료'); // L열: bid_state
+          } else if (styleKey === 'card') {
+            itemsSheet.getRange(rowNum, 17).setValue('전달완료'); // Q열: chuchen_state
+            itemsSheet.getRange(rowNum, 18).setValue(new Date().toISOString()); // R열: chuchen_date
           }
+          SpreadsheetApp.flush();
         }
       }
-    } catch (e) {
-      Logger.log('단건 전송 후 bid_state 업데이트 실패: ' + e.message);
     }
+  } catch (e) {
+    Logger.log('전송 후 상태 업데이트 실패: ' + e.message);
   }
 
   // [PHASE 1-5] 텔레그램 전송 이력 기록
   try {
     if (typeof writeItemHistory_ === 'function') {
-      writeItemHistory_({
+      // 만약 chuchen_state가 변했다면 히스토리에 필드 변경 내용까지 한 줄에 포함
+      const histData = {
         action           : 'TELEGRAM_SENT',
         item_id          : String(itemId),
         member_id        : targetMemberId,
@@ -944,7 +966,19 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
         telegram_username: String(memberRow.telegram_username || ''),
         trigger_type     : 'web-telegram',
         note             : styleKey
-      });
+      };
+
+      if (styleKey === 'card' && String(item.chuchen_state || '').trim() !== '전달완료') {
+        histData.field_name = 'chuchen_state';
+        histData.from_value = String(item.chuchen_state || '').trim();
+        histData.to_value = '전달완료';
+      } else if (styleKey === 'bid_price' && String(item.bid_state || '').trim() !== '전달완료') {
+        histData.field_name = 'bid_state';
+        histData.from_value = String(item.bid_state || '').trim();
+        histData.to_value = '전달완료';
+      }
+
+      writeItemHistory_(histData);
     }
   } catch (e) {
     Logger.log('[PHASE1-5] TELEGRAM_SENT 기록 오류: ' + e.toString());
@@ -982,7 +1016,7 @@ function sendChuchenTelegramBulk(itemIds) {
 
   // 성공/실패 무관하게 chuchen_state = '전달완료', chuchen_date = now 업데이트
   var updateResult = (typeof updateChuchenState === 'function')
-    ? updateChuchenState(itemIds, '전달완료', now)
+    ? updateChuchenState(itemIds, '전달완료', now, 'skip_logging') // 개별 발송에서 로그 남겼으므로 여기선 스킵
     : { success: false, updated: 0 };
 
   return {

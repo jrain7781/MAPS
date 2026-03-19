@@ -266,6 +266,9 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
 
   const realRowIndex = rowIndex + 2;
 
+  // [PHASE 1-3] 저장 전: 기존 값 읽어오기 전 시트 강제 반영 (경합 방지)
+  SpreadsheetApp.flush();
+
   // [PHASE 1-3] 저장 전: 기존 값 읽기 (변경 감지용) - 17열(chuchen_state)까지 읽기
   const oldRow = sheet.getRange(realRowIndex, 1, 1, 17).getValues()[0];
   const oldValues = {
@@ -296,13 +299,32 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
   sheet.getRange(realRowIndex, 14).setValue(note || '');
   // [추가] 15번째 열(O열)에 m_name2(명의 표시값) 저장
   sheet.getRange(realRowIndex, 15).setValue(mName2 || '');
-  // [추가] 17번째 열(Q열) chuchen_state - '전달완료'는 updateChuchenState()가 전담, 웹 폼에서는 저장 안 함
+  // [추가] 17번째 열(Q열) chuchen_state + 18번째 열(R열) chuchen_date
   const newChuchenState = String(chuchenState || '').trim();
-  if (newChuchenState && newChuchenState !== '전달완료') {
+  const newStuMemberVal = String(stuMember || '').trim();
+
+  // 초기화 조건: 추천 진입/이탈 + 입찰→미정/상품
+  const shouldResetChuchen =
+    (oldValues.stu_member === '추천' && newStuMemberVal !== '추천') ||
+    (oldValues.stu_member !== '추천' && newStuMemberVal === '추천') ||
+    (oldValues.stu_member === '입찰' && (newStuMemberVal === '미정' || newStuMemberVal === '상품'));
+
+  const actualSavedChuchenState = shouldResetChuchen ? '' : newChuchenState;
+
+  if (shouldResetChuchen) {
+    sheet.getRange(realRowIndex, 17).setValue(''); // Q열: chuchen_state 초기화
+    sheet.getRange(realRowIndex, 18).setValue(''); // R열: chuchen_date 초기화 (로딩바 제거)
+  } else if (newChuchenState) {
     sheet.getRange(realRowIndex, 17).setValue(newChuchenState);
+    if (newChuchenState === '신규') {
+      sheet.getRange(realRowIndex, 18).setValue(''); // 신규로 변경 시 chuchen_date 초기화
+    } else if (newChuchenState === '전달완료' && oldValues.chuchen_state !== '전달완료') {
+      // 신규/null → 전달완료 변경 시에만 기산점 갱신 (이미 전달완료면 타이머 유지)
+      sheet.getRange(realRowIndex, 18).setValue(new Date().toISOString()); // R열: chuchen_date
+    }
   }
 
-  // [PHASE 1-3] 저장 후: 변경된 필드마다 이력 기록 (chuchen_state 제외 - updateChuchenState 전담)
+  // [PHASE 1-3] 저장 후: 변경된 필드마다 이력 기록
   const newValues = {
     stu_member:    String(stuMember || '').trim(),
     m_name_id:     String(mNameId || '').trim(),
@@ -310,11 +332,34 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
     bidprice:      String(bidPrice || '').trim(),
     member_id:     String(memberId || '').trim(),
     bid_state:     String(bidState || '').trim(),
+    chuchen_state: actualSavedChuchenState,
   };
-  const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state'];
+  const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state', 'chuchen_state'];
   const batchTs = String(new Date().getTime()); // 이 호출 내 모든 FIELD_CHANGE가 같은 그룹으로 묶임
   trackFields.forEach(function (field) {
-    if (oldValues[field] !== newValues[field]) {
+    let ov = oldValues[field];
+    let nv = newValues[field];
+    
+    // [보정] bidprice는 콤마 제거 후 숫자만 비교 (문자열 콤마 유무에 따른 중복 로그 방지)
+    if (field === 'bidprice') {
+      ov = String(ov || '').replace(/[^0-9]/g, '');
+      nv = String(nv || '').replace(/[^0-9]/g, '');
+      // [보정] 빈값("")과 "0"은 실질적으로 동일한 '가격 없음'으로 간주하여 중복 로그 방지
+      if ((ov === '' || ov === '0') && (nv === '' || nv === '0')) {
+        ov = nv; 
+      }
+    }
+
+    // [보정] stu_member 공백 제거 비교 (데이터 정합성 보조)
+    if (field === 'stu_member') {
+      ov = String(ov || '').trim();
+      nv = String(nv || '').trim();
+    }
+
+    // [보정] chuchen_state: 웹에서 수동으로 '전달완료'로 바꿀 때는 로그를 기록하지만, 
+    // 나중에 텔레그램 발송 함수가 실행되면서 'TELEGRAM_SENT' 로그에 통합되는 경우는 여기서 스킵함.
+    // (보통 웹 모달에서 수동으로 보류/신규 등으로 바꿀 때 히스토리 남아야 함)
+    if (ov !== nv) {
       writeItemHistory_({
         action: 'FIELD_CHANGE',
         item_id: String(id),
@@ -447,7 +492,7 @@ function updateBidPriceConfirmed(memberToken, itemId) {
         item_id: String(itemId),
         member_id: member.member_id,
         member_name: member.member_name,
-        trigger_type: 'member-telegram',
+        trigger_type: 'system',
         field_name: 'bid_state',
         from_value: oldState,
         to_value: '확인완료',
@@ -1638,15 +1683,26 @@ function approveTelegramRequests(reqIds, approvedBy) {
     if (action === 'REQUEST_BID') {
       try {
         // items 시트에서 직접 상태 변경 (updateItemStuMemberById_ 호출 안 함 = openById 절약)
-        if (itemsSheet && itemId) {
-          var finder = itemsSheet.getRange(2, 1, itemsSheet.getLastRow() - 1, 1)
-            .createTextFinder(itemId).matchEntireCell(true);
-          var match = finder.findNext();
           if (match) {
+            const oldStu = String(itemsSheet.getRange(match.getRow(), 5).getValue() || '').trim();
             itemsSheet.getRange(match.getRow(), 5).setValue('입찰');
             updatedItems++;
+            
+            // [추가] 상태 변경 FIELD_CHANGE 로그 기록 (역산 렌더링용)
+            if (oldStu !== '입찰') {
+              writeItemHistory_({
+                action: 'FIELD_CHANGE',
+                item_id: itemId,
+                member_id: memberId_req,
+                member_name: memberName_req,
+                field_name: 'stu_member',
+                from_value: oldStu,
+                to_value: '입찰',
+                trigger_type: 'system',
+                req_id: reqId // 승인 기록과 동일한 req_id로 묶음
+              });
+            }
           }
-        }
         if (chatId && typeof telegramSendMessage === 'function') {
           try {
             telegramSendMessage(chatId, prefix + '입찰확정 되었습니다.', null, originMessageId ? { replyToMessageId: originMessageId } : null);
@@ -1659,12 +1715,25 @@ function approveTelegramRequests(reqIds, approvedBy) {
     if (action === 'REQUEST_CANCEL_BID' || action === 'REQUEST_CANCEL') {
       try {
         if (itemsSheet && itemId) {
-          var finder2 = itemsSheet.getRange(2, 1, itemsSheet.getLastRow() - 1, 1)
-            .createTextFinder(itemId).matchEntireCell(true);
-          var match2 = finder2.findNext();
           if (match2) {
+            const oldStu2 = String(itemsSheet.getRange(match2.getRow(), 5).getValue() || '').trim();
             itemsSheet.getRange(match2.getRow(), 5).setValue('미정');
             updatedItems++;
+            
+            // [추가] 상태 변경 FIELD_CHANGE 로그 기록
+            if (oldStu2 !== '미정') {
+              writeItemHistory_({
+                action: 'FIELD_CHANGE',
+                item_id: itemId,
+                member_id: memberId_req,
+                member_name: memberName_req,
+                field_name: 'stu_member',
+                from_value: oldStu2,
+                to_value: '미정',
+                trigger_type: 'system',
+                req_id: reqId
+              });
+            }
           }
         }
         if (chatId && typeof telegramSendMessage === 'function') {
@@ -3207,17 +3276,20 @@ function updateChuchenState(itemIds, state, dateStr, triggerType) {
       }
       // FIELD_CHANGE 로깅 (변경이 실제 발생한 경우만)
       if (oldState !== state) {
-        writeItemHistory_({
-          action: 'FIELD_CHANGE',
-          item_id: rowId,
-          member_id: String(row[8] || '').trim(),   // I열: member_id
-          member_name: String(row[6] || '').trim(),  // G열: m_name
-          field_name: 'chuchen_state',
-          from_value: oldState,
-          to_value: state,
-          trigger_type: triggerType || 'web-telegram',
-          note: 'chuchen_state 변경'
-        });
+        // [중요] 텔레그램 발송에 의한 자동 업데이트인 경우 별도 로그 안 남김 (발송 로그에 포함됨)
+        if (triggerType !== 'skip_logging') {
+          writeItemHistory_({
+            action: 'FIELD_CHANGE',
+            item_id: rowId,
+            member_id: String(row[8] || '').trim(),   // I열: member_id
+            member_name: String(row[6] || '').trim(),  // G열: m_name
+            field_name: 'chuchen_state',
+            from_value: oldState,
+            to_value: state,
+            trigger_type: triggerType || 'web-telegram',
+            note: 'chuchen_state 변경'
+          });
+        }
       }
       updated++;
     });

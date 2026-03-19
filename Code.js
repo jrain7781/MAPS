@@ -375,9 +375,25 @@ function processMemberDashboardAction(memberToken, itemId, action) {
     // 자동승인 모드: 즉시 DB 업데이트 + 승인완료로 로그 기록
     const newStatus = (act === 'bid') ? '입찰' : '미정';
     try {
+      const oldStuAuto = (typeof checkItemStatus_ === 'function') ? checkItemStatus_(item) : '';
       updateItemStuMemberById_(item, newStatus);
       // 로그 기록 (APPROVED 상태)
       createTelegramRequestByToken_(reqAction, item, member.member_id, 'dashboard (auto-approved)', 'APPROVED');
+
+      // [추가] 상태 변경 FIELD_CHANGE 로그 기록
+      if (oldStuAuto !== newStatus) {
+        writeItemHistory_({
+          action: 'FIELD_CHANGE',
+          item_id: item,
+          member_id: member.member_id,
+          member_name: member.member_name || '',
+          field_name: 'stu_member',
+          from_value: oldStuAuto,
+          to_value: newStatus,
+          trigger_type: 'web',
+          note: 'dashboard auto-approved'
+        });
+      }
 
       // 텔레그램 알림 (있을 경우)
       if (chatId) {
@@ -492,7 +508,23 @@ function processMemberDashboardActionDirect(memberToken, itemId, action) {
   // 3) DB 직접 업데이트
   var newStatus = (act === 'bid') ? '입찰' : '미정';
   try {
+    const oldStuDirect = (typeof checkItemStatus_ === 'function') ? checkItemStatus_(item) : '';
     updateItemStuMemberById_(item, newStatus);
+    
+    // [추가] 상태 변경 FIELD_CHANGE 로그 기록
+    if (oldStuDirect !== newStatus) {
+      writeItemHistory_({
+        action: 'FIELD_CHANGE',
+        item_id: item,
+        member_id: member.member_id,
+        member_name: member.member_name || '',
+        field_name: 'stu_member',
+        from_value: oldStuDirect,
+        to_value: newStatus,
+        trigger_type: 'web',
+        note: 'dashboard direct sync'
+      });
+    }
   } catch (e) {
     return { success: false, message: 'DB 업데이트 실패: ' + (e.message || '') };
   }

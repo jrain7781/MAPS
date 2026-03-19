@@ -3082,9 +3082,6 @@
         if (deleteTopButton) deleteTopButton.classList.add('content-hidden');
         if (goBackToCreateButton) goBackToCreateButton.classList.add('content-hidden');
 
-        const telegramTopButton = document.getElementById('telegramTopButton');
-        if (telegramTopButton) telegramTopButton.classList.add('content-hidden');
-
         // [추가] 등록 모드에서 텔레그램 유형 선택 숨김
         const detailTelegramStyleSelect = document.getElementById('detail-telegram-style-select');
         if (detailTelegramStyleSelect) detailTelegramStyleSelect.classList.add('hidden'); // 또는 content-hidden
@@ -3166,7 +3163,6 @@
         const formBidState = document.getElementById('form-bid-state');
         const elRegMember = document.getElementById('form-reg-member');
         const itemMemberTokenEl = document.getElementById('item-detail-member-token');
-        const telegramTopButton = document.getElementById('telegramTopButton');
 
         if (mode === 'create') {
             if (formTitle) formTitle.textContent = '새 입찰 정보 등록';
@@ -3211,7 +3207,6 @@
             if (createTopButton) createTopButton.style.display = 'block';
             if (editTopButton) editTopButton.classList.add('content-hidden');
             if (deleteTopButton) deleteTopButton.classList.add('content-hidden');
-            if (telegramTopButton) telegramTopButton.classList.add('content-hidden');
             currentDetailItem = null;
             currentItemDetailTab = 'detail';
             if (typeof switchItemDetailTab === 'function') switchItemDetailTab('detail');
@@ -3228,7 +3223,6 @@
             if (createTopButton) createTopButton.style.display = 'none';
             if (editTopButton) editTopButton.classList.remove('content-hidden');
             if (deleteTopButton) deleteTopButton.classList.remove('content-hidden');
-            if (telegramTopButton) telegramTopButton.classList.remove('content-hidden');
 
             const safeId = String(data.id || '');
             const shortId = safeId.length > 8 ? safeId.substring(0, 8) + '...' : safeId;
@@ -3353,7 +3347,7 @@
                 const isChuchen = (data.stu_member === '추천');
                 chuchenStateButtonsEl.style.display = isChuchen ? '' : 'none';
             }
-            setChuchenState(data.chuchen_state || '신규', false);
+            setChuchenState(data.chuchen_state || '신규'); // hidden input도 항목 로드 시 갱신
 
             currentDetailItem = data;
             // 물건 선택 시 항상 상세 탭으로 시작
@@ -3704,10 +3698,11 @@
             }
 
             // 일반 FIELD_CHANGE
-            var fv = change.from !== '' ? change.from : '(없음)';
-            var tv = change.to !== '' ? change.to : '(없음)';
+            var fv = (change.from !== undefined && change.from !== '') ? change.from : '-';
+            var tv = (change.to !== undefined && change.to !== '') ? change.to : '-';
             if (fv === tv) {
-                return '<td class="px-1 py-1 text-center text-gray-800 text-[11px] border-r border-gray-100 overflow-hidden">' + escapeHtml(tv) + '</td>';
+                var colorClass = fv !== '-' ? 'text-gray-800' : 'text-gray-300';
+                return '<td class="px-1 py-1 text-center ' + colorClass + ' text-[11px] border-r border-gray-100 overflow-hidden">' + escapeHtml(tv) + '</td>';
             }
             return '<td class="px-1 py-1 text-center text-[11px] border-r border-gray-100 overflow-hidden">'
                 + '<div class="text-red-600 font-bold">' + escapeHtml(tv) + '</div>'
@@ -4967,24 +4962,29 @@ MJ 이정우 팀장
         showStatus('텔레그램 전송 중...', 'warning');
         google.script.run
             .withSuccessHandler(result => {
+                const nowIso = new Date().toISOString();
                 if (result && result.success) {
                     showStatus(result.message || '텔레그램 전송 완료', 'success');
-                    // 추천물건 안내(card) 전송 성공 시 chuchen_state='전달완료' 업데이트
-                    if (styleKey === 'card' && typeof google !== 'undefined' && google.script && google.script.run) {
-                        const now = new Date().toISOString();
-                        google.script.run
-                            .withSuccessHandler(() => {
-                                setModalChuchenState('전달완료');
-                                if (currentModalItemData) {
-                                    currentModalItemData.chuchen_state = '전달완료';
-                                    currentModalItemData.chuchen_date = now;
-                                }
-                            })
-                            .withFailureHandler(() => { })
-                            .updateChuchenStateApi([itemId], '전달완료', now);
-                    }
                 } else {
-                    showStatus((result && result.message) ? result.message : '텔레그램 전송 실패', 'error');
+                    const failMsg = (result && result.message) ? result.message : '텔레그램 전송 실패';
+                    if (styleKey === 'card') {
+                        showStatus(failMsg + ' 추천상태 전달완료로 업데이트 됩니다.', 'warning');
+                        // 전송 실패 시 백엔드 chuchen_state/chuchen_date 직접 업데이트
+                        google.script.run
+                            .withSuccessHandler(() => {})
+                            .withFailureHandler(() => {})
+                            .updateChuchenState([itemId], '전달완료', nowIso);
+                    } else {
+                        showStatus(failMsg, 'error');
+                    }
+                }
+                // card 전송 시 성공/실패 무관하게 UI chuchen_state 전달완료 처리
+                if (styleKey === 'card') {
+                    setModalChuchenState('전달완료');
+                    if (currentModalItemData) {
+                        currentModalItemData.chuchen_state = '전달완료';
+                        currentModalItemData.chuchen_date = nowIso;
+                    }
                 }
             })
             .withFailureHandler(error => {
@@ -5079,10 +5079,14 @@ MJ 이정우 팀장
             return;
         }
 
+        const modalSaveBtn = document.querySelector('#modal-detail button[onclick="handleModalUpdate()"]');
+        if (modalSaveBtn) modalSaveBtn.disabled = true;
+
         showStatus('수정 내용을 저장 중...', 'warning');
 
         google.script.run
             .withSuccessHandler(result => {
+                if (modalSaveBtn) modalSaveBtn.disabled = false;
                 if (result.success) {
                     showStatus(result.message, 'success');
                     dataCache = { data: null, timestamp: 0 };
@@ -5111,6 +5115,7 @@ MJ 이정우 팀장
                 }
             })
             .withFailureHandler(error => {
+                if (modalSaveBtn) modalSaveBtn.disabled = false;
                 showStatus(`수정 오류: ${error.message}`, 'error');
             })
             .updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState);
@@ -5221,8 +5226,12 @@ MJ 이정우 팀장
             bidState = '신규';
         }
 
+        const mainSaveBtn = document.querySelector('#data-form button[onclick="handleFormSubmit()"]');
+        if (mainSaveBtn) mainSaveBtn.disabled = true;
+
         toggleLoading(true);
         const successHandler = (result) => {
+            if (mainSaveBtn) mainSaveBtn.disabled = false;
             if (result.success) {
                 showStatus(result.message, 'success');
                 dataCache = { data: null, timestamp: 0 };
@@ -5244,6 +5253,7 @@ MJ 이정우 팀장
             }
         };
         const errorHandler = (error) => {
+            if (mainSaveBtn) mainSaveBtn.disabled = false;
             toggleLoading(false);
             showStatus(`작업 처리 중 오류: ${error.message}`, 'error');
         };
@@ -6243,44 +6253,47 @@ MJ 이정우 팀장
             let ok = 0;
             let fail = 0;
             let idx = 0;
+            const failedIds = []; // 전송 실패 물건 ID (card 전용)
 
             const next = () => {
                 const done = ok + fail;
                 showStatus(`전송 중... (${done}/${ids.length})`, 'warning');
                 if (idx >= ids.length) {
                     const statusMsg = `전송 완료: 성공 ${ok}건 / 실패 ${fail}건`;
-                    // 추천물건 안내(card) 전송 완료 시 chuchen_state='전달완료' 업데이트
-                    if (styleKey === 'card' && typeof google !== 'undefined' && google.script && google.script.run) {
+                    if (styleKey === 'card' && failedIds.length > 0) {
+                        // 전송 실패 건도 chuchen_state 전달완료 업데이트
+                        const nowIso = new Date().toISOString();
+                        showStatus(statusMsg + ' (실패 건 추천상태 전달완료로 업데이트 됩니다.)', 'warning');
                         google.script.run
-                            .withSuccessHandler(upRes => {
-                                showStatus(statusMsg + ` (추천상태 업데이트: ${upRes ? upRes.updated : 0}건)`,
-                                    fail > 0 ? 'warning' : 'success');
-                                if (typeof loadData === 'function') loadData();
-                            })
-                            .withFailureHandler(() => {
-                                showStatus(statusMsg, fail > 0 ? 'warning' : 'success');
-                            })
-                            .updateChuchenStateApi(ids, '전달완료', new Date().toISOString());
+                            .withSuccessHandler(() => { if (typeof loadData === 'function') loadData(); })
+                            .withFailureHandler(() => { if (typeof loadData === 'function') loadData(); })
+                            .updateChuchenState(failedIds, '전달완료', nowIso);
                     } else {
-                        showStatus(statusMsg, (fail > 0 ? 'warning' : 'success'));
+                        showStatus(statusMsg, fail > 0 ? 'warning' : 'success');
+                        if (typeof loadData === 'function') loadData();
                     }
                     return;
                 }
-                const id = ids[idx++];
-                const item = getBidItemById(id);
+                const currentId = ids[idx++];
+                const item = getBidItemById(currentId);
                 if (!item || !item.member_id) {
                     fail++;
+                    if (styleKey === 'card') failedIds.push(currentId);
                     next();
                     return;
                 }
                 google.script.run
                     .withSuccessHandler(res => {
                         if (res && res.success) ok++;
-                        else fail++;
+                        else {
+                            fail++;
+                            if (styleKey === 'card') failedIds.push(currentId);
+                        }
                         next();
                     })
                     .withFailureHandler(_err => {
                         fail++;
+                        if (styleKey === 'card') failedIds.push(currentId);
                         next();
                     })
                     .sendItemToMemberTelegramWithStyle(item.member_id, item.id, styleKey);
