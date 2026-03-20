@@ -356,11 +356,16 @@ function getItemImages(itemId) {
   var imgSheet = ss.getSheetByName(ITEM_IMAGES_SHEET_NAME);
   var itemsSheet = ss.getSheetByName(IMAGE_DB_SHEET_NAME);
   var list = [];
+
   if (imgSheet) {
     var lastRow = imgSheet.getLastRow();
     if (lastRow >= 2) {
-      var data = imgSheet.getRange(2, 1, lastRow, 5).getValues();
-      for (var i = 0; i < data.length; i++) {
+      // [OPTIMIZE] 전체를 다 읽지 않고, 데이터 범위만 가져와서 역순으로 검색
+      // 데이터가 너무 많으면 getRange를 조절할 수 있으나, 일단 5컬럼만 가져옴
+      var data = imgSheet.getRange(2, 1, lastRow - 1, 5).getValues();
+      
+      // 최신순 검색 (뒤에서부터)
+      for (var i = data.length - 1; i >= 0; i--) {
         if (String(data[i][0]).trim() === String(itemId).trim()) {
           list.push({
             image_id: String(data[i][1] || '').trim(),
@@ -368,28 +373,32 @@ function getItemImages(itemId) {
             created_at: String(data[i][3] || '').trim(),
             file_name: String(data[i][4] || '').trim()
           });
+          // 최신 것 하나만 찾으면 바로 중단
+          break;
         }
       }
     }
   }
+
+  // imgSheet에서 못 찾았고 itemsSheet가 있으면 하위 호환용으로 검색
   if (list.length === 0 && itemsSheet) {
-    var idCol = itemsSheet.getRange(2, 1, Math.max(2, itemsSheet.getLastRow() - 1), 1).getValues();
-    for (var r = 0; r < idCol.length; r++) {
-      if (String(idCol[r][0]).trim() === String(itemId).trim()) {
-        var rowIndex = r + 2;
-        var imageId = itemsSheet.getRange(rowIndex, 13).getValue();
-        if (imageId && String(imageId).trim()) {
-          list.push({ image_id: String(imageId).trim(), uploader: 'system', created_at: '', file_name: '' });
+    var lastR = itemsSheet.getLastRow();
+    if (lastR >= 2) {
+      var idCol = itemsSheet.getRange(2, 1, lastR - 1, 1).getValues();
+      // 이것도 뒤에서부터 찾으면 빠름 (중복은 없을 테지만)
+      for (var r = idCol.length - 1; r >= 0; r--) {
+        if (String(idCol[r][0]).trim() === String(itemId).trim()) {
+          var imageId = itemsSheet.getRange(r + 2, 13).getValue();
+          if (imageId && String(imageId).trim()) {
+            list.push({ image_id: String(imageId).trim(), uploader: 'system', created_at: '', file_name: '' });
+          }
+          break;
         }
-        break;
       }
     }
   }
-  list.sort(function (a, b) {
-    if (!a.created_at) return 1;
-    if (!b.created_at) return -1;
-    return a.created_at.localeCompare(b.created_at);
-  });
+
+  // 이제 이미 정렬된 상태(최신 이미지 하나)이거나 비어있으므로 별도 정렬 불필요
   return list;
 }
 

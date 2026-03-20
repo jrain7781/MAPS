@@ -3520,22 +3520,35 @@
 
                 <!-- 메타데이터 정보 -->
                 <div class="border-t border-gray-100 pt-3">
-                    <div class="grid grid-cols-4 gap-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-xs font-bold text-gray-600">ID 정보</label>
+                        <button type="button" onclick="copyDualId('${item.image_id || ''}', '${item.auction_id || ''}')" 
+                                class="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-100 transition font-bold">동시 복사</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-gray-50 p-2 rounded border border-gray-100 relative group">
+                            <label class="block text-[10px] font-medium text-gray-500 mb-1">이미지 ID</label>
+                            <div class="flex items-center justify-between gap-1">
+                                <div class="text-[11px] text-gray-800 font-mono truncate flex-1" title="${item.image_id || ''}">${item.image_id || '-'}</div>
+                                <button type="button" onclick="copyToClipboard('${item.image_id || ''}')" class="text-[10px] text-blue-600 hover:underline flex-shrink-0">복사</button>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 p-2 rounded border border-gray-100 relative group">
+                            <label class="block text-[10px] font-medium text-gray-500 mb-1">옥션 ID</label>
+                            <div class="flex items-center justify-between gap-1">
+                                <div class="text-[11px] text-gray-800 font-mono truncate flex-1" title="${item.auction_id || ''}">${item.auction_id || '-'}</div>
+                                <button type="button" onclick="copyToClipboard('${item.auction_id || ''}')" class="text-[10px] text-blue-600 hover:underline flex-shrink-0">복사</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mt-2">
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">이미지 ID</label>
-                            <div class="text-xs text-gray-700 truncate max-w-[100px] font-mono break-all" title="${item.image_id || ''}">${item.image_id || '-'}</div>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5">등록자</label>
+                            <div class="text-[11px] text-gray-700">${item.reg_member || '-'}</div>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">수정날짜</label>
-                            <div class="text-xs text-gray-700">${item.mod_date ? String(item.mod_date).slice(0, 10) : '-'}</div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">등록자</label>
-                            <div class="text-xs text-gray-700">${item.reg_member || '-'}</div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">등록일자</label>
-                            <div class="text-xs text-gray-700">${item.reg_date ? String(item.reg_date).slice(0, 10) : '-'}</div>
+                            <label class="block text-[10px] font-medium text-gray-500 mb-0.5">등록일자</label>
+                            <div class="text-[11px] text-gray-700">${item.reg_date ? String(item.reg_date).slice(0, 10) : '-'}</div>
                         </div>
                     </div>
                 </div>
@@ -4178,38 +4191,42 @@
                 }
                 placeholderEl.classList.add('content-hidden');
                 listEl.classList.remove('content-hidden');
-                var ids = rows.map(function (r) { return r.image_id; });
-                if (footerEl) footerEl.textContent = 'Image ID: ' + ids.join(', ');
-                rows.forEach(function (r) {
-                    var wrap = document.createElement('div');
-                    wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white';
-                    var img = document.createElement('img');
-                    img.className = 'investigation-image-max w-full cursor-pointer';
-                    img.alt = r.file_name || '이미지';
-                    img.dataset.imageId = r.image_id;
-                    img.dataset.uploader = r.uploader || '';
-                    if (r.image_id) {
-                        var thumbUrl = 'https://drive.google.com/thumbnail?sz=w1600&id=' + encodeURIComponent(r.image_id);
-                        var originalUrl = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id);
-                        img.src = thumbUrl;
-                        img.loading = 'lazy';
-                        img.style.cursor = 'pointer';
-                        img.onclick = (function (url) { return function () { window.open(url, '_blank'); }; })(originalUrl);
-                    }
-                    wrap.appendChild(img);
-                    // 삭제 버튼: 모든 이미지(system/web)에 표시
-                    var btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'mt-2 mx-2 mb-2 text-red-600 hover:text-red-800 text-sm font-medium';
-                    btn.textContent = '삭제(X)';
-                    btn.onclick = function (ev) {
-                        ev.preventDefault();
-                        ev.stopPropagation();
+                
+                // [MODIFY] 최신 이미지만 하나만 보이게 수정
+                var r = rows[0]; 
+                if (footerEl) footerEl.textContent = '최근 이미지 ID: ' + r.image_id;
+                
+                var wrap = document.createElement('div');
+                wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm';
+                var img = document.createElement('img');
+                img.className = 'investigation-image-max w-full cursor-pointer';
+                img.alt = r.file_name || '이미지';
+                img.dataset.imageId = r.image_id;
+                img.dataset.uploader = r.uploader || '';
+                if (r.image_id) {
+                    var thumbUrl = 'https://drive.google.com/thumbnail?sz=w1600&id=' + encodeURIComponent(r.image_id);
+                    var originalUrl = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id);
+                    img.src = thumbUrl;
+                    img.loading = 'lazy';
+                    img.style.cursor = 'pointer';
+                    img.onclick = (function (url) { return function () { window.open(url, '_blank'); }; })(originalUrl);
+                }
+                wrap.appendChild(img);
+
+                // 삭제 버튼: 최신 이미지에 표시
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'mt-2 mx-2 mb-2 text-red-600 hover:text-red-800 text-sm font-medium';
+                btn.textContent = '삭제(X)';
+                btn.onclick = function (ev) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    if (confirm('이 이미지를 삭제하시겠습니까?')) {
                         handleDeleteItemImage(currentDetailItem.id, r.image_id);
-                    };
-                    wrap.appendChild(btn);
-                    listEl.appendChild(wrap);
-                });
+                    }
+                };
+                wrap.appendChild(btn);
+                listEl.appendChild(wrap);
             })
             .withFailureHandler(function () {
                 placeholderEl.textContent = '이미지를 불러올 수 없습니다.';
@@ -4233,8 +4250,9 @@
         }
         placeholderEl.classList.add('content-hidden');
         listEl.classList.remove('content-hidden');
-        if (footerEl) footerEl.textContent = 'Image ID: ' + ids.join(', ');
-        ids.forEach(function (id) {
+        if (footerEl) footerEl.textContent = '최근 이미지 ID: ' + ids[0];
+        // [MODIFY] 최신 이미지 하나만 렌더링
+        [ids[0]].forEach(function (id) {
             var wrap = document.createElement('div');
             wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white';
             var img = document.createElement('img');
@@ -11351,6 +11369,8 @@ ${token}
         } else if (type === 'bid_state_new' || type === 'bid_state_done' || type === 'bid_state_confirmed') {
             var stateMap = { bid_state_new: '신규', bid_state_done: '전달완료', bid_state_confirmed: '확인완료' };
             handleBulkBidState(cbs, stateMap[type]);
+        } else if (type === 'bulk_image_id') {
+            openBulkImageIdModal(cbs);
         } else {
             if (typeof showStatus === 'function') showStatus('작업 유형을 선택해 주세요.', 'warning');
         }
@@ -12865,5 +12885,160 @@ MJ 이정우 팀장
             img.classList.add('zoomed');
             img.classList.replace('cursor-zoom-in', 'cursor-zoom-out');
         }
+    }
+
+    // [Utility] 클립보드 복사
+    function copyToClipboard(text) {
+        if (!text) return;
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            if (typeof showStatus === 'function') showStatus('복사되었습니다: ' + text, 'success');
+        } catch (err) {
+            console.error('복사 실패', err);
+        }
+        document.body.removeChild(textarea);
+    }
+
+    // [Utility] 이미지ID|옥션ID 동시 복사
+    function copyDualId(imgId, aucId) {
+        const val = (imgId || '') + '|' + (aucId || '');
+        copyToClipboard(val);
+    }
+
+    // [Bulk] 이미지ID 일괄변경 팝업 열기
+    function openBulkImageIdModal(cbs) {
+        const modal = document.getElementById('bulkImageIdModal');
+        const tbody = document.getElementById('bulk-image-id-tbody');
+        if (!modal || !tbody) return;
+
+        const selectedIds = Array.from(cbs).map(cb => cb.getAttribute('data-id'));
+        const items = selectedIds.map(id => {
+            return (typeof allBiddingData !== 'undefined' ? allBiddingData : []).find(d => String(d.id) === String(id)) || { id: id };
+        });
+
+        tbody.innerHTML = items.map((it, idx) => {
+            return `
+                <tr class="hover:bg-gray-50 border-b border-gray-100" data-id="${it.id}">
+                    <td class="px-2 py-2 text-center text-gray-500">${idx + 1}</td>
+                    <td class="px-2 py-2 text-gray-600">${it['in-date'] || '-'}</td>
+                    <td class="px-2 py-2 font-medium text-gray-700">${it.sakun_no || '-'}</td>
+                    <td class="px-2 py-1">
+                        <input type="text" class="bulk-row-image-id w-full px-2 py-1 border border-gray-200 rounded text-[11px]" value="${it.image_id || ''}">
+                    </td>
+                    <td class="px-2 py-1">
+                        <input type="text" class="bulk-row-auction-id w-full px-2 py-1 border border-gray-200 rounded text-[11px]" value="${it.auction_id || ''}">
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        modal.classList.remove('content-hidden');
+    }
+
+    function closeBulkImageIdModal() {
+        const modal = document.getElementById('bulkImageIdModal');
+        if (modal) modal.classList.add('content-hidden');
+    }
+
+    // [Bulk] 모달 내 리스트에 일괄 적용
+    function applyBulkUpdateInModal() {
+        const newImgId = document.getElementById('bulk-input-image-id').value.trim();
+        const newAucId = document.getElementById('bulk-input-auction-id').value.trim();
+
+        const rows = document.querySelectorAll('#bulk-image-id-tbody tr');
+        rows.forEach(row => {
+            if (newImgId) row.querySelector('.bulk-row-image-id').value = newImgId;
+            if (newAucId) row.querySelector('.bulk-row-auction-id').value = newAucId;
+        });
+        
+        if (typeof showStatus === 'function') showStatus('리스트에 적용되었습니다. (최종 저장을 눌러야 DB에 반영됩니다)', 'info');
+    }
+
+    // [Bulk] 동시 붙여넣기 (클립보드 파싱)
+    async function pasteSimultaneous() {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text && text.includes('|')) {
+                const parts = text.split('|');
+                document.getElementById('bulk-input-image-id').value = parts[0] || '';
+                document.getElementById('bulk-input-auction-id').value = parts[1] || '';
+                if (typeof showStatus === 'function') showStatus('동시 붙여넣기 완료', 'success');
+            } else {
+                if (typeof showStatus === 'function') showStatus('올바른 형식이 아닙니다 (ID1|ID2)', 'warning');
+            }
+        } catch (err) {
+            console.error('클립보드 읽기 실패', err);
+            const val = prompt('복사한 "이미지ID|옥션ID" 값을 붙여넣어 주세요.');
+            if (val && val.includes('|')) {
+                const parts = val.split('|');
+                document.getElementById('bulk-input-image-id').value = parts[0] || '';
+                document.getElementById('bulk-input-auction-id').value = parts[1] || '';
+            }
+        }
+    }
+
+    // [Bulk] 최종 저장 (DB 반영)
+    function saveBulkImageIdToDB() {
+        const rows = document.querySelectorAll('#bulk-image-id-tbody tr');
+        if (rows.length === 0) return;
+
+        if (!confirm('변경사항을 서버(DB)에 저장하시겠습니까?')) return;
+
+        let completed = 0;
+        const total = rows.length;
+        
+        if (typeof showStatus === 'function') showStatus('저장 중... (0/' + total + ')', 'info');
+
+        rows.forEach(row => {
+            const id = row.getAttribute('data-id');
+            const newImgId = row.querySelector('.bulk-row-image-id').value.trim();
+            const newAucId = row.querySelector('.bulk-row-auction-id').value.trim();
+
+            const it = (typeof allBiddingData !== 'undefined' ? allBiddingData : []).find(d => String(d.id) === String(id));
+            if (!it) {
+                completed++;
+                if (completed === total) finalizeBulkSave();
+                return;
+            }
+
+            google.script.run
+                .withSuccessHandler(function() {
+                    completed++;
+                    finalizeBulkSave();
+                })
+                .withFailureHandler(function(err) {
+                    console.error('Update failed for ID ' + id, err);
+                    completed++;
+                    finalizeBulkSave();
+                })
+                .updateData(
+                    it.id, it['in-date'], it.sakun_no, it.court, it.stu_member, 
+                    it.m_name, it.bidprice, it.m_name_id, it.note, it.member_id, 
+                    it.bid_state, it.chuchen_state, newImgId, it.reg_member, 
+                    it.m_name2, newAucId
+                );
+        });
+
+        function finalizeBulkSave() {
+            if (completed === total) {
+                if (typeof showStatus === 'function') showStatus('모든 변경사항이 저장되었습니다.', 'success');
+                closeBulkImageIdModal();
+                loadData();
+            } else {
+                if (typeof showStatus === 'function') showStatus('저장 중... (' + completed + '/' + total + ')', 'info');
+            }
+        }
+    }
+
+    // 수치 콤마 포맷팅 유틸
+    function formatNumberString(str) {
+        if (!str) return '';
+        var num = parseInt(String(str).replace(/,/g, ''), 10);
+        if (isNaN(num)) return str;
+        return num.toLocaleString();
     }
 </script>
