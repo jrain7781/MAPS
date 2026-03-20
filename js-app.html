@@ -3457,7 +3457,7 @@
             if (panel) panel.classList.toggle('hidden', t !== tab);
         });
         if (tab === 'history') renderItemSubHistory();
-        if (tab === 'info') renderItemSubInfo();
+        if (tab === 'info') renderItemSubInfo('main');
         if (tab === 'message') {
             // 상세 탭에서의 메시지 템플릿 기본값(추천물건안내) 표시
             switchTemplateTab('check', false);
@@ -3488,31 +3488,43 @@
             .getItemHistory(String(itemId), 200);
     }
 
-    function renderItemSubInfo() {
-        const el = document.getElementById('item-sub-info-content');
-        if (!el || !currentDetailItem) return;
-        const item = currentDetailItem;
+    /**
+     * 상세 탭 하단 '정보' 패널 렌더링 (메타데이터 및 ID 정보)
+     * @param {string} context - 'main' (기본 상세 패널) 또는 'modal' (일정 모달)
+     */
+    function renderItemSubInfo(context = 'main') {
+        const isModal = (context === 'modal');
+        const elId = isModal ? 'modal-sub-info-content' : 'item-sub-info-content';
+        const el = document.getElementById(elId);
+        const item = isModal ? (typeof currentModalItemData !== 'undefined' ? currentModalItemData : null) : (typeof currentDetailItem !== 'undefined' ? currentDetailItem : null);
+        
+        if (!el || !item) return;
+
         const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (typeof allMemberData !== 'undefined' ? allMemberData : []);
         const mem = memberList.find(m => String(m.member_id) === String(item.member_id)) || {};
+        
+        // ID 충돌 방지를 위한 접미사
+        const suffix = isModal ? '-modal' : '';
+
         el.innerHTML = `
             <div class="space-y-4">
-                <!-- 텔레그램정보 -->
+                <!-- 텔레그램정보 (상세 뷰에서만 표시 가능하거나 공용) -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">텔레그램정보</label>
                     <div class="grid grid-cols-3 gap-3">
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">Y/N</label>
-                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">사용자명</label>
+                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-xs text-gray-700 truncate">
                                 ${mem.telegram_username || '-'}</div>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">토큰</label>
-                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-xs text-gray-700 truncate">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">토큰상태</label>
+                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-[10px] text-gray-700 truncate">
                                 ${mem.telegram_enabled === 'Y' && mem.member_token ? '확인완료' : (mem.member_token ? '미확인/알수없음' : '-')}</div>
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">ID</label>
-                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">채팅 ID</label>
+                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-xs text-gray-700">
                                 ${mem.telegram_chat_id || '-'}</div>
                         </div>
                     </div>
@@ -3521,32 +3533,38 @@
                 <!-- 메타데이터 정보 -->
                 <div class="border-t border-gray-100 pt-3">
                     <div class="flex justify-between items-center mb-2">
-                        <label class="block text-xs font-bold text-gray-600">ID 정보</label>
-                        <button type="button" onclick="copyDualId('${item.image_id || ''}', '${item.auction_id || ''}')" 
+                        <label class="block text-xs font-bold text-gray-600">ID 정보 (수정 후 저장 버튼 클릭)</label>
+                        <button type="button" onclick="copyDualId(document.getElementById('info-image-id${suffix}').value, document.getElementById('info-auction-id${suffix}').value)" 
                                 class="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-100 transition font-bold">동시 복사</button>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div class="bg-gray-50 p-2 rounded border border-gray-100 relative group">
-                            <label class="block text-[10px] font-medium text-gray-500 mb-1">이미지 ID</label>
-                            <div class="flex items-center justify-between gap-1">
-                                <div class="text-[11px] text-gray-800 font-mono truncate flex-1" title="${item.image_id || ''}">${item.image_id || '-'}</div>
-                                <button type="button" onclick="copyToClipboard('${item.image_id || ''}')" class="text-[10px] text-blue-600 hover:underline flex-shrink-0">복사</button>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-[10px] font-medium text-gray-500">이미지 ID</label>
+                                <div class="flex gap-1">
+                                    <button type="button" onclick="copyToClipboard(document.getElementById('info-image-id${suffix}').value)" class="text-[10px] text-blue-600 hover:underline">복사</button>
+                                    <button type="button" onclick="saveSingleField('${item.id}', 'image_id', document.getElementById('info-image-id${suffix}').value)" class="text-[10px] text-green-600 font-bold hover:underline">저장</button>
+                                </div>
                             </div>
+                            <input type="text" id="info-image-id${suffix}" class="w-full bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-800 font-mono focus:ring-1 focus:ring-green-400 focus:border-green-400 outline-none" value="${item.image_id || ''}" placeholder="공백 가능">
                         </div>
                         <div class="bg-gray-50 p-2 rounded border border-gray-100 relative group">
-                            <label class="block text-[10px] font-medium text-gray-500 mb-1">옥션 ID</label>
-                            <div class="flex items-center justify-between gap-1">
-                                <div class="text-[11px] text-gray-800 font-mono truncate flex-1" title="${item.auction_id || ''}">${item.auction_id || '-'}</div>
-                                <button type="button" onclick="copyToClipboard('${item.auction_id || ''}')" class="text-[10px] text-blue-600 hover:underline flex-shrink-0">복사</button>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-[10px] font-medium text-gray-500">옥션 ID</label>
+                                <div class="flex gap-1">
+                                    <button type="button" onclick="copyToClipboard(document.getElementById('info-auction-id${suffix}').value)" class="text-[10px] text-blue-600 hover:underline">복사</button>
+                                    <button type="button" onclick="saveSingleField('${item.id}', 'auction_id', document.getElementById('info-auction-id${suffix}').value)" class="text-[10px] text-orange-600 font-bold hover:underline">저장</button>
+                                </div>
                             </div>
+                            <input type="text" id="info-auction-id${suffix}" class="w-full bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-800 font-mono focus:ring-1 focus:ring-orange-400 focus:border-orange-400 outline-none" value="${item.auction_id || ''}" placeholder="공백 가능">
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4 mt-2">
-                        <div>
+                    <div class="grid grid-cols-2 gap-3 mt-2">
+                        <div class="bg-gray-50 p-1.5 rounded border border-gray-50">
                             <label class="block text-[10px] font-medium text-gray-500 mb-0.5">등록자</label>
                             <div class="text-[11px] text-gray-700">${item.reg_member || '-'}</div>
                         </div>
-                        <div>
+                        <div class="bg-gray-50 p-1.5 rounded border border-gray-50">
                             <label class="block text-[10px] font-medium text-gray-500 mb-0.5">등록일자</label>
                             <div class="text-[11px] text-gray-700">${item.reg_date ? String(item.reg_date).slice(0, 10) : '-'}</div>
                         </div>
@@ -3571,7 +3589,7 @@
             if (panel) panel.classList.toggle('hidden', t !== tab);
         });
         if (tab === 'history') renderModalSubHistory();
-        if (tab === 'info') renderModalSubInfo();
+        if (tab === 'info') renderItemSubInfo('modal');
     }
 
     function renderModalSubNote(data) {
@@ -3844,59 +3862,6 @@
             .getItemHistory(String(itemId), 200);
     }
 
-    function renderModalSubInfo() {
-        const el = document.getElementById('modal-sub-info-content');
-        if (!el || !currentModalItemData) return;
-        const item = currentModalItemData;
-        const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (typeof allMemberData !== 'undefined' ? allMemberData : []);
-        const mem = memberList.find(m => String(m.member_id) === String(item.member_id)) || {};
-        el.innerHTML = `
-            <div class="space-y-4">
-                <!-- 텔레그램정보 -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">텔레그램정보</label>
-                    <div class="grid grid-cols-3 gap-3">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">Y/N</label>
-                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
-                                ${mem.telegram_username || '-'}</div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">토큰</label>
-                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-xs text-gray-700 truncate">
-                                ${mem.telegram_enabled === 'Y' && mem.member_token ? '확인완료' : (mem.member_token ? '미확인/알수없음' : '-')}</div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">ID</label>
-                            <div class="w-full px-3 py-2 border border-gray-200 rounded-lg shadow-sm bg-gray-50 text-sm text-gray-700">
-                                ${mem.telegram_chat_id || '-'}</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 메타데이터 정보 -->
-                <div class="border-t border-gray-100 pt-3">
-                    <div class="grid grid-cols-4 gap-4">
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">이미지 ID</label>
-                            <div class="text-xs text-gray-700 truncate max-w-[100px] font-mono break-all" title="${item.image_id || ''}">${item.image_id || '-'}</div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">수정날짜</label>
-                            <div class="text-xs text-gray-700">${item.mod_date ? String(item.mod_date).slice(0, 10) : '-'}</div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">등록자</label>
-                            <div class="text-xs text-gray-700">${item.reg_member || '-'}</div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-600 mb-1">등록일자</label>
-                            <div class="text-xs text-gray-700">${item.reg_date ? String(item.reg_date).slice(0, 10) : '-'}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-    }
 
     function setChuchenState(state, updateHidden = true) {
         const btnNew = document.getElementById('btn-chuchen-new');
@@ -13040,5 +13005,48 @@ MJ 이정우 팀장
         var num = parseInt(String(str).replace(/,/g, ''), 10);
         if (isNaN(num)) return str;
         return num.toLocaleString();
+    }
+
+    /**
+     * 특정 필드 하나만 실시간으로 업데이트합니다.
+     * @param {string} itemId - 물건 ID
+     * @param {string} field - 필드명 ('image_id' 또는 'auction_id')
+     * @param {string} value - 저장할 값
+     */
+    function saveSingleField(itemId, field, value) {
+        if (!itemId || !field) return;
+        const fieldLabel = (field === 'image_id' ? '이미지 ID' : '옥션 ID');
+        
+        if (typeof google === 'undefined' || !google.script || !google.script.run) {
+            showStatus('GAS 환경에서만 저장 가능합니다.', 'error');
+            return;
+        }
+
+        showStatus(`${fieldLabel} 저장 중...`, 'loading');
+        
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if (res && res.success) {
+                    showStatus(`${fieldLabel} 저장이 완료되었습니다.`, 'success');
+                    // 현재 열려있는 데이터 객체 동기화 (상세 페인/모달 공지용)
+                    if (currentDetailItem && String(currentDetailItem.id) === String(itemId)) {
+                        currentDetailItem[field] = value;
+                    }
+                    if (currentModalItemData && String(currentModalItemData.id) === String(itemId)) {
+                        currentModalItemData[field] = value;
+                    }
+                    // 리스트 데이터도 업데이트 (UI 무결성)
+                    if (allBiddingData) {
+                        const item = allBiddingData.find(it => String(it.id) === String(itemId));
+                        if (item) item[field] = value;
+                    }
+                } else {
+                    showStatus('저장 실패: ' + (res ? res.message : '알 수 없는 오류'), 'error');
+                }
+            })
+            .withFailureHandler(function(err) {
+                showStatus('서버 오류: ' + (err.message || err), 'error');
+            })
+            .updateDataField([itemId], field, value);
     }
 </script>
