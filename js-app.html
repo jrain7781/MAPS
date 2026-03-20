@@ -77,7 +77,9 @@
     const formMemberId = document.getElementById('form-member-id');
     const formMNameId = document.getElementById('form-m-name-id');
     const formBidPrice = document.getElementById('form-bidprice');
+    const formChuchenState = document.getElementById('form-chuchen-state');
     const formImageId = document.getElementById('form-image-id');
+    const formAuctionId = document.getElementById('form-auction-id');
     const formNote = document.getElementById('form-note');
     const formRegMember = document.getElementById('form-reg-member');
 
@@ -142,7 +144,9 @@
     const modalFormMemberId = document.getElementById('modal-form-member-id');
     const modalFormMNameId = document.getElementById('modal-form-m-name-id');
     const modalFormBidPrice = document.getElementById('modal-form-bidprice');
+    const modalFormChuchenState = document.getElementById('modal-form-chuchen-state');
     const modalFormImageId = document.getElementById('modal-form-image-id');
+    const modalFormAuctionId = document.getElementById('modal-form-auction-id');
     const modalFormRegMember = document.getElementById('modal-form-reg-member');
 
     var courtListCache = null;
@@ -3892,7 +3896,7 @@
                 btnNew.classList.add('bg-gray-200', 'text-gray-700', 'font-bold', 'border-gray-400');
             }
             if (btnDone) {
-                btnDone.classList.remove('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
+                btnDone.classList.remove('bg-gray-900', 'text-white', 'font-bold');
                 btnDone.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
             }
         } else { // 전달완료
@@ -3902,7 +3906,7 @@
             }
             if (btnDone) {
                 btnDone.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
-                btnDone.classList.add('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
+                btnDone.classList.add('bg-gray-900', 'text-white', 'font-bold');
             }
         }
         if (updateHidden && hiddenInput) hiddenInput.value = state;
@@ -3919,7 +3923,7 @@
                 btnNew.classList.add('bg-gray-200', 'text-gray-700', 'font-bold', 'border-gray-400');
             }
             if (btnDone) {
-                btnDone.classList.remove('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
+                btnDone.classList.remove('bg-gray-900', 'text-white', 'font-bold');
                 btnDone.classList.add('bg-white', 'text-gray-600', 'border-gray-300');
             }
         } else {
@@ -3929,7 +3933,7 @@
             }
             if (btnDone) {
                 btnDone.classList.remove('bg-white', 'text-gray-600', 'border-gray-300');
-                btnDone.classList.add('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
+                btnDone.classList.add('bg-gray-900', 'text-white', 'font-bold');
             }
         }
         if (hiddenInput) hiddenInput.value = state;
@@ -5056,8 +5060,10 @@ MJ 이정우 팀장
         const bidPrice = bidPriceRaw === '' ? '0' : bidPriceRaw;
         const bidState = document.getElementById('modal-form-bid-state') ? document.getElementById('modal-form-bid-state').value : '';
         const imageId = modalFormImageId ? modalFormImageId.value : '';
+        const auctionId = modalFormAuctionId ? modalFormAuctionId.value : '';
+        const regMember = modalFormRegMember ? modalFormRegMember.value : '';
         const note = document.getElementById('modal-sub-item-note') ? document.getElementById('modal-sub-item-note').value : '';
-        const chuchenState = document.getElementById('modal-form-chuchen-state') ? document.getElementById('modal-form-chuchen-state').value : '';
+        const chuchenState = modalFormChuchenState ? modalFormChuchenState.value : (document.getElementById('modal-form-chuchen-state') ? document.getElementById('modal-form-chuchen-state').value : '');
 
         if (!inDate || !sakunNo || !court) {
             showStatus('필수 입력 항목(입찰일자, 사건번호, 법원명)을 확인해 주세요.', 'error');
@@ -5118,7 +5124,8 @@ MJ 이정우 팀장
                 if (modalSaveBtn) modalSaveBtn.disabled = false;
                 showStatus(`수정 오류: ${error.message}`, 'error');
             })
-            .updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState);
+            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId)
+            .updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId);
     }
 
     function handleModalDelete() {
@@ -5194,6 +5201,8 @@ MJ 이정우 팀장
         }
         const bidPrice = rawBidPrice === '' ? '0' : rawBidPrice;
         const imageId = formImageId ? formImageId.value : '';
+        const auctionId = formAuctionId ? formAuctionId.value : '';
+        const regMember = formRegMember ? formRegMember.value : '';
         const note = formNote ? formNote.value : '';
 
         let processedInDate = inDate.trim();
@@ -5258,12 +5267,15 @@ MJ 이정우 팀장
             showStatus(`작업 처리 중 오류: ${error.message}`, 'error');
         };
 
-        const panelChuchenState = document.getElementById('form-chuchen-state') ? document.getElementById('form-chuchen-state').value : '';
-        const dataArgs = [processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, panelChuchenState];
+        const panelChuchenState = formChuchenState ? formChuchenState.value : '';
         if (currentMode === 'create') {
-            google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler).createData(...dataArgs);
+            // Server createData signature: (inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId)
+            google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
+                .createData(processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, panelChuchenState, regMember, auctionId);
         } else if (currentMode === 'edit') {
-            google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler).updateData(id, ...dataArgs);
+            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId)
+            google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
+                .updateData(id, processedInDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, panelChuchenState, imageId, regMember, mName2, auctionId);
         }
     }
 

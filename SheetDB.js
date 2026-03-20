@@ -175,7 +175,7 @@ function formatParamsDate(value, format = 'yyMMdd') {
 /**
  * 새로운 입찰 물건 데이터를 생성합니다.
  */
-function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note) {
+function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
 
   // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과
@@ -185,14 +185,21 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
   }
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
-  // [방어 코드] 쓰기 전에 15번째 열(m_name2)까지 확보
-  ensureColumnExists(sheet, 15);
+  // [방어 코드] 쓰기 전에 16번째 열(auction_id)까지 확보
+  ensureColumnExists(sheet, 16);
 
   const id = new Date().getTime().toString();
   const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const regMember = '';
-  // appendRow는 열이 부족하면 알아서 늘려주므로 안전
-  sheet.appendRow([id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, regDate, regMember, bidState, imageId, note || '', '']);
+  
+  // appendRow: [id(1), in-date(2), sakun_no(3), court(4), stu_member(5), m_name_id(6), m_name(7), bidprice(8), member_id(9), reg_date(10), reg_member(11), bid_state(12), image_id(13), note(14), m_name_2(15), auction_id(16)]
+  sheet.appendRow([id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, regDate, regMember || '', bidState, imageId || '', note || '', mName2 || '', auctionId || '']);
+
+  // chuchen_state 등 추가 필드 업데이트 (16열 이후)
+  const realRowIndex = sheet.getLastRow();
+  if (chuchenState) {
+    ensureColumnExists(sheet, 17);
+    sheet.getRange(realRowIndex, 17).setValue(chuchenState);
+  }
 
   // [PHASE 1-4] 물건 생성 이력 기록 (본문)
   const createBatchTs = String(new Date().getTime()); // ITEM_CREATE 전체를 하나의 그룹으로
@@ -240,7 +247,7 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
 /**
  * 기존 입찰 물건 데이터를 수정합니다.
  */
-function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState) {
+function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
 
   // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과
@@ -277,7 +284,11 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
     m_name:        String(oldRow[6]  || '').trim(),  // G열(7)
     bidprice:      String(oldRow[7]  || '').trim(),  // H열(8)
     member_id:     String(oldRow[8]  || '').trim(),  // I열(9)
+    reg_member:    String(oldRow[10] || '').trim(),  // K열(11)
     bid_state:     String(oldRow[11] || '').trim(),  // L열(12)
+    image_id:      String(oldRow[12] || '').trim(),  // M열(13)
+    note:          String(oldRow[13] || '').trim(),  // N열(14)
+    auction_id:    (oldRow.length > 15) ? String(oldRow[15] || '').trim() : '', // P열(16)
     chuchen_state: String(oldRow[16] || '').trim(),  // Q열(17)
   };
   const oldBidState = oldValues.bid_state; // 기존 코드 호환
@@ -291,15 +302,37 @@ function updateData(id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPr
   sheet.getRange(realRowIndex, 7).setValue(mName);
   sheet.getRange(realRowIndex, 8).setValue(bidPrice);
   sheet.getRange(realRowIndex, 9).setValue(memberId);
+  
+  // 11번째 열(K열) reg_member - 넘어온 값이 있으면 쓰고 없으면 기존값 유지
+  if (regMember) sheet.getRange(realRowIndex, 11).setValue(regMember);
+  
   // 12번째 열(L열)에 상태값 저장
   sheet.getRange(realRowIndex, 12).setValue(bidState);
-  // [추가] 13번째 열(M열)에 이미지 URL 저장
-  sheet.getRange(realRowIndex, 13).setValue(imageId);
-  // [추가] 14번째 열(N열)에 note(비고) 저장
+  
+  // 13번째 열(M열)에 이미지 ID 저장 - [보호] 값이 있을 때만 덮어쓰거나, 관리자가 빈 값 전송 시만 허용
+  // 여기서는 단순히 클라이언트에서 전달된 값이 있으면 쓰고, 없으면 기존 값을 유지하는 정책 사용 (삭제 방지)
+  if (imageId) {
+    sheet.getRange(realRowIndex, 13).setValue(imageId);
+  } else if (!imageId && oldValues.image_id) {
+    // 클라이언트에서 빈 값이 왔지만 기존 시트에 값이 있으면 삭제하지 않음
+  } else {
+    sheet.getRange(realRowIndex, 13).setValue('');
+  }
+
+  // 14번째 열(N열)에 note(비고) 저장
   sheet.getRange(realRowIndex, 14).setValue(note || '');
-  // [추가] 15번째 열(O열)에 m_name2(명의 표시값) 저장
+  // 15번째 열(O열)에 m_name2(명의 표시값) 저장
   sheet.getRange(realRowIndex, 15).setValue(mName2 || '');
-  // [추가] 17번째 열(Q열) chuchen_state + 18번째 열(R열) chuchen_date
+  
+  // 16번째 열(P열) auction_id 저장 - [보호] 동일하게 유지
+  if (auctionId) {
+    sheet.getRange(realRowIndex, 16).setValue(auctionId);
+  } else if (!auctionId && oldValues.auction_id) {
+    // 삭제 방지
+  } else {
+    sheet.getRange(realRowIndex, 16).setValue('');
+  }
+
   const newChuchenState = String(chuchenState || '').trim();
   const newStuMemberVal = String(stuMember || '').trim();
 
