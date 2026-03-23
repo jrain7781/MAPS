@@ -140,102 +140,12 @@
 
             <div id="Dashboard" class="tab-content h-full p-4 md:p-8 overflow-y-auto content-hidden">
 
-                <!-- Row 1: 입찰요청(col-7) + 자동승인(col-5) -->
+                <!-- 대시보드 메인 그리드 (업무현황 이동 및 높이 조정) -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mb-6">
-
-                    <!-- 입찰 요청(승인 대기) 카드 -->
-                    <div id="telegram-requests-panel"
-                        class="lg:col-span-7 bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                        <div class="flex items-center justify-between gap-3 mb-3">
-                            <h2 class="text-xl font-bold text-gray-800 flex items-center">
-                                <svg class="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M8 12h8m-8 4h6m-6-8h8M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
-                                    </path>
-                                </svg>입찰 요청(승인 대기)
-                            </h2>
-                            <div class="flex items-center gap-3">
-                                <!-- 자동승인 토글 -->
-                                <label class="flex items-center gap-2 cursor-pointer select-none"
-                                    title="자동승인 ON: 회원 요청 시 관리자 승인 없이 즉시 처리됩니다">
-                                    <span class="text-sm font-semibold text-gray-600">자동승인</span>
-                                    <div class="relative">
-                                        <input type="checkbox" id="auto-approve-toggle" class="sr-only"
-                                            onchange="onAutoApproveToggleChange(this)">
-                                        <div id="auto-approve-track"
-                                            class="w-11 h-6 rounded-full transition-colors duration-200 bg-gray-300">
-                                        </div>
-                                        <div id="auto-approve-thumb"
-                                            class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200">
-                                        </div>
-                                    </div>
-                                    <span id="auto-approve-label"
-                                        class="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">수동
-                                        🔴</span>
-                                </label>
-                                <button type="button" onclick="loadTelegramRequests()"
-                                    class="px-3 py-1.5 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold">새로고침</button>
-                                <button type="button" onclick="approveSelectedTelegramRequests()"
-                                    class="px-3 py-1.5 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold">선택
-                                    승인</button>
-                                <button type="button" onclick="rejectSelectedTelegramRequests()"
-                                    class="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-semibold">선택
-                                    거절</button>
-                            </div>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full text-sm border-collapse">
-                                <thead>
-                                    <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase">
-                                        <th class="py-2 px-2 text-center w-10"><input type="checkbox"
-                                                id="tg-req-checkall" onchange="toggleAllTelegramRequestCheckboxes(this)"
-                                                class="rounded"></th>
-                                        <th class="py-2 px-2 text-left">요청시각</th>
-                                        <th class="py-2 px-2 text-left">회원</th>
-                                        <th class="py-2 px-2 text-left">사건번호</th>
-                                        <th class="py-2 px-2 text-left">법원</th>
-                                        <th class="py-2 px-2 text-center">입찰일자</th>
-                                        <th class="py-2 px-2 text-center">현재상태</th>
-                                        <th class="py-2 px-2 text-left">요청</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tg-req-tbody" class="text-gray-800">
-                                    <tr>
-                                        <td colspan="8" class="py-4 text-center text-gray-500">요청을 불러오는 중...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-2">회원이 텔레그램에서 <b>입찰 요청</b> 버튼을 누르면 여기에 쌓입니다. 승인 시 물건 상태가
-                            <b>입찰</b>로 변경됩니다.
-                        </p>
-                    </div>
-
-                    <!-- 텔레그램 승인현황 -->
-                    <div id="auto-approval-panel"
-                        class="lg:col-span-5 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="min-height:260px">
-                        <div class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
-                            <h2 class="text-sm font-bold text-gray-800">업무현황</h2>
-                            <div class="flex items-center gap-2">
-                                <label class="flex items-center gap-1 cursor-pointer select-none" title="체크: 직원/관리자 건만 조회 / 미체크: 직원/관리자 제외">
-                                    <input type="checkbox" id="approvalTestMode" onchange="loadAutoApprovalStats(true)" class="rounded text-indigo-600">
-                                    <span class="text-xs text-gray-500">테스트</span>
-                                </label>
-                                <button onclick="loadAutoApprovalStats(true)"
-                                    class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-medium px-3 py-1 rounded-lg transition duration-150">새로고침</button>
-                            </div>
-                        </div>
-                        <div id="autoApprovalBody" class="flex-1 min-h-0 overflow-hidden text-center text-gray-400 text-sm">데이터 로딩 중...</div>
-                    </div>
-
-                </div>
-
-                <!-- Row 2: 미입력(col-3) + 상태관리(col-4) + 텔레그램+자동물건(col-5) -->
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mb-6">
-                    <div
-                        class="lg:col-span-3 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden min-h-[680px] flex flex-col">
-                        <div class="bg-white border-b border-gray-200 px-4 py-3">
+                    
+                    <!-- [1] 입찰가 미입력 현황 (3/12) - 높이 750px 고정, 스크롤 추가 -->
+                    <div class="lg:col-span-3 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:750px;">
+                        <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
                             <div class="flex justify-between items-center mb-1">
                                 <h2 class="text-sm font-bold text-gray-800">입찰가 미입력 현황</h2>
                                 <select id="missingBidFilterMember" onchange="renderMissingBidDashboard()"
@@ -245,11 +155,10 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="p-0 flex-1">
+                        <div class="flex-1 overflow-y-auto">
                             <table class="w-full text-left border-collapse">
-                                <thead>
-                                    <tr
-                                        class="bg-gray-50 border-b border-gray-200 text-gray-600 text-sm uppercase leading-normal">
+                                <thead class="sticky top-0 bg-gray-50 z-10">
+                                    <tr class="border-b border-gray-200 text-gray-600 text-sm uppercase leading-normal">
                                         <th class="py-2 px-3 text-center font-bold">날짜</th>
                                         <th class="py-2 px-3 text-center font-bold">미입력 건수</th>
                                     </tr>
@@ -259,13 +168,16 @@
                                         <td colspan="2" class="py-4 text-center">데이터 로딩 중...</td>
                                     </tr>
                                 </tbody>
+                                <tfoot id="missingBidTableFoot" class="sticky bottom-0 bg-blue-50 z-10 font-bold border-t-2 border-blue-100">
+                                    <!-- JS에서 채움 -->
+                                </tfoot>
                             </table>
                         </div>
                     </div>
 
-                    <div
-                        class="lg:col-span-4 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden min-h-[680px] flex flex-col">
-                        <div class="bg-white border-b border-gray-200 px-4 py-3">
+                    <!-- [2] 물건 상태 관리 (4/12) - 높이 750px 고정, 스크롤 추가 -->
+                    <div class="lg:col-span-4 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:750px;">
+                        <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
                             <div class="flex justify-between items-center mb-1">
                                 <h2 class="text-sm font-bold text-gray-800">물건 상태 관리</h2>
                                 <select id="statusFilterMember" onchange="renderStatusManagementDashboard()"
@@ -275,11 +187,10 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="overflow-x-auto flex-1">
+                        <div class="flex-1 overflow-y-auto">
                             <table class="w-full text-center border-collapse text-xs">
-                                <thead>
-                                    <tr
-                                        class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
+                                <thead class="sticky top-0 bg-gray-50 z-10">
+                                    <tr class="border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
                                         <th class="py-1 px-2 font-bold border-r">날짜</th>
                                         <th class="py-1 px-1 font-bold w-1/6">상품</th>
                                         <th class="py-1 px-1 font-bold w-1/6">미정</th>
@@ -288,22 +199,43 @@
                                         <th class="py-1 px-1 font-bold w-1/6">변경</th>
                                     </tr>
                                 </thead>
-                                <tbody id="statusTableBody" class="text-gray-700 text-xs">
+                                <tbody id="statusTableBody" class="text-gray-700 text-xs text-nowrap">
                                     <tr>
                                         <td colspan="6" class="py-4 text-center">데이터 로딩 중...</td>
                                     </tr>
                                 </tbody>
+                                <tfoot id="statusTableFoot" class="sticky bottom-0 bg-blue-50 z-10 font-bold border-t-2 border-blue-100">
+                                    <!-- JS에서 채움 -->
+                                </tfoot>
                             </table>
                         </div>
                     </div>
 
-                    <!-- Row 2 오른쪽: 텔레그램가입 + 자동물건등록/매칭 -->
-                    <div class="lg:col-span-5 flex flex-col gap-6">
+                    <!-- [3] 오른쪽 컬럼 (5/12) - 업무/텔그/자동물건 스택 -->
+                    <div class="lg:col-span-5 flex flex-col gap-4">
 
-                        <!-- 텔레그램 가입현황 (Phase 3에서 구현) -->
+                        <!-- 업무현황 (높이 250px 고정) - 이중 스크롤 방지를 위해 overflow-y-auto 제거하고 내부 padding 조정 -->
+                        <div id="auto-approval-panel"
+                            class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:250px">
+                            <div class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
+                                <h2 class="text-sm font-bold text-gray-800">업무현황</h2>
+                                <div class="flex items-center gap-2">
+                                    <label class="flex items-center gap-1 cursor-pointer select-none" title="체크: 직원/관리자 건만 조회 / 미체크: 직원/관리자 제외">
+                                        <input type="checkbox" id="approvalTestMode" onchange="loadAutoApprovalStats(true)" class="rounded text-indigo-600">
+                                        <span class="text-xs text-gray-500">테스트</span>
+                                    </label>
+                                    <button onclick="loadAutoApprovalStats(true)"
+                                        class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-medium px-3 py-1 rounded-lg transition duration-150">새로고침</button>
+                                </div>
+                            </div>
+                            <!-- 내부 스크롤만 유지 -->
+                            <div id="autoApprovalBody" class="flex-1 overflow-y-auto text-center text-gray-400 text-sm">데이터 로딩 중...</div>
+                        </div>
+
+                        <!-- 텔레그램 가입현황 (높이 230px 고정) -->
                         <div id="telegram-join-panel"
-                            class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
-                            <div class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+                            class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:230px">
+                            <div class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
                                 <h2 class="text-sm font-bold text-gray-800">텔레그램 가입현황</h2>
                                 <div class="flex items-center gap-3 text-xs">
                                     <label class="flex items-center gap-1 cursor-pointer">
@@ -318,18 +250,18 @@
                                     </label>
                                 </div>
                             </div>
-                            <div id="telegramJoinBody" class="p-4 text-center text-gray-400 text-sm">데이터 로딩 중...</div>
+                            <div id="telegramJoinBody" class="flex-1 overflow-y-auto p-4 text-center text-gray-400 text-sm">데이터 로딩 중...</div>
                         </div>
 
-                        <!-- 자동물건등록/매칭현황 -->
-                        <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
+                        <!-- 자동물건등록/매칭현황 (높이 250px 고정) -->
+                        <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:250px">
                             <div
                                 class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
                                 <h2 class="text-sm font-bold text-gray-800">자동 물건 등록/매칭 현황</h2>
                                 <button onclick="loadDashboardImageStats()"
                                     class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-medium px-3 py-1 rounded-lg transition duration-150">새로고침</button>
                             </div>
-                            <div class="overflow-auto">
+                            <div class="flex-1 overflow-y-auto">
                                 <table class="w-full text-xs text-center border-collapse table-fixed">
                                     <colgroup>
                                         <col style="width:16%">
@@ -341,14 +273,12 @@
                                         <col style="width:12%">
                                         <col style="width:12%">
                                     </colgroup>
-                                    <thead class="sticky top-0 z-10">
+                                    <thead class="sticky top-0 bg-gray-50 z-10">
                                         <tr
                                             class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
                                             <th class="py-1 px-1 font-bold">실행시간</th>
                                             <th class="py-1 px-1 font-bold">담당자</th>
-                                            <th class="py-1 px-1 font-bold"><span class="cursor-help"
-                                                    onmouseenter="showConflictTooltip(event)"
-                                                    onmouseleave="hideConflictTooltip()">충돌 ⓘ</span></th>
+                                            <th class="py-1 px-1 font-bold">충돌 ⓘ</th>
                                             <th class="py-1 px-1 font-bold">전체</th>
                                             <th class="py-1 px-1 font-bold">신규등록</th>
                                             <th class="py-1 px-1 font-bold">매칭<br>(이미지)</th>
@@ -364,9 +294,7 @@
                                 </table>
                             </div>
                         </div>
-
                     </div>
-
                 </div>
 
                 <!-- 회원별 입찰 물건 현황 -->
@@ -2142,6 +2070,8 @@
                                 class="pref-sub-btn px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">웹훅</button>
                             <button id="pref-sub-btn-chatId" onclick="switchPrefSubTab('chatId')"
                                 class="pref-sub-btn px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">chat_id 연동</button>
+                            <button id="pref-sub-btn-autoApprove" onclick="switchPrefSubTab('autoApprove')"
+                                class="pref-sub-btn px-3 py-1.5 text-xs font-semibold rounded-t border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">자동승인</button>
                         </div>
                     </div>
 
@@ -2295,6 +2225,76 @@
                                     </div>
                                 </div>
                             </div><!-- /pref-sub-panel-chatId -->
+
+                        <!-- 하위탭: 자동승인 -->
+                        <div id="pref-sub-panel-autoApprove" class="pref-sub-panel p-4 md:p-6" style="display:none">
+                            <div id="telegram-requests-panel" class="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                                <div class="flex items-center justify-between gap-3 mb-3">
+                                    <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                                        <svg class="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M8 12h8m-8 4h6m-6-8h8M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z">
+                                            </path>
+                                        </svg>입찰 요청(승인 대기)
+                                    </h2>
+                                    <div class="flex items-center gap-3">
+                                        <!-- 자동승인 토글 -->
+                                        <label class="flex items-center gap-2 cursor-pointer select-none"
+                                            title="자동승인 ON: 회원 요청 시 관리자 승인 없이 즉시 처리됩니다">
+                                            <span class="text-sm font-semibold text-gray-600">자동승인</span>
+                                            <div class="relative">
+                                                <input type="checkbox" id="auto-approve-toggle" class="sr-only"
+                                                    onchange="onAutoApproveToggleChange(this)">
+                                                <div id="auto-approve-track"
+                                                    class="w-11 h-6 rounded-full transition-colors duration-200 bg-gray-300">
+                                                </div>
+                                                <div id="auto-approve-thumb"
+                                                    class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200">
+                                                </div>
+                                            </div>
+                                            <span id="auto-approve-label"
+                                                class="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">수동
+                                                🔴</span>
+                                        </label>
+                                        <button type="button" onclick="loadTelegramRequests()"
+                                            class="px-3 py-1.5 rounded-md bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold">새로고침</button>
+                                        <button type="button" onclick="approveSelectedTelegramRequests()"
+                                            class="px-3 py-1.5 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold">선택
+                                            승인</button>
+                                        <button type="button" onclick="rejectSelectedTelegramRequests()"
+                                            class="px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-semibold">선택
+                                            거절</button>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full text-sm border-collapse">
+                                        <thead>
+                                            <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 uppercase">
+                                                <th class="py-2 px-2 text-center w-10"><input type="checkbox"
+                                                        id="tg-req-checkall" onchange="toggleAllTelegramRequestCheckboxes(this)"
+                                                        class="rounded"></th>
+                                                <th class="py-2 px-2 text-left">요청시각</th>
+                                                <th class="py-2 px-2 text-left">회원</th>
+                                                <th class="py-2 px-2 text-left">사건번호</th>
+                                                <th class="py-2 px-2 text-left">법원</th>
+                                                <th class="py-2 px-2 text-center">입찰일자</th>
+                                                <th class="py-2 px-2 text-center">현재상태</th>
+                                                <th class="py-2 px-2 text-left">요청</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tg-req-tbody" class="text-gray-800">
+                                            <tr>
+                                                <td colspan="8" class="py-4 text-center text-gray-500">요청을 불러오는 중...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">회원이 텔레그램에서 <b>입찰 요청</b> 버튼을 누르면 여기에 쌓입니다. 승인 시 물건 상태가
+                                    <b>입찰</b>로 변경됩니다.
+                                </p>
+                            </div>
+                        </div><!-- /pref-sub-panel-autoApprove -->
 
                         </div><!-- /하위 탭 패널 컨테이너 -->
                     </div><!-- /pref-panel-telegram -->

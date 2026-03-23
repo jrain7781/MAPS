@@ -510,7 +510,7 @@ function processMemberDashboardActionDirect(memberToken, itemId, action) {
   try {
     const oldStuDirect = (typeof checkItemStatus_ === 'function') ? checkItemStatus_(item) : '';
     updateItemStuMemberById_(item, newStatus);
-    
+
     // [추가] 상태 변경 FIELD_CHANGE 로그 기록
     if (oldStuDirect !== newStatus) {
       writeItemHistory_({

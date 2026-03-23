@@ -648,10 +648,6 @@
             else stopCalendarPolling_();
         } catch (e) { }
 
-        // 대시보드로 이동 시 요청 목록 즉시 갱신
-        if (tabId === 'Dashboard' && !IS_MEMBER_VIEW) {
-            try { loadTelegramRequests(); } catch (e) { }
-        }
 
         // 환경설정 탭 이동 시 초기 탭 렌더
         if (tabId === 'Preferences') {
@@ -972,22 +968,36 @@
         }
     }
 
-    // 오늘부터 7일(영업일) 계산
+    // 오늘 이후 모든 데이터 날짜 추출
     function getWorkingDaysFromToday() {
-        const targetDates = [];
-        let tempDate = new Date();
-        targetDates.push(new Date(tempDate));
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayYYMMDD = String(today.getFullYear()).slice(-2) + 
+                            String(today.getMonth() + 1).padStart(2, '0') + 
+                            String(today.getDate()).padStart(2, '0');
 
-        let addedCount = 0;
-        while (addedCount < 14) {
-            tempDate.setDate(tempDate.getDate() + 1);
-            const day = tempDate.getDay();
-            if (day !== 0 && day !== 6) {
-                targetDates.push(new Date(tempDate));
-                addedCount++;
+        // 전체 데이터에서今日이후의 유니크한 날짜 추출
+        const dateSet = new Set();
+        allBiddingData.forEach(item => {
+            const itemDate = String(item['in-date']);
+            if (itemDate >= todayYYMMDD) {
+                dateSet.add(itemDate);
             }
-        }
-        return targetDates;
+        });
+
+        // 오늘 날짜가 데이터에 없더라도 기본으로 포함 (선택사항이나, 대시보드 유지보수 위해 추가)
+        dateSet.add(todayYYMMDD);
+
+        // 정렬된 날짜 배열 생성
+        const sortedDates = Array.from(dateSet).sort();
+        
+        // YYMMDD 형식을 Date 객체로 변환하여 반환
+        return sortedDates.map(yymmdd => {
+            const year = 2000 + parseInt(yymmdd.slice(0, 2));
+            const month = parseInt(yymmdd.slice(2, 4)) - 1;
+            const day = parseInt(yymmdd.slice(4, 6));
+            return new Date(year, month, day);
+        });
     }
 
     // ID로 아이템 찾기
@@ -2750,8 +2760,12 @@
     function renderMissingBidDashboard() {
         if (!missingBidTableBody) return;
         missingBidTableBody.innerHTML = '';
+        const missingBidTableFoot = document.getElementById('missingBidTableFoot');
+        if (missingBidTableFoot) missingBidTableFoot.innerHTML = '';
+        
         const targetDates = getWorkingDaysFromToday();
         const filterMember = document.getElementById('missingBidFilterMember') ? document.getElementById('missingBidFilterMember').value : '';
+        let totalMissing = 0;
 
         targetDates.forEach((dateObj, index) => {
             const year = String(dateObj.getFullYear()).slice(-2);
@@ -2772,6 +2786,8 @@
                 const isTargetMember = (filterMemberVal === 'All' || filterMemberVal === '') || (itemMember === filterMemberVal);
                 return itemDate === targetYYMMDD && (isNaN(price) || price === 0) && item.stu_member === '입찰' && isTargetMember;
             }).length;
+            
+            totalMissing += missingCount;
             const displayCount = missingCount === 0 ? "없음" : `${missingCount}건`;
             const textColorClass = missingCount > 0 ? "text-red-600 font-bold" : "text-gray-400";
             const cursorClass = missingCount > 0 ? "cursor-pointer hover:bg-gray-100" : "";
@@ -2792,11 +2808,29 @@
             }
             missingBidTableBody.appendChild(row);
         });
+
+        // <tfoot> 요약 추가
+        if (missingBidTableFoot) {
+            const footRow = document.createElement('tr');
+            const textColor = totalMissing > 0 ? "text-red-600" : "text-blue-800";
+            footRow.innerHTML = `
+                <td class="py-2 px-3 text-left text-blue-800 text-sm">전체 (오늘~)</td>
+                <td class="py-2 px-3 text-center text-sm ${textColor}">${totalMissing}건</td>
+            `;
+            if (totalMissing > 0) {
+                footRow.className = "cursor-pointer hover:bg-blue-100";
+                footRow.onclick = () => filterFromDashboard(todayYYMMDD, 'total_missing', null, filterMember);
+            }
+            missingBidTableFoot.appendChild(footRow);
+        }
     }
 
     function renderStatusManagementDashboard() {
         if (!statusTableBody) return;
         statusTableBody.innerHTML = '';
+        const statusTableFoot = document.getElementById('statusTableFoot');
+        if (statusTableFoot) statusTableFoot.innerHTML = '';
+
         const targetDates = getWorkingDaysFromToday();
         const statuses = ['상품', '미정', '추천', '입찰', '변경'];
         const filterMember = document.getElementById('statusFilterMember') ? document.getElementById('statusFilterMember').value : '';
@@ -2847,28 +2881,30 @@
             statusTableBody.appendChild(row);
         });
 
-        const totalRow = document.createElement('tr');
-        totalRow.className = "bg-blue-50 font-bold border-t-2 border-blue-100";
-        let totalHtml = `<td class="py-2 px-3 text-left border-r text-blue-800 text-sm">전체 당일~</td>`;
-        statuses.forEach(status => {
-            const totalCount = allBiddingData.filter(item => {
-                const isDateMatch = String(item['in-date']) >= todayYYMMDD;
-                const isStatusMatch = item.stu_member === status;
-                const itemMember = item.m_name_id || '';
-                const isMemberMatch = (filterMember === 'All' || filterMember === '') || (itemMember === filterMember);
-                return isDateMatch && isStatusMatch && isMemberMatch;
-            }).length;
+        // <tfoot> 요약 추가
+        if (statusTableFoot) {
+            const totalRow = document.createElement('tr');
+            let totalHtml = `<td class="py-2 px-3 text-left border-r text-blue-800 text-sm">전체 (오늘~)</td>`;
+            statuses.forEach(status => {
+                const totalCount = allBiddingData.filter(item => {
+                    const isDateMatch = String(item['in-date']) >= todayYYMMDD;
+                    const isStatusMatch = item.stu_member === status;
+                    const itemMember = item.m_name_id || '';
+                    const isMemberMatch = (filterMember === 'All' || filterMember === '') || (itemMember === filterMember);
+                    return isDateMatch && isStatusMatch && isMemberMatch;
+                }).length;
 
-            const displayContent = totalCount > 0 ? totalCount : "";
-            const cursorClass = totalCount > 0 ? "cursor-pointer hover:bg-blue-200 text-blue-800" : "text-gray-300";
-            const clickAttr = totalCount > 0
-                ? `onclick="filterFromDashboard('${todayYYMMDD}', 'total_status', '${status}', '${filterMember}')"`
-                : "";
+                const displayContent = totalCount > 0 ? totalCount : "";
+                const cursorClass = totalCount > 0 ? "cursor-pointer hover:bg-blue-200 text-blue-800" : "text-gray-300";
+                const clickAttr = totalCount > 0
+                    ? `onclick="filterFromDashboard('${todayYYMMDD}', 'total_status', '${status}', '${filterMember}')"`
+                    : "";
 
-            totalHtml += `<td class="py-2 px-1 ${cursorClass} text-center text-sm transition duration-150 border-r border-blue-100" ${clickAttr}>${displayContent}</td>`;
-        });
-        totalRow.innerHTML = totalHtml;
-        statusTableBody.appendChild(totalRow);
+                totalHtml += `<td class="py-2 px-1 ${cursorClass} text-center text-sm transition duration-150 border-r border-blue-100" ${clickAttr}>${displayContent}</td>`;
+            });
+            totalRow.innerHTML = totalHtml;
+            statusTableFoot.appendChild(totalRow);
+        }
     }
 
     // ── 업무현황 ──────────────────────────────────────────
@@ -2930,8 +2966,7 @@
                 + mkCell(row, 'status_notify',   'text-red-500',    i)
                 + '</tr>';
         });
-        el.innerHTML = '<div class="overflow-y-auto" style="max-height:280px; min-height:120px">'
-            + '<table class="w-full text-xs border-collapse">'
+        el.innerHTML = '<table class="w-full text-xs border-collapse">'
             + '<thead class="sticky top-0 z-10 bg-gray-50">'
             + '<tr class="border-b border-gray-100 text-gray-600">'
             + '<th class="py-1.5 px-2 text-center font-bold border-r" rowspan="2">날자</th>'
@@ -2949,7 +2984,7 @@
             + '<th class="py-1 px-1 text-center">확인</th>'
             + '</tr></thead>'
             + '<tbody>' + tbodyHtml + '</tbody>'
-            + '</table></div>';
+            + '</table>';
     }
 
 
@@ -5473,8 +5508,8 @@ MJ 이정우 팀장
         if (IS_MEMBER_VIEW) return;
         if (telegramRequestsPoller_) return;
         telegramRequestsPoller_ = setInterval(() => {
-            const dash = document.getElementById('Dashboard');
-            if (!dash || dash.classList.contains('content-hidden')) return;
+            const panel = document.getElementById('pref-sub-panel-autoApprove');
+            if (!panel || panel.style.display === 'none') return;
             try { loadTelegramRequests(true); } catch (e) { } // ★ 배경에서 조용히 갱신
         }, 15000); // ★ 5초 -> 15초로 완화
     }
@@ -7769,7 +7804,7 @@ MJ 이정우 팀장
     }
 
     function switchPrefSubTab(sub) {
-        ['msgEditor', 'notify', 'webhook', 'chatId'].forEach(function (s) {
+        ['msgEditor', 'notify', 'webhook', 'chatId', 'autoApprove'].forEach(function (s) {
             var btn = document.getElementById('pref-sub-btn-' + s);
             var panel = document.getElementById('pref-sub-panel-' + s);
             if (!btn || !panel) return;
@@ -7793,6 +7828,10 @@ MJ 이정우 팀장
         // chat_id 연동 탭: 캐시 즉시 적용
         if (sub === 'chatId') {
             applyChatIdAutoApproveUI_(_prefSettingsCache ? _prefSettingsCache.chatIdAutoApprove : null);
+        }
+        // 자동승인 탭: 승인 대기 목록 로드
+        if (sub === 'autoApprove') {
+            try { loadTelegramRequests(); } catch (e) { }
         }
     }
 
