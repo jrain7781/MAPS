@@ -572,3 +572,119 @@ function updateBidStateApi(itemIds, state) {
 function updateDataApi(ids, field, value) {
   return updateDataField(ids, field, value);
 }
+
+/**
+ * 구글 캘린더 이벤트 조회 - iCal 공개URL 방식 (OAuth 불필요)
+ * @param {number} startMs - 시작 타임스탬프 (ms)
+ * @param {number} endMs - 종료 타임스탬프 (ms)
+ */
+function getCalendarEvents(startMs, endMs) {
+  var ICAL_URL = 'https://calendar.google.com/calendar/ical/n15dboh1fqef9lrnbr9cn1t6k8%40group.calendar.google.com/private-c4866c71aac66cdb881f757ecc9fb4e4/basic.ics';
+  try {
+    var resp = UrlFetchApp.fetch(ICAL_URL, { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) {
+      return { success: false, error: 'iCal 로드 실패 (' + resp.getResponseCode() + ')' };
+    }
+    var icsText = resp.getContentText('UTF-8');
+    var events = parseIcal_(icsText, startMs, endMs);
+    return { success: true, events: events };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/** iCal 텍스트 파싱 → 이벤트 배열 반환 */
+function parseIcal_(icsText, startMs, endMs) {
+  var results = [];
+  // 줄 이어쓰기(CRLF + 공백) 처리
+  var text = icsText.replace(/\r\n[ \t]/g, '').replace(/\r/g, '');
+  var lines = text.split('\n');
+
+  var inEvent = false;
+  var ev = {};
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (line === 'BEGIN:VEVENT') { inEvent = true; ev = {}; continue; }
+    if (line === 'END:VEVENT') {
+      inEvent = false;
+      if (ev.start !== undefined && ev.end !== undefined) {
+        if (ev.end >= startMs && ev.start <= endMs) {
+          results.push(ev);
+        }
+      }
+      continue;
+    }
+    if (!inEvent) continue;
+
+    var sep = line.indexOf(':');
+    if (sep < 0) continue;
+    var key = line.substring(0, sep).toUpperCase();
+    var val = line.substring(sep + 1);
+
+    if (key === 'SUMMARY') {
+      ev.title = val.replace(/\\,/g, ',').replace(/\\n/g, ' ').replace(/\\;/g, ';');
+    } else if (key.indexOf('DTSTART') === 0) {
+      var parsed = parseIcalDate_(key, val);
+      ev.start = parsed.ms;
+      ev.allDay = parsed.allDay;
+    } else if (key.indexOf('DTEND') === 0) {
+      ev.end = parseIcalDate_(key, val).ms;
+    } else if (key === 'COLOR' || key === 'X-APPLE-CALENDAR-COLOR') {
+      ev.color = val;
+    }
+  }
+  return results;
+}
+
+/** iCal 날짜 문자열 → { ms, allDay } */
+function parseIcalDate_(key, val) {
+  // 종일 이벤트: VALUE=DATE 또는 8자리 숫자
+  if (key.indexOf('VALUE=DATE') >= 0 || /^\d{8}$/.test(val)) {
+    var y = parseInt(val.substr(0,4)), m = parseInt(val.substr(4,2))-1, d = parseInt(val.substr(6,2));
+    return { ms: new Date(y, m, d).getTime(), allDay: true };
+  }
+  // 일반 날짜시간
+  val = val.replace('Z','');
+  var y = parseInt(val.substr(0,4)), mo = parseInt(val.substr(4,2))-1, d = parseInt(val.substr(6,2));
+  var h = parseInt(val.substr(9,2)||'0'), mi = parseInt(val.substr(11,2)||'0'), s = parseInt(val.substr(13,2)||'0');
+  var ms;
+  if (val.slice(-1) === 'Z' || key.indexOf('TZID') < 0) {
+    // UTC
+    ms = Date.UTC(y, mo, d, h, mi, s);
+  } else {
+    ms = new Date(y, mo, d, h, mi, s).getTime();
+  }
+  return { ms: ms, allDay: false };
+}
+
+/** full.ics 색상 데이터 포함 여부 테스트 - 가장 최근 이벤트 기준 */
+function testFullIcalColor() {
+  var url = 'https://calendar.google.com/calendar/ical/n15dboh1fqef9lrnbr9cn1t6k8%40group.calendar.google.com/private-c4866c71aac66cdb881f757ecc9fb4e4/full.ics';
+  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  var text = resp.getContentText('UTF-8').replace(/\r\n[ \t]/g, '').replace(/\r/g, '');
+  // 모든 VEVENT 블록 추출 후 가장 최근 DTSTART 기준 정렬
+  var blocks = [];
+  var pos = 0;
+  while (true) {
+    var s = text.indexOf('BEGIN:VEVENT', pos);
+    if (s < 0) break;
+    var e = text.indexOf('END:VEVENT', s);
+    if (e < 0) break;
+    blocks.push(text.substring(s, e + 12));
+    pos = e + 12;
+  }
+  // DTSTART 기준 최신순 정렬
+  blocks.sort(function(a, b) {
+    var da = (a.match(/\nDTSTART[^:]*:(\d+)/) || ['','0'])[1];
+    var db = (b.match(/\nDTSTART[^:]*:(\d+)/) || ['','0'])[1];
+    return db.localeCompare(da);
+  });
+  Logger.log('전체 이벤트 수: ' + blocks.length);
+  Logger.log('COLOR 있음: ' + (text.indexOf('\nCOLOR:') >= 0));
+  Logger.log('CATEGORIES 있음: ' + (text.indexOf('CATEGORIES') >= 0));
+  // 최근 3개 이벤트 출력
+  for (var i = 0; i < Math.min(3, blocks.length); i++) {
+    Logger.log('=== 최근 이벤트 ' + (i+1) + ' ===\n' + blocks[i]);
+  }
+}

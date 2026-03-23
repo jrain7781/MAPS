@@ -5448,7 +5448,8 @@ MJ 이정우 팀장
                 if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
                 if (typeof loadTelegramJoinStatsByItem === 'function') loadTelegramJoinStatsByItem(); // 텔레그램 가입현황 (물건 모드 디폴트)
                 if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
-            })
+                if (typeof loadDashboardCalendar === 'function') loadDashboardCalendar(false); // 캘린더
+                })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
                 showStatus(`[대시보드 로드 오류]: ${error.message}.`, 'error');
@@ -7379,6 +7380,283 @@ MJ 이정우 팀장
         }, 50);
     }
     // ─────────────────────────────────────────────────────────────
+
+    // ── 대쉬보드 캘린더 (iCal 2주뷰 + 키워드 색상) ───────────────────────────
+    var _calWeekOffset = 0;      // 0=이번주, +1=다음주기준...
+    var _calEventsCache = {};    // key: weekStart.getTime() -> events[]
+    var _calColorRules = [];     // [{color:'#ef4444', keywords:'', mode:'OR'}] x7
+    var _calRulesInited = false;
+
+    var CAL_COLOR_PRESETS = [
+      { hex: '#ef4444', label: '빨강' },
+      { hex: '#f97316', label: '주황' },
+      { hex: '#eab308', label: '노랑' },
+      { hex: '#22c55e', label: '초록' },
+      { hex: '#3b82f6', label: '파랑' },
+      { hex: '#a855f7', label: '보라' },
+      { hex: '#ec4899', label: '핑크' }
+    ];
+
+    function _calInitRules() {
+      if (_calRulesInited) return;
+      _calRulesInited = true;
+      try {
+        var saved = localStorage.getItem('cal_color_rules');
+        if (saved) _calColorRules = JSON.parse(saved);
+      } catch(e) {}
+      while (_calColorRules.length < 7) {
+        var idx = _calColorRules.length;
+        _calColorRules.push({ color: CAL_COLOR_PRESETS[idx].hex, keywords: '', mode: 'OR' });
+      }
+      _calColorRules = _calColorRules.slice(0, 7);
+    }
+
+    function _calRenderRulesUI() {
+      var container = document.getElementById('cal-color-rules-ui');
+      if (!container) return;
+      var html = '';
+      _calColorRules.forEach(function(rule, i) {
+        var preset = CAL_COLOR_PRESETS[i];
+        html += '<div class="flex items-center gap-2">'
+          + '<div class="w-4 h-4 rounded flex-shrink-0 border border-gray-300" style="background:' + preset.hex + ';"></div>'
+          + '<span class="text-xs text-gray-500 w-6 flex-shrink-0">' + preset.label + '</span>'
+          + '<input type="text" id="cal-kw-' + i + '" value="' + _esc(rule.keywords) + '" placeholder="키워드1, 키워드2..." '
+          + 'class="flex-1 text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-blue-400 min-w-0" />'
+          + '<select id="cal-mode-' + i + '" class="text-xs border border-gray-300 rounded px-1 py-0.5 flex-shrink-0">'
+          + '<option value="OR"' + (rule.mode === 'OR' ? ' selected' : '') + '>OR</option>'
+          + '<option value="AND"' + (rule.mode === 'AND' ? ' selected' : '') + '>AND</option>'
+          + '</select>'
+          + '</div>';
+      });
+      container.innerHTML = html;
+    }
+
+    function toggleCalSettings() {
+      var panel = document.getElementById('cal-settings-panel');
+      if (!panel) return;
+      var isHidden = panel.classList.contains('hidden');
+      panel.classList.toggle('hidden');
+      if (isHidden) _calRenderRulesUI();
+    }
+
+    function calSaveColorRules() {
+      for (var i = 0; i < 7; i++) {
+        var kwEl = document.getElementById('cal-kw-' + i);
+        var modeEl = document.getElementById('cal-mode-' + i);
+        if (kwEl && modeEl) {
+          _calColorRules[i].keywords = kwEl.value.trim();
+          _calColorRules[i].mode = modeEl.value;
+        }
+      }
+      try { localStorage.setItem('cal_color_rules', JSON.stringify(_calColorRules)); } catch(e) {}
+      toggleCalSettings();
+      _calEventsCache = {};
+      loadDashboardCalendar(true);
+    }
+
+    function _getEventColor(title) {
+      var t = (title || '').toLowerCase();
+      for (var i = 0; i < _calColorRules.length; i++) {
+        var rule = _calColorRules[i];
+        if (!rule.keywords) continue;
+        var kws = rule.keywords.split(',').map(function(s){ return s.trim().toLowerCase(); }).filter(Boolean);
+        if (!kws.length) continue;
+        var matched = rule.mode === 'AND'
+          ? kws.every(function(kw){ return t.indexOf(kw) >= 0; })
+          : kws.some(function(kw){ return t.indexOf(kw) >= 0; });
+        if (matched) return CAL_COLOR_PRESETS[i].hex;
+      }
+      return null; // 기본: 회색
+    }
+
+    function _calGetWeekStart(offset) {
+      var now = new Date();
+      var dow = (now.getDay() + 6) % 7; // 월=0
+      var monday = new Date(now);
+      monday.setDate(now.getDate() - dow + offset * 7);
+      monday.setHours(0, 0, 0, 0);
+      return monday;
+    }
+
+    function calGoToday() {
+      _calWeekOffset = 0;
+      _calEventsCache = {};
+      loadDashboardCalendar(false);
+    }
+
+    function calMoveWeek(delta) {
+      _calWeekOffset += delta;
+      loadDashboardCalendar(false);
+    }
+
+    function loadDashboardCalendar(forceRefresh) {
+      if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+      var grid = document.getElementById('cal-grid');
+      if (!grid) return;
+      _calInitRules();
+
+      var weekStart = _calGetWeekStart(_calWeekOffset);
+      var weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 14);
+
+      var label = document.getElementById('cal-week-label');
+      if (label) {
+        var w2End = new Date(weekStart);
+        w2End.setDate(weekStart.getDate() + 13);
+        label.textContent = (weekStart.getMonth()+1) + '/' + weekStart.getDate()
+          + ' ~ ' + (w2End.getMonth()+1) + '/' + w2End.getDate();
+      }
+
+      var cacheKey = weekStart.getTime();
+      if (!forceRefresh && _calEventsCache[cacheKey]) {
+        _renderCalGrid(weekStart, _calEventsCache[cacheKey]);
+        return;
+      }
+
+      grid.innerHTML = '<div class="col-span-7 py-8 text-center text-gray-400 text-xs">불러오는 중...</div>';
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (!res || !res.success) {
+            if (grid) grid.innerHTML = '<div class="col-span-7 py-4 text-center text-red-400 text-xs">캘린더 오류: ' + (res && res.error ? res.error : '알 수 없음') + '</div>';
+            return;
+          }
+          _calEventsCache[cacheKey] = res.events || [];
+          _renderCalGrid(weekStart, res.events || []);
+        })
+        .withFailureHandler(function(err) {
+          if (grid) grid.innerHTML = '<div class="col-span-7 py-4 text-center text-red-400 text-xs">오류: ' + err.message + '</div>';
+        })
+        .getCalendarEvents(weekStart.getTime(), weekEnd.getTime());
+    }
+
+    function _renderCalGrid(weekStart, events) {
+      var grid = document.getElementById('cal-grid');
+      if (!grid) return;
+
+      // 날짜별 이벤트 맵
+      var evMap = {};
+      events.forEach(function(ev) {
+        var s = new Date(ev.start);
+        var e = new Date(ev.end || ev.start);
+        var cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+        var endDay = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+        if (ev.allDay && endDay > cur) endDay.setDate(endDay.getDate() - 1);
+        while (cur <= endDay) {
+          var k = cur.getFullYear() + '-' + _pad2(cur.getMonth()+1) + '-' + _pad2(cur.getDate());
+          if (!evMap[k]) evMap[k] = [];
+          evMap[k].push(ev);
+          cur.setDate(cur.getDate() + 1);
+        }
+      });
+
+      var today = new Date();
+      var todayKey = today.getFullYear() + '-' + _pad2(today.getMonth()+1) + '-' + _pad2(today.getDate());
+      var html = '';
+
+      for (var week = 0; week < 2; week++) {
+        for (var d = 0; d < 7; d++) {
+          var cur = new Date(weekStart);
+          cur.setDate(weekStart.getDate() + week * 7 + d);
+          var k = cur.getFullYear() + '-' + _pad2(cur.getMonth()+1) + '-' + _pad2(cur.getDate());
+          var isToday = (k === todayKey);
+          var isSat = (d === 5);
+          var isSun = (d === 6);
+          var dayEvs = evMap[k] || [];
+
+          var dateNumCls = 'inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded-full ';
+          if (isToday) dateNumCls += 'bg-blue-600 text-white';
+          else if (isSun) dateNumCls += 'text-red-400';
+          else if (isSat) dateNumCls += 'text-blue-400';
+          else dateNumCls += 'text-gray-700';
+
+          var cellBg = isToday ? 'bg-blue-50' : '';
+          var borderB = (week === 0) ? 'border-b border-gray-200 ' : '';
+          var borderR = (d < 6) ? 'border-r border-gray-100 ' : '';
+
+          var evHtml = '';
+          var kSafe = k.replace(/'/g, '');
+          dayEvs.slice(0, 4).forEach(function(ev, i) {
+            var color = _getEventColor(ev.title);
+            var bg = color || '#9ca3af';
+            var st = ev.allDay ? '' : (_fmtTime(new Date(ev.start)) + ' ');
+            evHtml += '<div class="text-xs px-1 py-0 mb-0.5 rounded truncate leading-5 cursor-pointer text-white hover:opacity-80"'
+              + ' style="background:' + bg + ';" title="' + _esc(ev.title) + '"'
+              + ' onclick="showCalEventPopup(\'' + kSafe + '\',' + i + ')">'
+              + _esc(st + ev.title) + '</div>';
+          });
+          if (dayEvs.length > 4) {
+            evHtml += '<div class="text-xs text-blue-500 pl-1 cursor-pointer hover:underline"'
+              + ' onclick="showCalDayPopup(\'' + kSafe + '\')">+' + (dayEvs.length - 4) + '개 더보기</div>';
+          }
+
+          html += '<div class="p-1 ' + cellBg + ' ' + borderB + borderR + '" style="min-height:100px;">'
+            + '<div class="mb-1"><span class="' + dateNumCls + '">' + cur.getDate() + '</span></div>'
+            + evHtml + '</div>';
+        }
+      }
+
+      _calLastEvMap = evMap;
+      grid.innerHTML = html;
+    }
+
+    var _calLastEvMap = {};
+
+    function closeCalPopup() {
+      var el = document.getElementById('cal-event-popup');
+      if (el) { el.classList.add('content-hidden'); el.classList.remove('flex'); }
+    }
+
+    function _openCalPopup(titleHtml, bodyHtml) {
+      var popup = document.getElementById('cal-event-popup');
+      var titleEl = document.getElementById('cal-popup-title');
+      var bodyEl = document.getElementById('cal-popup-body');
+      if (!popup || !titleEl || !bodyEl) return;
+      titleEl.innerHTML = titleHtml;
+      bodyEl.innerHTML = bodyHtml;
+      popup.classList.remove('content-hidden');
+      popup.classList.add('flex');
+    }
+
+    function showCalEventPopup(dateKey, idx) {
+      var ev = (_calLastEvMap[dateKey] || [])[idx];
+      if (!ev) return;
+      var color = _getEventColor(ev.title);
+      var bg = color || '#9ca3af';
+      var d = new Date(ev.start);
+      var dateStr = d.getFullYear() + '년 ' + (d.getMonth()+1) + '월 ' + d.getDate() + '일';
+      var timeStr = ev.allDay ? '종일 일정' : (_fmtTime(new Date(ev.start)) + ' ~ ' + _fmtTime(new Date(ev.end || ev.start)));
+      var titleHtml = '<span class="inline-block w-3 h-3 rounded-full mr-1.5 align-middle flex-shrink-0" style="background:' + bg + ';"></span>' + _esc(ev.title);
+      var bodyHtml = '<div class="flex items-center gap-2"><span class="text-gray-400">📅</span><span>' + dateStr + '</span></div>'
+        + '<div class="flex items-center gap-2"><span class="text-gray-400">🕐</span><span>' + timeStr + '</span></div>';
+      _openCalPopup(titleHtml, bodyHtml);
+    }
+
+    function showCalDayPopup(dateKey) {
+      var evs = _calLastEvMap[dateKey] || [];
+      if (!evs.length) return;
+      var parts = dateKey.split('-');
+      var titleHtml = parseInt(parts[1]) + '월 ' + parseInt(parts[2]) + '일 일정 (' + evs.length + '건)';
+      var bodyHtml = '';
+      evs.forEach(function(ev, i) {
+        var color = _getEventColor(ev.title);
+        var bg = color || '#9ca3af';
+        var timeStr = ev.allDay ? '종일' : (_fmtTime(new Date(ev.start)) + ' ~ ' + _fmtTime(new Date(ev.end || ev.start)));
+        bodyHtml += '<div class="flex items-start gap-2 py-1.5 border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50 rounded px-1"'
+          + ' onclick="showCalEventPopup(\'' + dateKey + '\',' + i + ')">'
+          + '<div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style="background:' + bg + ';"></div>'
+          + '<div class="min-w-0 flex-1">'
+          + '<div class="font-medium text-gray-800 text-xs truncate">' + _esc(ev.title) + '</div>'
+          + '<div class="text-gray-400 text-xs">' + timeStr + '</div>'
+          + '</div></div>';
+      });
+      _openCalPopup(titleHtml, bodyHtml);
+    }
+
+    function _pad2(n) { return n < 10 ? '0' + n : '' + n; }
+    function _fmtTime(d) { return _pad2(d.getHours()) + ':' + _pad2(d.getMinutes()); }
+    function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    // ── END 대쉬보드 캘린더 ───────────────────────────────────────────────────
 
     function loadDashboardImageStats() {
         const tbody = document.getElementById('imageSyncStatsBody');
