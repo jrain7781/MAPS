@@ -1035,6 +1035,15 @@
                 row.setAttribute('data-images', imageIdsVal);
                 var hasImages = !!(imageIdsVal && imageIdsVal.split(',').map(function (s) { return s.trim(); }).filter(Boolean).length);
                 row.setAttribute('data-sakun-no', item.sakun_no || '');
+                row.onmouseenter = function() {
+                    var idsStr = this.getAttribute('data-images') || '';
+                    var ids = idsStr.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+                    if (ids.length > 0) {
+                        // [PRELOAD] 마우스를 올리는 순간 이미지를 미리 로드하여 클릭 시 "탁" 하고 뜨게 함
+                        var preloadImg = new Image();
+                        preloadImg.src = 'https://drive.google.com/thumbnail?sz=w1000&id=' + encodeURIComponent(ids[0]);
+                    }
+                };
                 row.onclick = function (ev) {
                     if (ev.target && (ev.target.closest ? ev.target.closest('.item-row-cb') : ev.target.classList && ev.target.classList.contains('item-row-cb'))) return;
                     var r = ev.currentTarget;
