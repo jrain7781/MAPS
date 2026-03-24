@@ -4145,14 +4145,21 @@
             // 서버 호출 없이 data-images / currentDetailItem.image_ids 로 즉시 렌더링
             var ids = [];
             var idsRaw = '';
-            if (typeof activeRow !== 'undefined' && activeRow && activeRow.getAttribute('data-images') != null) {
+            // 우선순위: items 시트의 image_id가 있으면 최우선으로 즉시 렌더링
+            if (currentDetailItem && currentDetailItem.image_id) {
+                idsRaw = String(currentDetailItem.image_id);
+            } else if (typeof activeRow !== 'undefined' && activeRow && activeRow.getAttribute('data-images')) {
                 idsRaw = activeRow.getAttribute('data-images') || '';
-            } else if (currentDetailItem && (currentDetailItem.image_ids != null || currentDetailItem.image_id != null)) {
-                idsRaw = currentDetailItem.image_ids != null ? String(currentDetailItem.image_ids) : (currentDetailItem.image_id || '');
+            } else if (currentDetailItem && currentDetailItem.image_ids) {
+                idsRaw = String(currentDetailItem.image_ids);
             }
             if (idsRaw) ids = idsRaw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+            
             if (ids.length) {
+                // [OPTIMIZE] 일단 알고 있는 1장(또는 목록)을 즉시 렌더링
                 renderInvestigationImagesFromIds(ids);
+                // [NEW] 그 뒤에서 조용히 서버를 호출해 전체 목록(히스토리 포함)을 최신화
+                setTimeout(function() { loadInvestigationImages(true); }, 500); 
             } else {
                 var listEl = document.getElementById('investigationImageList');
                 var placeholderEl = document.getElementById('investigationPlaceholder');
@@ -4160,6 +4167,8 @@
                 if (listEl) { listEl.innerHTML = ''; listEl.classList.add('content-hidden'); }
                 if (placeholderEl) { placeholderEl.textContent = '등록된 이미지 없음'; placeholderEl.classList.remove('content-hidden'); }
                 if (footerEl) footerEl.textContent = '';
+                // 목록이 아예 없으면 서버 호출 시도
+                loadInvestigationImages();
             }
             // setupInvestigationDropPaste();
         }
@@ -4168,15 +4177,19 @@
         updateAuctionUrlButtonVisibility();
     }
 
-    function loadInvestigationImages() {
+    function loadInvestigationImages(isBackground) {
         var listEl = document.getElementById('investigationImageList');
         var placeholderEl = document.getElementById('investigationPlaceholder');
         var footerEl = document.getElementById('investigationImageIdsFooter');
         if (!listEl || !placeholderEl) return;
-        listEl.innerHTML = '';
-        listEl.classList.add('content-hidden');
-        placeholderEl.classList.remove('content-hidden');
-        placeholderEl.textContent = '이미지 로딩 중...';
+
+        // 백그라운드 업데이트가 아닐 때만 로딩 표시 (화면 깜빡임 방지)
+        if (!isBackground) {
+            listEl.innerHTML = '';
+            listEl.classList.add('content-hidden');
+            placeholderEl.classList.remove('content-hidden');
+            placeholderEl.textContent = '이미지 로딩 중...';
+        }
         if (!currentDetailItem || !currentDetailItem.id) {
             placeholderEl.textContent = '매칭된 이미지 없음';
             if (footerEl) footerEl.textContent = '';
@@ -4204,7 +4217,7 @@
                 img.dataset.imageId = r.image_id;
                 img.dataset.uploader = r.uploader || '';
                 if (r.image_id) {
-                    var thumbUrl = 'https://drive.google.com/thumbnail?sz=w1600&id=' + encodeURIComponent(r.image_id);
+                    var thumbUrl = 'https://drive.google.com/thumbnail?sz=w1000&id=' + encodeURIComponent(r.image_id);
                     var originalUrl = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id);
                     img.src = thumbUrl;
                     img.loading = 'lazy';
@@ -4259,7 +4272,7 @@
             img.className = 'investigation-image-max w-full cursor-pointer';
             img.alt = '이미지';
             if (id) {
-                var thumbUrl = 'https://drive.google.com/thumbnail?sz=w1600&id=' + encodeURIComponent(id);
+                var thumbUrl = 'https://drive.google.com/thumbnail?sz=w1000&id=' + encodeURIComponent(id);
                 var originalUrl = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(id);
                 img.src = thumbUrl;
                 img.dataset.id = id; // [추가] 복사 시 ID 참조를 위해 저장
@@ -4351,7 +4364,14 @@
             .withSuccessHandler(function (res) {
                 if (res && res.success) {
                     if (typeof showStatus === 'function') showStatus('이미지가 등록되었습니다.', 'success');
-                    loadInvestigationImages();
+                    // [OPTIMIZE] 서버 재호출 없이 즉시 로컬 데이터 갱신 및 렌더링
+                    if (res.image_id) {
+                        currentDetailItem.image_id = res.image_id;
+                        if (activeRow) activeRow.setAttribute('data-images', res.image_id);
+                        renderInvestigationImagesFromIds([res.image_id]);
+                    } else {
+                        loadInvestigationImages();
+                    }
                 } else {
                     if (typeof showStatus === 'function') showStatus(res && res.message ? res.message : '등록 실패', 'error');
                 }
@@ -11726,6 +11746,23 @@ ${token}
         if (!imageList || !placeholder) return;
 
         imageList.innerHTML = '';
+        
+        // [OPTIMIZE] items 시트의 image_id가 있으면 즉시 렌더링 (서버 대기 없이)
+        if (currentModalItemData && currentModalItemData.image_id) {
+            renderModalImagesByIDs([currentModalItemData.image_id]);
+            // [NEW] 백그라운드에서 전체 목록 가져오기
+            setTimeout(function() { 
+                google.script.run
+                    .withSuccessHandler(function (rows) {
+                        if (rows && rows.length > 0) {
+                            renderModalImagesByIDs(rows.map(r => r.image_id), rows);
+                        }
+                    })
+                    .getItemImages(currentModalItemData.id);
+            }, 500);
+            return;
+        }
+
         imageList.classList.add('content-hidden');
         placeholder.classList.remove('content-hidden');
         placeholder.textContent = '이미지 로딩 중...';
@@ -11743,71 +11780,75 @@ ${token}
                     if (footer) footer.textContent = '';
                     return;
                 }
-                placeholder.classList.add('content-hidden');
-                imageList.classList.remove('content-hidden');
                 const ids = rows.map(function (r) { return r.image_id; });
-                if (footer) footer.textContent = 'Image ID: ' + ids.join(', ');
-
-                rows.forEach(function (r) {
-                    const wrap = document.createElement('div');
-                    wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white capture-target relative'; // relative 추가
-                    const img = document.createElement('img');
-                    img.className = 'investigation-image-max w-full cursor-pointer';
-                    img.alt = r.file_name || '이미지';
-                    img.dataset.id = r.image_id;
-                    img.dataset.uploader = r.uploader || '';
-
-                    if (r.image_id) {
-                        img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-                        google.script.run
-                            .withSuccessHandler(function (dataUrl) {
-                                if (dataUrl) {
-                                    img.src = dataUrl;
-                                } else {
-                                    img.src = 'https://drive.google.com/thumbnail?sz=w1600&id=' + encodeURIComponent(r.image_id);
-                                }
-                            })
-                            .getImageDataUrl(r.image_id);
-
-                        // 이미지 클릭 시 라이트박스 열기 (새 창 대신 앱 내 확대)
-                        img.onclick = function () {
-                            openLightbox(this.src, r.file_name || '조사 이미지');
-                        };
-
-                        // 우측 상단 다운로드 버튼 추가
-                        const dlBtn = document.createElement('button');
-                        dlBtn.className = 'absolute top-2 right-2 p-1.5 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition z-10';
-                        dlBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>';
-                        dlBtn.title = '다운로드';
-                        dlBtn.onclick = function (e) {
-                            e.stopPropagation();
-                            const url = 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(r.image_id);
-                            window.open(url, '_blank');
-                        };
-                        wrap.appendChild(dlBtn);
-                    }
-                    wrap.appendChild(img);
-
-                    // 삭제 버튼 (Member View에서는 숨김)
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'mt-2 mx-2 mb-2 text-red-600 hover:text-red-800 text-sm font-medium';
-                    if (IS_MEMBER_VIEW) btn.classList.add('content-hidden');
-                    btn.textContent = '삭제(X)';
-                    btn.onclick = function (ev) {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        handleModalDeleteItemImage(currentModalItemData.id, r.image_id);
-                    };
-                    wrap.appendChild(btn);
-                    imageList.appendChild(wrap);
-                });
+                renderModalImagesByIDs(ids, rows);
             })
-            .withFailureHandler(function () {
-                placeholder.textContent = '이미지를 불러올 수 없습니다.';
-                if (footer) footer.textContent = '';
+            .withFailureHandler(function (err) {
+                placeholder.textContent = '로딩 실패: ' + (err.message || '');
             })
             .getItemImages(currentModalItemData.id);
+    }
+
+    function renderModalImagesByIDs(ids, rowData) {
+        const imageList = document.getElementById('modal-investigation-image-list');
+        const placeholder = document.getElementById('modal-investigation-placeholder');
+        const footer = document.getElementById('modal-investigation-image-ids-footer');
+
+        if (!imageList || !placeholder) return;
+
+        imageList.innerHTML = '';
+        placeholder.classList.add('content-hidden');
+        imageList.classList.remove('content-hidden');
+
+        if (footer) footer.textContent = 'Image ID: ' + ids.join(', ');
+
+        ids.forEach(function (id, idx) {
+            const r = (rowData && rowData[idx]) ? rowData[idx] : { image_id: id };
+            const wrap = document.createElement('div');
+            wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white capture-target relative';
+            const img = document.createElement('img');
+            img.className = 'investigation-image-max w-full cursor-pointer';
+            img.alt = r.file_name || '이미지';
+            img.dataset.id = r.image_id;
+            img.dataset.uploader = r.uploader || '';
+
+            if (r.image_id) {
+                // [OPTIMIZE] 구글 드라이브 썸네일 URL 사용 (sz=w1000으로 적정화)
+                img.src = 'https://drive.google.com/thumbnail?sz=w1000&id=' + encodeURIComponent(r.image_id);
+
+                // 이미지 클릭 시 라이트박스 열기 (새 창 대신 앱 내 확대)
+                img.onclick = function () {
+                    openLightbox(this.src, r.file_name || '조사 이미지');
+                };
+
+                // 우측 상단 다운로드 버튼 추가
+                const dlBtn = document.createElement('button');
+                dlBtn.className = 'absolute top-2 right-2 p-1.5 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition z-10';
+                dlBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>';
+                dlBtn.title = '다운로드';
+                dlBtn.onclick = function (e) {
+                    e.stopPropagation();
+                    const url = 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(r.image_id);
+                    window.open(url, '_blank');
+                };
+                wrap.appendChild(dlBtn);
+            }
+            wrap.appendChild(img);
+
+            // 삭제 버튼 (Member View에서는 숨김)
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'mt-2 mx-2 mb-2 text-red-600 hover:text-red-800 text-sm font-medium';
+            if (typeof IS_MEMBER_VIEW !== 'undefined' && IS_MEMBER_VIEW) btn.classList.add('content-hidden');
+            btn.textContent = '삭제(X)';
+            btn.onclick = function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                handleModalDeleteItemImage(currentModalItemData.id, r.image_id);
+            };
+            wrap.appendChild(btn);
+            imageList.appendChild(wrap);
+        });
     }
 
     function handleModalDeleteItemImage(itemId, imageId) {

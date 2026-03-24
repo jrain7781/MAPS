@@ -458,15 +458,24 @@ function registerWebImage(itemId, base64DataUrl, mimeType, sakunNo, inDate, cour
     }
 
     var itemsSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(IMAGE_DB_SHEET_NAME);
-    if (itemsSheet && typeof ensureColumnExists === 'function') {
-      ensureColumnExists(itemsSheet, 13);
-      var ids = itemsSheet.getRange(2, 1, Math.max(2, itemsSheet.getLastRow() - 1), 1).getValues();
+    if (!itemsSheet) {
+      Logger.log(`[registerWebImage] Error: itemsSheet (${IMAGE_DB_SHEET_NAME}) not found.`);
+    } else {
+      if (typeof ensureColumnExists === 'function') {
+        ensureColumnExists(itemsSheet, 13);
+      }
+      var ids = itemsSheet.getRange(2, 1, Math.max(1, itemsSheet.getLastRow() - 1), 1).getValues();
+      var found = false;
       for (var i = 0; i < ids.length; i++) {
         if (String(ids[i][0]).trim() === String(itemId).trim()) {
-          var cell = itemsSheet.getRange(i + 2, 13);
-          if (!cell.getValue() || !String(cell.getValue()).trim()) cell.setValue(file.getId());
+          // [OPTIMIZE] 항상 최신 이미지 ID로 업데이트 (기존에는 비어있을 때만 업데이트했음)
+          itemsSheet.getRange(i + 2, 13).setValue(file.getId());
+          found = true;
           break;
         }
+      }
+      if (!found) {
+        Logger.log(`[registerWebImage] Warning: itemId (${itemId}) not found in items sheet.`);
       }
     }
     return { success: true, image_id: file.getId(), file_name: fileName };
