@@ -3586,6 +3586,7 @@
                             <div class="flex items-center justify-between mb-1">
                                 <label class="block text-[10px] font-medium text-gray-500">이미지 ID</label>
                                 <div class="flex gap-1">
+                                    <button type="button" onclick="fetchLatestImageIdForItem('${item.id}', '${suffix}')" class="text-[10px] text-purple-600 hover:underline font-bold">가져오기</button>
                                     <button type="button" onclick="copyToClipboard(document.getElementById('info-image-id${suffix}').value)" class="text-[10px] text-blue-600 hover:underline">복사</button>
                                     <button type="button" onclick="saveSingleField('${item.id}', 'image_id', document.getElementById('info-image-id${suffix}').value)" class="text-[10px] text-green-600 font-bold hover:underline">저장</button>
                                 </div>
@@ -3615,6 +3616,32 @@
                     </div>
                 </div>
             </div>`;
+    }
+
+    // [Info] 정보탭 - 이미지 ID 가져오기 (item_images 최신값)
+    function fetchLatestImageIdForItem(itemId, suffix) {
+        const input = document.getElementById('info-image-id' + suffix);
+        if (!input) return;
+        input.value = '조회 중...';
+        input.disabled = true;
+        google.script.run
+            .withSuccessHandler(function(results) {
+                input.disabled = false;
+                const latest = (results && results[0]) ? results[0].image_id_latest : '';
+                if (latest) {
+                    input.value = latest;
+                    if (typeof showStatus === 'function') showStatus('최신 이미지 ID를 가져왔습니다. 저장 버튼을 눌러 반영하세요.', 'info');
+                } else {
+                    input.value = '';
+                    if (typeof showStatus === 'function') showStatus('item_images에 등록된 이미지가 없습니다.', 'warning');
+                }
+            })
+            .withFailureHandler(function(err) {
+                input.disabled = false;
+                input.value = '';
+                if (typeof showStatus === 'function') showStatus('조회 실패: ' + err.message, 'error');
+            })
+            .getLatestImageIdsForItems([itemId]);
     }
 
     // ── 입찰일정 모달 하단 탭 ──────────────────────────────────────
@@ -11937,6 +11964,8 @@ ${token}
             handleBulkBidState(cbs, stateMap[type]);
         } else if (type === 'bulk_image_id') {
             openBulkImageIdModal(cbs);
+        } else if (type === 'fill_image_id') {
+            openFillImageIdModal(cbs);
         } else {
             if (typeof showStatus === 'function') showStatus('작업 유형을 선택해 주세요.', 'warning');
         }
@@ -13508,6 +13537,124 @@ MJ 이정우 팀장
     function closeBulkImageIdModal() {
         const modal = document.getElementById('bulkImageIdModal');
         if (modal) modal.classList.add('content-hidden');
+    }
+
+    // ── 이미지 ID 채우기 모달 ────────────────────────────────────────
+    function openFillImageIdModal(cbs) {
+        const modal = document.getElementById('fillImageIdModal');
+        const tbody = document.getElementById('fill-image-id-tbody');
+        const loading = document.getElementById('fill-image-loading');
+        if (!modal || !tbody) return;
+
+        const ids = Array.from(cbs).map(cb => cb.getAttribute('data-id'));
+        const items = ids.map(id => (typeof allBiddingData !== 'undefined' ? allBiddingData : []).find(d => String(d.id) === String(id)) || { id });
+
+        // 테이블 초기 렌더링 (최신 ID는 로딩 중 표시)
+        tbody.innerHTML = items.map((it, idx) => {
+            const isEmpty = !it.image_id;
+            return `<tr class="hover:bg-gray-50 border-b border-gray-100${isEmpty ? ' bg-yellow-50' : ''}" data-id="${it.id}" data-original="${it.image_id || ''}">
+                <td class="px-2 py-2 text-center text-gray-400">${idx + 1}</td>
+                <td class="px-2 py-2 font-medium text-gray-700">${it.sakun_no || '-'}</td>
+                <td class="px-2 py-1">
+                    <input type="text" class="fill-row-image-id w-full px-2 py-1 border ${isEmpty ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-white'} rounded text-[11px] font-mono" value="${it.image_id || ''}" placeholder="(비어있음)">
+                </td>
+                <td class="px-2 py-2 text-[11px] font-mono text-gray-400 fill-row-latest" data-latest="">
+                    <span class="text-gray-300">조회 중...</span>
+                </td>
+            </tr>`;
+        }).join('');
+
+        modal.classList.remove('content-hidden');
+
+        // 서버에서 최신 image_id 조회
+        if (loading) loading.classList.remove('hidden');
+        google.script.run
+            .withSuccessHandler(function(results) {
+                if (loading) loading.classList.add('hidden');
+                results.forEach(function(r) {
+                    const row = tbody.querySelector(`tr[data-id="${r.id}"]`);
+                    if (!row) return;
+                    const latestCell = row.querySelector('.fill-row-latest');
+                    if (!latestCell) return;
+                    latestCell.setAttribute('data-latest', r.image_id_latest || '');
+                    if (r.image_id_latest) {
+                        latestCell.innerHTML = `<span class="text-green-700 font-medium">${r.image_id_latest}</span>`;
+                    } else {
+                        latestCell.innerHTML = '<span class="text-gray-300">없음</span>';
+                    }
+                });
+            })
+            .withFailureHandler(function(err) {
+                if (loading) loading.classList.add('hidden');
+                if (typeof showStatus === 'function') showStatus('최신 이미지 ID 조회 실패: ' + err.message, 'error');
+            })
+            .getLatestImageIdsForItems(ids);
+    }
+
+    function closeFillImageIdModal() {
+        const modal = document.getElementById('fillImageIdModal');
+        if (modal) modal.classList.add('content-hidden');
+    }
+
+    // [FillImage] 이미지 ID 채우기 버튼 - latest 값을 current input에 복사
+    function fillAllImageIds() {
+        const rows = document.querySelectorAll('#fill-image-id-tbody tr');
+        let filled = 0;
+        rows.forEach(function(row) {
+            const latest = row.querySelector('.fill-row-latest').getAttribute('data-latest');
+            if (!latest) return;
+            const input = row.querySelector('.fill-row-image-id');
+            if (input) {
+                input.value = latest;
+                input.classList.remove('border-yellow-300', 'bg-yellow-50');
+                input.classList.add('border-green-300', 'bg-green-50');
+                filled++;
+            }
+        });
+        if (typeof showStatus === 'function') showStatus(`${filled}건 채워졌습니다. 저장하기를 눌러 DB에 반영하세요.`, 'info');
+    }
+
+    // [FillImage] 저장하기 - 변경된 값만 DB 반영
+    function saveFillImageIdToDB() {
+        const rows = document.querySelectorAll('#fill-image-id-tbody tr');
+        const updates = [];
+        rows.forEach(function(row) {
+            const id = row.getAttribute('data-id');
+            const original = row.getAttribute('data-original');
+            const newVal = row.querySelector('.fill-row-image-id').value.trim();
+            if (newVal !== original) updates.push({ id, value: newVal });
+        });
+
+        if (updates.length === 0) {
+            if (typeof showStatus === 'function') showStatus('변경된 항목이 없습니다.', 'warning');
+            return;
+        }
+        if (!confirm(`${updates.length}건을 DB에 저장하시겠습니까?`)) return;
+
+        let completed = 0;
+        if (typeof showStatus === 'function') showStatus(`저장 중... (0/${updates.length})`, 'info');
+
+        updates.forEach(function(u) {
+            google.script.run
+                .withSuccessHandler(function() {
+                    completed++;
+                    if (typeof showStatus === 'function') showStatus(`저장 중... (${completed}/${updates.length})`, 'info');
+                    // allBiddingData 캐시 업데이트
+                    if (typeof allBiddingData !== 'undefined') {
+                        const item = allBiddingData.find(d => String(d.id) === String(u.id));
+                        if (item) item.image_id = u.value;
+                    }
+                    if (completed === updates.length) {
+                        closeFillImageIdModal();
+                        if (typeof showStatus === 'function') showStatus(`${updates.length}건 이미지 ID 저장 완료`, 'success');
+                    }
+                })
+                .withFailureHandler(function(err) {
+                    completed++;
+                    if (typeof showStatus === 'function') showStatus('저장 실패: ' + err.message, 'error');
+                })
+                .updateDataField([u.id], 'image_id', u.value);
+        });
     }
 
     // [Bulk] 모달 내 리스트에 일괄 적용

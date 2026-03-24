@@ -403,6 +403,38 @@ function getItemImages(itemId) {
 }
 
 /**
+ * 여러 물건의 최신 이미지 ID를 일괄 반환합니다. (이미지 ID 채우기 기능용)
+ * item_images 시트를 한 번만 읽어서 각 itemId별 최신 image_id 반환
+ * @param {Array} itemIds - 물건 ID 배열
+ * @return {Array} [{ id, image_id_latest }, ...]
+ */
+function getLatestImageIdsForItems(itemIds) {
+  if (!itemIds || itemIds.length === 0) return [];
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var imgSheet = ss.getSheetByName(ITEM_IMAGES_SHEET_NAME);
+  var map = {};
+
+  if (imgSheet && imgSheet.getLastRow() >= 2) {
+    var data = imgSheet.getRange(2, 1, imgSheet.getLastRow() - 1, 2).getValues();
+    // 뒤에서부터 읽어서 처음 만나는 것이 최신값 (map에 없을 때만 저장)
+    for (var i = data.length - 1; i >= 0; i--) {
+      var id = String(data[i][0]).trim();
+      var imgId = String(data[i][1] || '').trim();
+      if (imgId && !map[id]) {
+        map[id] = imgId;
+      }
+    }
+  }
+
+  return itemIds.map(function(itemId) {
+    return {
+      id: String(itemId),
+      image_id_latest: map[String(itemId)] || ''
+    };
+  });
+}
+
+/**
  * 해당 물건의 웹 이미지 번호 다음 값을 구합니다. (_web1, _web2 ...)
  */
 function getNextWebNumber_(itemId) {
