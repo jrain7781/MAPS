@@ -4268,6 +4268,33 @@ function saveMsgTemplatesBatch(pairs) {
 }
 
 /**
+ * 캘린더 색상 규칙 저장 (settings 시트에 CAL_COLOR_RULES 키로 저장)
+ * @param {string} json - JSON 배열 문자열
+ */
+function saveCalColorRules(json) {
+  try {
+    saveSetting_('CAL_COLOR_RULES', json);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * 캘린더 색상 규칙 로드 (settings 시트에서 CAL_COLOR_RULES 읽기)
+ * @returns {Array|null}
+ */
+function getCalColorRules() {
+  try {
+    const val = getSetting_('CAL_COLOR_RULES', '');
+    if (!val) return null;
+    return JSON.parse(val);
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
  * 버튼 설정 저장 (settings 시트에 BTN_CFG.{msgKey} 키로 저장)
  * @param {string} msgKey
  * @param {string} btnsJson  - JSON 배열 문자열

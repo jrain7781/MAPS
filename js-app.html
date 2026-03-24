@@ -4125,6 +4125,11 @@
 
         if (!contentDetail || !contentInvestigation) return;
 
+        // 모든 탭 비활성화
+        [btnDetail, btnInvestigation].forEach(function(b) { if (b) b.classList.remove('active'); });
+        [contentDetail, contentInvestigation].forEach(function(c) { if (c) c.classList.add('content-hidden'); });
+        if (toolbar) toolbar.classList.add('content-hidden');
+
         if (detailPane) {
             detailPane.classList.remove('tab-detail-active', 'tab-investigation-active');
             detailPane.classList.add('tab-' + tabName + '-active');
@@ -4132,14 +4137,9 @@
 
         if (tabName === 'detail') {
             if (btnDetail) btnDetail.classList.add('active');
-            if (btnInvestigation) btnInvestigation.classList.remove('active');
             contentDetail.classList.remove('content-hidden');
-            contentInvestigation.classList.add('content-hidden');
-            if (toolbar) toolbar.classList.add('content-hidden');
         } else {
             if (btnInvestigation) btnInvestigation.classList.add('active');
-            if (btnDetail) btnDetail.classList.remove('active');
-            contentDetail.classList.add('content-hidden');
             contentInvestigation.classList.remove('content-hidden');
             if (toolbar) toolbar.classList.remove('content-hidden');
             // 서버 호출 없이 data-images / currentDetailItem.image_ids 로 즉시 렌더링
@@ -5426,13 +5426,20 @@ MJ 이정우 팀장
             try { startTelegramRequestsPolling_(); } catch (e) { }
         }
 
+        // ★ 보조 패널은 메인 데이터와 병렬 로드 (속도 개선: 순차→동시)
+        if (!IS_MEMBER_VIEW) {
+            if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats();
+            if (typeof loadTelegramJoinStatsByItem === 'function') loadTelegramJoinStatsByItem();
+            if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats();
+            if (typeof loadDashboardCalendar === 'function') loadDashboardCalendar(false);
+        }
+
         // 데이터 캐싱: 회원 전용 링크에서는 대시보드 사용 안 함 (혹시 호출되면 재사용 금지)
         if (!IS_MEMBER_VIEW && !forceRefresh && allBiddingData && allBiddingData.length > 0) {
             updateDashboardFilterOptions();
             renderMissingBidDashboard();
             renderStatusManagementDashboard();
             renderMemberBidChart();
-            if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
             return;
         }
         toggleDashboardLoading(true);
@@ -5445,10 +5452,6 @@ MJ 이정우 팀장
                 renderStatusManagementDashboard();
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
-                if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
-                if (typeof loadTelegramJoinStatsByItem === 'function') loadTelegramJoinStatsByItem(); // 텔레그램 가입현황 (물건 모드 디폴트)
-                if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
-                if (typeof loadDashboardCalendar === 'function') loadDashboardCalendar(false); // 캘린더
                 })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
@@ -7386,6 +7389,7 @@ MJ 이정우 팀장
     var _calEventsCache = {};    // key: weekStart.getTime() -> events[]
     var _calColorRules = [];     // [{color:'#ef4444', keywords:'', mode:'OR'}] x7
     var _calRulesInited = false;
+    var _calRulesLoading = false;
 
     var CAL_COLOR_PRESETS = [
       { hex: '#ef4444', label: '빨강' },
@@ -7394,21 +7398,114 @@ MJ 이정우 팀장
       { hex: '#22c55e', label: '초록' },
       { hex: '#3b82f6', label: '파랑' },
       { hex: '#a855f7', label: '보라' },
-      { hex: '#ec4899', label: '핑크' }
+      { hex: '#ec4899', label: '핑크' },
+      { hex: '#1f2937', label: '검정' }
     ];
 
-    function _calInitRules() {
-      if (_calRulesInited) return;
-      _calRulesInited = true;
-      try {
-        var saved = localStorage.getItem('cal_color_rules');
-        if (saved) _calColorRules = JSON.parse(saved);
-      } catch(e) {}
-      while (_calColorRules.length < 7) {
+    function _calSetDefaultRules() {
+      // 구버전(mode+쉼표) → 표현식 변환
+      _calColorRules.forEach(function(r) {
+        if (r.mode && r.keywords && r.keywords.indexOf(',') >= 0) {
+          var parts = r.keywords.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+          if (parts.length > 1) r.keywords = parts.join(' ' + r.mode + ' ');
+        }
+        delete r.mode;
+      });
+      while (_calColorRules.length < 8) {
         var idx = _calColorRules.length;
-        _calColorRules.push({ color: CAL_COLOR_PRESETS[idx].hex, keywords: '', mode: 'OR' });
+        _calColorRules.push({ color: CAL_COLOR_PRESETS[idx].hex, keywords: '' });
       }
-      _calColorRules = _calColorRules.slice(0, 7);
+      _calColorRules = _calColorRules.slice(0, 8);
+    }
+
+    function _calInitRules(callback) {
+      if (_calRulesInited) { if (callback) callback(); return; }
+      if (_calRulesLoading) return; // 로딩 중이면 중복 호출 무시
+      _calRulesLoading = true;
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function(rules) {
+            _calRulesLoading = false;
+            _calRulesInited = true;
+            if (rules && Array.isArray(rules) && rules.length) {
+              _calColorRules = rules;
+            }
+            _calSetDefaultRules();
+            if (callback) callback();
+          })
+          .withFailureHandler(function() {
+            _calRulesLoading = false;
+            _calRulesInited = true;
+            _calSetDefaultRules();
+            if (callback) callback();
+          })
+          .getCalColorRules();
+      } else {
+        _calRulesLoading = false;
+        _calRulesInited = true;
+        _calSetDefaultRules();
+        if (callback) callback();
+      }
+    }
+
+    function _calHighlightExpr(text) {
+      var result = '', i = 0;
+      text = text || '';
+      while (i < text.length) {
+        if (text[i] === '(') { result += '<span style="color:#6b7280;font-weight:700;">(</span>'; i++; continue; }
+        if (text[i] === ')') { result += '<span style="color:#6b7280;font-weight:700;">)</span>'; i++; continue; }
+        if (text[i] === ' ') { result += ' '; i++; continue; }
+        var j = i;
+        while (j < text.length && text[j] !== ' ' && text[j] !== '(' && text[j] !== ')') j++;
+        var word = text.substring(i, j);
+        var up = word.toUpperCase();
+        if (up === 'AND') result += '<span style="color:#3b82f6;font-weight:700;">AND</span>';
+        else if (up === 'OR') result += '<span style="color:#f97316;font-weight:700;">OR</span>';
+        else result += word.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        i = j;
+      }
+      return result;
+    }
+
+    function _calGetCaretOffset(el) {
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return 0;
+      var r = sel.getRangeAt(0).cloneRange();
+      r.selectNodeContents(el);
+      r.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
+      return r.toString().length;
+    }
+
+    function _calSetCaretOffset(el, offset) {
+      var sel = window.getSelection();
+      if (!sel) return;
+      var range = document.createRange();
+      var rem = offset, found = false;
+      function walk(n) {
+        if (found) return;
+        if (n.nodeType === 3) {
+          if (rem <= n.length) { range.setStart(n, rem); range.setEnd(n, rem); found = true; }
+          else rem -= n.length;
+        } else { for (var k = 0; k < n.childNodes.length; k++) walk(n.childNodes[k]); }
+      }
+      walk(el);
+      if (!found) { range.selectNodeContents(el); range.collapse(false); }
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    function calKwInput(el, idx) {
+      var pos = _calGetCaretOffset(el);
+      var text = el.innerText || el.textContent || '';
+      el.innerHTML = _calHighlightExpr(text);
+      _calSetCaretOffset(el, pos);
+    }
+
+    function calKwPaste(e, el, idx) {
+      e.preventDefault();
+      var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, text);
     }
 
     function _calRenderRulesUI() {
@@ -7416,19 +7513,53 @@ MJ 이정우 팀장
       if (!container) return;
       var html = '';
       _calColorRules.forEach(function(rule, i) {
-        var preset = CAL_COLOR_PRESETS[i];
+        var preset = CAL_COLOR_PRESETS.filter(function(p){ return p.hex === rule.color; })[0]
+                     || { hex: rule.color, label: '?' };
+        var isFirst = (i === 0);
+        var isLast  = (i === _calColorRules.length - 1);
+        var hlHtml  = _calHighlightExpr(rule.keywords || '');
         html += '<div class="flex items-center gap-2">'
+          + '<div class="flex flex-col gap-0 flex-shrink-0">'
+          + '<button onclick="calMoveRule(' + i + ',-1)" ' + (isFirst ? 'disabled' : '') + ' '
+          + 'class="text-gray-400 hover:text-gray-700 disabled:opacity-20 leading-none text-xs px-0.5">▲</button>'
+          + '<button onclick="calMoveRule(' + i + ',1)" ' + (isLast ? 'disabled' : '') + ' '
+          + 'class="text-gray-400 hover:text-gray-700 disabled:opacity-20 leading-none text-xs px-0.5">▼</button>'
+          + '</div>'
           + '<div class="w-4 h-4 rounded flex-shrink-0 border border-gray-300" style="background:' + preset.hex + ';"></div>'
-          + '<span class="text-xs text-gray-500 w-6 flex-shrink-0">' + preset.label + '</span>'
-          + '<input type="text" id="cal-kw-' + i + '" value="' + _esc(rule.keywords) + '" placeholder="키워드1, 키워드2..." '
-          + 'class="flex-1 text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-blue-400 min-w-0" />'
-          + '<select id="cal-mode-' + i + '" class="text-xs border border-gray-300 rounded px-1 py-0.5 flex-shrink-0">'
-          + '<option value="OR"' + (rule.mode === 'OR' ? ' selected' : '') + '>OR</option>'
-          + '<option value="AND"' + (rule.mode === 'AND' ? ' selected' : '') + '>AND</option>'
-          + '</select>'
+          + '<span class="text-xs text-gray-500 w-8 flex-shrink-0">' + preset.label + '</span>'
+          + '<div contenteditable="true" id="cal-kw-' + i + '" '
+          + 'oninput="calKwInput(this,' + i + ')" '
+          + 'onpaste="calKwPaste(event,this,' + i + ')" '
+          + 'onkeydown="if(event.key===\'Enter\')event.preventDefault();" '
+          + 'data-placeholder="법원 AND (아파트 OR 주택)" '
+          + 'class="flex-1 text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-blue-400 min-w-0 cursor-text" '
+          + 'style="white-space:nowrap;overflow:hidden;min-height:22px;line-height:20px;">'
+          + (hlHtml || '<span style="color:#9ca3af;font-weight:400;">법원 AND (아파트 OR 주택)</span>')
+          + '</div>'
           + '</div>';
       });
       container.innerHTML = html;
+      // placeholder 처리: 내용 있으면 실제 하이라이트, 없으면 placeholder 유지
+      _calColorRules.forEach(function(rule, i) {
+        if (rule.keywords) {
+          var el = document.getElementById('cal-kw-' + i);
+          if (el) el.innerHTML = _calHighlightExpr(rule.keywords);
+        }
+      });
+    }
+
+    function calMoveRule(i, dir) {
+      // 현재 입력값 먼저 저장
+      for (var j = 0; j < _calColorRules.length; j++) {
+        var kw = document.getElementById('cal-kw-' + j);
+        if (kw) _calColorRules[j].keywords = (kw.innerText || kw.textContent || '').trim();
+      }
+      var target = i + dir;
+      if (target < 0 || target >= _calColorRules.length) return;
+      var tmp = _calColorRules[i];
+      _calColorRules[i] = _calColorRules[target];
+      _calColorRules[target] = tmp;
+      _calRenderRulesUI();
     }
 
     function toggleCalSettings() {
@@ -7436,36 +7567,120 @@ MJ 이정우 팀장
       if (!panel) return;
       var isHidden = panel.classList.contains('hidden');
       panel.classList.toggle('hidden');
-      if (isHidden) _calRenderRulesUI();
+      if (isHidden) {
+        if (!_calRulesInited) {
+          _calInitRules(function() { _calRenderRulesUI(); });
+        } else {
+          _calRenderRulesUI();
+        }
+      }
+    }
+
+    function calSaveColorRulesClose() {
+      toggleCalSettings();
     }
 
     function calSaveColorRules() {
-      for (var i = 0; i < 7; i++) {
+      for (var i = 0; i < 8; i++) {
         var kwEl = document.getElementById('cal-kw-' + i);
-        var modeEl = document.getElementById('cal-mode-' + i);
-        if (kwEl && modeEl) {
-          _calColorRules[i].keywords = kwEl.value.trim();
-          _calColorRules[i].mode = modeEl.value;
-        }
+        if (kwEl) _calColorRules[i].keywords = (kwEl.innerText || kwEl.textContent || '').trim();
       }
-      try { localStorage.setItem('cal_color_rules', JSON.stringify(_calColorRules)); } catch(e) {}
-      toggleCalSettings();
-      _calEventsCache = {};
-      loadDashboardCalendar(true);
+      var json = JSON.stringify(_calColorRules);
+      var saveBtn = document.getElementById('cal-save-btn');
+      var msgEl  = document.getElementById('cal-save-msg');
+      if (saveBtn) saveBtn.disabled = true;
+      if (msgEl) { msgEl.textContent = '저장 중...'; msgEl.className = 'text-xs text-gray-400'; }
+      google.script.run
+        .withSuccessHandler(function() {
+          if (saveBtn) saveBtn.disabled = false;
+          if (msgEl) { msgEl.textContent = '저장되었습니다.'; msgEl.className = 'text-xs text-green-600 font-medium'; }
+          _calEventsCache = {};
+          loadDashboardCalendar(true);
+          setTimeout(function() { toggleCalSettings(); }, 600);
+        })
+        .withFailureHandler(function(e) {
+          if (saveBtn) saveBtn.disabled = false;
+          if (msgEl) { msgEl.textContent = '저장 실패: ' + (e && e.message ? e.message : e); msgEl.className = 'text-xs text-red-500'; }
+        })
+        .saveCalColorRules(json);
+    }
+
+    // ── AND/OR/() 표현식 파서 ────────────────────────────────────────────────
+    function _calTokenize(expr) {
+      var tokens = [], i = 0;
+      expr = (expr || '').trim();
+      while (i < expr.length) {
+        while (i < expr.length && expr[i] === ' ') i++;
+        if (i >= expr.length) break;
+        if (expr[i] === '(') { tokens.push('('); i++; continue; }
+        if (expr[i] === ')') { tokens.push(')'); i++; continue; }
+        var j = i;
+        while (j < expr.length && expr[j] !== ' ' && expr[j] !== '(' && expr[j] !== ')') j++;
+        var word = expr.substring(i, j);
+        var up = word.toUpperCase();
+        if (up === 'AND') tokens.push('AND');
+        else if (up === 'OR') tokens.push('OR');
+        else if (word) tokens.push({ kw: word.toLowerCase() });
+        i = j;
+      }
+      return tokens;
+    }
+    function _calParseExpr(tok, p) {
+      var r = _calParseAnd(tok, p); p = r.p; var n = r.n;
+      while (p < tok.length && tok[p] === 'OR') {
+        p++;
+        r = _calParseAnd(tok, p); p = r.p;
+        n = { op: 'OR', l: n, r: r.n };
+      }
+      return { n: n, p: p };
+    }
+    function _calParseAnd(tok, p) {
+      var r = _calParseAtom(tok, p); p = r.p; var n = r.n;
+      while (p < tok.length && tok[p] === 'AND') {
+        p++;
+        r = _calParseAtom(tok, p); p = r.p;
+        n = { op: 'AND', l: n, r: r.n };
+      }
+      return { n: n, p: p };
+    }
+    function _calParseAtom(tok, p) {
+      if (p >= tok.length) return { n: null, p: p };
+      if (tok[p] === '(') {
+        p++;
+        var r = _calParseExpr(tok, p); p = r.p;
+        if (p < tok.length && tok[p] === ')') p++;
+        return { n: r.n, p: p };
+      }
+      if (tok[p] && tok[p].kw !== undefined) return { n: tok[p], p: p + 1 };
+      return { n: null, p: p + 1 };
+    }
+    function _calEvalNode(n, text) {
+      if (!n) return false;
+      if (n.kw !== undefined) return text.indexOf(n.kw) >= 0;
+      if (n.op === 'AND') return _calEvalNode(n.l, text) && _calEvalNode(n.r, text);
+      if (n.op === 'OR')  return _calEvalNode(n.l, text) || _calEvalNode(n.r, text);
+      return false;
+    }
+    function _calMatchExpr(keywords, title) {
+      if (!keywords || !keywords.trim()) return false;
+      try {
+        var tok = _calTokenize(keywords);
+        if (!tok.length) return false;
+        return _calEvalNode(_calParseExpr(tok, 0).n, (title || '').toLowerCase());
+      } catch(e) { return false; }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    function _getEventRuleIndex(title) {
+      for (var i = 0; i < _calColorRules.length; i++) {
+        if (_calMatchExpr(_calColorRules[i].keywords, title)) return i;
+      }
+      return _calColorRules.length; // 매칭 없으면 맨 뒤
     }
 
     function _getEventColor(title) {
-      var t = (title || '').toLowerCase();
-      for (var i = 0; i < _calColorRules.length; i++) {
-        var rule = _calColorRules[i];
-        if (!rule.keywords) continue;
-        var kws = rule.keywords.split(',').map(function(s){ return s.trim().toLowerCase(); }).filter(Boolean);
-        if (!kws.length) continue;
-        var matched = rule.mode === 'AND'
-          ? kws.every(function(kw){ return t.indexOf(kw) >= 0; })
-          : kws.some(function(kw){ return t.indexOf(kw) >= 0; });
-        if (matched) return CAL_COLOR_PRESETS[i].hex;
-      }
+      var i = _getEventRuleIndex(title);
+      if (i < _calColorRules.length) return _calColorRules[i].color;
       return null; // 기본: 회색
     }
 
@@ -7487,13 +7702,19 @@ MJ 이정우 팀장
     function calMoveWeek(delta) {
       _calWeekOffset += delta;
       loadDashboardCalendar(false);
+      // 이동 후 다음 방향 미리 pre-fetch
+      setTimeout(function() { _calPrefetch(_calWeekOffset + delta); }, 300);
     }
 
     function loadDashboardCalendar(forceRefresh) {
       if (typeof google === 'undefined' || !google.script || !google.script.run) return;
       var grid = document.getElementById('cal-grid');
       if (!grid) return;
-      _calInitRules();
+
+      if (!_calRulesInited) {
+        _calInitRules(function() { loadDashboardCalendar(forceRefresh); });
+        return;
+      }
 
       var weekStart = _calGetWeekStart(_calWeekOffset);
       var weekEnd = new Date(weekStart);
@@ -7523,11 +7744,30 @@ MJ 이정우 팀장
           }
           _calEventsCache[cacheKey] = res.events || [];
           _renderCalGrid(weekStart, res.events || []);
+          // 현재 뷰 로드 완료 후 인접 주 백그라운드 pre-fetch
+          setTimeout(function() {
+            _calPrefetch(_calWeekOffset - 1);
+            _calPrefetch(_calWeekOffset + 1);
+          }, 200);
         })
         .withFailureHandler(function(err) {
           if (grid) grid.innerHTML = '<div class="col-span-7 py-4 text-center text-red-400 text-xs">오류: ' + err.message + '</div>';
         })
         .getCalendarEvents(weekStart.getTime(), weekEnd.getTime());
+    }
+
+    function _calPrefetch(offset) {
+      var ws = _calGetWeekStart(offset);
+      var key = ws.getTime();
+      if (_calEventsCache[key]) return; // 이미 캐시됨
+      var we = new Date(ws);
+      we.setDate(ws.getDate() + 14);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.success) _calEventsCache[key] = res.events || [];
+        })
+        .withFailureHandler(function() {}) // 백그라운드 실패는 무시
+        .getCalendarEvents(ws.getTime(), we.getTime());
     }
 
     function _renderCalGrid(weekStart, events) {
@@ -7562,7 +7802,12 @@ MJ 이정우 팀장
           var isToday = (k === todayKey);
           var isSat = (d === 5);
           var isSun = (d === 6);
-          var dayEvs = evMap[k] || [];
+          var dayEvs = (evMap[k] || []).slice().sort(function(a, b) {
+            var ai = _getEventRuleIndex(a.title);
+            var bi = _getEventRuleIndex(b.title);
+            if (ai !== bi) return ai - bi;
+            return new Date(a.start) - new Date(b.start);
+          });
 
           var dateNumCls = 'inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded-full ';
           if (isToday) dateNumCls += 'bg-blue-600 text-white';
@@ -11296,16 +11541,17 @@ ${token}
         const isModalOpen = modal && !modal.classList.contains('content-hidden');
         const item = isModalOpen ? currentModalItemData : currentDetailItem;
 
+        const _awin = 'width=896,height=900,left=100,top=50,resizable=yes,scrollbars=yes';
         // auction_id 없으면 무조건 로그인 페이지
         if (!item || !item.auction_id || !String(item.auction_id).trim()) {
-            window.open(AUCTION_LOGIN_URL, '_blank');
+            window.open(AUCTION_LOGIN_URL, '_auction', _awin);
             return;
         }
 
         // 첫 클릭: 로그인 페이지로 이동 (페이지 새로고침 시 초기화)
         if (!_auctionLoginShown) {
             _auctionLoginShown = true;
-            window.open(AUCTION_LOGIN_URL, '_blank');
+            window.open(AUCTION_LOGIN_URL, '_auction', _awin);
             showStatus('로그인 페이지를 열었습니다. 로그인 후 다시 [옥션원 가기] 버튼을 클릭하세요.', 'info');
             return;
         }
@@ -11331,9 +11577,9 @@ ${token}
         }
 
         if (finalUrl) {
-            window.open(finalUrl, '_blank');
+            window.open(finalUrl, '_auction', _awin);
         } else {
-            window.open(AUCTION_LOGIN_URL, '_blank');
+            window.open(AUCTION_LOGIN_URL, '_auction', _awin);
         }
     }
 
