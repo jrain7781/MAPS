@@ -1502,7 +1502,7 @@
         const timerBarHtml = (rawStatus === '추천' && item.chuchen_date) ? createChuchenTimerBar(item.chuchen_date) : '';
 
         return `
-            <div class="member-item-card" onclick="handleMemberCardClick('${itemId}')">
+            <div class="member-item-card" onmouseenter="preloadItemImage('${item.image_id}')" onclick="handleMemberCardClick('${itemId}')">
                 <div class="member-card-row">
                     <div class="member-card-left">
                         <div class="member-sakun-info">
@@ -1940,7 +1940,7 @@
                             dotTitle = "옥션ID만 연결됨";
                         }
 
-                        const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${(hasImages || hasAucId) ? `<span class="inline-block w-3.5 h-3.5 rounded-full ${dotClass} cursor-pointer" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="${dotTitle}"></span>` : ''}</span>`;
+                        const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${(hasImages || hasAucId) ? `<span class="inline-block w-3.5 h-3.5 rounded-full ${dotClass} cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="${dotTitle}"></span>` : ''}</span>`;
 
                         // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
                         const chuchenDateStr = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date) : '';
@@ -2183,10 +2183,10 @@
                         dotTitle = "옥션ID만 연결됨";
                     }
 
-                    const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${(hasImages || hasAucId) ? `<span class="inline-block w-3.5 h-3.5 rounded-full ${dotClass} cursor-pointer" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="${dotTitle}"></span>` : ''}</span>`;
+                    const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${(hasImages || hasAucId) ? `<span class="inline-block w-3.5 h-3.5 rounded-full ${dotClass} cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="${dotTitle}"></span>` : ''}</span>`;
 
                     const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
-                      <div class="md:hidden border-2 border-green-300 rounded-xl p-3 mb-2 bg-stone-50 shadow-sm flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                      <div class="md:hidden border-2 border-green-300 rounded-xl p-3 mb-2 bg-stone-50 shadow-sm flex items-center justify-between cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="openDetailModalById('${bid.id}')">
                           <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<span>${dupSakunHtml(bid)}</span></div>
                           <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
                               <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
@@ -2200,7 +2200,7 @@
                               <div class="text-sm ${bidPriceMobileClass}">${bidpriceFormatted}</div>
                           </div>
                       </div>
-                      <table class="hidden md:table bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                      <table class="hidden md:table bid-item-table ${desktopBorder} cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="openDetailModalById('${bid.id}')">
                           <tbody>
                               <tr>
                                   <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<span>${dupSakunHtml(bid)}</span></div></td>
@@ -4246,6 +4246,13 @@
                 if (footerEl) footerEl.textContent = '';
             })
             .getItemImages(currentDetailItem.id);
+    }
+
+    // [NEW] 이미지 미리 로딩 (Hover 시 캐시 확보용)
+    function preloadItemImage(id) {
+        if (!id) return;
+        var p = new Image();
+        p.src = 'https://drive.google.com/thumbnail?sz=w1000&id=' + encodeURIComponent(id);
     }
 
     function renderInvestigationImagesFromIds(ids) {
