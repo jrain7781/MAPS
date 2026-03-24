@@ -191,19 +191,12 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
   const id = new Date().getTime().toString();
   const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   
-  // appendRow: [id(1), in-date(2), sakun_no(3), court(4), stu_member(5), m_name_id(6), m_name(7), bidprice(8), member_id(9), reg_date(10), reg_member(11), bid_state(12), image_id(13), note(14), m_name_2(15), auction_id(16)]
-  sheet.appendRow([id, inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, regDate, regMember || '', bidState, imageId || '', note || '', mName2 || '', auctionId || '']);
-
-  // chuchen_state 등 추가 필드 업데이트 (16열 이후)
-  const realRowIndex = sheet.getLastRow();
-  if (chuchenState) {
-    ensureColumnExists(sheet, 17);
-    sheet.getRange(realRowIndex, 17).setValue(chuchenState);
-  }
-
-  // [PHASE 1-4] 물건 생성 이력 기록 (본문)
-  const createBatchTs = String(new Date().getTime()); // ITEM_CREATE 전체를 하나의 그룹으로
-  writeItemHistory_({
+  // [PHASE 1-4] 물건 생성 이력 기록 (배치 처리로 속도 대폭 개선)
+  const createBatchTs = String(new Date().getTime());
+  const historyEntries = [];
+  
+  // 메인 생성 이벤트
+  historyEntries.push({
     action: 'ITEM_CREATE',
     item_id: id,
     member_id: String(memberId || ''),
@@ -213,7 +206,7 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
     req_id: createBatchTs
   });
 
-  // [수정] 물건 등록 시 입력된 초기값들도 히스토리에 남겨서 테이블에 표시되게 함
+  // 초기 값 기록
   const initialValues = {
     stu_member: String(stuMember || '').trim(),
     m_name_id: String(mNameId || '').trim(),
@@ -226,7 +219,7 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
   const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state'];
   trackFields.forEach(function (field) {
     if (initialValues[field] !== '') {
-      writeItemHistory_({
+      historyEntries.push({
         action: 'ITEM_CREATE',
         item_id: String(id),
         member_id: initialValues.member_id,
@@ -236,10 +229,38 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
         to_value: initialValues[field],
         trigger_type: 'web',
         note: '최초 등록 값',
-        req_id: createBatchTs  // 같은 등록 이벤트 = 같은 그룹
+        req_id: createBatchTs
       });
     }
   });
+
+  // [BATCH] 일괄 이력 저장
+  writeItemHistoryBatch_(historyEntries);
+
+  // Prepare the new row data (Mapping arguments to ITEM_HEADERS structure)
+  const newRow = ITEM_HEADERS.map(header => {
+    if (header === 'id') return id;
+    if (header === 'in-date') return inDate;
+    if (header === 'sakun_no') return sakunNo;
+    if (header === 'court') return court;
+    if (header === 'stu_member') return stuMember;
+    if (header === 'm_name_id') return mNameId;
+    if (header === 'm_name') return mName;
+    if (header === 'bidprice') return bidPrice;
+    if (header === 'member_id') return memberId;
+    if (header === 'reg_date') return regDate;
+    if (header === 'reg_member') return regMember || '';
+    if (header === 'bid_state') return bidState;
+    if (header === 'image_id') return imageId || '';
+    if (header === 'note') return note || '';
+    if (header === 'm_name2') return mName2 || '';
+    if (header === 'auction_id') return auctionId || '';
+    if (header === 'chuchen_state') return chuchenState || '';
+    if (header === 'chuchen_date') return '';
+    return '';
+  });
+
+  sheet.appendRow(newRow);
 
   return { success: true, message: '성공적으로 등록되었습니다.' };
 }
@@ -273,64 +294,59 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
 
   const realRowIndex = rowIndex + 2;
 
-  // [PHASE 1-3] 저장 전: 기존 값 읽어오기 전 시트 강제 반영 (경합 방지)
-  SpreadsheetApp.flush();
-
   // [PHASE 1-3] 저장 전: 기존 값 읽기 (변경 감지용) - 17열(chuchen_state)까지 읽기
-  const oldRow = sheet.getRange(realRowIndex, 1, 1, 17).getValues()[0];
+  const range = sheet.getRange(realRowIndex, 1, 1, 18); // R열(18)까지 한 번에 처리
+  const rowValues = range.getValues()[0];
   const oldValues = {
-    stu_member:    String(oldRow[4]  || '').trim(),  // E열(5)
-    m_name_id:     String(oldRow[5]  || '').trim(),  // F열(6)
-    m_name:        String(oldRow[6]  || '').trim(),  // G열(7)
-    bidprice:      String(oldRow[7]  || '').trim(),  // H열(8)
-    member_id:     String(oldRow[8]  || '').trim(),  // I열(9)
-    reg_member:    String(oldRow[10] || '').trim(),  // K열(11)
-    bid_state:     String(oldRow[11] || '').trim(),  // L열(12)
-    image_id:      String(oldRow[12] || '').trim(),  // M열(13)
-    note:          String(oldRow[13] || '').trim(),  // N열(14)
-    auction_id:    (oldRow.length > 15) ? String(oldRow[15] || '').trim() : '', // P열(16)
-    chuchen_state: String(oldRow[16] || '').trim(),  // Q열(17)
+    inDate:        String(rowValues[1]  || '').trim(), // B
+    sakunNo:       String(rowValues[2]  || '').trim(), // C
+    court:         String(rowValues[3]  || '').trim(), // D
+    stu_member:    String(rowValues[4]  || '').trim(), // E
+    m_name_id:     String(rowValues[5]  || '').trim(), // F
+    m_name:        String(rowValues[6]  || '').trim(), // G
+    bidprice:      String(rowValues[7]  || '').trim(), // H
+    member_id:     String(rowValues[8]  || '').trim(), // I
+    reg_member:    String(rowValues[10] || '').trim(), // K
+    bid_state:     String(rowValues[11] || '').trim(), // L
+    image_id:      String(rowValues[12] || '').trim(), // M
+    note:          String(rowValues[13] || '').trim(), // N
+    m_name_2:      String(rowValues[14] || '').trim(), // O
+    auction_id:    String(rowValues[15] || '').trim(), // P
+    chuchen_state: String(rowValues[16] || '').trim(), // Q
+    chuchen_date:  String(rowValues[17] || '').trim(), // R
   };
-  const oldBidState = oldValues.bid_state; // 기존 코드 호환
 
-  // 데이터 업데이트 (개별 셀 업데이트로 정확성 확보)
-  sheet.getRange(realRowIndex, 2).setValue(inDate);
-  sheet.getRange(realRowIndex, 3).setValue(sakunNo);
-  sheet.getRange(realRowIndex, 4).setValue(court);
-  sheet.getRange(realRowIndex, 5).setValue(stuMember);
-  sheet.getRange(realRowIndex, 6).setValue(mNameId);
-  sheet.getRange(realRowIndex, 7).setValue(mName);
-  sheet.getRange(realRowIndex, 8).setValue(bidPrice);
-  sheet.getRange(realRowIndex, 9).setValue(memberId);
+  // 신규 값 배열 생성 (메모리상 업데이트)
+  const newRowValues = [...rowValues];
+  newRowValues[1] = inDate;
+  newRowValues[2] = sakunNo;
+  newRowValues[3] = court;
+  newRowValues[4] = stuMember;
+  newRowValues[5] = mNameId;
+  newRowValues[6] = mName;
+  newRowValues[7] = bidPrice;
+  newRowValues[8] = memberId;
   
-  // 11번째 열(K열) reg_member - 넘어온 값이 있으면 쓰고 없으면 기존값 유지
-  if (regMember) sheet.getRange(realRowIndex, 11).setValue(regMember);
+  if (regMember) newRowValues[10] = regMember;
+  newRowValues[11] = bidState;
   
-  // 12번째 열(L열)에 상태값 저장
-  sheet.getRange(realRowIndex, 12).setValue(bidState);
-  
-  // 13번째 열(M열)에 이미지 ID 저장 - [보호] 값이 있을 때만 덮어쓰거나, 관리자가 빈 값 전송 시만 허용
-  // 여기서는 단순히 클라이언트에서 전달된 값이 있으면 쓰고, 없으면 기존 값을 유지하는 정책 사용 (삭제 방지)
   if (imageId) {
-    sheet.getRange(realRowIndex, 13).setValue(imageId);
+    newRowValues[12] = imageId;
   } else if (!imageId && oldValues.image_id) {
-    // 클라이언트에서 빈 값이 왔지만 기존 시트에 값이 있으면 삭제하지 않음
+    // 삭제 방지
   } else {
-    sheet.getRange(realRowIndex, 13).setValue('');
+    newRowValues[12] = '';
   }
 
-  // 14번째 열(N열)에 note(비고) 저장
-  sheet.getRange(realRowIndex, 14).setValue(note || '');
-  // 15번째 열(O열)에 m_name2(명의 표시값) 저장
-  sheet.getRange(realRowIndex, 15).setValue(mName2 || '');
+  newRowValues[13] = note || '';
+  newRowValues[14] = mName2 || '';
   
-  // 16번째 열(P열) auction_id 저장 - [보호] 동일하게 유지
   if (auctionId) {
-    sheet.getRange(realRowIndex, 16).setValue(auctionId);
+    newRowValues[15] = auctionId;
   } else if (!auctionId && oldValues.auction_id) {
     // 삭제 방지
   } else {
-    sheet.getRange(realRowIndex, 16).setValue('');
+    newRowValues[15] = '';
   }
 
   const newChuchenState = String(chuchenState || '').trim();
@@ -345,71 +361,71 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
   const actualSavedChuchenState = shouldResetChuchen ? '' : newChuchenState;
 
   if (shouldResetChuchen) {
-    sheet.getRange(realRowIndex, 17).setValue(''); // Q열: chuchen_state 초기화
-    sheet.getRange(realRowIndex, 18).setValue(''); // R열: chuchen_date 초기화 (로딩바 제거)
+    newRowValues[16] = ''; // Q열: chuchen_state 초기화
+    newRowValues[17] = ''; // R열: chuchen_date 초기화
   } else if (newChuchenState) {
-    sheet.getRange(realRowIndex, 17).setValue(newChuchenState);
+    newRowValues[16] = newChuchenState;
     if (newChuchenState === '신규') {
-      sheet.getRange(realRowIndex, 18).setValue(''); // 신규로 변경 시 chuchen_date 초기화
+      newRowValues[17] = ''; // 신규로 변경 시 chuchen_date 초기화
     } else if (newChuchenState === '전달완료' && oldValues.chuchen_state !== '전달완료') {
       // 신규/null → 전달완료 변경 시에만 기산점 갱신 (이미 전달완료면 타이머 유지)
-      sheet.getRange(realRowIndex, 18).setValue(new Date().toISOString()); // R열: chuchen_date
+      newRowValues[17] = new Date().toISOString(); // R열: chuchen_date
     }
   }
 
-  // [PHASE 1-3] 저장 후: 변경된 필드마다 이력 기록
-  const newValues = {
-    stu_member:    String(stuMember || '').trim(),
-    m_name_id:     String(mNameId || '').trim(),
-    m_name:        String(mName || '').trim(),
-    bidprice:      String(bidPrice || '').trim(),
-    member_id:     String(memberId || '').trim(),
-    bid_state:     String(bidState || '').trim(),
-    chuchen_state: actualSavedChuchenState,
+  // [BATCH] 일괄 저장 (setValue 10여 회 -> setValues 1회로 단축)
+  range.setValues([newRowValues]);
+
+  // [PHASE 1-4] 변경 감지 및 히스토리 기록 (배치 처리)
+  const updateBatchTs = String(new Date().getTime());
+  const historyEntries = [];
+  const trackFields = {
+    'stu_member': stuMember,
+    'm_name_id': mNameId,
+    'm_name': mName,
+    'bidprice': bidPrice,
+    'member_id': memberId,
+    'bid_state': bidState,
+    'chuchen_state': newRowValues[16], // Use the value that was actually saved
+    'note': (note || '').trim()
   };
-  const trackFields = ['stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'bid_state', 'chuchen_state'];
-  const batchTs = String(new Date().getTime()); // 이 호출 내 모든 FIELD_CHANGE가 같은 그룹으로 묶임
-  trackFields.forEach(function (field) {
-    let ov = oldValues[field];
-    let nv = newValues[field];
+
+  Object.keys(trackFields).forEach(function (field) {
+    const newVal = String(trackFields[field] || '').trim();
+    const oldVal = String(oldValues[field] || '').trim(); // Ensure oldVal is also trimmed for comparison
     
     // [보정] bidprice는 콤마 제거 후 숫자만 비교 (문자열 콤마 유무에 따른 중복 로그 방지)
     if (field === 'bidprice') {
-      ov = String(ov || '').replace(/[^0-9]/g, '');
-      nv = String(nv || '').replace(/[^0-9]/g, '');
+      const ovNum = String(oldVal || '').replace(/[^0-9]/g, '');
+      const nvNum = String(newVal || '').replace(/[^0-9]/g, '');
       // [보정] 빈값("")과 "0"은 실질적으로 동일한 '가격 없음'으로 간주하여 중복 로그 방지
-      if ((ov === '' || ov === '0') && (nv === '' || nv === '0')) {
-        ov = nv; 
+      if ((ovNum === '' || ovNum === '0') && (nvNum === '' || nvNum === '0')) {
+        return; // Skip logging if both are effectively 'no price'
       }
+      if (ovNum === nvNum) return; // If numeric values are the same, skip
     }
 
-    // [보정] stu_member 공백 제거 비교 (데이터 정합성 보조)
-    if (field === 'stu_member') {
-      ov = String(ov || '').trim();
-      nv = String(nv || '').trim();
-    }
-
-    // [보정] chuchen_state: 웹에서 수동으로 '전달완료'로 바꿀 때는 로그를 기록하지만, 
-    // 나중에 텔레그램 발송 함수가 실행되면서 'TELEGRAM_SENT' 로그에 통합되는 경우는 여기서 스킵함.
-    // (보통 웹 모달에서 수동으로 보류/신규 등으로 바꿀 때 히스토리 남아야 함)
-    if (ov !== nv) {
-      writeItemHistory_({
+    if (oldVal !== newVal) {
+      historyEntries.push({
         action: 'FIELD_CHANGE',
         item_id: String(id),
-        member_id: newValues.member_id || oldValues.member_id,
-        member_name: newValues.m_name || oldValues.m_name,
+        member_id: String(memberId || ''),
+        member_name: String(mName || ''),
         field_name: field,
-        from_value: oldValues[field],
-        to_value: newValues[field],
+        from_value: oldVal,
+        to_value: newVal,
         trigger_type: 'web',
-        note: field + ' 변경',
-        req_id: batchTs  // 같은 updateData 호출 = 같은 req_id = 같은 그룹
+        req_id: updateBatchTs
       });
     }
   });
 
+  if (historyEntries.length > 0) {
+    writeItemHistoryBatch_(historyEntries);
+  }
+
   // [기능 추가] 상태가 '전달완료'로 변경될 때 텔레그램 자동 발송
-  if (bidState === '전달완료' && oldBidState !== '전달완료') {
+  if (bidState === '전달완료' && oldValues.bid_state !== '전달완료') {
     try {
       if (typeof sendItemToMemberTelegramWithStyle === 'function') {
         const result = sendItemToMemberTelegramWithStyle(memberId, id, 'bid_price');
@@ -1715,27 +1731,9 @@ function approveTelegramRequests(reqIds, approvedBy) {
     // items 시트 상태 변경 (같은 ss 재사용, openById 추가 없음)
     if (action === 'REQUEST_BID') {
       try {
-        // items 시트에서 직접 상태 변경 (updateItemStuMemberById_ 호출 안 함 = openById 절약)
-          if (match) {
-            const oldStu = String(itemsSheet.getRange(match.getRow(), 5).getValue() || '').trim();
-            itemsSheet.getRange(match.getRow(), 5).setValue('입찰');
-            updatedItems++;
-            
-            // [추가] 상태 변경 FIELD_CHANGE 로그 기록 (역산 렌더링용)
-            if (oldStu !== '입찰') {
-              writeItemHistory_({
-                action: 'FIELD_CHANGE',
-                item_id: itemId,
-                member_id: memberId_req,
-                member_name: memberName_req,
-                field_name: 'stu_member',
-                from_value: oldStu,
-                to_value: '입찰',
-                trigger_type: 'system',
-                req_id: reqId // 승인 기록과 동일한 req_id로 묶음
-              });
-            }
-          }
+        updateItemStuMemberById_(itemId, '입찰');
+        updatedItems++;
+
         if (chatId && typeof telegramSendMessage === 'function') {
           try {
             telegramSendMessage(chatId, prefix + '입찰확정 되었습니다.', null, originMessageId ? { replyToMessageId: originMessageId } : null);
@@ -1747,28 +1745,9 @@ function approveTelegramRequests(reqIds, approvedBy) {
     // [PHASE 1-5] REQUEST_CANCEL → REQUEST_CANCEL_BID 호환 처리
     if (action === 'REQUEST_CANCEL_BID' || action === 'REQUEST_CANCEL') {
       try {
-        if (itemsSheet && itemId) {
-          if (match2) {
-            const oldStu2 = String(itemsSheet.getRange(match2.getRow(), 5).getValue() || '').trim();
-            itemsSheet.getRange(match2.getRow(), 5).setValue('미정');
-            updatedItems++;
-            
-            // [추가] 상태 변경 FIELD_CHANGE 로그 기록
-            if (oldStu2 !== '미정') {
-              writeItemHistory_({
-                action: 'FIELD_CHANGE',
-                item_id: itemId,
-                member_id: memberId_req,
-                member_name: memberName_req,
-                field_name: 'stu_member',
-                from_value: oldStu2,
-                to_value: '미정',
-                trigger_type: 'system',
-                req_id: reqId
-              });
-            }
-          }
-        }
+        updateItemStuMemberById_(itemId, '미정');
+        updatedItems++;
+
         if (chatId && typeof telegramSendMessage === 'function') {
           try {
             telegramSendMessage(chatId, prefix + '입찰취소 되었습니다.', null, originMessageId ? { replyToMessageId: originMessageId } : null);
@@ -3379,7 +3358,7 @@ function updateBidState(itemIds, state) {
 }
 
 /**
- * 물건의 특정 필드 하나를 일괄 업데이트합니다.
+ * 물건의 특정 필드 하나를 일괄 업데이트합니다. (배치 처리 최적화)
  * @param {Array} ids - 물건 ID 배열
  * @param {string} field - 필드명 (e.g., 'note', 'stu_member'...)
  * @param {any} value - 저장할 값
@@ -3393,21 +3372,26 @@ function updateDataField(ids, field, value) {
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
 
-    // 필드 인덱스 찾기
     const colIndex = ITEM_HEADERS.indexOf(field);
     if (colIndex === -1) return { success: false, message: '유효하지 않은 필드명입니다: ' + field };
     const realColNum = colIndex + 1;
 
-    const allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    // [BATCH] 전체 데이터 읽기 -> 메모리 수정 -> 한 번에 쓰기
+    const range = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length);
+    const data = range.getValues();
     let updatedCount = 0;
 
     ids.forEach(id => {
-      const idx = allIds.findIndex(v => String(v) === String(id));
-      if (idx >= 0) {
-        sheet.getRange(idx + 2, realColNum).setValue(value);
+      const rowIdx = data.findIndex(row => String(row[0]) === String(id));
+      if (rowIdx >= 0) {
+        data[rowIdx][colIndex] = value;
         updatedCount++;
       }
     });
+
+    if (updatedCount > 0) {
+      range.setValues(data);
+    }
 
     SpreadsheetApp.flush();
     return { success: true, message: `${updatedCount}건의 [${field}] 필드가 수정되었습니다.`, updated: updatedCount };
@@ -3423,29 +3407,25 @@ function updateDataField(ids, field, value) {
 
 /**
  * telegram_requests 시트에 이력 1건을 기록합니다.
- * @param {Object} p
- * @param {string} p.action        - FIELD_CHANGE | ITEM_CREATE | TELEGRAM_SENT | TELEGRAM_RECEIVED |
- *                                   REQUEST_BID | REQUEST_CANCEL_CHUCHEN | REQUEST_CANCEL_BID |
- *                                   REQUEST_APPROVED | REQUEST_REJECTED | EXPIRY_NOTIFY | AUTO_EXPIRE | BID_DATE_NOTIFY
- * @param {string} [p.status]      - PENDING | DONE (기본: DONE)
- * @param {string} [p.item_id]     - 물건 ID
- * @param {string} [p.member_id]   - 회원 ID
- * @param {string} [p.chat_id]     - 텔레그램 chat_id
- * @param {string} [p.telegram_username]
- * @param {string} [p.note]        - 메모
- * @param {string} [p.approved_by] - 처리자 (기본: system)
- * @param {string} [p.from_value]  - 변경 전 값 (FIELD_CHANGE 시)
- * @param {string} [p.to_value]    - 변경 후 값 (FIELD_CHANGE 시)
- * @param {string} [p.field_name]  - 변경 필드명 (FIELD_CHANGE 시)
- * @param {string} [p.trigger_type]- web | web-telegram | web-다중 | member-telegram | system (기본: system)
- * @param {string} [p.member_name] - 이벤트 시점 회원명
  */
 function writeItemHistory_(p) {
+  writeItemHistoryBatch_([p]);
+}
+
+/**
+ * [PHASE 1-4] telegram_requests 시트에 이력을 배치로 기록합니다. (성능 최적화 핵심)
+ * @param {Array<Object>} entries - 이력 객체 배열
+ */
+function writeItemHistoryBatch_(entries) {
+  if (!entries || entries.length === 0) return;
+  
   try {
     const sheet = ensureTelegramRequestsSheet_();
-    const now = new Date(); // Date 객체로 저장 → Sheets가 날짜 시리얼로 저장 후 getValues()에서 Date 객체 반환
-    sheet.appendRow([
-      p.req_id || String(now.getTime()), // A: req_id (배치 공유 ID 또는 개별 타임스탬프)
+    const now = new Date();
+    
+    // 이력 데이터를 이차원 배열로 변환 (A~P열)
+    const rows = entries.map(p => [
+      p.req_id || String(now.getTime()), // A: req_id
       now,                            // B: requested_at
       p.action || '',                 // C: action
       p.status || 'DONE',             // D: status
@@ -3462,8 +3442,15 @@ function writeItemHistory_(p) {
       p.trigger_type || 'system',     // O: trigger_type
       p.member_name || ''             // P: member_name
     ]);
+
+    // 마지막 행 다음부터 일괄 쓰기
+    const lastRow = sheet.getLastRow();
+    sheet.getRange(lastRow + 1, 1, rows.length, 16).setValues(rows);
+    
+    // [중요] 즉시 동기화
+    SpreadsheetApp.flush();
   } catch (e) {
-    Logger.log('[writeItemHistory_] 오류: ' + e.toString());
+    Logger.log('[writeItemHistoryBatch_] 오류: ' + e.toString());
   }
 }
 
