@@ -28,6 +28,13 @@
     padding: 0 !important;
   }
 
+  /* 회원 모드: MemberItemList 카드 목록 짤림 방지 */
+  body.member-view-mode #MemberItemList {
+    height: auto !important;
+    min-height: 100%;
+    overflow-y: visible !important;
+  }
+
   body.member-view-mode .bidding-schedule-card-body {
     border: none;
     border-radius: 0;
@@ -1782,7 +1789,7 @@
   .member-dashboard-v2 {
     max-width: 640px;
     margin: 0 auto;
-    padding: 0 12px 40px;
+    padding: 0 12px calc(80px + env(safe-area-inset-bottom, 0px));
     background: #f3f4f6;
     min-height: 100%;
   }
@@ -1873,6 +1880,45 @@
 
   .sp.chg {
     background: #1f2937;
+  }
+
+  /* 입찰리스트 전용 상단바 */
+  .il-top-bar {
+    height: 60px !important;
+  }
+
+  .il-sp {
+    height: 48px !important;
+    padding: 0 18px !important;
+    font-size: 1.15rem !important;
+    cursor: pointer;
+    border: none;
+  }
+
+  /* 새로고침 버튼 */
+  .refresh-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1.5px solid #e2e8f0;
+    background: #fff;
+    cursor: pointer;
+    color: #4f46e5;
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform .3s, background .15s;
+    flex-shrink: 0;
+  }
+  .refresh-btn:hover { background: #eef2ff; border-color: #6366f1; }
+  .refresh-btn:active { transform: rotate(180deg); }
+
+  /* top-bar-inner justify 수정 (입찰리스트용: space-between) */
+  .il-top-bar .top-bar-inner {
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 4px;
   }
 
   /* 2. 캘린더 */
@@ -2406,29 +2452,111 @@
     animation: swipeLeftHint 0.75s ease 0.4s both;
   }
 
+  /* ===== 물건카드 CSS 변수 ===== */
+  :root {
+    --ic-h: 70px;
+    --ic-gap: 16px;
+    --ic-date-h: 50px;
+    --ic-date-fs: 1.30rem;
+    --ic-sakun-fs: 1.30rem;
+    --ic-price-fs: 1.30rem;
+    --ic-court-fs: 1.00rem;
+    --ic-mgr-fs: 0.90rem;
+    --vbh-px: 12px;
+    --vbh-py: 9px;
+    --vbh-fs: 0.72rem;
+    --vbh-mt: 0px;
+    --vbh-mb: 0px;
+    --vbh-ml: 4px;
+    --vbh-mr: 13px;
+    --badge-px: 18px;
+    --badge-py: 8px;
+    --badge-fs: 1.20rem;
+    --badge-mt: 0px;
+    --badge-mb: 0px;
+    --badge-ml: 0px;
+    --badge-mr: 0px;
+  }
+
   .ic {
     background: #fff;
     border: 3px solid #e2e8f0;
     border-radius: 14px;
-    padding: 38px 14px 0 14px !important;
+    padding: 0 !important;
     display: flex;
     flex-direction: column;
-    gap: 0;
     overflow: hidden;
-    min-height: 90px;
-    margin-bottom: 8px;
+    min-height: var(--ic-h);
+    margin-bottom: var(--ic-gap);
+    margin-top: 4px;
     transition: transform .28s cubic-bezier(.4, 0, .2, 1), opacity .28s ease;
     will-change: transform;
   }
 
+  /* 카드 헤더: 날짜배지 + 조사내용보기 */
+  .ic-header {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .ic-date-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 19px;
+    min-height: var(--ic-date-h);
+    font-size: var(--ic-date-fs);
+    font-weight: 800;
+    border-radius: 0 0 14px 0;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  /* 법원/담당자 (사건번호 아래) */
+  .ic-court-label {
+    font-size: var(--ic-court-fs);
+    font-weight: 700;
+    color: #64748b;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 조사내용보기 버튼 (헤더 오른쪽, pill) */
+  .view-btn-header {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: var(--vbh-py) var(--vbh-px);
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #b0b8c1 0%, #8d98a4 100%);
+    cursor: pointer;
+    color: #fff;
+    flex-shrink: 0;
+    margin: var(--vbh-mt) var(--vbh-mr) var(--vbh-mb) var(--vbh-ml);
+    align-self: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,.15);
+    transition: filter .15s, transform .1s;
+  }
+  .view-btn-header:hover { filter: brightness(1.08); }
+  .view-btn-header:active { transform: scale(.96); filter: brightness(.94); }
+  .vbh-lbl { font-size: var(--vbh-fs); font-weight: 800; white-space: nowrap; letter-spacing: .01em; }
+  .vbh-arr { font-size: 0.9rem; font-weight: 900; line-height: 1; }
+
   .ic-body {
     display: flex;
     gap: 8px;
-    padding-bottom: 14px;
+    padding: 12px 14px 14px;
   }
 
   .ic-timer-wrap {
-    margin: 0 -14px;
+    margin: 0;
   }
 
   /* 선택된 카드만 왼쪽으로 날아감 */
@@ -2464,10 +2592,10 @@
   }
 
   .ic-sakun {
-    font-size: 1.05rem;
+    font-size: var(--ic-sakun-fs);
     font-weight: 900;
     color: #1e293b;
-    line-height: 1.3;
+    line-height: 1.2;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2480,11 +2608,9 @@
   }
 
   .ic-price {
-    font-size: 1.1rem;
+    font-size: var(--ic-price-fs);
     font-weight: 900;
     color: #9ca3af;
-    /* 기본 회색 (서브클래스로 override) */
-    margin-top: 4px;
   }
 
   /* 전달완료: 클릭 유도 (주황, pulse 애니메이션) */
@@ -2561,37 +2687,94 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    min-width: 72px;
+    gap: 8px;
+    min-width: 76px;
   }
 
   .badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 8px 18px;
+    padding: var(--badge-py) var(--badge-px);
     border-radius: 10px;
-    font-size: .88rem;
+    font-size: var(--badge-fs);
     font-weight: 800;
     cursor: pointer;
     border: none;
     color: #fff;
-    transition: all .15s;
     white-space: nowrap;
+    margin: var(--badge-mt) var(--badge-mr) var(--badge-mb) var(--badge-ml);
+    transition: transform .1s;
   }
+  .badge:active { transform: scale(.95); }
+
+  @keyframes pulseBid { 0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.5)} 60%{box-shadow:0 0 0 9px rgba(79,70,229,0)} }
+  @keyframes pulseRec { 0%,100%{box-shadow:0 0 0 0 rgba(251,146,60,.5)} 60%{box-shadow:0 0 0 9px rgba(251,146,60,0)} }
 
   .badge.bb {
     background: #4f46e5;
+    animation: pulseBid 2s infinite;
   }
 
   .badge.br {
     background: #fb923c;
+    animation: pulseRec 2s infinite;
   }
 
   .badge.bc {
     background: #1f2937;
     cursor: default;
   }
+
+  /* 배지 아래 클릭 유도 (추천만) */
+  .ic-click-label {
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-align: center;
+    white-space: nowrap;
+    animation: bounceY 1s infinite;
+    margin-right: var(--badge-mr);
+  }
+  .ic-click-label.bid-confirm { color: #4f46e5; }
+  @keyframes bounceY { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+
+  /* ===== 입찰리스트 안내 카드 ===== */
+  .notice-card {
+    background: linear-gradient(135deg, #1e1b4b 0%, #3b1e7a 100%);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin: 8px 0 12px;
+    box-shadow: 0 6px 24px rgba(30,27,75,.5);
+  }
+  .notice-title {
+    font-size: 0.9rem; font-weight: 900; color: #fff;
+    margin-bottom: 10px; display: flex; align-items: center;
+    gap: 6px; letter-spacing: .03em;
+  }
+  .notice-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.8rem; font-weight: 700; line-height: 1.45;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,.10); border-radius: 10px;
+    padding: 9px 11px; color: #fff;
+  }
+  .notice-item:last-child { margin-bottom: 0; }
+  .notice-item.urgent {
+    background: rgba(253,224,71,.18);
+    border: 1px solid rgba(253,224,71,.55); color: #fde047;
+  }
+  .notice-item.warn {
+    background: rgba(248,113,113,.18);
+    border: 1px solid rgba(248,113,113,.55); color: #fca5a5;
+  }
+  .notice-icon { font-size: 1.05rem; flex-shrink: 0; }
+  .notice-item strong { color: #fff; font-weight: 900; }
+  .ni-btn { display:inline-flex; align-items:center; padding:2px 8px; border-radius:6px; font-size:0.78rem; font-weight:800; vertical-align:middle; color:#fff; margin:0 1px; }
+  .ni-btn.bid { background:#6366f1; }
+  .ni-btn.rec { background:#f97316; }
+  .notice-toggle { margin-left:auto; background:rgba(255,255,255,.15); border:none; border-radius:20px; color:#fff; font-size:0.72rem; font-weight:800; padding:3px 10px; cursor:pointer; flex-shrink:0; }
+  .notice-body { overflow:hidden; transition:max-height .3s ease, opacity .3s ease; max-height:300px; opacity:1; }
+  .notice-body.collapsed { max-height:0; opacity:0; }
 
   .ic-time {
     font-size: .68rem;

@@ -491,6 +491,7 @@
             } else {
                 navigateTo('MemberItemList');
             }
+            initNoticeState();
         }, 100);
     }
 
@@ -12732,6 +12733,26 @@ MJ 이정우 팀장
         renderMemberItemList();
     }
 
+    /** 이용 안내 접기/펼치기 */
+    function toggleNoticeCard() {
+        var body = document.getElementById('notice-body');
+        var btn = document.querySelector('.notice-toggle');
+        if (!body) return;
+        var collapsed = body.classList.toggle('collapsed');
+        if (btn) btn.textContent = collapsed ? '펼치기 ▼' : '접기 ▲';
+        try { localStorage.setItem('notice_collapsed', collapsed ? '1' : '0'); } catch(e) {}
+    }
+    function initNoticeState() {
+        try {
+            if (localStorage.getItem('notice_collapsed') === '1') {
+                var body = document.getElementById('notice-body');
+                var btn = document.querySelector('.notice-toggle');
+                if (body) body.classList.add('collapsed');
+                if (btn) btn.textContent = '펼치기 ▼';
+            }
+        } catch(e) {}
+    }
+
     /** 입찰리스트 렌더링 */
     function renderMemberItemList() {
         var el = document.getElementById('iL2');
@@ -12959,91 +12980,67 @@ MJ 이정우 팀장
     function cItem(i) {
         var s = String(i.stu_member || '미정');
         var cls = 'ic';
-        var borderCol = '#e2e8f0'; // 기본 색상
-
+        var borderCol = '#e2e8f0';
         if (s === '입찰') { cls += ' sb'; borderCol = '#4f46e5'; }
         else if (s === '추천') { cls += ' sr'; borderCol = '#fb923c'; }
         else if (s === '변경') { cls += ' sc'; borderCol = '#1f2937'; }
 
         var bCls = 'badge';
-        var bTxt = s;
         if (s === '입찰') bCls += ' bb';
         else if (s === '추천') bCls += ' br';
         else if (s === '변경') bCls += ' bc';
 
-        // 서버 헤더와 일치하도록 키 수정
         var sk = String(i.sakun_no || '');
         var ct = String(i.court || '');
         var pr = i.bidprice ? fmtP(i.bidprice) : '0';
-        var bidSt = String(i.bid_state || '').trim(); // bid_state 파악
+        var bidSt = String(i.bid_state || '').trim();
         var m_nm = mapN(String(i.m_name_id || ''));
-        var tm = String(i.reg_date || '').substring(11, 16); // 시간 추출
 
-        // bid_state에 따른 입찰가 표시 HTML 분기
-        // 물건상태가 '입찰'인 경우에만 입찰가 표시 (그 외는 무조건 가격미정)
-        var priceHtml;
-        var copyBtnHtml = '';
+        var priceHtml, copyBtnHtml = '';
+        var cpSvg = '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>';
         if (s !== '입찰') {
-            // 입찰 상태 아님 → 입찰가 등록 여부에 관계없이 항상 가격미정
             priceHtml = '<div class="ic-price ic-price-default">가격미정</div>';
         } else if (bidSt === '전달완료') {
-            // 전달완료: 클릭 유도, 마스킹
             priceHtml = '<div class="ic-price ic-price-pending" onclick="event.stopPropagation();handleBidPriceClick(\'' + i.id + '\')">입찰가 도착! 터치하세요 👆</div>';
         } else if (bidSt === '확인완료' || bidSt.includes('확인완료')) {
-            // 확인완료: 전체 공개 + 복사 버튼
             var fullPrice = (pr && pr !== '0') ? pr + ' 원' : '미입력';
             priceHtml = '<div class="ic-price ic-price-confirmed">' + fullPrice + '</div>';
-            copyBtnHtml = '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + pr + '\', event)">' +
-                '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
-                '</button>';
+            copyBtnHtml = '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + pr + '\', event)">' + cpSvg + '</button>';
         } else {
-            // 기본 (신규/미전달): 미정 표시
             priceHtml = '<div class="ic-price ic-price-default">가격미정</div>';
         }
 
-        // [수정] 입찰일자 배지: 카드 상단에 딱 붙임 (Flush with top-left)
         var dt = String(i['in-date'] || '');
         var dtLabel = dt.substring(2, 4) + '월 ' + dt.substring(4, 6) + '일';
-        var txtCol = (s === '추천') ? '#000' : '#fff'; // v3.15: 추천 가독성 개선 (검정색)
-        var dtStyle = 'background-color:' + borderCol + '; color:' + txtCol + '; font-size:0.75rem; height:24px; display:flex; align-items:center; padding:0 10px; border-radius:10px 0 10px 0; font-weight:800; position:absolute; top:0; left:0; z-index:10;';
-
-        // 조사이미지 아이콘 (사진 프레임 SVG - 이미지 보기 의미)
-        var swipeIco = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
-        var skSafe = sk.replace(/'/g, '');
-
+        var txtCol = (s === '추천') ? '#000' : '#fff';
+        var clickLabel = (s === '추천') ? '<div class="ic-click-label bid-confirm">입찰확정 클릭!</div>' : '';
         var timerBar = (s === '추천' && i.chuchen_date) ? createChuchenTimerBar(i.chuchen_date) : '';
+        var skSafe = sk.replace(/'/g, '');
+        var viewIcoSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
 
-        var h = '<div class="' + cls + '" style="position:relative; margin-top:4px;" data-id="' + i.id + '" data-sk="' + skSafe + '">' +
-            // 날짜 배지 (좌상단)
-            '<div class="ic-in-date" style="' + dtStyle + '">' + dtLabel + '</div>' +
-            // 이미지 버튼 (우상단 - 날짜배지와 대칭)
-            '<button class="img-btn" title="조사이미지 보기" onclick="event.stopPropagation();openImgViewer(\'' + i.id + '\',\'' + skSafe + '\')">' + swipeIco + '</button>' +
-            // 콘텐츠 행 래퍼
+        return '<div class="' + cls + '" data-id="' + i.id + '" data-sk="' + skSafe + '">' +
+            '<div class="ic-header">' +
+            '<div class="ic-date-badge" style="background:' + borderCol + ';color:' + txtCol + '">' + dtLabel + '</div>' +
+            '<button class="view-btn-header" onclick="event.stopPropagation();openImgViewer(\'' + i.id + '\',\'' + skSafe + '\')" title="조사내용보기">' +
+            viewIcoSvg + '<span class="vbh-lbl">조사내용보기</span><span class="vbh-arr">›</span>' +
+            '</button>' +
+            '</div>' +
             '<div class="ic-body">' +
-            // 좌측 정보 영역
             '<div class="ic-l" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
             '<div class="ic-copy-row">' +
             '<div class="ic-sakun">' + sk + '</div>' +
-            '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + sk + '\', event)">' +
-            '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>' +
-            '</button>' +
+            '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + skSafe + '\', event)">' + cpSvg + '</button>' +
             '</div>' +
-            '<div class="ic-court">' + ct + ' / ' + m_nm + '</div>' +
-            '<div class="ic-copy-row">' +
-            priceHtml +
-            copyBtnHtml +
+            '<div class="ic-court-label">' + ct + ' / ' + m_nm + '</div>' +
+            '<div class="ic-copy-row">' + priceHtml + copyBtnHtml + '</div>' +
             '</div>' +
-            '</div>' +
-            // 우측 액션 영역 (입찰/추천 배지 + 시간)
             '<div class="ic-r">' +
-            '<button class="' + bCls + '" onclick="setB(\'' + i.id + '\', \'' + s + '\', \'' + sk + '\')">' + bTxt + '</button>' +
-            '<div class="ic-time">' + tm + '</div>' +
+            '<button class="' + bCls + '" onclick="setB(\'' + i.id + '\', \'' + s + '\', \'' + sk + '\')">' + s + '</button>' +
+            clickLabel +
             '</div>' +
             '</div>' +
-            // 48시간 타이머 바 (추천 상태만)
             (timerBar ? '<div class="ic-timer-wrap">' + timerBar + '</div>' : '') +
             '</div>';
-        return h;
     }
 
     /**
