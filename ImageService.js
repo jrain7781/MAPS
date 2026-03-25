@@ -308,40 +308,72 @@ function fixAllDuplicates() {
  * item_images 시트가 있으면 해당 item_id별 image_id를 created_at 순으로 이어 붙이고,
  * 없으면 items.image_id 한 개를 그대로 사용합니다.
  */
+/**
+ * items 시트 데이터와 item_images 시트의 이미지 목록을 결합하여 반환합니다. (성능 최적화 버전)
+ */
 function readAllDataWithImageIds() {
   var items = [];
   try {
-    if (typeof readAllData === 'function') items = readAllData();
-  } catch (e) { return items; }
+    // 1. 기본 아이템 데이터 읽기 (SheetDB.js 의 readAllData 활용)
+    if (typeof readAllData === 'function') {
+      items = readAllData();
+    }
+  } catch (e) {
+    Logger.log('[readAllDataWithImageIds] readAllData 오류: ' + e.toString());
+    return items;
+  }
+
+  if (!items || items.length === 0) return [];
+
+  // 2. 이미지 매핑 데이터 읽기 (한 번의 시트 접근으로 처리)
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var imgSheet = ss.getSheetByName(ITEM_IMAGES_SHEET_NAME);
-  var map = {};
-  if (imgSheet && imgSheet.getLastRow() >= 2) {
-    var data = imgSheet.getRange(2, 1, imgSheet.getLastRow(), 5).getValues();
-    for (var i = 0; i < data.length; i++) {
-      var itemId = String(data[i][0]).trim();
-      if (!itemId) continue;
-      if (!map[itemId]) map[itemId] = [];
-      map[itemId].push({ id: String(data[i][1] || '').trim(), created_at: String(data[i][3] || '').trim() });
-    }
-    for (var k in map) {
-      map[k].sort(function (a, b) { return (a.created_at || '').localeCompare(b.created_at || ''); });
+  var imageMap = {};
+
+  if (imgSheet) {
+    var lastRow = imgSheet.getLastRow();
+    if (lastRow >= 2) {
+      // item_id(1), image_id(2), created_at(4) 컬럼만 읽기 (필요 시 더 넓게 읽음)
+      var imgData = imgSheet.getRange(2, 1, lastRow - 1, 4).getValues();
+      for (var i = 0; i < imgData.length; i++) {
+        var itemId = String(imgData[i][0]).trim();
+        var imgId = String(imgData[i][1] || '').trim();
+        var createdAt = String(imgData[i][3] || '').trim();
+        if (!itemId || !imgId) continue;
+
+        if (!imageMap[itemId]) imageMap[itemId] = [];
+        imageMap[itemId].push({ id: imgId, created_at: createdAt });
+      }
+      
+      // 등록일 순 정렬
+      for (var k in imageMap) {
+        imageMap[k].sort(function (a, b) {
+          return (a.created_at || '').localeCompare(b.created_at || '');
+        });
+      }
     }
   }
+
+  // 3. 아이템 데이터에 이미지 ID 리스트 결합
   for (var j = 0; j < items.length; j++) {
-    var key = String(items[j].id || '').trim();
-    var arr = map[key];
-    if (arr && arr.length) {
-      items[j].image_ids = arr.map(function (x) { return x.id; }).filter(Boolean).join(',');
-      items[j].has_images = true;
-    } else if (items[j].image_id && String(items[j].image_id).trim()) {
-      items[j].image_ids = String(items[j].image_id).trim();
-      items[j].has_images = true;
+    var item = items[j];
+    var itemIdKey = String(item.id || '').trim();
+    var imgArr = imageMap[itemIdKey];
+
+    if (imgArr && imgArr.length > 0) {
+      // 여러 이미지가 있는 경우 콤마(,)로 결합
+      item.image_ids = imgArr.map(function (x) { return x.id; }).join(',');
+      item.has_images = true;
+    } else if (item.image_id && String(item.image_id).trim()) {
+      // 기본 image_id 컬럼에만 값이 있는 경우 (하위 호환)
+      item.image_ids = String(item.image_id).trim();
+      item.has_images = true;
     } else {
-      items[j].image_ids = '';
-      items[j].has_images = false;
+      item.image_ids = '';
+      item.has_images = false;
     }
   }
+
   return items;
 }
 

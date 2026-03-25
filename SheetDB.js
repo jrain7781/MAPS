@@ -190,11 +190,11 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
 
   const id = new Date().getTime().toString();
   const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  
+
   // [PHASE 1-4] 물건 생성 이력 기록 (배치 처리로 속도 대폭 개선)
   const createBatchTs = String(new Date().getTime());
   const historyEntries = [];
-  
+
   // 메인 생성 이벤트
   historyEntries.push({
     action: 'ITEM_CREATE',
@@ -262,7 +262,17 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
 
   sheet.appendRow(newRow);
 
-  return { success: true, message: '성공적으로 등록되었습니다.' };
+  // 생성된 데이터 객체 반환 (프론트엔드 로컬 캐시 갱신용)
+  var createdItem = {};
+  ITEM_HEADERS.forEach((header, index) => {
+    createdItem[header] = newRow[index];
+  });
+  if (typeof formatParamsDate === 'function') {
+    createdItem['in-date'] = formatParamsDate(newRow[1]);
+    createdItem['reg_date'] = formatParamsDate(newRow[9], 'yyyy-MM-dd');
+  }
+
+  return { success: true, message: '성공적으로 등록되었습니다.', data: createdItem };
 }
 
 /**
@@ -284,36 +294,36 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
 
-  // ID 검색
-  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  const rowIndex = ids.findIndex(item => String(item) === String(id));
+  // ID 검색 (createTextFinder 사용으로 12k+ 행 조회 성능 최적화)
+  const finder = sheet.getRange(2, 1, lastRow - 1, 1).createTextFinder(String(id)).matchEntireCell(true);
+  const match = finder.findNext();
 
-  if (rowIndex === -1) {
+  if (!match) {
     return { success: false, message: '해당 ID의 데이터를 찾을 수 없습니다.' };
   }
 
-  const realRowIndex = rowIndex + 2;
+  const realRowIndex = match.getRow();
 
   // [PHASE 1-3] 저장 전: 기존 값 읽기 (변경 감지용) - 17열(chuchen_state)까지 읽기
   const range = sheet.getRange(realRowIndex, 1, 1, 18); // R열(18)까지 한 번에 처리
   const rowValues = range.getValues()[0];
   const oldValues = {
-    inDate:        String(rowValues[1]  || '').trim(), // B
-    sakunNo:       String(rowValues[2]  || '').trim(), // C
-    court:         String(rowValues[3]  || '').trim(), // D
-    stu_member:    String(rowValues[4]  || '').trim(), // E
-    m_name_id:     String(rowValues[5]  || '').trim(), // F
-    m_name:        String(rowValues[6]  || '').trim(), // G
-    bidprice:      String(rowValues[7]  || '').trim(), // H
-    member_id:     String(rowValues[8]  || '').trim(), // I
-    reg_member:    String(rowValues[10] || '').trim(), // K
-    bid_state:     String(rowValues[11] || '').trim(), // L
-    image_id:      String(rowValues[12] || '').trim(), // M
-    note:          String(rowValues[13] || '').trim(), // N
-    m_name_2:      String(rowValues[14] || '').trim(), // O
-    auction_id:    String(rowValues[15] || '').trim(), // P
+    inDate: String(rowValues[1] || '').trim(), // B
+    sakunNo: String(rowValues[2] || '').trim(), // C
+    court: String(rowValues[3] || '').trim(), // D
+    stu_member: String(rowValues[4] || '').trim(), // E
+    m_name_id: String(rowValues[5] || '').trim(), // F
+    m_name: String(rowValues[6] || '').trim(), // G
+    bidprice: String(rowValues[7] || '').trim(), // H
+    member_id: String(rowValues[8] || '').trim(), // I
+    reg_member: String(rowValues[10] || '').trim(), // K
+    bid_state: String(rowValues[11] || '').trim(), // L
+    image_id: String(rowValues[12] || '').trim(), // M
+    note: String(rowValues[13] || '').trim(), // N
+    m_name_2: String(rowValues[14] || '').trim(), // O
+    auction_id: String(rowValues[15] || '').trim(), // P
     chuchen_state: String(rowValues[16] || '').trim(), // Q
-    chuchen_date:  String(rowValues[17] || '').trim(), // R
+    chuchen_date: String(rowValues[17] || '').trim(), // R
   };
 
   // 신규 값 배열 생성 (메모리상 업데이트)
@@ -326,10 +336,10 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
   newRowValues[6] = mName;
   newRowValues[7] = bidPrice;
   newRowValues[8] = memberId;
-  
+
   if (regMember) newRowValues[10] = regMember;
   newRowValues[11] = bidState;
-  
+
   if (imageId) {
     newRowValues[12] = imageId;
   } else if (!imageId && oldValues.image_id) {
@@ -340,7 +350,7 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
 
   newRowValues[13] = note || '';
   newRowValues[14] = mName2 || '';
-  
+
   if (auctionId) {
     newRowValues[15] = auctionId;
   } else if (!auctionId && oldValues.auction_id) {
@@ -393,7 +403,7 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
   Object.keys(trackFields).forEach(function (field) {
     const newVal = String(trackFields[field] || '').trim();
     const oldVal = String(oldValues[field] || '').trim(); // Ensure oldVal is also trimmed for comparison
-    
+
     // [보정] bidprice는 콤마 제거 후 숫자만 비교 (문자열 콤마 유무에 따른 중복 로그 방지)
     if (field === 'bidprice') {
       const ovNum = String(oldVal || '').replace(/[^0-9]/g, '');
@@ -442,7 +452,17 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
     }
   }
 
-  return { success: true, message: '성공적으로 수정되었습니다.' };
+  // 수정된 데이터 객체 반환 (프론트엔드 로컬 캐시 갱신용)
+  var updatedItem = {};
+  ITEM_HEADERS.forEach((header, index) => {
+    updatedItem[header] = newRowValues[index];
+  });
+  if (typeof formatParamsDate === 'function') {
+    updatedItem['in-date'] = formatParamsDate(newRowValues[1]);
+    updatedItem['reg_date'] = formatParamsDate(newRowValues[9], 'yyyy-MM-dd');
+  }
+
+  return { success: true, message: '성공적으로 수정되었습니다.', data: updatedItem };
 }
 
 /**
@@ -694,14 +714,14 @@ function deleteData(id) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
 
-  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  const rowIndex = ids.findIndex(item => String(item) === String(id));
+  const finder = sheet.getRange(2, 1, lastRow - 1, 1).createTextFinder(String(id)).matchEntireCell(true);
+  const match = finder.findNext();
 
-  if (rowIndex === -1) {
+  if (!match) {
     return { success: false, message: '해당 ID의 데이터를 찾을 수 없습니다.' };
   }
 
-  sheet.deleteRow(rowIndex + 2);
+  sheet.deleteRow(match.getRow());
   return { success: true, message: '성공적으로 삭제되었습니다.' };
 }
 
@@ -1680,6 +1700,7 @@ function approveTelegramRequests(reqIds, approvedBy) {
   }
 
   var approved = 0, updatedItems = 0;
+  var updatedItemsList = [];
 
   function parseNote_(raw) {
     var s = String(raw || '').trim();
@@ -1734,6 +1755,11 @@ function approveTelegramRequests(reqIds, approvedBy) {
         updateItemStuMemberById_(itemId, '입찰');
         updatedItems++;
 
+        if (it) {
+          var updatedItem = Object.assign({}, it, { id: itemId, stu_member: '입찰' });
+          updatedItemsList.push(updatedItem);
+        }
+
         if (chatId && typeof telegramSendMessage === 'function') {
           try {
             telegramSendMessage(chatId, prefix + '입찰확정 되었습니다.', null, originMessageId ? { replyToMessageId: originMessageId } : null);
@@ -1748,6 +1774,11 @@ function approveTelegramRequests(reqIds, approvedBy) {
         updateItemStuMemberById_(itemId, '미정');
         updatedItems++;
 
+        if (it) {
+          var updatedItem = Object.assign({}, it, { id: itemId, stu_member: '미정' });
+          updatedItemsList.push(updatedItem);
+        }
+
         if (chatId && typeof telegramSendMessage === 'function') {
           try {
             telegramSendMessage(chatId, prefix + '입찰취소 되었습니다.', null, originMessageId ? { replyToMessageId: originMessageId } : null);
@@ -1756,7 +1787,7 @@ function approveTelegramRequests(reqIds, approvedBy) {
       } catch (e) { }
     }
   }
-  return { success: true, approved: approved, updatedItems: updatedItems, message: '승인 ' + approved + '건 처리 (상태 변경 ' + updatedItems + '건)' };
+  return { success: true, approved: approved, updatedItems: updatedItems, data: updatedItemsList, message: '승인 ' + approved + '건 처리 (상태 변경 ' + updatedItems + '건)' };
 }
 
 function rejectTelegramRequests(reqIds, rejectedBy) {
@@ -2555,9 +2586,9 @@ function getAutoApprovalStats(testMode) {
     var mSheet = ss.getSheetByName(MEMBERS_SHEET_NAME);
     if (mSheet && mSheet.getLastRow() > 1) {
       var mRows = mSheet.getRange(2, 1, mSheet.getLastRow() - 1, 3).getValues();
-      mRows.forEach(function(mr) { if (mr[0]) memberGubunMap[String(mr[0]).trim()] = String(mr[2] || '').trim(); });
+      mRows.forEach(function (mr) { if (mr[0]) memberGubunMap[String(mr[0]).trim()] = String(mr[2] || '').trim(); });
     }
-  } catch(e) {}
+  } catch (e) { }
 
   var lastRow = reqSheet.getLastRow();
   var totalCols = Math.min(reqSheet.getMaxColumns(), 16);
@@ -2596,28 +2627,28 @@ function getAutoApprovalStats(testMode) {
   // 텔레+수작업 합산 (중복 제거)
   function mergeIds(tele, web) {
     var all = tele.slice();
-    web.forEach(function(id) { if (all.indexOf(id) < 0) all.push(id); });
+    web.forEach(function (id) { if (all.indexOf(id) < 0) all.push(id); });
     return all;
   }
 
   rows.forEach(function (row) {
-    var action     = String(row[2]  || '').trim();
-    var status     = String(row[3]  || '').trim();
-    var itemId     = String(row[4]  || '').trim();
-    var note       = String(row[8]  || '').trim();
-    var reqAt      = row[1];
-    var appAt      = row[9];
-    var fromVal    = String(row[11] || '').trim();
-    var toVal      = String(row[12] || '').trim();
-    var fieldName  = String(row[13] || '').trim();
+    var action = String(row[2] || '').trim();
+    var status = String(row[3] || '').trim();
+    var itemId = String(row[4] || '').trim();
+    var note = String(row[8] || '').trim();
+    var reqAt = row[1];
+    var appAt = row[9];
+    var fromVal = String(row[11] || '').trim();
+    var toVal = String(row[12] || '').trim();
+    var fieldName = String(row[13] || '').trim();
     var triggerType = String(row[14] || '').trim();
 
     if (!itemId) return;
 
     // 테스트모드: members.gubun이 직원/관리자인 건만 / 일반모드: 직원/관리자 제외
-    var memberId  = String(row[5] || '').trim();
-    var gubun     = memberGubunMap[memberId] || '';
-    var isStaff   = (gubun === '직원' || gubun === '관리자');
+    var memberId = String(row[5] || '').trim();
+    var gubun = memberGubunMap[memberId] || '';
+    var isStaff = (gubun === '직원' || gubun === '관리자');
     if (testMode && !isStaff) return;
     if (!testMode && isStaff) return;
 
@@ -2631,9 +2662,9 @@ function getAutoApprovalStats(testMode) {
     } else {
       var s = String(dateToUse).trim();
       if (/^\d{6} \d{6}$/.test(s)) {
-        d = new Date(2000 + parseInt(s.substring(0,2),10), parseInt(s.substring(2,4),10)-1,
-                     parseInt(s.substring(4,6),10), parseInt(s.substring(7,9),10),
-                     parseInt(s.substring(9,11),10), parseInt(s.substring(11,13),10));
+        d = new Date(2000 + parseInt(s.substring(0, 2), 10), parseInt(s.substring(2, 4), 10) - 1,
+          parseInt(s.substring(4, 6), 10), parseInt(s.substring(7, 9), 10),
+          parseInt(s.substring(9, 11), 10), parseInt(s.substring(11, 13), 10));
       } else {
         d = new Date(s);
       }
@@ -2647,44 +2678,44 @@ function getAutoApprovalStats(testMode) {
     if (action === 'TELEGRAM_SENT' && note === 'card') {
       addId(ds.recommend_tele, itemId);                                          // 11번
     } else if (action === 'FIELD_CHANGE' && fieldName === 'chuchen_state' && toVal === '전달완료'
-               && triggerType !== 'web-telegram') {
+      && triggerType !== 'web-telegram') {
       addId(ds.recommend_web, itemId);                                           // 9번 (수작업만)
 
-    // ── 추천물건-입찰확정 ─────────────────────────────────────────────
+      // ── 추천물건-입찰확정 ─────────────────────────────────────────────
     } else if (action === 'REQUEST_BID' && status === 'APPROVED') {
       addId(ds.bid_approved_tele, itemId);                                       // 17번
     } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '입찰') {
       addId(ds.bid_approved_web, itemId);                                        // 8번
 
-    // ── 입찰물건-입찰취소 (미선택보다 먼저) ─────────────────────────────
+      // ── 입찰물건-입찰취소 (미선택보다 먼저) ─────────────────────────────
     } else if (action === 'REQUEST_CANCEL_BID' && status === 'APPROVED') {
       addId(ds.cancel_approved_tele, itemId);                                    // 19번
-    // 수작업: 입찰→추천/미정/상품 (엑셀 로직수정: 구체적 값 명시)
+      // 수작업: 입찰→추천/미정/상품 (엑셀 로직수정: 구체적 값 명시)
     } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && fromVal === '입찰'
-               && (toVal === '추천' || toVal === '미정' || toVal === '상품')) {
+      && (toVal === '추천' || toVal === '미정' || toVal === '상품')) {
       addId(ds.cancel_approved_web, itemId);                                     // 8번
 
-    // ── 추천물건-미선택 ───────────────────────────────────────────────
+      // ── 추천물건-미선택 ───────────────────────────────────────────────
     } else if (action === 'REQUEST_CANCEL_CHUCHEN' && status === 'APPROVED') {
       addId(ds.bid_pending_tele, itemId);                                        // 18번
-    // 수작업: 추천→미정/상품 (엑셀 로직수정: from='추천' 조건 추가)
+      // 수작업: 추천→미정/상품 (엑셀 로직수정: from='추천' 조건 추가)
     } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && fromVal === '추천'
-               && (toVal === '미정' || toVal === '상품')) {
+      && (toVal === '미정' || toVal === '상품')) {
       addId(ds.bid_pending_web, itemId);                                         // 8번
 
-    // ── 입찰가-전달 ──────────────────────────────────────────────────
+      // ── 입찰가-전달 ──────────────────────────────────────────────────
     } else if (action === 'TELEGRAM_SENT' && note === 'bid_price') {
       addId(ds.delivered_tele, itemId);                                          // 10번
     } else if (action === 'FIELD_CHANGE' && fieldName === 'bid_state' && toVal === '전달완료') {
       addId(ds.delivered_web, itemId);                                           // 3번
 
-    // ── 입찰가-확인 ──────────────────────────────────────────────────
+      // ── 입찰가-확인 ──────────────────────────────────────────────────
     } else if (action === 'PRICE_CONFIRMED') {
       addId(ds.confirmed_tele, itemId);                                          // 20번
     } else if (action === 'FIELD_CHANGE' && fieldName === 'bid_state' && toVal === '확인완료') {
       addId(ds.confirmed_web, itemId);                                           // 3번
 
-    // ── 변경/취소 안내 ────────────────────────────────────────────────
+      // ── 변경/취소 안내 ────────────────────────────────────────────────
     } else if (action === 'TELEGRAM_SENT' && note === 'status') {
       addId(ds.status_tele, itemId);                                             // 12번
     } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '변경') {
@@ -3329,7 +3360,7 @@ function updateBidState(itemIds, state) {
     // [0]id [6]m_name [8]member_id [11]bid_state
     var updated = 0;
     var idsStr = itemIds.map(String);
-    allData.forEach(function(row, i) {
+    allData.forEach(function (row, i) {
       var rowId = String(row[0] || '').trim();
       if (idsStr.indexOf(rowId) === -1) return;
       var oldState = String(row[11] || '').trim();
@@ -3351,7 +3382,7 @@ function updateBidState(itemIds, state) {
     });
     if (updated > 0) SpreadsheetApp.flush();
     return { success: true, updated: updated };
-  } catch(e) {
+  } catch (e) {
     Logger.log('updateBidState 오류: ' + e.message);
     return { success: false, updated: 0 };
   }
@@ -3376,27 +3407,100 @@ function updateDataField(ids, field, value) {
     if (colIndex === -1) return { success: false, message: '유효하지 않은 필드명입니다: ' + field };
     const realColNum = colIndex + 1;
 
-    // [BATCH] 전체 데이터 읽기 -> 메모리 수정 -> 한 번에 쓰기
-    const range = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length);
-    const data = range.getValues();
-    let updatedCount = 0;
-
-    ids.forEach(id => {
-      const rowIdx = data.findIndex(row => String(row[0]) === String(id));
-      if (rowIdx >= 0) {
-        data[rowIdx][colIndex] = value;
-        updatedCount++;
+    // [최적화] ID가 한 개인 경우: 전체 시트를 읽지 않고 해당 셀만 직접 수정 (속도/동시성 개선)
+    if (ids.length === 1) {
+      const lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(10000); // 10초 대기
+        const id = String(ids[0]);
+        const allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+        const rowIdx = allIds.findIndex(v => String(v) === id);
+        if (rowIdx >= 0) {
+          sheet.getRange(rowIdx + 2, realColNum).setValue(value);
+          SpreadsheetApp.flush();
+          return { success: true, message: `1건의 [${field}] 필드가 수정되었습니다.`, updated: 1 };
+        } else {
+          return { success: false, message: 'ID를 찾을 수 없습니다: ' + id };
+        }
+      } finally {
+        lock.releaseLock();
       }
-    });
-
-    if (updatedCount > 0) {
-      range.setValues(data);
     }
 
-    SpreadsheetApp.flush();
-    return { success: true, message: `${updatedCount}건의 [${field}] 필드가 수정되었습니다.`, updated: updatedCount };
+    // [BATCH] 여러 개 업데이트 시: Lock 적용 후 전체 데이터 읽기 -> 메모리 수정 -> 한 번에 쓰기
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(30000); // 일괄 처리 시 30초 대기
+      const range = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length);
+      const data = range.getValues();
+      let updatedCount = 0;
+
+      ids.forEach(id => {
+        const rowIdx = data.findIndex(row => String(row[0]) === String(id));
+        if (rowIdx >= 0) {
+          data[rowIdx][colIndex] = value;
+          updatedCount++;
+        }
+      });
+
+      if (updatedCount > 0) {
+        range.setValues(data);
+        SpreadsheetApp.flush();
+      }
+
+      return { success: true, message: `${updatedCount}건의 [${field}] 필드가 수정되었습니다.`, updated: updatedCount };
+    } finally {
+      lock.releaseLock();
+    }
   } catch (e) {
     Logger.log('[updateDataField] 오류: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
+ * 물건별로 서로 다른 값을 가진 특정 필드를 일괄 업데이트합니다.
+ * @param {Array<{id: string, value: any}>} updates - {id, value} 객체 배열
+ * @param {string} field - 필드명
+ */
+function updateDataFieldBulk(updates, field) {
+  try {
+    if (!updates || !updates.length) return { success: false, message: '업데이트 목록이 없습니다.' };
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
+
+    const colIndex = ITEM_HEADERS.indexOf(field);
+    if (colIndex === -1) return { success: false, message: '유효하지 않은 필드명입니다: ' + field };
+
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(30000); // 30초 대기
+      const range = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length);
+      const data = range.getValues();
+      let updatedCount = 0;
+
+      updates.forEach(u => {
+        const rowIdx = data.findIndex(row => String(row[0]) === String(u.id));
+        if (rowIdx >= 0) {
+          data[rowIdx][colIndex] = u.value;
+          updatedCount++;
+        }
+      });
+
+      if (updatedCount > 0) {
+        range.setValues(data);
+        SpreadsheetApp.flush();
+      }
+
+      return { success: true, message: `${updatedCount}건이 일괄 수정되었습니다.`, updated: updatedCount };
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (e) {
+    Logger.log('[updateDataFieldBulk] 오류: ' + e.toString());
     return { success: false, message: e.toString() };
   }
 }
@@ -3418,11 +3522,11 @@ function writeItemHistory_(p) {
  */
 function writeItemHistoryBatch_(entries) {
   if (!entries || entries.length === 0) return;
-  
+
   try {
     const sheet = ensureTelegramRequestsSheet_();
     const now = new Date();
-    
+
     // 이력 데이터를 이차원 배열로 변환 (A~P열)
     const rows = entries.map(p => [
       p.req_id || String(now.getTime()), // A: req_id
@@ -3446,7 +3550,7 @@ function writeItemHistoryBatch_(entries) {
     // 마지막 행 다음부터 일괄 쓰기
     const lastRow = sheet.getLastRow();
     sheet.getRange(lastRow + 1, 1, rows.length, 16).setValues(rows);
-    
+
     // [중요] 즉시 동기화
     SpreadsheetApp.flush();
   } catch (e) {
@@ -3825,12 +3929,12 @@ function getCancelHistory(memberId, limit) {
     // telegram_requests에서 입찰확정(REQUEST_BID APPROVED) 날짜 매핑: item_id → approved_at
     const bidConfirmMap = {};
     for (let i = 0; i < data.length; i++) {
-        const actionStr = String(data[i][2]).trim();
-        const stateStr = String(data[i][3]).trim();
-        if ((actionStr === 'REQUEST_BID' || actionStr === 'BID') && stateStr === 'APPROVED') {
-            const iid = String(data[i][4] || '').trim();
-            if (iid && !bidConfirmMap[iid]) bidConfirmMap[iid] = String(data[i][9] || ''); // J열: approved_at
-        }
+      const actionStr = String(data[i][2]).trim();
+      const stateStr = String(data[i][3]).trim();
+      if ((actionStr === 'REQUEST_BID' || actionStr === 'BID') && stateStr === 'APPROVED') {
+        const iid = String(data[i][4] || '').trim();
+        if (iid && !bidConfirmMap[iid]) bidConfirmMap[iid] = String(data[i][9] || ''); // J열: approved_at
+      }
     }
 
     const result = [];
@@ -3852,7 +3956,7 @@ function getCancelHistory(memberId, limit) {
       if (memberId && reqMember !== String(memberId).trim()) continue;
 
       const itemId = String(data[i][4] || '').trim();
-      
+
       // 동일 물건 번호 1번 카운팅 로직 (이미 추가된 물건은 스킵)
       if (itemId && seenItemIds[itemId]) continue;
       if (itemId) seenItemIds[itemId] = true;
@@ -4047,30 +4151,52 @@ function getItemHistory(itemId, limit) {
     if (!sheet || sheet.getLastRow() < 2) return [];
 
     const lastRow = sheet.getLastRow();
-    const data = sheet.getRange(2, 1, lastRow - 1, 16).getValues(); // A~P열
+    
+    // [최적화 Phase 4] 최근 기록 우선 검색
+    // 로그가 수만 건일 경우 findAll() 자체가 느릴 수 있으므로 최근 5000행만 먼저 검색
+    const searchDepth = 5000;
+    const startRow = Math.max(2, lastRow - searchDepth);
+    const numRows = lastRow - startRow + 1;
+    
+    let finder = sheet.getRange(startRow, 5, numRows, 1).createTextFinder(String(itemId)).matchEntireCell(true);
+    let matches = finder.findAll();
+    
+    // 최근 5000행에 결과가 없거나 부족한 경우 (극히 드묾) 전체 검색으로 전환
+    if (!matches || matches.length === 0) {
+      finder = sheet.getRange(2, 5, lastRow - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true);
+      matches = finder.findAll();
+    }
+    
+    if (!matches || matches.length === 0) return [];
+
+    const rowNumbers = matches.map(m => m.getRow()).sort((a, b) => b - a).slice(0, maxRows);
+    
+    const minRow = Math.min(...rowNumbers);
+    const maxRow = Math.max(...rowNumbers);
+    const dataRange = sheet.getRange(minRow, 1, maxRow - minRow + 1, 16).getValues();
+    const minRowIdx = minRow;
 
     const result = [];
-    // 뒤에서부터(최신부터) 역순으로 탐색하여 limit 개수를 빠르게 채움
-    for (let i = data.length - 1; i >= 0 && result.length < maxRows; i--) {
-      const rowItemId = String(data[i][4] || '').trim(); // E열: item_id
-      if (rowItemId !== String(itemId).trim()) continue;
-
+    rowNumbers.forEach(rowNum => {
+      const rowData = dataRange[rowNum - minRowIdx];
+      if (!rowData) return;
+      
       result.push({
-        req_id: String(data[i][0] || ''),   // A: req_id
-        requested_at: String(data[i][1] || ''),   // B: requested_at (yyMMdd HHmmss)
-        action: String(data[i][2] || ''),   // C: action
-        status: String(data[i][3] || ''),   // D: status
-        item_id: rowItemId,                    // E: item_id
-        member_id: String(data[i][5] || ''),   // F: member_id
-        note: String(data[i][8] || ''),   // I: note
-        from_value: String(data[i][11] || ''),   // L: from_value
-        to_value: String(data[i][12] || ''),   // M: to_value
-        field_name: String(data[i][13] || ''),   // N: field_name
-        trigger_type: String(data[i][14] || ''),   // O: trigger_type
-        member_name: String(data[i][15] || '')    // P: member_name
+        req_id: String(rowData[0] || ''),
+        requested_at: String(rowData[1] || ''),
+        action: String(rowData[2] || ''),
+        status: String(rowData[3] || ''),
+        item_id: String(rowData[4] || ''),
+        member_id: String(rowData[5] || ''),
+        note: String(rowData[8] || ''),
+        from_value: String(rowData[11] || ''),
+        to_value: String(rowData[12] || ''),
+        field_name: String(rowData[13] || ''),
+        trigger_type: String(rowData[14] || ''),
+        member_name: String(rowData[15] || '')
       });
-    }
-    // 최신부터 수집했으므로 시간 오름차순(오래된 순) 유지를 위해 리버스 반환
+    });
+
     return result.reverse();
   } catch (e) {
     Logger.log('[getItemHistory] 오류: ' + e.toString());
@@ -4207,7 +4333,7 @@ function migrateMsgTemplatesNewKeys_() {
     if (!sheet || sheet.getLastRow() < 1) return;
     const lastRow = sheet.getLastRow();
     const existingKeys = lastRow >= 2
-      ? sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(function(r) { return String(r[0]); })
+      ? sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(function (r) { return String(r[0]); })
       : [];
     const newDefaults = [
       ['member.bid_confirm_ask', 'member', '입찰확정 요청', '입찰확정 하시겠습니까?', '', '', ''],
@@ -4222,7 +4348,7 @@ function migrateMsgTemplatesNewKeys_() {
       ['item_card.status.bottom', 'item_card', '입찰불가 하단 메세지', '서울/수도권(경기,인천) 입찰하시는 분은 1주택자만 대출이가능합니다!!\n1. 입찰가 관리: 이정우: (010-4238-7781)\n2. 단기투자클럽 관리: 이경미님 (010-3448-8035)', '', '', '']
     ];
     let added = 0;
-    newDefaults.forEach(function(row) {
+    newDefaults.forEach(function (row) {
       if (!existingKeys.includes(row[0])) {
         sheet.appendRow(row);
         added++;
@@ -4307,11 +4433,11 @@ function getAllBtnConfigs() {
     if (!sheet || sheet.getLastRow() < 2) return {};
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
     const result = {};
-    data.forEach(function(row) {
+    data.forEach(function (row) {
       const k = String(row[0] || '');
       if (k.indexOf('BTN_CFG.') === 0) {
         const msgKey = k.slice('BTN_CFG.'.length);
-        try { result[msgKey] = JSON.parse(String(row[1] || '')); } catch (e) {}
+        try { result[msgKey] = JSON.parse(String(row[1] || '')); } catch (e) { }
       }
     });
     return result;
@@ -4407,11 +4533,11 @@ function getAllDataConfigs() {
     if (!sheet || sheet.getLastRow() < 2) return {};
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
     const result = {};
-    data.forEach(function(row) {
+    data.forEach(function (row) {
       const k = String(row[0] || '');
       if (k.indexOf('DATA_CFG.') === 0) {
         const msgKey = k.slice('DATA_CFG.'.length);
-        try { result[msgKey] = JSON.parse(String(row[1] || '')); } catch (e) {}
+        try { result[msgKey] = JSON.parse(String(row[1] || '')); } catch (e) { }
       }
     });
     return result;

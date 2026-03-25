@@ -574,6 +574,15 @@ function updateDataApi(ids, field, value) {
 }
 
 /**
+ * [범용] 여러 물건의 특정 필드를 서로 다른 값으로 일괄 업데이트합니다.
+ * @param {Array} updates - {id, value} 객체 배열
+ * @param {string} field - 필드명
+ */
+function updateDataFieldBulkApi(updates, field) {
+  return updateDataFieldBulk(updates, field);
+}
+
+/**
  * 구글 캘린더 이벤트 조회 - iCal 공개URL 방식 (OAuth 불필요)
  * @param {number} startMs - 시작 타임스탬프 (ms)
  * @param {number} endMs - 종료 타임스탬프 (ms)

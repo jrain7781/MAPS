@@ -4612,9 +4612,25 @@
     }
 
     let currentModalItemData = null;
+    let currentModalHistoryData = null; // [최적화 Phase 3] 히스토리 데이터 사전 로딩용
 
     function openDetailModal(data) {
         currentModalItemData = data;
+        currentModalHistoryData = null; // 초기화
+        
+        // [최적화 Phase 3] 모달 열리자마지 히스토리 미리 가져오기 (Background Fetch)
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run
+                .withSuccessHandler(function (rows) {
+                    currentModalHistoryData = rows;
+                    // 만약 이미 히스토리 탭을 눌러서 '불러오는 중...' 상태라면 바로 렌더링
+                    const el = document.getElementById('modal-sub-history-list');
+                    if (el && (el.innerHTML.includes('불러오는 중...') || el.innerHTML === '')) {
+                        renderHistoryTable_(rows, el, currentModalItemData);
+                    }
+                })
+                .getItemHistory(String(data.id), 200);
+        }
         ensureCourtListLoaded();
         ensureMemberListLoaded();
 
@@ -5160,16 +5176,56 @@ MJ 이정우 팀장
         const modalSaveBtn = document.querySelector('#modal-detail button[onclick="handleModalUpdate()"]');
         if (modalSaveBtn) modalSaveBtn.disabled = true;
 
-        showStatus('수정 내용을 저장 중...', 'warning');
+        // [최적화 Phase 2] 낙관적 UI 업데이트 (Optimistic UI)
+        // 서버 응답을 기다리지 않고 로컬 캐시를 먼저 갱신하여 사용자에게 즉각적인 피드백 제공
+        const optimisticData = {
+            id: id,
+            'in-date': inDate,
+            sakun_no: sakunNo,
+            court: court,
+            stu_member: stuMember,
+            m_name: mName,
+            m_name2: mName2,
+            member_id: memberId,
+            m_name_id: mNameId,
+            bidprice: bidPrice,
+            bid_state: bidState,
+            image_id: imageId,
+            auction_id: auctionId,
+            reg_member: regMember,
+            note: note,
+            chuchen_state: chuchenState
+        };
+
+        const idx = allBiddingData.findIndex(it => String(it.id) === String(id));
+        if (idx >= 0) {
+            allBiddingData[idx] = Object.assign({}, allBiddingData[idx], optimisticData);
+            allBiddingData.sort(dataComparator);
+            dataCache = { data: allBiddingData, timestamp: Date.now() };
+            
+            // 즉시 UI 반영
+            closeDetailModal();
+            renderCalendar();
+            if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary();
+            showStatus('저장 중... (배경 데이터 동기화)', 'warning');
+        }
 
         google.script.run
             .withSuccessHandler(result => {
                 if (modalSaveBtn) modalSaveBtn.disabled = false;
                 if (result.success) {
-                    showStatus(result.message, 'success');
-                    dataCache = { data: null, timestamp: 0 };
-                    closeDetailModal();
-                    loadDataAndRenderCalendar(true);
+                    showStatus('저장이 최종 완료되었습니다.', 'success');
+                    
+                    // 서버에서 받은 최종 데이터로 한 번 더 정밀 동기화
+                    if (result.data) {
+                        const finalIdx = allBiddingData.findIndex(it => String(it.id) === String(result.data.id));
+                        if (finalIdx >= 0) {
+                            allBiddingData[finalIdx] = Object.assign({}, allBiddingData[finalIdx], result.data);
+                        }
+                    }
+                    dataCache = { data: allBiddingData, timestamp: Date.now() };
+                    renderCalendar(); 
+                    if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary();
 
                     // 전달완료 상태로 "전환"될 때만 텔레그램 자동 전송 (이전 상태가 전달완료가 아닌 경우만)
                     const prevBidState = typeof window._prevModalBidState !== 'undefined' ? window._prevModalBidState : '';
@@ -5206,21 +5262,30 @@ MJ 이정우 팀장
         if (!confirm(`정말로 이 물건을 삭제하시겠습니까?`)) {
             return;
         }
-        showStatus('삭제 중...', 'warning');
+
+        // [최적화 Phase 2] 낙관적 삭제 (Optimistic Delete)
+        if (allBiddingData) {
+            allBiddingData = allBiddingData.filter(it => String(it.id) !== String(id));
+            dataCache = { data: allBiddingData, timestamp: Date.now() };
+            
+            closeDetailModal();
+            renderCalendar();
+            applyFilters();
+            showStatus('삭제 중... (배경 동기화)', 'warning');
+        }
+
         google.script.run
             .withSuccessHandler(result => {
                 if (result.success) {
-                    showStatus(result.message, 'success');
-                    dataCache = { data: null, timestamp: 0 };
-                    closeDetailModal();
-                    // forceRefresh = true를 전달하여 서버에서 최신 데이터를 가져오도록 함
-                    loadDataAndRenderCalendar(true);
+                    showStatus('삭제가 최종 완료되었습니다.', 'success');
                 } else {
                     showStatus(result.message, 'error');
+                    loadData(true);
                 }
             })
             .withFailureHandler(error => {
                 showStatus(`삭제 오류: ${error.message}`, 'error');
+                loadData(true);
             })
             .deleteData(id);
     }
@@ -5314,21 +5379,40 @@ MJ 이정우 팀장
         const successHandler = (result) => {
             if (mainSaveBtn) mainSaveBtn.disabled = false;
             if (result.success) {
-                showStatus(result.message, 'success');
-                dataCache = { data: null, timestamp: 0 };
-                loadData(true);
-                if (currentMode === 'create') {
-                    if (formSakunNo) formSakunNo.value = '';
-                    if (formBidPrice) formBidPrice.value = '';
-                    if (formInDate) formInDate.focus();
-                    const bidStateEl = document.getElementById('form-bid-state');
-                    if (bidStateEl) bidStateEl.value = '';
-                } else {
-                    goToCreateMode();
+                showStatus('저장이 최종 완료되었습니다.', 'success');
+                
+                // [최적화] 서버에서 확정된 데이터로 최종 반영
+                if (result.data) {
+                    const finalIdx = allBiddingData.findIndex(it => String(it.id) === String(result.data.id));
+                    if (finalIdx >= 0) {
+                        allBiddingData[finalIdx] = Object.assign({}, allBiddingData[finalIdx], result.data);
+                    } else {
+                        allBiddingData.push(result.data);
+                    }
+                    allBiddingData.sort(dataComparator);
+                    dataCache = { data: allBiddingData, timestamp: Date.now() };
+                }
+
+                toggleLoading(false);
+                applyFilters(); 
+                if (typeof renderCalendar === 'function') renderCalendar(); 
+                
+                // [최적화 Phase 4] 현재 사용자가 수정 중인 대상과 저장 완료 대상이 같을 때만 모드 전환
+                // 배경 저장 중에 다른 물건을 클릭했다면 입력창을 초기화하지 않음
+                const currentFormId = formId ? formId.value : '';
+                if (String(currentFormId) === String(id)) {
+                    if (currentMode === 'create') {
+                        if (formSakunNo) formSakunNo.value = '';
+                        if (formBidPrice) formBidPrice.value = '';
+                        if (formInDate) formInDate.focus();
+                        const bidStateEl = document.getElementById('form-bid-state');
+                        if (bidStateEl) bidStateEl.value = '';
+                    } else {
+                        goToCreateMode();
+                    }
                 }
             } else {
                 showStatus(result.message, 'error');
-                loadData();
                 toggleLoading(false);
                 if (formInDate) formInDate.focus();
             }
@@ -5340,6 +5424,40 @@ MJ 이정우 팀장
         };
 
         const panelChuchenState = formChuchenState ? formChuchenState.value : '';
+
+        // [최적화 Phase 2] 낙관적 업데이트 - 수정 모드인 경우 즉시 반영
+        if (currentMode === 'edit') {
+            const optimisticData = {
+                id: id,
+                'in-date': processedInDate,
+                sakun_no: sakunNo,
+                court: court,
+                stu_member: stuMember,
+                m_name: mName,
+                m_name2: mName2,
+                member_id: memberId,
+                m_name_id: mNameId,
+                bidprice: bidPrice,
+                bid_state: bidState,
+                image_id: imageId,
+                auction_id: auctionId,
+                reg_member: regMember,
+                note: note,
+                chuchen_state: panelChuchenState
+            };
+            const idx = allBiddingData.findIndex(it => String(it.id) === String(id));
+            if (idx >= 0) {
+                allBiddingData[idx] = Object.assign({}, allBiddingData[idx], optimisticData);
+                allBiddingData.sort(dataComparator);
+                dataCache = { data: allBiddingData, timestamp: Date.now() };
+                applyFilters();
+                if (typeof renderCalendar === 'function') renderCalendar();
+                showStatus('저장 중... (배경 동기화)', 'warning');
+            }
+        } else {
+            toggleLoading(true); // 신규 등록은 ID가 없으므로 로딩 표시
+        }
+
         if (currentMode === 'create') {
             // Server createData signature: (inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId)
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
@@ -5359,22 +5477,30 @@ MJ 이정우 팀장
         if (!confirm(`정말로 ID ${id}의 입찰 정보를 삭제하시겠습니까?`)) {
             return;
         }
-        toggleLoading(true);
+
+        // [최적화 Phase 2] 낙관적 삭제 (Optimistic Delete)
+        if (allBiddingData) {
+            allBiddingData = allBiddingData.filter(it => String(it.id) !== String(id));
+            dataCache = { data: allBiddingData, timestamp: Date.now() };
+            applyFilters();
+            if (typeof renderCalendar === 'function') renderCalendar();
+            showStatus('삭제 중... (배경 동기화)', 'warning');
+        }
+
         google.script.run
             .withSuccessHandler((result) => {
                 if (result.success) {
-                    showStatus(result.message, 'success');
-                    dataCache = { data: null, timestamp: 0 };
+                    showStatus('삭제가 최종 완료되었습니다.', 'success');
                     goToCreateMode();
-                    loadData(true);
                 } else {
                     showStatus(result.message, 'error');
-                    toggleLoading(false);
+                    // 실패 시에만 데이터를 다시 불러와서 복구하거나 알림
+                    loadData(true);
                 }
             })
             .withFailureHandler(error => {
-                toggleLoading(false);
                 showStatus(`삭제 처리 중 오류: ${error.message}`, 'error');
+                loadData(true);
             })
             .deleteData(id);
     }
@@ -5686,10 +5812,27 @@ MJ 이정우 팀장
                 .withSuccessHandler(res => {
                     if (res && res.success) {
                         showStatus(res.message || '승인 완료', 'success');
-                        // 데이터 갱신 (캘린더/대시보드)
-                        try { loadDataAndRenderCalendar(true); } catch (e) { }
-                        try { loadDataAndRenderDashboard(true); } catch (e) { }
-                        loadTelegramRequests();
+                        
+                        // [최적화] 로컬 캐시 즉시 반영
+                        if (res.data && res.data.length > 0) {
+                            res.data.forEach(updatedItem => {
+                                const idx = allBiddingData.findIndex(it => String(it.id) === String(updatedItem.id));
+                                if (idx >= 0) {
+                                    allBiddingData[idx] = Object.assign({}, allBiddingData[idx], updatedItem);
+                                } else {
+                                    allBiddingData.push(updatedItem);
+                                }
+                            });
+                            allBiddingData.sort(dataComparator);
+                            dataCache = { data: allBiddingData, timestamp: Date.now() };
+                        }
+
+                        // 전체 리로딩 대신 로컬 기반 즉시 렌더링
+                        applyFilters();
+                        if (typeof renderCalendar === 'function') renderCalendar();
+                        if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary();
+                        
+                        loadTelegramRequests(); // 요청 목록 소리는 유지 (PENDING -> DONE)
                     } else {
                         showStatus((res && res.message) ? res.message : '승인 실패', 'error');
                     }
@@ -12205,16 +12348,29 @@ MJ 이정우 팀장
             .withSuccessHandler(res => {
                 if (res && res.success) {
                     if (typeof showStatus === 'function') showStatus(res.message || '일괄 변경이 완료되었습니다.', 'success');
+                    
+                    // [최적화] 로컬 캐시 일괄 갱신
+                    if (allBiddingData && ids && ids.length > 0) {
+                        ids.forEach(id => {
+                            const item = allBiddingData.find(it => String(it.id) === String(id));
+                            if (item) item.stu_member = newStatus;
+                        });
+                        dataCache = { data: allBiddingData, timestamp: Date.now() };
+                    }
                 } else {
                     if (typeof showStatus === 'function') showStatus((res && res.message) ? res.message : '변경 중 일부 오류가 발생했습니다.', 'warning');
                 }
                 closeBulkStatusModal();
-                loadData(true);
+                
+                // 리로딩 대신 로컬 갱신 후 화면만 리렌더링
+                applyFilters();
+                if (typeof renderCalendar === 'function') renderCalendar();
             })
             .withFailureHandler(err => {
                 console.error('Bulk update error:', err);
                 if (typeof showStatus === 'function') showStatus('서버 통신 중 오류가 발생했습니다.', 'error');
-                loadData(true);
+                // 오류 시에는 안전을 위해 전체 리로드 시도 가능하지만, 일단 로컬 상태 유지
+                toggleLoading ? toggleLoading(false) : null;
             })
             .updateBulkStatus(ids, newStatus);
     }
@@ -12231,15 +12387,25 @@ MJ 이정우 팀장
             .withSuccessHandler(res => {
                 if (res && res.success) {
                     if (typeof showStatus === 'function') showStatus(res.message || '일괄 삭제가 완료되었습니다.', 'success');
+                    
+                    // [최적화] 로컬 캐시에서 일괄 제거
+                    if (allBiddingData && ids && ids.length > 0) {
+                        const idSet = new Set(ids.map(id => String(id)));
+                        allBiddingData = allBiddingData.filter(it => !idSet.has(String(it.id)));
+                        dataCache = { data: allBiddingData, timestamp: Date.now() };
+                    }
                 } else {
                     if (typeof showStatus === 'function') showStatus((res && res.message) ? res.message : '삭제 중 오류가 발생했습니다.', 'error');
                 }
-                loadData(true);
+                
+                // 리로딩 대신 로컬 갱신 후 화면만 리렌더링
+                applyFilters();
+                if (typeof renderCalendar === 'function') renderCalendar();
             })
             .withFailureHandler(err => {
                 console.error('Bulk delete error:', err);
                 if (typeof showStatus === 'function') showStatus('삭제 중 오류가 발생했습니다.', 'error');
-                loadData(true);
+                toggleLoading ? toggleLoading(false) : null;
             })
             .deleteBulkData(ids);
     }
@@ -13622,7 +13788,7 @@ MJ 이정우 팀장
             const id = row.getAttribute('data-id');
             const original = row.getAttribute('data-original');
             const newVal = row.querySelector('.fill-row-image-id').value.trim();
-            if (newVal !== original) updates.push({ id, value: newVal });
+            if (newVal !== original) updates.push({ id: id, value: newVal });
         });
 
         if (updates.length === 0) {
@@ -13631,30 +13797,28 @@ MJ 이정우 팀장
         }
         if (!confirm(`${updates.length}건을 DB에 저장하시겠습니까?`)) return;
 
-        let completed = 0;
-        if (typeof showStatus === 'function') showStatus(`저장 중... (0/${updates.length})`, 'info');
+        showStatus(`일괄 저장 중... (${updates.length}건)`, 'info');
 
-        updates.forEach(function(u) {
-            google.script.run
-                .withSuccessHandler(function() {
-                    completed++;
-                    if (typeof showStatus === 'function') showStatus(`저장 중... (${completed}/${updates.length})`, 'info');
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if (res && res.success) {
                     // allBiddingData 캐시 업데이트
                     if (typeof allBiddingData !== 'undefined') {
-                        const item = allBiddingData.find(d => String(d.id) === String(u.id));
-                        if (item) item.image_id = u.value;
+                        updates.forEach(function(u) {
+                            const item = allBiddingData.find(d => String(d.id) === String(u.id));
+                            if (item) item.image_id = u.value;
+                        });
                     }
-                    if (completed === updates.length) {
-                        closeFillImageIdModal();
-                        if (typeof showStatus === 'function') showStatus(`${updates.length}건 이미지 ID 저장 완료`, 'success');
-                    }
-                })
-                .withFailureHandler(function(err) {
-                    completed++;
-                    if (typeof showStatus === 'function') showStatus('저장 실패: ' + err.message, 'error');
-                })
-                .updateDataField([u.id], 'image_id', u.value);
-        });
+                    closeFillImageIdModal();
+                    if (typeof showStatus === 'function') showStatus(`${res.updated || updates.length}건 이미지 ID 일괄 저장 완료`, 'success');
+                } else {
+                    if (typeof showStatus === 'function') showStatus('일괄 저장 실패: ' + (res ? res.message : '알 수 없는 오류'), 'error');
+                }
+            })
+            .withFailureHandler(function(err) {
+                if (typeof showStatus === 'function') showStatus('서버 오류: ' + err.message, 'error');
+            })
+            .updateDataFieldBulkApi(updates, 'image_id');
     }
 
     // [Bulk] 모달 내 리스트에 일괄 적용
