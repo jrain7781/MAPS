@@ -203,6 +203,7 @@ def get_jurisdiction_data():
         {"Sido": "전라남도", "Sigungu": "장흥군", "Court": "광주장흥"},
         {"Sido": "전라남도", "Sigungu": "강진군", "Court": "광주장흥"},
         {"Sido": "전라남도", "Sigungu": "순천시", "Court": "광주순천"},
+        {"Sido": "전라남도", "Sigungu": "여수시", "Court": "광주순천"},
         {"Sido": "전라남도", "Sigungu": "광양시", "Court": "광주순천"},
         {"Sido": "전라남도", "Sigungu": "구례군", "Court": "광주순천"},
         {"Sido": "전라남도", "Sigungu": "고흥군", "Court": "광주순천"},
