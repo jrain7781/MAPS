@@ -4037,89 +4037,95 @@ function getCancelHistory(memberId, limit) {
     if (!reqSheet || reqSheet.getLastRow() < 2) return [];
 
     const lastRow = reqSheet.getLastRow();
-    const data = reqSheet.getRange(2, 1, lastRow - 1, 16).getValues(); // A~P열
+    let rowNumbers = [];
 
-    // items 시트에서 사건번호/입찰일/법원/추천일자 매핑 (A~R열)
+    // [최적화 Phase 5.1] 전수 조사 + 인덱스 검색 (createTextFinder)
+    if (memberId) {
+      const finder = reqSheet.getRange(2, 6, lastRow - 1, 1).createTextFinder(String(memberId)).matchEntireCell(true);
+      const matches = finder.findAll();
+      if (!matches || matches.length === 0) return [];
+      rowNumbers = matches.map(m => m.getRow());
+    } else {
+      const searchDepth = 5000;
+      const startRow = Math.max(2, lastRow - searchDepth);
+      for (let r = lastRow; r >= startRow; r--) rowNumbers.push(r);
+    }
+
+    // 최신순 정렬 (역순)
+    rowNumbers.sort((a, b) => b - a);
+
+    // [핵심 최적화] N+1 방지를 위해 찾은 행들의 최소/최대 범위를 한 번에 읽음
+    const minRow = Math.min(...rowNumbers);
+    const maxRow = Math.max(...rowNumbers);
+    const totalScanRows = maxRow - minRow + 1;
+    
+    // 로그 데이터 일괄 읽기 (한 번의 API 호출로 해결)
+    const chunkData = reqSheet.getRange(minRow, 1, totalScanRows, 16).getValues();
+    const startOffset = minRow;
+
+    // 물건 정보 매핑
     const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
     const itemMap = {};
     if (itemSheet && itemSheet.getLastRow() >= 2) {
-      const iData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 18).getValues(); // A~R열
-      iData.forEach(function (r) {
+      const iData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 18).getValues();
+      iData.forEach(r => {
         const id = String(r[0] || '').trim();
         if (id) itemMap[id] = {
           inDate: String(r[1] || ''),
           sakunNo: String(r[2] || ''),
           court: String(r[3] || ''),
-          chuchenDate: r[17] ? String(r[17]) : ''  // R열: chuchen_date
+          chuchenDate: r[17] ? String(r[17]) : ''
         };
       });
     }
 
-    // telegram_requests에서 입찰확정(REQUEST_BID APPROVED) 날짜 매핑: item_id → approved_at
-    const bidConfirmMap = {};
-    for (let i = 0; i < data.length; i++) {
-      const actionStr = String(data[i][2]).trim();
-      const stateStr = String(data[i][3]).trim();
-      if ((actionStr === 'REQUEST_BID' || actionStr === 'BID') && stateStr === 'APPROVED') {
-        const iid = String(data[i][4] || '').trim();
-        if (iid && !bidConfirmMap[iid]) bidConfirmMap[iid] = String(data[i][9] || ''); // J열: approved_at
-      }
-    }
-
     const result = [];
-    const seenItemIds = {}; // 중복 방지를 위한 객체 (Set 대체)
+    const seenItemIds = {};
 
-    // 최신순(역순)
-    for (let i = data.length - 1; i >= 0 && result.length < maxRows; i--) {
-      const reqMember = String(data[i][5] || '').trim(); // F열: member_id
-      const fieldName = String(data[i][13] || '').trim(); // N열: field_name
-      const fromValue = String(data[i][11] || '').trim(); // L열: from_value
-      const toValue = String(data[i][12] || '').trim();   // M열: to_value
-      const action = String(data[i][2] || '').trim();
+    for (let i = 0; i < rowNumbers.length && result.length < maxRows; i++) {
+        const rowNum = rowNumbers[i];
+        const rowData = chunkData[rowNum - startOffset];
+        if (!rowData) continue;
+        
+        const action = String(rowData[2] || '').trim();
+        const fieldName = String(rowData[13] || '').trim();
+        const fromValue = String(rowData[11] || '').trim();
+        const toValue = String(rowData[12] || '').trim();
+        const itemId = String(rowData[4] || '').trim();
+        const reqMember = String(rowData[5] || '').trim();
 
-      // 조건: 기존 CANCEL_ACTIONS 이거나, 상태가 '미정'으로 바뀐 모든 경우
-      const isLegacyCancel = CANCEL_ACTIONS.indexOf(action) !== -1;
-      const isStateChangeToMidjung = (fieldName === 'stu_member' && toValue === '미정');
+        const isLegacyCancel = CANCEL_ACTIONS.indexOf(action) !== -1;
+        const isStateChangeToMidjung = (fieldName === 'stu_member' && toValue === '미정');
 
-      if (!isLegacyCancel && !isStateChangeToMidjung) continue;
-      if (memberId && reqMember !== String(memberId).trim()) continue;
+        if (!isLegacyCancel && !isStateChangeToMidjung) continue;
+        if (memberId && reqMember !== String(memberId).trim()) continue;
 
-      const itemId = String(data[i][4] || '').trim();
+        if (itemId && seenItemIds[itemId]) continue;
+        if (itemId) seenItemIds[itemId] = true;
 
-      // 동일 물건 번호 1번 카운팅 로직 (이미 추가된 물건은 스킵)
-      if (itemId && seenItemIds[itemId]) continue;
-      if (itemId) seenItemIds[itemId] = true;
-
-      // 사유 자동 판별 (직전 상태 기준)
-      let finalLabel = '미선택'; // 기본값
-      if (isStateChangeToMidjung) {
-        if (fromValue.indexOf('입찰') !== -1) {
-          finalLabel = '입찰취소';
-        } else if (fromValue.indexOf('추천') !== -1) {
-          finalLabel = '미선택';
+        let finalLabel = '미선택';
+        if (isStateChangeToMidjung) {
+          if (fromValue.indexOf('입찰') !== -1) finalLabel = '입찰취소';
+          else if (fromValue.indexOf('추천') !== -1) finalLabel = '미선택';
         } else {
-          finalLabel = '미선택';
+          finalLabel = ACTION_LABEL[action] || action;
         }
-      } else {
-        // 기존 텔레그램 요청 등(레거시) 매핑
-        finalLabel = ACTION_LABEL[action] || action;
-      }
 
-      const item = itemMap[itemId] || {};
-      result.push({
-        req_id: String(data[i][0] || ''),
-        cancel_date: String(data[i][1] || ''),   // B: requested_at
-        action: action, // 프론트 컬러링 용도 유지
-        action_label: finalLabel,
-        item_id: itemId,
-        member_id: reqMember,
-        member_name: String(data[i][15] || ''),   // P: member_name
-        in_date: item.inDate || '',
-        sakun_no: item.sakunNo || '',
-        court: item.court || '',
-        chuchen_date: item.chuchenDate || '',
-        bid_confirm_date: bidConfirmMap[itemId] || ''
-      });
+        const item = itemMap[itemId] || {};
+        result.push({
+          req_id: String(rowData[0] || ''),
+          cancel_date: (rowData[1] instanceof Date) ? Utilities.formatDate(rowData[1], "Asia/Seoul", "yyyy-MM-dd HH:mm:ss") : String(rowData[1] || ''),
+          action: action,
+          action_label: finalLabel,
+          item_id: itemId,
+          member_id: reqMember,
+          member_name: String(rowData[15] || ''),
+          in_date: item.inDate || '',
+          sakun_no: item.sakunNo || '',
+          court: item.court || '',
+          chuchen_date: item.chuchenDate || '',
+          bid_confirm_date: ''
+        });
     }
     return result;
   } catch (e) {

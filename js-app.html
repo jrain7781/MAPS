@@ -664,7 +664,7 @@
 
         // 회원 취소이력 탭 이동 시 로드
         if (tabId === 'MemberCancelHistory') {
-            try { loadMemberCancelHistory(); } catch (e) { console.error('MemberCancelHistory load error:', e); }
+            try { loadPublicMemberCancelHistory(); } catch (e) { console.error('MemberCancelHistory load error:', e); }
         }
 
         // 회원 대시보드 탭 이동 시 렌더링
@@ -10727,13 +10727,13 @@ MJ 이정우 팀장
             btn.classList.toggle('active', active);
             panel.classList.toggle('hidden', !active);
         });
-        if (tabName === 'cancel') loadMemberCancelHistory();
+        if (tabName === 'cancel') loadAdminMemberCancelHistory();
     }
 
     /**
      * 현재 선택된 회원의 취소 이력을 서버에서 조회하여 테이블에 렌더링
      */
-    function loadMemberCancelHistory() {
+    function loadAdminMemberCancelHistory() {
         const statusEl = document.getElementById('cancelHistoryStatus');
         const tbody = document.getElementById('cancelHistoryTableBody');
         if (!tbody) return;
@@ -10757,7 +10757,21 @@ MJ 이정우 팀장
                 }
                 if (statusEl) statusEl.textContent = '총 ' + rows.length + '건';
                 tbody.innerHTML = rows.map(function (r, i) {
-                    const dateStr = String(r.cancel_date || '').substring(0, 16);
+                    // YYMMDD 형식 추출 (모든 날짜 문자열에 대해 강제 변환)
+                    const rawDate = r.cancel_date ? new Date(r.cancel_date) : null;
+                    let dateStr = String(r.cancel_date || '').slice(0, 10);
+                    if (rawDate && !isNaN(rawDate.getTime())) {
+                        const yy = String(rawDate.getFullYear()).slice(2, 4);
+                        const mm = String(rawDate.getMonth() + 1).padStart(2, '0');
+                        const dd = String(rawDate.getDate()).padStart(2, '0');
+                        dateStr = yy + mm + dd;
+                    } else {
+                        // 날짜 객체가 아닐 때 (이미 YYMMDD인 경우 등)
+                        const m = String(r.cancel_date || '').match(/^(\d{2})(\d{2})(\d{2})/);
+                        if (m) dateStr = m[1] + m[2] + m[3];
+                        else dateStr = String(r.cancel_date || '').slice(2, 10).replace(/-/g, '');
+                    }
+
                     const inDate = String(r.in_date || '');
                     const sakunNo = String(r.sakun_no || '');
                     const court = String(r.court || '');
@@ -12854,14 +12868,16 @@ MJ 이정우 팀장
     /** 날짜 문자열 포맷 변환 (yyMMdd HHmmss 또는 ISO → MM/DD 표시) */
     function _formatCancelDate(v) {
         if (!v) return '-';
+        var d = new Date(v);
+        if (d && !isNaN(d.getTime())) {
+            var yy = String(d.getFullYear()).slice(2, 4);
+            var mm = String(d.getMonth() + 1).padStart(2, '0');
+            var dd = String(d.getDate()).padStart(2, '0');
+            return yy + mm + dd;
+        }
         var s = String(v).trim();
-        // yyMMdd HHmmss 형식
-        var m1 = s.match(/^(\d{2})(\d{2})(\d{2})/);
-        if (m1) return m1[2] + '/' + m1[3];
-        // ISO 형식 (yyyy-MM-dd...)
-        var m2 = s.match(/(\d{4})-(\d{2})-(\d{2})/);
-        if (m2) return m2[2] + '/' + m2[3];
-        return s.slice(0, 10);
+        if (/^\d{6}/.test(s)) return s.slice(0, 6);
+        return s.slice(2, 10).replace(/-/g, '');
     }
 
     /** 입찰일자 포맷 (YYMMDD → YY/MM/DD) */
@@ -12886,7 +12902,7 @@ MJ 이정우 팀장
     }
 
     /** 취소이력 로드 및 렌더링 */
-    function loadMemberCancelHistory() {
+    function loadPublicMemberCancelHistory() {
         if (typeof google === 'undefined' || !google.script || !google.script.run) return;
         if (!APP_CTX.token) return;
 
