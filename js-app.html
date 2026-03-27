@@ -13091,7 +13091,44 @@ MJ 이정우 팀장
         var cnt = document.getElementById('imgVCnt');
         if (title) title.textContent = sk || '';
         if (cnt) cnt.textContent = '';
-        if (body) body.innerHTML = '<div class="img-vph">이미지 불러오는 중...</div>';
+        if (!body) return;
+
+        // [최적화] allBiddingData 캐시에서 image_ids 확인 → GAS 호출 없이 즉시 렌더링
+        var cachedItem = (typeof allBiddingData !== 'undefined' && allBiddingData)
+            ? allBiddingData.find(function (it) { return String(it.id) === String(id); })
+            : null;
+        var cachedIds = [];
+        if (cachedItem && cachedItem.image_ids) {
+            cachedIds = String(cachedItem.image_ids).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        } else if (cachedItem && cachedItem.image_id) {
+            var sid = String(cachedItem.image_id).trim();
+            if (sid) cachedIds = [sid];
+        }
+
+        if (cachedIds.length > 0) {
+            // 캐시 이미지 즉시 렌더링 (GAS 호출 없음)
+            body.innerHTML = '';
+            if (cnt) cnt.textContent = cachedIds.length + '장';
+            cachedIds.forEach(function (imgId) {
+                var card = document.createElement('div'); card.className = 'img-vcard relative';
+                var img = document.createElement('img');
+                img.alt = '조사 이미지'; img.loading = 'lazy';
+                img.className = 'cursor-pointer';
+                img.src = 'https://drive.google.com/thumbnail?sz=w1200&id=' + encodeURIComponent(imgId);
+                img.onerror = function () { this.src = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(imgId); };
+                img.onclick = function () { openLightbox(this.src, '조사 이미지'); };
+                var dlBtn = document.createElement('button');
+                dlBtn.className = 'absolute top-2 right-2 p-1.5 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition z-10';
+                dlBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>';
+                dlBtn.onclick = function (e) { e.stopPropagation(); window.open('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(imgId), '_blank'); };
+                card.appendChild(dlBtn);
+                card.appendChild(img); body.appendChild(card);
+            });
+            return; // GAS 호출 불필요
+        }
+
+        // 캐시에 없으면 GAS 호출 (폴백)
+        body.innerHTML = '<div class="img-vph">이미지 불러오는 중...</div>';
         google.script.run
             .withSuccessHandler(function (rows) {
                 if (!body) return;
@@ -13106,20 +13143,11 @@ MJ 이정우 팀장
                     img.className = 'cursor-pointer';
                     img.src = 'https://drive.google.com/thumbnail?sz=w1200&id=' + encodeURIComponent(r.image_id);
                     img.onerror = function () { this.src = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id); };
-
-                    // 라이트박스 연결
-                    img.onclick = function () {
-                        openLightbox(this.src, r.file_name || '조사 이미지');
-                    };
-
-                    // 다운로드 버튼
-                    const dlBtn = document.createElement('button');
+                    img.onclick = function () { openLightbox(this.src, r.file_name || '조사 이미지'); };
+                    var dlBtn = document.createElement('button');
                     dlBtn.className = 'absolute top-2 right-2 p-1.5 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-70 transition z-10';
                     dlBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>';
-                    dlBtn.onclick = function (e) {
-                        e.stopPropagation();
-                        window.open('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(r.image_id), '_blank');
-                    };
+                    dlBtn.onclick = function (e) { e.stopPropagation(); window.open('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(r.image_id), '_blank'); };
                     card.appendChild(dlBtn);
                     card.appendChild(img); body.appendChild(card);
                 });
