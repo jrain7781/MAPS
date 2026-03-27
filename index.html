@@ -153,7 +153,7 @@
                 월별조회</button>
             <button id="menu-MemberCancelHistory" onclick="navigateTo('MemberCancelHistory')"
                 class="py-4 px-6 text-base text-left text-gray-700 hover:bg-gray-100 transition duration-150 content-hidden member-only-menu">📋
-                취소이력</button>
+                물건이력</button>
         </nav>
 
         <div class="flex-1 overflow-y-auto pb-0">
@@ -494,7 +494,7 @@
                 <div class="member-dashboard-v2">
                     <div class="top-bar">
                         <div class="top-bar-inner">
-                            <span class="text-sm font-semibold text-gray-600 px-2">취소 이력 (읽기 전용)</span>
+                            <span class="text-sm font-semibold text-gray-600 px-2">물건이력 (최근 1년)</span>
                         </div>
                     </div>
                     <div class="lc">
@@ -504,16 +504,16 @@
                                 <thead>
                                     <tr class="bg-gray-50 border-b border-gray-200">
                                         <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">순번</th>
-                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">취소일자</th>
+                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">구분</th>
+                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">일자</th>
                                         <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">입찰일자</th>
                                         <th class="px-3 py-2 text-left text-xs text-gray-500 font-semibold">사건번호</th>
                                         <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">법원</th>
-                                        <th class="px-3 py-2 text-center text-xs text-gray-500 font-semibold">취소사유</th>
                                     </tr>
                                 </thead>
                                 <tbody id="memberCancelHistoryBody">
                                     <tr>
-                                        <td colspan="7" class="p-8 text-center text-gray-400 text-sm">취소이력 메뉴를 클릭하면
+                                        <td colspan="6" class="p-8 text-center text-gray-400 text-sm">물건이력 메뉴를 클릭하면
                                             불러옵니다.</td>
                                     </tr>
                                 </tbody>
@@ -1357,7 +1357,7 @@
                         <button onclick="switchMemberDetailTab('info')" id="memberTab-info"
                             class="detail-tab-btn active" data-tab="info">회원정보</button>
                         <button onclick="switchMemberDetailTab('cancel')" id="memberTab-cancel" class="detail-tab-btn"
-                            data-tab="cancel">취소건 조회</button>
+                            data-tab="cancel">물건이력</button>
                     </div>
 
                     <!-- 탭 패널: 회원정보 -->
@@ -1557,9 +1557,48 @@
                     <div id="memberTabPanel-cancel" class="detail-tab-panel hidden">
                         <div class="bg-white rounded-xl shadow-lg p-5">
                             <div class="flex justify-between items-center mb-3 border-b pb-3">
-                                <h3 class="text-base font-semibold text-gray-800">취소건 조회</h3>
-                                <button type="button" onclick="loadMemberCancelHistory()"
+                                <h3 class="text-base font-semibold text-gray-800">물건이력</h3>
+                                <button type="button" onclick="loadAdminMemberItemHistory()"
                                     class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
+                            </div>
+
+                            <!-- 요약 테이블 -->
+                            <div class="mb-5 overflow-x-auto">
+                                <div class="text-xs font-bold text-gray-700 mb-1">* 요약</div>
+                                <table class="min-w-full text-xs border-collapse border border-gray-200">
+                                    <thead class="bg-blue-50">
+                                        <tr>
+                                            <th class="border border-gray-200 px-2 py-1">합계</th>
+                                            <th id="sum-chuchen-total" class="border border-gray-200 px-2 py-1 text-blue-600 font-bold">0</th>
+                                            <th id="sum-bid-total" class="border border-gray-200 px-2 py-1 text-blue-600 font-bold">0</th>
+                                            <th id="sum-cancel-total" class="border border-gray-200 px-2 py-1 text-red-500 font-bold">0</th>
+                                            <th id="sum-change-total" class="border border-gray-200 px-2 py-1 text-gray-600 font-bold">0</th>
+                                        </tr>
+                                        <tr class="text-gray-600 bg-gray-50">
+                                            <th class="border border-gray-200 px-2 py-1">날짜</th>
+                                            <th class="border border-gray-200 px-2 py-1">추천</th>
+                                            <th class="border border-gray-200 px-2 py-1">입찰</th>
+                                            <th class="border border-gray-200 px-2 py-1">취소</th>
+                                            <th class="border border-gray-200 px-2 py-1">변경</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="memberHistorySummaryBody" class="text-center bg-white">
+                                        <tr>
+                                            <td colspan="5" class="p-2 text-gray-400">조회된 이력이 없습니다.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="flex items-center gap-2 mb-2">
+                                <label class="text-xs font-bold text-gray-700">* 리스트</label>
+                                <div class="flex-1"></div>
+                                <select id="memberHistoryPeriod" onchange="loadAdminMemberItemHistory()" class="text-xs border border-gray-300 rounded px-2 py-1 bg-white">
+                                    <option value="6">최근 6개월</option>
+                                    <option value="12" selected>최근 1년</option>
+                                    <option value="24">최근 2년</option>
+                                    <option value="999">전체</option>
+                                </select>
                             </div>
                             <div id="cancelHistoryStatus" class="text-xs text-gray-400 mb-2"></div>
                             <div class="overflow-x-auto">
@@ -1567,11 +1606,11 @@
                                     <thead class="bg-gray-50">
                                         <tr>
                                             <th class="px-2 py-2 text-center font-bold text-gray-600">#</th>
-                                            <th class="px-2 py-2 text-center font-bold text-gray-600">취소일자</th>
+                                            <th class="px-2 py-2 text-center font-bold text-gray-600">구분</th>
+                                            <th class="px-2 py-2 text-center font-bold text-gray-600">일자</th>
                                             <th class="px-2 py-2 text-center font-bold text-gray-600">입찰일자</th>
                                             <th class="px-2 py-2 text-center font-bold text-gray-600">사건번호</th>
                                             <th class="px-2 py-2 text-center font-bold text-gray-600">법원</th>
-                                            <th class="px-2 py-2 text-center font-bold text-gray-600">취소사유</th>
                                         </tr>
                                     </thead>
                                     <tbody id="cancelHistoryTableBody" class="bg-white divide-y divide-gray-100">

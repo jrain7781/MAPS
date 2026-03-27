@@ -662,9 +662,9 @@
             try { switchPrefTab('image'); } catch (e) { }
         }
 
-        // 회원 취소이력 탭 이동 시 로드
+        // 회원 물건이력 탭 이동 시 로드
         if (tabId === 'MemberCancelHistory') {
-            try { loadPublicMemberCancelHistory(); } catch (e) { console.error('MemberCancelHistory load error:', e); }
+            try { loadPublicMemberItemHistory(); } catch (e) { console.error('MemberItemHistory load error:', e); }
         }
 
         // 회원 대시보드 탭 이동 시 렌더링
@@ -10727,75 +10727,102 @@ MJ 이정우 팀장
             btn.classList.toggle('active', active);
             panel.classList.toggle('hidden', !active);
         });
-        if (tabName === 'cancel') loadAdminMemberCancelHistory();
+        if (tabName === 'cancel') loadAdminMemberItemHistory();
     }
 
     /**
-     * 현재 선택된 회원의 취소 이력을 서버에서 조회하여 테이블에 렌더링
+     * 현재 선택된 회원의 물건 이력을 서버에서 조회하여 요약 및 테이블 렌더링
      */
-    function loadAdminMemberCancelHistory() {
+    function loadAdminMemberItemHistory() {
         const statusEl = document.getElementById('cancelHistoryStatus');
-        const tbody = document.getElementById('cancelHistoryTableBody');
-        if (!tbody) return;
+        const summaryBody = document.getElementById('memberHistorySummaryBody');
+        const listBody = document.getElementById('cancelHistoryTableBody');
+        if (!listBody) return;
 
         // 현재 선택된 회원 ID
         const memberId = (document.getElementById('mem-member_id') || {}).value || '';
         if (!memberId) {
-            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td></tr>';
+            summaryBody.innerHTML = '<tr><td colspan="5" class="p-2 text-center text-gray-400">회원을 선택해 주세요.</td></tr>';
+            listBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td></tr>';
             return;
         }
 
+        const periodSelect = document.getElementById('memberHistoryPeriod');
+        const months = periodSelect ? periodSelect.value : 12;
+
         if (statusEl) statusEl.textContent = '조회 중...';
-        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
+        summaryBody.innerHTML = '<tr><td colspan="5" class="p-2 text-center text-gray-400">요약 중...</td></tr>';
+        listBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
 
         google.script.run
-            .withSuccessHandler(function (rows) {
-                if (!rows || rows.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">취소 이력이 없습니다.</td></tr>';
-                    if (statusEl) statusEl.textContent = '총 0건';
-                    return;
+            .withSuccessHandler(function (res) {
+                const summary = res.summary || [];
+                const list = res.list || [];
+
+                // 1. 요약 데이터 렌더링
+                let sumTotals = { 추천: 0, 입찰: 0, 취소: 0, 변경: 0 };
+                if (summary.length > 0) {
+                    summaryBody.innerHTML = summary.map(function (s) {
+                        sumTotals.추천 += s.추천 || 0;
+                        sumTotals.입찰 += s.입찰 || 0;
+                        sumTotals.취소 += s.취소 || 0;
+                        sumTotals.변경 += s.변경 || 0;
+                        return `
+                            <tr>
+                                <td class="border border-gray-200 px-2 py-1 bg-gray-50">${s.month}</td>
+                                <td class="border border-gray-200 px-2 py-1">${s.추천 || '-'}</td>
+                                <td class="border border-gray-200 px-2 py-1">${s.입찰 || '-'}</td>
+                                <td class="border border-gray-200 px-2 py-1 text-red-500">${s.취소 || '-'}</td>
+                                <td class="border border-gray-200 px-2 py-1">${s.변경 || '-'}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    summaryBody.innerHTML = '<tr><td colspan="5" class="p-2 text-gray-400">이력이 없습니다.</td></tr>';
                 }
-                if (statusEl) statusEl.textContent = '총 ' + rows.length + '건';
-                tbody.innerHTML = rows.map(function (r, i) {
-                    // YYMMDD 형식 추출 (모든 날짜 문자열에 대해 강제 변환)
-                    const rawDate = r.cancel_date ? new Date(r.cancel_date) : null;
-                    let dateStr = String(r.cancel_date || '').slice(0, 10);
-                    if (rawDate && !isNaN(rawDate.getTime())) {
-                        const yy = String(rawDate.getFullYear()).slice(2, 4);
-                        const mm = String(rawDate.getMonth() + 1).padStart(2, '0');
-                        const dd = String(rawDate.getDate()).padStart(2, '0');
-                        dateStr = yy + mm + dd;
-                    } else {
-                        // 날짜 객체가 아닐 때 (이미 YYMMDD인 경우 등)
-                        const m = String(r.cancel_date || '').match(/^(\d{2})(\d{2})(\d{2})/);
-                        if (m) dateStr = m[1] + m[2] + m[3];
-                        else dateStr = String(r.cancel_date || '').slice(2, 10).replace(/-/g, '');
-                    }
 
-                    const inDate = String(r.in_date || '');
-                    const sakunNo = String(r.sakun_no || '');
-                    const court = String(r.court || '');
-                    const label = String(r.action_label || r.action || '');
-                    const isMissing = r.action === 'AUTO_EXPIRE' || r.action === 'REQUEST_CANCEL_CHUCHEN';
-                    const labelCols = isMissing 
-                        ? '<span class="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-700">' + escapeHtml(label) + '</span>'
-                        : '<span class="px-1.5 py-0.5 rounded text-xs bg-red-100 text-red-700">' + escapeHtml(label) + '</span>';
+                // 합계 표시
+                const sumChuchen = document.getElementById('sum-chuchen-total');
+                const sumBid = document.getElementById('sum-bid-total');
+                const sumCancel = document.getElementById('sum-cancel-total');
+                const sumChange = document.getElementById('sum-change-total');
+                if (sumChuchen) sumChuchen.textContent = sumTotals.추천;
+                if (sumBid) sumBid.textContent = sumTotals.입찰;
+                if (sumCancel) sumCancel.textContent = sumTotals.취소;
+                if (sumChange) sumChange.textContent = sumTotals.변경;
 
-                    return '<tr class="hover:bg-gray-50">' +
-                        '<td class="px-2 py-1.5 text-center text-gray-500">' + (i + 1) + '</td>' +
-                        '<td class="px-2 py-1.5 text-center text-gray-700">' + escapeHtml(dateStr) + '</td>' +
-                        '<td class="px-2 py-1.5 text-center text-gray-700">' + escapeHtml(inDate) + '</td>' +
-                        '<td class="px-2 py-1.5 text-center font-medium text-gray-800">' + escapeHtml(sakunNo) + '</td>' +
-                        '<td class="px-2 py-1.5 text-center text-gray-600">' + escapeHtml(court) + '</td>' +
-                        '<td class="px-2 py-1.5 text-center">' + labelCols + '</td>' +
-                        '</tr>';
-                }).join('');
+                // 2. 리스트 데이터 렌더링
+                if (statusEl) statusEl.textContent = '총 ' + list.length + '건';
+                if (list.length > 0) {
+                    listBody.innerHTML = list.map(function (r, i) {
+                        // 카테고리별 컬러
+                        let catClass = 'bg-gray-100 text-gray-600';
+                        if (r.category === '추천') catClass = 'bg-blue-100 text-blue-600';
+                        else if (r.category === '입찰') catClass = 'bg-green-100 text-green-600';
+                        else if (r.category === '취소') catClass = 'bg-red-100 text-red-500';
+
+                        return `
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-2 py-1.5 text-center text-gray-400">${i + 1}</td>
+                                <td class="px-2 py-1.5 text-center">
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${catClass}">${r.category}</span>
+                                </td>
+                                <td class="px-2 py-1.5 text-center font-mono text-gray-700">${String(r.date || '').substring(2, 10).replace(/-/g, '')}</td>
+                                <td class="px-2 py-1.5 text-center font-mono text-gray-700">${String(r.in_date || '')}</td>
+                                <td class="px-2 py-1.5 font-semibold text-gray-800">${escapeHtml(r.sakun_no)}</td>
+                                <td class="px-2 py-1.5 text-gray-600">${escapeHtml(r.court)}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    listBody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400">조회된 이력이 없습니다.</td></tr>';
+                }
             })
-            .withFailureHandler(function (e) {
-                tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-red-400">조회 오류: ' + escapeHtml(String(e)) + '</td></tr>';
-                if (statusEl) statusEl.textContent = '';
+            .withFailureHandler(function (err) {
+                if (statusEl) statusEl.textContent = '오류: ' + err.toString();
+                if (listBody) listBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-red-400">로드 중 오류가 발생했습니다.</td></tr>';
             })
-            .getCancelHistory(memberId, 100);
+            .getMemberItemHistory(memberId, months);
     }
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -12860,7 +12887,7 @@ MJ 이정우 팀장
     }
 
     // =============================================================================
-    // 회원 취소이력 (MemberCancelHistory) - 읽기 전용 리스트
+    // 회원 물건이력 (MemberItemHistory) - 읽기 전용 리스트
     // =============================================================================
 
     var _cancelHistoryLoaded = false;
@@ -12902,44 +12929,50 @@ MJ 이정우 팀장
     }
 
     /** 취소이력 로드 및 렌더링 */
-    function loadPublicMemberCancelHistory() {
+    /** 물건 이력 로드 및 렌더링 (회원용) */
+    function loadPublicMemberItemHistory() {
         if (typeof google === 'undefined' || !google.script || !google.script.run) return;
         if (!APP_CTX.token) return;
 
         var statusEl = document.getElementById('memberCancelHistoryStatus');
         var tbody = document.getElementById('memberCancelHistoryBody');
         if (statusEl) statusEl.textContent = '불러오는 중...';
-        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-gray-400">로딩 중...</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-gray-400">로딩 중...</td></tr>';
 
         google.script.run
-            .withSuccessHandler(function (rows) {
+            .withSuccessHandler(function (res) {
                 _cancelHistoryLoaded = true;
-                if (statusEl) statusEl.textContent = '총 ' + (rows ? rows.length : 0) + '건';
+                var list = res.list || [];
+                if (statusEl) statusEl.textContent = '최근 1년 ' + list.length + '건';
                 if (!tbody) return;
-                if (!rows || rows.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-gray-400 text-sm">취소이력이 없습니다.</td></tr>';
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400 text-sm">이력이 없습니다.</td></tr>';
                     return;
                 }
                 var html = '';
-                rows.forEach(function (r, idx) {
-                    var actionColor = r.action === 'AUTO_EXPIRE' || r.action === 'REQUEST_CANCEL_CHUCHEN' ? 'text-gray-500' : 'text-red-500';
-                    var cancelReason = r.action_label || '';
+                list.forEach(function (r, idx) {
+                    // 카테고리별 컬러
+                    var catClass = 'text-gray-500';
+                    if (r.category === '추천') catClass = 'text-blue-500';
+                    else if (r.category === '입찰') catClass = 'text-green-600';
+                    else if (r.category === '취소') catClass = 'text-red-500';
+
                     html += '<tr class="border-b border-gray-100 hover:bg-gray-50">'
                         + '<td class="px-3 py-2 text-center text-gray-400 text-xs">' + (idx + 1) + '</td>'
-                        + '<td class="px-3 py-2 text-center text-xs ' + actionColor + '">' + _formatCancelDate(r.cancel_date) + '</td>'
-                        + '<td class="px-3 py-2 text-center text-xs">' + _formatInDate(r.in_date) + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs font-bold ' + catClass + '">' + r.category + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs text-gray-600 font-mono">' + String(r.date || '').substring(2, 10).replace(/-/g, '') + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs text-gray-600 font-mono">' + (r.in_date || '-') + '</td>'
                         + '<td class="px-3 py-2 text-left text-xs font-medium text-gray-700">' + (r.sakun_no || '-') + '</td>'
                         + '<td class="px-3 py-2 text-center text-xs text-gray-500">' + (r.court || '-') + '</td>'
-                        + '<td class="px-3 py-2 text-center text-xs ' + actionColor + '">' + cancelReason + '</td>'
                         + '</tr>';
                 });
                 tbody.innerHTML = html;
             })
             .withFailureHandler(function (e) {
                 if (statusEl) statusEl.textContent = '로드 실패: ' + e;
-                if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-red-400">데이터 로드에 실패했습니다.</td></tr>';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-red-400">데이터 로드에 실패했습니다.</td></tr>';
             })
-            .getCancelHistoryByToken(APP_CTX.token);
+            .getMemberItemHistoryByToken(APP_CTX.token, 12);
     }
 
     /** 현재 활성 회원 뷰를 새로고침 */

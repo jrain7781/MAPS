@@ -4021,49 +4021,54 @@ function setupBidDateTrigger() {
  * @param {number} [limit=100]
  * @returns {Array<Object>}
  */
-function getCancelHistory(memberId, limit) {
-  const CANCEL_ACTIONS = ['AUTO_EXPIRE', 'REQUEST_CANCEL_CHUCHEN', 'REQUEST_CANCEL_BID', 'CANCEL_BID'];
-  const ACTION_LABEL = {
-    'AUTO_EXPIRE': '미선택',
-    'REQUEST_CANCEL_CHUCHEN': '미선택',
-    'REQUEST_CANCEL_BID': '입찰취소',
-    'CANCEL_BID': '입찰취소'
+/**
+ * 회원의 전체 물건 이력(추천, 입찰, 취소, 변경) 조회 및 월별 요약 통계 생성
+ * @param {string} memberId - 회원 ID
+ * @param {number} months - 조회 기간 (월 단위, 기본 12)
+ * @returns {Object} { summary: Array, list: Array }
+ */
+function getMemberItemHistory(memberId, months) {
+  const CATEGORIES = {
+    CHUCHEN: '추천',
+    BID: '입찰',
+    CANCEL: '취소',
+    CHANGE: '변경'
   };
-  const maxRows = parseInt(limit, 10) || 100;
+
+  const CANCEL_ACTIONS = ['AUTO_EXPIRE', 'REQUEST_CANCEL_CHUCHEN', 'REQUEST_CANCEL_BID', 'CANCEL_BID'];
+  const BID_ACTIONS = ['REQUEST_BID', 'BID', 'REQUEST_BID_CONFIRM'];
+  const CHUCHEN_ACTIONS = ['CHUCHEN', 'SEND_CHUCHEN'];
+
+  const periodMonths = parseInt(months, 10) || 12;
+  const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth() - periodMonths, now.getDate());
 
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
-    if (!reqSheet || reqSheet.getLastRow() < 2) return [];
+    if (!reqSheet || reqSheet.getLastRow() < 2) return { summary: [], list: [] };
 
     const lastRow = reqSheet.getLastRow();
     let rowNumbers = [];
 
-    // [최적화 Phase 5.1] 전수 조사 + 인덱스 검색 (createTextFinder)
+    // 1. Member ID로 행 번호 추출 (createTextFinder)
     if (memberId) {
       const finder = reqSheet.getRange(2, 6, lastRow - 1, 1).createTextFinder(String(memberId)).matchEntireCell(true);
       const matches = finder.findAll();
-      if (!matches || matches.length === 0) return [];
+      if (!matches || matches.length === 0) return { summary: [], list: [] };
       rowNumbers = matches.map(m => m.getRow());
     } else {
-      const searchDepth = 5000;
-      const startRow = Math.max(2, lastRow - searchDepth);
-      for (let r = lastRow; r >= startRow; r--) rowNumbers.push(r);
+      return { summary: [], list: [] }; // 관리자 전체 조회 등은 별도 로직 필요
     }
 
-    // 최신순 정렬 (역순)
-    rowNumbers.sort((a, b) => b - a);
-
-    // [핵심 최적화] N+1 방지를 위해 찾은 행들의 최소/최대 범위를 한 번에 읽음
+    // 2. 데이터 일괄 읽기 (Batch Read Optimization)
     const minRow = Math.min(...rowNumbers);
     const maxRow = Math.max(...rowNumbers);
     const totalScanRows = maxRow - minRow + 1;
-    
-    // 로그 데이터 일괄 읽기 (한 번의 API 호출로 해결)
     const chunkData = reqSheet.getRange(minRow, 1, totalScanRows, 16).getValues();
     const startOffset = minRow;
 
-    // 물건 정보 매핑
+    // 3. 물건 정보 캐싱 (items 시트)
     const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
     const itemMap = {};
     if (itemSheet && itemSheet.getLastRow() >= 2) {
@@ -4073,81 +4078,91 @@ function getCancelHistory(memberId, limit) {
         if (id) itemMap[id] = {
           inDate: String(r[1] || ''),
           sakunNo: String(r[2] || ''),
-          court: String(r[3] || ''),
-          chuchenDate: r[17] ? String(r[17]) : ''
+          court: String(r[3] || '')
         };
       });
     }
 
-    const result = [];
-    const seenItemIds = {};
+    const list = [];
+    const monthlyStats = {}; // { '26-03': { 추천: 0, 입찰: 0, 취소: 0, 변경: 1 } }
+    const seenActionPerItem = {}; // { itemId_category: true } - 중복 기록 방지
 
-    for (let i = 0; i < rowNumbers.length && result.length < maxRows; i++) {
-        const rowNum = rowNumbers[i];
-        const rowData = chunkData[rowNum - startOffset];
-        if (!rowData) continue;
-        
-        const action = String(rowData[2] || '').trim();
-        const fieldName = String(rowData[13] || '').trim();
-        const fromValue = String(rowData[11] || '').trim();
-        const toValue = String(rowData[12] || '').trim();
-        const itemId = String(rowData[4] || '').trim();
-        const reqMember = String(rowData[5] || '').trim();
+    // 4. 데이터 분류 및 집계
+    for (let i = rowNumbers.length - 1; i >= 0; i--) {
+      const rowNum = rowNumbers[i];
+      const rowData = chunkData[rowNum - startOffset];
+      if (!rowData) continue;
 
-        const isLegacyCancel = CANCEL_ACTIONS.indexOf(action) !== -1;
-        const isStateChangeToMidjung = (fieldName === 'stu_member' && toValue === '미정');
+      const requestedAt = rowData[1] instanceof Date ? rowData[1] : new Date(rowData[1]);
+      if (isNaN(requestedAt.getTime())) continue;
+      
+      // 기간 필터링
+      if (periodMonths !== 999 && requestedAt < startDate) continue;
 
-        if (!isLegacyCancel && !isStateChangeToMidjung) continue;
-        if (memberId && reqMember !== String(memberId).trim()) continue;
+      const action = String(rowData[2] || '').trim();
+      const fieldName = String(rowData[13] || '').trim();
+      const toValue = String(rowData[12] || '').trim();
+      const itemId = String(rowData[4] || '').trim();
 
-        if (itemId && seenItemIds[itemId]) continue;
-        if (itemId) seenItemIds[itemId] = true;
+      let category = '';
+      if (CANCEL_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue === '미정')) category = CATEGORIES.CANCEL;
+      else if (fieldName === 'stu_member' && toValue === '변경') category = CATEGORIES.CHANGE;
+      else if (BID_ACTIONS.indexOf(action) !== -1) category = CATEGORIES.BID;
+      else if (CHUCHEN_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue && toValue !== '미정' && toValue !== '변경')) category = CATEGORIES.CHUCHEN;
 
-        let finalLabel = '미선택';
-        if (isStateChangeToMidjung) {
-          if (fromValue.indexOf('입찰') !== -1) finalLabel = '입찰취소';
-          else if (fromValue.indexOf('추천') !== -1) finalLabel = '미선택';
-        } else {
-          finalLabel = ACTION_LABEL[action] || action;
-        }
+      if (!category) continue;
 
-        const item = itemMap[itemId] || {};
-        result.push({
-          req_id: String(rowData[0] || ''),
-          cancel_date: (rowData[1] instanceof Date) ? Utilities.formatDate(rowData[1], "Asia/Seoul", "yyyy-MM-dd HH:mm:ss") : String(rowData[1] || ''),
-          action: action,
-          action_label: finalLabel,
-          item_id: itemId,
-          member_id: reqMember,
-          member_name: String(rowData[15] || ''),
-          in_date: item.inDate || '',
-          sakun_no: item.sakunNo || '',
-          court: item.court || '',
-          chuchen_date: item.chuchenDate || '',
-          bid_confirm_date: ''
-        });
+      // 동일 물건+동일 카테고리 중복 방지 (최신 1건만)
+      const seenKey = itemId + '_' + category;
+      if (itemId && seenActionPerItem[seenKey]) continue;
+      if (itemId) seenActionPerItem[seenKey] = true;
+
+      // 월별 통계 집계 (YY-MM)
+      const yy = String(requestedAt.getFullYear()).slice(2, 4);
+      const mm = String(requestedAt.getMonth() + 1).padStart(2, '0');
+      const monthKey = yy + '-' + mm;
+
+      if (!monthlyStats[monthKey]) monthlyStats[monthKey] = { month: monthKey, 추천: 0, 입찰: 0, 취소: 0, 변경: 0, total: 0 };
+      monthlyStats[monthKey][category]++;
+      monthlyStats[monthKey].total++;
+
+      const item = itemMap[itemId] || {};
+      list.push({
+        req_id: String(rowData[0] || ''),
+        date: Utilities.formatDate(requestedAt, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"),
+        category: category,
+        item_id: itemId,
+        sakun_no: item.sakunNo || '',
+        court: item.court || '',
+        in_date: item.inDate || ''
+      });
     }
-    return result;
+
+    // 요약 집계 정렬 (최신월순)
+    const summary = Object.keys(monthlyStats).sort((a, b) => b.localeCompare(a)).map(k => monthlyStats[k]);
+
+    return { summary: summary, list: list };
   } catch (e) {
-    Logger.log('[getCancelHistory] 오류: ' + e.toString());
-    return [];
+    Logger.log('[getMemberItemHistory] 오류: ' + e.toString());
+    return { summary: [], list: [] };
   }
 }
 
 
 /**
- * 회원 토큰으로 취소이력 조회 (회원 화면 공개 API)
+ * 회원 토큰으로 물건 이력조회 (최근 n개월)
  * @param {string} token - 회원 member_token
- * @returns {Array<Object>}
+ * @param {number} months - 조회 기간 (기본 12)
+ * @returns {Object} { summary, list }
  */
-function getCancelHistoryByToken(token) {
+function getMemberItemHistoryByToken(token, months) {
   try {
     const member = (typeof getMemberByToken === 'function') ? getMemberByToken(token) : null;
-    if (!member || !member.id) return [];
-    return getCancelHistory(String(member.id), 100);
+    if (!member || !member.id) return { summary: [], list: [] };
+    return getMemberItemHistory(String(member.id), months);
   } catch (e) {
-    Logger.log('[getCancelHistoryByToken] 오류: ' + e.toString());
-    return [];
+    Logger.log('[getMemberItemHistoryByToken] 오류: ' + e.toString());
+    return { summary: [], list: [] };
   }
 }
 
