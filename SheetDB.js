@@ -462,6 +462,12 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
     updatedItem['reg_date'] = formatParamsDate(newRowValues[9], 'yyyy-MM-dd');
   }
 
+  // 데이터 변경 → 해당 회원 캐시 무효화
+  invalidateMemberItemsCache_(memberId);
+  if (oldValues.member_id && oldValues.member_id !== String(memberId || '')) {
+    invalidateMemberItemsCache_(oldValues.member_id); // 회원 변경 시 이전 회원 캐시도 무효화
+  }
+
   return { success: true, message: '성공적으로 수정되었습니다.', data: updatedItem };
 }
 
@@ -1303,6 +1309,22 @@ function readDataByMemberToken(memberToken) {
 }
 
 /**
+ * 회원 물건 캐시 무효화 (데이터 변경 시 호출)
+ * @param {string|Array} memberIds
+ */
+function invalidateMemberItemsCache_(memberIds) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var ids = Array.isArray(memberIds) ? memberIds : [memberIds];
+    ids.forEach(function(id) {
+      if (id) cache.remove('member_items_v1_' + String(id));
+    });
+  } catch(e) {
+    Logger.log('캐시 무효화 오류: ' + e.message);
+  }
+}
+
+/**
  * 회원 토큰으로 해당 회원 물건만 반환합니다. (이미지 ID 포함)
  * - 프론트가 기존과 동일하게 image_ids를 기대하므로, ImageService의 readAllDataWithImageIds()를 활용
  * @param {string} memberToken
@@ -1311,10 +1333,105 @@ function readDataByMemberToken(memberToken) {
 function readDataWithImageIdsByMemberToken(memberToken) {
   const member = getMemberByToken(memberToken);
   if (!member) return [];
-  const items = (typeof readAllDataWithImageIds === 'function')
-    ? readAllDataWithImageIds()
-    : readAllData();
-  return (items || []).filter(it => String(it.member_id || '') === String(member.member_id));
+
+  const memberId = String(member.member_id || '');
+  if (!memberId) return [];
+
+  // 서버 캐시 확인 (두 번째 접속부터 Spreadsheet 읽기 없이 반환)
+  try {
+    var cache = CacheService.getScriptCache();
+    var cacheKey = 'member_items_v1_' + memberId;
+    var cached = cache.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+  } catch(e) {
+    Logger.log('캐시 읽기 오류: ' + e.message);
+  }
+
+  // 스프레드시트 1회만 열기
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  // 1. items 시트 전체를 읽되, 배열 상태에서 member_id(idx=8)로 먼저 필터링
+  const sheet = ss.getSheetByName(DB_SHEET_NAME);
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const colsToRead = Math.min(sheet.getMaxColumns(), ITEM_HEADERS.length);
+  if (colsToRead < 1) return [];
+
+  const values = sheet.getRange(2, 1, lastRow - 1, colsToRead).getValues();
+  const memberRows = values.filter(row => String(row[8] || '') === memberId);
+  if (memberRows.length === 0) return [];
+
+  // 2. 필터된 행만 객체 변환
+  const memberItems = memberRows.map(row => ({
+    'id':            row[0],
+    'in-date':       formatParamsDate(row[1]),
+    'sakun_no':      row[2],
+    'court':         row[3],
+    'stu_member':    row[4],
+    'm_name_id':     row[5],
+    'm_name':        row[6],
+    'bidprice':      row[7],
+    'member_id':     row[8],
+    'reg_date':      formatParamsDate(row[9], 'yyyy-MM-dd'),
+    'reg_member':    row[10],
+    'bid_state':     (row.length > 11) ? (row[11] || '') : '',
+    'image_id':      (row.length > 12) ? (row[12] || '') : '',
+    'note':          (row.length > 13) ? (row[13] || '') : '',
+    'm_name2':       (row.length > 14) ? (row[14] || '') : '',
+    'auction_id':    (row.length > 15) ? (row[15] || '') : '',
+    'chuchen_state': (row.length > 16) ? (row[16] || '') : '',
+    'chuchen_date':  (row.length > 17) ? (row[17] || '') : '',
+    'has_images':    false
+  }));
+
+  // 3. 이 회원 물건 ID 목록으로 item_images 부분 조회
+  const memberItemIds = new Set(memberItems.map(it => String(it.id || '').trim()));
+  const imageMap = {};
+  const imgSheet = ss.getSheetByName(ITEM_IMAGES_SHEET_NAME);
+  if (imgSheet) {
+    const imgLastRow = imgSheet.getLastRow();
+    if (imgLastRow >= 2) {
+      const imgData = imgSheet.getRange(2, 1, imgLastRow - 1, 4).getValues();
+      for (let i = 0; i < imgData.length; i++) {
+        const itemId = String(imgData[i][0]).trim();
+        if (!memberItemIds.has(itemId)) continue; // 이 회원 물건이 아니면 스킵
+        const imgId = String(imgData[i][1] || '').trim();
+        if (!imgId) continue;
+        if (!imageMap[itemId]) imageMap[itemId] = [];
+        imageMap[itemId].push({ id: imgId, created_at: String(imgData[i][3] || '').trim() });
+      }
+      for (const k in imageMap) {
+        imageMap[k].sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
+      }
+    }
+  }
+
+  // 4. image_ids 결합
+  for (const item of memberItems) {
+    const imgArr = imageMap[String(item.id || '').trim()];
+    if (imgArr && imgArr.length > 0) {
+      item.image_ids = imgArr.map(x => x.id).join(',');
+      item.has_images = true;
+    } else if (item.image_id && String(item.image_id).trim()) {
+      item.image_ids = String(item.image_id).trim();
+      item.has_images = true;
+    } else {
+      item.image_ids = '';
+      item.has_images = false;
+    }
+  }
+
+  // 서버 캐시 저장 (5분 TTL - 재방문 시 Spreadsheet 읽기 생략)
+  try {
+    var cache = CacheService.getScriptCache();
+    cache.put('member_items_v1_' + memberId, JSON.stringify(memberItems), 300);
+  } catch(e) {
+    Logger.log('캐시 저장 오류: ' + e.message);
+  }
+
+  return memberItems;
 }
 
 /**
@@ -3309,6 +3426,7 @@ function updateChuchenState(itemIds, state, dateStr, triggerType) {
     var allData = sheet.getRange(2, 1, lastRow - 1, 17).getValues();
     var updated = 0;
     var idsStr = itemIds.map(String);
+    var affectedMemberIds = [];
     allData.forEach(function (row, i) {
       var rowId = String(row[0] || '').trim();
       if (idsStr.indexOf(rowId) === -1) return;
@@ -3334,9 +3452,14 @@ function updateChuchenState(itemIds, state, dateStr, triggerType) {
           });
         }
       }
+      var mid = String(row[8] || '').trim();
+      if (mid && affectedMemberIds.indexOf(mid) === -1) affectedMemberIds.push(mid);
       updated++;
     });
-    if (updated > 0) SpreadsheetApp.flush();
+    if (updated > 0) {
+      SpreadsheetApp.flush();
+      invalidateMemberItemsCache_(affectedMemberIds);
+    }
     return { success: true, updated: updated };
   } catch (e) {
     Logger.log('updateChuchenState 오류: ' + e.message);
@@ -3360,6 +3483,7 @@ function updateBidState(itemIds, state) {
     // [0]id [6]m_name [8]member_id [11]bid_state
     var updated = 0;
     var idsStr = itemIds.map(String);
+    var affectedMemberIds = [];
     allData.forEach(function (row, i) {
       var rowId = String(row[0] || '').trim();
       if (idsStr.indexOf(rowId) === -1) return;
@@ -3378,9 +3502,14 @@ function updateBidState(itemIds, state) {
           note: 'bid_state 변경'
         });
       }
+      var mid = String(row[8] || '').trim();
+      if (mid && affectedMemberIds.indexOf(mid) === -1) affectedMemberIds.push(mid);
       updated++;
     });
-    if (updated > 0) SpreadsheetApp.flush();
+    if (updated > 0) {
+      SpreadsheetApp.flush();
+      invalidateMemberItemsCache_(affectedMemberIds);
+    }
     return { success: true, updated: updated };
   } catch (e) {
     Logger.log('updateBidState 오류: ' + e.message);

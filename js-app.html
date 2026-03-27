@@ -316,7 +316,7 @@
 
     // 데이터 캐시 관리
     let dataCache = { data: null, timestamp: 0 };
-    const CACHE_DURATION = 30000; // 30초 캐시 유지
+    const CACHE_DURATION = 300000; // 5분 캐시 유지
     let _auctionLoginShown = false; // 옥션원 로그인 체크 플래그 (전역)
 
     // =============================================================================
@@ -399,6 +399,9 @@
                 if (typeof window.Telegram.WebApp.disableVerticalSwipes === 'function') {
                     window.Telegram.WebApp.disableVerticalSwipes(); // 세로 스와이프(풀다운) 방지
                 }
+                // 안정적 확장을 위해 재시도 (첫 호출이 무시될 수 있음)
+                setTimeout(function() { try { window.Telegram.WebApp.expand(); } catch(e) {} }, 400);
+                setTimeout(function() { try { window.Telegram.WebApp.expand(); } catch(e) {} }, 1200);
             }
         } catch (e) { console.warn('[TG] expand/disableVerticalSwipes:', e); }
 
@@ -569,6 +572,10 @@
     };
 
     function navigateTo(tabId) {
+        // 로딩 스플래시 숨기기 (최초 1회)
+        var splash = document.getElementById('app-loading');
+        if (splash) splash.style.display = 'none';
+
         // 회원 전용 링크에서는 입찰리스트 + 월별조회 + 취소이력만 허용
         if (IS_MEMBER_VIEW && !['MemberItemList', 'MemberDashboard', 'MemberCancelHistory'].includes(tabId)) {
             tabId = 'MemberItemList';
@@ -12799,6 +12806,14 @@ MJ 이정우 팀장
         filtered.forEach(function (item) { html += cItem(item); });
         el.innerHTML = html;
         initCardSwipes_();
+
+        // 카드 짤림 방지: 부모 스크롤 초기화 (display 건드리지 않음)
+        var ilEl = document.getElementById('MemberItemList');
+        if (ilEl) {
+            void ilEl.offsetHeight; // reflow 트리거
+            var scrollParent = ilEl.parentElement;
+            if (scrollParent) scrollParent.scrollTop = 0;
+        }
     }
 
     /** 입찰리스트 데이터 로드 + 렌더 */
@@ -12812,14 +12827,15 @@ MJ 이정우 팀장
             return;
         }
 
+        // 즉시 화면 전환 (체감 속도 개선 - GAS 응답 대기 없이 화면 먼저 표시)
+        navigateTo('MemberItemList');
         var el = document.getElementById('iL2');
-        if (el) el.innerHTML = '<div style="text-align:center; padding:60px 20px; color:#94a3b8;">데이터를 불러오는 중...</div>';
+        if (el) el.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div style="width:40px;height:40px;border:3px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:mj-spin 0.7s linear infinite;margin:0 auto;"></div></div>';
 
         google.script.run
             .withSuccessHandler(function (data) {
                 allBiddingData = Array.isArray(data) ? data.sort(dataComparator) : [];
                 dataCache = { data: allBiddingData, timestamp: Date.now() };
-                navigateTo('MemberItemList');
                 renderMemberItemList();
             })
             .withFailureHandler(function (error) {
