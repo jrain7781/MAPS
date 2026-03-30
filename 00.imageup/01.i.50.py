@@ -366,20 +366,19 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
             try:
                 product_id = driver.execute_script("""
                     var tbl = arguments[0], hdr = arguments[1], isGongmae = arguments[2];
-                    // 공매: href 링크 먼저 확인 (이미지 src는 이미지파일 ID라 잘못된 값)
+                    // 공매 전용: opt 속성 (checkbox에 product_id 저장)
                     if(isGongmae){
-                        var sources = [tbl, hdr];
-                        for(var s=0; s<sources.length; s++){
-                            var link = sources[s].querySelector('a[href*="product_id="]');
-                            if(link){ var m=link.href.match(/product_id=(\d+)/); if(m) return m[1]; }
-                            var all = sources[s].querySelectorAll('[onclick]');
-                            for(var j=0; j<all.length; j++){
-                                var m=(all[j].getAttribute('onclick')||'').match(/product_id[=\(,]['"]?(\d+)/);
-                                if(m) return m[1];
-                            }
+                        var optEl = tbl.querySelector('[opt]') || hdr.querySelector('[opt]');
+                        if(optEl){ var optVal = optEl.getAttribute('opt'); if(optVal) return optVal; }
+                        // fallback: pd_view_popup(type, product_id) 패턴
+                        var allOC = Array.from(tbl.querySelectorAll('[onclick]')).concat(Array.from(hdr.querySelectorAll('[onclick]')));
+                        for(var j=0; j<allOC.length; j++){
+                            var m = (allOC[j].getAttribute('onclick')||'').match(/pd_view_popup\(\d+,\s*(\d+)\)/);
+                            if(m) return m[1];
                         }
                     }
-                    // 이미지 src/onerror에서 추출 (경매용)
+                    // 이미지 src/onerror에서 추출 (경매 전용 - 공매는 이미지 ID가 달라 스킵)
+                    if(!isGongmae){
                     var imgs = tbl.querySelectorAll('img');
                     for(var i=0; i<imgs.length; i++){
                         var src = imgs[i].getAttribute('src') || '';
@@ -388,6 +387,7 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                         var oe = imgs[i].getAttribute('onerror') || '';
                         var m2 = oe.match(/Thumnail\/m\/\d+\/m(\d+)_/) || oe.match(/PubAuct\/\d+\/\d+\/(\d+)_/);
                         if(m2) return m2[1];
+                    }
                     }
                     // href/onclick fallback (경매용)
                     if(!isGongmae){
