@@ -188,6 +188,18 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
   // [방어 코드] 쓰기 전에 16번째 열(auction_id)까지 확보
   ensureColumnExists(sheet, 16);
 
+  // [중복 체크] 동일 입찰일자+사건번호+법원명 존재 여부 확인 (B,C,D열만 읽어 속도 최적화)
+  const dupLastRow = sheet.getLastRow();
+  if (dupLastRow > 1) {
+    const dupRows = sheet.getRange(2, 2, dupLastRow - 1, 3).getValues(); // B=in-date, C=sakun_no, D=court
+    const isDup = dupRows.some(function(r) {
+      return String(r[0]) === String(inDate) &&
+             String(r[1]).trim() === String(sakunNo).trim() &&
+             String(r[2]).trim() === String(court).trim();
+    });
+    if (isDup) return { success: false, message: '이미 동일한 입찰일자/사건번호/법원명으로 등록된 물건이 있습니다.' };
+  }
+
   const id = new Date().getTime().toString();
   const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
@@ -380,6 +392,21 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
     } else if (newChuchenState === '전달완료' && oldValues.chuchen_state !== '전달완료') {
       // 신규/null → 전달완료 변경 시에만 기산점 갱신 (이미 전달완료면 타이머 유지)
       newRowValues[17] = new Date().toISOString(); // R열: chuchen_date
+    }
+  }
+
+  // [중복 체크] 자기 자신 제외하고 동일 키 존재 여부 확인 (A,B,C,D열만 읽어 속도 최적화)
+  {
+    const dupLastRow = sheet.getLastRow();
+    if (dupLastRow > 1) {
+      const dupRows = sheet.getRange(2, 1, dupLastRow - 1, 4).getValues(); // A=id, B=in-date, C=sakun_no, D=court
+      const isDup = dupRows.some(function(r) {
+        if (String(r[0]) === String(id)) return false; // 자기 자신 제외
+        return String(r[1]) === String(inDate) &&
+               String(r[2]).trim() === String(sakunNo).trim() &&
+               String(r[3]).trim() === String(court).trim();
+      });
+      if (isDup) return { success: false, message: '이미 동일한 입찰일자/사건번호/법원명으로 등록된 물건이 있습니다.' };
     }
   }
 

@@ -5259,6 +5259,7 @@ MJ 이정우 팀장
             .withFailureHandler(error => {
                 if (modalSaveBtn) modalSaveBtn.disabled = false;
                 showStatus(`수정 오류: ${error.message}`, 'error');
+                loadData(true); // Optimistic Update 오염 복구
             })
             // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId)
             .updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId);
@@ -5429,6 +5430,7 @@ MJ 이정우 팀장
             if (mainSaveBtn) mainSaveBtn.disabled = false;
             toggleLoading(false);
             showStatus(`작업 처리 중 오류: ${error.message}`, 'error');
+            loadData(true); // Optimistic Update 오염 복구
         };
 
         const panelChuchenState = formChuchenState ? formChuchenState.value : '';
@@ -6025,12 +6027,21 @@ MJ 이정우 팀장
     // --- 중복 감지 헬퍼 ---
     function _getDupMap() {
         if (!_dupMap) {
+            // 1패스: 키별 항목 수 카운트 (m_name_id 빈 값 포함)
+            var keyCount = {};
+            allBiddingData.forEach(function(item) {
+                var key = String(item['in-date'] || '') + '_' + String(item.sakun_no || '') + '_' + String(item.court || '');
+                keyCount[key] = (keyCount[key] || 0) + 1;
+            });
+            // 2패스: 2건 이상인 키만 담당자 목록 수집 (빈 담당자는 '미지정'으로 표시)
             _dupMap = {};
             allBiddingData.forEach(function(item) {
                 var key = String(item['in-date'] || '') + '_' + String(item.sakun_no || '') + '_' + String(item.court || '');
-                if (!_dupMap[key]) _dupMap[key] = [];
-                var mgr = String(item.m_name_id || '').trim();
-                if (mgr && !_dupMap[key].includes(mgr)) _dupMap[key].push(mgr);
+                if (keyCount[key] > 1) {
+                    if (!_dupMap[key]) _dupMap[key] = [];
+                    var mgr = String(item.m_name_id || '').trim() || '미지정';
+                    if (!_dupMap[key].includes(mgr)) _dupMap[key].push(mgr);
+                }
             });
         }
         return _dupMap;
@@ -6038,7 +6049,7 @@ MJ 이정우 팀장
     function getDupManagers(item) {
         var key = String(item['in-date'] || '') + '_' + String(item.sakun_no || '') + '_' + String(item.court || '');
         var mgrs = _getDupMap()[key];
-        return (mgrs && mgrs.length > 1) ? mgrs : null;
+        return (mgrs && mgrs.length > 0) ? mgrs : null;
     }
     function dupSakunHtml(bid) {
         var sakun = String(bid.sakun_no || '미상');
@@ -11817,7 +11828,7 @@ ${token}
         } else {
             // 기본값 (설정이 없는 경우)
             const defaultBase = isGongmae ?
-                'https://www.auction1.co.kr/auction/ca_view.php?product_id=' :
+                'https://www.auction1.co.kr/pubauct/view.php?product_id=' :
                 'https://www.auction1.co.kr/auction/ca_view.php?product_id=';
             finalUrl = defaultBase + aid;
         }

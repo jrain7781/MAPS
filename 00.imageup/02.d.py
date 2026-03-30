@@ -355,12 +355,25 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
             # 6. 법원명 추출
             court_name = "공매" if type_prefix == "공매" else get_court_from_text(full_text)
 
-            # 6-1. 옥션 product_id 추출 (이미지 src 패턴: 경매=Thumnail/m/.../m{ID}_, 공매=PubAuct/...//{ID}_)
+            # 6-1. 옥션 product_id 추출 (공매: href 링크 우선 / 경매: 이미지 src 패턴 우선)
             product_id = ""
             try:
                 product_id = driver.execute_script("""
-                    var tbl = arguments[0], hdr = arguments[1];
-                    // 1. 이미지 src/onerror에서 추출
+                    var tbl = arguments[0], hdr = arguments[1], isGongmae = arguments[2];
+                    // 공매: href 링크 먼저 확인 (이미지 src는 이미지파일 ID라 잘못된 값)
+                    if(isGongmae){
+                        var sources = [tbl, hdr];
+                        for(var s=0; s<sources.length; s++){
+                            var link = sources[s].querySelector('a[href*="product_id="]');
+                            if(link){ var m=link.href.match(/product_id=(\d+)/); if(m) return m[1]; }
+                            var all = sources[s].querySelectorAll('[onclick]');
+                            for(var j=0; j<all.length; j++){
+                                var m=(all[j].getAttribute('onclick')||'').match(/product_id[=\(,]['"]?(\d+)/);
+                                if(m) return m[1];
+                            }
+                        }
+                    }
+                    // 이미지 src/onerror에서 추출 (경매용)
                     var imgs = tbl.querySelectorAll('img');
                     for(var i=0; i<imgs.length; i++){
                         var src = imgs[i].getAttribute('src') || '';
@@ -370,18 +383,20 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                         var m2 = oe.match(/Thumnail\/m\/\d+\/m(\d+)_/) || oe.match(/PubAuct\/\d+\/\d+\/(\d+)_/);
                         if(m2) return m2[1];
                     }
-                    // 2. href/onclick fallback (테이블→헤더)
-                    var sources = [tbl, hdr];
-                    for(var s=0; s<sources.length; s++){
-                        var link = sources[s].querySelector('a[href*="product_id="]');
-                        if(link){ var m=link.href.match(/product_id=(\d+)/); if(m) return m[1]; }
-                        var all = sources[s].querySelectorAll('[onclick]');
-                        for(var j=0; j<all.length; j++){
-                            var m=(all[j].getAttribute('onclick')||'').match(/product_id[=\(,]['"]?(\d+)/);
-                            if(m) return m[1];
+                    // href/onclick fallback (경매용)
+                    if(!isGongmae){
+                        var sources = [tbl, hdr];
+                        for(var s=0; s<sources.length; s++){
+                            var link = sources[s].querySelector('a[href*="product_id="]');
+                            if(link){ var m=link.href.match(/product_id=(\d+)/); if(m) return m[1]; }
+                            var all = sources[s].querySelectorAll('[onclick]');
+                            for(var j=0; j<all.length; j++){
+                                var m=(all[j].getAttribute('onclick')||'').match(/product_id[=\(,]['"]?(\d+)/);
+                                if(m) return m[1];
+                            }
                         }
                     }
-                    // 3. 부모 방향 속성 탐색
+                    // 부모 방향 속성 탐색
                     var el = tbl.parentElement;
                     for(var i=0; i<10; i++){
                         if(!el || el===document.body) break;
@@ -393,7 +408,7 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
                         el = el.parentElement;
                     }
                     return '';
-                """, item, header_element) or ""
+                """, item, header_element, type_prefix == "공매") or ""
             except:
                 pass
             print(f"    🔍 product_id: {product_id or '미추출'}")
