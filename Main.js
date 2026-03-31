@@ -29,6 +29,18 @@ function doGet(e) {
   if (adminKey) {
     const validAdminKey = getAdminSecretKey_();
     if (adminKey === validAdminKey) {
+      // ★ API 조회 (Python 크롤링 스크립트용 - ?admin=KEY&api=getSearchItems)
+      if (params.api === 'getSearchItems') {
+        try {
+          const items = (typeof readAllSearchItems === 'function') ? readAllSearchItems() : [];
+          return ContentService.createTextOutput(JSON.stringify({ success: true, items: items }))
+            .setMimeType(ContentService.MimeType.JSON);
+        } catch (apiErr) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: String(apiErr) }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
       // ✅ 관리자 전체 접근
       const template = HtmlService.createTemplateFromFile('index');
       template.__params = params;
@@ -77,6 +89,26 @@ function doPost(e) {
     try { payload = JSON.parse(raw); } catch (err) { payload = null; }
     if (!payload) {
       return ContentService.createTextOutput('BAD_JSON').setMimeType(ContentService.MimeType.TEXT);
+    }
+
+    // ★ 외부 API 호출 처리 (Python 크롤링 스크립트 등 - api_action 필드로 구분)
+    if (payload.api_action) {
+      try {
+        const apiKey = payload.api_key || '';
+        const validKey = getAdminSecretKey_();
+        if (apiKey !== validKey) {
+          return ContentService.createTextOutput(JSON.stringify({ success: false, message: '인증 실패' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+        const result = (typeof handleSearchApiPost_ === 'function')
+          ? handleSearchApiPost_(payload)
+          : { success: false, message: 'handleSearchApiPost_ 함수 없음' };
+        return ContentService.createTextOutput(JSON.stringify(result))
+          .setMimeType(ContentService.MimeType.JSON);
+      } catch (apiErr) {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, message: String(apiErr) }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
     }
 
     // ★ 텔레그램 웹훅 처리 (단계별 타이밍 로그)

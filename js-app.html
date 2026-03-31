@@ -10849,6 +10849,8 @@ MJ 이정우 팀장
             title.textContent = '새 회원 등록';
             form.reset();
             document.getElementById('mem-member_id').value = '';
+            // 구분 체크박스 초기화
+            if (typeof setGubunCheckboxes === 'function') setGubunCheckboxes('');
             btnCreate.classList.remove('content-hidden');
             btnUpdate.classList.add('content-hidden');
             btnDelete.classList.add('content-hidden');
@@ -10869,6 +10871,9 @@ MJ 이정우 팀장
                 const el = document.getElementById('mem-' + key);
                 if (el) el.value = member[key] || '';
             });
+
+            // 구분 체크박스 복원
+            if (typeof setGubunCheckboxes === 'function') setGubunCheckboxes(member.gubun || '');
 
             // 수업 선택
             const classSelect = document.getElementById('mem-class_id_select');
@@ -14062,4 +14067,483 @@ MJ 이정우 팀장
             })
             .updateDataField([itemId], field, value);
     }
+
+    // ================================================================
+    // [조사물건 관리] SearchManagement
+    // ================================================================
+
+    // TAB_LAYOUTS에 SearchManagement 추가
+    TAB_LAYOUTS['SearchManagement'] = 'flex';
+
+    var allSearchData = [];
+    var filteredSearchData = [];
+    var smSortKey = 'in-date';
+    var smSortAsc = false;
+    var smInvestigators = []; // 조사자 목록 캐시
+
+    // navigateTo에서 SearchManagement 진입 시 데이터 로드
+    (function() {
+        var _origNavigateTo = navigateTo;
+        navigateTo = function(tabId) {
+            _origNavigateTo(tabId);
+            if (tabId === 'SearchManagement') {
+                loadSearchData();
+            }
+        };
+    })();
+
+    // 조사자 목록 로드 (최초 1회)
+    function loadInvestigators(cb) {
+        if (smInvestigators.length > 0) { if (cb) cb(smInvestigators); return; }
+        if (typeof google === 'undefined' || !google.script || !google.script.run) { if (cb) cb([]); return; }
+        google.script.run
+            .withSuccessHandler(function(list) {
+                smInvestigators = list || [];
+                buildSmJosajaDropdown();
+                if (cb) cb(smInvestigators);
+            })
+            .withFailureHandler(function() { if (cb) cb([]); })
+            .getInvestigators();
+    }
+
+    function buildSmJosajaDropdown() {
+        var dd = document.getElementById('sm-josaja-dropdown');
+        var bulkSel = document.getElementById('sm-bulk-josaja-select');
+        if (!dd) return;
+        // 기존 조사자 항목 제거 후 재구성
+        var existing = dd.querySelectorAll('[data-josaja]');
+        existing.forEach(function(el) { el.parentElement.remove(); });
+        smInvestigators.forEach(function(m) {
+            var name = String(m.member_name || '').trim();
+            if (!name) return;
+            var label = document.createElement('label');
+            label.setAttribute('data-josaja', name);
+            label.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1';
+            label.innerHTML = '<input type="checkbox" name="sm-josaja-cb" value="' + name + '" onchange="handleSmJosajaOther(this); applySearchFilters()" class="rounded"> ' + name;
+            dd.appendChild(label);
+        });
+        // bulk select 동기화
+        if (bulkSel) {
+            bulkSel.innerHTML = '<option value="">-- 선택 --</option>' +
+                smInvestigators.map(function(m) {
+                    var n = String(m.member_name || '').trim();
+                    return n ? '<option value="' + n + '">' + n + '</option>' : '';
+                }).join('');
+        }
+    }
+
+    function loadSearchData(forceRefresh) {
+        if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+        var tbody = document.getElementById('searchTableBody');
+        var loading = document.getElementById('smLoadingIndicator');
+        var nodata = document.getElementById('smNoDataMessage');
+        if (loading) loading.style.display = '';
+        if (nodata) nodata.classList.add('content-hidden');
+
+        loadInvestigators(function() {
+            google.script.run
+                .withSuccessHandler(function(items) {
+                    allSearchData = items || [];
+                    if (loading) loading.style.display = 'none';
+                    applySearchFilters();
+                })
+                .withFailureHandler(function(err) {
+                    if (loading) loading.style.display = 'none';
+                    showStatus('조사물건 로드 실패: ' + (err.message || err), 'error');
+                })
+                .readAllSearchItems();
+        });
+    }
+
+    function applySearchFilters() {
+        var indateVal = (document.getElementById('sm-filter-indate') || {}).value || '';
+        var sakunoVal = (document.getElementById('sm-filter-sakuno') || {}).value || '';
+        var courtVal = (document.getElementById('sm-filter-court') || {}).value || '';
+        var addressVal = (document.getElementById('sm-filter-address') || {}).value || '';
+
+        // 상태 필터
+        var statusAll = document.getElementById('sm-status-all');
+        var isStatusAll = statusAll && statusAll.checked;
+        var statusSelected = [];
+        if (!isStatusAll) {
+            document.querySelectorAll('[name="sm-status-cb"]:checked').forEach(function(cb) {
+                statusSelected.push(cb.value);
+            });
+        }
+
+        // 조사자 필터
+        var josajaAll = document.getElementById('sm-josaja-all');
+        var isJosajaAll = josajaAll && josajaAll.checked;
+        var josajaSelected = [];
+        if (!isJosajaAll) {
+            document.querySelectorAll('[name="sm-josaja-cb"]:checked').forEach(function(cb) {
+                josajaSelected.push(cb.value);
+            });
+        }
+
+        filteredSearchData = allSearchData.filter(function(item) {
+            if (indateVal && String(item['in-date'] || '').indexOf(indateVal) === -1) return false;
+            if (sakunoVal && String(item.sakun_no || '').toLowerCase().indexOf(sakunoVal.toLowerCase()) === -1) return false;
+            if (courtVal && String(item.court || '').indexOf(courtVal) === -1) return false;
+            if (addressVal && String(item.address || '').indexOf(addressVal) === -1) return false;
+            if (!isStatusAll && statusSelected.length > 0) {
+                if (statusSelected.indexOf(String(item.josa_status || '신규')) === -1) return false;
+            }
+            if (!isJosajaAll && josajaSelected.length > 0) {
+                if (josajaSelected.indexOf(String(item.josaja || '')) === -1) return false;
+            }
+            return true;
+        });
+
+        // 정렬
+        filteredSearchData.sort(function(a, b) {
+            var va = String(a[smSortKey] || '');
+            var vb = String(b[smSortKey] || '');
+            return smSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+        });
+
+        renderSearchList();
+    }
+
+    function sortSearchList(key) {
+        if (smSortKey === key) { smSortAsc = !smSortAsc; }
+        else { smSortKey = key; smSortAsc = false; }
+        applySearchFilters();
+    }
+
+    function renderSearchList() {
+        var tbody = document.getElementById('searchTableBody');
+        var nodata = document.getElementById('smNoDataMessage');
+        var countEl = document.getElementById('searchMgmt-count');
+        if (!tbody) return;
+
+        if (countEl) countEl.textContent = filteredSearchData.length + '건';
+
+        if (filteredSearchData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400"><div id="smNoDataMessage">조사물건 데이터가 없습니다.</div></td></tr>';
+            return;
+        }
+
+        var statusColorMap = {
+            '신규': 'bg-blue-100 text-blue-700',
+            '요청': 'bg-yellow-100 text-yellow-700',
+            '확인': 'bg-green-100 text-green-700',
+            '완료': 'bg-gray-200 text-gray-600',
+            '폐기': 'bg-red-100 text-red-600'
+        };
+
+        var html = filteredSearchData.map(function(item, idx) {
+            var statusCls = statusColorMap[item.josa_status] || 'bg-gray-100 text-gray-600';
+            var inDate = String(item['in-date'] || '');
+            var kamjungka = String(item.kamjungka || '');
+            var minBid = String(item.min_bid_price || '');
+            var rate = String(item.min_bid_rate || '');
+            var area = String(item.item_area || '');
+
+            // 조사자 인라인 셀렉트
+            var josajOpts = '<option value="">-미배정-</option>' +
+                smInvestigators.map(function(m) {
+                    var n = String(m.member_name || '');
+                    var sel = n === String(item.josaja || '') ? ' selected' : '';
+                    return '<option value="' + n + '"' + sel + '>' + n + '</option>';
+                }).join('');
+
+            return '<tr class="hover:bg-gray-50 transition">' +
+                '<td class="px-1 py-2 text-center"><input type="checkbox" class="sm-row-check rounded" value="' + item.search_id + '"></td>' +
+                '<td class="px-2 py-2 text-center text-xs whitespace-nowrap">' + inDate + '</td>' +
+                '<td class="px-2 py-2 text-center text-xs font-mono">' + String(item.sakun_no || '') + '</td>' +
+                '<td class="px-2 py-2 text-center text-xs">' + String(item.court || '') + '</td>' +
+                '<td class="px-2 py-2 text-xs max-w-[200px]">' +
+                    '<div class="font-medium text-gray-800 truncate" title="' + String(item.item_summary || '') + '">' + String(item.item_summary || '-') + '</div>' +
+                    '<div class="text-gray-400 truncate text-xs" title="' + String(item.address || '') + '">' + String(item.address || '') + '</div>' +
+                '</td>' +
+                '<td class="px-2 py-2 text-right text-xs">' + kamjungka + '</td>' +
+                '<td class="px-2 py-2 text-right text-xs">' + minBid + '</td>' +
+                '<td class="px-2 py-2 text-center text-xs">' + rate + '</td>' +
+                '<td class="px-2 py-2 text-center text-xs">' + area + '</td>' +
+                '<td class="px-2 py-2 text-center">' +
+                    '<span class="px-2 py-0.5 rounded text-xs font-semibold ' + statusCls + '">' + (item.josa_status || '신규') + '</span>' +
+                '</td>' +
+                '<td class="px-1 py-1 text-center">' +
+                    '<select class="sm-josaja-select text-xs px-1 py-1 border border-gray-300 rounded w-20 bg-white" ' +
+                        'data-search-id="' + item.search_id + '" ' +
+                        'onchange="saveSearchJosaja(this)">' +
+                        josajOpts +
+                    '</select>' +
+                '</td>' +
+                '<td class="px-1 py-1">' +
+                    '<div class="flex items-center gap-1">' +
+                        '<input type="text" class="sm-note-input text-xs px-1 py-1 border border-gray-200 rounded w-full min-w-[80px] focus:border-indigo-400 focus:outline-none" ' +
+                            'data-search-id="' + item.search_id + '" ' +
+                            'value="' + String(item.note1 || '').replace(/"/g, '&quot;') + '" ' +
+                            'placeholder="비고" ' +
+                            'onkeydown="if(event.key===\'Enter\')saveSearchNote(this)">' +
+                        '<button class="text-green-600 hover:text-green-800 flex-shrink-0" title="비고 저장" ' +
+                            'onclick="saveSearchNote(this.previousElementSibling)">' +
+                            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+                                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>' +
+                            '</svg>' +
+                        '</button>' +
+                    '</div>' +
+                '</td>' +
+                '<td class="px-1 py-1 text-center">' +
+                    '<button class="text-blue-500 hover:text-blue-700 text-xs px-1 py-1" ' +
+                        'title="조사요청 텔레그램 전송" ' +
+                        'onclick="sendJosaRequest(\'' + item.search_id + '\')">' +
+                        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+                            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11l18-8-8 18-2-7-8-3z"></path>' +
+                        '</svg>' +
+                    '</button>' +
+                '</td>' +
+                '</tr>';
+        }).join('');
+        tbody.innerHTML = html;
+    }
+
+    // 전체 선택/해제
+    function toggleAllSmCheckboxes(masterCb) {
+        document.querySelectorAll('.sm-row-check').forEach(function(cb) {
+            cb.checked = masterCb.checked;
+        });
+    }
+
+    // 선택 항목 조사자 일괄 저장
+    function saveSmBulkJosaja() {
+        var josaja = (document.getElementById('sm-bulk-josaja-select') || {}).value || '';
+        if (!josaja) { showStatus('조사자를 선택해 주세요.', 'error'); return; }
+        var checked = [];
+        document.querySelectorAll('.sm-row-check:checked').forEach(function(cb) { checked.push(cb.value); });
+        if (checked.length === 0) { showStatus('저장할 항목을 체크해 주세요.', 'error'); return; }
+        if (!confirm(checked.length + '건의 조사자를 [' + josaja + ']로 저장하시겠습니까?')) return;
+        var done = 0, failed = 0;
+        checked.forEach(function(searchId) {
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    done++;
+                    if (!res || !res.success) failed++;
+                    else {
+                        // 로컬 캐시 업데이트
+                        allSearchData.forEach(function(item) {
+                            if (item.search_id === searchId) item.josaja = josaja;
+                        });
+                    }
+                    if (done === checked.length) {
+                        showStatus(checked.length + '건 조사자 저장 완료' + (failed > 0 ? ' (' + failed + '건 실패)' : ''), failed > 0 ? 'error' : 'success');
+                        renderSearchList(); // 목록 다시 렌더
+                    }
+                })
+                .withFailureHandler(function() {
+                    done++; failed++;
+                    if (done === checked.length) showStatus('\uad6c한 오류 (' + failed + '건)', 'error');
+                })
+                .updateSearchItemStatus(searchId, null, josaja);
+        });
+        showStatus('저장 중... (' + checked.length + '건)', 'info');
+    }
+
+    // 조사자 인라인 저장
+    function saveSearchJosaja(selectEl) {
+        var searchId = selectEl.getAttribute('data-search-id');
+        var josaja = selectEl.value;
+        if (!searchId) return;
+        selectEl.disabled = true;
+        google.script.run
+            .withSuccessHandler(function(res) {
+                selectEl.disabled = false;
+                if (res && res.success) {
+                    // allSearchData 업데이트
+                    allSearchData.forEach(function(item) {
+                        if (item.search_id === searchId) item.josaja = josaja;
+                    });
+                    showStatus('조사자 저장 완료', 'success');
+                } else {
+                    showStatus('저장 실패: ' + (res ? res.message : '오류'), 'error');
+                }
+            })
+            .withFailureHandler(function(err) {
+                selectEl.disabled = false;
+                showStatus('서버 오류: ' + (err.message || err), 'error');
+            })
+            .updateSearchItemStatus(searchId, null, josaja);
+    }
+
+    // 선택 항목 삭제
+    function handleSmDelete() {
+        var checked = Array.from(document.querySelectorAll('.sm-row-check:checked')).map(function(cb) { return cb.value; });
+        if (checked.length === 0) { showStatus('삭제할 항목을 선택해 주세요.', 'error'); return; }
+        if (!confirm(checked.length + '건을 삭제하시겠습니까?')) return;
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if (res && res.success) {
+                    allSearchData = allSearchData.filter(function(item) { return checked.indexOf(item.search_id) === -1; });
+                    applySearchFilters();
+                    showStatus(checked.length + '건 삭제 완료', 'success');
+                    var masterCb = document.getElementById('smCheckAll');
+                    if (masterCb) masterCb.checked = false;
+                } else {
+                    showStatus('삭제 실패: ' + (res ? res.message : '오류'), 'error');
+                }
+            })
+            .withFailureHandler(function(err) { showStatus('서버 오류: ' + (err.message || err), 'error'); })
+            .deleteSearchItems(checked);
+    }
+
+    // 비고 인라인 저장
+    function saveSearchNote(inputEl) {
+        var searchId = inputEl.getAttribute('data-search-id');
+        var note1 = inputEl.value;
+        if (!searchId) return;
+        inputEl.disabled = true;
+        google.script.run
+            .withSuccessHandler(function(res) {
+                inputEl.disabled = false;
+                if (res && res.success) {
+                    allSearchData.forEach(function(item) {
+                        if (item.search_id === searchId) item.note1 = note1;
+                    });
+                    inputEl.style.borderColor = '#22c55e';
+                    setTimeout(function() { inputEl.style.borderColor = ''; }, 1500);
+                } else {
+                    showStatus('비고 저장 실패', 'error');
+                }
+            })
+            .withFailureHandler(function(err) {
+                inputEl.disabled = false;
+                showStatus('서버 오류: ' + (err.message || err), 'error');
+            })
+            .saveSearchNote(searchId, note1);
+    }
+
+    // 단건 텔레그램 전송
+    function sendJosaRequest(searchId) {
+        if (!searchId) return;
+        var item = allSearchData.find(function(i) { return i.search_id === searchId; });
+        if (!item) return;
+        if (!item.josaja) {
+            showStatus('조사자를 먼저 배정해 주세요.', 'error');
+            return;
+        }
+        if (!confirm('[' + item.sakun_no + '] ' + item.court + '\n조사자: ' + item.josaja + '\n\n조사요청 텔레그램을 전송하시겠습니까?')) return;
+        google.script.run
+            .withSuccessHandler(function(res) {
+                if (res && res.success) {
+                    showStatus('조사요청 전송 완료', 'success');
+                    loadSearchData(true);
+                } else {
+                    showStatus('전송 실패: ' + (res ? res.message : '오류'), 'error');
+                }
+            })
+            .withFailureHandler(function(err) {
+                showStatus('전송 오류: ' + (err.message || err), 'error');
+            })
+            .sendJosaRequestTelegram(searchId);
+    }
+
+    // 선택 일괄 전송
+    function handleJosaRequestBulk() {
+        var checked = [];
+        document.querySelectorAll('.sm-row-check:checked').forEach(function(cb) {
+            checked.push(cb.value);
+        });
+        if (checked.length === 0) { showStatus('전송할 항목을 선택하세요.', 'error'); return; }
+        if (!confirm(checked.length + '건을 조사요청 전송하시겠습니까?')) return;
+        var failed = 0;
+        var done = 0;
+        checked.forEach(function(searchId) {
+            google.script.run
+                .withSuccessHandler(function(res) {
+                    done++;
+                    if (!res || !res.success) failed++;
+                    if (done === checked.length) {
+                        showStatus('전송 완료: ' + (done - failed) + '건 성공' + (failed > 0 ? ', ' + failed + '건 실패' : ''), failed > 0 ? 'error' : 'success');
+                        loadSearchData(true);
+                    }
+                })
+                .withFailureHandler(function() {
+                    done++; failed++;
+                    if (done === checked.length) {
+                        showStatus('전송 완료: ' + (done - failed) + '건 성공, ' + failed + '건 실패', 'error');
+                    }
+                })
+                .sendJosaRequestTelegram(searchId);
+        });
+    }
+
+    // 조사상태 드롭다운 핸들러
+    function toggleSmStatusDropdown(event) {
+        event.stopPropagation();
+        var dd = document.getElementById('sm-status-dropdown');
+        if (!dd) return;
+        var isHidden = dd.classList.contains('content-hidden');
+        document.querySelectorAll('#sm-status-dropdown, #sm-josaja-dropdown').forEach(function(el) {
+            el.classList.add('content-hidden');
+        });
+        if (isHidden) dd.classList.remove('content-hidden');
+    }
+    function toggleSmJosajaDropdown(event) {
+        event.stopPropagation();
+        var dd = document.getElementById('sm-josaja-dropdown');
+        if (!dd) return;
+        var isHidden = dd.classList.contains('content-hidden');
+        document.querySelectorAll('#sm-status-dropdown, #sm-josaja-dropdown').forEach(function(el) {
+            el.classList.add('content-hidden');
+        });
+        if (isHidden) dd.classList.remove('content-hidden');
+    }
+    function handleSmStatusAll(cb) {
+        var isAll = cb.checked;
+        document.querySelectorAll('[name="sm-status-cb"]').forEach(function(c) { c.checked = false; });
+        if (!isAll) cb.checked = true;
+        var lbl = document.getElementById('sm-status-label');
+        if (lbl) lbl.textContent = '조사상태';
+    }
+    function handleSmStatusOther(cb) {
+        var allCb = document.getElementById('sm-status-all');
+        if (allCb) allCb.checked = false;
+        var sel = document.querySelectorAll('[name="sm-status-cb"]:checked');
+        var lbl = document.getElementById('sm-status-label');
+        if (lbl) lbl.textContent = sel.length > 0 ? sel.length + '개 선택' : '조사상태';
+    }
+    function handleSmJosajaAll(cb) {
+        var isAll = cb.checked;
+        document.querySelectorAll('[name="sm-josaja-cb"]').forEach(function(c) { c.checked = false; });
+        if (!isAll) cb.checked = true;
+        var lbl = document.getElementById('sm-josaja-label');
+        if (lbl) lbl.textContent = '조사자';
+    }
+    function handleSmJosajaOther(cb) {
+        var allCb = document.getElementById('sm-josaja-all');
+        if (allCb) allCb.checked = false;
+        var sel = document.querySelectorAll('[name="sm-josaja-cb"]:checked');
+        var lbl = document.getElementById('sm-josaja-label');
+        if (lbl) lbl.textContent = sel.length > 0 ? sel.length + '명 선택' : '조사자';
+    }
+
+    // 클릭 외부 클릭 시 드롭다운 닫기 (전역 등록)
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#sm-status-wrap') && !e.target.closest('#sm-josaja-wrap')) {
+            var els = document.querySelectorAll('#sm-status-dropdown, #sm-josaja-dropdown');
+            els.forEach(function(el) { el.classList.add('content-hidden'); });
+        }
+    });
+
+    // ---- 회원관리 구분 다중선택 헬퍼 ----
+    function updateGubunHidden() {
+        var checked = [];
+        document.querySelectorAll('[name="mem-gubun-cb"]:checked').forEach(function(cb) {
+            checked.push(cb.value);
+        });
+        var hidden = document.getElementById('mem-gubun');
+        if (hidden) hidden.value = checked.join(',');
+    }
+
+    // 회원 폼 로드 시 gubun 값 복원 (기존 setMemberFormData 등에서 호출)
+    function setGubunCheckboxes(gubunValue) {
+        var vals = String(gubunValue || '').split(',').map(function(v) { return v.trim(); });
+        document.querySelectorAll('[name="mem-gubun-cb"]').forEach(function(cb) {
+            cb.checked = vals.indexOf(cb.value) !== -1;
+        });
+        updateGubunHidden();
+    }
+
 </script>

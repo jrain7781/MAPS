@@ -132,7 +132,10 @@ const MEMBER_CLASS_DETAILS_HEADERS = [
 ];
 
 // --- 구분(gubun) 드롭다운 옵션 ---
-const GUBUN_OPTIONS = ['회원', '직원', '관리자'];
+const GUBUN_OPTIONS = ['회원', '직원', '관리자', '조사자'];
+
+// --- 조사물건(search) 시트 이름 ---
+const SEARCH_SHEET_NAME = 'search';
 
 // --- 명의 구분 드롭다운 옵션 ---
 const NAME_GUBUN_OPTIONS = ['개인', '법인'];

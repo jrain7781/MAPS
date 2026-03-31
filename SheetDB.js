@@ -4836,3 +4836,206 @@ function sendBidDateNotification_(memberId, itemId, dTag) {
     Logger.log('[sendBidDateNotification_] 오류: ' + e.toString());
   }
 }
+
+// ============================================================
+// [조사물건 관리] search 시트 CRUD
+// ============================================================
+
+const DB_SEARCH_SHEET_NAME = 'search';
+const SEARCH_HEADERS = [
+  'search_id', 'in-date', 'sakun_no', 'court', 'item_type',
+  'item_summary', 'item_area', 'item_status', 'kamjungka',
+  'min_bid_price', 'min_bid_rate', 'address', 'note1', 'note2',
+  'josaja', 'reg_date', 'reg_member', 'auction_id', 'josa_status', 'img_url'
+];
+
+/**
+ * search 시트 초기화 (헤더 세팅)
+ */
+function initSearchSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(DB_SEARCH_SHEET_NAME);
+  }
+  const headerRange = sheet.getRange(1, 1, 1, SEARCH_HEADERS.length);
+  headerRange.setValues([SEARCH_HEADERS]);
+  headerRange.setFontWeight('bold');
+  return sheet;
+}
+
+/**
+ * 조사물건 전체 조회
+ */
+function readAllSearchItems() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
+  if (!sheet) {
+    initSearchSheet_();
+    sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
+  }
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  const maxCols = Math.min(sheet.getMaxColumns(), SEARCH_HEADERS.length);
+  const values = sheet.getRange(2, 1, lastRow - 1, maxCols).getValues();
+
+  return values.map(function(row) {
+    var obj = {};
+    SEARCH_HEADERS.forEach(function(h, i) {
+      var val = (row[i] !== undefined && row[i] !== null) ? row[i] : '';
+      if (val instanceof Date) val = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyMMdd HHmmss');
+      obj[h] = String(val);
+    });
+    return obj;
+  }).filter(function(row) { return row.search_id; });
+}
+
+/**
+ * 조사물건 신규 등록
+ */
+function saveSearchItem(data) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
+  if (!sheet) {
+    initSearchSheet_();
+    sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
+  }
+  // 헤더 컬럼 수가 SEARCH_HEADERS보다 적으면 업데이트 (신규 컬럼 추가 대응)
+  if (sheet.getLastColumn() < SEARCH_HEADERS.length) {
+    sheet.getRange(1, 1, 1, SEARCH_HEADERS.length).setValues([SEARCH_HEADERS]).setFontWeight('bold');
+  }
+  // 중복 체크 (sakun_no + in-date 기준)
+  var existing = readAllSearchItems();
+  var sakunNo = String(data.sakun_no || '').trim();
+  var inDate = String(data['in-date'] || '').trim();
+  if (sakunNo) {
+    var isDup = existing.some(function(item) {
+      return String(item.sakun_no || '').trim() === sakunNo &&
+             String(item['in-date'] || '').trim() === inDate;
+    });
+    if (isDup) return { success: false, message: '이미 등록된 물건입니다 (사건번호+입찰일자 중복).' };
+  }
+  // search_id 생성
+  var now = new Date();
+  var ts = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyMMddHHmmss');
+  var searchId = 'S' + ts + String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+  var regDate = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyMMdd HHmmss');
+
+  var row = SEARCH_HEADERS.map(function(h) {
+    if (h === 'search_id') return searchId;
+    if (h === 'reg_date') return regDate;
+    if (h === 'josa_status') return data.josa_status || '신규';
+    var v = data[h];
+    return (v !== undefined && v !== null) ? String(v) : '';
+  });
+
+  sheet.appendRow(row);
+  return { success: true, search_id: searchId };
+}
+
+/**
+ * 여러 조사물건 일괄 등록 (Python 크롤링에서 사용)
+ */
+function saveSearchItemsBatch(items) {
+  var results = [];
+  if (!Array.isArray(items)) return { success: false, message: 'items가 배열이 아닙니다.' };
+  items.forEach(function(item) {
+    results.push(saveSearchItem(item));
+  });
+  var saved = results.filter(function(r) { return r.success; }).length;
+  return { success: true, saved: saved, skipped: items.length - saved, results: results };
+}
+
+/**
+ * 조사물건 상태 업데이트 (josa_status, josaja)
+ */
+function updateSearchItemStatus(searchId, josaStatus, josaja) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
+  if (!sheet) return { success: false, message: 'search 시트가 없습니다.' };
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
+
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === String(searchId).trim()) {
+      var rowNum = i + 2;
+      var statusColIdx = SEARCH_HEADERS.indexOf('josa_status') + 1;
+      var josajaColdIdx = SEARCH_HEADERS.indexOf('josaja') + 1;
+      if (statusColIdx > 0) sheet.getRange(rowNum, statusColIdx).setValue(josaStatus);
+      if (josajaColdIdx > 0 && josaja) sheet.getRange(rowNum, josajaColdIdx).setValue(josaja);
+      return { success: true };
+    }
+  }
+  return { success: false, message: '해당 조사물건을 찾을 수 없습니다.' };
+}
+
+/**
+ * 조사자 목록 조회 (members 시트에서 gubun='조사자')
+ */
+function getInvestigators() {
+  var members = readAllMembers();
+  return members.filter(function(m) {
+    var gubun = String(m.gubun || '');
+    return gubun === '조사자' || gubun.split(',').map(function(g) { return g.trim(); }).indexOf('조사자') !== -1;
+  });
+}
+
+/**
+ * 조사물건 삭제 (search_id 배열)
+ */
+function deleteSearchItems(searchIds) {
+  if (!Array.isArray(searchIds) || searchIds.length === 0) return { success: false, message: '삭제할 항목이 없습니다.' };
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
+  if (!sheet) return { success: false, message: 'search 시트 없음' };
+  var ids = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 1), 1).getValues();
+  var toDelete = searchIds.map(function(id) { return String(id).trim(); });
+  // 뒤에서부터 삭제 (행 번호 밀림 방지)
+  for (var i = ids.length - 1; i >= 0; i--) {
+    if (toDelete.indexOf(String(ids[i][0]).trim()) !== -1) {
+      sheet.deleteRow(i + 2);
+    }
+  }
+  return { success: true };
+}
+
+/**
+ * 조사물건 비고 저장 (note1)
+ */
+function saveSearchNote(searchId, note1) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
+  if (!sheet) return { success: false };
+  var ids = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 1), 1).getValues();
+  var noteColIdx = SEARCH_HEADERS.indexOf('note1') + 1;
+  if (noteColIdx < 1) return { success: false };
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === String(searchId).trim()) {
+      sheet.getRange(i + 2, noteColIdx).setValue(note1);
+      return { success: true };
+    }
+  }
+  return { success: false, message: '항목 없음' };
+}
+
+/**
+ * 외부 API 핸들러 (Python 크롤링 스크립트에서 POST로 호출)
+ * payload.api_action: 'saveSearchItems' | 'getSearchItems' | 'initSearchSheet'
+ */
+function handleSearchApiPost_(payload) {
+  var action = String(payload.api_action || '');
+  if (action === 'saveSearchItems') {
+    return saveSearchItemsBatch(payload.items || []);
+  }
+  if (action === 'getSearchItems') {
+    return { success: true, items: readAllSearchItems() };
+  }
+  if (action === 'initSearchSheet') {
+    initSearchSheet_();
+    return { success: true, message: 'search 시트 초기화 완료' };
+  }
+  return { success: false, message: '알 수 없는 API 액션: ' + action };
+}

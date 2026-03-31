@@ -544,6 +544,33 @@ function handleTelegramWebhook_(update) {
       return;
     }
 
+    // === 조사요청 확인/거절 ===
+    if (action === 'JOSA_YES' || action === 'JOSA_NO') {
+      var josaSearchId = itemId; // itemId 위치에 search_id가 들어옴
+      if (action === 'JOSA_YES') {
+        try { telegramAnswerCallbackQuery_(cqId, '확인 완료로 처리합니다.', false); } catch (e) { }
+        try {
+          if (typeof updateSearchItemStatus === 'function') {
+            updateSearchItemStatus(josaSearchId, '확인', null);
+          }
+          telegramSendMessage(chatId, '✅ 조사요청 확인 처리되었습니다.\nMAPS에서 상태가 <b>확인</b>으로 업데이트됩니다.');
+        } catch (e) {
+          try { telegramSendMessage(chatId, '처리 오류: ' + (e.message || '')); } catch (e2) { }
+        }
+      } else {
+        try { telegramAnswerCallbackQuery_(cqId, '거절 처리합니다.', false); } catch (e) { }
+        try {
+          if (typeof updateSearchItemStatus === 'function') {
+            updateSearchItemStatus(josaSearchId, '요청취소', null);
+          }
+          telegramSendMessage(chatId, '❌ 조사요청을 거절하였습니다.\nMAPS에서 상태가 <b>요청취소</b>로 업데이트됩니다.');
+        } catch (e) {
+          try { telegramSendMessage(chatId, '처리 오류: ' + (e.message || '')); } catch (e2) { }
+        }
+      }
+      return;
+    }
+
     // === 입찰가 확인완료 ===
     if (action === 'PRICE_CONFIRM') {
       try { telegramAnswerCallbackQuery_(cqId, '입찰가를 확인합니다.', false); } catch (e) { }
@@ -1025,5 +1052,87 @@ function sendChuchenTelegramBulk(itemIds) {
     failedItems: failedItems,
     updated: updateResult.updated
   };
+}
+
+// ============================================================
+// [조사물건 관리] 조사요청 텔레그램 전송
+// ============================================================
+
+/**
+ * 조사요청 텔레그램 전송 (GAS 프론트엔드에서 호출)
+ * @param {string} searchId - search 시트의 search_id
+ */
+function sendJosaRequestTelegram(searchId) {
+  if (!searchId) return { success: false, message: 'search_id가 없습니다.' };
+
+  // search 아이템 조회
+  var items = (typeof readAllSearchItems === 'function') ? readAllSearchItems() : [];
+  var item = null;
+  for (var i = 0; i < items.length; i++) {
+    if (String(items[i].search_id).trim() === String(searchId).trim()) {
+      item = items[i];
+      break;
+    }
+  }
+  if (!item) return { success: false, message: '해당 조사물건을 찾을 수 없습니다.' };
+
+  var josaja = String(item.josaja || '').trim();
+  if (!josaja) return { success: false, message: '조사자를 먼저 배정해 주세요.' };
+
+  // 조사자 회원 정보 조회
+  var investigators = (typeof getInvestigators === 'function') ? getInvestigators() : [];
+  var josajaMember = null;
+  for (var j = 0; j < investigators.length; j++) {
+    if (String(investigators[j].member_name || '').trim() === josaja) {
+      josajaMember = investigators[j];
+      break;
+    }
+  }
+  if (!josajaMember) return { success: false, message: '조사자 회원 정보를 찾을 수 없습니다: ' + josaja };
+
+  var chatId = String(josajaMember.telegram_chat_id || '').trim();
+  if (!chatId) return { success: false, message: josaja + ' 조사자의 텔레그램 chat_id가 없습니다.' };
+
+  var enabled = String(josajaMember.telegram_enabled || '').toUpperCase();
+  if (enabled === 'N') return { success: false, message: josaja + ' 조사자의 텔레그램이 비활성화되어 있습니다.' };
+
+  // 메시지 구성
+  var inDate = String(item['in-date'] || '');
+  var sakunNo = String(item.sakun_no || '');
+  var court = String(item.court || '');
+  var address = String(item.address || '');
+  var kamjungka = String(item.kamjungka || '');
+  var minBid = String(item.min_bid_price || '');
+  var itemArea = String(item.item_area || '');
+  var itemSummary = String(item.item_summary || '');
+
+  var text = '📋 <b>조사요청 물건이 있습니다.</b>\n\n' +
+    '• 사건번호: ' + sakunNo + '\n' +
+    '• 법원: ' + court + '\n' +
+    '• 입찰일자: ' + inDate + '\n' +
+    (itemSummary ? '• 물건요약: ' + itemSummary + '\n' : '') +
+    (address ? '• 주소: ' + address + '\n' : '') +
+    (itemArea ? '• 면적: ' + itemArea + '\n' : '') +
+    (kamjungka ? '• 감정가: ' + kamjungka + '\n' : '') +
+    (minBid ? '• 최저입찰가: ' + minBid + '\n' : '') +
+    '\n확인 하시겠습니까?';
+
+  var replyMarkup = {
+    inline_keyboard: [[
+      { text: '예', callback_data: 'MJ|JOSA_YES|' + String(searchId) },
+      { text: '아니오', callback_data: 'MJ|JOSA_NO|' + String(searchId) }
+    ]]
+  };
+
+  try {
+    telegramSendMessage(chatId, text, replyMarkup);
+    // 상태를 '요청'으로 업데이트
+    if (typeof updateSearchItemStatus === 'function') {
+      updateSearchItemStatus(searchId, '요청', josaja);
+    }
+    return { success: true, message: josaja + '에게 조사요청 전송 완료' };
+  } catch (e) {
+    return { success: false, message: '텔레그램 전송 오류: ' + e.toString() };
+  }
 }
 
