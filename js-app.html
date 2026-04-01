@@ -14133,8 +14133,11 @@ MJ 이정우 팀장
     }
 
     function loadSearchData(forceRefresh) {
-        if (typeof google === 'undefined' || !google.script || !google.script.run) return;
-        var tbody = document.getElementById('searchTableBody');
+        if (typeof google === 'undefined' || !google.script || !google.script.run) {
+            showStatus('google.script.run 사용 불가 (GAS 환경에서만 동작)', 'error');
+            return;
+        }
+        if (forceRefresh) smInvestigators = []; // 강제 새로고침 시 조사자 캐시 초기화
         var loading = document.getElementById('smLoadingIndicator');
         var nodata = document.getElementById('smNoDataMessage');
         if (loading) loading.style.display = '';
@@ -14468,24 +14471,12 @@ MJ 이정우 팀장
             var failMatch = String(item.item_status || '').match(/유찰\s*\d+회/);
             var failStr = failMatch ? failMatch[0] : '';
 
-            // 특수물건 태그 분리 (괄호그룹 단위 파싱)
-            var specialTags = String(item.item_status || '').replace(/유찰\s*\d+회/g, '').trim();
-            var note1Val = String(item.note1 || '').trim();
-            var specialAll = (specialTags || note1Val).trim();
-            // 괄호 그룹 추출
-            var allBrackets = specialAll.match(/\[[^\]]*\]/g) || [];
-            var noBracketText = specialAll.replace(/\[[^\]]*\]/g, '').trim();
-            // 공시가격 그룹 → 감정가 열 (크게)
-            var gongsiBrackets = allBrackets.filter(function(b){ return /공시/.test(b); });
-            // 금액범위 그룹 (공시 아닌, 억/만원 포함) → 감정가 열 (작게)
-            var priceBrackets  = allBrackets.filter(function(b){ return !/공시/.test(b) && /억|만원/.test(b); });
-            // 순수 특수물건 (공시/금액 아닌 것 + 비괄호텍스트) → 소재지 열
-            var specialBrackets = allBrackets.filter(function(b){ return !/공시/.test(b) && !/억|만원/.test(b); });
-            var specialOnlyStr = (specialBrackets.join(' ') + (noBracketText ? ' ' + noBracketText : '')).trim();
-            var gongsiStr     = gongsiBrackets.join(' ');
-            var priceRangeStr = priceBrackets.join(' ');
-            var specialHtml = specialOnlyStr
-                ? '<div style="font-size:13px;color:#dc2626;font-weight:600;margin-top:2px;">' + specialOnlyStr + '</div>'
+            // item_status 전체 소재지 아래 표시
+            var itemStatusFull = String(item.item_status || '').trim();
+            var itemSummaryFull = String(item.item_summary || '').trim();
+            var statusUnderAddr = [itemStatusFull, itemSummaryFull].filter(Boolean).join(' ');
+            var specialHtml = statusUnderAddr
+                ? '<div style="font-size:12px;color:#dc2626;font-weight:600;margin-top:3px;word-break:keep-all;line-height:1.4;">' + statusUnderAddr + '</div>'
                 : '';
 
             // 퍼센트 포맷 (0.34 → 34%, 34% → 34%, 34 → 34%)
@@ -14566,13 +14557,10 @@ MJ 이정우 팀장
                     '<div style="font-size:12px;color:#6b7280;margin-top:3px;">' + String(item.item_area || '') + '</div>' +
                     specialHtml +
                 '</td>' +
-                // 열6: 감정가 / 최저매각가 / 평당가 / 공시가격(붉은색) / 금액범위(작게)
+                // 열6: 감정가 / 최저매각가
                 '<td class="px-2 py-2 text-right" style="vertical-align:top;white-space:nowrap">' +
                     '<div class="font-bold text-sm text-gray-900">' + kamjungkaDisp + '</div>' +
                     '<div class="text-sm text-blue-600 mt-0.5">' + minBidDisp + '</div>' +
-                    '<div class="text-xs text-gray-500 mt-0.5">' + String(item.item_summary || '') + '</div>' +
-                    (gongsiStr ? '<div style="font-size:12px;color:#dc2626;font-weight:600;margin-top:2px;text-align:right;">' + gongsiStr + '</div>' : '') +
-                    (priceRangeStr ? '<div style="font-size:10px;color:#9ca3af;margin-top:1px;text-align:right;">' + priceRangeStr + '</div>' : '') +
                 '</td>' +
                 // 열7: 유찰 + 낙찰율(퍼센트)
                 '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +

@@ -110,6 +110,31 @@ SPECIAL_EXCLUDE_VALUES = {row[0] for row in SPECIAL_EXCLUDE_LIST}
 # 텍스트 키워드 셋 (페이지 텍스트 체크용)
 SPECIAL_EXCLUDE_KEYWORDS = {kw for _, _, kws in SPECIAL_EXCLUDE_LIST for kw in kws}
 
+# auction1.co.kr special select 전체 value→이름 맵 (제외되지 않은 특수물건 이름 추출용)
+SPECIAL_VALUE_NAME_MAP = {
+    '11': '오늘공개신건',
+    '31': '재매각',
+    '42': '재진행',
+    '8':  '반값경매',
+    '24': '반값(1년경과)',
+    '33': '위반건축물',
+    '34': '초보자경매물건',
+    '1':  '유치권',
+    '2':  '법정지상권',
+    '29': '분묘기지권',
+    '35': '유치권배제신청',
+    '36': '임금채권',
+    '45': 'HUG임차권',
+    '25': '형식적경매(유치권)',
+    '26': '형식적경매(유류)',
+    '27': '형식적경매(청산)',
+    '28': '형식적경매(기타)',
+    '46': '공시1억이하',
+    '47': '공시1억~2억',
+    '48': '공시2억~3억',
+    '49': '공시3억~4억',
+}
+
 SELECTOR_ID = "client_id"
 SELECTOR_PW_DUMMY = "pw_Dummy"
 SELECTOR_PW_REAL = "passwd"
@@ -700,9 +725,23 @@ def parse_search_results(driver, existing_keys, page_no=1):
                     print(f"    🔕 [{sakun_no}] 감정가({kamjungka_man}만원) 범위 초과, 스킵")
                     continue
 
-            # --- 평당가 (item_summary에 저장) ---
-            sqm_m = re.search(r'평당\s*[\d,]+만원', full_text)
-            item_summary = sqm_m.group() if sqm_m else ''
+            # --- 특수물건 항목명 (item_summary에 저장) ---
+            item_summary = driver.execute_script("""
+                var tbl = arguments[0];
+                var nameMap = arguments[1];
+                var excludeVals = arguments[2];
+                var inputs = tbl.querySelectorAll('input[type="checkbox"], input[type="hidden"]');
+                for (var i = 0; i < inputs.length; i++) {
+                    var val = (inputs[i].value || '').trim();
+                    if (val && nameMap[val] && excludeVals.indexOf(val) === -1) return nameMap[val];
+                }
+                var allEls = tbl.querySelectorAll('[data-special], [data-type]');
+                for (var j = 0; j < allEls.length; j++) {
+                    var spVal = (allEls[j].getAttribute('data-special') || allEls[j].getAttribute('data-type') || '').trim();
+                    if (spVal && nameMap[spVal] && excludeVals.indexOf(spVal) === -1) return nameMap[spVal];
+                }
+                return '';
+            """, container, SPECIAL_VALUE_NAME_MAP, list(SPECIAL_EXCLUDE_VALUES)) or ''
 
             # --- 이미지 URL ---
             img_url = driver.execute_script("""
