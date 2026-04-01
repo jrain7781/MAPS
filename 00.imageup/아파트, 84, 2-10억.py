@@ -77,41 +77,38 @@ ITEM_END   = None   # ← 끝 번호 (None = 전체)
 
 # ==============================================================================
 # [핵심] 특수물건 제외 목록
-# auction1.co.kr 검색 화면에서 special select의 option 9~27번 value 목록
+# auction1.co.kr 검색 화면에서 special select의 option value 목록
 # special=0(설정안함/전체)으로 1번만 검색 후, 아래 태그가 있는 물건은 등록 제외
+# 형식: (value, 표시명, 텍스트키워드목록)
 # ==============================================================================
-SPECIAL_EXCLUDE_VALUES = {
-    '44',   # 9번: 맹지
-    '16',   # 10번: 전세권/임차권 설정
-    '17',   # 11번: 선순위 전세권/임차권 설정
-    '39',   # 12번: 임차권 설정
-    '40',   # 13번: 선순위 임차권 설정
-    '18',   # 14번: 임차권 등기
-    '20',   # 15번: 전세권설정/임차권등기
-    '19',   # 16번: 말소기준등기보다 앞선 임차권
-    '23',   # 17번: 대항력 있는 임차인
-    '32',   # 18번: 전세권만 매각
-    '22',   # 19번: 선순위 가등기
-    '21',   # 20번: 선순위 가처분
-    '15',   # 21번: 예고등기
-    '13',   # 22번: 대지권미등기
-    '12',   # 23번: 토지별도등기 있는 물건
-    '14',   # 24번: 토지별도등기인수조건
-    '4',    # 25번: 건물만 입찰 물건 검색
-    '5',    # 26번: 토지만 입찰 물건 검색
-    '3',    # 27번: 지분입찰 물건 검색
-}
+# ※ value: auction1.co.kr input value / 키워드: 페이지 텍스트에서도 체크
+SPECIAL_EXCLUDE_LIST = [
+    ('44',  '맹지',                    ['맹지']),
+    ('16',  '전세권/임차권 설정',       ['전세권설정', '임차권설정']),
+    ('17',  '선순위 전세권/임차권 설정', ['선순위전세권', '선순위임차권']),
+    ('39',  '임차권 설정',              ['임차권설정']),
+    ('40',  '선순위 임차권 설정',       ['선순위임차권설정']),
+    ('18',  '임차권 등기',              ['임차권등기']),
+    ('20',  '전세권설정/임차권등기',    ['전세권설정', '임차권등기']),
+    ('19',  '말소기준등기보다 앞선 임차권', ['말소기준등기보다앞선임차권', '선순위임차권']),
+    ('23',  '대항력 있는 임차인',       ['대항력있는임차인', '대항력 있는 임차인']),
+    ('32',  '전세권만 매각',            ['전세권만매각', '전세권만 매각']),
+    ('22',  '선순위 가등기',            ['선순위가등기', '선순위 가등기']),
+    ('21',  '선순위 가처분',            ['선순위가처분', '선순위 가처분']),
+    ('15',  '예고등기',                 ['예고등기']),
+    ('13',  '대지권미등기',             ['대지권미등기', '대지권 미등기']),
+    ('12',  '토지별도등기 있는 물건',   ['토지별도등기']),
+    ('14',  '토지별도등기인수조건',     ['토지별도등기인수조건']),
+    ('4',   '건물만 입찰',              ['건물만입찰', '건물만 입찰']),
+    ('5',   '토지만 입찰',              ['토지만입찰', '토지만 입찰']),
+    ('3',   '지분입찰',                 ['지분입찰', '지분 입찰']),
+]
 
-# 특수물건 텍스트 키워드 (페이지 내 텍스트로도 체크)
-SPECIAL_EXCLUDE_KEYWORDS = {
-    '맹지', '전세권설정', '임차권설정', '임차권등기',
-    '대항력있는임차인', '대항력 있는 임차인',
-    '선순위가등기', '선순위 가등기',
-    '선순위가처분', '선순위 가처분',
-    '예고등기', '대지권미등기', '대지권 미등기',
-    '토지별도등기', '건물만입찰', '건물만 입찰',
-    '토지만입찰', '토지만 입찰', '지분입찰', '지분 입찰',
-}
+# value 셋 (JS 체크용)
+SPECIAL_EXCLUDE_VALUES = {row[0] for row in SPECIAL_EXCLUDE_LIST}
+
+# 텍스트 키워드 셋 (페이지 텍스트 체크용)
+SPECIAL_EXCLUDE_KEYWORDS = {kw for _, _, kws in SPECIAL_EXCLUDE_LIST for kw in kws}
 
 SELECTOR_ID = "client_id"
 SELECTOR_PW_DUMMY = "pw_Dummy"
@@ -258,46 +255,94 @@ def is_special_item(driver, container):
 # ==============================================================================
 # [함수] 총 페이지 수 조회
 # ==============================================================================
+def has_next_page(driver):
+    """현재 페이지에 '다음' 페이지 버튼이 있으면 True 반환"""
+    try:
+        return driver.execute_script("""
+            // goPage(N) 링크 스캔 (현재 페이지 번호보다 큰 숫자)
+            var goPageLinks = document.querySelectorAll('a[onclick*="goPage"]');
+            for(var i=0; i<goPageLinks.length; i++){
+                var m = (goPageLinks[i].getAttribute('onclick')||'').match(/goPage\\s*\\(\\s*(\\d+)\\s*\\)/);
+                if(m && parseInt(m[1]) > 1) return true;
+            }
+            // 모든 엘리먼트에서 '다음' 텍스트 탐색 (태그 무관)
+            var all = document.querySelectorAll('*');
+            for(var i=0; i<all.length; i++){
+                var el = all[i];
+                // 자식 없는 leaf 노드이거나 a/button/span 등 클릭 가능 요소
+                var t = '';
+                if(el.childElementCount === 0) t = (el.textContent||'').trim();
+                else if(el.tagName === 'A' || el.tagName === 'BUTTON') t = (el.textContent||'').trim();
+                if(t === '다음' || t === '>' || t === '▶' || t === 'next' || t === '다음 페이지') return true;
+            }
+            return false;
+        """) or False
+    except:
+        return False
+
+
+def click_next_page(driver):
+    """'다음' 버튼 클릭. 성공 시 True 반환"""
+    try:
+        return driver.execute_script("""
+            // goPage 링크 중 최대 번호 클릭
+            var maxPg = 0, maxEl = null;
+            var goPageLinks = document.querySelectorAll('a[onclick*="goPage"]');
+            for(var i=0; i<goPageLinks.length; i++){
+                var m = (goPageLinks[i].getAttribute('onclick')||'').match(/goPage\\s*\\(\\s*(\\d+)\\s*\\)/);
+                if(m){ var pg = parseInt(m[1]); if(pg > maxPg){ maxPg = pg; maxEl = goPageLinks[i]; } }
+            }
+            if(maxEl){ maxEl.click(); return 'goPage:'+maxPg; }
+
+            // '다음' 텍스트 엘리먼트 탐색 (전체 DOM)
+            var all = document.querySelectorAll('*');
+            for(var i=0; i<all.length; i++){
+                var el = all[i];
+                var t = '';
+                if(el.childElementCount === 0) t = (el.textContent||'').trim();
+                else if(el.tagName === 'A' || el.tagName === 'BUTTON') t = (el.textContent||'').trim();
+                if(t === '다음' || t === '>' || t === '▶' || t === 'next' || t === '다음 페이지'){
+                    el.click(); return '다음클릭';
+                }
+            }
+            return false;
+        """) or False
+    except:
+        return False
+
+
+def get_page_fingerprint(driver):
+    """현재 페이지 첫 번째 물건 행의 텍스트 앞 200자 반환 (페이지 변경 감지용)"""
+    try:
+        return driver.execute_script("""
+            var trs = document.querySelectorAll('tr');
+            for(var i=0; i<trs.length; i++){
+                var tr = trs[i];
+                if(tr.querySelector('a[href*="product_id="]') || tr.querySelector('img[src*="auction1.co.kr"]')){
+                    var t = (tr.textContent || '').replace(/\\s+/g,' ').trim();
+                    if(t.length > 30) return t.slice(0, 200);
+                }
+            }
+            return (document.body.innerText || '').slice(300, 500);
+        """) or ''
+    except:
+        return ''
+
+
 def get_total_pages(driver):
-    """현재 검색 결과의 총 페이지 수 반환"""
+    """현재 검색 결과의 총 페이지 수 반환 (goPage 방식만, 그 외는 has_next_page로 처리)"""
     try:
         page_info = driver.execute_script("""
             var maxPage = 1;
-
-            // 1순위: goPage(N) onclick 패턴 직접 스캔
+            // goPage(N) onclick 패턴 스캔
             var goPageLinks = document.querySelectorAll('a[onclick*="goPage"]');
             goPageLinks.forEach(function(a) {
                 var m = (a.getAttribute('onclick') || '').match(/goPage\\s*\\(\\s*(\\d+)\\s*\\)/);
                 if (m) { var pg = parseInt(m[1]); if (pg > maxPage) maxPage = pg; }
             });
-            if (maxPage > 1) return maxPage;
-
-            // 2순위: 페이저 컨테이너 내 숫자 링크
-            var selectors = ['#paging','.paging','#pager','.pager','#pageWrap','.pageWrap',
-                             '[class*="paging"]','[class*="page_nav"]','[class*="pagination"]'];
-            for (var s = 0; s < selectors.length; s++) {
-                var pager = document.querySelector(selectors[s]);
-                if (pager) {
-                    pager.querySelectorAll('a').forEach(function(a) {
-                        var txt = a.textContent.trim();
-                        if (/^\\d+$/.test(txt)) { var p = parseInt(txt); if (p > maxPage) maxPage = p; }
-                    });
-                    if (maxPage > 1) return maxPage;
-                    break;
-                }
-            }
-
-            // 3순위: '다음' 버튼 감지 → 최소 2페이지
-            var els = document.querySelectorAll('a,button');
-            for (var i = 0; i < els.length; i++) {
-                var t = (els[i].textContent || '').trim();
-                if (t === '다음' || t === '>' || t === '▶' || t === 'next') return 2;
-            }
-
             return maxPage;
         """)
         total = int(page_info) if page_info else 1
-        print(f"    [페이징] 총 {total}페이지 감지")
         return total
     except:
         return 1
@@ -315,7 +360,18 @@ def go_to_page(driver, wait, page_no):
             // 1순위: goPage(N) 직접 호출 (auction1 전용 함수)
             try { goPage(pageNo); return 'goPage:' + pageNo; } catch(e) {}
 
-            // 2순위: onclick="goPage(N)" 링크 클릭
+            // 2순위: 페이지 함수 다양한 이름 시도
+            var fnNames = ['goListPage','go_page','movePage','pageMove','changePage','listPage'];
+            for(var fi=0; fi<fnNames.length; fi++){
+                try {
+                    if(typeof window[fnNames[fi]] === 'function'){
+                        window[fnNames[fi]](pageNo);
+                        return fnNames[fi]+':'+pageNo;
+                    }
+                } catch(e2){}
+            }
+
+            // 3순위: onclick="goPage(N)" 링크 클릭
             var goLinks = document.querySelectorAll('a[onclick*="goPage"]');
             for (var i = 0; i < goLinks.length; i++) {
                 var m = (goLinks[i].getAttribute('onclick') || '').match(/goPage\\s*\\(\\s*(\\d+)\\s*\\)/);
@@ -325,9 +381,10 @@ def go_to_page(driver, wait, page_no):
                 }
             }
 
-            // 3순위: 숫자 텍스트 기반 링크 클릭 (다양한 셀렉터)
+            // 4순위: 숫자 텍스트 기반 링크 클릭 (다양한 셀렉터)
             var selectors = ['#paging a', '.paging a', '#pager a', '.pager a',
-                             '[class*="paging"] a', '[class*="pagination"] a'];
+                             '[class*="paging"] a', '[class*="pagination"] a',
+                             'td a', 'div a'];
             for (var s = 0; s < selectors.length; s++) {
                 var links = document.querySelectorAll(selectors[s]);
                 for (var j = 0; j < links.length; j++) {
@@ -339,7 +396,7 @@ def go_to_page(driver, wait, page_no):
                 }
             }
 
-            // 4순위: page_no 파라미터 방식
+            // 5순위: page_no 파라미터 방식 (onclick 속성에서 패턴 탐색)
             var allLinks = document.querySelectorAll('a');
             for (var k = 0; k < allLinks.length; k++) {
                 var oc = allLinks[k].getAttribute('onclick') || '';
@@ -350,7 +407,46 @@ def go_to_page(driver, wait, page_no):
                 }
             }
 
-            return 'not_found';
+            // 6순위: 페이지 관련 함수를 onclick에서 찾아서 pageNo 로 재호출
+            var allLinks2 = document.querySelectorAll('a');
+            for (var k2 = 0; k2 < allLinks2.length; k2++) {
+                var oc2 = allLinks2[k2].getAttribute('onclick') || '';
+                var mFn = oc2.match(/^\\s*(\\w+)\\s*\\(\\s*\\d+/);
+                if(mFn){
+                    try{
+                        window[mFn[1]](pageNo);
+                        return 'fn_'+mFn[1]+':'+pageNo;
+                    } catch(e3){}
+                }
+            }
+
+            // 7순위: 폼에 숨긴 page 파라미터 있으면 설정 후 submit
+            var forms = document.querySelectorAll('form');
+            for(var fi2=0; fi2<forms.length; fi2++){
+                var pgInput = forms[fi2].querySelector('input[name="page"], input[name="page_no"], input[name="p"]');
+                if(pgInput){
+                    pgInput.value = pageNo;
+                    forms[fi2].submit();
+                    return 'form_submit_page:'+pageNo;
+                }
+            }
+
+            // 디버그: 실제 페이지에 있는 onclick 함수명 목록 반환
+            var fnSet = {};
+            var allA = document.querySelectorAll('a[onclick]');
+            for(var di=0; di<allA.length && di<30; di++){
+                var oc3 = allA[di].getAttribute('onclick') || '';
+                var mD = oc3.match(/^\\s*(\\w+)\\s*\\(/);
+                if(mD) fnSet[mD[1]] = (fnSet[mD[1]]||0)+1;
+            }
+            // 페이지 번호 링크 있는 a 태그 수집 (디버그)
+            var numLinks = [];
+            var allAA = document.querySelectorAll('a');
+            for(var ni=0; ni<allAA.length; ni++){
+                var t = allAA[ni].textContent.trim();
+                if(/^\\d+$/.test(t) && parseInt(t) > 1 && parseInt(t) < 20) numLinks.push(t);
+            }
+            return 'not_found|fns=' + JSON.stringify(fnSet) + '|nums=' + JSON.stringify(numLinks);
         """, page_no)
         return result
     except:
@@ -546,8 +642,8 @@ def parse_search_results(driver, existing_keys, page_no=1):
                 in_date  = ''
                 bid_date = None
 
-            # 입찰일 지난 물건 제외
-            if bid_date and bid_date <= datetime.date.today():
+            # 입찰일 지난 물건 제외 (오늘 입찰 포함 - 오늘보다 이전만 제외)
+            if bid_date and bid_date < datetime.date.today():
                 skip_past += 1
                 print(f"    ⏭  [{sakun_no}] 입찰일 {bid_date} 지남, 스킵")
                 continue
@@ -922,63 +1018,60 @@ def run_crawler():
 
         # ── 1페이지 파싱 ──
         print("\n📋 [1페이지] 결과 파싱 중...")
+        prev_fingerprint = get_page_fingerprint(driver)
         page1_items, page1_total = parse_search_results(driver, existing_keys, page_no=1)
         all_new_items.extend(page1_items)
 
-        # ── 총 페이지 확인 후 페이지네이션 ──
+        # ── 페이지네이션: goPage 방식 OR '다음' 버튼 방식 ──
         total_pages = get_total_pages(driver)
-        print(f"\n   총 {total_pages}페이지 감지")
+        # goPage 링크가 없으면 has_next_page로 다음 버튼 체크
+        if total_pages == 1:
+            total_pages = 999 if has_next_page(driver) else 1
+        print(f"\n   총 {total_pages if total_pages < 999 else '다음버튼'}페이지 감지")
 
-        if total_pages > 1:
-            pg = 2
-            while pg <= max(total_pages, pg):
-                print(f"\n📋 [{pg}페이지] 이동 중...")
-                result = go_to_page(driver, wait, pg)
-                print(f"   페이지이동: {result}")
+        pg = 2
+        while pg <= total_pages:
+            print(f"\n📋 [{pg}페이지] 이동 중...")
 
-                if result == 'not_found':
-                    # goPage 없음 → '다음' 버튼 직접 클릭
-                    clicked = driver.execute_script("""
-                        var els = document.querySelectorAll('a,button');
-                        for(var i=0; i<els.length; i++){
-                            var t = (els[i].textContent||'').trim();
-                            if(t==='다음'||t==='>'||t==='▶'){ els[i].click(); return true; }
-                        }
-                        return false;
-                    """)
-                    if not clicked:
-                        print(f"   ⚠️ [{pg}p] 페이지 이동 실패 - 크롤링 종료")
-                        break
+            # 1순위: goPage 방식
+            result = go_to_page(driver, wait, pg)
+            print(f"   페이지이동: {result}")
 
-                wait_for_ajax(driver)
-                time.sleep(1.5)
-                remove_popups_css(driver)
-
-                pg_items, pg_total = parse_search_results(driver, existing_keys, page_no=pg)
-                all_new_items.extend(pg_items)
-
-                if pg_total == 0:
-                    print(f"   [{pg}p] 빈 페이지, 크롤링 종료")
+            if result == 'not_found':
+                # 2순위: '다음' 버튼 클릭
+                clicked = click_next_page(driver)
+                if not clicked:
+                    print(f"   ⚠️ [{pg}p] 다음 페이지 없음 - 크롤링 종료")
                     break
+                print(f"   페이지이동: {clicked}")
 
-                # 다음 페이지 존재 여부 확인 (total_pages=2는 '최소 2페이지' 의미)
-                if total_pages <= 2:
-                    has_more = driver.execute_script("""
-                        var els = document.querySelectorAll('a,button');
-                        for(var i=0; i<els.length; i++){
-                            var t = (els[i].textContent||'').trim();
-                            if(t==='다음'||t==='>'||t==='▶') return true;
-                        }
-                        return false;
-                    """)
-                    if not has_more:
-                        print(f"   [{pg}p] 마지막 페이지 (다음 버튼 없음)")
-                        break
+            wait_for_ajax(driver)
+            time.sleep(1.5)
+            remove_popups_css(driver)
 
-                if pg >= 50:
-                    print("   ⚠️ 안전 제한 50페이지 도달")
-                    break
-                pg += 1
+            # ── 막힌 페이지 감지: 페이지 내용이 이전과 동일하면 중단 ──
+            curr_fingerprint = get_page_fingerprint(driver)
+            if curr_fingerprint and prev_fingerprint and curr_fingerprint == prev_fingerprint:
+                print(f"   ⚠️ [{pg}p] 페이지 내용이 이전과 동일 → 페이지 이동 실패, 크롤링 종료")
+                break
+            prev_fingerprint = curr_fingerprint
+
+            pg_items, pg_total = parse_search_results(driver, existing_keys, page_no=pg)
+            all_new_items.extend(pg_items)
+
+            if pg_total == 0:
+                print(f"   [{pg}p] 빈 페이지, 크롤링 종료")
+                break
+
+            # total_pages=999(다음버튼 방식)이면 매 페이지마다 다음 버튼 재확인
+            if total_pages == 999 and not has_next_page(driver):
+                print(f"   [{pg}p] 마지막 페이지 (다음 버튼 없음)")
+                break
+
+            if pg >= 50:
+                print("   ⚠️ 안전 제한 50페이지 도달")
+                break
+            pg += 1
 
         print(f"\n📦 신규 등록 대상: {len(all_new_items)}건")
 
