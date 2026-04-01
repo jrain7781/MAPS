@@ -14157,82 +14157,94 @@ MJ 이정우 팀장
         });
     }
 
-    // 태그 드롭다운 토글
-    function toggleSmTagDropdown(e) {
-        e.stopPropagation();
-        var dd = document.getElementById('sm-tag-dropdown');
-        if (dd) dd.classList.toggle('content-hidden');
-        document.getElementById('sm-status-dropdown') && document.getElementById('sm-status-dropdown').classList.add('content-hidden');
-        document.getElementById('sm-josaja-dropdown') && document.getElementById('sm-josaja-dropdown').classList.add('content-hidden');
-        document.getElementById('sm-group-dropdown') && document.getElementById('sm-group-dropdown').classList.add('content-hidden');
+    // ── 태그 행 드롭다운 공통 유틸 ──────────────────────────────────────────
+    var _smTagDDs = ['sm-tagtype-dropdown','sm-tagarea-dropdown','sm-tagprice-dropdown','sm-group-dropdown','sm-status-dropdown','sm-josaja-dropdown'];
+    function _closeAllSmDDs(exceptId) {
+        _smTagDDs.forEach(function(id) { if (id !== exceptId) { var el = document.getElementById(id); if (el) el.classList.add('content-hidden'); } });
     }
-    function handleSmTagAll(cb) {
-        document.querySelectorAll('[name="sm-tag-cb"]').forEach(function(el) { el.checked = cb.checked; });
-        document.getElementById('sm-tag-label').textContent = '태그';
+    function _makeSmTagToggle(ddId) {
+        return function(e) { e.stopPropagation(); _closeAllSmDDs(ddId); var dd = document.getElementById(ddId); if (dd) dd.classList.toggle('content-hidden'); };
     }
-    function handleSmTagOther(cb) {
-        var allCb = document.getElementById('sm-tag-all');
-        var others = document.querySelectorAll('[name="sm-tag-cb"]');
-        var allChecked = Array.from(others).every(function(el) { return el.checked; });
-        if (allCb) allCb.checked = allChecked;
-        var selected = Array.from(others).filter(function(el) { return el.checked; });
-        var lbl = document.getElementById('sm-tag-label');
-        if (lbl) lbl.textContent = allChecked ? '태그' : (selected.length + '개선택');
+    function _makeSmTagAllHandler(cbName, labelId, defaultLabel) {
+        return function(cb) { document.querySelectorAll('[name="' + cbName + '"]').forEach(function(el) { el.checked = cb.checked; }); var lbl = document.getElementById(labelId); if (lbl) lbl.textContent = defaultLabel; };
     }
-    // 묶음 드롭다운 토글
-    function toggleSmGroupDropdown(e) {
-        e.stopPropagation();
-        var dd = document.getElementById('sm-group-dropdown');
-        if (dd) dd.classList.toggle('content-hidden');
-        document.getElementById('sm-status-dropdown') && document.getElementById('sm-status-dropdown').classList.add('content-hidden');
-        document.getElementById('sm-josaja-dropdown') && document.getElementById('sm-josaja-dropdown').classList.add('content-hidden');
-        document.getElementById('sm-tag-dropdown') && document.getElementById('sm-tag-dropdown').classList.add('content-hidden');
+    function _makeSmTagOtherHandler(cbName, labelId, defaultLabel) {
+        return function(cb) {
+            var allId = cbName.replace('-cb', '-all');
+            var others = document.querySelectorAll('[name="' + cbName + '"]');
+            var allChecked = Array.from(others).every(function(el) { return el.checked; });
+            var allEl = document.getElementById(allId); if (allEl) allEl.checked = allChecked;
+            var selected = Array.from(others).filter(function(el) { return el.checked; });
+            var lbl = document.getElementById(labelId); if (lbl) lbl.textContent = allChecked ? defaultLabel : (selected.length + '개');
+        };
     }
-    function handleSmGroupAll(cb) {
-        document.querySelectorAll('[name="sm-group-cb"]').forEach(function(el) { el.checked = cb.checked; });
-        document.getElementById('sm-group-label').textContent = '묶음';
-    }
-    function handleSmGroupOther(cb) {
-        var allCb = document.getElementById('sm-group-all');
-        var others = document.querySelectorAll('[name="sm-group-cb"]');
-        var allChecked = Array.from(others).every(function(el) { return el.checked; });
-        if (allCb) allCb.checked = allChecked;
-        var selected = Array.from(others).filter(function(el) { return el.checked; });
-        var lbl = document.getElementById('sm-group-label');
-        if (lbl) lbl.textContent = allChecked ? '묶음' : (selected.length + '개선택');
-    }
-    // 태그/묶음 드롭다운 데이터 빌드 (데이터 로드 후 호출)
-    function buildSmTagDropdown() {
-        var tagSet = {};
-        allSearchData.forEach(function(item) {
-            String(item.tags || '').split('|').filter(Boolean).forEach(function(t) { tagSet[t] = true; });
-        });
-        var tags = Object.keys(tagSet).sort();
-        var dd = document.getElementById('sm-tag-dropdown');
-        if (!dd) return;
-        // 기존 동적 항목 제거
-        Array.from(dd.querySelectorAll('[name="sm-tag-cb"]')).forEach(function(el) { el.closest('label').remove(); });
-        tags.forEach(function(t) {
+    function _buildSmTagSubDropdown(ddId, allId, cbName, values, labelId, defaultLabel) {
+        var dd = document.getElementById(ddId); if (!dd) return;
+        Array.from(dd.querySelectorAll('[name="' + cbName + '"]')).forEach(function(el) { el.closest('label').remove(); });
+        values.forEach(function(v) {
             var lbl = document.createElement('label');
-            lbl.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1';
-            lbl.innerHTML = '<input type="checkbox" name="sm-tag-cb" value="' + t + '" checked onchange="handleSmTagOther(this); applySearchFilters()" class="rounded"> ' + t;
+            lbl.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-xs';
+            lbl.innerHTML = '<input type="checkbox" name="' + cbName + '" value="' + v + '" checked onchange="handleSmTagOther_' + cbName.replace(/-/g,'_') + '(this); applySearchFilters()" class="rounded"> ' + v;
             dd.appendChild(lbl);
         });
+        var lbl2 = document.getElementById(labelId); if (lbl2) lbl2.textContent = defaultLabel;
+    }
+
+    // 물건타입 드롭다운
+    var toggleSmTagTypeDropdown = _makeSmTagToggle('sm-tagtype-dropdown');
+    var handleSmTagTypeAll = _makeSmTagAllHandler('sm-tagtype-cb', 'sm-tagtype-label', '물건타입');
+    var handleSmTagOther_sm_tagtype_cb = _makeSmTagOtherHandler('sm-tagtype-cb', 'sm-tagtype-label', '물건타입');
+    // 면적 드롭다운
+    var toggleSmTagAreaDropdown = _makeSmTagToggle('sm-tagarea-dropdown');
+    var handleSmTagAreaAll = _makeSmTagAllHandler('sm-tagarea-cb', 'sm-tagarea-label', '면적');
+    var handleSmTagOther_sm_tagarea_cb = _makeSmTagOtherHandler('sm-tagarea-cb', 'sm-tagarea-label', '면적');
+    // 감정가 드롭다운
+    var toggleSmTagPriceDropdown = _makeSmTagToggle('sm-tagprice-dropdown');
+    var handleSmTagPriceAll = _makeSmTagAllHandler('sm-tagprice-cb', 'sm-tagprice-label', '감정가');
+    var handleSmTagOther_sm_tagprice_cb = _makeSmTagOtherHandler('sm-tagprice-cb', 'sm-tagprice-label', '감정가');
+    // 조사명(search_group) 드롭다운
+    function toggleSmGroupDropdown(e) { e.stopPropagation(); _closeAllSmDDs('sm-group-dropdown'); var dd = document.getElementById('sm-group-dropdown'); if (dd) dd.classList.toggle('content-hidden'); }
+    function handleSmGroupAll(cb) { document.querySelectorAll('[name="sm-group-cb"]').forEach(function(el) { el.checked = cb.checked; }); var lbl = document.getElementById('sm-group-label'); if (lbl) lbl.textContent = '조사명 전체'; }
+    function handleSmGroupOther(cb) {
+        var others = document.querySelectorAll('[name="sm-group-cb"]');
+        var allChecked = Array.from(others).every(function(el) { return el.checked; });
+        var allEl = document.getElementById('sm-group-all'); if (allEl) allEl.checked = allChecked;
+        var selected = Array.from(others).filter(function(el) { return el.checked; });
+        var lbl = document.getElementById('sm-group-label');
+        if (lbl) lbl.textContent = allChecked ? '조사명 전체' : (selected.length + '개선택');
+    }
+
+    // 태그 서브 드롭다운 빌드 (데이터 로드 후 호출)
+    function buildSmTagDropdown() {
+        // tags 필드: "아파트|84|2-10억" → [0]=타입, [1]=면적, [2]=감정가범위
+        var typeSet = {}, areaSet = {}, priceSet = {};
+        allSearchData.forEach(function(item) {
+            var parts = String(item.tags || '').split('|').filter(Boolean);
+            if (parts[0]) typeSet[parts[0]] = true;
+            if (parts[1]) areaSet[parts[1]] = true;
+            if (parts[2]) priceSet[parts[2]] = true;
+        });
+        _buildSmTagSubDropdown('sm-tagtype-dropdown', 'sm-tagtype-all', 'sm-tagtype-cb', Object.keys(typeSet).sort(), 'sm-tagtype-label', '물건타입');
+        _buildSmTagSubDropdown('sm-tagarea-dropdown', 'sm-tagarea-all', 'sm-tagarea-cb', Object.keys(areaSet).sort(), 'sm-tagarea-label', '면적');
+        _buildSmTagSubDropdown('sm-tagprice-dropdown', 'sm-tagprice-all', 'sm-tagprice-cb', Object.keys(priceSet).sort(), 'sm-tagprice-label', '감정가');
     }
     function buildSmGroupDropdown() {
         var groupSet = {};
         allSearchData.forEach(function(item) {
             var g = String(item.search_group || '').trim();
-            if (g) groupSet[g] = true;
+            if (g) {
+                // 예쁘게 표시: "아파트84_2-10억" → tags 기반 변환
+                var parts = String(item.tags || '').split('|').filter(Boolean);
+                var label = parts.length >= 3 ? parts[0] + ', ' + parts[1] + '㎡, ' + parts[2] : (g.replace(/_/g, ', '));
+                groupSet[g] = label;
+            }
         });
-        var groups = Object.keys(groupSet).sort();
-        var dd = document.getElementById('sm-group-dropdown');
-        if (!dd) return;
+        var dd = document.getElementById('sm-group-dropdown'); if (!dd) return;
         Array.from(dd.querySelectorAll('[name="sm-group-cb"]')).forEach(function(el) { el.closest('label').remove(); });
-        groups.forEach(function(g) {
+        Object.keys(groupSet).sort().forEach(function(g) {
             var lbl = document.createElement('label');
-            lbl.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1';
-            lbl.innerHTML = '<input type="checkbox" name="sm-group-cb" value="' + g + '" checked onchange="handleSmGroupOther(this); applySearchFilters()" class="rounded"> ' + g;
+            lbl.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-xs';
+            lbl.innerHTML = '<input type="checkbox" name="sm-group-cb" value="' + g + '" checked onchange="handleSmGroupOther(this); applySearchFilters()" class="rounded"> ' + groupSet[g];
             dd.appendChild(lbl);
         });
     }
@@ -14263,15 +14275,19 @@ MJ 이정우 팀장
             });
         }
 
-        // 태그 필터 (다중선택, OR: 선택된 태그 중 하나라도 포함)
-        var tagAll = document.getElementById('sm-tag-all');
-        var isTagAll = tagAll && tagAll.checked;
-        var tagSelected = [];
-        if (!isTagAll) {
-            document.querySelectorAll('[name="sm-tag-cb"]:checked').forEach(function(cb) { tagSelected.push(cb.value); });
+        // 태그 서브 필터: 물건타입
+        function _getSmTagFilter(allId, cbName) {
+            var allEl = document.getElementById(allId);
+            var isAll = allEl && allEl.checked;
+            var selected = [];
+            if (!isAll) document.querySelectorAll('[name="' + cbName + '"]:checked').forEach(function(cb) { selected.push(cb.value); });
+            return { isAll: isAll, selected: selected };
         }
+        var tfType  = _getSmTagFilter('sm-tagtype-all',  'sm-tagtype-cb');
+        var tfArea  = _getSmTagFilter('sm-tagarea-all',  'sm-tagarea-cb');
+        var tfPrice = _getSmTagFilter('sm-tagprice-all', 'sm-tagprice-cb');
 
-        // 묶음 필터
+        // 조사명(search_group) 필터
         var groupAll = document.getElementById('sm-group-all');
         var isGroupAll = groupAll && groupAll.checked;
         var groupSelected = [];
@@ -14290,11 +14306,13 @@ MJ 이정우 팀장
             if (!isJosajaAll && josajaSelected.length > 0) {
                 if (josajaSelected.indexOf(String(item.josaja || '')) === -1) return false;
             }
-            if (!isTagAll && tagSelected.length > 0) {
-                var itemTags = String(item.tags || '').split('|').filter(Boolean);
-                var hasTag = tagSelected.some(function(t) { return itemTags.indexOf(t) !== -1; });
-                if (!hasTag) return false;
-            }
+            // 태그 서브 필터 (tags 필드: "아파트|84|2-10억")
+            var tagParts = String(item.tags || '').split('|');
+            var itemType = tagParts[0] || ''; var itemArea = tagParts[1] || ''; var itemPrice = tagParts[2] || '';
+            if (!tfType.isAll  && tfType.selected.length  > 0 && tfType.selected.indexOf(itemType)  === -1) return false;
+            if (!tfArea.isAll  && tfArea.selected.length  > 0 && tfArea.selected.indexOf(itemArea)   === -1) return false;
+            if (!tfPrice.isAll && tfPrice.selected.length > 0 && tfPrice.selected.indexOf(itemPrice) === -1) return false;
+            // 조사명 필터
             if (!isGroupAll && groupSelected.length > 0) {
                 if (groupSelected.indexOf(String(item.search_group || '').trim()) === -1) return false;
             }
@@ -14386,7 +14404,7 @@ MJ 이정우 팀장
         if (countEl) countEl.textContent = filteredSearchData.length + '건';
 
         if (filteredSearchData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-400">조사물건 데이터가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-gray-400">조사물건 데이터가 없습니다.</td></tr>';
             return;
         }
 
@@ -14450,13 +14468,31 @@ MJ 이정우 팀장
             var failMatch = String(item.item_status || '').match(/유찰\s*\d+회/);
             var failStr = failMatch ? failMatch[0] : '';
 
-            // 특수물건 태그 (item_status에서 유찰 제외 나머지 + note1)
+            // 특수물건 태그 (item_status에서 유찰 제외 나머지 + note1) - 붉은색
             var specialTags = String(item.item_status || '').replace(/유찰\s*\d+회/g, '').trim();
             var note1Val = String(item.note1 || '').trim();
             var specialDisplay = specialTags || note1Val;
             var specialHtml = specialDisplay
-                ? '<div style="font-size:10px;color:#7c3aed;margin-top:2px;">' + specialDisplay + '</div>'
+                ? '<div style="font-size:10px;color:#dc2626;font-weight:600;margin-top:2px;">' + specialDisplay + '</div>'
                 : '';
+
+            // 조사명(search_group) 표시: "아파트84_2-10억" → "아파트, 84㎡, 2-10억"
+            var sgRaw = String(item.search_group || '').trim();
+            var sgDisplay = '';
+            if (sgRaw) {
+                // tags 필드가 있으면 태그 기반으로 예쁘게 표시
+                var tParts = String(item.tags || '').split('|').filter(Boolean);
+                if (tParts.length >= 3) {
+                    sgDisplay = tParts[0] + ', ' + tParts[1] + '㎡, ' + tParts[2];
+                } else if (tParts.length > 0) {
+                    sgDisplay = tParts.join(', ');
+                } else {
+                    sgDisplay = sgRaw.replace(/_/g, ', ');
+                }
+            }
+
+            // 등록일 표시
+            var regDate = String(item.reg_date || '').trim();
 
             // 가격 콤마 포맷
             var kamjungkaDisp = fmtPrice(item.kamjungka);
@@ -14481,11 +14517,12 @@ MJ 이정우 팀장
                         auctionBtnHtml +
                     '</div>' +
                 '</td>' +
-                // 열2: 상태배지 + 조사자 셀렉트 (변경 즉시 자동저장)
-                '<td class="px-1 py-2 text-center" style="vertical-align:middle;min-width:90px">' +
+                // 열2: 상태배지 + 조사명 + 조사자 셀렉트 (50% 폭 축소)
+                '<td class="px-1 py-2 text-center" style="vertical-align:middle;width:48px;min-width:48px;max-width:48px;">' +
                     '<span class="block px-1 py-0.5 rounded text-xs font-semibold mb-1 ' + statusCls + '">' + (item.josa_status || '신규') + '</span>' +
-                    '<select class="sm-josaja-select text-xs px-1 py-1 border border-gray-300 rounded w-full bg-white" ' +
-                        'title="변경 즉시 자동저장" ' +
+                    (sgDisplay ? '<div style="font-size:9px;color:#6366f1;margin-bottom:2px;word-break:break-all;line-height:1.2;">' + sgDisplay + '</div>' : '') +
+                    '<select class="sm-josaja-select text-xs px-0.5 py-0.5 border border-gray-300 rounded w-full bg-white" ' +
+                        'title="선택 즉시 자동저장 + 상태→신규" ' +
                         'data-search-id="' + item.search_id + '" ' +
                         'onchange="saveSearchJosaja(this)">' +
                         josajOpts +
@@ -14500,18 +14537,18 @@ MJ 이정우 팀장
                     tagsHtml +
                     '<div style="margin-top:4px;">' + josaBtnHtml + '</div>' +
                 '</td>' +
-                // 열5: 소재지 (주소 / 면적 / 특수물건태그) - 고정폭
-                '<td class="px-2 py-2" style="vertical-align:top;width:160px;max-width:160px;min-width:120px;">' +
+                // 열5: 소재지 (주소 / 면적 / 특수물건태그) - 30% 증가 (160→208px)
+                '<td class="px-2 py-2" style="vertical-align:top;width:208px;max-width:208px;min-width:160px;">' +
                     '<div style="font-size:13px;color:#111827;word-break:break-all;line-height:1.3;">' + String(item.address || '') + '</div>' +
                     '<div style="font-size:12px;color:#6b7280;margin-top:3px;">' + String(item.item_area || '') + '</div>' +
                     specialHtml +
                 '</td>' +
-                // 열6: 감정가 / 최저매각가 / 평당가 / 특수물건태그
+                // 열6: 감정가 / 최저매각가 / 평당가 / 특수물건태그(붉은색)
                 '<td class="px-2 py-2 text-right" style="vertical-align:top;white-space:nowrap">' +
                     '<div class="font-bold text-sm text-gray-900">' + kamjungkaDisp + '</div>' +
                     '<div class="text-sm text-blue-600 mt-0.5">' + minBidDisp + '</div>' +
                     '<div class="text-xs text-gray-500 mt-0.5">' + String(item.item_summary || '') + '</div>' +
-                    (specialDisplay ? '<div style="font-size:10px;color:#7c3aed;margin-top:2px;text-align:right;">' + specialDisplay + '</div>' : '') +
+                    (specialDisplay ? '<div style="font-size:10px;color:#dc2626;font-weight:600;margin-top:2px;text-align:right;">' + specialDisplay + '</div>' : '') +
                 '</td>' +
                 // 열7: 유찰 + 낙찰율
                 '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
@@ -14522,6 +14559,10 @@ MJ 이정우 팀장
                 '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
                     '<div class="text-sm text-gray-900">' + inDateDisp + '</div>' +
                     (ddayStr ? '<div class="text-xs text-gray-500 mt-0.5">' + ddayStr + '</div>' : '') +
+                '</td>' +
+                // 열9: 등록일
+                '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
+                    '<div style="font-size:11px;color:#6b7280;">' + regDate + '</div>' +
                 '</td>' +
                 '</tr>';
         }).join('');
@@ -14575,15 +14616,21 @@ MJ 이정우 팀장
         var josaja = selectEl.value;
         if (!searchId) return;
         selectEl.disabled = true;
+        // 조사자 변경 시 상태를 '신규'로 초기화
+        var newStatus = '신규';
         google.script.run
             .withSuccessHandler(function(res) {
                 selectEl.disabled = false;
                 if (res && res.success) {
-                    // allSearchData 업데이트
                     allSearchData.forEach(function(item) {
-                        if (item.search_id === searchId) item.josaja = josaja;
+                        if (item.search_id === searchId) {
+                            item.josaja = josaja;
+                            item.josa_status = newStatus;
+                        }
                     });
-                    showStatus('조사자 저장 완료', 'success');
+                    renderSearchList();
+                    // 저장 완료 팝업
+                    _showSmSaveToast('저장되었습니다. (' + (josaja || '미배정') + ')');
                 } else {
                     showStatus('저장 실패: ' + (res ? res.message : '오류'), 'error');
                 }
@@ -14592,7 +14639,21 @@ MJ 이정우 팀장
                 selectEl.disabled = false;
                 showStatus('서버 오류: ' + (err.message || err), 'error');
             })
-            .updateSearchItemStatus(searchId, null, josaja);
+            .updateSearchItemStatus(searchId, newStatus, josaja);
+    }
+
+    function _showSmSaveToast(msg) {
+        var t = document.getElementById('sm-save-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'sm-save-toast';
+            t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1d4ed8;color:white;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.25);transition:opacity 0.3s;';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._hideTimer);
+        t._hideTimer = setTimeout(function() { t.style.opacity = '0'; }, 2000);
     }
 
     // 선택 항목 삭제
@@ -14749,9 +14810,11 @@ MJ 이정우 팀장
 
     // 클릭 외부 클릭 시 드롭다운 닫기 (전역 등록)
     document.addEventListener('click', function(e) {
-        if (!e.target.closest('#sm-status-wrap') && !e.target.closest('#sm-josaja-wrap')) {
-            var els = document.querySelectorAll('#sm-status-dropdown, #sm-josaja-dropdown');
-            els.forEach(function(el) { el.classList.add('content-hidden'); });
+        var wraps = ['#sm-status-wrap','#sm-josaja-wrap','#sm-tagtype-wrap','#sm-tagarea-wrap','#sm-tagprice-wrap','#sm-group-wrap'];
+        var inWrap = wraps.some(function(w) { return e.target.closest(w); });
+        if (!inWrap) {
+            var dds = ['#sm-status-dropdown','#sm-josaja-dropdown','#sm-tagtype-dropdown','#sm-tagarea-dropdown','#sm-tagprice-dropdown','#sm-group-dropdown'];
+            dds.forEach(function(s) { var el = document.querySelector(s); if (el) el.classList.add('content-hidden'); });
         }
     });
 

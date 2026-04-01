@@ -1291,7 +1291,8 @@
                 </div>
                 <!-- 검색 필터 -->
                 <div class="list-search-strip bg-gray-50 border-b px-3 py-2">
-                    <div class="flex flex-wrap gap-2 items-center">
+                    <!-- 1행: 기본 필터 -->
+                    <div class="flex flex-wrap gap-2 items-center mb-2">
                         <div class="flex-shrink-0 w-[3rem] md:w-[4.6rem]">
                             <input type="text" id="sm-filter-indate" oninput="applySearchFilters()" onfocus="this.select()"
                                 placeholder="입찰일자"
@@ -1318,18 +1319,12 @@
                             </button>
                             <div id="sm-status-dropdown" onclick="event.stopPropagation()"
                                 class="content-hidden absolute top-full left-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[120px]">
-                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
-                                    <input type="checkbox" id="sm-status-all" value="All" checked onchange="handleSmStatusAll(this); applySearchFilters()" class="rounded"> 전체</label>
-                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
-                                    <input type="checkbox" name="sm-status-cb" value="신규" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 신규</label>
-                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
-                                    <input type="checkbox" name="sm-status-cb" value="요청" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 요청</label>
-                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
-                                    <input type="checkbox" name="sm-status-cb" value="확인" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 확인</label>
-                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
-                                    <input type="checkbox" name="sm-status-cb" value="완료" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 완료</label>
-                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
-                                    <input type="checkbox" name="sm-status-cb" value="폐기" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 폐기</label>
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="sm-status-all" value="All" checked onchange="handleSmStatusAll(this); applySearchFilters()" class="rounded"> 전체</label>
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="sm-status-cb" value="신규" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 신규</label>
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="sm-status-cb" value="요청" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 요청</label>
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="sm-status-cb" value="확인" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 확인</label>
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="sm-status-cb" value="완료" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 완료</label>
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="sm-status-cb" value="폐기" onchange="handleSmStatusOther(this); applySearchFilters()" class="rounded"> 폐기</label>
                             </div>
                         </div>
                         <!-- 조사자 필터 -->
@@ -1343,8 +1338,7 @@
                             </button>
                             <div id="sm-josaja-dropdown" onclick="event.stopPropagation()"
                                 class="content-hidden absolute top-full left-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[120px] max-h-[200px] overflow-y-auto">
-                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
-                                    <input type="checkbox" id="sm-josaja-all" value="All" checked onchange="handleSmJosajaAll(this); applySearchFilters()" class="rounded"> 전체</label>
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="sm-josaja-all" value="All" checked onchange="handleSmJosajaAll(this); applySearchFilters()" class="rounded"> 전체</label>
                             </div>
                         </div>
                         <div class="flex-1 min-w-[5rem]">
@@ -1352,36 +1346,57 @@
                                 placeholder="주소"
                                 class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-center placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                         </div>
-                        <!-- 태그 필터 (다중선택) -->
-                        <div class="relative flex-shrink-0" id="sm-tag-wrap">
-                            <button type="button" onclick="toggleSmTagDropdown(event)" id="sm-tag-btn"
-                                class="min-w-[64px] px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm flex items-center focus:outline-none">
-                                <span id="sm-tag-label" class="flex-1 text-center text-gray-500">태그</span>
-                                <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                </svg>
+                    </div>
+                    <!-- 2행: 태그 필터 (물건타입/면적/감정가/조사명) -->
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <span class="text-xs font-semibold text-gray-500 flex-shrink-0">태그:</span>
+                        <!-- 물건타입 드롭박스 -->
+                        <div class="relative flex-shrink-0" id="sm-tagtype-wrap">
+                            <button type="button" onclick="toggleSmTagTypeDropdown(event)" id="sm-tagtype-btn"
+                                class="min-w-[64px] px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-xs flex items-center focus:outline-none">
+                                <span id="sm-tagtype-label" class="flex-1 text-center text-gray-500">물건타입</span>
+                                <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
-                            <div id="sm-tag-dropdown" onclick="event.stopPropagation()"
-                                class="content-hidden absolute top-full left-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[140px] max-h-[250px] overflow-y-auto">
-                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
-                                    <input type="checkbox" id="sm-tag-all" value="All" checked onchange="handleSmTagAll(this); applySearchFilters()" class="rounded"> 전체</label>
-                                <!-- 동적으로 채워짐 (buildSmTagDropdown) -->
+                            <div id="sm-tagtype-dropdown" onclick="event.stopPropagation()"
+                                class="content-hidden absolute top-full left-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[120px] max-h-[250px] overflow-y-auto">
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-xs"><input type="checkbox" id="sm-tagtype-all" value="All" checked onchange="handleSmTagTypeAll(this); applySearchFilters()" class="rounded"> 전체</label>
                             </div>
                         </div>
-                        <!-- 묶음(search_group) 필터 -->
+                        <!-- 면적 드롭박스 -->
+                        <div class="relative flex-shrink-0" id="sm-tagarea-wrap">
+                            <button type="button" onclick="toggleSmTagAreaDropdown(event)" id="sm-tagarea-btn"
+                                class="min-w-[56px] px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-xs flex items-center focus:outline-none">
+                                <span id="sm-tagarea-label" class="flex-1 text-center text-gray-500">면적</span>
+                                <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div id="sm-tagarea-dropdown" onclick="event.stopPropagation()"
+                                class="content-hidden absolute top-full left-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[100px] max-h-[250px] overflow-y-auto">
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-xs"><input type="checkbox" id="sm-tagarea-all" value="All" checked onchange="handleSmTagAreaAll(this); applySearchFilters()" class="rounded"> 전체</label>
+                            </div>
+                        </div>
+                        <!-- 감정가범위 드롭박스 -->
+                        <div class="relative flex-shrink-0" id="sm-tagprice-wrap">
+                            <button type="button" onclick="toggleSmTagPriceDropdown(event)" id="sm-tagprice-btn"
+                                class="min-w-[64px] px-3 py-1.5 border border-gray-300 rounded-lg bg-white text-xs flex items-center focus:outline-none">
+                                <span id="sm-tagprice-label" class="flex-1 text-center text-gray-500">감정가</span>
+                                <svg class="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div id="sm-tagprice-dropdown" onclick="event.stopPropagation()"
+                                class="content-hidden absolute top-full left-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[120px] max-h-[250px] overflow-y-auto">
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-xs"><input type="checkbox" id="sm-tagprice-all" value="All" checked onchange="handleSmTagPriceAll(this); applySearchFilters()" class="rounded"> 전체</label>
+                            </div>
+                        </div>
+                        <!-- 조사명(search_group) 드롭박스 - 덩어리 조회 -->
                         <div class="relative flex-shrink-0" id="sm-group-wrap">
                             <button type="button" onclick="toggleSmGroupDropdown(event)" id="sm-group-btn"
-                                class="min-w-[64px] px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm flex items-center focus:outline-none">
-                                <span id="sm-group-label" class="flex-1 text-center text-gray-500">묶음</span>
-                                <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                                </svg>
+                                class="min-w-[90px] px-3 py-1.5 border border-indigo-300 rounded-lg bg-indigo-50 text-xs flex items-center focus:outline-none">
+                                <span id="sm-group-label" class="flex-1 text-center text-indigo-600 font-medium">조사명 전체</span>
+                                <svg class="w-3 h-3 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                             </button>
                             <div id="sm-group-dropdown" onclick="event.stopPropagation()"
-                                class="content-hidden absolute top-full right-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[160px] max-h-[250px] overflow-y-auto">
-                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
-                                    <input type="checkbox" id="sm-group-all" value="All" checked onchange="handleSmGroupAll(this); applySearchFilters()" class="rounded"> 전체</label>
-                                <!-- 동적으로 채워짐 (buildSmGroupDropdown) -->
+                                class="content-hidden absolute top-full left-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[180px] max-h-[250px] overflow-y-auto">
+                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-xs"><input type="checkbox" id="sm-group-all" value="All" checked onchange="handleSmGroupAll(this); applySearchFilters()" class="rounded"> 전체</label>
+                                <!-- 동적으로 채워짐 -->
                             </div>
                         </div>
                     </div>
@@ -1399,18 +1414,19 @@
                                         <span>옥션</span>
                                     </div>
                                 </th>
-                                <th class="px-2 py-3 text-center text-xs font-bold text-gray-800 w-24" onclick="sortSearchList('josa_status')" style="cursor:pointer;">상태<br><span class="font-normal text-gray-500">조사자</span><br><span class="font-normal text-gray-400 text-[10px]">(변경=자동저장)</span></th>
+                                <th class="px-1 py-3 text-center text-xs font-bold text-gray-800 w-12" onclick="sortSearchList('josa_status')" style="cursor:pointer;min-width:48px;max-width:48px;">상태<br><span class="font-normal text-gray-500">조사자</span></th>
                                 <th class="px-2 py-3 text-center text-xs font-bold text-gray-800 w-20">사진</th>
                                 <th class="px-2 py-3 text-center text-xs font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none w-32" onclick="sortSearchList('sakun_no')">사건번호<br><span class="font-normal text-gray-500">물건종류</span></th>
-                                <th class="px-2 py-3 text-center text-xs font-bold text-gray-800 select-none w-40">소재지</th>
+                                <th class="px-2 py-3 text-center text-xs font-bold text-gray-800 select-none" style="width:208px;min-width:160px;">소재지</th>
                                 <th class="px-2 py-3 text-center text-xs font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none w-32" onclick="sortSearchList('kamjungka')">감정가<br><span class="font-normal text-blue-600">최저매각가</span><br><span class="font-normal text-gray-500">평당가</span></th>
                                 <th class="px-2 py-3 text-center text-xs font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none w-20" onclick="sortSearchList('item_status')">진행상태</th>
                                 <th class="px-2 py-3 text-center text-xs font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none w-24" onclick="sortSearchList('in-date')">매각기일</th>
+                                <th class="px-2 py-3 text-center text-xs font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none w-24" onclick="sortSearchList('reg_date')">등록일</th>
                             </tr>
                         </thead>
                         <tbody id="searchTableBody" class="bg-white divide-y divide-gray-100">
                             <tr>
-                                <td colspan="8" class="p-4 text-center text-gray-500">
+                                <td colspan="9" class="p-4 text-center text-gray-500">
                                     <div id="smLoadingIndicator" class="flex justify-center items-center p-4">
                                         <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 mr-3"></div>데이터를 불러오는 중...
                                     </div>
