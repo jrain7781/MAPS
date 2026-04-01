@@ -14468,17 +14468,24 @@ MJ 이정우 팀장
             var failMatch = String(item.item_status || '').match(/유찰\s*\d+회/);
             var failStr = failMatch ? failMatch[0] : '';
 
-            // 특수물건 태그 분리: 공시가격은 감정가 열, 나머지는 소재지 열
+            // 특수물건 태그 분리 (괄호그룹 단위 파싱)
             var specialTags = String(item.item_status || '').replace(/유찰\s*\d+회/g, '').trim();
             var note1Val = String(item.note1 || '').trim();
-            var specialAll = specialTags || note1Val;
-            // 공시가격 관련 (감정가 열에 표시)
-            var gongsiParts = specialAll.split(/\s+/).filter(function(s){ return /공시|公示/.test(s); });
-            var gongsiDisplay = gongsiParts.join(' ');
-            // 공시가격 제외 특수물건 (소재지 열에 표시)
-            var specialNoGongsi = specialAll.split(/\s+/).filter(function(s){ return !/공시|公示/.test(s); }).join(' ').trim();
-            var specialHtml = specialNoGongsi
-                ? '<div style="font-size:13px;color:#dc2626;font-weight:600;margin-top:2px;">' + specialNoGongsi + '</div>'
+            var specialAll = (specialTags || note1Val).trim();
+            // 괄호 그룹 추출
+            var allBrackets = specialAll.match(/\[[^\]]*\]/g) || [];
+            var noBracketText = specialAll.replace(/\[[^\]]*\]/g, '').trim();
+            // 공시가격 그룹 → 감정가 열 (크게)
+            var gongsiBrackets = allBrackets.filter(function(b){ return /공시/.test(b); });
+            // 금액범위 그룹 (공시 아닌, 억/만원 포함) → 감정가 열 (작게)
+            var priceBrackets  = allBrackets.filter(function(b){ return !/공시/.test(b) && /억|만원/.test(b); });
+            // 순수 특수물건 (공시/금액 아닌 것 + 비괄호텍스트) → 소재지 열
+            var specialBrackets = allBrackets.filter(function(b){ return !/공시/.test(b) && !/억|만원/.test(b); });
+            var specialOnlyStr = (specialBrackets.join(' ') + (noBracketText ? ' ' + noBracketText : '')).trim();
+            var gongsiStr     = gongsiBrackets.join(' ');
+            var priceRangeStr = priceBrackets.join(' ');
+            var specialHtml = specialOnlyStr
+                ? '<div style="font-size:13px;color:#dc2626;font-weight:600;margin-top:2px;">' + specialOnlyStr + '</div>'
                 : '';
 
             // 퍼센트 포맷 (0.34 → 34%, 34% → 34%, 34 → 34%)
@@ -14559,12 +14566,13 @@ MJ 이정우 팀장
                     '<div style="font-size:12px;color:#6b7280;margin-top:3px;">' + String(item.item_area || '') + '</div>' +
                     specialHtml +
                 '</td>' +
-                // 열6: 감정가 / 최저매각가 / 평당가 / 공시가격(붉은색)
+                // 열6: 감정가 / 최저매각가 / 평당가 / 공시가격(붉은색) / 금액범위(작게)
                 '<td class="px-2 py-2 text-right" style="vertical-align:top;white-space:nowrap">' +
                     '<div class="font-bold text-sm text-gray-900">' + kamjungkaDisp + '</div>' +
                     '<div class="text-sm text-blue-600 mt-0.5">' + minBidDisp + '</div>' +
                     '<div class="text-xs text-gray-500 mt-0.5">' + String(item.item_summary || '') + '</div>' +
-                    (gongsiDisplay ? '<div style="font-size:13px;color:#dc2626;font-weight:600;margin-top:2px;text-align:right;">' + gongsiDisplay + '</div>' : '') +
+                    (gongsiStr ? '<div style="font-size:12px;color:#dc2626;font-weight:600;margin-top:2px;text-align:right;">' + gongsiStr + '</div>' : '') +
+                    (priceRangeStr ? '<div style="font-size:10px;color:#9ca3af;margin-top:1px;text-align:right;">' + priceRangeStr + '</div>' : '') +
                 '</td>' +
                 // 열7: 유찰 + 낙찰율(퍼센트)
                 '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
@@ -14657,6 +14665,70 @@ MJ 이정우 팀장
             })
             .updateSearchItemStatus(searchId, newStatus, josaja);
     }
+
+    // ── 검색물건 테이블 컬럼 드래그 리사이즈 ───────────────────────────────
+    (function initSmColResize() {
+        var STORE_KEY = 'smColWidths';
+        function getStoredWidths() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch(e) { return {}; } }
+        function saveWidth(idx, px) { var w = getStoredWidths(); w[idx] = px; localStorage.setItem(STORE_KEY, JSON.stringify(w)); }
+        function applyStoredWidths() {
+            var tbl = document.getElementById('searchTableBody');
+            if (!tbl) return;
+            var thead = tbl.closest('table') && tbl.closest('table').querySelector('thead');
+            if (!thead) return;
+            var ths = thead.querySelectorAll('th');
+            var w = getStoredWidths();
+            Object.keys(w).forEach(function(i) { if (ths[i]) { ths[i].style.width = w[i] + 'px'; ths[i].style.minWidth = w[i] + 'px'; } });
+        }
+        function addResizeHandles() {
+            var tbl = document.getElementById('searchTableBody');
+            if (!tbl) return;
+            var thead = tbl.closest('table') && tbl.closest('table').querySelector('thead');
+            if (!thead || thead.getAttribute('data-resizable')) return;
+            thead.setAttribute('data-resizable', '1');
+            var ths = thead.querySelectorAll('th');
+            ths.forEach(function(th, idx) {
+                th.style.position = 'relative';
+                var handle = document.createElement('div');
+                handle.style.cssText = 'position:absolute;right:0;top:0;width:6px;height:100%;cursor:col-resize;z-index:10;background:transparent;';
+                handle.title = '드래그하여 열 너비 조정';
+                handle.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    var startX = e.pageX, startW = th.offsetWidth;
+                    function onMove(ev) {
+                        var newW = Math.max(30, startW + ev.pageX - startX);
+                        th.style.width = newW + 'px';
+                        th.style.minWidth = newW + 'px';
+                    }
+                    function onUp(ev) {
+                        saveWidth(idx, Math.max(30, startW + ev.pageX - startX));
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    }
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                });
+                th.appendChild(handle);
+            });
+        }
+        // renderSearchList 후 자동 적용
+        var _origRender = null;
+        function hookRender() {
+            if (typeof renderSearchList === 'function' && !renderSearchList._resizeHooked) {
+                var orig = renderSearchList;
+                renderSearchList = function() { orig(); addResizeHandles(); applyStoredWidths(); };
+                renderSearchList._resizeHooked = true;
+            }
+        }
+        // 리셋 버튼: 컬럼폭 초기화
+        window.resetSmColWidths = function() {
+            localStorage.removeItem(STORE_KEY);
+            var tbl = document.getElementById('searchTableBody');
+            if (tbl) { var ths = tbl.closest('table').querySelectorAll('thead th'); ths.forEach(function(th){ th.style.width=''; th.style.minWidth=''; }); }
+        };
+        setTimeout(hookRender, 500);
+        setTimeout(function(){ addResizeHandles(); applyStoredWidths(); }, 1500);
+    })();
 
     function _showSmSaveToast(msg) {
         var t = document.getElementById('sm-save-toast');
