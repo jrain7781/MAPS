@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import sys, os, datetime as _dt
 
-# ── 로그 파일: 스크립트 폴더에 실행시각_apt84.log 로 저장 ──
-_LOG_DIR  = os.path.dirname(os.path.abspath(__file__))
+# ── 로그 파일: 스크립트 폴더/logs/ 하위에 실행시각_apt84.log 로 저장 ──
+_LOG_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(_LOG_DIR, exist_ok=True)
 _LOG_FILE = os.path.join(_LOG_DIR, _dt.datetime.now().strftime('%Y%m%d_%H%M%S') + '_apt84.log')
 _log_fh   = open(_LOG_FILE, 'w', encoding='utf-8', buffering=1)
 

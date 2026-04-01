@@ -14213,14 +14213,13 @@ MJ 이정우 팀장
 
     function renderSearchList() {
         var tbody = document.getElementById('searchTableBody');
-        var nodata = document.getElementById('smNoDataMessage');
         var countEl = document.getElementById('searchMgmt-count');
         if (!tbody) return;
 
         if (countEl) countEl.textContent = filteredSearchData.length + '건';
 
         if (filteredSearchData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400"><div id="smNoDataMessage">조사물건 데이터가 없습니다.</div></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-400">조사물건 데이터가 없습니다.</td></tr>';
             return;
         }
 
@@ -14232,15 +14231,36 @@ MJ 이정우 팀장
             '폐기': 'bg-red-100 text-red-600'
         };
 
-        var html = filteredSearchData.map(function(item, idx) {
+        var html = filteredSearchData.map(function(item) {
             var statusCls = statusColorMap[item.josa_status] || 'bg-gray-100 text-gray-600';
             var inDate = String(item['in-date'] || '');
-            var kamjungka = String(item.kamjungka || '');
-            var minBid = String(item.min_bid_price || '');
-            var rate = String(item.min_bid_rate || '');
-            var area = String(item.item_area || '');
 
-            // 조사자 인라인 셀렉트
+            // 입찰일 표시: 260401 → 26.04.01
+            var inDateDisp = inDate.length === 6
+                ? inDate.substr(0,2) + '.' + inDate.substr(2,2) + '.' + inDate.substr(4,2)
+                : inDate;
+
+            // D-day 계산
+            var ddayStr = '';
+            if (inDate.length === 6) {
+                try {
+                    var bd = new Date('20' + inDate.substr(0,2) + '-' + inDate.substr(2,2) + '-' + inDate.substr(4,2));
+                    var diff = Math.round((bd - new Date()) / 86400000);
+                    ddayStr = diff > 0 ? '입찰 ' + diff + '일전' : (diff === 0 ? '오늘' : '입찰마감');
+                } catch(e) {}
+            }
+
+            // 썸네일 이미지
+            var imgUrl = String(item.img_url || '');
+            var imgHtml = imgUrl
+                ? '<img src="' + imgUrl + '" style="width:72px;height:72px;object-fit:cover;border-radius:4px;" onerror="this.style.display=\'none\'">'
+                : '<div style="width:72px;height:72px;background:#f3f4f6;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9ca3af;">사진없음</div>';
+
+            // 옥션 링크
+            var auctionId = String(item.auction_id || '');
+            var auctionUrl = auctionId ? 'https://www.auction1.co.kr/auction/ca_list.php?product_id=' + auctionId : '';
+
+            // 조사자 셀렉트
             var josajOpts = '<option value="">-미배정-</option>' +
                 smInvestigators.map(function(m) {
                     var n = String(m.member_name || '');
@@ -14248,52 +14268,60 @@ MJ 이정우 팀장
                     return '<option value="' + n + '"' + sel + '>' + n + '</option>';
                 }).join('');
 
-            return '<tr class="hover:bg-gray-50 transition">' +
-                '<td class="px-1 py-2 text-center"><input type="checkbox" class="sm-row-check rounded" value="' + item.search_id + '"></td>' +
-                '<td class="px-2 py-2 text-center text-xs whitespace-nowrap">' + inDate + '</td>' +
-                '<td class="px-2 py-2 text-center text-xs font-mono">' + String(item.sakun_no || '') + '</td>' +
-                '<td class="px-2 py-2 text-center text-xs">' + String(item.court || '') + '</td>' +
-                '<td class="px-2 py-2 text-xs max-w-[200px]">' +
-                    '<div class="font-medium text-gray-800 truncate" title="' + String(item.item_summary || '') + '">' + String(item.item_summary || '-') + '</div>' +
-                    '<div class="text-gray-400 truncate text-xs" title="' + String(item.address || '') + '">' + String(item.address || '') + '</div>' +
+            // 유찰회수 파싱
+            var failMatch = String(item.item_status || '').match(/유찰\s*\d+회/);
+            var failStr = failMatch ? failMatch[0] : '';
+
+            return '<tr style="border-bottom:1px solid #e5e7eb;">' +
+                // 열1: 체크박스 + 옥션버튼
+                '<td class="px-1 py-2 text-center" style="vertical-align:middle">' +
+                    '<div class="flex flex-col items-center gap-1">' +
+                        '<input type="checkbox" class="sm-row-check rounded" value="' + item.search_id + '">' +
+                        (auctionUrl
+                            ? '<a href="' + auctionUrl + '" target="_blank" class="text-xs px-1 py-0.5 bg-orange-400 text-white rounded hover:bg-orange-500 whitespace-nowrap">옥션</a>'
+                            : '<span class="text-xs text-gray-300">옥션</span>') +
+                    '</div>' +
                 '</td>' +
-                '<td class="px-2 py-2 text-right text-xs">' + kamjungka + '</td>' +
-                '<td class="px-2 py-2 text-right text-xs">' + minBid + '</td>' +
-                '<td class="px-2 py-2 text-center text-xs">' + rate + '</td>' +
-                '<td class="px-2 py-2 text-center text-xs">' + area + '</td>' +
-                '<td class="px-2 py-2 text-center">' +
-                    '<span class="px-2 py-0.5 rounded text-xs font-semibold ' + statusCls + '">' + (item.josa_status || '신규') + '</span>' +
+                // 열2: 사진
+                '<td class="px-1 py-2 text-center" style="vertical-align:middle">' + imgHtml + '</td>' +
+                // 열3: 사건번호 / 물건종류 / 새창
+                '<td class="px-2 py-2" style="vertical-align:top;min-width:110px">' +
+                    '<div class="font-bold text-sm text-gray-900">' + String(item.sakun_no || '') + '</div>' +
+                    '<div class="text-xs text-blue-600 mt-0.5">' + String(item.item_type || '') + '</div>' +
+                    (auctionUrl ? '<a href="' + auctionUrl + '" target="_blank" class="inline-block mt-1 text-xs px-2 py-0.5 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 text-gray-700">새창</a>' : '') +
                 '</td>' +
-                '<td class="px-1 py-1 text-center">' +
-                    '<select class="sm-josaja-select text-xs px-1 py-1 border border-gray-300 rounded w-20 bg-white" ' +
+                // 열4: 소재지 (주소 / 면적 / 상태red)
+                '<td class="px-2 py-2" style="vertical-align:top">' +
+                    '<div class="text-sm text-gray-900">' + String(item.address || '') + '</div>' +
+                    '<div class="text-xs text-gray-500 mt-0.5">' + String(item.item_area || '') + '</div>' +
+                    (item.item_status && item.item_status !== '신건'
+                        ? '<div class="text-xs text-red-600 mt-0.5">' + String(item.item_status) + '</div>'
+                        : '') +
+                '</td>' +
+                // 열5: 감정가 / 최저매각가 / 평당가
+                '<td class="px-2 py-2 text-right" style="vertical-align:top;white-space:nowrap">' +
+                    '<div class="font-bold text-sm text-gray-900">' + String(item.kamjungka || '') + '</div>' +
+                    '<div class="text-sm text-blue-600 mt-0.5">' + String(item.min_bid_price || '') + '</div>' +
+                    '<div class="text-xs text-gray-500 mt-0.5">' + String(item.item_summary || '') + '</div>' +
+                '</td>' +
+                // 열6: 진행상태 (유찰 + 낙찰율)
+                '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
+                    '<div class="text-xs text-gray-700">' + failStr + '</div>' +
+                    '<div class="text-xs text-orange-500">(' + String(item.min_bid_rate || '') + ')</div>' +
+                '</td>' +
+                // 열7: 매각기일
+                '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
+                    '<div class="text-sm text-gray-900">' + inDateDisp + '</div>' +
+                    (ddayStr ? '<div class="text-xs text-gray-500 mt-0.5">' + ddayStr + '</div>' : '') +
+                '</td>' +
+                // 열8: 조사자 (상태배지 + 셀렉트)
+                '<td class="px-1 py-2 text-center" style="vertical-align:middle;min-width:90px">' +
+                    '<span class="block px-1 py-0.5 rounded text-xs font-semibold mb-1 ' + statusCls + '">' + (item.josa_status || '신규') + '</span>' +
+                    '<select class="sm-josaja-select text-xs px-1 py-1 border border-gray-300 rounded w-full bg-white" ' +
                         'data-search-id="' + item.search_id + '" ' +
                         'onchange="saveSearchJosaja(this)">' +
                         josajOpts +
                     '</select>' +
-                '</td>' +
-                '<td class="px-1 py-1">' +
-                    '<div class="flex items-center gap-1">' +
-                        '<input type="text" class="sm-note-input text-xs px-1 py-1 border border-gray-200 rounded w-full min-w-[80px] focus:border-indigo-400 focus:outline-none" ' +
-                            'data-search-id="' + item.search_id + '" ' +
-                            'value="' + String(item.note1 || '').replace(/"/g, '&quot;') + '" ' +
-                            'placeholder="비고" ' +
-                            'onkeydown="if(event.key===\'Enter\')saveSearchNote(this)">' +
-                        '<button class="text-green-600 hover:text-green-800 flex-shrink-0" title="비고 저장" ' +
-                            'onclick="saveSearchNote(this.previousElementSibling)">' +
-                            '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-                                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path>' +
-                            '</svg>' +
-                        '</button>' +
-                    '</div>' +
-                '</td>' +
-                '<td class="px-1 py-1 text-center">' +
-                    '<button class="text-blue-500 hover:text-blue-700 text-xs px-1 py-1" ' +
-                        'title="조사요청 텔레그램 전송" ' +
-                        'onclick="sendJosaRequest(\'' + item.search_id + '\')">' +
-                        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-                            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 11l18-8-8 18-2-7-8-3z"></path>' +
-                        '</svg>' +
-                    '</button>' +
                 '</td>' +
                 '</tr>';
         }).join('');
