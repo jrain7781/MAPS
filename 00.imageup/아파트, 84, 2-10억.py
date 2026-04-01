@@ -751,7 +751,7 @@ def parse_search_results(driver, existing_keys, page_no=1):
                 'img_url':       img_url,
                 'josa_status':   '신규',
                 'tags':          '아파트|84|2-10억',
-                'search_group':  '아파트84_2-10억',
+                'search_group':  '아파트 84 2-10억',
             }
 
             items.append(item_data)
