@@ -743,13 +743,15 @@ def parse_search_results(driver, existing_keys, page_no=1):
                 'min_bid_price': min_bid_price_str,
                 'min_bid_rate':  min_bid_rate,
                 'address':       address,
-                'note1':         '',
+                'note1':         item_status if item_status != '신건' else '',
                 'note2':         '',
                 'josaja':        '',
                 'reg_member':    'system',
                 'auction_id':    str(auction_id),
                 'img_url':       img_url,
-                'josa_status':   '신규'
+                'josa_status':   '신규',
+                'tags':          '아파트|84|2-10억',
+                'search_group':  '아파트84_2-10억',
             }
 
             items.append(item_data)

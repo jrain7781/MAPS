@@ -4846,7 +4846,8 @@ const SEARCH_HEADERS = [
   'search_id', 'in-date', 'sakun_no', 'court', 'item_type',
   'item_summary', 'item_area', 'item_status', 'kamjungka',
   'min_bid_price', 'min_bid_rate', 'address', 'note1', 'note2',
-  'josaja', 'reg_date', 'reg_member', 'auction_id', 'josa_status', 'img_url'
+  'josaja', 'reg_date', 'reg_member', 'auction_id', 'josa_status', 'img_url',
+  'tags', 'search_group'
 ];
 
 /**

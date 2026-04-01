@@ -14145,6 +14145,8 @@ MJ 이정우 팀장
                 .withSuccessHandler(function(items) {
                     allSearchData = items || [];
                     if (loading) loading.style.display = 'none';
+                    buildSmTagDropdown();
+                    buildSmGroupDropdown();
                     applySearchFilters();
                 })
                 .withFailureHandler(function(err) {
@@ -14152,6 +14154,86 @@ MJ 이정우 팀장
                     showStatus('조사물건 로드 실패: ' + (err.message || err), 'error');
                 })
                 .readAllSearchItems();
+        });
+    }
+
+    // 태그 드롭다운 토글
+    function toggleSmTagDropdown(e) {
+        e.stopPropagation();
+        var dd = document.getElementById('sm-tag-dropdown');
+        if (dd) dd.classList.toggle('content-hidden');
+        document.getElementById('sm-status-dropdown') && document.getElementById('sm-status-dropdown').classList.add('content-hidden');
+        document.getElementById('sm-josaja-dropdown') && document.getElementById('sm-josaja-dropdown').classList.add('content-hidden');
+        document.getElementById('sm-group-dropdown') && document.getElementById('sm-group-dropdown').classList.add('content-hidden');
+    }
+    function handleSmTagAll(cb) {
+        document.querySelectorAll('[name="sm-tag-cb"]').forEach(function(el) { el.checked = cb.checked; });
+        document.getElementById('sm-tag-label').textContent = '태그';
+    }
+    function handleSmTagOther(cb) {
+        var allCb = document.getElementById('sm-tag-all');
+        var others = document.querySelectorAll('[name="sm-tag-cb"]');
+        var allChecked = Array.from(others).every(function(el) { return el.checked; });
+        if (allCb) allCb.checked = allChecked;
+        var selected = Array.from(others).filter(function(el) { return el.checked; });
+        var lbl = document.getElementById('sm-tag-label');
+        if (lbl) lbl.textContent = allChecked ? '태그' : (selected.length + '개선택');
+    }
+    // 묶음 드롭다운 토글
+    function toggleSmGroupDropdown(e) {
+        e.stopPropagation();
+        var dd = document.getElementById('sm-group-dropdown');
+        if (dd) dd.classList.toggle('content-hidden');
+        document.getElementById('sm-status-dropdown') && document.getElementById('sm-status-dropdown').classList.add('content-hidden');
+        document.getElementById('sm-josaja-dropdown') && document.getElementById('sm-josaja-dropdown').classList.add('content-hidden');
+        document.getElementById('sm-tag-dropdown') && document.getElementById('sm-tag-dropdown').classList.add('content-hidden');
+    }
+    function handleSmGroupAll(cb) {
+        document.querySelectorAll('[name="sm-group-cb"]').forEach(function(el) { el.checked = cb.checked; });
+        document.getElementById('sm-group-label').textContent = '묶음';
+    }
+    function handleSmGroupOther(cb) {
+        var allCb = document.getElementById('sm-group-all');
+        var others = document.querySelectorAll('[name="sm-group-cb"]');
+        var allChecked = Array.from(others).every(function(el) { return el.checked; });
+        if (allCb) allCb.checked = allChecked;
+        var selected = Array.from(others).filter(function(el) { return el.checked; });
+        var lbl = document.getElementById('sm-group-label');
+        if (lbl) lbl.textContent = allChecked ? '묶음' : (selected.length + '개선택');
+    }
+    // 태그/묶음 드롭다운 데이터 빌드 (데이터 로드 후 호출)
+    function buildSmTagDropdown() {
+        var tagSet = {};
+        allSearchData.forEach(function(item) {
+            String(item.tags || '').split('|').filter(Boolean).forEach(function(t) { tagSet[t] = true; });
+        });
+        var tags = Object.keys(tagSet).sort();
+        var dd = document.getElementById('sm-tag-dropdown');
+        if (!dd) return;
+        // 기존 동적 항목 제거
+        Array.from(dd.querySelectorAll('[name="sm-tag-cb"]')).forEach(function(el) { el.closest('label').remove(); });
+        tags.forEach(function(t) {
+            var lbl = document.createElement('label');
+            lbl.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1';
+            lbl.innerHTML = '<input type="checkbox" name="sm-tag-cb" value="' + t + '" checked onchange="handleSmTagOther(this); applySearchFilters()" class="rounded"> ' + t;
+            dd.appendChild(lbl);
+        });
+    }
+    function buildSmGroupDropdown() {
+        var groupSet = {};
+        allSearchData.forEach(function(item) {
+            var g = String(item.search_group || '').trim();
+            if (g) groupSet[g] = true;
+        });
+        var groups = Object.keys(groupSet).sort();
+        var dd = document.getElementById('sm-group-dropdown');
+        if (!dd) return;
+        Array.from(dd.querySelectorAll('[name="sm-group-cb"]')).forEach(function(el) { el.closest('label').remove(); });
+        groups.forEach(function(g) {
+            var lbl = document.createElement('label');
+            lbl.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1';
+            lbl.innerHTML = '<input type="checkbox" name="sm-group-cb" value="' + g + '" checked onchange="handleSmGroupOther(this); applySearchFilters()" class="rounded"> ' + g;
+            dd.appendChild(lbl);
         });
     }
 
@@ -14181,6 +14263,22 @@ MJ 이정우 팀장
             });
         }
 
+        // 태그 필터 (다중선택, OR: 선택된 태그 중 하나라도 포함)
+        var tagAll = document.getElementById('sm-tag-all');
+        var isTagAll = tagAll && tagAll.checked;
+        var tagSelected = [];
+        if (!isTagAll) {
+            document.querySelectorAll('[name="sm-tag-cb"]:checked').forEach(function(cb) { tagSelected.push(cb.value); });
+        }
+
+        // 묶음 필터
+        var groupAll = document.getElementById('sm-group-all');
+        var isGroupAll = groupAll && groupAll.checked;
+        var groupSelected = [];
+        if (!isGroupAll) {
+            document.querySelectorAll('[name="sm-group-cb"]:checked').forEach(function(cb) { groupSelected.push(cb.value); });
+        }
+
         filteredSearchData = allSearchData.filter(function(item) {
             if (indateVal && String(item['in-date'] || '').indexOf(indateVal) === -1) return false;
             if (sakunoVal && String(item.sakun_no || '').toLowerCase().indexOf(sakunoVal.toLowerCase()) === -1) return false;
@@ -14191,6 +14289,14 @@ MJ 이정우 팀장
             }
             if (!isJosajaAll && josajaSelected.length > 0) {
                 if (josajaSelected.indexOf(String(item.josaja || '')) === -1) return false;
+            }
+            if (!isTagAll && tagSelected.length > 0) {
+                var itemTags = String(item.tags || '').split('|').filter(Boolean);
+                var hasTag = tagSelected.some(function(t) { return itemTags.indexOf(t) !== -1; });
+                if (!hasTag) return false;
+            }
+            if (!isGroupAll && groupSelected.length > 0) {
+                if (groupSelected.indexOf(String(item.search_group || '').trim()) === -1) return false;
             }
             return true;
         });
@@ -14209,6 +14315,67 @@ MJ 이정우 팀장
         if (smSortKey === key) { smSortAsc = !smSortAsc; }
         else { smSortKey = key; smSortAsc = false; }
         applySearchFilters();
+    }
+
+    // 숫자 콤마 포맷 (가격 표시용)
+    function fmtPrice(val) {
+        var s = String(val || '').replace(/,/g, '').trim();
+        var n = parseInt(s, 10);
+        if (isNaN(n) || n === 0) return val;
+        return n.toLocaleString();
+    }
+
+    // 조사물건 보기 팝업 (allBiddingData에서 sakun_no 검색)
+    function openJosaViewPopup(sakunNo) {
+        var matches = (typeof allBiddingData !== 'undefined' ? allBiddingData : []).filter(function(d) {
+            return String(d.sakun_no || '').trim() === String(sakunNo).trim();
+        });
+        if (matches.length === 0) {
+            showStatus('MAPS 등록 조사물건 없음: ' + sakunNo, 'info');
+            return;
+        }
+        var content = matches.map(function(it) {
+            return '<div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;margin-bottom:8px;">' +
+                '<div style="font-weight:bold;font-size:13px;">' + (it.sakun_no||'') + ' · ' + (it.court||'') + '</div>' +
+                '<div style="font-size:12px;color:#374151;margin-top:3px;">' + (it.address||'-') + '</div>' +
+                '<div style="font-size:11px;color:#6b7280;margin-top:3px;">' +
+                    '담당: ' + (it.member_name||'-') + ' | 상태: ' + (it.stu_member||'-') +
+                    (it['in-date'] ? ' | 입찰: ' + it['in-date'] : '') +
+                '</div>' +
+                '</div>';
+        }).join('');
+        var modal = document.getElementById('sm-josa-popup');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'sm-josa-popup';
+            modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border:1px solid #d1d5db;border-radius:12px;padding:20px;z-index:10002;min-width:360px;max-width:520px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)';
+            document.body.appendChild(modal);
+            var ov = document.createElement('div');
+            ov.id = 'sm-josa-overlay';
+            ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:10001';
+            ov.onclick = function() { modal.style.display='none'; ov.style.display='none'; };
+            document.body.appendChild(ov);
+        }
+        modal.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+            '<span style="font-weight:bold;font-size:14px;">조사물건 정보 (' + matches.length + '건)</span>' +
+            '<button onclick="document.getElementById(\'sm-josa-popup\').style.display=\'none\';document.getElementById(\'sm-josa-overlay\').style.display=\'none\';" style="background:none;border:none;font-size:20px;cursor:pointer;color:#6b7280;line-height:1;">×</button>' +
+            '</div>' + content;
+        modal.style.display = 'block';
+        document.getElementById('sm-josa-overlay').style.display = 'block';
+    }
+
+    // 검색물건 옥션 상세 팝업 (ca_view.php, 환경설정 URL 사용)
+    function openSearchAuctionPopup(auctionId) {
+        var _awin = 'width=896,height=900,left=100,top=50,resizable=yes,scrollbars=yes';
+        var settings = (typeof auctionSettingsCache !== 'undefined') ? auctionSettingsCache : {};
+        var pattern = settings.auction_pattern || '';
+        var url;
+        if (pattern && pattern.includes('[ID]')) {
+            url = pattern.replace('[ID]', auctionId);
+        } else {
+            url = 'https://www.auction1.co.kr/auction/ca_view.php?product_id=' + auctionId;
+        }
+        window.open(url, '_auction', _awin);
     }
 
     function renderSearchList() {
@@ -14256,9 +14423,20 @@ MJ 이정우 팀장
                 ? '<img src="' + imgUrl + '" style="width:72px;height:72px;object-fit:cover;border-radius:4px;" onerror="this.style.display=\'none\'">'
                 : '<div style="width:72px;height:72px;background:#f3f4f6;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#9ca3af;">사진없음</div>';
 
-            // 옥션 링크
+            // 옥션 버튼 (ca_view 팝업)
             var auctionId = String(item.auction_id || '');
-            var auctionUrl = auctionId ? 'https://www.auction1.co.kr/auction/ca_list.php?product_id=' + auctionId : '';
+            var auctionBtnHtml = auctionId
+                ? '<button onclick="openSearchAuctionPopup(\'' + auctionId + '\')" style="font-size:14px;padding:4px 10px;background:#f97316;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:600;white-space:nowrap;" onmouseover="this.style.background=\'#ea580c\'" onmouseout="this.style.background=\'#f97316\'">옥션</button>'
+                : '<span style="font-size:14px;padding:4px 10px;color:#d1d5db;font-weight:600;">옥션</span>';
+
+            // 조사물건 보기 버튼 (allBiddingData에서 sakun_no 매칭 여부)
+            var sakunNo = String(item.sakun_no || '');
+            var hasMapsItem = (typeof allBiddingData !== 'undefined') &&
+                allBiddingData.some(function(d) { return String(d.sakun_no||'').trim() === sakunNo.trim(); });
+            var josaBtnStyle = hasMapsItem
+                ? 'font-size:11px;padding:3px 7px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer;white-space:nowrap;'
+                : 'font-size:11px;padding:3px 7px;background:#e5e7eb;color:#9ca3af;border:none;border-radius:4px;cursor:pointer;white-space:nowrap;';
+            var josaBtnHtml = '<button onclick="openJosaViewPopup(\'' + sakunNo.replace(/'/g, "\\'") + '\')" style="' + josaBtnStyle + '">조사물건 보기</button>';
 
             // 조사자 셀렉트
             var josajOpts = '<option value="">-미배정-</option>' +
@@ -14272,56 +14450,78 @@ MJ 이정우 팀장
             var failMatch = String(item.item_status || '').match(/유찰\s*\d+회/);
             var failStr = failMatch ? failMatch[0] : '';
 
+            // 특수물건 태그 (item_status에서 유찰 제외 나머지 + note1)
+            var specialTags = String(item.item_status || '').replace(/유찰\s*\d+회/g, '').trim();
+            var note1Val = String(item.note1 || '').trim();
+            var specialDisplay = specialTags || note1Val;
+            var specialHtml = specialDisplay
+                ? '<div style="font-size:10px;color:#7c3aed;margin-top:2px;">' + specialDisplay + '</div>'
+                : '';
+
+            // 가격 콤마 포맷
+            var kamjungkaDisp = fmtPrice(item.kamjungka);
+            var minBidDisp = fmtPrice(item.min_bid_price);
+
+            // 태그 배지
+            var tagsHtml = '';
+            var tagsArr = String(item.tags || '').split('|').filter(Boolean);
+            if (tagsArr.length > 0) {
+                tagsHtml = '<div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:3px;">' +
+                    tagsArr.map(function(t) {
+                        return '<span style="font-size:9px;padding:1px 4px;background:#e0e7ff;color:#3730a3;border-radius:3px;">' + t + '</span>';
+                    }).join('') +
+                    '</div>';
+            }
+
             return '<tr style="border-bottom:1px solid #e5e7eb;">' +
-                // 열1: 체크박스 + 옥션버튼
-                '<td class="px-1 py-2 text-center" style="vertical-align:middle">' +
-                    '<div class="flex flex-col items-center gap-1">' +
-                        '<input type="checkbox" class="sm-row-check rounded" value="' + item.search_id + '">' +
-                        (auctionUrl
-                            ? '<a href="' + auctionUrl + '" target="_blank" class="text-xs px-1 py-0.5 bg-orange-400 text-white rounded hover:bg-orange-500 whitespace-nowrap">옥션</a>'
-                            : '<span class="text-xs text-gray-300">옥션</span>') +
+                // 열1: 체크박스(크게) + 옥션버튼(크게) - 가로 나열
+                '<td class="px-1 py-2 text-center" style="vertical-align:middle;white-space:nowrap;">' +
+                    '<div style="display:flex;flex-direction:row;align-items:center;justify-content:center;gap:6px;">' +
+                        '<input type="checkbox" class="sm-row-check rounded" value="' + item.search_id + '" style="width:18px;height:18px;cursor:pointer;">' +
+                        auctionBtnHtml +
                     '</div>' +
                 '</td>' +
-                // 열2: 사진
-                '<td class="px-1 py-2 text-center" style="vertical-align:middle">' + imgHtml + '</td>' +
-                // 열3: 사건번호 / 물건종류 / 새창
-                '<td class="px-2 py-2" style="vertical-align:top;min-width:110px">' +
-                    '<div class="font-bold text-sm text-gray-900">' + String(item.sakun_no || '') + '</div>' +
-                    '<div class="text-xs text-blue-600 mt-0.5">' + String(item.item_type || '') + '</div>' +
-                    (auctionUrl ? '<a href="' + auctionUrl + '" target="_blank" class="inline-block mt-1 text-xs px-2 py-0.5 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 text-gray-700">새창</a>' : '') +
-                '</td>' +
-                // 열4: 소재지 (주소 / 면적 / 상태red)
-                '<td class="px-2 py-2" style="vertical-align:top">' +
-                    '<div class="text-sm text-gray-900">' + String(item.address || '') + '</div>' +
-                    '<div class="text-xs text-gray-500 mt-0.5">' + String(item.item_area || '') + '</div>' +
-                    (item.item_status && item.item_status !== '신건'
-                        ? '<div class="text-xs text-red-600 mt-0.5">' + String(item.item_status) + '</div>'
-                        : '') +
-                '</td>' +
-                // 열5: 감정가 / 최저매각가 / 평당가
-                '<td class="px-2 py-2 text-right" style="vertical-align:top;white-space:nowrap">' +
-                    '<div class="font-bold text-sm text-gray-900">' + String(item.kamjungka || '') + '</div>' +
-                    '<div class="text-sm text-blue-600 mt-0.5">' + String(item.min_bid_price || '') + '</div>' +
-                    '<div class="text-xs text-gray-500 mt-0.5">' + String(item.item_summary || '') + '</div>' +
-                '</td>' +
-                // 열6: 진행상태 (유찰 + 낙찰율)
-                '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
-                    '<div class="text-xs text-gray-700">' + failStr + '</div>' +
-                    '<div class="text-xs text-orange-500">(' + String(item.min_bid_rate || '') + ')</div>' +
-                '</td>' +
-                // 열7: 매각기일
-                '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
-                    '<div class="text-sm text-gray-900">' + inDateDisp + '</div>' +
-                    (ddayStr ? '<div class="text-xs text-gray-500 mt-0.5">' + ddayStr + '</div>' : '') +
-                '</td>' +
-                // 열8: 조사자 (상태배지 + 셀렉트)
+                // 열2: 상태배지 + 조사자 셀렉트 (변경 즉시 자동저장)
                 '<td class="px-1 py-2 text-center" style="vertical-align:middle;min-width:90px">' +
                     '<span class="block px-1 py-0.5 rounded text-xs font-semibold mb-1 ' + statusCls + '">' + (item.josa_status || '신규') + '</span>' +
                     '<select class="sm-josaja-select text-xs px-1 py-1 border border-gray-300 rounded w-full bg-white" ' +
+                        'title="변경 즉시 자동저장" ' +
                         'data-search-id="' + item.search_id + '" ' +
                         'onchange="saveSearchJosaja(this)">' +
                         josajOpts +
                     '</select>' +
+                '</td>' +
+                // 열3: 사진
+                '<td class="px-1 py-2 text-center" style="vertical-align:middle">' + imgHtml + '</td>' +
+                // 열4: 사건번호 / 물건종류 / 태그 / 조사물건 보기
+                '<td class="px-2 py-2" style="vertical-align:top;min-width:110px">' +
+                    '<div class="font-bold text-sm text-gray-900">' + sakunNo + '</div>' +
+                    '<div class="text-xs text-blue-600 mt-0.5">' + String(item.item_type || '') + '</div>' +
+                    tagsHtml +
+                    '<div style="margin-top:4px;">' + josaBtnHtml + '</div>' +
+                '</td>' +
+                // 열5: 소재지 (주소 / 면적 / 특수물건태그) - 고정폭
+                '<td class="px-2 py-2" style="vertical-align:top;width:160px;max-width:160px;min-width:120px;">' +
+                    '<div style="font-size:13px;color:#111827;word-break:break-all;line-height:1.3;">' + String(item.address || '') + '</div>' +
+                    '<div style="font-size:12px;color:#6b7280;margin-top:3px;">' + String(item.item_area || '') + '</div>' +
+                    specialHtml +
+                '</td>' +
+                // 열6: 감정가 / 최저매각가 / 평당가 / 특수물건태그
+                '<td class="px-2 py-2 text-right" style="vertical-align:top;white-space:nowrap">' +
+                    '<div class="font-bold text-sm text-gray-900">' + kamjungkaDisp + '</div>' +
+                    '<div class="text-sm text-blue-600 mt-0.5">' + minBidDisp + '</div>' +
+                    '<div class="text-xs text-gray-500 mt-0.5">' + String(item.item_summary || '') + '</div>' +
+                    (specialDisplay ? '<div style="font-size:10px;color:#7c3aed;margin-top:2px;text-align:right;">' + specialDisplay + '</div>' : '') +
+                '</td>' +
+                // 열7: 유찰 + 낙찰율
+                '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
+                    '<div class="text-xs text-gray-700">' + failStr + '</div>' +
+                    '<div class="text-xs text-orange-500">(' + String(item.min_bid_rate || '') + ')</div>' +
+                '</td>' +
+                // 열8: 매각기일
+                '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
+                    '<div class="text-sm text-gray-900">' + inDateDisp + '</div>' +
+                    (ddayStr ? '<div class="text-xs text-gray-500 mt-0.5">' + ddayStr + '</div>' : '') +
                 '</td>' +
                 '</tr>';
         }).join('');
