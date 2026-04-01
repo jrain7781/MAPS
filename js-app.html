@@ -14455,9 +14455,9 @@ MJ 이정우 팀장
             var hasMapsItem = (typeof allBiddingData !== 'undefined') &&
                 allBiddingData.some(function(d) { return String(d.sakun_no||'').trim() === sakunNo.trim(); });
             var josaBtnStyle = hasMapsItem
-                ? 'font-size:11px;padding:3px 7px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer;white-space:nowrap;'
-                : 'font-size:11px;padding:3px 7px;background:#e5e7eb;color:#9ca3af;border:none;border-radius:4px;cursor:pointer;white-space:nowrap;';
-            var josaBtnHtml = '<button onclick="openJosaViewPopup(\'' + sakunNo.replace(/'/g, "\\'") + '\')" style="' + josaBtnStyle + '">조사물건 보기</button>';
+                ? 'font-size:11px;padding:3px 0;width:72px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer;text-align:center;display:block;'
+                : 'font-size:11px;padding:3px 0;width:72px;background:#e5e7eb;color:#9ca3af;border:none;border-radius:4px;cursor:pointer;text-align:center;display:block;';
+            var josaBtnHtml = '<button onclick="openJosaViewPopup(\'' + sakunNo.replace(/'/g, "\\'") + '\')" style="' + josaBtnStyle + '">조사물건</button>';
 
             // 조사자 셀렉트
             var josajOpts = '<option value="">-미배정-</option>' +
@@ -14542,14 +14542,19 @@ MJ 이정우 팀장
                         josajOpts +
                     '</select>' +
                 '</td>' +
-                // 열3: 사진 (가운데 정렬, 좌우 여백)
-                '<td class="px-3 py-2 text-center" style="vertical-align:middle;">' + imgHtml + '</td>' +
-                // 열4: 사건번호 / 물건종류 / 태그 / 조사물건 보기
+                // 열3: 사진 + 조사물건보기 버튼
+                '<td class="px-3 py-2 text-center" style="vertical-align:middle;">' +
+                    '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">' +
+                        imgHtml +
+                        josaBtnHtml +
+                    '</div>' +
+                '</td>' +
+                // 열4: 사건번호 / 물건종류 / 태그 / item_summary
                 '<td class="px-2 py-2" style="vertical-align:top;min-width:110px">' +
                     '<div class="font-bold text-sm text-gray-900">' + sakunNo + '</div>' +
                     '<div class="text-xs text-blue-600 mt-0.5">' + String(item.item_type || '') + '</div>' +
                     tagsHtml +
-                    '<div style="margin-top:4px;">' + josaBtnHtml + '</div>' +
+                    (itemSummaryFull ? '<div style="font-size:11px;color:#2563eb;margin-top:3px;font-weight:600;">' + itemSummaryFull + '</div>' : '') +
                 '</td>' +
                 // 열5: 소재지 (주소 / 면적 / 특수물건태그) - 가로 제한 없음
                 '<td class="px-2 py-2" style="vertical-align:top;min-width:180px;">' +

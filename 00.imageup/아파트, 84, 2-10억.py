@@ -648,10 +648,13 @@ def parse_search_results(driver, existing_keys, page_no=1):
 
             # ── full_text 파싱: 페이지에 보이는 데이터 그대로 추출 ──
 
-            # --- 사건번호 (예: 24-87492 → 24타경87492) ---
-            sak_m = re.search(r'\b\d{2,4}-\d+(?:-\d+)?\b', full_text)
+            # --- 사건번호 (예: 25-87492 → 2025타경87492) ---
+            sak_m = re.search(r'\b(\d{2,4})-(\d+)(?:-\d+)?\b', full_text)
             if sak_m:
-                sakun_no = sak_m.group().replace('-', '타경', 1)
+                yr = sak_m.group(1)
+                if len(yr) == 2:
+                    yr = '20' + yr  # 2자리 연도 → 4자리
+                sakun_no = yr + '타경' + sak_m.group(2)
             else:
                 sakun_no = f'번호미상{i}'
 

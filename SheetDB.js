@@ -4925,6 +4925,12 @@ function saveSearchItem(data) {
   if (sheet.getLastColumn() < SEARCH_HEADERS.length) {
     sheet.getRange(1, 1, 1, SEARCH_HEADERS.length).setValues([SEARCH_HEADERS]).setFontWeight('bold');
   }
+  // sakun_no 연도 정규화: "25타경..." → "2025타경..."
+  if (data.sakun_no) {
+    data.sakun_no = String(data.sakun_no).replace(/^(\d{2})(타경)/, function(_, yr, t) {
+      return '20' + yr + t;
+    });
+  }
   // 중복 체크 (sakun_no + in-date 기준)
   var existing = readAllSearchItems();
   var sakunNo = String(data.sakun_no || '').trim();
