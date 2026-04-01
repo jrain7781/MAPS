@@ -686,11 +686,16 @@ def parse_search_results(driver, existing_keys, page_no=1):
             item_type = type_m.group() if type_m else ''
 
             # --- 주소 (시/도 포함 라인) ---
+            # 패턴1: "경기도 수원시..." / "서울특별시 강남구..." (도/시 이름 뒤 공백 포함)
+            # 패턴2: "경기 수원시..." (시도 약칭 + 공백)
             addr_m = re.search(
-                r'((?:서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)\S+\s[^\n\[]{5,100})',
+                r'((?:서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)\S*\s+[^\n\[]{5,100})',
                 full_text
             )
             address = addr_m.group().strip() if addr_m else ''
+            # 주소가 너무 길면 앞 40자만 (긴 full_text 전체가 잡히는 경우 방지)
+            if len(address) > 60:
+                address = address[:60].rsplit(' ', 1)[0]
 
             # --- 면적 (㎡ 포함 대괄호 전체: [대지권 37.105㎡..., 건물 84.944㎡...]) ---
             area_m = re.search(r'\[[^\]]*㎡[^\]]*\]', full_text)
