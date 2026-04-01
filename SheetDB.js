@@ -4866,6 +4866,25 @@ function initSearchSheet_() {
 }
 
 /**
+ * SEARCH 시트 헤더 컬럼 갱신 (신규 컬럼 추가 시 GAS 에디터에서 직접 실행)
+ * - 기존 데이터는 유지하고 헤더 행만 SEARCH_HEADERS 기준으로 갱신
+ */
+function updateSearchHeaders() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
+  if (!sheet) { Logger.log('SEARCH 시트 없음'); return; }
+  const currentCols = sheet.getLastColumn();
+  if (currentCols < SEARCH_HEADERS.length) {
+    // 부족한 열만 추가
+    const needed = SEARCH_HEADERS.length - currentCols;
+    sheet.insertColumnsAfter(currentCols, needed);
+  }
+  // 헤더 행 전체 재기록
+  sheet.getRange(1, 1, 1, SEARCH_HEADERS.length).setValues([SEARCH_HEADERS]).setFontWeight('bold');
+  Logger.log('SEARCH 헤더 갱신 완료: ' + SEARCH_HEADERS.join(', '));
+}
+
+/**
  * 조사물건 전체 조회
  */
 function readAllSearchItems() {
