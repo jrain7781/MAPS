@@ -14605,8 +14605,14 @@ MJ 이정우 팀장
                 return Math.round(n) + '%';
             }
 
-            // 조사명(search_group) 표시: 콤마 구분 멀티값 그대로 표시
-            var sgDisplay = _parseAllGroups(item).join(' / ');
+            // 조사명(search_group) 표시: "아파트 84 2-10억" → "아파트, 84㎡, 2-10억"
+            function fmtGroupLabel(g) {
+                var parts = g.trim().split(/\s+/);
+                return parts.map(function(p, i) {
+                    return (i === 1 && /^\d+(\.\d+)?$/.test(p)) ? p + '㎡' : p;
+                }).join(', ');
+            }
+            var sgDisplay = _parseAllGroups(item).map(fmtGroupLabel).join('\n');
 
             // 등록일 표시
             var regDate = String(item.reg_date || '').trim();
@@ -14621,7 +14627,8 @@ MJ 이정우 팀장
             if (allTagGroups.length > 0) {
                 tagsHtml = '<div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:3px;">' +
                     allTagGroups.map(function(t) {
-                        var label = [t.type, t.area, t.price].filter(Boolean).join('|');
+                        var areaDisp = t.area ? (/^\d+(\.\d+)?$/.test(t.area) ? t.area + '㎡' : t.area) : '';
+                        var label = [t.type, areaDisp, t.price].filter(Boolean).join(', ');
                         return '<span style="font-size:9px;padding:1px 4px;background:#e0e7ff;color:#3730a3;border-radius:3px;">' + label + '</span>';
                     }).join('') +
                     '</div>';
@@ -14646,12 +14653,10 @@ MJ 이정우 팀장
                     '</select>' +
                 '</td>' +
                 // 열3: 조사명 덩어리 + 조사내용 버튼
-                '<td class="px-1 py-2 text-center" style="vertical-align:middle;min-width:80px;">' +
+                '<td class="px-1 py-2 text-center" style="vertical-align:middle;min-width:90px;">' +
                     (sgDisplay
-                        ? '<div style="font-size:10px;color:#4f46e5;font-weight:600;line-height:1.4;word-break:keep-all;white-space:pre-line;">' +
-                          _parseAllGroups(item).join('\n') +
-                          '</div>'
-                        : '<div style="font-size:10px;color:#d1d5db;">-</div>') +
+                        ? '<div style="font-size:13px;color:#4f46e5;font-weight:600;line-height:1.5;word-break:keep-all;white-space:pre-line;">' + sgDisplay + '</div>'
+                        : '<div style="font-size:13px;color:#d1d5db;">-</div>') +
                     josaBtnHtml +
                 '</td>' +
                 // 열4: 사진
