@@ -14217,15 +14217,27 @@ MJ 이정우 팀장
         if (lbl) lbl.textContent = allChecked ? '조사명 전체' : (selected.length + '개선택');
     }
 
+    // tags 멀티값 파싱 헬퍼: "아파트|84|2-10억;아파트|84|3-7억" → [{type,area,price}, ...]
+    function _parseAllTags(item) {
+        return String(item.tags || '').split(';').filter(Boolean).map(function(t) {
+            var p = t.split('|');
+            return { type: p[0]||'', area: p[1]||'', price: p[2]||'' };
+        });
+    }
+    // search_group 멀티값 파싱: "아파트 84 2-10억,아파트 84 3-7억" → [...]
+    function _parseAllGroups(item) {
+        return String(item.search_group || '').split(',').map(function(g){return g.trim();}).filter(Boolean);
+    }
+
     // 태그 서브 드롭다운 빌드 (데이터 로드 후 호출)
     function buildSmTagDropdown() {
-        // tags 필드: "아파트|84|2-10억" → [0]=타입, [1]=면적, [2]=감정가범위
         var typeSet = {}, areaSet = {}, priceSet = {};
         allSearchData.forEach(function(item) {
-            var parts = String(item.tags || '').split('|').filter(Boolean);
-            if (parts[0]) typeSet[parts[0]] = true;
-            if (parts[1]) areaSet[parts[1]] = true;
-            if (parts[2]) priceSet[parts[2]] = true;
+            _parseAllTags(item).forEach(function(t) {
+                if (t.type)  typeSet[t.type]   = true;
+                if (t.area)  areaSet[t.area]   = true;
+                if (t.price) priceSet[t.price] = true;
+            });
         });
         _buildSmTagSubDropdown('sm-tagtype-dropdown', 'sm-tagtype-all', 'sm-tagtype-cb', Object.keys(typeSet).sort(), 'sm-tagtype-label', '물건타입');
         _buildSmTagSubDropdown('sm-tagarea-dropdown', 'sm-tagarea-all', 'sm-tagarea-cb', Object.keys(areaSet).sort(), 'sm-tagarea-label', '면적');
@@ -14234,20 +14246,16 @@ MJ 이정우 팀장
     function buildSmGroupDropdown() {
         var groupSet = {};
         allSearchData.forEach(function(item) {
-            var g = String(item.search_group || '').trim();
-            if (g) {
-                // 예쁘게 표시: "아파트84_2-10억" → tags 기반 변환
-                var parts = String(item.tags || '').split('|').filter(Boolean);
-                var label = parts.length >= 3 ? parts[0] + ', ' + parts[1] + '㎡, ' + parts[2] : (g.replace(/_/g, ', '));
-                groupSet[g] = label;
-            }
+            _parseAllGroups(item).forEach(function(g) {
+                if (!groupSet[g]) groupSet[g] = g; // 값 = 표시명 (동일)
+            });
         });
         var dd = document.getElementById('sm-group-dropdown'); if (!dd) return;
         Array.from(dd.querySelectorAll('[name="sm-group-cb"]')).forEach(function(el) { el.closest('label').remove(); });
         Object.keys(groupSet).sort().forEach(function(g) {
             var lbl = document.createElement('label');
             lbl.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-xs';
-            lbl.innerHTML = '<input type="checkbox" name="sm-group-cb" value="' + g + '" checked onchange="handleSmGroupOther(this); applySearchFilters()" class="rounded"> ' + groupSet[g];
+            lbl.innerHTML = '<input type="checkbox" name="sm-group-cb" value="' + g + '" checked onchange="handleSmGroupOther(this); applySearchFilters()" class="rounded"> ' + g;
             dd.appendChild(lbl);
         });
     }
@@ -14309,15 +14317,21 @@ MJ 이정우 팀장
             if (!isJosajaAll && josajaSelected.length > 0) {
                 if (josajaSelected.indexOf(String(item.josaja || '')) === -1) return false;
             }
-            // 태그 서브 필터 (tags 필드: "아파트|84|2-10억")
-            var tagParts = String(item.tags || '').split('|');
-            var itemType = tagParts[0] || ''; var itemArea = tagParts[1] || ''; var itemPrice = tagParts[2] || '';
-            if (!tfType.isAll  && tfType.selected.length  > 0 && tfType.selected.indexOf(itemType)  === -1) return false;
-            if (!tfArea.isAll  && tfArea.selected.length  > 0 && tfArea.selected.indexOf(itemArea)   === -1) return false;
-            if (!tfPrice.isAll && tfPrice.selected.length > 0 && tfPrice.selected.indexOf(itemPrice) === -1) return false;
-            // 조사명 필터
+            // 태그 서브 필터: 멀티값(;구분) 중 하나라도 선택 항목에 포함되면 통과
+            var itemTags = _parseAllTags(item);
+            if (!tfType.isAll && tfType.selected.length > 0) {
+                if (!itemTags.some(function(t){ return tfType.selected.indexOf(t.type) !== -1; })) return false;
+            }
+            if (!tfArea.isAll && tfArea.selected.length > 0) {
+                if (!itemTags.some(function(t){ return tfArea.selected.indexOf(t.area) !== -1; })) return false;
+            }
+            if (!tfPrice.isAll && tfPrice.selected.length > 0) {
+                if (!itemTags.some(function(t){ return tfPrice.selected.indexOf(t.price) !== -1; })) return false;
+            }
+            // 조사명 필터: 멀티값(,구분) 중 하나라도 일치하면 통과
             if (!isGroupAll && groupSelected.length > 0) {
-                if (groupSelected.indexOf(String(item.search_group || '').trim()) === -1) return false;
+                var itemGroups = _parseAllGroups(item);
+                if (!itemGroups.some(function(g){ return groupSelected.indexOf(g) !== -1; })) return false;
             }
             return true;
         });
@@ -14490,20 +14504,8 @@ MJ 이정우 팀장
                 return Math.round(n) + '%';
             }
 
-            // 조사명(search_group) 표시: "아파트84_2-10억" → "아파트, 84㎡, 2-10억"
-            var sgRaw = String(item.search_group || '').trim();
-            var sgDisplay = '';
-            if (sgRaw) {
-                // tags 필드가 있으면 태그 기반으로 예쁘게 표시
-                var tParts = String(item.tags || '').split('|').filter(Boolean);
-                if (tParts.length >= 3) {
-                    sgDisplay = tParts[0] + ', ' + tParts[1] + '㎡, ' + tParts[2];
-                } else if (tParts.length > 0) {
-                    sgDisplay = tParts.join(', ');
-                } else {
-                    sgDisplay = sgRaw.replace(/_/g, ', ');
-                }
-            }
+            // 조사명(search_group) 표시: 콤마 구분 멀티값 그대로 표시
+            var sgDisplay = _parseAllGroups(item).join(' / ');
 
             // 등록일 표시
             var regDate = String(item.reg_date || '').trim();
@@ -14512,13 +14514,14 @@ MJ 이정우 팀장
             var kamjungkaDisp = fmtPrice(item.kamjungka);
             var minBidDisp = fmtPrice(item.min_bid_price);
 
-            // 태그 배지
+            // 태그 배지: 멀티태그(;구분) 각 그룹을 배지로 표시
             var tagsHtml = '';
-            var tagsArr = String(item.tags || '').split('|').filter(Boolean);
-            if (tagsArr.length > 0) {
+            var allTagGroups = _parseAllTags(item);
+            if (allTagGroups.length > 0) {
                 tagsHtml = '<div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:3px;">' +
-                    tagsArr.map(function(t) {
-                        return '<span style="font-size:9px;padding:1px 4px;background:#e0e7ff;color:#3730a3;border-radius:3px;">' + t + '</span>';
+                    allTagGroups.map(function(t) {
+                        var label = [t.type, t.area, t.price].filter(Boolean).join('|');
+                        return '<span style="font-size:9px;padding:1px 4px;background:#e0e7ff;color:#3730a3;border-radius:3px;">' + label + '</span>';
                     }).join('') +
                     '</div>';
             }

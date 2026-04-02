@@ -4931,18 +4931,66 @@ function saveSearchItem(data) {
       return '20' + yr + t;
     });
   }
-  // 중복 체크 (sakun_no + in-date 기준)
+
+  // 중복 체크 키: sakun_no + in-date + court (3개 조합)
   var existing = readAllSearchItems();
   var sakunNo = String(data.sakun_no || '').trim();
-  var inDate = String(data['in-date'] || '').trim();
+  var inDate  = String(data['in-date'] || '').trim();
+  var court   = String(data.court || '').trim();
+
+  // 동일 물건 존재 여부 확인
+  var existIdx = -1;
+  var existItem = null;
   if (sakunNo) {
-    var isDup = existing.some(function(item) {
-      return String(item.sakun_no || '').trim() === sakunNo &&
-             String(item['in-date'] || '').trim() === inDate;
-    });
-    if (isDup) return { success: false, message: '이미 등록된 물건입니다 (사건번호+입찰일자 중복).' };
+    for (var ei = 0; ei < existing.length; ei++) {
+      var ex = existing[ei];
+      if (String(ex.sakun_no  || '').trim() === sakunNo &&
+          String(ex['in-date']|| '').trim() === inDate  &&
+          String(ex.court     || '').trim() === court) {
+        existIdx = ei;
+        existItem = ex;
+        break;
+      }
+    }
   }
-  // search_id 생성
+
+  // ── 기존 등록 있음 → 업데이트 (josa_status, josaja 제외) ──
+  if (existItem) {
+    var searchId = existItem.search_id;
+    // search_group 누적 (콤마 구분, 중복 제거)
+    var newGroup = String(data.search_group || '').trim();
+    var existGroups = String(existItem.search_group || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    if (newGroup && existGroups.indexOf(newGroup) === -1) existGroups.push(newGroup);
+    var mergedGroup = existGroups.join(',');
+    // tags 누적 (세미콜론 구분, 중복 제거)
+    var newTags = String(data.tags || '').trim();
+    var existTags = String(existItem.tags || '').split(';').map(function(s){return s.trim();}).filter(Boolean);
+    if (newTags && existTags.indexOf(newTags) === -1) existTags.push(newTags);
+    var mergedTags = existTags.join(';');
+
+    // 시트에서 해당 행 찾아 업데이트
+    var lastRow = sheet.getLastRow();
+    var idCol = SEARCH_HEADERS.indexOf('search_id') + 1;
+    var allIds = sheet.getRange(2, idCol, lastRow - 1, 1).getValues();
+    var sheetRowIdx = -1;
+    for (var ri = 0; ri < allIds.length; ri++) {
+      if (String(allIds[ri][0]).trim() === searchId) { sheetRowIdx = ri + 2; break; }
+    }
+    if (sheetRowIdx > 0) {
+      var skipFields = { search_id:1, reg_date:1, josa_status:1, josaja:1 };
+      SEARCH_HEADERS.forEach(function(h, ci) {
+        if (skipFields[h]) return;
+        var val;
+        if (h === 'search_group') val = mergedGroup;
+        else if (h === 'tags') val = mergedTags;
+        else val = (data[h] !== undefined && data[h] !== null) ? String(data[h]) : String(existItem[h] || '');
+        sheet.getRange(sheetRowIdx, ci + 1).setValue(val);
+      });
+    }
+    return { success: true, search_id: searchId, updated: true, message: '기존 물건 업데이트 완료' };
+  }
+
+  // ── 신규 등록 ──
   var now = new Date();
   var ts = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyMMddHHmmss');
   var searchId = 'S' + ts + String(Math.floor(Math.random() * 1000)).padStart(3, '0');
@@ -4957,7 +5005,7 @@ function saveSearchItem(data) {
   });
 
   sheet.appendRow(row);
-  return { success: true, search_id: searchId };
+  return { success: true, search_id: searchId, updated: false };
 }
 
 /**
