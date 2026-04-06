@@ -14,9 +14,10 @@ const MEMBER_CLASS_DETAILS_SHEET_NAME_DB = 'member_class_details';
 
 // - m_name2: "선택된 명의 표시값" (예: "(MJ) 한한한") — 화면 복원/리스트 표시에 사용
 // - auction_id: "옥션 고유번호 (7자리)"
-const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'reg_date', 'reg_member', 'bid_state', 'image_id', 'note', 'm_name2', 'auction_id', 'chuchen_state', 'chuchen_date'];
+const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'reg_date', 'reg_member', 'bid_state', 'image_id', 'note', 'm_name2', 'auction_id', 'chuchen_state', 'chuchen_date', 'class_d1_id'];
 // chuchen_state: Q열(idx 16) - '신규'|'전달완료'
 // chuchen_date:  R열(idx 17) - 최근 전달 일시 (ISO string)
+// class_d1_id:   S열(idx 18) - 수업 회차 ID (수업 물건 연결용)
 
 
 // members 시트 헤더 정의 (2026-02 개편)
@@ -2356,7 +2357,14 @@ function readMembersByClassD1Id(classD1Id) {
   const filtered = data
     .map(row => {
       const obj = {};
-      MEMBER_CLASS_DETAILS_HEADERS.forEach((h, i) => { obj[h] = row[i] || ''; });
+      MEMBER_CLASS_DETAILS_HEADERS.forEach((h, i) => {
+        const val = row[i];
+        if (val instanceof Date) {
+          obj[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        } else {
+          obj[h] = val !== undefined && val !== null ? val : '';
+        }
+      });
       return obj;
     })
     .filter(d => String(d.class_d1_id) === String(classD1Id));

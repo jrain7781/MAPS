@@ -117,7 +117,9 @@ const CLASS_D1_HEADERS = [
   'class_loop',       // 회차 번호 (1, 2, 3...)
   'completed',        // 완료 여부 (Y/N)
   'reg_date',         // 등록일
-  'reg_id'            // 등록자
+  'reg_id',           // 등록자
+  'bid_datetime_1',   // 1차 입찰 마감 일시 (O열)
+  'bid_datetime_2'    // 2차 입찰 마감 일시 (P열)
 ];
 
 // --- 회원 수업 상세(member_class_details) 시트 헤더 ---
