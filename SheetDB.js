@@ -2753,6 +2753,7 @@ function getAutoApprovalStats(testMode) {
         bid_approved_web: [],    // 8번: FIELD_CHANGE stu_member→입찰
         bid_pending_tele: [],    // 18번: REQUEST_CANCEL_CHUCHEN APPROVED
         bid_pending_web: [],     // 8번: FIELD_CHANGE stu_member 추천→미정/상품
+        bid_pending_sys: [],     // AUTO_EXPIRE: 시스템 자동 만료
         cancel_approved_tele: [],// 19번: REQUEST_CANCEL_BID APPROVED
         cancel_approved_web: [], // 8번: FIELD_CHANGE stu_member 입찰→추천/미정/상품
         delivered_tele: [],      // 10번: TELEGRAM_SENT note='bid_price'
@@ -2846,6 +2847,9 @@ function getAutoApprovalStats(testMode) {
     } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && fromVal === '추천'
       && (toVal === '미정' || toVal === '상품')) {
       addId(ds.bid_pending_web, itemId);                                         // 8번
+      // 시스템 자동 만료: AUTO_EXPIRE
+    } else if (action === 'AUTO_EXPIRE' && fieldName === 'stu_member' && fromVal === '추천' && toVal === '미정') {
+      addId(ds.bid_pending_sys, itemId);
 
       // ── 입찰가-전달 ──────────────────────────────────────────────────
     } else if (action === 'TELEGRAM_SENT' && note === 'bid_price') {
@@ -2871,20 +2875,20 @@ function getAutoApprovalStats(testMode) {
     var s = dateStats[k];
     var rec = mergeIds(s.recommend_tele, s.recommend_web);
     var bapr = mergeIds(s.bid_approved_tele, s.bid_approved_web);
-    var bpnd = mergeIds(s.bid_pending_tele, s.bid_pending_web);
+    var bpnd = mergeIds(mergeIds(s.bid_pending_tele, s.bid_pending_web), s.bid_pending_sys);
     var capr = mergeIds(s.cancel_approved_tele, s.cancel_approved_web);
     var dlvr = mergeIds(s.delivered_tele, s.delivered_web);
     var conf = mergeIds(s.confirmed_tele, s.confirmed_web);
     var stat = mergeIds(s.status_tele, s.status_web);
     return {
       date: s.date,
-      recommend: rec.length, recommend_tele: s.recommend_tele.length, recommend_web: s.recommend_web.length, recommend_ids: rec,
-      bid_approved: bapr.length, bid_approved_tele: s.bid_approved_tele.length, bid_approved_web: s.bid_approved_web.length, bid_approved_ids: bapr,
-      bid_pending: bpnd.length, bid_pending_tele: s.bid_pending_tele.length, bid_pending_web: s.bid_pending_web.length, bid_pending_ids: bpnd,
-      cancel_approved: capr.length, cancel_approved_tele: s.cancel_approved_tele.length, cancel_approved_web: s.cancel_approved_web.length, cancel_approved_ids: capr,
-      delivered: dlvr.length, delivered_tele: s.delivered_tele.length, delivered_web: s.delivered_web.length, delivered_ids: dlvr,
-      confirmed: conf.length, confirmed_tele: s.confirmed_tele.length, confirmed_web: s.confirmed_web.length, confirmed_ids: conf,
-      status_notify: stat.length, status_notify_tele: s.status_tele.length, status_notify_web: s.status_web.length, status_notify_ids: stat
+      recommend: rec.length, recommend_tele: s.recommend_tele.length, recommend_web: s.recommend_web.length, recommend_ids: rec, recommend_tele_ids: s.recommend_tele, recommend_web_ids: s.recommend_web,
+      bid_approved: bapr.length, bid_approved_tele: s.bid_approved_tele.length, bid_approved_web: s.bid_approved_web.length, bid_approved_ids: bapr, bid_approved_tele_ids: s.bid_approved_tele, bid_approved_web_ids: s.bid_approved_web,
+      bid_pending: bpnd.length, bid_pending_tele: s.bid_pending_tele.length, bid_pending_web: s.bid_pending_web.length, bid_pending_sys: s.bid_pending_sys.length, bid_pending_ids: bpnd, bid_pending_tele_ids: s.bid_pending_tele, bid_pending_web_ids: s.bid_pending_web, bid_pending_sys_ids: s.bid_pending_sys,
+      cancel_approved: capr.length, cancel_approved_tele: s.cancel_approved_tele.length, cancel_approved_web: s.cancel_approved_web.length, cancel_approved_ids: capr, cancel_approved_tele_ids: s.cancel_approved_tele, cancel_approved_web_ids: s.cancel_approved_web,
+      delivered: dlvr.length, delivered_tele: s.delivered_tele.length, delivered_web: s.delivered_web.length, delivered_ids: dlvr, delivered_tele_ids: s.delivered_tele, delivered_web_ids: s.delivered_web,
+      confirmed: conf.length, confirmed_tele: s.confirmed_tele.length, confirmed_web: s.confirmed_web.length, confirmed_ids: conf, confirmed_tele_ids: s.confirmed_tele, confirmed_web_ids: s.confirmed_web,
+      status_notify: stat.length, status_notify_tele: s.status_tele.length, status_notify_web: s.status_web.length, status_notify_ids: stat, status_notify_tele_ids: s.status_tele, status_notify_web_ids: s.status_web
     };
   });
   result.sort(function (a, b) { return b.date.localeCompare(a.date); });

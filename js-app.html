@@ -2960,15 +2960,25 @@
         var fmtDateDay = function (s) {
             try { var p = s.split('/'); var dt = new Date(2000 + parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)); return s + ' (' + DAYS_KO[dt.getDay()] + ')'; } catch (e) { return s; }
         };
-        // "합계 (텔레, 수작업)" 형식 셀 렌더링
+        // "합계 (텔레, 수작업[, 만료])" 형식 셀 렌더링 - 합계/각 항목 개별 클릭 가능
         var mkCell = function (row, baseField, color, rowIdx) {
             var total = row[baseField] || 0;
             if (!total) return '<td class="py-1.5 px-1 text-center text-gray-200 text-xs">-</td>';
             var tele = row[baseField + '_tele'] || 0;
             var web  = row[baseField + '_web']  || 0;
-            var text = (tele > 0 || web > 0) ? total + '<span class="font-normal text-gray-400"> (' + tele + ', ' + web + ')</span>' : total;
+            var sys  = row[baseField + '_sys']  || 0;
+            var mkSub = function (cnt, field) {
+                if (!cnt) return '0';
+                return '<span class="hover:underline cursor-pointer" onclick="event.stopPropagation();navigateToItemsByIds(' + rowIdx + ',\'' + field + '\')">' + cnt + '</span>';
+            };
+            var sub = '';
+            if (tele > 0 || web > 0 || sys > 0) {
+                var parts = mkSub(tele, baseField + '_tele_ids') + ', ' + mkSub(web, baseField + '_web_ids');
+                if (sys > 0) parts += ', ' + mkSub(sys, baseField + '_sys_ids');
+                sub = '<span class="font-normal text-gray-400"> (' + parts + ')</span>';
+            }
             var click = 'onclick="navigateToItemsByIds(' + rowIdx + ',\'' + baseField + '_ids\')" style="cursor:pointer"';
-            return '<td class="py-1.5 px-1 text-center text-xs font-bold hover:underline ' + color + '" ' + click + '>' + text + '</td>';
+            return '<td class="py-1.5 px-1 text-center text-xs font-bold hover:underline ' + color + '" ' + click + '>' + total + sub + '</td>';
         };
         var tbodyHtml = '';
         stats.forEach(function (row, i) {
@@ -3395,7 +3405,7 @@
 
             // [NEW] 입찰가 상태(신규/전송됨) 버튼 초기화
             const currentBidState = data.bid_state || '신규'; // 기본값 신규
-            setBidState(currentBidState, false); // false: 값만 세팅하고 UI 업데이트 (이벤트 발생 X)
+            setDetailBidState(currentBidState);
 
             // [추천 전달 상태] 추천 상태일 때만 chuchen_state 버튼 표시
             const chuchenStateButtonsEl = document.getElementById('chuchen-state-buttons');
@@ -3463,33 +3473,62 @@
         }
     }
 
-    function setBidState(state, updateHidden = true) {
-        const btnNew = document.getElementById('btn-bid-new');
-        const btnDone = document.getElementById('btn-bid-done');
+    function setDetailBidState(state) {
+        const bidInput = document.getElementById('form-bidprice');
         const hiddenInput = document.getElementById('form-bid-state');
+        const btnNew = document.getElementById('detail-bid-state-new-btn');
+        const btnDelivered = document.getElementById('detail-bid-state-delivered-btn');
+        const btnConfirmed = document.getElementById('detail-bid-state-confirmed-btn');
 
-        if (state === '신규') {
-            if (btnNew) {
-                btnNew.classList.remove('bg-white', 'text-gray-600');
-                btnNew.classList.add('bg-red-100', 'text-red-600', 'font-bold', 'border-red-200');
-            }
-            if (btnDone) {
-                btnDone.classList.remove('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
-                btnDone.classList.add('bg-white', 'text-gray-600');
-            }
-        } else {
-            if (btnNew) {
-                btnNew.classList.remove('bg-red-100', 'text-red-600', 'font-bold', 'border-red-200');
-                btnNew.classList.add('bg-white', 'text-gray-600');
-            }
-            if (btnDone) {
-                btnDone.classList.remove('bg-white', 'text-gray-600');
-                btnDone.classList.add('bg-green-100', 'text-green-600', 'font-bold', 'border-green-200');
-            }
+        if (hiddenInput) hiddenInput.value = state;
+
+        // 버튼 스타일 초기화
+        if (btnNew) {
+            btnNew.classList.remove('bg-red-500', 'text-white', 'font-bold');
+            btnNew.classList.add('bg-red-100', 'text-red-700');
+        }
+        if (btnDelivered) {
+            btnDelivered.classList.remove('bg-gray-900', 'text-white', 'font-bold');
+            btnDelivered.classList.add('bg-gray-100', 'text-gray-700');
+        }
+        if (btnConfirmed) {
+            btnConfirmed.classList.remove('bg-blue-500', 'text-white', 'font-bold');
+            btnConfirmed.classList.add('bg-gray-100', 'text-gray-700');
         }
 
-        if (updateHidden && hiddenInput) {
-            hiddenInput.value = state;
+        // 선택된 버튼 스타일 + 입찰가 색상 적용
+        if (state === '신규') {
+            if (btnNew) {
+                btnNew.classList.remove('bg-red-100', 'text-red-700');
+                btnNew.classList.add('bg-red-500', 'text-white', 'font-bold');
+            }
+            if (bidInput) {
+                bidInput.classList.remove('text-gray-700', 'text-blue-600');
+                bidInput.classList.add('text-red-600');
+            }
+        } else if (state === '전달완료') {
+            if (btnDelivered) {
+                btnDelivered.classList.remove('bg-gray-100', 'text-gray-700');
+                btnDelivered.classList.add('bg-gray-900', 'text-white', 'font-bold');
+            }
+            if (bidInput) {
+                bidInput.classList.remove('text-red-600', 'text-blue-600');
+                bidInput.classList.add('text-gray-700');
+            }
+        } else if (state === '확인완료') {
+            if (btnConfirmed) {
+                btnConfirmed.classList.remove('bg-gray-100', 'text-gray-700');
+                btnConfirmed.classList.add('bg-blue-500', 'text-white', 'font-bold');
+            }
+            if (bidInput) {
+                bidInput.classList.remove('text-red-600', 'text-gray-700');
+                bidInput.classList.add('text-blue-600');
+            }
+        } else {
+            if (bidInput) {
+                bidInput.classList.remove('text-gray-700', 'text-blue-600');
+                bidInput.classList.add('text-red-600');
+            }
         }
     }
 
