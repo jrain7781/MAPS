@@ -2170,7 +2170,14 @@ function readClassD1ByClassId(classId) {
   return data
     .map(row => {
       const obj = {};
-      CLASS_D1_HEADERS.forEach((h, i) => { obj[h] = row[i] || ''; });
+      CLASS_D1_HEADERS.forEach((h, i) => {
+        const val = row[i];
+        if (val instanceof Date) {
+          obj[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        } else {
+          obj[h] = val !== undefined && val !== null ? val : '';
+        }
+      });
       return obj;
     })
     .filter(d => String(d.class_id) === String(classId))
@@ -2424,6 +2431,25 @@ function addMemberToClassD1(classD1Id, memberId) {
 
   sheet.appendRow(row);
   return { success: true, message: '회원 추가 완료' };
+}
+
+/**
+ * 수업 회차에 여러 회원을 일괄 추가합니다.
+ */
+function addMemberToClassD1Batch(classD1Id, memberIds) {
+  var added = 0;
+  var skipped = [];
+  memberIds.forEach(function(memberId) {
+    var r = addMemberToClassD1(classD1Id, memberId);
+    if (r.success) {
+      added++;
+    } else {
+      skipped.push(r.message);
+    }
+  });
+  var msg = added + '명 추가 완료';
+  if (skipped.length > 0) msg += ' (' + skipped.join(', ') + ')';
+  return { success: added > 0, added: added, message: msg };
 }
 
 /**

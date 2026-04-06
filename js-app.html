@@ -11304,10 +11304,12 @@ ${token}
 
         google.script.run
             .withSuccessHandler(data => {
+                console.log('[D1] readClassD1ByClassId result:', JSON.stringify(data));
                 allClassD1Data = Array.isArray(data) ? data : [];
                 renderClassD1Grid();
             })
             .withFailureHandler(err => {
+                console.error('[D1] readClassD1ByClassId error:', err);
                 grid.innerHTML = '<div class="col-span-7 text-red-400 py-2">로드 실패</div>';
             })
             .readClassD1ByClassId(classId);
@@ -11326,7 +11328,7 @@ ${token}
             const isSelected = selectedClassD1Id === d.class_d1_id;
             const isCompleted = d.completed === 'Y';
             const bgClass = isSelected ? 'bg-indigo-600 text-white' : (isCompleted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700');
-            const dateStr = d.class_date ? d.class_date.substring(4, 6) + '/' + d.class_date.substring(6, 8) : '';
+            const dateStr = d.class_date ? String(d.class_date).substring(4, 6) + '/' + String(d.class_date).substring(6, 8) : '';
 
             return `<div class="p-2 rounded cursor-pointer ${bgClass} hover:opacity-80" onclick="selectClassD1('${d.class_d1_id}')">
                 <div class="font-bold">${d.class_loop}회</div>
@@ -11452,77 +11454,203 @@ ${token}
     }
 
     // 회원 추가 모달
+    var d1PendingMembers = []; // 임시 저장 목록 [{member_id, member_name, info}]
+
     function showAddMemberToD1Modal() {
         if (!selectedClassD1Id) {
             showStatus('먼저 회차를 선택하세요.', 'error');
             return;
         }
+        d1PendingMembers = [];
+        renderD1PendingList();
+        // 입력 초기화
+        const nameEl = document.getElementById('d1-add-member-name');
+        const idEl = document.getElementById('d1-add-member-id');
+        const infoEl = document.getElementById('d1-add-member-info');
+        if (nameEl) nameEl.value = '';
+        if (idEl) idEl.value = '';
+        if (infoEl) infoEl.textContent = '';
         document.getElementById('addMemberToD1Modal').classList.remove('content-hidden');
-        loadAddMemberList();
+        if (nameEl) {
+            bindD1MemberAc_();
+            setTimeout(() => nameEl.focus(), 100);
+        }
     }
 
     function closeAddMemberToD1Modal(event) {
         if (event && event.target !== event.currentTarget) return;
         document.getElementById('addMemberToD1Modal').classList.add('content-hidden');
+        closeD1MemberAc_();
     }
 
-    function loadAddMemberList() {
-        const tbody = document.getElementById('addMemberListTableBody');
-        if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-500 text-sm">회원을 불러오는 중...</td></tr>';
+    // ── D1 전용 자동완성 ──────────────────────────────────────────
+    var _d1AcBound = false;
+    var _d1AcContainer = null;
+    var _d1AcItems = [];
+    var _d1AcIdx = 0;
+    var _d1AcOpen = false;
 
-        google.script.run
-            .withSuccessHandler(data => {
-                const members = Array.isArray(data) ? data : [];
-                renderAddMemberList(members);
-            })
-            .withFailureHandler(err => {
-                if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-red-500 text-sm">로드 실패</td></tr>';
-            })
-            .getMembersForClass();
-    }
+    function bindD1MemberAc_() {
+        const inputEl = document.getElementById('d1-add-member-name');
+        const memberIdEl = document.getElementById('d1-add-member-id');
+        if (!inputEl || _d1AcBound) return;
+        _d1AcBound = true;
 
-    function renderAddMemberList(members) {
-        const tbody = document.getElementById('addMemberListTableBody');
-        if (!tbody) return;
-
-        if (members.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-500 text-sm">등록된 회원이 없습니다.</td></tr>';
-            return;
+        // 컨테이너 생성
+        if (!_d1AcContainer) {
+            _d1AcContainer = document.createElement('div');
+            _d1AcContainer.style.cssText = 'position:absolute;z-index:99999;display:none;';
+            _d1AcContainer.className = 'bg-white border border-gray-200 rounded-lg shadow-lg overflow-auto';
+            _d1AcContainer.addEventListener('mousedown', e => e.preventDefault());
+            document.body.appendChild(_d1AcContainer);
         }
 
-        const kw = (document.getElementById('addD1Member-search')?.value || '').toLowerCase();
-        const filtered = members.filter(m => {
-            const name = String(m.member_name || '').toLowerCase();
-            return name.includes(kw);
+        inputEl.addEventListener('input', () => {
+            memberIdEl.value = '';
+            document.getElementById('d1-add-member-info').textContent = '';
+            openD1Ac_(inputEl.value);
         });
-
-        tbody.innerHTML = filtered.map(m => `
-            <tr>
-                <td class="px-3 py-2 text-sm">${escapeHtml(m.member_name || '-')}</td>
-                <td class="px-3 py-2 text-sm text-gray-500">${escapeHtml(m.phone || '-')}</td>
-                <td class="px-2 py-2 text-center">
-                    <button type="button" onclick="addMemberToD1('${m.member_id}')" class="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded">추가</button>
-                </td>
-            </tr>
-        `).join('');
+        inputEl.addEventListener('focus', () => openD1Ac_(inputEl.value));
+        inputEl.addEventListener('blur', () => setTimeout(closeD1MemberAc_, 200));
+        inputEl.addEventListener('keydown', e => {
+            if (!_d1AcOpen) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); _d1AcIdx = Math.min(_d1AcIdx + 1, _d1AcItems.length - 1); renderD1Ac_(inputEl); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); _d1AcIdx = Math.max(_d1AcIdx - 1, 0); renderD1Ac_(inputEl); }
+            else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectD1AcItem_(_d1AcItems[_d1AcIdx]); }
+            else if (e.key === 'Escape') closeD1MemberAc_();
+        });
     }
 
-    function filterAddMemberList() {
-        loadAddMemberList();
+    function openD1Ac_(query) {
+        const members = getMemberDataSource_();
+        const q = String(query || '').toLowerCase().trim();
+        _d1AcItems = [];
+        members.forEach(m => {
+            const name = String(m.member_name || '').trim();
+            if (!name) return;
+            if (!q || name.toLowerCase().includes(q)) {
+                _d1AcItems.push({ member_id: m.member_id, member_name: name, member: m });
+            }
+        });
+        _d1AcIdx = 0;
+        _d1AcOpen = _d1AcItems.length > 0;
+        renderD1Ac_(document.getElementById('d1-add-member-name'));
     }
 
-    function addMemberToD1(memberId) {
+    function renderD1Ac_(inputEl) {
+        if (!_d1AcContainer || !inputEl) return;
+        if (!_d1AcOpen || _d1AcItems.length === 0) { _d1AcContainer.style.display = 'none'; return; }
+        const r = inputEl.getBoundingClientRect();
+        _d1AcContainer.style.left = (r.left + window.scrollX) + 'px';
+        _d1AcContainer.style.top = (r.bottom + window.scrollY + 4) + 'px';
+        _d1AcContainer.style.width = Math.max(260, r.width) + 'px';
+        _d1AcContainer.style.maxHeight = '220px';
+        _d1AcContainer.style.display = 'block';
+        _d1AcContainer.innerHTML = _d1AcItems.map((it, idx) => {
+            const m = it.member;
+            const classId = String(m.class_id || '').trim();
+            const cls = (typeof allClassesData !== 'undefined' && classId)
+                ? (allClassesData.find(c => String(c.class_id) === classId) || {}) : {};
+            const clsText = cls.class_name ? cls.class_name + (cls.class_loc ? ' (' + cls.class_loc + ')' : '') : '';
+            const sub = [m.phone || '', clsText].filter(Boolean).join(' | ');
+            const active = idx === _d1AcIdx ? 'bg-indigo-100' : 'hover:bg-indigo-50';
+            return '<div data-idx="' + idx + '" class="px-3 py-2 text-sm cursor-pointer ' + active + '">' +
+                '<span class="font-medium text-gray-900">' + escapeHtml(it.member_name) + '</span>' +
+                (sub ? '<span class="ml-2 text-xs text-gray-400">' + escapeHtml(sub) + '</span>' : '') +
+                '</div>';
+        }).join('');
+        Array.from(_d1AcContainer.querySelectorAll('[data-idx]')).forEach(node => {
+            node.addEventListener('mouseenter', () => { _d1AcIdx = parseInt(node.getAttribute('data-idx')); renderD1Ac_(inputEl); });
+            node.addEventListener('click', e => { e.stopPropagation(); selectD1AcItem_(_d1AcItems[parseInt(node.getAttribute('data-idx'))]); });
+        });
+    }
+
+    function selectD1AcItem_(it) {
+        if (!it) return;
+        const inputEl = document.getElementById('d1-add-member-name');
+        const memberIdEl = document.getElementById('d1-add-member-id');
+        const infoEl = document.getElementById('d1-add-member-info');
+        if (inputEl) inputEl.value = it.member_name;
+        if (memberIdEl) memberIdEl.value = it.member_id;
+        // 이름 옆 클래스 정보 표시
+        const m = it.member;
+        const classId = String(m.class_id || '').trim();
+        const cls = (typeof allClassesData !== 'undefined' && classId)
+            ? (allClassesData.find(c => String(c.class_id) === classId) || {}) : {};
+        const parts = [];
+        if (m.phone) parts.push(m.phone);
+        if (cls.class_type) parts.push(cls.class_type);
+        if (cls.class_name) parts.push(cls.class_name);
+        if (cls.class_grade) parts.push('[' + cls.class_grade + ']');
+        if (cls.class_loc) parts.push('(' + cls.class_loc + ')');
+        if (infoEl) infoEl.textContent = parts.length ? parts.join(' | ') : '';
+        closeD1MemberAc_();
+    }
+
+    function closeD1MemberAc_() {
+        _d1AcOpen = false;
+        if (_d1AcContainer) _d1AcContainer.style.display = 'none';
+    }
+
+    // ── 임시목록 관리 ─────────────────────────────────────────────
+    function addToD1Pending() {
+        const memberId = (document.getElementById('d1-add-member-id')?.value || '').trim();
+        const memberName = (document.getElementById('d1-add-member-name')?.value || '').trim();
+        if (!memberId) { showStatus('회원을 선택하세요.', 'error'); return; }
+        if (d1PendingMembers.some(p => p.member_id === memberId)) {
+            showStatus('이미 임시목록에 있습니다.', 'error'); return;
+        }
+        const infoText = (document.getElementById('d1-add-member-info')?.textContent || '');
+        d1PendingMembers.push({ member_id: memberId, member_name: memberName, info: infoText });
+        renderD1PendingList();
+        // 입력 초기화
+        const nameEl = document.getElementById('d1-add-member-name');
+        const idEl = document.getElementById('d1-add-member-id');
+        const infoEl = document.getElementById('d1-add-member-info');
+        if (nameEl) nameEl.value = '';
+        if (idEl) idEl.value = '';
+        if (infoEl) infoEl.textContent = '';
+        if (nameEl) nameEl.focus();
+    }
+
+    function removeD1Pending(memberId) {
+        d1PendingMembers = d1PendingMembers.filter(p => p.member_id !== memberId);
+        renderD1PendingList();
+    }
+
+    function renderD1PendingList() {
+        const wrap = document.getElementById('d1PendingListWrap');
+        const list = document.getElementById('d1PendingList');
+        if (!wrap || !list) return;
+        if (d1PendingMembers.length === 0) {
+            wrap.classList.add('content-hidden');
+            list.innerHTML = '';
+            return;
+        }
+        wrap.classList.remove('content-hidden');
+        list.innerHTML = d1PendingMembers.map(p =>
+            '<div class="flex items-center justify-between px-3 py-2 text-sm">' +
+            '<div><span class="font-medium text-gray-900">' + escapeHtml(p.member_name) + '</span>' +
+            (p.info ? '<span class="ml-2 text-xs text-gray-400">' + escapeHtml(p.info) + '</span>' : '') + '</div>' +
+            '<button type="button" onclick="removeD1Pending(\'' + p.member_id + '\')" class="ml-2 text-red-400 hover:text-red-600 text-xs">✕</button>' +
+            '</div>'
+        ).join('');
+    }
+
+    function saveD1MembersBatch() {
+        if (d1PendingMembers.length === 0) { showStatus('임시목록에 추가된 회원이 없습니다.', 'error'); return; }
+        const memberIds = d1PendingMembers.map(p => p.member_id);
+        showStatus('저장 중...', 'info');
         google.script.run
             .withSuccessHandler(result => {
-                if (result.success) {
-                    showStatus(result.message, 'success');
+                showStatus(result.message, result.success ? 'success' : 'error');
+                if (result.added > 0) {
                     loadD1Members(selectedClassD1Id);
-                } else {
-                    showStatus(result.message, 'error');
+                    closeAddMemberToD1Modal();
                 }
             })
-            .withFailureHandler(e => showStatus(e.message, 'error'))
-            .addMemberToClassD1(selectedClassD1Id, memberId);
+            .withFailureHandler(e => showStatus(e.message || '저장 실패', 'error'))
+            .addMemberToClassD1Batch(selectedClassD1Id, memberIds);
     }
 
     // 입찰물건관리에서 등록된 회원만 자동검색 (기존 함수 확장: 명의별 옵션 생성)
