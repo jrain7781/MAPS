@@ -112,13 +112,13 @@ SPECIAL_EXCLUDE_KEYWORDS = {kw for _, _, kws in SPECIAL_EXCLUDE_LIST for kw in k
 
 # auction1.co.kr special select 전체 value→이름 맵 (제외되지 않은 특수물건 이름 추출용)
 SPECIAL_VALUE_NAME_MAP = {
-    '11': '오늘공개신건',
-    '31': '재매각',
+    '31': '오늘공고신건',
+    '11': '재매각',
     '42': '재진행',
     '8':  '반값경매',
-    '24': '반값(1년경과)',
+    '24': '1년경과물건',
     '33': '위반건축물',
-    '34': '초보자경매물건',
+    '34': '초보자경매',
     '1':  '유치권',
     '2':  '법정지상권',
     '29': '분묘기지권',
@@ -126,7 +126,7 @@ SPECIAL_VALUE_NAME_MAP = {
     '36': '임금채권',
     '45': 'HUG임차권',
     '25': '형식적경매(유치권)',
-    '26': '형식적경매(유류)',
+    '26': '형식적경매(공유물분할)',
     '27': '형식적경매(청산)',
     '28': '형식적경매(기타)',
     '46': '공시1억이하',
@@ -551,7 +551,7 @@ def save_search_items_to_maps(items_to_save):
 # ==============================================================================
 # [함수] 검색 결과 파싱 (1페이지 분량)
 # ==============================================================================
-def parse_search_results(driver, existing_keys, page_no=1):
+def parse_search_results(driver, existing_keys, page_no=1, item_summary=''):
     """검색 결과 페이지에서 물건 정보를 추출합니다."""
     time.sleep(2)
     remove_popups_css(driver)
@@ -639,13 +639,6 @@ def parse_search_results(driver, existing_keys, page_no=1):
             if APARTMENT_KEYWORD not in full_text:
                 continue
 
-            # --- 특수물건 체크 (핵심 필터) ---
-            is_special, reason = is_special_item(driver, container)
-            if is_special:
-                skip_special += 1
-                print(f"    🚫 [{i+1}/{total_count}] 특수물건 제외: {reason}")
-                continue
-
             # ── full_text 파싱: 페이지에 보이는 데이터 그대로 추출 ──
 
             # --- 사건번호 (예: 25-87492 → 2025타경87492) ---
@@ -676,29 +669,24 @@ def parse_search_results(driver, existing_keys, page_no=1):
                 print(f"    ⏭  [{sakun_no}] 입찰일 {bid_date} 지남, 스킵")
                 continue
 
-            # --- 중복 체크 ---
-            key1 = sakun_no
-            key2 = f"{sakun_no}|{in_date}"
-            if key1 in existing_keys or key2 in existing_keys:
-                skip_dup += 1
-                print(f"    ⏭  [{sakun_no}] 이미 MAPS에 등록됨, 스킵")
-                continue
+            # --- 중복 체크 (GAS 업데이트 로직에 위임: 클라이언트단 스킵 없음) ---
+            # saveSearchItem이 동일 sakun_no+in-date+court 이면 UPDATE 처리
+            pass  # (중복 스킵 제거)
 
             # --- 물건종류 ---
             type_m = re.search(r'아파트|오피스텔|빌라|다세대|연립|단독주택|상가|토지|근린생활', full_text)
             item_type = type_m.group() if type_m else ''
 
-            # --- 주소 (시/도 포함 라인) ---
-            # 패턴1: "경기도 수원시..." / "서울특별시 강남구..." (도/시 이름 뒤 공백 포함)
-            # 패턴2: "경기 수원시..." (시도 약칭 + 공백)
-            addr_m = re.search(
-                r'((?:서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)\S*\s+[^\n\[]{5,100})',
-                full_text
-            )
-            address = addr_m.group().strip() if addr_m else ''
-            # 주소가 너무 길면 앞 40자만 (긴 full_text 전체가 잡히는 경우 방지)
-            if len(address) > 60:
-                address = address[:60].rsplit(' ', 1)[0]
+            # --- 주소 (설계 문서 셀렉터: td:nth-child(4) > span > div.addr) ---
+            address = driver.execute_script("""
+                var tr = arguments[0];
+                var el = tr.querySelector('td:nth-child(4) > span > div[class*="addr"]');
+                if (el) return (el.innerText || el.textContent || '').trim();
+                // fallback: div.addr 직접
+                var el2 = tr.querySelector('div[class*="addr"]');
+                if (el2) return (el2.innerText || el2.textContent || '').trim();
+                return '';
+            """, container) or ''
 
             # --- 면적 (㎡ 포함 대괄호 전체: [대지권 37.105㎡..., 건물 84.944㎡...]) ---
             area_m = re.search(r'\[[^\]]*㎡[^\]]*\]', full_text)
@@ -733,23 +721,7 @@ def parse_search_results(driver, existing_keys, page_no=1):
                     print(f"    🔕 [{sakun_no}] 감정가({kamjungka_man}만원) 범위 초과, 스킵")
                     continue
 
-            # --- 특수물건 항목명 (item_summary에 저장) ---
-            item_summary = driver.execute_script("""
-                var tbl = arguments[0];
-                var nameMap = arguments[1];
-                var excludeVals = arguments[2];
-                var inputs = tbl.querySelectorAll('input[type="checkbox"], input[type="hidden"]');
-                for (var i = 0; i < inputs.length; i++) {
-                    var val = (inputs[i].value || '').trim();
-                    if (val && nameMap[val] && excludeVals.indexOf(val) === -1) return nameMap[val];
-                }
-                var allEls = tbl.querySelectorAll('[data-special], [data-type]');
-                for (var j = 0; j < allEls.length; j++) {
-                    var spVal = (allEls[j].getAttribute('data-special') || allEls[j].getAttribute('data-type') || '').trim();
-                    if (spVal && nameMap[spVal] && excludeVals.indexOf(spVal) === -1) return nameMap[spVal];
-                }
-                return '';
-            """, container, SPECIAL_VALUE_NAME_MAP, list(SPECIAL_EXCLUDE_VALUES)) or ''
+            # item_summary: 검색에 사용한 특수물건 값 (파라미터로 전달)
 
             # --- 이미지 URL ---
             img_url = driver.execute_script("""
@@ -790,7 +762,6 @@ def parse_search_results(driver, existing_keys, page_no=1):
                 'min_bid_price': min_bid_price_str,
                 'min_bid_rate':  min_bid_rate,
                 'address':       address,
-                'note1':         item_status if item_status != '신건' else '',
                 'note2':         '',
                 'josaja':        '',
                 'reg_member':    'system',
@@ -802,7 +773,7 @@ def parse_search_results(driver, existing_keys, page_no=1):
             }
 
             items.append(item_data)
-            print(f"    ✅ [{sakun_no}] {address or court} / {in_date} / 감정가:{kamjungka_str} / 면적:{item_area}")
+            print(f"    ✅ [{sakun_no}] {address or court} / {in_date} / 특수:{item_summary or '없음'} / 감정가:{kamjungka_str}")
 
         except Exception as e:
             print(f"    ⚠️ [{i+1}] 파싱 오류: {type(e).__name__}: {e}")
@@ -935,194 +906,112 @@ def run_crawler():
             raise RuntimeError("검색폼 로드 실패 - 수동으로 URL 확인 필요")
         time.sleep(1)
 
-        # ── 검색 조건 세팅 ──
-        print("   검색 조건 세팅 중...")
-        driver.execute_script("""
-            function setVal(id, val) {
-                var el = document.getElementById(id) || document.querySelector('[name="' + id + '"]');
-                if(el) {
-                    el.value = val;
-                    el.dispatchEvent(new Event('change', {bubbles: true}));
-                    el.dispatchEvent(new Event('input', {bubbles: true}));
+        # ── 검색 조건 세팅 함수 ──
+        def set_search_conditions(special_val):
+            driver.execute_script("""
+                function setVal(id, val) {
+                    var el = document.getElementById(id) || document.querySelector('[name="' + id + '"]');
+                    if(el) { el.value = val; el.dispatchEvent(new Event('change', {bubbles:true})); }
                 }
-            }
-            // 가격 범위 (만원 단위) - class 기반 셀렉터 사용 (엑셀 설계: input.unite_ju.min_price)
-            function setPriceInput(cls, val) {
-                var el = document.querySelector('input.' + cls) ||
-                         document.getElementById(cls) ||
-                         document.querySelector('[name="' + cls + '"]');
-                if (el) {
-                    el.value = val;
-                    el.dispatchEvent(new Event('change', {bubbles: true}));
-                    el.dispatchEvent(new Event('input', {bubbles: true}));
+                function setPriceInput(cls, val) {
+                    var el = document.querySelector('input.' + cls) || document.getElementById(cls);
+                    if(el) { el.value = val; el.dispatchEvent(new Event('change', {bubbles:true})); }
                 }
-            }
-            setPriceInput('min_price', '20000');   // 2억
-            setPriceInput('max_price', '100000');  // 10억
-
-            // 개찰횟수 (2~3회차 = 유찰 1~2회)
-            setVal('b_count1', '2');
-            setVal('b_count2', '3');
-
-            // 부동산 종류: 아파트
-            var sClass = document.getElementById('s_class');
-            if(sClass) {
-                var opts = Array.from(sClass.options);
-                var aptOpt = opts.find(o => o.text.includes('아파트'));
-                if(aptOpt) {
-                    sClass.value = aptOpt.value;
-                    sClass.dispatchEvent(new Event('change', {bubbles: true}));
+                setPriceInput('min_price', '20000');
+                setPriceInput('max_price', '100000');
+                setVal('b_count1', '2');
+                setVal('b_count2', '3');
+                var sClass = document.getElementById('s_class');
+                if(sClass) {
+                    var aptOpt = Array.from(sClass.options).find(o => o.text.includes('아파트'));
+                    if(aptOpt) { sClass.value = aptOpt.value; sClass.dispatchEvent(new Event('change', {bubbles:true})); }
                 }
-            }
+                setVal('b_area1', '84');
+                var special = document.getElementById('special');
+                if(special) { special.value = arguments[0]; special.dispatchEvent(new Event('change', {bubbles:true})); }
+            """, special_val)
+            time.sleep(0.5)
 
-            // 면적 입력 (b_area1 = 84)
-            setVal('b_area1', '84');
-
-            // ★ 특수물건 = 설정안함(0) - 전체 검색 후 JS에서 필터링
-            var special = document.getElementById('special');
-            if(special) {
-                special.value = '0';
-                special.dispatchEvent(new Event('change', {bubbles: true}));
-            }
-        """)
-        time.sleep(0.5)
-
-        # ── 폼 값 실제 적용 여부 검증 ──
-        form_vals = driver.execute_script("""
-            function gv(id) {
-                var el = document.getElementById(id) || document.querySelector('[name="'+id+'"]') || document.querySelector('input.'+id);
-                return el ? el.value : 'NOT_FOUND';
-            }
-            return {
-                min_price: gv('min_price'),
-                max_price: gv('max_price'),
-                b_area1:   gv('b_area1'),
-                b_count1:  gv('b_count1'),
-                b_count2:  gv('b_count2'),
-                s_class:   gv('s_class'),
-                state:     gv('state'),
-                special:   gv('special'),
-            };
-        """)
-        print(f"   [폼값확인] {form_vals}")
-        print("   ✓ 검색 조건 세팅 완료 (special=설정안함/전체)")
-
-        # ── 목록 수 설정 ──
-        try:
-            ls = driver.execute_script("""
-                var s = document.getElementById('list_scale');
-                if(s) { s.value = '50'; s.dispatchEvent(new Event('change', {bubbles:true})); return '50'; }
-                return '기본';
-            """)
-            print(f"   ✓ 목록 수: {ls}개")
-        except:
-            pass
-
-        # ── 정렬 설정 ──
-        try:
-            r = driver.execute_script("""
-                var s = document.getElementById('order_type');
-                if(!s) return '없음';
-                var opt = Array.from(s.options).find(o => o.text.includes('등록일') && o.text.includes('↓'));
-                if(!opt) return '옵션없음';
-                s.value = opt.value;
-                s.dispatchEvent(new Event('change', {bubbles:true}));
-                return s.value;
-            """)
-            print(f"   ✓ 정렬 설정: {r}")
-        except:
-            pass
-
-        # ── 검색 버튼 클릭 (엑셀 셀렉터 우선) ──
-        search_clicked = False
-        # 엑셀: #fm_aulist > table > tbody > tr:nth-child(12) > td > input.btn_box_s.btn_lightblack
-        for sel_type, sel_val in [
-            ('css', '#fm_aulist > table > tbody > tr:nth-child(12) > td > input.btn_box_s.btn_lightblack'),
-            ('css', 'input.btn_lightblack'),
-            ('css', 'input.btn_box_s'),
-            ('id',  'btnSrch'),
-        ]:
-            try:
-                if sel_type == 'css':
-                    btn = WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, sel_val)))
-                else:
-                    btn = WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((By.ID, sel_val)))
-                driver.execute_script("arguments[0].click();", btn)
-                print(f"   v 검색 버튼 클릭 완료 [{sel_type}:{sel_val[:40]}]")
-                search_clicked = True
-                wait_for_ajax(driver)
-                break
-            except:
-                continue
-        if not search_clicked:
-            # 최후 수단: 폼 submit
+        def click_search():
+            for sel in [
+                '#fm_aulist > table > tbody > tr:nth-child(12) > td > input.btn_box_s.btn_lightblack',
+                'input.btn_lightblack', 'input.btn_box_s',
+            ]:
+                try:
+                    btn = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, sel)))
+                    driver.execute_script("arguments[0].click();", btn)
+                    wait_for_ajax(driver)
+                    return True
+                except:
+                    continue
             try:
                 driver.execute_script("document.getElementById('fm_aulist').submit();")
-                print("   v 폼 submit 실행")
                 wait_for_ajax(driver)
-            except Exception as e:
-                print(f"   ! 검색 실행 실패: {e}")
+                return True
+            except:
+                return False
 
-        # ── 1페이지 파싱 ──
-        print("\n📋 [1페이지] 결과 파싱 중...")
-        prev_fingerprint = get_page_fingerprint(driver)
-        page1_items, page1_total = parse_search_results(driver, existing_keys, page_no=1)
-        all_new_items.extend(page1_items)
+        def crawl_all_pages(summary_name):
+            """현재 검색 결과 전 페이지 파싱. item_summary=summary_name"""
+            items = []
+            prev_fp = get_page_fingerprint(driver)
+            print(f"\n📋 [1페이지] 파싱 중...")
+            pg1, _ = parse_search_results(driver, existing_keys, page_no=1, item_summary=summary_name)
+            items.extend(pg1)
 
-        # ── 페이지네이션: goPage 방식 OR '다음' 버튼 방식 ──
-        total_pages = get_total_pages(driver)
-        # goPage 링크가 없으면 has_next_page로 다음 버튼 체크
-        if total_pages == 1:
-            total_pages = 999 if has_next_page(driver) else 1
-        print(f"\n   총 {total_pages if total_pages < 999 else '다음버튼'}페이지 감지")
+            total_pages = get_total_pages(driver)
+            if total_pages == 1:
+                total_pages = 999 if has_next_page(driver) else 1
 
-        pg = 2
-        while pg <= total_pages:
-            print(f"\n📋 [{pg}페이지] 이동 중...")
-
-            # 1순위: goPage 방식
-            result = go_to_page(driver, wait, pg)
-            print(f"   페이지이동: {result}")
-
-            if result == 'not_found':
-                # 2순위: '다음' 버튼 클릭
-                clicked = click_next_page(driver)
-                if not clicked:
-                    print(f"   ⚠️ [{pg}p] 다음 페이지 없음 - 크롤링 종료")
+            pg = 2
+            while pg <= total_pages:
+                print(f"\n📋 [{pg}페이지] 이동 중...")
+                result = go_to_page(driver, wait, pg)
+                if 'not_found' in str(result):
+                    if not click_next_page(driver):
+                        break
+                wait_for_ajax(driver)
+                time.sleep(1.5)
+                remove_popups_css(driver)
+                curr_fp = get_page_fingerprint(driver)
+                if curr_fp and prev_fp and curr_fp == prev_fp:
+                    print(f"   ⚠️ [{pg}p] 페이지 이동 실패, 종료")
                     break
-                print(f"   페이지이동: {clicked}")
+                prev_fp = curr_fp
+                pg_items, pg_total = parse_search_results(driver, existing_keys, page_no=pg, item_summary=summary_name)
+                items.extend(pg_items)
+                if pg_total == 0:
+                    break
+                if total_pages == 999 and not has_next_page(driver):
+                    break
+                if pg >= 50:
+                    break
+                pg += 1
+            return items
 
-            wait_for_ajax(driver)
-            time.sleep(1.5)
-            remove_popups_css(driver)
+        # ── 특수물건별 루프 검색 ──
+        for sp_val, sp_name in SPECIAL_VALUE_NAME_MAP.items():
+            print(f"\n{'='*50}")
+            print(f"🔍 특수물건 [{sp_name}] (value={sp_val}) 검색")
+            print(f"{'='*50}")
 
-            # ── 막힌 페이지 감지: 페이지 내용이 이전과 동일하면 중단 ──
-            curr_fingerprint = get_page_fingerprint(driver)
-            if curr_fingerprint and prev_fingerprint and curr_fingerprint == prev_fingerprint:
-                print(f"   ⚠️ [{pg}p] 페이지 내용이 이전과 동일 → 페이지 이동 실패, 크롤링 종료")
-                break
-            prev_fingerprint = curr_fingerprint
+            nav_ok = go_to_search_page()
+            try:
+                WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, "fm_aulist")))
+            except:
+                print(f"   ! 검색폼 로드 실패, 건너뜀")
+                continue
 
-            pg_items, pg_total = parse_search_results(driver, existing_keys, page_no=pg)
-            all_new_items.extend(pg_items)
+            set_search_conditions(sp_val)
+            if not click_search():
+                print(f"   ! 검색 실행 실패, 건너뜀")
+                continue
 
-            if pg_total == 0:
-                print(f"   [{pg}p] 빈 페이지, 크롤링 종료")
-                break
+            sp_items = crawl_all_pages(sp_name)
+            all_new_items.extend(sp_items)
+            print(f"   → [{sp_name}] {len(sp_items)}건 수집")
 
-            # total_pages=999(다음버튼 방식)이면 매 페이지마다 다음 버튼 재확인
-            if total_pages == 999 and not has_next_page(driver):
-                print(f"   [{pg}p] 마지막 페이지 (다음 버튼 없음)")
-                break
-
-            if pg >= 50:
-                print("   ⚠️ 안전 제한 50페이지 도달")
-                break
-            pg += 1
-
-        print(f"\n📦 신규 등록 대상: {len(all_new_items)}건")
+        print(f"\n📦 총 등록 대상: {len(all_new_items)}건")
 
     except Exception as e:
         print(f"\n❌ 오류 발생:")
