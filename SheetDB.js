@@ -2298,6 +2298,21 @@ function updateClassD1Completed(classD1Id, completed) {
 }
 
 /**
+ * 회차 날짜를 수정합니다.
+ */
+function updateClassD1Date(classD1Id, newDate) {
+  const sheet = ensureClassD1Sheet_();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '데이터 없음' };
+  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+  const idx = ids.findIndex(id => String(id) === String(classD1Id));
+  if (idx < 0) return { success: false, message: '회차를 찾을 수 없습니다.' };
+  const dateCol = CLASS_D1_HEADERS.indexOf('class_date') + 1;
+  sheet.getRange(idx + 2, dateCol).setValue(newDate);
+  return { success: true, message: '날짜 수정 완료' };
+}
+
+/**
  * 회차를 삭제합니다.
  */
 function deleteClassD1(classD1Id) {

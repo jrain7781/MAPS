@@ -10400,6 +10400,8 @@ MJ 이정우 팀장
     let selectedClassId = null;
     let selectedClassD1Id = null;
     let d1MembersData = [];
+    let d1Batches = [];       // 배치 그룹 배열 [{ batchKey, items[] }]
+    let d1BatchIdx = 0;       // 현재 배치 인덱스
 
     // --- 회원관리 (신규) 함수들 ---
 
@@ -11300,19 +11302,50 @@ ${token}
     function loadClassD1Grid(classId) {
         const grid = document.getElementById('classD1Grid');
         if (!grid) return;
-        grid.innerHTML = '<div class="col-span-7 text-gray-400 py-2">회차를 불러오는 중...</div>';
+        grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
 
         google.script.run
             .withSuccessHandler(data => {
-                console.log('[D1] readClassD1ByClassId result:', JSON.stringify(data));
                 allClassD1Data = Array.isArray(data) ? data : [];
+                buildD1Batches_();
                 renderClassD1Grid();
             })
             .withFailureHandler(err => {
-                console.error('[D1] readClassD1ByClassId error:', err);
-                grid.innerHTML = '<div class="col-span-7 text-red-400 py-2">로드 실패</div>';
+                grid.innerHTML = '<div class="text-red-400 py-2 text-xs text-center">로드 실패</div>';
             })
             .readClassD1ByClassId(classId);
+    }
+
+    // 배치 그룹핑: class_d1_id 에서 타임스탬프(중간 파트) 기준으로 묶기
+    function buildD1Batches_() {
+        const map = {};
+        allClassD1Data.forEach(d => {
+            const parts = String(d.class_d1_id).split('_');
+            const batchKey = parts.length >= 2 ? parts[1] : 'default';
+            if (!map[batchKey]) map[batchKey] = [];
+            map[batchKey].push(d);
+        });
+        // 최신 배치가 앞에 오도록 내림차순 정렬
+        d1Batches = Object.keys(map).sort((a, b) => b.localeCompare(a)).map(k => ({ batchKey: k, items: map[k] }));
+        d1BatchIdx = 0; // 최신 배치 먼저 표시
+        updateD1BatchLabel_();
+    }
+
+    function updateD1BatchLabel_() {
+        const label = document.getElementById('d1BatchLabel');
+        if (!label) return;
+        if (d1Batches.length === 0) { label.textContent = '-'; return; }
+        const bk = d1Batches[d1BatchIdx].batchKey;
+        // YYYYMMDDHHMMSS → YYYY-MM-DD 형식으로
+        const dateStr = bk.length >= 8 ? bk.substring(0, 4) + '-' + bk.substring(4, 6) + '-' + bk.substring(6, 8) : bk;
+        label.textContent = dateStr + ' 생성 (' + (d1BatchIdx + 1) + '/' + d1Batches.length + ')';
+    }
+
+    function prevD1Batch() {
+        if (d1BatchIdx < d1Batches.length - 1) { d1BatchIdx++; updateD1BatchLabel_(); renderClassD1Grid(); }
+    }
+    function nextD1Batch() {
+        if (d1BatchIdx > 0) { d1BatchIdx--; updateD1BatchLabel_(); renderClassD1Grid(); }
     }
 
     function renderClassD1Grid() {
@@ -11320,20 +11353,34 @@ ${token}
         if (!grid) return;
 
         if (allClassD1Data.length === 0) {
-            grid.innerHTML = '<div class="col-span-7 text-gray-400 py-2">회차가 없습니다. "다음회차 생성" 버튼을 눌러주세요.</div>';
+            grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">회차가 없습니다. 회차생성 버튼을 눌러주세요.</div>';
+            document.getElementById('d1BatchLabel').textContent = '-';
             return;
         }
 
-        grid.innerHTML = allClassD1Data.map(d => {
+        const batch = d1Batches[d1BatchIdx];
+        if (!batch) return;
+        const items = batch.items;
+
+        grid.innerHTML = items.map(d => {
             const isSelected = selectedClassD1Id === d.class_d1_id;
             const isCompleted = d.completed === 'Y';
-            const bgClass = isSelected ? 'bg-indigo-600 text-white' : (isCompleted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700');
-            const dateStr = d.class_date ? String(d.class_date).substring(4, 6) + '/' + String(d.class_date).substring(6, 8) : '';
-
-            return `<div class="p-2 rounded cursor-pointer ${bgClass} hover:opacity-80" onclick="selectClassD1('${d.class_d1_id}')">
-                <div class="font-bold">${d.class_loop}회</div>
-                <div class="text-xs">${dateStr}</div>
-                ${isCompleted ? '<div class="text-xs">✓</div>' : ''}
+            const selCls = isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50';
+            const dateStr = d.class_date ? String(d.class_date).substring(4, 6) + '/' + String(d.class_date).substring(6, 8) : '-';
+            const weekStr = d.class_week || '';
+            const completedBadge = isCompleted ? '<span class="ml-1 text-green-600 text-xs">✓</span>' : '';
+            return `<div class="border rounded-lg px-3 py-2 mb-1.5 cursor-pointer ${selCls} transition-colors" onclick="selectClassD1('${d.class_d1_id}')">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-sm text-indigo-700">${d.class_loop}회</span>
+                        <span class="text-xs text-gray-500">${dateStr}${weekStr ? ' (' + weekStr + ')' : ''}</span>
+                        ${completedBadge}
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button type="button" onclick="event.stopPropagation();editD1Date('${d.class_d1_id}','${d.class_date}')" class="px-1.5 py-0.5 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded">수정</button>
+                        <button type="button" onclick="event.stopPropagation();deleteD1Confirm('${d.class_d1_id}','${d.class_loop}')" class="px-1.5 py-0.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded">삭제</button>
+                    </div>
+                </div>
             </div>`;
         }).join('');
     }
@@ -11342,6 +11389,32 @@ ${token}
         selectedClassD1Id = classD1Id;
         renderClassD1Grid();
         loadD1Members(classD1Id);
+    }
+
+    function editD1Date(classD1Id, currentDate) {
+        const currentStr = currentDate ? String(currentDate).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : '';
+        const newVal = prompt('날짜 변경 (YYYY-MM-DD)', currentStr);
+        if (!newVal) return;
+        const newDate = newVal.replace(/-/g, '');
+        if (!/^\d{8}$/.test(newDate)) { showStatus('날짜 형식 오류 (YYYYMMDD)', 'error'); return; }
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); }
+                else showStatus(r.message, 'error');
+            })
+            .withFailureHandler(e => showStatus(e.message, 'error'))
+            .updateClassD1Date(classD1Id, newDate);
+    }
+
+    function deleteD1Confirm(classD1Id, loopNo) {
+        if (!confirm(loopNo + '회차를 삭제하시겠습니까?')) return;
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); }
+                else showStatus(r.message, 'error');
+            })
+            .withFailureHandler(e => showStatus(e.message, 'error'))
+            .deleteClassD1(classD1Id);
     }
 
     function loadD1Members(classD1Id) {
