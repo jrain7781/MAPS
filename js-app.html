@@ -11397,38 +11397,66 @@ ${token}
         updateD1BatchLabel_();
     }
 
-    function updateD1BatchLabel_() {
-        const label = document.getElementById('d1BatchLabel');
-        if (!label) return;
-        if (d1Batches.length === 0) { label.textContent = '-'; return; }
-        const batch = d1Batches[d1BatchIdx];
-        const items = batch.items || [];
-        const total = items.length;
-        // 첫/마지막 수업 날짜
-        const sorted = items.slice().sort((a, b) => String(a.class_date).localeCompare(String(b.class_date)));
-        function fmtD(raw) {
-            const s = String(raw || '').replace(/-/g, '');
-            return s.length >= 8 ? s.substring(4,6) + '/' + s.substring(6,8) : s;
-        }
-        const first = sorted.length > 0 ? fmtD(sorted[0].class_date) : '-';
-        const last  = sorted.length > 1 ? fmtD(sorted[sorted.length - 1].class_date) : first;
-        label.textContent = `총${total}회  ${first} ~ ${last}`;
+    function updateD1BatchLabel_() { /* 레이블 제거됨 — 수업리스트 그리드로 대체 */ }
+    function prevD1Batch() { if (d1BatchIdx < d1Batches.length - 1) { d1BatchIdx++; renderClassD1Grid(); } }
+    function nextD1Batch() { if (d1BatchIdx > 0) { d1BatchIdx--; renderClassD1Grid(); } }
+
+    function selectD1Batch(idx) {
+        d1BatchIdx = idx;
+        renderClassD1Grid();
     }
 
-    function prevD1Batch() {
-        if (d1BatchIdx < d1Batches.length - 1) { d1BatchIdx++; updateD1BatchLabel_(); renderClassD1Grid(); }
-    }
-    function nextD1Batch() {
-        if (d1BatchIdx > 0) { d1BatchIdx--; updateD1BatchLabel_(); renderClassD1Grid(); }
+    function renderD1BatchListGrid_() {
+        const el = document.getElementById('d1BatchListGrid');
+        if (!el) return;
+        if (d1Batches.length === 0) { el.innerHTML = ''; return; }
+
+        function fd(d) {
+            const s = String(d || '').replace(/-/g, '');
+            return s.length >= 8 ? s.substring(4, 6) + '/' + s.substring(6, 8) : (d || '-');
+        }
+
+        const rows = d1Batches.map((b, i) => {
+            const items = (b.items || []).slice().sort((a, c) => String(a.class_date).localeCompare(String(c.class_date)));
+            const total = items.length;
+            const firstRaw = total > 0 ? String(items[0].class_date || '').replace(/-/g, '') : '';
+            const lastRaw  = total > 0 ? String(items[total - 1].class_date || '').replace(/-/g, '') : '';
+            const firstFull = firstRaw.length >= 8 ? firstRaw.substring(0,4) + '/' + firstRaw.substring(4,6) + '/' + firstRaw.substring(6,8) : '-';
+            const lastFull  = lastRaw.length  >= 8 ? lastRaw.substring(0,4)  + '/' + lastRaw.substring(4,6)  + '/' + lastRaw.substring(6,8)  : firstFull;
+            const isSel = i === d1BatchIdx;
+            const rowCls = isSel
+                ? 'bg-indigo-100 border-l-4 border-indigo-500 cursor-pointer'
+                : 'border-l-4 border-transparent hover:bg-indigo-50 cursor-pointer';
+            const txtCls = isSel ? 'font-bold text-indigo-800' : 'text-gray-700';
+            const periodHtml = firstFull === lastFull
+                ? `<span class="whitespace-nowrap">${firstFull}</span>`
+                : `<span class="whitespace-nowrap">${firstFull}</span><br><span class="whitespace-nowrap">~${lastFull}</span>`;
+            return `<tr class="${rowCls} transition-colors" onclick="selectD1Batch(${i})">
+                <td class="px-2 py-1.5 text-center ${txtCls}">${i + 1}</td>
+                <td class="px-2 py-1.5 text-center ${txtCls}">${total}회</td>
+                <td class="px-2 py-1.5 text-center leading-tight ${txtCls}">${periodHtml}</td>
+            </tr>`;
+        }).join('');
+
+        el.innerHTML = `<table class="divide-y divide-gray-100 w-full">
+            <thead class="bg-gray-50 sticky top-0">
+                <tr>
+                    <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">순번</th>
+                    <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">총회차</th>
+                    <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">기간</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">${rows}</tbody>
+        </table>`;
     }
 
     function renderClassD1Grid() {
+        renderD1BatchListGrid_();
         const grid = document.getElementById('classD1Grid');
         if (!grid) return;
 
         if (allClassD1Data.length === 0) {
             grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">회차가 없습니다. 회차생성 버튼을 눌러주세요.</div>';
-            document.getElementById('d1BatchLabel').textContent = '-';
             return;
         }
 
@@ -11800,7 +11828,6 @@ ${token}
     }
 
     function loadGenD1Members_(d1Ids) {
-        // allClassD1SummaryData가 있으면 활용, 없으면 서버 요청
         const memberSection = document.getElementById('genD1-memberSection');
         const memberList = document.getElementById('genD1-memberList');
         memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">불러오는 중...</div>';
@@ -11811,36 +11838,33 @@ ${token}
                 memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">회원 없음</div>';
                 return;
             }
-            // 선택된 배치의 회차들에 등록된 회원만 필터
-            const filtered = members.filter(m => {
-                return d1Ids.some(id => m.attendance && m.attendance[id]);
-            });
+            // 선택된 배치 회차에 등록('Y')된 회원만 필터
+            const filtered = members.filter(m =>
+                d1Ids.some(id => m.attendance && m.attendance[id] === 'Y')
+            );
             if (filtered.length === 0) {
                 memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">등록된 회원 없음</div>';
                 return;
             }
             memberList.innerHTML = filtered.map(m => `
-                <label class="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-indigo-50 genD1-member-row">
+                <label class="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-indigo-50 genD1-member-row">
                     <input type="checkbox" class="genD1-member-cb rounded" value="${m.member_id}" checked>
-                    <span>${escapeHtml(m.member_name || '-')}</span>
-                    <span class="text-xs text-gray-400">${escapeHtml(m.phone || '')}</span>
+                    <span class="font-medium">${escapeHtml(m.member_name || '-')}</span>
+                    <span class="text-gray-400">${escapeHtml(m.phone || '')}</span>
                 </label>`).join('');
             document.getElementById('genD1-memberSelectAll').checked = true;
         }
 
-        if (allClassD1SummaryData && allClassD1SummaryData.members) {
-            renderMembers(allClassD1SummaryData.members);
-        } else {
-            google.script.run
-                .withSuccessHandler(data => {
-                    allClassD1SummaryData = data;
-                    renderMembers(data.members || []);
-                })
-                .withFailureHandler(() => {
-                    memberList.innerHTML = '<div class="p-2 text-xs text-red-400 text-center">로드 실패</div>';
-                })
-                .readAllMembersByClassId(selectedClassId);
-        }
+        // 캐시 무시하고 항상 서버에서 최신 데이터 로드 (d1Ids 기준 필터가 핵심)
+        google.script.run
+            .withSuccessHandler(data => {
+                allClassD1SummaryData = data;
+                renderMembers(data.members || []);
+            })
+            .withFailureHandler(() => {
+                memberList.innerHTML = '<div class="p-2 text-xs text-red-400 text-center">로드 실패</div>';
+            })
+            .readAllMembersByClassId(selectedClassId);
     }
 
     function toggleD1AllMembers(checked) {
