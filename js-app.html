@@ -11317,14 +11317,18 @@ ${token}
             tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">수업이 없습니다.</td></tr>';
             return;
         }
-        tbody.innerHTML = classes.map(c => `
-            <tr class="cursor-pointer hover:bg-indigo-50 ${selectedClassId === c.class_id ? 'bg-indigo-100' : ''}" onclick="selectClassForSchedule('${c.class_id}')">
-                <td class="px-2 py-2 text-center text-xs">${escapeHtml(c.class_type)}</td>
-                <td class="px-2 py-2 text-center text-xs font-medium">${escapeHtml(c.class_name)}</td>
-                <td class="px-2 py-2 text-center text-xs">${escapeHtml(c.class_grade)}</td>
-                <td class="px-2 py-2 text-center text-xs">${escapeHtml(c.class_loc)}</td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = classes.map(c => {
+            const isSelected = selectedClassId === c.class_id;
+            const rowCls = isSelected
+                ? 'bg-indigo-100 border-l-4 border-indigo-500'
+                : 'hover:bg-indigo-50 border-l-4 border-transparent';
+            return `<tr class="cursor-pointer ${rowCls} transition-colors" onclick="selectClassForSchedule('${c.class_id}')">
+                <td class="px-2 py-2 text-center text-xs ${isSelected ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_type)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSelected ? 'font-bold text-indigo-900' : 'font-medium'}">${escapeHtml(c.class_name)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSelected ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_grade)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSelected ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_loc)}</td>
+            </tr>`;
+        }).join('');
     }
 
     function selectClassForSchedule(classId) {
@@ -11332,6 +11336,24 @@ ${token}
         selectedClassD1Id = null;
         filterClassScheduleList();
         loadClassD1Grid(classId);
+        // 우측 헤더에 선택된 수업 정보 표시
+        const infoEl = document.getElementById('d1SelectedClassInfo');
+        if (infoEl) {
+            const cls = allClassesData.find(c => String(c.class_id) === String(classId));
+            if (cls) {
+                const parts = [
+                    cls.class_type,
+                    cls.class_name,
+                    cls.class_grade ? `[${cls.class_grade}]` : '',
+                    cls.class_loc ? `(${cls.class_loc})` : ''
+                ].filter(Boolean);
+                infoEl.textContent = parts.join(' ');
+                infoEl.classList.remove('hidden');
+            } else {
+                infoEl.textContent = '';
+                infoEl.classList.add('hidden');
+            }
+        }
     }
 
     function loadClassD1Grid(classId) {
@@ -11713,12 +11735,30 @@ ${token}
 
     // 회차 생성 모달
     function showGenerateD1Modal() {
-        if (!selectedClassId) {
-            showStatus('먼저 수업을 선택하세요.', 'error');
-            return;
-        }
+        if (!selectedClassId) { showStatus('먼저 수업을 선택하세요.', 'error'); return; }
         document.getElementById('generateD1Modal').classList.remove('content-hidden');
         document.getElementById('genD1-startDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('genD1-startLoop').value = '1';
+        document.getElementById('genD1-endLoop').value = '10';
+        document.getElementById('genD1-timeFrom').value = '';
+        document.getElementById('genD1-timeTo').value = '';
+        document.getElementById('genD1-memberSection').classList.add('hidden');
+        document.getElementById('genD1-memberList').innerHTML = '';
+        // 이전 배치 드롭다운 채우기
+        const batchSel = document.getElementById('genD1-prevBatch');
+        batchSel.innerHTML = '<option value="">-- 배치 선택 --</option>';
+        d1Batches.forEach((b, i) => {
+            const items = b.items || [];
+            const sorted = items.slice().sort((a, c) => String(a.class_date).localeCompare(String(c.class_date)));
+            function fd(d) { const s = String(d||'').replace(/-/g,''); return s.length>=8?s.substring(4,6)+'/'+s.substring(6,8):s; }
+            const label = items.length > 0
+                ? (fd(sorted[0]?.class_date) + ' ~ ' + fd(sorted[sorted.length-1]?.class_date) + ' (' + items.length + '회)')
+                : ('배치 ' + (i+1));
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = label;
+            batchSel.appendChild(opt);
+        });
     }
 
     function closeGenerateD1Modal(event) {
@@ -11726,15 +11766,105 @@ ${token}
         document.getElementById('generateD1Modal').classList.add('content-hidden');
     }
 
-    function handleGenerateD1() {
-        const startDate = document.getElementById('genD1-startDate')?.value?.replace(/-/g, '') || '';
-        const loopUnit = document.getElementById('genD1-loopUnit')?.value || '1';
-        const loopCount = parseInt(document.getElementById('genD1-loopCount')?.value) || 10;
+    // 이전 배치 가져오기
+    function applyPrevBatch() {
+        const batchSel = document.getElementById('genD1-prevBatch');
+        const idx = parseInt(batchSel.value);
+        if (isNaN(idx) || !d1Batches[idx]) { showStatus('배치를 선택하세요.', 'error'); return; }
+        const batch = d1Batches[idx];
+        const items = (batch.items || []).slice().sort((a, b) => Number(a.class_loop) - Number(b.class_loop));
 
-        if (!startDate) {
-            showStatus('시작일을 입력하세요.', 'error');
-            return;
+        const copyStartLoop = document.getElementById('genD1-copy-startLoop').checked;
+        const copyEndLoop   = document.getElementById('genD1-copy-endLoop').checked;
+        const copyTime      = document.getElementById('genD1-copy-time').checked;
+        const copyMembers   = document.getElementById('genD1-copy-members').checked;
+
+        if (copyStartLoop && items.length > 0) {
+            document.getElementById('genD1-startLoop').value = Number(items[0].class_loop) || 1;
         }
+        if (copyEndLoop && items.length > 0) {
+            document.getElementById('genD1-endLoop').value = Number(items[items.length-1].class_loop) || 10;
+        }
+        if (copyTime && items.length > 0) {
+            document.getElementById('genD1-timeFrom').value = items[0].class_time_from || '';
+            document.getElementById('genD1-timeTo').value   = items[0].class_time_to   || '';
+        }
+        if (copyMembers) {
+            // 해당 배치 회차 ID 목록으로 회원 로드
+            const d1Ids = items.map(d => String(d.class_d1_id));
+            loadGenD1Members_(d1Ids);
+        } else {
+            document.getElementById('genD1-memberSection').classList.add('hidden');
+        }
+        showStatus('가져오기 완료', 'success');
+    }
+
+    function loadGenD1Members_(d1Ids) {
+        // allClassD1SummaryData가 있으면 활용, 없으면 서버 요청
+        const memberSection = document.getElementById('genD1-memberSection');
+        const memberList = document.getElementById('genD1-memberList');
+        memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">불러오는 중...</div>';
+        memberSection.classList.remove('hidden');
+
+        function renderMembers(members) {
+            if (!members || members.length === 0) {
+                memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">회원 없음</div>';
+                return;
+            }
+            // 선택된 배치의 회차들에 등록된 회원만 필터
+            const filtered = members.filter(m => {
+                return d1Ids.some(id => m.attendance && m.attendance[id]);
+            });
+            if (filtered.length === 0) {
+                memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">등록된 회원 없음</div>';
+                return;
+            }
+            memberList.innerHTML = filtered.map(m => `
+                <label class="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-indigo-50 genD1-member-row">
+                    <input type="checkbox" class="genD1-member-cb rounded" value="${m.member_id}" checked>
+                    <span>${escapeHtml(m.member_name || '-')}</span>
+                    <span class="text-xs text-gray-400">${escapeHtml(m.phone || '')}</span>
+                </label>`).join('');
+            document.getElementById('genD1-memberSelectAll').checked = true;
+        }
+
+        if (allClassD1SummaryData && allClassD1SummaryData.members) {
+            renderMembers(allClassD1SummaryData.members);
+        } else {
+            google.script.run
+                .withSuccessHandler(data => {
+                    allClassD1SummaryData = data;
+                    renderMembers(data.members || []);
+                })
+                .withFailureHandler(() => {
+                    memberList.innerHTML = '<div class="p-2 text-xs text-red-400 text-center">로드 실패</div>';
+                })
+                .readAllMembersByClassId(selectedClassId);
+        }
+    }
+
+    function toggleD1AllMembers(checked) {
+        document.querySelectorAll('.genD1-member-cb').forEach(cb => { cb.checked = checked; });
+    }
+
+    function handleGenerateD1() {
+        const startDate  = document.getElementById('genD1-startDate')?.value?.replace(/-/g,'') || '';
+        const loopUnit   = document.getElementById('genD1-loopUnit')?.value || '1';
+        const startLoop  = parseInt(document.getElementById('genD1-startLoop')?.value) || 1;
+        const endLoop    = parseInt(document.getElementById('genD1-endLoop')?.value)   || 10;
+        const timeFrom   = document.getElementById('genD1-timeFrom')?.value || '';
+        const timeTo     = document.getElementById('genD1-timeTo')?.value   || '';
+
+        if (!startDate) { showStatus('시작일을 입력하세요.', 'error'); return; }
+        if (startLoop > endLoop) { showStatus('시작회차가 최종회차보다 큽니다.', 'error'); return; }
+
+        // 선택된 회원 ID
+        const memberIds = [];
+        document.querySelectorAll('.genD1-member-cb:checked').forEach(cb => memberIds.push(cb.value));
+        const memberApplyRadio = document.querySelector('input[name="genD1-memberApply"]:checked');
+        const memberApplyAll = !memberApplyRadio || memberApplyRadio.value === 'all';
+
+        const options = { startLoop, endLoop, timeFrom, timeTo, memberIds, memberApplyAll };
 
         google.script.run
             .withSuccessHandler(result => {
@@ -11747,7 +11877,7 @@ ${token}
                 }
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
-            .generateClassD1(selectedClassId, startDate, loopUnit, loopCount);
+            .generateClassD1(selectedClassId, startDate, loopUnit, options);
     }
 
     // ── 물건/회원 카드 ──────────────────────────────────────────────
@@ -11834,7 +11964,8 @@ ${token}
         // 현재 선택된 회차 정보에서 수업명/날짜 추출
         const d1Info = allClassD1Data.find(d => String(d.class_d1_id) === String(selectedClassD1Id));
         const className = d1Info ? [d1Info.class_type, d1Info.class_name].filter(Boolean).join('') : '';
-        const classDate = d1Info ? String(d1Info.class_date || '') : '';
+        const classDate = d1Info ? String(d1Info.class_date || '').replace(/-/g, '') : '';
+        const classLoop = d1Info ? (d1Info.class_loop || '') : '';
         const itemIds = d1PendingItems.map(p => p.id);
 
         google.script.run
@@ -11850,7 +11981,7 @@ ${token}
                 }
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
-            .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate);
+            .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate, classLoop);
     }
 
     function loadD1Items(classD1Id) {

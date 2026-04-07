@@ -2240,78 +2240,84 @@ function readAllClassD1() {
  * 수업 회차를 일괄 생성합니다.
  * @param {string} classId - 수업 ID
  * @param {string} startDate - 시작일 (YYYYMMDD)
- * @param {string} loopUnit - 루프 단위 ('1주' 또는 '2주' 등)
- * @param {number} loopCount - 생성할 회차 수
+ * @param {string} loopUnit - 루프 단위 (주)
+ * @param {Object} options - { startLoop, endLoop, timeFrom, timeTo, memberIds, memberApplyAll }
  */
-function generateClassD1(classId, startDate, loopUnit, loopCount) {
-  const sheet = ensureClassD1Sheet_();
+function generateClassD1(classId, startDate, loopUnit, options) {
+  var sheet = ensureClassD1Sheet_();
 
-  // 수업 정보 가져오기
-  const allClasses = readAllClasses();
-  const classInfo = allClasses.find(c => String(c.class_id) === String(classId));
+  var allClasses = readAllClasses();
+  var classInfo = allClasses.find(function(c) { return String(c.class_id) === String(classId); });
   if (!classInfo) return { success: false, message: '수업 정보를 찾을 수 없습니다.' };
 
-  // 기존 회차 중 가장 큰 회차 번호 확인
-  const existingD1 = readClassD1ByClassId(classId);
-  const maxLoop = existingD1.length > 0
-    ? Math.max(...existingD1.map(d => Number(d.class_loop) || 0))
-    : 0;
+  // options 파싱 (하위호환: 숫자가 오면 loopCount로 처리)
+  var opts = (options && typeof options === 'object') ? options : { endLoop: Number(options) || 10 };
+  var startLoop = Number(opts.startLoop) || 1;
+  var endLoop   = Number(opts.endLoop)   || 10;
+  var timeFrom  = opts.timeFrom || classInfo.class_time_from || '';
+  var timeTo    = opts.timeTo   || classInfo.class_time_to   || '';
+  var memberIds    = Array.isArray(opts.memberIds) ? opts.memberIds : [];
+  var memberApplyAll = opts.memberApplyAll !== false; // default true
 
-  // 루프 단위 파싱 (주 단위)
-  const weekInterval = parseInt(loopUnit) || 1;
-  const dayInterval = weekInterval * 7;
+  var weekInterval = parseInt(loopUnit) || 1;
+  var dayInterval  = weekInterval * 7;
 
-  // 시작일 파싱
-  const year = parseInt(startDate.substring(0, 4));
-  const month = parseInt(startDate.substring(4, 6)) - 1;
-  const day = parseInt(startDate.substring(6, 8));
-  let currentDate = new Date(year, month, day);
+  var year  = parseInt(startDate.substring(0, 4));
+  var month = parseInt(startDate.substring(4, 6)) - 1;
+  var day   = parseInt(startDate.substring(6, 8));
+  var currentDate = new Date(year, month, day);
 
-  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMddHHmmss');
-  const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  const weekNames = ['일', '월', '화', '수', '목', '금', '토'];
+  var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMddHHmmss');
+  var regDate   = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var weekNames = ['일', '월', '화', '수', '목', '금', '토'];
 
-  const newRows = [];
-  for (let i = 0; i < loopCount; i++) {
-    const loopNo = maxLoop + i + 1;
+  var newRows = [];
+  var newD1Ids = [];
 
-    // 수업 전체 회차를 초과하면 중단
+  for (var loopNo = startLoop; loopNo <= endLoop; loopNo++) {
     if (classInfo.class_loop && loopNo > Number(classInfo.class_loop)) break;
 
-    const dateStr = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyyMMdd');
-    const weekDay = weekNames[currentDate.getDay()];
-    const d1Id = `${classId}_${timestamp}_${loopNo}`;
+    var dateStr = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyyMMdd');
+    var weekDay = weekNames[currentDate.getDay()];
+    var d1Id    = classId + '_' + timestamp + '_' + loopNo;
 
-    const row = CLASS_D1_HEADERS.map(h => {
+    var row = CLASS_D1_HEADERS.map(function(h) {
       switch (h) {
-        case 'class_d1_id': return d1Id;
-        case 'class_id': return classId;
-        case 'class_type': return classInfo.class_type || '';
-        case 'class_name': return classInfo.class_name || '';
-        case 'class_grade': return classInfo.class_grade || '';
-        case 'class_loc': return classInfo.class_loc || '';
-        case 'class_date': return dateStr;
-        case 'class_week': return weekDay;
-        case 'class_time_from': return classInfo.class_time_from || '';
-        case 'class_time_to': return classInfo.class_time_to || '';
-        case 'class_loop': return loopNo;
-        case 'completed': return 'N';
-        case 'reg_date': return regDate;
-        default: return '';
+        case 'class_d1_id':    return d1Id;
+        case 'class_id':       return classId;
+        case 'class_type':     return classInfo.class_type  || '';
+        case 'class_name':     return classInfo.class_name  || '';
+        case 'class_grade':    return classInfo.class_grade || '';
+        case 'class_loc':      return classInfo.class_loc   || '';
+        case 'class_date':     return dateStr;
+        case 'class_week':     return weekDay;
+        case 'class_time_from':return timeFrom;
+        case 'class_time_to':  return timeTo;
+        case 'class_loop':     return loopNo;
+        case 'completed':      return 'N';
+        case 'reg_date':       return regDate;
+        default:               return '';
       }
     });
-
     newRows.push(row);
-
-    // 다음 날짜로 이동
+    newD1Ids.push(d1Id);
     currentDate.setDate(currentDate.getDate() + dayInterval);
   }
 
-  if (newRows.length > 0) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, CLASS_D1_HEADERS.length).setValues(newRows);
+  if (newRows.length === 0) return { success: false, message: '생성할 회차가 없습니다.' };
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, CLASS_D1_HEADERS.length).setValues(newRows);
+  SpreadsheetApp.flush();
+
+  // 회원 일괄 등록
+  if (memberIds.length > 0) {
+    var applyIds = memberApplyAll ? newD1Ids : [newD1Ids[0]];
+    applyIds.forEach(function(d1Id) {
+      addMemberToClassD1Batch(d1Id, memberIds);
+    });
   }
 
-  return { success: true, message: `${newRows.length}개 회차 생성 완료`, created: newRows.length };
+  return { success: true, message: newRows.length + '개 회차 생성 완료 (회원 ' + memberIds.length + '명)', created: newRows.length };
 }
 
 /**
@@ -2367,7 +2373,7 @@ function deleteClassD1(classD1Id) {
  * 회차에 물건들을 일괄 등록합니다.
  * - stu_member = '추천', m_name = className_classDate, class_d1_id = classD1Id, chuchen_state = '신규'
  */
-function addItemsToClassD1(classD1Id, itemIds, className, classDate) {
+function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) {
   if (!classD1Id || !Array.isArray(itemIds) || itemIds.length === 0) {
     return { success: false, message: '파라미터 오류' };
   }
@@ -2385,7 +2391,8 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate) {
   var chuchenDateCol = ITEM_HEADERS.indexOf('chuchen_date') + 1;
 
   var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues().flat().map(String);
-  var mName = className && classDate ? className + '_' + classDate : className || '';
+  var loopPrefix = classLoop ? '(' + classLoop + '회)' : '';
+  var mName = loopPrefix + (className && classDate ? className + '_' + classDate : className || '');
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
   var updated = 0;
 
