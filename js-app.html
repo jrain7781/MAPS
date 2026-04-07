@@ -11379,10 +11379,18 @@ ${token}
         const label = document.getElementById('d1BatchLabel');
         if (!label) return;
         if (d1Batches.length === 0) { label.textContent = '-'; return; }
-        const bk = d1Batches[d1BatchIdx].batchKey;
-        // YYYYMMDDHHMMSS → YYYY-MM-DD 형식으로
-        const dateStr = bk.length >= 8 ? bk.substring(0, 4) + '-' + bk.substring(4, 6) + '-' + bk.substring(6, 8) : bk;
-        label.textContent = dateStr + ' 생성 (' + (d1BatchIdx + 1) + '/' + d1Batches.length + ')';
+        const batch = d1Batches[d1BatchIdx];
+        const items = batch.items || [];
+        const total = items.length;
+        // 첫/마지막 수업 날짜
+        const sorted = items.slice().sort((a, b) => String(a.class_date).localeCompare(String(b.class_date)));
+        function fmtD(raw) {
+            const s = String(raw || '').replace(/-/g, '');
+            return s.length >= 8 ? s.substring(4,6) + '/' + s.substring(6,8) : s;
+        }
+        const first = sorted.length > 0 ? fmtD(sorted[0].class_date) : '-';
+        const last  = sorted.length > 1 ? fmtD(sorted[sorted.length - 1].class_date) : first;
+        label.textContent = `총${total}회  ${first} ~ ${last}`;
     }
 
     function prevD1Batch() {
@@ -11406,40 +11414,83 @@ ${token}
         if (!batch) return;
         const items = batch.items;
 
-        // 요약 카드
-        const totalCount = allClassD1Data.length;
-        const isSummarySelected = selectedClassD1Id === '__summary__';
-        const summarySelCls = isSummarySelected
-            ? 'border-purple-500 bg-purple-50'
-            : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50';
-        const summaryCard = `<div class="border rounded-lg px-3 py-2 mb-2 cursor-pointer ${summarySelCls} transition-colors" onclick="selectClassD1('__summary__')">
-            <div class="flex items-center gap-2">
-                <span class="text-xs font-bold text-purple-700">전체 요약</span>
-                <span class="text-xs text-gray-500">총 ${totalCount}회</span>
-            </div>
-        </div>`;
+        // 오늘 기준 가장 가까운 미래 회차 찾기
+        const todayStr = (() => {
+            const t = new Date();
+            return String(t.getFullYear()) + String(t.getMonth() + 1).padStart(2, '0') + String(t.getDate()).padStart(2, '0');
+        })();
+        let nearestD1Id = null;
+        let nearestDiff = Infinity;
+        allClassD1Data.forEach(d => {
+            const dateNum = parseInt(String(d.class_date || '').replace(/-/g, ''), 10);
+            if (!isNaN(dateNum) && dateNum >= parseInt(todayStr, 10)) {
+                const diff = dateNum - parseInt(todayStr, 10);
+                if (diff < nearestDiff) { nearestDiff = diff; nearestD1Id = d.class_d1_id; }
+            }
+        });
 
-        grid.innerHTML = summaryCard + items.map(d => {
-            const isSelected = selectedClassD1Id === d.class_d1_id;
-            const isCompleted = d.completed === 'Y';
-            const selCls = isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50';
-            const dateStr = d.class_date ? String(d.class_date).substring(4, 6) + '/' + String(d.class_date).substring(6, 8) : '-';
-            const weekStr = d.class_week || '';
-            const completedBadge = isCompleted ? '<span class="ml-1 text-green-600 text-xs">✓</span>' : '';
-            return `<div class="border rounded-lg px-3 py-2 mb-1.5 cursor-pointer ${selCls} transition-colors" onclick="selectClassD1('${d.class_d1_id}')">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                        <span class="font-bold text-sm text-indigo-700">${d.class_loop}회</span>
-                        <span class="text-xs text-gray-500">${dateStr}${weekStr ? ' (' + weekStr + ')' : ''}</span>
-                        ${completedBadge}
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <button type="button" onclick="event.stopPropagation();editD1Date('${d.class_d1_id}','${d.class_date}')" class="px-1.5 py-0.5 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded">수정</button>
-                        <button type="button" onclick="event.stopPropagation();deleteD1Confirm('${d.class_d1_id}','${d.class_loop}')" class="px-1.5 py-0.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded">삭제</button>
-                    </div>
-                </div>
+        // 카드 공통 렌더 함수
+        function d1Card_(cls, titleCls, textCls, badgeHtml, titleHtml, bodyHtml, clickHandler) {
+            return `<div class="flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 ${cls} transition-all" style="min-width:82px" onclick="${clickHandler}">
+                ${badgeHtml}
+                <div class="text-center text-sm font-bold ${titleCls} mb-1">${titleHtml}</div>
+                <ul class="text-xs ${textCls} space-y-0.5">${bodyHtml}</ul>
             </div>`;
-        }).join('');
+        }
+
+        // 전체요약 카드 (맨 앞)
+        const isSumSel = selectedClassD1Id === '__summary__';
+        const sumCard = d1Card_(
+            isSumSel ? 'border-purple-500 bg-purple-100 shadow-lg' : 'border-purple-300 bg-purple-50 hover:border-purple-500',
+            'text-purple-800', 'text-purple-600',
+            '', '전체',
+            `<li>• 총 ${allClassD1Data.length}회</li><li>• 요약보기</li>`,
+            "selectClassD1('__summary__')"
+        );
+
+        grid.innerHTML = `<div class="flex gap-2 overflow-x-auto pb-1" style="scrollbar-width:thin">` +
+            sumCard +
+            items.map(d => {
+                const isSelected = selectedClassD1Id === d.class_d1_id;
+                const isNearest = d.class_d1_id === nearestD1Id;
+                const isCompleted = d.completed === 'Y';
+                const rawDate = String(d.class_date || '').replace(/-/g, '');
+                const isPast = rawDate && rawDate < todayStr;
+                const dateStr = rawDate.length >= 8
+                    ? rawDate.substring(4, 6) + '/' + rawDate.substring(6, 8)
+                    : (d.class_date ? String(d.class_date).substring(5) : '-');
+                const weekStr = d.class_week || '';
+                const itemCount = d.item_count || 0;
+                const memberCount = d.member_count || 0;
+                const completedMark = isCompleted ? ' ✓' : '';
+
+                let cls, titleCls, textCls, badge;
+                if (isSelected) {
+                    cls = 'border-gray-600 bg-gray-300 shadow-lg';
+                    titleCls = 'text-gray-900'; textCls = 'text-gray-700';
+                    badge = '';
+                } else if (isNearest) {
+                    cls = 'border-blue-500 bg-blue-50 shadow-md';
+                    titleCls = 'text-blue-900'; textCls = 'text-blue-600';
+                    badge = `<div class="text-[9px] bg-blue-500 text-white text-center rounded leading-tight mb-1 px-1">오늘↑</div>`;
+                } else if (isPast || isCompleted) {
+                    cls = 'border-green-300 bg-green-50 hover:border-green-500 hover:shadow-sm';
+                    titleCls = 'text-green-800'; textCls = 'text-green-600';
+                    badge = '';
+                } else {
+                    cls = 'border-gray-200 bg-white hover:border-indigo-300 hover:shadow-sm';
+                    titleCls = 'text-gray-800'; textCls = 'text-gray-500';
+                    badge = '';
+                }
+
+                const body = `<li>• ${dateStr}${weekStr ? ' (' + weekStr + ')' : ''}</li>` +
+                             `<li>• 물건: ${itemCount}</li>` +
+                             `<li>• 회원: ${memberCount}</li>`;
+
+                return d1Card_(cls, titleCls, textCls, badge,
+                    `${d.class_loop}회${completedMark}`, body,
+                    `selectClassD1('${d.class_d1_id}')`);
+            }).join('') + `</div>`;
     }
 
     function selectClassD1(classD1Id) {
@@ -11527,6 +11578,24 @@ ${token}
                 ${attendCells}
             </tr>`;
         }).join('');
+    }
+
+    function editSelectedD1() {
+        if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
+            showStatus('수정할 회차를 먼저 선택하세요.', 'error'); return;
+        }
+        const d = allClassD1Data.find(x => String(x.class_d1_id) === String(selectedClassD1Id));
+        if (!d) return;
+        editD1Date(d.class_d1_id, d.class_date);
+    }
+
+    function deleteSelectedD1() {
+        if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
+            showStatus('삭제할 회차를 먼저 선택하세요.', 'error'); return;
+        }
+        const d = allClassD1Data.find(x => String(x.class_d1_id) === String(selectedClassD1Id));
+        if (!d) return;
+        deleteD1Confirm(d.class_d1_id, d.class_loop);
     }
 
     function editD1Date(classD1Id, currentDate) {

@@ -2168,7 +2168,7 @@ function readClassD1ByClassId(classId) {
   if (lastRow < 2) return [];
 
   const data = sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
-  return data
+  const d1List = data
     .map(row => {
       const obj = {};
       CLASS_D1_HEADERS.forEach((h, i) => {
@@ -2183,6 +2183,41 @@ function readClassD1ByClassId(classId) {
     })
     .filter(d => String(d.class_id) === String(classId))
     .sort((a, b) => Number(a.class_loop) - Number(b.class_loop));
+
+  if (d1List.length === 0) return [];
+
+  // 물건/회원 카운트 집계
+  const d1Ids = new Set(d1List.map(d => String(d.class_d1_id)));
+
+  // 물건 카운트 (items 시트)
+  const itemSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  const itemCountMap = {};
+  if (itemSheet && itemSheet.getLastRow() >= 2) {
+    const d1IdCol = ITEM_HEADERS.indexOf('class_d1_id');
+    const itemData = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, ITEM_HEADERS.length).getValues();
+    itemData.forEach(row => {
+      const d1Id = String(row[d1IdCol] || '');
+      if (d1Ids.has(d1Id)) itemCountMap[d1Id] = (itemCountMap[d1Id] || 0) + 1;
+    });
+  }
+
+  // 회원 카운트 (member_class_details 시트)
+  const memSheet = ensureMemberClassDetailsSheet_();
+  const memberCountMap = {};
+  if (memSheet.getLastRow() >= 2) {
+    const d1IdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+    const memData = memSheet.getRange(2, 1, memSheet.getLastRow() - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+    memData.forEach(row => {
+      const d1Id = String(row[d1IdIdx] || '');
+      if (d1Ids.has(d1Id)) memberCountMap[d1Id] = (memberCountMap[d1Id] || 0) + 1;
+    });
+  }
+
+  return d1List.map(d => ({
+    ...d,
+    item_count: itemCountMap[String(d.class_d1_id)] || 0,
+    member_count: memberCountMap[String(d.class_d1_id)] || 0
+  }));
 }
 
 /**
