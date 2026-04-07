@@ -2072,9 +2072,10 @@
                 </div>
                 <!-- 우측: 수업 회차 -->
                 <div id="classScheduleDetailPane" class="flex-1 p-3 bg-gray-100 overflow-y-auto mobile-hidden flex flex-col gap-2">
-                    <!-- 수업 회차 헤더 -->
-                    <div class="bg-white rounded-xl shadow-lg px-3 py-2 flex-none">
-                        <div class="flex justify-between items-center">
+                    <!-- 수업 회차 통합 카드 (헤더 + 수업리스트 + 회차카드) -->
+                    <div class="bg-white rounded-xl shadow-lg flex-none flex flex-col overflow-hidden">
+                        <!-- 헤더 -->
+                        <div class="px-3 py-2 border-b border-gray-100 flex justify-between items-center flex-none">
                             <div class="flex items-center gap-2 min-w-0">
                                 <h3 class="text-sm font-semibold text-gray-800 flex-none">수업 회차</h3>
                                 <span id="d1SelectedClassInfo" class="hidden text-xs text-indigo-600 font-medium truncate"></span>
@@ -2085,18 +2086,22 @@
                                 <button type="button" id="d1DeleteBtn" onclick="deleteSelectedD1()"
                                     class="py-0.5 px-2 rounded-lg text-xs font-semibold bg-red-100 hover:bg-red-200 text-red-700">삭제</button>
                                 <button type="button" onclick="showGenerateD1Modal()"
-                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+ 회차생성</button>
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+ 수업생성</button>
                             </div>
                         </div>
-                    </div>
-                    <!-- 수업리스트 그리드 + 회차 카드 -->
-                    <div class="flex-none flex gap-2 items-start">
-                        <!-- 수업리스트 그리드 -->
-                        <div id="d1BatchListGrid" class="flex-none bg-white rounded-xl shadow-lg overflow-hidden text-xs"></div>
-                        <!-- 회차 카드 스크롤 -->
-                        <div class="flex-1 min-w-0">
-                            <div id="classD1Grid">
-                                <div class="text-gray-400 py-2 text-xs text-center">수업을 선택하세요</div>
+                        <!-- 수업리스트 그리드 + 회차카드 (2줄 고정 높이, 3줄+ 세로 스크롤) -->
+                        <div class="flex items-stretch overflow-hidden" style="height:188px">
+                            <!-- 수업리스트 그리드 (드래그 width) -->
+                            <div id="d1BatchListGrid" class="flex-none overflow-y-auto text-xs border-r border-gray-100" style="width:155px"></div>
+                            <!-- 드래그 구분선 -->
+                            <div id="d1BatchDivider" class="w-1.5 cursor-col-resize bg-gray-100 hover:bg-indigo-400 flex-none flex items-center justify-center transition-colors select-none" title="드래그로 폭 조절">
+                                <div class="w-0.5 h-8 bg-gray-300 rounded-full"></div>
+                            </div>
+                            <!-- 회차 카드 영역 (flex-wrap, 세로 스크롤) -->
+                            <div class="flex-1 overflow-y-auto p-1.5 min-w-0" style="scrollbar-width:thin">
+                                <div id="classD1Grid">
+                                    <div class="text-gray-400 py-2 text-xs text-center">수업을 선택하세요</div>
+                                </div>
                             </div>
                         </div>
                     </div>

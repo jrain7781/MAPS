@@ -14,10 +14,11 @@ const MEMBER_CLASS_DETAILS_SHEET_NAME_DB = 'member_class_details';
 
 // - m_name2: "선택된 명의 표시값" (예: "(MJ) 한한한") — 화면 복원/리스트 표시에 사용
 // - auction_id: "옥션 고유번호 (7자리)"
-const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'reg_date', 'reg_member', 'bid_state', 'image_id', 'note', 'm_name2', 'auction_id', 'chuchen_state', 'chuchen_date', 'class_d1_id'];
-// chuchen_state: Q열(idx 16) - '신규'|'전달완료'
-// chuchen_date:  R열(idx 17) - 최근 전달 일시 (ISO string)
-// class_d1_id:   S열(idx 18) - 수업 회차 ID (수업 물건 연결용)
+const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'reg_date', 'reg_member', 'bid_state', 'image_id', 'note', 'm_name2', 'auction_id', 'chuchen_state', 'chuchen_date', 'class_d1_id', 'bid_datetime_2'];
+// chuchen_state:  Q열(idx 16) - '신규'|'전달완료'
+// chuchen_date:   R열(idx 17) - 최근 전달 일시 (ISO string)
+// class_d1_id:    S열(idx 18) - 수업 회차 ID (수업 물건 연결용)
+// bid_datetime_2: T열(idx 19) - 수업 최종 마감 일시 (수업회차 등록 시 복사)
 
 
 // members 시트 헤더 정의 (2026-02 개편)
@@ -2371,7 +2372,7 @@ function deleteClassD1(classD1Id) {
 
 /**
  * 회차에 물건들을 일괄 등록합니다.
- * - stu_member = '추천', m_name = className_classDate, class_d1_id = classD1Id, chuchen_state = '신규'
+ * - stu_member = '추천', class_d1_id 강제 업데이트, bid_datetime_2 복사
  */
 function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) {
   if (!classD1Id || !Array.isArray(itemIds) || itemIds.length === 0) {
@@ -2383,16 +2384,27 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터 없음' };
 
-  var idCol = ITEM_HEADERS.indexOf('id') + 1;
-  var stuMemberCol = ITEM_HEADERS.indexOf('stu_member') + 1;
-  var mNameCol = ITEM_HEADERS.indexOf('m_name') + 1;
-  var classD1IdCol = ITEM_HEADERS.indexOf('class_d1_id') + 1;
+  // 회차 정보에서 bid_datetime_2 조회
+  var d1List = readClassD1ByClassId_ ? null : null;
+  var d1Sheet = ensureClassD1Sheet_();
+  var d1LastRow = d1Sheet.getLastRow();
+  var bidDatetime2Val = '';
+  if (d1LastRow >= 2) {
+    var d1Data = d1Sheet.getRange(2, 1, d1LastRow - 1, CLASS_D1_HEADERS.length).getValues();
+    var d1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
+    var bd2Idx  = CLASS_D1_HEADERS.indexOf('bid_datetime_2');
+    var found = d1Data.find(function(r) { return String(r[d1IdIdx]) === String(classD1Id); });
+    if (found && bd2Idx >= 0) bidDatetime2Val = found[bd2Idx] || '';
+  }
+
+  var idCol           = ITEM_HEADERS.indexOf('id') + 1;
+  var stuMemberCol    = ITEM_HEADERS.indexOf('stu_member') + 1;
+  var classD1IdCol    = ITEM_HEADERS.indexOf('class_d1_id') + 1;
   var chuchenStateCol = ITEM_HEADERS.indexOf('chuchen_state') + 1;
-  var chuchenDateCol = ITEM_HEADERS.indexOf('chuchen_date') + 1;
+  var chuchenDateCol  = ITEM_HEADERS.indexOf('chuchen_date') + 1;
+  var bd2Col          = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
 
   var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues().flat().map(String);
-  var loopPrefix = classLoop ? '(' + classLoop + '회)' : '';
-  var mName = loopPrefix + (className && classDate ? className + '_' + classDate : className || '');
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
   var updated = 0;
 
@@ -2401,15 +2413,75 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
     if (idx < 0) return;
     var row = idx + 2;
     sheet.getRange(row, stuMemberCol).setValue('추천');
-    sheet.getRange(row, mNameCol).setValue(mName);
-    sheet.getRange(row, classD1IdCol).setValue(classD1Id);
+    sheet.getRange(row, classD1IdCol).setValue(classD1Id); // 기존값 있어도 강제 업데이트
     sheet.getRange(row, chuchenStateCol).setValue('신규');
     sheet.getRange(row, chuchenDateCol).setValue(today);
+    if (bd2Col > 0) sheet.getRange(row, bd2Col).setValue(bidDatetime2Val);
     updated++;
   });
 
   SpreadsheetApp.flush();
   return { success: true, message: updated + '개 물건 등록 완료' };
+}
+
+/**
+ * 회차에서 물건을 제거합니다 (class_d1_id, bid_datetime_2 초기화).
+ */
+function removeItemFromClassD1(itemId) {
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  if (!sheet) return { success: false, message: 'items 시트 없음' };
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '데이터 없음' };
+
+  var idCol      = ITEM_HEADERS.indexOf('id') + 1;
+  var d1IdCol    = ITEM_HEADERS.indexOf('class_d1_id') + 1;
+  var bd2Col     = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
+
+  var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues().flat().map(String);
+  var idx = ids.indexOf(String(itemId));
+  if (idx < 0) return { success: false, message: '물건을 찾을 수 없습니다.' };
+
+  var row = idx + 2;
+  sheet.getRange(row, d1IdCol).setValue('');
+  if (bd2Col > 0) sheet.getRange(row, bd2Col).setValue('');
+  SpreadsheetApp.flush();
+  return { success: true, message: '물건 연결 해제 완료' };
+}
+
+/**
+ * 특정 회차의 bid_datetime_2가 경과된 경우 추천 물건을 미정으로 일괄 변경.
+ * class_d1_id는 유지, bid_datetime_2는 유지.
+ */
+function expireClassD1Items(classD1Id) {
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  if (!sheet) return { success: false, message: 'items 시트 없음' };
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '데이터 없음' };
+
+  var idIdx      = ITEM_HEADERS.indexOf('class_d1_id');
+  var stuIdx     = ITEM_HEADERS.indexOf('stu_member');
+  var bd2Idx     = ITEM_HEADERS.indexOf('bid_datetime_2');
+  var stuCol     = stuIdx + 1;
+
+  var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
+  var now = new Date();
+  var updated = 0;
+
+  data.forEach(function(row, i) {
+    if (String(row[idIdx]) !== String(classD1Id)) return;
+    if (String(row[stuIdx]) !== '추천') return;
+    var bd2 = row[bd2Idx];
+    if (!bd2) return;
+    var expiry = new Date(bd2);
+    if (isNaN(expiry.getTime()) || now < expiry) return;
+    sheet.getRange(i + 2, stuCol).setValue('미정');
+    updated++;
+  });
+
+  SpreadsheetApp.flush();
+  return { success: true, message: updated + '개 물건 미정 처리 완료' };
 }
 
 /**

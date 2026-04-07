@@ -119,7 +119,10 @@ const CLASS_D1_HEADERS = [
   'reg_date',         // 등록일
   'reg_id',           // 등록자
   'bid_datetime_1',   // 1차 입찰 마감 일시 (O열)
-  'bid_datetime_2'    // 2차 입찰 마감 일시 (P열)
+  'bid_datetime_2',   // 2차 입찰 마감 일시 (P열)
+  'bid_starttime',    // 물건선택 시작시간 (Q열)
+  '1cha_bid',         // 1차 선택 가능 개수 (R열)
+  '2cha_bid'          // 2차 선택 가능 개수 (S열)
 ];
 
 // --- 회원 수업 상세(member_class_details) 시트 헤더 ---
