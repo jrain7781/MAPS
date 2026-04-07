@@ -2253,12 +2253,28 @@ function generateClassD1(classId, startDate, loopUnit, options) {
 
   // options 파싱 (하위호환: 숫자가 오면 loopCount로 처리)
   var opts = (options && typeof options === 'object') ? options : { endLoop: Number(options) || 10 };
-  var startLoop = Number(opts.startLoop) || 1;
-  var endLoop   = Number(opts.endLoop)   || 10;
-  var timeFrom  = opts.timeFrom || classInfo.class_time_from || '';
-  var timeTo    = opts.timeTo   || classInfo.class_time_to   || '';
+  var startLoop    = Number(opts.startLoop) || 1;
+  var endLoop      = Number(opts.endLoop)   || 10;
+  var addCount     = opts.addCount ? Number(opts.addCount) : null; // 회차 추가 모드
+  var timeFrom     = opts.timeFrom || classInfo.class_time_from || '';
+  var timeTo       = opts.timeTo   || classInfo.class_time_to   || '';
+  var bidStarttime = opts.bidStarttime || '';
+  var bidDatetime1 = opts.bidDatetime1 || '';
+  var bidDatetime2 = opts.bidDatetime2 || '';
   var memberIds    = Array.isArray(opts.memberIds) ? opts.memberIds : [];
   var memberApplyAll = opts.memberApplyAll !== false; // default true
+
+  // 회차 추가 모드: startLoop/endLoop을 기존 마지막 회차 기준으로 계산
+  if (addCount !== null) {
+    var existingLoops = sheet.getLastRow() > 1
+      ? sheet.getRange(2, 1, sheet.getLastRow() - 1, CLASS_D1_HEADERS.length).getValues()
+          .filter(function(r) { return String(r[CLASS_D1_HEADERS.indexOf('class_id')]) === String(classId); })
+          .map(function(r) { return Number(r[CLASS_D1_HEADERS.indexOf('class_loop')]); })
+      : [];
+    var lastLoop = existingLoops.length > 0 ? Math.max.apply(null, existingLoops) : 0;
+    startLoop = lastLoop + 1;
+    endLoop   = lastLoop + addCount;
+  }
 
   var weekInterval = parseInt(loopUnit) || 1;
   var dayInterval  = weekInterval * 7;
@@ -2272,12 +2288,31 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   var regDate   = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var weekNames = ['일', '월', '화', '수', '목', '금', '토'];
 
+  // 기존 회차 날짜 중복 체크
+  var lastRow = sheet.getLastRow();
+  var existingDatesForClass = [];
+  if (lastRow >= 2) {
+    var d1DataAll = sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+    var d1ClassIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
+    var d1DateIdx    = CLASS_D1_HEADERS.indexOf('class_date');
+    existingDatesForClass = d1DataAll
+      .filter(function(r) { return String(r[d1ClassIdIdx]) === String(classId); })
+      .map(function(r) { return String(r[d1DateIdx]).replace(/-/g, ''); });
+  }
+
   var newRows = [];
   var newD1Ids = [];
+  var checkDate = new Date(currentDate.getTime());
 
   for (var loopNo = startLoop; loopNo <= endLoop; loopNo++) {
-    if (classInfo.class_loop && loopNo > Number(classInfo.class_loop)) break;
+    var dateStr = Utilities.formatDate(checkDate, Session.getScriptTimeZone(), 'yyyyMMdd');
+    if (existingDatesForClass.indexOf(dateStr) >= 0) {
+      return { success: false, message: dateStr + ' 날짜에 이미 회차가 존재합니다.' };
+    }
+    checkDate.setDate(checkDate.getDate() + dayInterval);
+  }
 
+  for (var loopNo = startLoop; loopNo <= endLoop; loopNo++) {
     var dateStr = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyyMMdd');
     var weekDay = weekNames[currentDate.getDay()];
     var d1Id    = classId + '_' + timestamp + '_' + loopNo;
@@ -2297,6 +2332,9 @@ function generateClassD1(classId, startDate, loopUnit, options) {
         case 'class_loop':     return loopNo;
         case 'completed':      return 'N';
         case 'reg_date':       return regDate;
+        case 'bid_starttime':  return bidStarttime;
+        case 'bid_datetime_1': return bidDatetime1;
+        case 'bid_datetime_2': return bidDatetime2;
         default:               return '';
       }
     });
@@ -2425,7 +2463,7 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
 }
 
 /**
- * 회차에서 물건을 제거합니다 (class_d1_id, bid_datetime_2 초기화).
+ * 회차에서 물건을 취소합니다 (class_d1_id/bid_datetime_2 초기화, stu_member='미정').
  */
 function removeItemFromClassD1(itemId) {
   var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
@@ -2434,9 +2472,10 @@ function removeItemFromClassD1(itemId) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터 없음' };
 
-  var idCol      = ITEM_HEADERS.indexOf('id') + 1;
-  var d1IdCol    = ITEM_HEADERS.indexOf('class_d1_id') + 1;
-  var bd2Col     = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
+  var idCol        = ITEM_HEADERS.indexOf('id') + 1;
+  var d1IdCol      = ITEM_HEADERS.indexOf('class_d1_id') + 1;
+  var bd2Col       = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
+  var stuMemberCol = ITEM_HEADERS.indexOf('stu_member') + 1;
 
   var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues().flat().map(String);
   var idx = ids.indexOf(String(itemId));
@@ -2444,9 +2483,10 @@ function removeItemFromClassD1(itemId) {
 
   var row = idx + 2;
   sheet.getRange(row, d1IdCol).setValue('');
+  sheet.getRange(row, stuMemberCol).setValue('미정');
   if (bd2Col > 0) sheet.getRange(row, bd2Col).setValue('');
   SpreadsheetApp.flush();
-  return { success: true, message: '물건 연결 해제 완료' };
+  return { success: true, message: '물건 취소 완료' };
 }
 
 /**
