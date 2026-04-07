@@ -947,17 +947,50 @@
     }
 
     // [추천 전달] 48시간 타이머 바: 왼쪽=빨강(경과), 오른쪽=초록(남음), 경계에 시간 뱃지
-    function createChuchenTimerBar(chuchenDate) {
+    function createChuchenTimerBar(chuchenDate, item) {
         if (!chuchenDate) return '';
         try {
+            const now = Date.now();
+
+            // class_d1_id 있는 물건: bid_datetime_1/2 기준
+            const d1Id = item && String(item.class_d1_id || '').trim();
+            if (d1Id && allD1DatetimeMap[d1Id]) {
+                const dtInfo = allD1DatetimeMap[d1Id];
+                const dt1 = dtInfo.bid_datetime_1 ? new Date(dtInfo.bid_datetime_1).getTime() : 0;
+                const dt2 = dtInfo.bid_datetime_2 ? new Date(dtInfo.bid_datetime_2).getTime() : 0;
+                const startAt = new Date(chuchenDate).getTime();
+                const endAt = dt2 || dt1;
+                if (!endAt || isNaN(startAt) || isNaN(endAt) || endAt <= startAt) {
+                    // datetime 정보 부족 → 기존 48h 로직 폴백
+                } else {
+                    const totalMs = endAt - startAt;
+                    const elapsedMs = now - startAt;
+                    if (elapsedMs >= totalMs) {
+                        return `<div class="chuchen-timer-bar" style="background:#ef4444"><div class="chuchen-timer-badge" style="left:94%">만료</div></div>`;
+                    }
+                    const elapsedPct = Math.min(100, (elapsedMs / totalMs) * 100).toFixed(2);
+                    const remainHours = Math.max(0, Math.floor((endAt - now) / (1000 * 3600)));
+                    const badgePct = Math.min(94, Math.max(6, parseFloat(elapsedPct)));
+                    const bg = `linear-gradient(to right, #ef4444 ${elapsedPct}%, #22c55e ${elapsedPct}%)`;
+
+                    // 1차만료 경계 표시
+                    let firstExpireMarker = '';
+                    if (dt1 && dt2 && dt1 < dt2 && dt1 > startAt) {
+                        const dt1Pct = Math.min(99, Math.max(1, ((dt1 - startAt) / totalMs * 100))).toFixed(2);
+                        firstExpireMarker = `<div class="chuchen-timer-badge" style="left:${dt1Pct}%;background:#f59e0b;color:#fff">1차</div>`;
+                    }
+                    return `<div class="chuchen-timer-bar" style="background:${bg};position:relative">${firstExpireMarker}<div class="chuchen-timer-badge" style="left:${badgePct}%">${remainHours}h</div></div>`;
+                }
+            }
+
+            // 기존 로직 (class_d1_id 없는 물건: chuchen_date 기준 48h)
             const sentAt = new Date(chuchenDate).getTime();
             if (isNaN(sentAt)) return '';
-            const elapsedHours = (Date.now() - sentAt) / (1000 * 3600);
+            const elapsedHours = (now - sentAt) / (1000 * 3600);
             const MAX_HOURS = 48;
             if (elapsedHours >= MAX_HOURS) return `<div class="chuchen-timer-bar" style="background:#ef4444"><div class="chuchen-timer-badge" style="left:94%">만료</div></div>`;
             const elapsedPct = Math.min(100, (elapsedHours / MAX_HOURS) * 100).toFixed(2);
             const remainHours = Math.max(0, MAX_HOURS - Math.floor(elapsedHours));
-            // 뱃지가 양 끝에서 잘리지 않도록 클램프 (6%~94%)
             const badgePct = Math.min(94, Math.max(6, parseFloat(elapsedPct)));
             const bg = `linear-gradient(to right, #ef4444 ${elapsedPct}%, #22c55e ${elapsedPct}%)`;
             return `<div class="chuchen-timer-bar" style="background:${bg}"><div class="chuchen-timer-badge" style="left:${badgePct}%">${remainHours}h</div></div>`;
@@ -1507,7 +1540,7 @@
             `;
         }
 
-        const timerBarHtml = (rawStatus === '추천' && item.chuchen_date) ? createChuchenTimerBar(item.chuchen_date) : '';
+        const timerBarHtml = (rawStatus === '추천' && item.chuchen_date) ? createChuchenTimerBar(item.chuchen_date, item) : '';
 
         return `
             <div class="member-item-card" onmouseenter="preloadItemImage('${item.image_id}')" onclick="handleMemberCardClick('${itemId}')">
@@ -1953,7 +1986,7 @@
                         // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
                         const chuchenDateStr = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date) : '';
                         const chuchenDateHtml = chuchenDateStr ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr}</div>` : '';
-                        const timerBarHtml = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date) : '';
+                        const timerBarHtml = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
 
                         const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
@@ -2648,7 +2681,7 @@
                         // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
                         const chuchenDateStr2 = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date) : '';
                         const chuchenDateHtml2 = chuchenDateStr2 ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr2}</div>` : '';
-                        const timerBarHtml2 = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date) : '';
+                        const timerBarHtml2 = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
 
                         const mobileHtml = `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
@@ -10402,6 +10435,8 @@ MJ 이정우 팀장
     let d1MembersData = [];
     let d1Batches = [];       // 배치 그룹 배열 [{ batchKey, items[] }]
     let d1BatchIdx = 0;       // 현재 배치 인덱스
+    let allClassD1SummaryData = null; // 전체 회차 출석 요약 데이터
+    let allD1DatetimeMap = {};        // class_d1_id → { bid_datetime_1, bid_datetime_2 }
 
     // --- 회원관리 (신규) 함수들 ---
 
@@ -11307,6 +11342,15 @@ ${token}
         google.script.run
             .withSuccessHandler(data => {
                 allClassD1Data = Array.isArray(data) ? data : [];
+                // bid_datetime_1/2 맵 업데이트
+                allClassD1Data.forEach(d => {
+                    if (d.class_d1_id) {
+                        allD1DatetimeMap[String(d.class_d1_id)] = {
+                            bid_datetime_1: d.bid_datetime_1 || '',
+                            bid_datetime_2: d.bid_datetime_2 || ''
+                        };
+                    }
+                });
                 buildD1Batches_();
                 renderClassD1Grid();
             })
@@ -11362,7 +11406,20 @@ ${token}
         if (!batch) return;
         const items = batch.items;
 
-        grid.innerHTML = items.map(d => {
+        // 요약 카드
+        const totalCount = allClassD1Data.length;
+        const isSummarySelected = selectedClassD1Id === '__summary__';
+        const summarySelCls = isSummarySelected
+            ? 'border-purple-500 bg-purple-50'
+            : 'border-gray-200 hover:border-purple-300 hover:bg-purple-50';
+        const summaryCard = `<div class="border rounded-lg px-3 py-2 mb-2 cursor-pointer ${summarySelCls} transition-colors" onclick="selectClassD1('__summary__')">
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-purple-700">전체 요약</span>
+                <span class="text-xs text-gray-500">총 ${totalCount}회</span>
+            </div>
+        </div>`;
+
+        grid.innerHTML = summaryCard + items.map(d => {
             const isSelected = selectedClassD1Id === d.class_d1_id;
             const isCompleted = d.completed === 'Y';
             const selCls = isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-indigo-300 hover:bg-gray-50';
@@ -11388,7 +11445,88 @@ ${token}
     function selectClassD1(classD1Id) {
         selectedClassD1Id = classD1Id;
         renderClassD1Grid();
-        loadD1Members(classD1Id);
+        // 등록 패널 닫기
+        document.getElementById('d1ItemRegisterPanel')?.classList.add('content-hidden');
+        d1PendingItems = [];
+        if (classD1Id === '__summary__') {
+            loadD1Summary(selectedClassId);
+            document.getElementById('d1-item-list').innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">회차를 선택하세요</div>';
+        } else {
+            restoreD1MemberTableHead_();
+            loadD1Members(classD1Id);
+            loadD1Items(classD1Id);
+        }
+    }
+
+    function restoreD1MemberTableHead_() {
+        const thead = document.getElementById('classD1MemberTableHead');
+        if (!thead) return;
+        thead.innerHTML = `<tr>
+            <th class="px-2 py-2 text-left text-xs font-bold text-gray-700">회원 리스트</th>
+            <th class="px-2 py-2 text-center text-xs font-bold text-gray-700 w-16">회차</th>
+        </tr>`;
+    }
+
+    function loadD1Summary(classId) {
+        if (!classId) return;
+        const tbody = document.getElementById('classD1MemberTableBody');
+        const thead = document.getElementById('classD1MemberTableHead');
+        if (thead) thead.innerHTML = `<tr><th class="px-2 py-2 text-left text-xs font-bold text-purple-700" colspan="2">전체 출석표 로딩 중...</th></tr>`;
+        if (tbody) tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-400 text-sm">불러오는 중...</td></tr>';
+
+        google.script.run
+            .withSuccessHandler(data => {
+                allClassD1SummaryData = data;
+                renderD1SummaryTable(data);
+            })
+            .withFailureHandler(err => {
+                if (tbody) tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-red-500 text-sm">로드 실패</td></tr>';
+            })
+            .readAllMembersByClassId(classId);
+    }
+
+    function renderD1SummaryTable(data) {
+        const thead = document.getElementById('classD1MemberTableHead');
+        const tbody = document.getElementById('classD1MemberTableBody');
+        if (!thead || !tbody) return;
+
+        const d1List = (data.d1List || []).slice().sort((a, b) => Number(a.class_loop) - Number(b.class_loop));
+        const members = data.members || [];
+        const colSpan = 2 + d1List.length;
+
+        thead.innerHTML = `<tr>
+            <th class="px-2 py-2 text-left text-xs font-bold text-purple-700">회원명</th>
+            <th class="px-2 py-2 text-center text-xs font-bold text-purple-700 w-12">참석</th>
+            ${d1List.map(d => `<th class="px-1 py-2 text-center text-xs font-bold text-gray-600 w-8">${d.class_loop}회</th>`).join('')}
+        </tr>`;
+
+        if (members.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${colSpan}" class="p-4 text-center text-gray-500 text-sm">등록된 회원이 없습니다.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = members.map(m => {
+            const tooltip = [
+                m.member_id ? 'ID: ' + m.member_id : '',
+                m.phone ? '전화: ' + m.phone : '',
+                m.name1 ? '명의1: ' + (m.name1_gubun ? '[' + m.name1_gubun + '] ' : '') + m.name1 : '',
+                m.name2 ? '명의2: ' + (m.name2_gubun ? '[' + m.name2_gubun + '] ' : '') + m.name2 : '',
+                m.name3 ? '명의3: ' + (m.name3_gubun ? '[' + m.name3_gubun + '] ' : '') + m.name3 : '',
+            ].filter(Boolean).join('\n');
+
+            const attendCells = d1List.map(d => {
+                const att = m.attendance[String(d.class_d1_id)];
+                if (att === 'Y') return '<td class="px-1 py-1.5 text-center text-xs text-green-600 font-bold">O</td>';
+                if (att === 'N') return '<td class="px-1 py-1.5 text-center text-xs text-gray-300">-</td>';
+                return '<td class="px-1 py-1.5 text-center text-xs text-gray-200">·</td>';
+            }).join('');
+
+            return `<tr class="hover:bg-purple-50">
+                <td class="px-2 py-1.5 text-sm" title="${escapeHtml(tooltip)}">${escapeHtml(m.member_name || '-')}</td>
+                <td class="px-2 py-1.5 text-center text-xs font-semibold text-purple-700">${m.attendCount}/${d1List.length}</td>
+                ${attendCells}
+            </tr>`;
+        }).join('');
     }
 
     function editD1Date(classD1Id, currentDate) {
@@ -11432,6 +11570,36 @@ ${token}
             .readMembersByClassD1Id(classD1Id);
     }
 
+    function buildD1MemberRow_(m) {
+        // 전체 출석 횟수 (summary 데이터 있으면 사용)
+        const totalD1 = allClassD1Data.length;
+        let attendCount = null;
+        if (allClassD1SummaryData && allClassD1SummaryData.members) {
+            const sm = allClassD1SummaryData.members.find(s => String(s.member_id) === String(m.member_id));
+            if (sm) attendCount = sm.attendCount;
+        }
+        const attendBadge = attendCount !== null
+            ? `<span class="ml-1 text-xs text-indigo-500">(${attendCount}/${totalD1})</span>`
+            : '';
+
+        // 툴팁: 전체 회원 데이터에서 추가 정보 조회
+        const fullMember = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length)
+            ? allMembersNewData.find(fm => String(fm.member_id) === String(m.member_id)) || m
+            : m;
+        const tooltip = [
+            fullMember.member_id ? 'ID: ' + fullMember.member_id : '',
+            fullMember.phone ? '전화: ' + fullMember.phone : '',
+            fullMember.name1 ? '명의1: ' + (fullMember.name1_gubun ? '[' + fullMember.name1_gubun + '] ' : '') + fullMember.name1 : '',
+            fullMember.name2 ? '명의2: ' + (fullMember.name2_gubun ? '[' + fullMember.name2_gubun + '] ' : '') + fullMember.name2 : '',
+            fullMember.name3 ? '명의3: ' + (fullMember.name3_gubun ? '[' + fullMember.name3_gubun + '] ' : '') + fullMember.name3 : '',
+        ].filter(Boolean).join('\n');
+
+        return `<tr class="cursor-pointer hover:bg-gray-50" onclick="selectD1Member('${m.detail_id}')">
+            <td class="px-3 py-2 text-sm" title="${escapeHtml(tooltip)}">${escapeHtml(m.member_name || '-')}${attendBadge}</td>
+            <td class="px-2 py-2 text-center text-sm">${m.attended === 'Y' ? '✓' : '-'}</td>
+        </tr>`;
+    }
+
     function renderD1Members() {
         const tbody = document.getElementById('classD1MemberTableBody');
         if (!tbody) return;
@@ -11441,20 +11609,12 @@ ${token}
             return;
         }
 
-        tbody.innerHTML = d1MembersData.map(m => `
-            <tr class="cursor-pointer hover:bg-gray-50" onclick="selectD1Member('${m.detail_id}')">
-                <td class="px-3 py-2 text-sm">${escapeHtml(m.member_name || '-')}</td>
-                <td class="px-2 py-2 text-center text-sm">${m.attended === 'Y' ? '✓' : '-'}</td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = d1MembersData.map(m => buildD1MemberRow_(m)).join('');
     }
 
     function filterD1Members() {
         const kw = (document.getElementById('csd-member-search')?.value || '').toLowerCase();
-        const filtered = d1MembersData.filter(m => {
-            const name = String(m.member_name || '').toLowerCase();
-            return name.includes(kw);
-        });
+        const filtered = d1MembersData.filter(m => String(m.member_name || '').toLowerCase().includes(kw));
 
         const tbody = document.getElementById('classD1MemberTableBody');
         if (!tbody) return;
@@ -11462,12 +11622,7 @@ ${token}
             tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-500 text-sm">검색 결과 없음</td></tr>';
             return;
         }
-        tbody.innerHTML = filtered.map(m => `
-            <tr class="cursor-pointer hover:bg-gray-50" onclick="selectD1Member('${m.detail_id}')">
-                <td class="px-3 py-2 text-sm">${escapeHtml(m.member_name || '-')}</td>
-                <td class="px-2 py-2 text-center text-sm">${m.attended === 'Y' ? '✓' : '-'}</td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = filtered.map(m => buildD1MemberRow_(m)).join('');
     }
 
     function selectD1Member(detailId) {
@@ -11525,6 +11680,209 @@ ${token}
             .withFailureHandler(e => showStatus(e.message, 'error'))
             .generateClassD1(selectedClassId, startDate, loopUnit, loopCount);
     }
+
+    // ── 물건/회원 탭 전환 ──────────────────────────────────────────
+    var currentD1Tab = 'item';
+    var d1PendingItems = []; // 물건 임시 목록 [{id, sakun_no, court, stu_member}]
+    var d1ItemsData = [];    // 등록된 물건 조회 결과
+
+    function switchD1Tab(tab) {
+        currentD1Tab = tab;
+        ['item', 'member'].forEach(t => {
+            const pane = document.getElementById('d1TabPane-' + t);
+            const btn = document.getElementById('d1Tab-' + t);
+            const actionBtn = document.getElementById('d1TabBtn-' + t);
+            if (t === tab) {
+                if (pane) pane.classList.remove('hidden');
+                if (btn) btn.classList.replace('bg-white', 'bg-indigo-50'), btn.classList.replace('text-gray-500', 'text-indigo-700'), btn.classList.replace('border-gray-200', 'border-indigo-300');
+                if (actionBtn) actionBtn.classList.remove('hidden');
+            } else {
+                if (pane) pane.classList.add('hidden');
+                if (btn) btn.classList.replace('bg-indigo-50', 'bg-white'), btn.classList.replace('text-indigo-700', 'text-gray-500'), btn.classList.replace('border-indigo-300', 'border-gray-200');
+                if (actionBtn) actionBtn.classList.add('hidden');
+            }
+        });
+    }
+
+    function showD1ItemRegisterPanel() {
+        if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
+            showStatus('먼저 회차를 선택하세요.', 'error');
+            return;
+        }
+        const panel = document.getElementById('d1ItemRegisterPanel');
+        if (!panel) return;
+        panel.classList.toggle('content-hidden');
+        if (!panel.classList.contains('content-hidden')) {
+            d1PendingItems = [];
+            renderD1PendingItems_();
+            const input = document.getElementById('d1-item-search');
+            if (input) { input.value = ''; setTimeout(() => input.focus(), 100); }
+        }
+    }
+
+    function searchD1Items() {
+        const kw = (document.getElementById('d1-item-search')?.value || '').trim().toLowerCase();
+        const dropdown = document.getElementById('d1-item-dropdown');
+        if (!dropdown) return;
+        if (kw.length < 2) { dropdown.classList.add('hidden'); return; }
+
+        const results = allBiddingData.filter(it => {
+            const sakun = String(it.sakun_no || '').toLowerCase();
+            return sakun.includes(kw);
+        }).slice(0, 20);
+
+        if (results.length === 0) { dropdown.classList.add('hidden'); return; }
+
+        dropdown.innerHTML = results.map(it => {
+            const alreadyPending = d1PendingItems.some(p => String(p.id) === String(it.id));
+            const alreadyIn = String(it.class_d1_id || '') === String(selectedClassD1Id || '');
+            const disabled = alreadyPending || alreadyIn;
+            const label = alreadyIn ? ' (등록됨)' : alreadyPending ? ' (추가됨)' : '';
+            return `<div class="px-3 py-1.5 text-sm cursor-pointer hover:bg-indigo-50 ${disabled ? 'text-gray-400' : 'text-gray-800'}"
+                onclick="${disabled ? '' : `addD1PendingItem('${it.id}')`}">
+                ${escapeHtml(it.sakun_no || '')} <span class="text-xs text-gray-400">${escapeHtml(it.court || '')}</span>${label}
+            </div>`;
+        }).join('');
+        dropdown.classList.remove('hidden');
+    }
+
+    function addD1PendingItem(itemId) {
+        const item = allBiddingData.find(it => String(it.id) === String(itemId));
+        if (!item) return;
+        if (d1PendingItems.some(p => String(p.id) === String(itemId))) return;
+        d1PendingItems.push({ id: item.id, sakun_no: item.sakun_no, court: item.court, stu_member: item.stu_member });
+        renderD1PendingItems_();
+        const input = document.getElementById('d1-item-search');
+        const dropdown = document.getElementById('d1-item-dropdown');
+        if (input) input.value = '';
+        if (dropdown) dropdown.classList.add('hidden');
+    }
+
+    function removeD1PendingItem(itemId) {
+        d1PendingItems = d1PendingItems.filter(p => String(p.id) !== String(itemId));
+        renderD1PendingItems_();
+    }
+
+    function renderD1PendingItems_() {
+        const el = document.getElementById('d1-item-pending-list');
+        if (!el) return;
+        if (d1PendingItems.length === 0) {
+            el.innerHTML = '<div class="text-xs text-gray-400 text-center py-1">추가할 물건을 검색하세요</div>';
+            return;
+        }
+        el.innerHTML = d1PendingItems.map(p => `
+            <div class="flex items-center justify-between bg-white rounded px-2 py-1 text-xs border border-gray-200">
+                <span class="text-gray-700">${escapeHtml(p.sakun_no || '')} <span class="text-gray-400">${escapeHtml(p.court || '')}</span></span>
+                <button type="button" onclick="removeD1PendingItem('${p.id}')" class="text-red-400 hover:text-red-600 ml-2">✕</button>
+            </div>`).join('');
+    }
+
+    function registerD1Items() {
+        if (!selectedClassD1Id || selectedClassD1Id === '__summary__') { showStatus('회차를 선택하세요.', 'error'); return; }
+        if (d1PendingItems.length === 0) { showStatus('등록할 물건을 추가하세요.', 'error'); return; }
+
+        // 현재 선택된 회차 정보에서 수업명/날짜 추출
+        const d1Info = allClassD1Data.find(d => String(d.class_d1_id) === String(selectedClassD1Id));
+        const className = d1Info ? [d1Info.class_type, d1Info.class_name].filter(Boolean).join('') : '';
+        const classDate = d1Info ? String(d1Info.class_date || '') : '';
+        const itemIds = d1PendingItems.map(p => p.id);
+
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r.success) {
+                    showStatus(r.message, 'success');
+                    d1PendingItems = [];
+                    renderD1PendingItems_();
+                    document.getElementById('d1ItemRegisterPanel')?.classList.add('content-hidden');
+                    loadD1Items(selectedClassD1Id);
+                } else {
+                    showStatus(r.message, 'error');
+                }
+            })
+            .withFailureHandler(e => showStatus(e.message, 'error'))
+            .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate);
+    }
+
+    function loadD1Items(classD1Id) {
+        const el = document.getElementById('d1-item-list');
+        if (!el) return;
+        el.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
+
+        google.script.run
+            .withSuccessHandler(data => {
+                d1ItemsData = Array.isArray(data) ? data : [];
+                renderD1Items();
+            })
+            .withFailureHandler(() => {
+                el.innerHTML = '<div class="text-red-400 py-2 text-xs text-center">로드 실패</div>';
+            })
+            .getItemsByClassD1Id(classD1Id);
+    }
+
+    function renderD1Items() {
+        const el = document.getElementById('d1-item-list');
+        if (!el) return;
+        if (d1ItemsData.length === 0) {
+            el.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">등록된 물건이 없습니다.</div>';
+            return;
+        }
+        el.innerHTML = d1ItemsData.map(item => {
+            const statusClass = getStatusTagClass(item.stu_member);
+            const sakun = escapeHtml(String(item.sakun_no || ''));
+            const court = escapeHtml(String(item.court || ''));
+            const member = escapeHtml(String(item.m_name || ''));
+            const bidprice = item.bidprice ? Number(item.bidprice).toLocaleString() + '원' : '-';
+            return `<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-100 text-xs hover:bg-gray-50">
+                <span class="px-1.5 py-0.5 rounded text-xs font-semibold ${statusClass}">${escapeHtml(item.stu_member || '-')}</span>
+                <span class="font-medium text-gray-800 flex-1 truncate">${sakun}</span>
+                <span class="text-gray-400">${court}</span>
+                <span class="text-gray-500 truncate max-w-[60px]">${member}</span>
+            </div>`;
+        }).join('');
+    }
+
+    // 수업회차 패널 드래그 폭 조절
+    (function initClassScheduleDivider() {
+        function setup() {
+            const divider = document.getElementById('classScheduleDivider');
+            const listPane = document.getElementById('classScheduleListPane');
+            const container = document.getElementById('ClassSchedule');
+            if (!divider || !listPane || !container) return;
+
+            let dragging = false;
+            let startX = 0;
+            let startWidth = 0;
+
+            divider.addEventListener('mousedown', e => {
+                dragging = true;
+                startX = e.clientX;
+                startWidth = listPane.getBoundingClientRect().width;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', e => {
+                if (!dragging) return;
+                const containerWidth = container.getBoundingClientRect().width;
+                const delta = e.clientX - startX;
+                const newWidth = Math.min(Math.max(startWidth + delta, 200), containerWidth - 200);
+                listPane.style.width = newWidth + 'px';
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (!dragging) return;
+                dragging = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', setup);
+        } else {
+            setup();
+        }
+    })();
 
     // 회원 추가 모달
     var d1PendingMembers = []; // 임시 저장 목록 [{member_id, member_name, info}]
@@ -13352,7 +13710,7 @@ MJ 이정우 팀장
         var dtLabel = dt.substring(2, 4) + '월 ' + dt.substring(4, 6) + '일';
         var txtCol = (s === '추천') ? '#000' : '#fff';
         var clickLabel = (s === '추천') ? '<div class="ic-click-label bid-confirm">입찰확정 클릭!</div>' : '';
-        var timerBar = (s === '추천' && i.chuchen_date) ? createChuchenTimerBar(i.chuchen_date) : '';
+        var timerBar = (s === '추천' && i.chuchen_date) ? createChuchenTimerBar(i.chuchen_date, i) : '';
         var skSafe = sk.replace(/'/g, '');
         var viewIcoSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
 

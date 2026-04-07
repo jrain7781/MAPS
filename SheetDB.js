@@ -2328,6 +2328,71 @@ function deleteClassD1(classD1Id) {
   return { success: true, message: '회차 삭제 완료' };
 }
 
+/**
+ * 회차에 물건들을 일괄 등록합니다.
+ * - stu_member = '추천', m_name = className_classDate, class_d1_id = classD1Id, chuchen_state = '신규'
+ */
+function addItemsToClassD1(classD1Id, itemIds, className, classDate) {
+  if (!classD1Id || !Array.isArray(itemIds) || itemIds.length === 0) {
+    return { success: false, message: '파라미터 오류' };
+  }
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  if (!sheet) return { success: false, message: 'items 시트 없음' };
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '데이터 없음' };
+
+  var idCol = ITEM_HEADERS.indexOf('id') + 1;
+  var stuMemberCol = ITEM_HEADERS.indexOf('stu_member') + 1;
+  var mNameCol = ITEM_HEADERS.indexOf('m_name') + 1;
+  var classD1IdCol = ITEM_HEADERS.indexOf('class_d1_id') + 1;
+  var chuchenStateCol = ITEM_HEADERS.indexOf('chuchen_state') + 1;
+  var chuchenDateCol = ITEM_HEADERS.indexOf('chuchen_date') + 1;
+
+  var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues().flat().map(String);
+  var mName = className && classDate ? className + '_' + classDate : className || '';
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
+  var updated = 0;
+
+  itemIds.forEach(function(itemId) {
+    var idx = ids.indexOf(String(itemId));
+    if (idx < 0) return;
+    var row = idx + 2;
+    sheet.getRange(row, stuMemberCol).setValue('추천');
+    sheet.getRange(row, mNameCol).setValue(mName);
+    sheet.getRange(row, classD1IdCol).setValue(classD1Id);
+    sheet.getRange(row, chuchenStateCol).setValue('신규');
+    sheet.getRange(row, chuchenDateCol).setValue(today);
+    updated++;
+  });
+
+  SpreadsheetApp.flush();
+  return { success: true, message: updated + '개 물건 등록 완료' };
+}
+
+/**
+ * 특정 회차(classD1Id)에 등록된 물건 목록을 조회합니다.
+ */
+function getItemsByClassD1Id(classD1Id) {
+  if (!classD1Id) return [];
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  if (!sheet) return [];
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
+  var classD1IdIdx = ITEM_HEADERS.indexOf('class_d1_id');
+
+  return data
+    .filter(function(row) { return String(row[classD1IdIdx]) === String(classD1Id); })
+    .map(function(row) {
+      var obj = {};
+      ITEM_HEADERS.forEach(function(h, i) { obj[h] = row[i] !== undefined && row[i] !== null ? row[i] : ''; });
+      return obj;
+    });
+}
+
 // ================================================================================================
 // [회원 수업 상세(member_class_details) 시트 관리] CRUD 함수들
 // ================================================================================================
@@ -2395,6 +2460,61 @@ function readMembersByClassD1Id(classD1Id) {
       gubun: member.gubun || ''
     };
   });
+}
+
+/**
+ * 특정 수업(classId)의 전체 회차에 대한 회원 출석 현황을 조회합니다.
+ * 반환: { d1List: [...], members: [{ member_id, member_name, phone, gubun, name1~3, attendance: {d1Id: 'Y'/'N'}, attendCount }] }
+ */
+function readAllMembersByClassId(classId) {
+  var d1List = readClassD1ByClassId(classId);
+  if (!d1List || d1List.length === 0) return { d1List: [], members: [] };
+
+  var d1Ids = {};
+  d1List.forEach(function(d) { d1Ids[String(d.class_d1_id)] = true; });
+
+  var sheet = ensureMemberClassDetailsSheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { d1List: d1List, members: [] };
+
+  var data = sheet.getRange(2, 1, lastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+  var relevantRows = data
+    .map(function(row) {
+      var obj = {};
+      MEMBER_CLASS_DETAILS_HEADERS.forEach(function(h, i) { obj[h] = (row[i] !== undefined && row[i] !== null) ? row[i] : ''; });
+      return obj;
+    })
+    .filter(function(d) { return d1Ids[String(d.class_d1_id)]; });
+
+  var allMembers = readAllMembersNew();
+
+  var memberMap = {};
+  relevantRows.forEach(function(d) {
+    var memberId = String(d.member_id);
+    if (!memberMap[memberId]) {
+      var member = allMembers.find(function(m) { return String(m.member_id) === memberId; }) || {};
+      memberMap[memberId] = {
+        member_id: memberId,
+        member_name: member.member_name || '',
+        phone: member.phone || '',
+        gubun: member.gubun || '',
+        name1: member.name1 || '', name1_gubun: member.name1_gubun || '',
+        name2: member.name2 || '', name2_gubun: member.name2_gubun || '',
+        name3: member.name3 || '', name3_gubun: member.name3_gubun || '',
+        attendance: {},
+        attendCount: 0
+      };
+    }
+    var d1Id = String(d.class_d1_id);
+    memberMap[memberId].attendance[d1Id] = d.attended === 'Y' ? 'Y' : 'N';
+    if (d.attended === 'Y') memberMap[memberId].attendCount++;
+  });
+
+  var members = Object.values(memberMap).sort(function(a, b) {
+    return a.member_name.localeCompare(b.member_name, 'ko');
+  });
+
+  return { d1List: d1List, members: members };
 }
 
 /**
