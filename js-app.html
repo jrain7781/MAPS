@@ -11681,28 +11681,9 @@ ${token}
             .generateClassD1(selectedClassId, startDate, loopUnit, loopCount);
     }
 
-    // ── 물건/회원 탭 전환 ──────────────────────────────────────────
-    var currentD1Tab = 'item';
+    // ── 물건/회원 카드 ──────────────────────────────────────────────
     var d1PendingItems = []; // 물건 임시 목록 [{id, sakun_no, court, stu_member}]
     var d1ItemsData = [];    // 등록된 물건 조회 결과
-
-    function switchD1Tab(tab) {
-        currentD1Tab = tab;
-        ['item', 'member'].forEach(t => {
-            const pane = document.getElementById('d1TabPane-' + t);
-            const btn = document.getElementById('d1Tab-' + t);
-            const actionBtn = document.getElementById('d1TabBtn-' + t);
-            if (t === tab) {
-                if (pane) pane.classList.remove('hidden');
-                if (btn) btn.classList.replace('bg-white', 'bg-indigo-50'), btn.classList.replace('text-gray-500', 'text-indigo-700'), btn.classList.replace('border-gray-200', 'border-indigo-300');
-                if (actionBtn) actionBtn.classList.remove('hidden');
-            } else {
-                if (pane) pane.classList.add('hidden');
-                if (btn) btn.classList.replace('bg-indigo-50', 'bg-white'), btn.classList.replace('text-indigo-700', 'text-gray-500'), btn.classList.replace('border-indigo-300', 'border-gray-200');
-                if (actionBtn) actionBtn.classList.add('hidden');
-            }
-        });
-    }
 
     function showD1ItemRegisterPanel() {
         if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
@@ -11841,47 +11822,62 @@ ${token}
         }).join('');
     }
 
-    // 수업회차 패널 드래그 폭 조절
-    (function initClassScheduleDivider() {
-        function setup() {
-            const divider = document.getElementById('classScheduleDivider');
-            const listPane = document.getElementById('classScheduleListPane');
-            const container = document.getElementById('ClassSchedule');
-            if (!divider || !listPane || !container) return;
+    // ── 수업회차 패널/카드 드래그 폭 조절 + localStorage 저장 ──────
+    (function initCsdDragResize() {
+        const LS_LIST = 'csd_list_pane_width';
+        const LS_CARD = 'csd_item_card_width';
 
-            let dragging = false;
-            let startX = 0;
-            let startWidth = 0;
+        function makeDraggable(dividerId, leftElId, rightElId, lsKey, minLeft, minRight) {
+            function setup() {
+                const divider = document.getElementById(dividerId);
+                const leftEl = document.getElementById(leftElId);
+                if (!divider || !leftEl) return;
 
-            divider.addEventListener('mousedown', e => {
-                dragging = true;
-                startX = e.clientX;
-                startWidth = listPane.getBoundingClientRect().width;
-                document.body.style.cursor = 'col-resize';
-                document.body.style.userSelect = 'none';
-                e.preventDefault();
-            });
+                // localStorage 복원
+                const saved = localStorage.getItem(lsKey);
+                if (saved) leftEl.style.width = saved;
 
-            document.addEventListener('mousemove', e => {
-                if (!dragging) return;
-                const containerWidth = container.getBoundingClientRect().width;
-                const delta = e.clientX - startX;
-                const newWidth = Math.min(Math.max(startWidth + delta, 200), containerWidth - 200);
-                listPane.style.width = newWidth + 'px';
-            });
+                let dragging = false, startX = 0, startWidth = 0;
 
-            document.addEventListener('mouseup', () => {
-                if (!dragging) return;
-                dragging = false;
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-            });
+                divider.addEventListener('mousedown', e => {
+                    dragging = true;
+                    startX = e.clientX;
+                    startWidth = leftEl.getBoundingClientRect().width;
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                    e.preventDefault();
+                });
+
+                document.addEventListener('mousemove', e => {
+                    if (!dragging) return;
+                    const parent = leftEl.parentElement;
+                    if (!parent) return;
+                    const containerWidth = parent.getBoundingClientRect().width;
+                    const delta = e.clientX - startX;
+                    const newWidth = Math.min(Math.max(startWidth + delta, minLeft), containerWidth - minRight);
+                    leftEl.style.width = newWidth + 'px';
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (!dragging) return;
+                    dragging = false;
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    // 저장
+                    localStorage.setItem(lsKey, leftEl.style.width);
+                });
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', setup);
+            } else {
+                setup();
+            }
         }
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', setup);
-        } else {
-            setup();
-        }
+
+        // 1) 좌우 패널 (수업상세 리스트 ↔ 수업 회차)
+        makeDraggable('classScheduleDivider', 'classScheduleListPane', 'classScheduleDetailPane', LS_LIST, 200, 200);
+        // 2) 물건 카드 ↔ 회원 카드
+        makeDraggable('d1CardDivider', 'd1ItemCard', 'd1MemberCard', LS_CARD, 100, 100);
     })();
 
     // 회원 추가 모달
