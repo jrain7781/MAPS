@@ -11473,19 +11473,24 @@ ${token}
         if (!batch) return;
         const items = batch.items;
 
-        // 오늘 기준 가장 가까운 미래 회차 찾기
+        // 오늘 기준 배치별 가장 가까운 미래 회차 찾기 (배치마다 독립 하이라이트)
         const todayStr = (() => {
             const t = new Date();
             return String(t.getFullYear()) + String(t.getMonth() + 1).padStart(2, '0') + String(t.getDate()).padStart(2, '0');
         })();
-        let nearestD1Id = null;
-        let nearestDiff = Infinity;
-        allClassD1Data.forEach(d => {
-            const dateNum = parseInt(String(d.class_date || '').replace(/-/g, ''), 10);
-            if (!isNaN(dateNum) && dateNum >= parseInt(todayStr, 10)) {
-                const diff = dateNum - parseInt(todayStr, 10);
-                if (diff < nearestDiff) { nearestDiff = diff; nearestD1Id = d.class_d1_id; }
-            }
+        const todayNum = parseInt(todayStr, 10);
+        // 배치별 nearestD1Id 맵
+        const nearestD1IdByBatch = {};
+        d1Batches.forEach(batch => {
+            let bNearestId = null, bNearestDiff = Infinity;
+            (batch.items || []).forEach(d => {
+                const dateNum = parseInt(String(d.class_date || '').replace(/-/g, ''), 10);
+                if (!isNaN(dateNum) && dateNum >= todayNum) {
+                    const diff = dateNum - todayNum;
+                    if (diff < bNearestDiff) { bNearestDiff = diff; bNearestId = d.class_d1_id; }
+                }
+            });
+            if (bNearestId) nearestD1IdByBatch[String(bNearestId)] = true;
         });
 
         // 날짜+시간 포맷 (yy/mm/dd HH시)
@@ -11531,7 +11536,7 @@ ${token}
             sumCard +
             items.map(d => {
                 const isSelected = selectedClassD1Id === d.class_d1_id;
-                const isNearest = d.class_d1_id === nearestD1Id;
+                const isNearest = !!nearestD1IdByBatch[String(d.class_d1_id)];
                 const isCompleted = d.completed === 'Y';
                 const rawDate = String(d.class_date || '').replace(/-/g, '');
                 const isPast = rawDate && rawDate < todayStr;
@@ -11879,12 +11884,25 @@ ${token}
         document.getElementById('genD1-addCount-section').classList.toggle('hidden', mode !== 'add');
         document.getElementById('generateD1Modal').dataset.mode = mode;
 
-        document.getElementById('genD1-startLoop').value = '1';
-        document.getElementById('genD1-endLoop').value = '10';
-        document.getElementById('genD1-addCount').value = '1';
-        // 드롭다운 리셋
-        ['genD1-timeFrom','genD1-timeTo'].forEach(p => { setDropdownTime_(p, '09:00'); });
+        document.getElementById('genD1-startLoop').value = '';
+        document.getElementById('genD1-endLoop').value = '';
+        document.getElementById('genD1-addCount').value = '';
+        // 시간 드롭다운 리셋 (오전 1시 00분 기본)
+        ['genD1-timeFrom-ampm','genD1-timeTo-ampm'].forEach(id => { const el=document.getElementById(id); if(el) el.value='AM'; });
+        ['genD1-timeFrom-h','genD1-timeTo-h'].forEach(id => { const el=document.getElementById(id); if(el) el.value='1'; });
+        ['genD1-timeFrom-m','genD1-timeTo-m'].forEach(id => { const el=document.getElementById(id); if(el) el.value='00'; });
         ['genD1-bidStarttime-day','genD1-bidDatetime1-day','genD1-bidDatetime2-day'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+
+        // 회차범위 체크박스: 회차추가 모드에서 비활성화
+        const copyStartLoopCb = document.getElementById('genD1-copy-startLoop');
+        const copyStartLoopLabel = copyStartLoopCb?.parentElement;
+        if (mode === 'add') {
+            if (copyStartLoopCb) { copyStartLoopCb.checked = false; copyStartLoopCb.disabled = true; }
+            if (copyStartLoopLabel) copyStartLoopLabel.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+        } else {
+            if (copyStartLoopCb) { copyStartLoopCb.checked = true; copyStartLoopCb.disabled = false; }
+            if (copyStartLoopLabel) copyStartLoopLabel.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
+        }
         // 회차 추가 모드: 현재 배치 batchKey 저장
         document.getElementById('generateD1Modal').dataset.batchKey = (mode === 'add' && d1Batches[d1BatchIdx]) ? d1Batches[d1BatchIdx].batchKey : '';
         document.getElementById('genD1-memberSection').classList.add('hidden');
@@ -12103,17 +12121,25 @@ ${token}
             ? { addCount, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds, memberApplyAll }
             : { startLoop, endLoop, timeFrom, timeTo, ...bidOpts, memberIds, memberApplyAll };
 
+        // 생성 중 팝업 표시
+        closeGenerateD1Modal();
+        const loadingModal = document.getElementById('d1LoadingModal');
+        if (loadingModal) loadingModal.classList.remove('content-hidden');
+
         google.script.run
             .withSuccessHandler(result => {
+                if (loadingModal) loadingModal.classList.add('content-hidden');
                 if (result.success) {
                     showStatus(result.message, 'success');
-                    closeGenerateD1Modal();
                     loadClassD1Grid(selectedClassId);
                 } else {
                     showStatus(result.message, 'error');
                 }
             })
-            .withFailureHandler(e => showStatus(e.message, 'error'))
+            .withFailureHandler(e => {
+                if (loadingModal) loadingModal.classList.add('content-hidden');
+                showStatus(e.message, 'error');
+            })
             .generateClassD1(selectedClassId, startDate, loopUnit, options);
     }
 
