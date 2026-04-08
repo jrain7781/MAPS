@@ -400,8 +400,8 @@
                     window.Telegram.WebApp.disableVerticalSwipes(); // 세로 스와이프(풀다운) 방지
                 }
                 // 안정적 확장을 위해 재시도 (첫 호출이 무시될 수 있음)
-                setTimeout(function() { try { window.Telegram.WebApp.expand(); } catch(e) {} }, 400);
-                setTimeout(function() { try { window.Telegram.WebApp.expand(); } catch(e) {} }, 1200);
+                setTimeout(function () { try { window.Telegram.WebApp.expand(); } catch (e) { } }, 400);
+                setTimeout(function () { try { window.Telegram.WebApp.expand(); } catch (e) { } }, 1200);
             }
         } catch (e) { console.warn('[TG] expand/disableVerticalSwipes:', e); }
 
@@ -1013,9 +1013,9 @@
     function getWorkingDaysFromToday() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const todayYYMMDD = String(today.getFullYear()).slice(-2) + 
-                            String(today.getMonth() + 1).padStart(2, '0') + 
-                            String(today.getDate()).padStart(2, '0');
+        const todayYYMMDD = String(today.getFullYear()).slice(-2) +
+            String(today.getMonth() + 1).padStart(2, '0') +
+            String(today.getDate()).padStart(2, '0');
 
         // 전체 데이터에서今日이후의 유니크한 날짜 추출
         const dateSet = new Set();
@@ -1031,7 +1031,7 @@
 
         // 정렬된 날짜 배열 생성
         const sortedDates = Array.from(dateSet).sort();
-        
+
         // YYMMDD 형식을 Date 객체로 변환하여 반환
         return sortedDates.map(yymmdd => {
             const year = 2000 + parseInt(yymmdd.slice(0, 2));
@@ -1076,7 +1076,7 @@
                 row.setAttribute('data-images', imageIdsVal);
                 var hasImages = !!(imageIdsVal && imageIdsVal.split(',').map(function (s) { return s.trim(); }).filter(Boolean).length);
                 row.setAttribute('data-sakun-no', item.sakun_no || '');
-                row.onmouseenter = function() {
+                row.onmouseenter = function () {
                     var idsStr = this.getAttribute('data-images') || '';
                     var ids = idsStr.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
                     if (ids.length > 0) {
@@ -2786,7 +2786,7 @@
             const calAllChecked = calCurSel.length === 0;
             let calCbHtml = `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="cal-search-manager-all" value="All" ${calAllChecked ? 'checked' : ''} onchange="handleCalManagerAll(this); renderCalendar()" class="rounded"> 전체</label>`;
             calCbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="cal-search-manager-cb" value="대표님" ${calCurSel.includes('대표님') ? 'checked' : ''} onchange="handleCalManagerOther(this); updateCalManagerLabel(); renderCalendar()" class="rounded"> 대표님</label>`;
-            [...members].sort().filter(m => m !== '대표님').forEach(function(member) {
+            [...members].sort().filter(m => m !== '대표님').forEach(function (member) {
                 calCbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="cal-search-manager-cb" value="${member}" ${calCurSel.includes(member) ? 'checked' : ''} onchange="handleCalManagerOther(this); updateCalManagerLabel(); renderCalendar()" class="rounded"> ${member}</label>`;
             });
             calManagerDropdown.innerHTML = calCbHtml;
@@ -2801,7 +2801,7 @@
             const memberArr = [...members].sort();
             // 대표님 항상 맨 위 (데이터 유무 관계없이)
             cbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="search-manager-cb" value="대표님" ${currentSelected.includes('대표님') ? 'checked' : ''} onchange="handleManagerOther(this); updateManagerLabel(); applyFilters()" class="rounded"> 대표님</label>`;
-            memberArr.filter(m => m !== '대표님').forEach(function(member) {
+            memberArr.filter(m => m !== '대표님').forEach(function (member) {
                 cbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="search-manager-cb" value="${member}" ${currentSelected.includes(member) ? 'checked' : ''} onchange="handleManagerOther(this); updateManagerLabel(); applyFilters()" class="rounded"> ${member}</label>`;
             });
             searchManagerDropdown.innerHTML = cbHtml;
@@ -2814,7 +2814,7 @@
         missingBidTableBody.innerHTML = '';
         const missingBidTableFoot = document.getElementById('missingBidTableFoot');
         if (missingBidTableFoot) missingBidTableFoot.innerHTML = '';
-        
+
         const targetDates = getWorkingDaysFromToday();
         const filterMember = document.getElementById('missingBidFilterMember') ? document.getElementById('missingBidFilterMember').value : '';
         let totalMissing = 0;
@@ -2838,7 +2838,7 @@
                 const isTargetMember = (filterMemberVal === 'All' || filterMemberVal === '') || (itemMember === filterMemberVal);
                 return itemDate === targetYYMMDD && (isNaN(price) || price === 0) && item.stu_member === '입찰' && isTargetMember;
             }).length;
-            
+
             totalMissing += missingCount;
             const displayCount = missingCount === 0 ? "없음" : `${missingCount}건`;
             const textColorClass = missingCount > 0 ? "text-red-600 font-bold" : "text-gray-400";
@@ -3000,8 +3000,8 @@
             var total = row[baseField] || 0;
             if (!total) return '<td class="py-1.5 px-1 text-center text-gray-200 text-xs">-</td>';
             var tele = row[baseField + '_tele'] || 0;
-            var web  = row[baseField + '_web']  || 0;
-            var sys  = row[baseField + '_sys']  || 0;
+            var web = row[baseField + '_web'] || 0;
+            var sys = row[baseField + '_sys'] || 0;
             var mkSub = function (cnt, field) {
                 if (!cnt) return '0';
                 return '<span class="hover:underline cursor-pointer" onclick="event.stopPropagation();navigateToItemsByIds(' + rowIdx + ',\'' + field + '\')">' + cnt + '</span>';
@@ -3019,13 +3019,13 @@
         stats.forEach(function (row, i) {
             tbodyHtml += '<tr class="border-b border-gray-100 hover:bg-gray-50">'
                 + '<td class="py-1.5 px-2 whitespace-nowrap text-xs border-r bg-gray-50 font-bold text-gray-700 text-center">' + fmtDateDay(row.date) + '</td>'
-                + mkCell(row, 'recommend',       'text-gray-700',   i)
-                + mkCell(row, 'bid_approved',    'text-indigo-600', i)
-                + mkCell(row, 'bid_pending',     'text-orange-500', i)
-                + mkCell(row, 'cancel_approved', 'text-gray-500',   i)
-                + mkCell(row, 'delivered',       'text-blue-600',   i)
-                + mkCell(row, 'confirmed',       'text-green-600',  i)
-                + mkCell(row, 'status_notify',   'text-red-500',    i)
+                + mkCell(row, 'recommend', 'text-gray-700', i)
+                + mkCell(row, 'bid_approved', 'text-indigo-600', i)
+                + mkCell(row, 'bid_pending', 'text-orange-500', i)
+                + mkCell(row, 'cancel_approved', 'text-gray-500', i)
+                + mkCell(row, 'delivered', 'text-blue-600', i)
+                + mkCell(row, 'confirmed', 'text-green-600', i)
+                + mkCell(row, 'status_notify', 'text-red-500', i)
                 + '</tr>';
         });
         el.innerHTML = '<table class="w-full text-xs border-collapse">'
@@ -3623,12 +3623,12 @@
         const elId = isModal ? 'modal-sub-info-content' : 'item-sub-info-content';
         const el = document.getElementById(elId);
         const item = isModal ? (typeof currentModalItemData !== 'undefined' ? currentModalItemData : null) : (typeof currentDetailItem !== 'undefined' ? currentDetailItem : null);
-        
+
         if (!el || !item) return;
 
         const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (typeof allMemberData !== 'undefined' ? allMemberData : []);
         const mem = memberList.find(m => String(m.member_id) === String(item.member_id)) || {};
-        
+
         // ID 충돌 방지를 위한 접미사
         const suffix = isModal ? '-modal' : '';
 
@@ -3707,7 +3707,7 @@
         input.value = '조회 중...';
         input.disabled = true;
         google.script.run
-            .withSuccessHandler(function(results) {
+            .withSuccessHandler(function (results) {
                 input.disabled = false;
                 const latest = (results && results[0]) ? results[0].image_id_latest : '';
                 if (latest) {
@@ -3718,7 +3718,7 @@
                     if (typeof showStatus === 'function') showStatus('item_images에 등록된 이미지가 없습니다.', 'warning');
                 }
             })
-            .withFailureHandler(function(err) {
+            .withFailureHandler(function (err) {
                 input.disabled = false;
                 input.value = '';
                 if (typeof showStatus === 'function') showStatus('조회 실패: ' + err.message, 'error');
@@ -3815,12 +3815,12 @@
         // groups are currently from oldest to newest.
         // 역산 기반 당대 스냅샷 구축 시작. 최신값을 모른다면 빈칸.
         var currentState = {
-            'stu_member':    currentItem && currentItem.stu_member    ? currentItem.stu_member    : '',
+            'stu_member': currentItem && currentItem.stu_member ? currentItem.stu_member : '',
             'chuchen_state': currentItem && currentItem.chuchen_state ? currentItem.chuchen_state : '',
-            'bidprice':      currentItem && currentItem.bidprice      ? currentItem.bidprice      : '',
-            'bid_state':     currentItem && currentItem.bid_state     ? currentItem.bid_state     : '',
-            'm_name':        currentItem && currentItem.m_name        ? currentItem.m_name        : '',
-            'm_name_id':     currentItem && currentItem.m_name_id     ? currentItem.m_name_id     : ''
+            'bidprice': currentItem && currentItem.bidprice ? currentItem.bidprice : '',
+            'bid_state': currentItem && currentItem.bid_state ? currentItem.bid_state : '',
+            'm_name': currentItem && currentItem.m_name ? currentItem.m_name : '',
+            'm_name_id': currentItem && currentItem.m_name_id ? currentItem.m_name_id : ''
         };
 
         // 뒤집어서 (가장 최신 -> 가장 오래된 순) 역산 진행
@@ -3929,7 +3929,7 @@
         var noteMap = { 'card': '추천물건전달', 'bid_price': '입찰가전달', 'status': '진행상태전달', 'check_request': '확인요청전달' };
         var FIELD_DISP_ = {
             chuchen_state: { '전달완료': '전달', '신규': '' },
-            bid_state:     { '전달완료': '전달', '확인완료': '확인', '신규': '' }
+            bid_state: { '전달완료': '전달', '확인완료': '확인', '신규': '' }
         };
         function applyFieldDisp_(col, v) {
             if (col === 'bidprice' && v && v !== '') {
@@ -4244,8 +4244,8 @@
         if (!contentDetail || !contentInvestigation) return;
 
         // 모든 탭 비활성화
-        [btnDetail, btnInvestigation].forEach(function(b) { if (b) b.classList.remove('active'); });
-        [contentDetail, contentInvestigation].forEach(function(c) { if (c) c.classList.add('content-hidden'); });
+        [btnDetail, btnInvestigation].forEach(function (b) { if (b) b.classList.remove('active'); });
+        [contentDetail, contentInvestigation].forEach(function (c) { if (c) c.classList.add('content-hidden'); });
         if (toolbar) toolbar.classList.add('content-hidden');
 
         if (detailPane) {
@@ -4272,7 +4272,7 @@
                 idsRaw = String(currentDetailItem.image_ids);
             }
             if (idsRaw) ids = idsRaw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-            
+
             if (ids.length) {
                 // [OPTIMIZE] items 시트의 image_id (또는 리스트 캐시) 1장만 즉시 렌더링
                 renderInvestigationImagesFromIds(ids);
@@ -4313,11 +4313,11 @@
                 }
                 placeholderEl.classList.add('content-hidden');
                 listEl.classList.remove('content-hidden');
-                
+
                 // [MODIFY] 최신 이미지만 하나만 보이게 수정
-                var r = rows[0]; 
+                var r = rows[0];
                 if (footerEl) footerEl.textContent = '최근 이미지 ID: ' + r.image_id;
-                
+
                 var wrap = document.createElement('div');
                 wrap.className = 'w-full border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm';
                 var img = document.createElement('img');
@@ -4699,7 +4699,7 @@
     function openDetailModal(data) {
         currentModalItemData = data;
         currentModalHistoryData = null; // 초기화
-        
+
         // [최적화 Phase 3] 모달 열리자마지 히스토리 미리 가져오기 (Background Fetch)
         if (typeof google !== 'undefined' && google.script && google.script.run) {
             google.script.run
@@ -5145,8 +5145,8 @@ MJ 이정우 팀장
                         showStatus(failMsg + ' 추천상태 전달완료로 업데이트 됩니다.', 'warning');
                         // 전송 실패 시 백엔드 chuchen_state/chuchen_date 직접 업데이트
                         google.script.run
-                            .withSuccessHandler(() => {})
-                            .withFailureHandler(() => {})
+                            .withSuccessHandler(() => { })
+                            .withFailureHandler(() => { })
                             .updateChuchenState([itemId], '전달완료', nowIso);
                     } else {
                         showStatus(failMsg, 'error');
@@ -5284,7 +5284,7 @@ MJ 이정우 팀장
             allBiddingData[idx] = Object.assign({}, allBiddingData[idx], optimisticData);
             allBiddingData.sort(dataComparator);
             dataCache = { data: allBiddingData, timestamp: Date.now() };
-            
+
             // 즉시 UI 반영
             closeDetailModal();
             renderCalendar();
@@ -5297,7 +5297,7 @@ MJ 이정우 팀장
                 if (modalSaveBtn) modalSaveBtn.disabled = false;
                 if (result.success) {
                     showStatus('저장이 최종 완료되었습니다.', 'success');
-                    
+
                     // 서버에서 받은 최종 데이터로 한 번 더 정밀 동기화
                     if (result.data) {
                         const finalIdx = allBiddingData.findIndex(it => String(it.id) === String(result.data.id));
@@ -5306,7 +5306,7 @@ MJ 이정우 팀장
                         }
                     }
                     dataCache = { data: allBiddingData, timestamp: Date.now() };
-                    renderCalendar(); 
+                    renderCalendar();
                     if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary();
 
                     // 전달완료 상태로 "전환"될 때만 텔레그램 자동 전송 (이전 상태가 전달완료가 아닌 경우만)
@@ -5350,7 +5350,7 @@ MJ 이정우 팀장
         if (allBiddingData) {
             allBiddingData = allBiddingData.filter(it => String(it.id) !== String(id));
             dataCache = { data: allBiddingData, timestamp: Date.now() };
-            
+
             closeDetailModal();
             renderCalendar();
             applyFilters();
@@ -5463,7 +5463,7 @@ MJ 이정우 팀장
             if (mainSaveBtn) mainSaveBtn.disabled = false;
             if (result.success) {
                 showStatus('저장이 최종 완료되었습니다.', 'success');
-                
+
                 // [최적화] 서버에서 확정된 데이터로 최종 반영
                 if (result.data) {
                     const finalIdx = allBiddingData.findIndex(it => String(it.id) === String(result.data.id));
@@ -5477,9 +5477,9 @@ MJ 이정우 팀장
                 }
 
                 toggleLoading(false);
-                applyFilters(); 
-                if (typeof renderCalendar === 'function') renderCalendar(); 
-                
+                applyFilters();
+                if (typeof renderCalendar === 'function') renderCalendar();
+
                 // [최적화 Phase 4] 현재 사용자가 수정 중인 대상과 저장 완료 대상이 같을 때만 모드 전환
                 // 배경 저장 중에 다른 물건을 클릭했다면 입력창을 초기화하지 않음
                 const currentFormId = formId ? formId.value : '';
@@ -5716,7 +5716,7 @@ MJ 이정우 팀장
                 renderStatusManagementDashboard();
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
-                })
+            })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
                 showStatus(`[대시보드 로드 오류]: ${error.message}.`, 'error');
@@ -5896,7 +5896,7 @@ MJ 이정우 팀장
                 .withSuccessHandler(res => {
                     if (res && res.success) {
                         showStatus(res.message || '승인 완료', 'success');
-                        
+
                         // [최적화] 로컬 캐시 즉시 반영
                         if (res.data && res.data.length > 0) {
                             res.data.forEach(updatedItem => {
@@ -5915,7 +5915,7 @@ MJ 이정우 팀장
                         applyFilters();
                         if (typeof renderCalendar === 'function') renderCalendar();
                         if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary();
-                        
+
                         loadTelegramRequests(); // 요청 목록 소리는 유지 (PENDING -> DONE)
                     } else {
                         showStatus((res && res.message) ? res.message : '승인 실패', 'error');
@@ -6103,13 +6103,13 @@ MJ 이정우 팀장
         if (!_dupMap) {
             // 1패스: 키별 항목 수 카운트 (m_name_id 빈 값 포함)
             var keyCount = {};
-            allBiddingData.forEach(function(item) {
+            allBiddingData.forEach(function (item) {
                 var key = String(item['in-date'] || '') + '_' + String(item.sakun_no || '') + '_' + String(item.court || '');
                 keyCount[key] = (keyCount[key] || 0) + 1;
             });
             // 2패스: 2건 이상인 키만 담당자 목록 수집 (빈 담당자는 '미지정'으로 표시)
             _dupMap = {};
-            allBiddingData.forEach(function(item) {
+            allBiddingData.forEach(function (item) {
                 var key = String(item['in-date'] || '') + '_' + String(item.sakun_no || '') + '_' + String(item.court || '');
                 if (keyCount[key] > 1) {
                     if (!_dupMap[key]) _dupMap[key] = [];
@@ -7682,515 +7682,515 @@ MJ 이정우 팀장
     var _calRulesLoading = false;
 
     var CAL_COLOR_PRESETS = [
-      { hex: '#ef4444', label: '빨강' },
-      { hex: '#f97316', label: '주황' },
-      { hex: '#eab308', label: '노랑' },
-      { hex: '#22c55e', label: '초록' },
-      { hex: '#3b82f6', label: '파랑' },
-      { hex: '#a855f7', label: '보라' },
-      { hex: '#ec4899', label: '핑크' },
-      { hex: '#1f2937', label: '검정' }
+        { hex: '#ef4444', label: '빨강' },
+        { hex: '#f97316', label: '주황' },
+        { hex: '#eab308', label: '노랑' },
+        { hex: '#22c55e', label: '초록' },
+        { hex: '#3b82f6', label: '파랑' },
+        { hex: '#a855f7', label: '보라' },
+        { hex: '#ec4899', label: '핑크' },
+        { hex: '#1f2937', label: '검정' }
     ];
 
     function _calSetDefaultRules() {
-      // 구버전(mode+쉼표) → 표현식 변환
-      _calColorRules.forEach(function(r) {
-        if (r.mode && r.keywords && r.keywords.indexOf(',') >= 0) {
-          var parts = r.keywords.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
-          if (parts.length > 1) r.keywords = parts.join(' ' + r.mode + ' ');
+        // 구버전(mode+쉼표) → 표현식 변환
+        _calColorRules.forEach(function (r) {
+            if (r.mode && r.keywords && r.keywords.indexOf(',') >= 0) {
+                var parts = r.keywords.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+                if (parts.length > 1) r.keywords = parts.join(' ' + r.mode + ' ');
+            }
+            delete r.mode;
+        });
+        while (_calColorRules.length < 8) {
+            var idx = _calColorRules.length;
+            _calColorRules.push({ color: CAL_COLOR_PRESETS[idx].hex, keywords: '' });
         }
-        delete r.mode;
-      });
-      while (_calColorRules.length < 8) {
-        var idx = _calColorRules.length;
-        _calColorRules.push({ color: CAL_COLOR_PRESETS[idx].hex, keywords: '' });
-      }
-      _calColorRules = _calColorRules.slice(0, 8);
+        _calColorRules = _calColorRules.slice(0, 8);
     }
 
     function _calInitRules(callback) {
-      if (_calRulesInited) { if (callback) callback(); return; }
-      if (_calRulesLoading) return; // 로딩 중이면 중복 호출 무시
-      _calRulesLoading = true;
+        if (_calRulesInited) { if (callback) callback(); return; }
+        if (_calRulesLoading) return; // 로딩 중이면 중복 호출 무시
+        _calRulesLoading = true;
 
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
-        google.script.run
-          .withSuccessHandler(function(rules) {
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            google.script.run
+                .withSuccessHandler(function (rules) {
+                    _calRulesLoading = false;
+                    _calRulesInited = true;
+                    if (rules && Array.isArray(rules) && rules.length) {
+                        _calColorRules = rules;
+                    }
+                    _calSetDefaultRules();
+                    if (callback) callback();
+                })
+                .withFailureHandler(function () {
+                    _calRulesLoading = false;
+                    _calRulesInited = true;
+                    _calSetDefaultRules();
+                    if (callback) callback();
+                })
+                .getCalColorRules();
+        } else {
             _calRulesLoading = false;
             _calRulesInited = true;
-            if (rules && Array.isArray(rules) && rules.length) {
-              _calColorRules = rules;
-            }
             _calSetDefaultRules();
             if (callback) callback();
-          })
-          .withFailureHandler(function() {
-            _calRulesLoading = false;
-            _calRulesInited = true;
-            _calSetDefaultRules();
-            if (callback) callback();
-          })
-          .getCalColorRules();
-      } else {
-        _calRulesLoading = false;
-        _calRulesInited = true;
-        _calSetDefaultRules();
-        if (callback) callback();
-      }
+        }
     }
 
     function _calHighlightExpr(text) {
-      var result = '', i = 0;
-      text = text || '';
-      while (i < text.length) {
-        if (text[i] === '(') { result += '<span style="color:#6b7280;font-weight:700;">(</span>'; i++; continue; }
-        if (text[i] === ')') { result += '<span style="color:#6b7280;font-weight:700;">)</span>'; i++; continue; }
-        if (text[i] === ' ') { result += ' '; i++; continue; }
-        var j = i;
-        while (j < text.length && text[j] !== ' ' && text[j] !== '(' && text[j] !== ')') j++;
-        var word = text.substring(i, j);
-        var up = word.toUpperCase();
-        if (up === 'AND') result += '<span style="color:#3b82f6;font-weight:700;">AND</span>';
-        else if (up === 'OR') result += '<span style="color:#f97316;font-weight:700;">OR</span>';
-        else result += word.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        i = j;
-      }
-      return result;
+        var result = '', i = 0;
+        text = text || '';
+        while (i < text.length) {
+            if (text[i] === '(') { result += '<span style="color:#6b7280;font-weight:700;">(</span>'; i++; continue; }
+            if (text[i] === ')') { result += '<span style="color:#6b7280;font-weight:700;">)</span>'; i++; continue; }
+            if (text[i] === ' ') { result += ' '; i++; continue; }
+            var j = i;
+            while (j < text.length && text[j] !== ' ' && text[j] !== '(' && text[j] !== ')') j++;
+            var word = text.substring(i, j);
+            var up = word.toUpperCase();
+            if (up === 'AND') result += '<span style="color:#3b82f6;font-weight:700;">AND</span>';
+            else if (up === 'OR') result += '<span style="color:#f97316;font-weight:700;">OR</span>';
+            else result += word.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            i = j;
+        }
+        return result;
     }
 
     function _calGetCaretOffset(el) {
-      var sel = window.getSelection();
-      if (!sel || !sel.rangeCount) return 0;
-      var r = sel.getRangeAt(0).cloneRange();
-      r.selectNodeContents(el);
-      r.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
-      return r.toString().length;
+        var sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return 0;
+        var r = sel.getRangeAt(0).cloneRange();
+        r.selectNodeContents(el);
+        r.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
+        return r.toString().length;
     }
 
     function _calSetCaretOffset(el, offset) {
-      var sel = window.getSelection();
-      if (!sel) return;
-      var range = document.createRange();
-      var rem = offset, found = false;
-      function walk(n) {
-        if (found) return;
-        if (n.nodeType === 3) {
-          if (rem <= n.length) { range.setStart(n, rem); range.setEnd(n, rem); found = true; }
-          else rem -= n.length;
-        } else { for (var k = 0; k < n.childNodes.length; k++) walk(n.childNodes[k]); }
-      }
-      walk(el);
-      if (!found) { range.selectNodeContents(el); range.collapse(false); }
-      sel.removeAllRanges();
-      sel.addRange(range);
+        var sel = window.getSelection();
+        if (!sel) return;
+        var range = document.createRange();
+        var rem = offset, found = false;
+        function walk(n) {
+            if (found) return;
+            if (n.nodeType === 3) {
+                if (rem <= n.length) { range.setStart(n, rem); range.setEnd(n, rem); found = true; }
+                else rem -= n.length;
+            } else { for (var k = 0; k < n.childNodes.length; k++) walk(n.childNodes[k]); }
+        }
+        walk(el);
+        if (!found) { range.selectNodeContents(el); range.collapse(false); }
+        sel.removeAllRanges();
+        sel.addRange(range);
     }
 
     function calKwInput(el, idx) {
-      var pos = _calGetCaretOffset(el);
-      var text = el.innerText || el.textContent || '';
-      el.innerHTML = _calHighlightExpr(text);
-      _calSetCaretOffset(el, pos);
+        var pos = _calGetCaretOffset(el);
+        var text = el.innerText || el.textContent || '';
+        el.innerHTML = _calHighlightExpr(text);
+        _calSetCaretOffset(el, pos);
     }
 
     function calKwPaste(e, el, idx) {
-      e.preventDefault();
-      var text = (e.clipboardData || window.clipboardData).getData('text/plain');
-      document.execCommand('insertText', false, text);
+        e.preventDefault();
+        var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+        document.execCommand('insertText', false, text);
     }
 
     function _calRenderRulesUI() {
-      var container = document.getElementById('cal-color-rules-ui');
-      if (!container) return;
-      var html = '';
-      _calColorRules.forEach(function(rule, i) {
-        var preset = CAL_COLOR_PRESETS.filter(function(p){ return p.hex === rule.color; })[0]
-                     || { hex: rule.color, label: '?' };
-        var isFirst = (i === 0);
-        var isLast  = (i === _calColorRules.length - 1);
-        var hlHtml  = _calHighlightExpr(rule.keywords || '');
-        html += '<div class="flex items-center gap-2">'
-          + '<div class="flex flex-col gap-0 flex-shrink-0">'
-          + '<button onclick="calMoveRule(' + i + ',-1)" ' + (isFirst ? 'disabled' : '') + ' '
-          + 'class="text-gray-400 hover:text-gray-700 disabled:opacity-20 leading-none text-xs px-0.5">▲</button>'
-          + '<button onclick="calMoveRule(' + i + ',1)" ' + (isLast ? 'disabled' : '') + ' '
-          + 'class="text-gray-400 hover:text-gray-700 disabled:opacity-20 leading-none text-xs px-0.5">▼</button>'
-          + '</div>'
-          + '<div class="w-4 h-4 rounded flex-shrink-0 border border-gray-300" style="background:' + preset.hex + ';"></div>'
-          + '<span class="text-xs text-gray-500 w-8 flex-shrink-0">' + preset.label + '</span>'
-          + '<div contenteditable="true" id="cal-kw-' + i + '" '
-          + 'oninput="calKwInput(this,' + i + ')" '
-          + 'onpaste="calKwPaste(event,this,' + i + ')" '
-          + 'onkeydown="if(event.key===\'Enter\')event.preventDefault();" '
-          + 'data-placeholder="법원 AND (아파트 OR 주택)" '
-          + 'class="flex-1 text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-blue-400 min-w-0 cursor-text" '
-          + 'style="white-space:nowrap;overflow:hidden;min-height:22px;line-height:20px;">'
-          + (hlHtml || '<span style="color:#9ca3af;font-weight:400;">법원 AND (아파트 OR 주택)</span>')
-          + '</div>'
-          + '</div>';
-      });
-      container.innerHTML = html;
-      // placeholder 처리: 내용 있으면 실제 하이라이트, 없으면 placeholder 유지
-      _calColorRules.forEach(function(rule, i) {
-        if (rule.keywords) {
-          var el = document.getElementById('cal-kw-' + i);
-          if (el) el.innerHTML = _calHighlightExpr(rule.keywords);
-        }
-      });
+        var container = document.getElementById('cal-color-rules-ui');
+        if (!container) return;
+        var html = '';
+        _calColorRules.forEach(function (rule, i) {
+            var preset = CAL_COLOR_PRESETS.filter(function (p) { return p.hex === rule.color; })[0]
+                || { hex: rule.color, label: '?' };
+            var isFirst = (i === 0);
+            var isLast = (i === _calColorRules.length - 1);
+            var hlHtml = _calHighlightExpr(rule.keywords || '');
+            html += '<div class="flex items-center gap-2">'
+                + '<div class="flex flex-col gap-0 flex-shrink-0">'
+                + '<button onclick="calMoveRule(' + i + ',-1)" ' + (isFirst ? 'disabled' : '') + ' '
+                + 'class="text-gray-400 hover:text-gray-700 disabled:opacity-20 leading-none text-xs px-0.5">▲</button>'
+                + '<button onclick="calMoveRule(' + i + ',1)" ' + (isLast ? 'disabled' : '') + ' '
+                + 'class="text-gray-400 hover:text-gray-700 disabled:opacity-20 leading-none text-xs px-0.5">▼</button>'
+                + '</div>'
+                + '<div class="w-4 h-4 rounded flex-shrink-0 border border-gray-300" style="background:' + preset.hex + ';"></div>'
+                + '<span class="text-xs text-gray-500 w-8 flex-shrink-0">' + preset.label + '</span>'
+                + '<div contenteditable="true" id="cal-kw-' + i + '" '
+                + 'oninput="calKwInput(this,' + i + ')" '
+                + 'onpaste="calKwPaste(event,this,' + i + ')" '
+                + 'onkeydown="if(event.key===\'Enter\')event.preventDefault();" '
+                + 'data-placeholder="법원 AND (아파트 OR 주택)" '
+                + 'class="flex-1 text-xs border border-gray-300 rounded px-2 py-0.5 focus:outline-none focus:border-blue-400 min-w-0 cursor-text" '
+                + 'style="white-space:nowrap;overflow:hidden;min-height:22px;line-height:20px;">'
+                + (hlHtml || '<span style="color:#9ca3af;font-weight:400;">법원 AND (아파트 OR 주택)</span>')
+                + '</div>'
+                + '</div>';
+        });
+        container.innerHTML = html;
+        // placeholder 처리: 내용 있으면 실제 하이라이트, 없으면 placeholder 유지
+        _calColorRules.forEach(function (rule, i) {
+            if (rule.keywords) {
+                var el = document.getElementById('cal-kw-' + i);
+                if (el) el.innerHTML = _calHighlightExpr(rule.keywords);
+            }
+        });
     }
 
     function calMoveRule(i, dir) {
-      // 현재 입력값 먼저 저장
-      for (var j = 0; j < _calColorRules.length; j++) {
-        var kw = document.getElementById('cal-kw-' + j);
-        if (kw) _calColorRules[j].keywords = (kw.innerText || kw.textContent || '').trim();
-      }
-      var target = i + dir;
-      if (target < 0 || target >= _calColorRules.length) return;
-      var tmp = _calColorRules[i];
-      _calColorRules[i] = _calColorRules[target];
-      _calColorRules[target] = tmp;
-      _calRenderRulesUI();
+        // 현재 입력값 먼저 저장
+        for (var j = 0; j < _calColorRules.length; j++) {
+            var kw = document.getElementById('cal-kw-' + j);
+            if (kw) _calColorRules[j].keywords = (kw.innerText || kw.textContent || '').trim();
+        }
+        var target = i + dir;
+        if (target < 0 || target >= _calColorRules.length) return;
+        var tmp = _calColorRules[i];
+        _calColorRules[i] = _calColorRules[target];
+        _calColorRules[target] = tmp;
+        _calRenderRulesUI();
     }
 
     function toggleCalSettings() {
-      var panel = document.getElementById('cal-settings-panel');
-      if (!panel) return;
-      var isHidden = panel.classList.contains('hidden');
-      panel.classList.toggle('hidden');
-      if (isHidden) {
-        if (!_calRulesInited) {
-          _calInitRules(function() { _calRenderRulesUI(); });
-        } else {
-          _calRenderRulesUI();
+        var panel = document.getElementById('cal-settings-panel');
+        if (!panel) return;
+        var isHidden = panel.classList.contains('hidden');
+        panel.classList.toggle('hidden');
+        if (isHidden) {
+            if (!_calRulesInited) {
+                _calInitRules(function () { _calRenderRulesUI(); });
+            } else {
+                _calRenderRulesUI();
+            }
         }
-      }
     }
 
     function calSaveColorRulesClose() {
-      toggleCalSettings();
+        toggleCalSettings();
     }
 
     function calSaveColorRules() {
-      for (var i = 0; i < 8; i++) {
-        var kwEl = document.getElementById('cal-kw-' + i);
-        if (kwEl) _calColorRules[i].keywords = (kwEl.innerText || kwEl.textContent || '').trim();
-      }
-      var json = JSON.stringify(_calColorRules);
-      var saveBtn = document.getElementById('cal-save-btn');
-      var msgEl  = document.getElementById('cal-save-msg');
-      if (saveBtn) saveBtn.disabled = true;
-      if (msgEl) { msgEl.textContent = '저장 중...'; msgEl.className = 'text-xs text-gray-400'; }
-      google.script.run
-        .withSuccessHandler(function() {
-          if (saveBtn) saveBtn.disabled = false;
-          if (msgEl) { msgEl.textContent = '저장되었습니다.'; msgEl.className = 'text-xs text-green-600 font-medium'; }
-          _calEventsCache = {};
-          loadDashboardCalendar(true);
-          setTimeout(function() { toggleCalSettings(); }, 600);
-        })
-        .withFailureHandler(function(e) {
-          if (saveBtn) saveBtn.disabled = false;
-          if (msgEl) { msgEl.textContent = '저장 실패: ' + (e && e.message ? e.message : e); msgEl.className = 'text-xs text-red-500'; }
-        })
-        .saveCalColorRules(json);
+        for (var i = 0; i < 8; i++) {
+            var kwEl = document.getElementById('cal-kw-' + i);
+            if (kwEl) _calColorRules[i].keywords = (kwEl.innerText || kwEl.textContent || '').trim();
+        }
+        var json = JSON.stringify(_calColorRules);
+        var saveBtn = document.getElementById('cal-save-btn');
+        var msgEl = document.getElementById('cal-save-msg');
+        if (saveBtn) saveBtn.disabled = true;
+        if (msgEl) { msgEl.textContent = '저장 중...'; msgEl.className = 'text-xs text-gray-400'; }
+        google.script.run
+            .withSuccessHandler(function () {
+                if (saveBtn) saveBtn.disabled = false;
+                if (msgEl) { msgEl.textContent = '저장되었습니다.'; msgEl.className = 'text-xs text-green-600 font-medium'; }
+                _calEventsCache = {};
+                loadDashboardCalendar(true);
+                setTimeout(function () { toggleCalSettings(); }, 600);
+            })
+            .withFailureHandler(function (e) {
+                if (saveBtn) saveBtn.disabled = false;
+                if (msgEl) { msgEl.textContent = '저장 실패: ' + (e && e.message ? e.message : e); msgEl.className = 'text-xs text-red-500'; }
+            })
+            .saveCalColorRules(json);
     }
 
     // ── AND/OR/() 표현식 파서 ────────────────────────────────────────────────
     function _calTokenize(expr) {
-      var tokens = [], i = 0;
-      expr = (expr || '').trim();
-      while (i < expr.length) {
-        while (i < expr.length && expr[i] === ' ') i++;
-        if (i >= expr.length) break;
-        if (expr[i] === '(') { tokens.push('('); i++; continue; }
-        if (expr[i] === ')') { tokens.push(')'); i++; continue; }
-        var j = i;
-        while (j < expr.length && expr[j] !== ' ' && expr[j] !== '(' && expr[j] !== ')') j++;
-        var word = expr.substring(i, j);
-        var up = word.toUpperCase();
-        if (up === 'AND') tokens.push('AND');
-        else if (up === 'OR') tokens.push('OR');
-        else if (word) tokens.push({ kw: word.toLowerCase() });
-        i = j;
-      }
-      return tokens;
+        var tokens = [], i = 0;
+        expr = (expr || '').trim();
+        while (i < expr.length) {
+            while (i < expr.length && expr[i] === ' ') i++;
+            if (i >= expr.length) break;
+            if (expr[i] === '(') { tokens.push('('); i++; continue; }
+            if (expr[i] === ')') { tokens.push(')'); i++; continue; }
+            var j = i;
+            while (j < expr.length && expr[j] !== ' ' && expr[j] !== '(' && expr[j] !== ')') j++;
+            var word = expr.substring(i, j);
+            var up = word.toUpperCase();
+            if (up === 'AND') tokens.push('AND');
+            else if (up === 'OR') tokens.push('OR');
+            else if (word) tokens.push({ kw: word.toLowerCase() });
+            i = j;
+        }
+        return tokens;
     }
     function _calParseExpr(tok, p) {
-      var r = _calParseAnd(tok, p); p = r.p; var n = r.n;
-      while (p < tok.length && tok[p] === 'OR') {
-        p++;
-        r = _calParseAnd(tok, p); p = r.p;
-        n = { op: 'OR', l: n, r: r.n };
-      }
-      return { n: n, p: p };
+        var r = _calParseAnd(tok, p); p = r.p; var n = r.n;
+        while (p < tok.length && tok[p] === 'OR') {
+            p++;
+            r = _calParseAnd(tok, p); p = r.p;
+            n = { op: 'OR', l: n, r: r.n };
+        }
+        return { n: n, p: p };
     }
     function _calParseAnd(tok, p) {
-      var r = _calParseAtom(tok, p); p = r.p; var n = r.n;
-      while (p < tok.length && tok[p] === 'AND') {
-        p++;
-        r = _calParseAtom(tok, p); p = r.p;
-        n = { op: 'AND', l: n, r: r.n };
-      }
-      return { n: n, p: p };
+        var r = _calParseAtom(tok, p); p = r.p; var n = r.n;
+        while (p < tok.length && tok[p] === 'AND') {
+            p++;
+            r = _calParseAtom(tok, p); p = r.p;
+            n = { op: 'AND', l: n, r: r.n };
+        }
+        return { n: n, p: p };
     }
     function _calParseAtom(tok, p) {
-      if (p >= tok.length) return { n: null, p: p };
-      if (tok[p] === '(') {
-        p++;
-        var r = _calParseExpr(tok, p); p = r.p;
-        if (p < tok.length && tok[p] === ')') p++;
-        return { n: r.n, p: p };
-      }
-      if (tok[p] && tok[p].kw !== undefined) return { n: tok[p], p: p + 1 };
-      return { n: null, p: p + 1 };
+        if (p >= tok.length) return { n: null, p: p };
+        if (tok[p] === '(') {
+            p++;
+            var r = _calParseExpr(tok, p); p = r.p;
+            if (p < tok.length && tok[p] === ')') p++;
+            return { n: r.n, p: p };
+        }
+        if (tok[p] && tok[p].kw !== undefined) return { n: tok[p], p: p + 1 };
+        return { n: null, p: p + 1 };
     }
     function _calEvalNode(n, text) {
-      if (!n) return false;
-      if (n.kw !== undefined) return text.indexOf(n.kw) >= 0;
-      if (n.op === 'AND') return _calEvalNode(n.l, text) && _calEvalNode(n.r, text);
-      if (n.op === 'OR')  return _calEvalNode(n.l, text) || _calEvalNode(n.r, text);
-      return false;
+        if (!n) return false;
+        if (n.kw !== undefined) return text.indexOf(n.kw) >= 0;
+        if (n.op === 'AND') return _calEvalNode(n.l, text) && _calEvalNode(n.r, text);
+        if (n.op === 'OR') return _calEvalNode(n.l, text) || _calEvalNode(n.r, text);
+        return false;
     }
     function _calMatchExpr(keywords, title) {
-      if (!keywords || !keywords.trim()) return false;
-      try {
-        var tok = _calTokenize(keywords);
-        if (!tok.length) return false;
-        return _calEvalNode(_calParseExpr(tok, 0).n, (title || '').toLowerCase());
-      } catch(e) { return false; }
+        if (!keywords || !keywords.trim()) return false;
+        try {
+            var tok = _calTokenize(keywords);
+            if (!tok.length) return false;
+            return _calEvalNode(_calParseExpr(tok, 0).n, (title || '').toLowerCase());
+        } catch (e) { return false; }
     }
     // ────────────────────────────────────────────────────────────────────────
 
     function _getEventRuleIndex(title) {
-      for (var i = 0; i < _calColorRules.length; i++) {
-        if (_calMatchExpr(_calColorRules[i].keywords, title)) return i;
-      }
-      return _calColorRules.length; // 매칭 없으면 맨 뒤
+        for (var i = 0; i < _calColorRules.length; i++) {
+            if (_calMatchExpr(_calColorRules[i].keywords, title)) return i;
+        }
+        return _calColorRules.length; // 매칭 없으면 맨 뒤
     }
 
     function _getEventColor(title) {
-      var i = _getEventRuleIndex(title);
-      if (i < _calColorRules.length) return _calColorRules[i].color;
-      return null; // 기본: 회색
+        var i = _getEventRuleIndex(title);
+        if (i < _calColorRules.length) return _calColorRules[i].color;
+        return null; // 기본: 회색
     }
 
     function _calGetWeekStart(offset) {
-      var now = new Date();
-      var dow = (now.getDay() + 6) % 7; // 월=0
-      var monday = new Date(now);
-      monday.setDate(now.getDate() - dow + offset * 7);
-      monday.setHours(0, 0, 0, 0);
-      return monday;
+        var now = new Date();
+        var dow = (now.getDay() + 6) % 7; // 월=0
+        var monday = new Date(now);
+        monday.setDate(now.getDate() - dow + offset * 7);
+        monday.setHours(0, 0, 0, 0);
+        return monday;
     }
 
     function calGoToday() {
-      _calWeekOffset = 0;
-      _calEventsCache = {};
-      loadDashboardCalendar(false);
+        _calWeekOffset = 0;
+        _calEventsCache = {};
+        loadDashboardCalendar(false);
     }
 
     function calMoveWeek(delta) {
-      _calWeekOffset += delta;
-      loadDashboardCalendar(false);
-      // 이동 후 다음 방향 미리 pre-fetch
-      setTimeout(function() { _calPrefetch(_calWeekOffset + delta); }, 300);
+        _calWeekOffset += delta;
+        loadDashboardCalendar(false);
+        // 이동 후 다음 방향 미리 pre-fetch
+        setTimeout(function () { _calPrefetch(_calWeekOffset + delta); }, 300);
     }
 
     function loadDashboardCalendar(forceRefresh) {
-      if (typeof google === 'undefined' || !google.script || !google.script.run) return;
-      var grid = document.getElementById('cal-grid');
-      if (!grid) return;
+        if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+        var grid = document.getElementById('cal-grid');
+        if (!grid) return;
 
-      if (!_calRulesInited) {
-        _calInitRules(function() { loadDashboardCalendar(forceRefresh); });
-        return;
-      }
-
-      var weekStart = _calGetWeekStart(_calWeekOffset);
-      var weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 14);
-
-      var label = document.getElementById('cal-week-label');
-      if (label) {
-        var w2End = new Date(weekStart);
-        w2End.setDate(weekStart.getDate() + 13);
-        label.textContent = (weekStart.getMonth()+1) + '/' + weekStart.getDate()
-          + ' ~ ' + (w2End.getMonth()+1) + '/' + w2End.getDate();
-      }
-
-      var cacheKey = weekStart.getTime();
-      if (!forceRefresh && _calEventsCache[cacheKey]) {
-        _renderCalGrid(weekStart, _calEventsCache[cacheKey]);
-        return;
-      }
-
-      grid.innerHTML = '<div class="col-span-7 py-8 text-center text-gray-400 text-xs">불러오는 중...</div>';
-
-      google.script.run
-        .withSuccessHandler(function(res) {
-          if (!res || !res.success) {
-            if (grid) grid.innerHTML = '<div class="col-span-7 py-4 text-center text-red-400 text-xs">캘린더 오류: ' + (res && res.error ? res.error : '알 수 없음') + '</div>';
+        if (!_calRulesInited) {
+            _calInitRules(function () { loadDashboardCalendar(forceRefresh); });
             return;
-          }
-          _calEventsCache[cacheKey] = res.events || [];
-          _renderCalGrid(weekStart, res.events || []);
-          // 현재 뷰 로드 완료 후 인접 주 백그라운드 pre-fetch
-          setTimeout(function() {
-            _calPrefetch(_calWeekOffset - 1);
-            _calPrefetch(_calWeekOffset + 1);
-          }, 200);
-        })
-        .withFailureHandler(function(err) {
-          if (grid) grid.innerHTML = '<div class="col-span-7 py-4 text-center text-red-400 text-xs">오류: ' + err.message + '</div>';
-        })
-        .getCalendarEvents(weekStart.getTime(), weekEnd.getTime());
+        }
+
+        var weekStart = _calGetWeekStart(_calWeekOffset);
+        var weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 14);
+
+        var label = document.getElementById('cal-week-label');
+        if (label) {
+            var w2End = new Date(weekStart);
+            w2End.setDate(weekStart.getDate() + 13);
+            label.textContent = (weekStart.getMonth() + 1) + '/' + weekStart.getDate()
+                + ' ~ ' + (w2End.getMonth() + 1) + '/' + w2End.getDate();
+        }
+
+        var cacheKey = weekStart.getTime();
+        if (!forceRefresh && _calEventsCache[cacheKey]) {
+            _renderCalGrid(weekStart, _calEventsCache[cacheKey]);
+            return;
+        }
+
+        grid.innerHTML = '<div class="col-span-7 py-8 text-center text-gray-400 text-xs">불러오는 중...</div>';
+
+        google.script.run
+            .withSuccessHandler(function (res) {
+                if (!res || !res.success) {
+                    if (grid) grid.innerHTML = '<div class="col-span-7 py-4 text-center text-red-400 text-xs">캘린더 오류: ' + (res && res.error ? res.error : '알 수 없음') + '</div>';
+                    return;
+                }
+                _calEventsCache[cacheKey] = res.events || [];
+                _renderCalGrid(weekStart, res.events || []);
+                // 현재 뷰 로드 완료 후 인접 주 백그라운드 pre-fetch
+                setTimeout(function () {
+                    _calPrefetch(_calWeekOffset - 1);
+                    _calPrefetch(_calWeekOffset + 1);
+                }, 200);
+            })
+            .withFailureHandler(function (err) {
+                if (grid) grid.innerHTML = '<div class="col-span-7 py-4 text-center text-red-400 text-xs">오류: ' + err.message + '</div>';
+            })
+            .getCalendarEvents(weekStart.getTime(), weekEnd.getTime());
     }
 
     function _calPrefetch(offset) {
-      var ws = _calGetWeekStart(offset);
-      var key = ws.getTime();
-      if (_calEventsCache[key]) return; // 이미 캐시됨
-      var we = new Date(ws);
-      we.setDate(ws.getDate() + 14);
-      google.script.run
-        .withSuccessHandler(function(res) {
-          if (res && res.success) _calEventsCache[key] = res.events || [];
-        })
-        .withFailureHandler(function() {}) // 백그라운드 실패는 무시
-        .getCalendarEvents(ws.getTime(), we.getTime());
+        var ws = _calGetWeekStart(offset);
+        var key = ws.getTime();
+        if (_calEventsCache[key]) return; // 이미 캐시됨
+        var we = new Date(ws);
+        we.setDate(ws.getDate() + 14);
+        google.script.run
+            .withSuccessHandler(function (res) {
+                if (res && res.success) _calEventsCache[key] = res.events || [];
+            })
+            .withFailureHandler(function () { }) // 백그라운드 실패는 무시
+            .getCalendarEvents(ws.getTime(), we.getTime());
     }
 
     function _renderCalGrid(weekStart, events) {
-      var grid = document.getElementById('cal-grid');
-      if (!grid) return;
+        var grid = document.getElementById('cal-grid');
+        if (!grid) return;
 
-      // 날짜별 이벤트 맵
-      var evMap = {};
-      events.forEach(function(ev) {
-        var s = new Date(ev.start);
-        var e = new Date(ev.end || ev.start);
-        var cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
-        var endDay = new Date(e.getFullYear(), e.getMonth(), e.getDate());
-        if (ev.allDay && endDay > cur) endDay.setDate(endDay.getDate() - 1);
-        while (cur <= endDay) {
-          var k = cur.getFullYear() + '-' + _pad2(cur.getMonth()+1) + '-' + _pad2(cur.getDate());
-          if (!evMap[k]) evMap[k] = [];
-          evMap[k].push(ev);
-          cur.setDate(cur.getDate() + 1);
+        // 날짜별 이벤트 맵
+        var evMap = {};
+        events.forEach(function (ev) {
+            var s = new Date(ev.start);
+            var e = new Date(ev.end || ev.start);
+            var cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+            var endDay = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+            if (ev.allDay && endDay > cur) endDay.setDate(endDay.getDate() - 1);
+            while (cur <= endDay) {
+                var k = cur.getFullYear() + '-' + _pad2(cur.getMonth() + 1) + '-' + _pad2(cur.getDate());
+                if (!evMap[k]) evMap[k] = [];
+                evMap[k].push(ev);
+                cur.setDate(cur.getDate() + 1);
+            }
+        });
+
+        var today = new Date();
+        var todayKey = today.getFullYear() + '-' + _pad2(today.getMonth() + 1) + '-' + _pad2(today.getDate());
+        var html = '';
+
+        for (var week = 0; week < 2; week++) {
+            for (var d = 0; d < 7; d++) {
+                var cur = new Date(weekStart);
+                cur.setDate(weekStart.getDate() + week * 7 + d);
+                var k = cur.getFullYear() + '-' + _pad2(cur.getMonth() + 1) + '-' + _pad2(cur.getDate());
+                var isToday = (k === todayKey);
+                var isSat = (d === 5);
+                var isSun = (d === 6);
+                var dayEvs = (evMap[k] || []).slice().sort(function (a, b) {
+                    var ai = _getEventRuleIndex(a.title);
+                    var bi = _getEventRuleIndex(b.title);
+                    if (ai !== bi) return ai - bi;
+                    return new Date(a.start) - new Date(b.start);
+                });
+
+                var dateNumCls = 'inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded-full ';
+                if (isToday) dateNumCls += 'bg-blue-600 text-white';
+                else if (isSun) dateNumCls += 'text-red-400';
+                else if (isSat) dateNumCls += 'text-blue-400';
+                else dateNumCls += 'text-gray-700';
+
+                var cellBg = isToday ? 'bg-blue-50' : '';
+                var borderB = (week === 0) ? 'border-b border-gray-200 ' : '';
+                var borderR = (d < 6) ? 'border-r border-gray-100 ' : '';
+
+                var evHtml = '';
+                var kSafe = k.replace(/'/g, '');
+                dayEvs.slice(0, 4).forEach(function (ev, i) {
+                    var color = _getEventColor(ev.title);
+                    var bg = color || '#9ca3af';
+                    var st = ev.allDay ? '' : (_fmtTime(new Date(ev.start)) + ' ');
+                    evHtml += '<div class="text-xs px-1 py-0 mb-0.5 rounded truncate leading-5 cursor-pointer text-white hover:opacity-80"'
+                        + ' style="background:' + bg + ';" title="' + _esc(ev.title) + '"'
+                        + ' onclick="showCalEventPopup(\'' + kSafe + '\',' + i + ')">'
+                        + _esc(st + ev.title) + '</div>';
+                });
+                if (dayEvs.length > 4) {
+                    evHtml += '<div class="text-xs text-blue-500 pl-1 cursor-pointer hover:underline"'
+                        + ' onclick="showCalDayPopup(\'' + kSafe + '\')">+' + (dayEvs.length - 4) + '개 더보기</div>';
+                }
+
+                html += '<div class="p-1 ' + cellBg + ' ' + borderB + borderR + '" style="min-height:100px;">'
+                    + '<div class="mb-1"><span class="' + dateNumCls + '">' + cur.getDate() + '</span></div>'
+                    + evHtml + '</div>';
+            }
         }
-      });
 
-      var today = new Date();
-      var todayKey = today.getFullYear() + '-' + _pad2(today.getMonth()+1) + '-' + _pad2(today.getDate());
-      var html = '';
-
-      for (var week = 0; week < 2; week++) {
-        for (var d = 0; d < 7; d++) {
-          var cur = new Date(weekStart);
-          cur.setDate(weekStart.getDate() + week * 7 + d);
-          var k = cur.getFullYear() + '-' + _pad2(cur.getMonth()+1) + '-' + _pad2(cur.getDate());
-          var isToday = (k === todayKey);
-          var isSat = (d === 5);
-          var isSun = (d === 6);
-          var dayEvs = (evMap[k] || []).slice().sort(function(a, b) {
-            var ai = _getEventRuleIndex(a.title);
-            var bi = _getEventRuleIndex(b.title);
-            if (ai !== bi) return ai - bi;
-            return new Date(a.start) - new Date(b.start);
-          });
-
-          var dateNumCls = 'inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded-full ';
-          if (isToday) dateNumCls += 'bg-blue-600 text-white';
-          else if (isSun) dateNumCls += 'text-red-400';
-          else if (isSat) dateNumCls += 'text-blue-400';
-          else dateNumCls += 'text-gray-700';
-
-          var cellBg = isToday ? 'bg-blue-50' : '';
-          var borderB = (week === 0) ? 'border-b border-gray-200 ' : '';
-          var borderR = (d < 6) ? 'border-r border-gray-100 ' : '';
-
-          var evHtml = '';
-          var kSafe = k.replace(/'/g, '');
-          dayEvs.slice(0, 4).forEach(function(ev, i) {
-            var color = _getEventColor(ev.title);
-            var bg = color || '#9ca3af';
-            var st = ev.allDay ? '' : (_fmtTime(new Date(ev.start)) + ' ');
-            evHtml += '<div class="text-xs px-1 py-0 mb-0.5 rounded truncate leading-5 cursor-pointer text-white hover:opacity-80"'
-              + ' style="background:' + bg + ';" title="' + _esc(ev.title) + '"'
-              + ' onclick="showCalEventPopup(\'' + kSafe + '\',' + i + ')">'
-              + _esc(st + ev.title) + '</div>';
-          });
-          if (dayEvs.length > 4) {
-            evHtml += '<div class="text-xs text-blue-500 pl-1 cursor-pointer hover:underline"'
-              + ' onclick="showCalDayPopup(\'' + kSafe + '\')">+' + (dayEvs.length - 4) + '개 더보기</div>';
-          }
-
-          html += '<div class="p-1 ' + cellBg + ' ' + borderB + borderR + '" style="min-height:100px;">'
-            + '<div class="mb-1"><span class="' + dateNumCls + '">' + cur.getDate() + '</span></div>'
-            + evHtml + '</div>';
-        }
-      }
-
-      _calLastEvMap = evMap;
-      grid.innerHTML = html;
+        _calLastEvMap = evMap;
+        grid.innerHTML = html;
     }
 
     var _calLastEvMap = {};
 
     function closeCalPopup() {
-      var el = document.getElementById('cal-event-popup');
-      if (el) { el.classList.add('content-hidden'); el.classList.remove('flex'); }
+        var el = document.getElementById('cal-event-popup');
+        if (el) { el.classList.add('content-hidden'); el.classList.remove('flex'); }
     }
 
     function _openCalPopup(titleHtml, bodyHtml) {
-      var popup = document.getElementById('cal-event-popup');
-      var titleEl = document.getElementById('cal-popup-title');
-      var bodyEl = document.getElementById('cal-popup-body');
-      if (!popup || !titleEl || !bodyEl) return;
-      titleEl.innerHTML = titleHtml;
-      bodyEl.innerHTML = bodyHtml;
-      popup.classList.remove('content-hidden');
-      popup.classList.add('flex');
+        var popup = document.getElementById('cal-event-popup');
+        var titleEl = document.getElementById('cal-popup-title');
+        var bodyEl = document.getElementById('cal-popup-body');
+        if (!popup || !titleEl || !bodyEl) return;
+        titleEl.innerHTML = titleHtml;
+        bodyEl.innerHTML = bodyHtml;
+        popup.classList.remove('content-hidden');
+        popup.classList.add('flex');
     }
 
     function showCalEventPopup(dateKey, idx) {
-      var ev = (_calLastEvMap[dateKey] || [])[idx];
-      if (!ev) return;
-      var color = _getEventColor(ev.title);
-      var bg = color || '#9ca3af';
-      var d = new Date(ev.start);
-      var dateStr = d.getFullYear() + '년 ' + (d.getMonth()+1) + '월 ' + d.getDate() + '일';
-      var timeStr = ev.allDay ? '종일 일정' : (_fmtTime(new Date(ev.start)) + ' ~ ' + _fmtTime(new Date(ev.end || ev.start)));
-      var titleHtml = '<span class="inline-block w-3 h-3 rounded-full mr-1.5 align-middle flex-shrink-0" style="background:' + bg + ';"></span>' + _esc(ev.title);
-      var bodyHtml = '<div class="flex items-center gap-2"><span class="text-gray-400">📅</span><span>' + dateStr + '</span></div>'
-        + '<div class="flex items-center gap-2"><span class="text-gray-400">🕐</span><span>' + timeStr + '</span></div>';
-      _openCalPopup(titleHtml, bodyHtml);
+        var ev = (_calLastEvMap[dateKey] || [])[idx];
+        if (!ev) return;
+        var color = _getEventColor(ev.title);
+        var bg = color || '#9ca3af';
+        var d = new Date(ev.start);
+        var dateStr = d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일';
+        var timeStr = ev.allDay ? '종일 일정' : (_fmtTime(new Date(ev.start)) + ' ~ ' + _fmtTime(new Date(ev.end || ev.start)));
+        var titleHtml = '<span class="inline-block w-3 h-3 rounded-full mr-1.5 align-middle flex-shrink-0" style="background:' + bg + ';"></span>' + _esc(ev.title);
+        var bodyHtml = '<div class="flex items-center gap-2"><span class="text-gray-400">📅</span><span>' + dateStr + '</span></div>'
+            + '<div class="flex items-center gap-2"><span class="text-gray-400">🕐</span><span>' + timeStr + '</span></div>';
+        _openCalPopup(titleHtml, bodyHtml);
     }
 
     function showCalDayPopup(dateKey) {
-      var evs = _calLastEvMap[dateKey] || [];
-      if (!evs.length) return;
-      var parts = dateKey.split('-');
-      var titleHtml = parseInt(parts[1]) + '월 ' + parseInt(parts[2]) + '일 일정 (' + evs.length + '건)';
-      var bodyHtml = '';
-      evs.forEach(function(ev, i) {
-        var color = _getEventColor(ev.title);
-        var bg = color || '#9ca3af';
-        var timeStr = ev.allDay ? '종일' : (_fmtTime(new Date(ev.start)) + ' ~ ' + _fmtTime(new Date(ev.end || ev.start)));
-        bodyHtml += '<div class="flex items-start gap-2 py-1.5 border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50 rounded px-1"'
-          + ' onclick="showCalEventPopup(\'' + dateKey + '\',' + i + ')">'
-          + '<div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style="background:' + bg + ';"></div>'
-          + '<div class="min-w-0 flex-1">'
-          + '<div class="font-medium text-gray-800 text-xs truncate">' + _esc(ev.title) + '</div>'
-          + '<div class="text-gray-400 text-xs">' + timeStr + '</div>'
-          + '</div></div>';
-      });
-      _openCalPopup(titleHtml, bodyHtml);
+        var evs = _calLastEvMap[dateKey] || [];
+        if (!evs.length) return;
+        var parts = dateKey.split('-');
+        var titleHtml = parseInt(parts[1]) + '월 ' + parseInt(parts[2]) + '일 일정 (' + evs.length + '건)';
+        var bodyHtml = '';
+        evs.forEach(function (ev, i) {
+            var color = _getEventColor(ev.title);
+            var bg = color || '#9ca3af';
+            var timeStr = ev.allDay ? '종일' : (_fmtTime(new Date(ev.start)) + ' ~ ' + _fmtTime(new Date(ev.end || ev.start)));
+            bodyHtml += '<div class="flex items-start gap-2 py-1.5 border-b border-gray-100 last:border-0 cursor-pointer hover:bg-gray-50 rounded px-1"'
+                + ' onclick="showCalEventPopup(\'' + dateKey + '\',' + i + ')">'
+                + '<div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-0.5" style="background:' + bg + ';"></div>'
+                + '<div class="min-w-0 flex-1">'
+                + '<div class="font-medium text-gray-800 text-xs truncate">' + _esc(ev.title) + '</div>'
+                + '<div class="text-gray-400 text-xs">' + timeStr + '</div>'
+                + '</div></div>';
+        });
+        _openCalPopup(titleHtml, bodyHtml);
     }
 
     function _pad2(n) { return n < 10 ? '0' + n : '' + n; }
     function _fmtTime(d) { return _pad2(d.getHours()) + ':' + _pad2(d.getMinutes()); }
-    function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function _esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     // ── END 대쉬보드 캘린더 ───────────────────────────────────────────────────
 
     function loadDashboardImageStats() {
@@ -11166,12 +11166,12 @@ ${token}
                 ? 'bg-indigo-100 border-l-4 border-indigo-500'
                 : 'hover:bg-indigo-50 border-l-4 border-transparent';
             return `<tr class="cursor-pointer ${rowCls} transition-colors" onclick="selectClass('${c.class_id}')">
-                <td class="px-2 py-2 text-center text-xs ${isSel?'font-semibold text-indigo-800':''}">${escapeHtml(c.class_id)}</td>
-                <td class="px-2 py-2 text-center text-xs ${isSel?'text-indigo-800':''}">${escapeHtml(c.class_loop || '-')}</td>
-                <td class="px-2 py-2 text-center text-xs ${isSel?'font-semibold text-indigo-800':''}">${escapeHtml(c.class_type)}</td>
-                <td class="px-2 py-2 text-center text-xs font-medium ${isSel?'font-bold text-indigo-900':''}">${escapeHtml(c.class_name)}</td>
-                <td class="px-2 py-2 text-center text-xs ${isSel?'text-indigo-800':''}">${escapeHtml(c.class_grade)}</td>
-                <td class="px-2 py-2 text-center text-xs ${isSel?'text-indigo-800':''}">${escapeHtml(c.class_loc)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSel ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_id)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSel ? 'text-indigo-800' : ''}">${escapeHtml(c.class_loop || '-')}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSel ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_type)}</td>
+                <td class="px-2 py-2 text-center text-xs font-medium ${isSel ? 'font-bold text-indigo-900' : ''}">${escapeHtml(c.class_name)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSel ? 'text-indigo-800' : ''}">${escapeHtml(c.class_grade)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSel ? 'text-indigo-800' : ''}">${escapeHtml(c.class_loc)}</td>
             </tr>`;
         }).join('');
     }
@@ -11429,9 +11429,9 @@ ${token}
             const items = (b.items || []).slice().sort((a, c) => String(a.class_date).localeCompare(String(c.class_date)));
             const total = items.length;
             const firstRaw = total > 0 ? String(items[0].class_date || '').replace(/-/g, '') : '';
-            const lastRaw  = total > 0 ? String(items[total - 1].class_date || '').replace(/-/g, '') : '';
-            const firstFull = firstRaw.length >= 8 ? firstRaw.substring(2,4) + '/' + firstRaw.substring(4,6) + '/' + firstRaw.substring(6,8) : '-';
-            const lastFull  = lastRaw.length  >= 8 ? lastRaw.substring(2,4)  + '/' + lastRaw.substring(4,6)  + '/' + lastRaw.substring(6,8)  : firstFull;
+            const lastRaw = total > 0 ? String(items[total - 1].class_date || '').replace(/-/g, '') : '';
+            const firstFull = firstRaw.length >= 8 ? firstRaw.substring(2, 4) + '/' + firstRaw.substring(4, 6) + '/' + firstRaw.substring(6, 8) : '-';
+            const lastFull = lastRaw.length >= 8 ? lastRaw.substring(2, 4) + '/' + lastRaw.substring(4, 6) + '/' + lastRaw.substring(6, 8) : firstFull;
             const isSel = i === d1BatchIdx;
             const rowCls = isSel
                 ? 'bg-indigo-100 border-l-4 border-indigo-500 cursor-pointer'
@@ -11496,12 +11496,12 @@ ${token}
         // 날짜+시간 포맷 (yy/mm/dd HH시)
         function fmtDt_(v) {
             if (!v) return '-';
-            const dt = new Date(String(v).replace('T',' '));
+            const dt = new Date(String(v).replace('T', ' '));
             if (isNaN(dt.getTime())) return String(v);
             const yy = String(dt.getFullYear()).substring(2);
-            const mm = String(dt.getMonth()+1).padStart(2,'0');
-            const dd = String(dt.getDate()).padStart(2,'0');
-            const hh = String(dt.getHours()).padStart(2,'0');
+            const mm = String(dt.getMonth() + 1).padStart(2, '0');
+            const dd = String(dt.getDate()).padStart(2, '0');
+            const hh = String(dt.getHours()).padStart(2, '0');
             return `${yy}/${mm}/${dd} ${hh}시`;
         }
         // 카드 공통 렌더 함수
@@ -11568,20 +11568,20 @@ ${token}
                 }
 
                 // 요일 계산 (class_date 기반)
-                const DAY_NAMES_ = ['일','월','화','수','목','금','토'];
+                const DAY_NAMES_ = ['일', '월', '화', '수', '목', '금', '토'];
                 let weekDisplayStr = weekStr;
                 if (!weekDisplayStr && rawDate.length >= 8) {
                     const dtForDay = new Date(
-                        parseInt(rawDate.substring(0,4)),
-                        parseInt(rawDate.substring(4,6))-1,
-                        parseInt(rawDate.substring(6,8))
+                        parseInt(rawDate.substring(0, 4)),
+                        parseInt(rawDate.substring(4, 6)) - 1,
+                        parseInt(rawDate.substring(6, 8))
                     );
                     weekDisplayStr = DAY_NAMES_[dtForDay.getDay()];
                 }
 
-                const body = `<li>• <span class="text-blue-600 font-bold">${dateStr}${weekDisplayStr ? ' <span class="text-blue-600">('+weekDisplayStr+')</span>' : ''}</span></li>` +
-                             `<li>• 물건: ${itemCount}</li>` +
-                             `<li>• 회원: ${memberCount}</li>`;
+                const body = `<li>• <span class="text-blue-600 font-bold">${dateStr}${weekDisplayStr ? ' <span class="text-blue-600">(' + weekDisplayStr + ')</span>' : ''}</span></li>` +
+                    `<li>• 물건: ${itemCount}</li>` +
+                    `<li>• 회원: ${memberCount}</li>`;
 
                 // 마우스오버 툴팁 (시간만 표시, 날짜는 카드에 이미 있음)
                 function fmtClassTime_(v) {
@@ -11591,15 +11591,15 @@ ${token}
                     return isNaN(h) ? '-' : h + '시';
                 }
                 const tfrom = fmtClassTime_(d.class_time_from);
-                const tto   = fmtClassTime_(d.class_time_to);
+                const tto = fmtClassTime_(d.class_time_to);
                 function fmtBidDt_(v) {
                     if (!v) return '-';
                     const dt = new Date(String(v));
                     if (isNaN(dt.getTime())) return '-';
                     const yy = String(dt.getFullYear()).substring(2);
-                    const mm = String(dt.getMonth()+1).padStart(2,'0');
-                    const dd = String(dt.getDate()).padStart(2,'0');
-                    const hh = String(dt.getHours()).padStart(2,'0');
+                    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+                    const dd = String(dt.getDate()).padStart(2, '0');
+                    const hh = String(dt.getHours()).padStart(2, '0');
                     const dow = DAY_NAMES_[dt.getDay()];
                     return `${yy}/${mm}/${dd} (${dow}) ${hh}시`;
                 }
@@ -11619,15 +11619,15 @@ ${token}
         if (classD1Id && classD1Id !== '__summary__') {
             const d1Info = allClassD1Data.find(d => String(d.class_d1_id) === String(classD1Id));
             if (d1Info) {
-                const raw = String(d1Info.class_date||'').replace(/-/g,'');
-                const dateDisp = raw.length>=8 ? raw.substring(2,4)+'/'+raw.substring(4,6)+'/'+raw.substring(6,8) : raw;
+                const raw = String(d1Info.class_date || '').replace(/-/g, '');
+                const dateDisp = raw.length >= 8 ? raw.substring(2, 4) + '/' + raw.substring(4, 6) + '/' + raw.substring(6, 8) : raw;
                 sectionInfo = `[${d1Info.class_loop}회 | ${dateDisp}]`;
             }
         }
         const itemInfo = document.getElementById('d1ItemSectionInfo');
-        const memInfo  = document.getElementById('d1MemberSectionInfo');
+        const memInfo = document.getElementById('d1MemberSectionInfo');
         if (itemInfo) itemInfo.textContent = sectionInfo;
-        if (memInfo)  memInfo.textContent  = sectionInfo;
+        if (memInfo) memInfo.textContent = sectionInfo;
         // 등록 패널 닫기
         document.getElementById('d1ItemRegisterPanel')?.classList.add('content-hidden');
         d1PendingItems = [];
@@ -11845,30 +11845,30 @@ ${token}
 
     // 시간 드롭다운 헬퍼
     function getDropdownTime_(prefix) {
-        const ampm = document.getElementById(prefix+'-ampm')?.value || 'AM';
-        const h    = parseInt(document.getElementById(prefix+'-h')?.value) || 12;
-        const m    = document.getElementById(prefix+'-m')?.value || '00';
+        const ampm = document.getElementById(prefix + '-ampm')?.value || 'AM';
+        const h = parseInt(document.getElementById(prefix + '-h')?.value) || 12;
+        const m = document.getElementById(prefix + '-m')?.value || '00';
         let hour24 = h;
         if (ampm === 'AM') { hour24 = (h === 12) ? 0 : h; }
-        else               { hour24 = (h === 12) ? 12 : h + 12; }
-        return String(hour24).padStart(2,'0') + ':' + m;
+        else { hour24 = (h === 12) ? 12 : h + 12; }
+        return String(hour24).padStart(2, '0') + ':' + m;
     }
     function setDropdownTime_(prefix, timeStr) {
         if (!timeStr) return;
         const parts = String(timeStr).split(':');
         const hour24 = parseInt(parts[0]) || 0;
-        const min = parts[1] ? parts[1].substring(0,2) : '00';
+        const min = parts[1] ? parts[1].substring(0, 2) : '00';
         const minNum = parseInt(min) || 0;
-        const minRounded = String(Math.floor(minNum/10)*10).padStart(2,'0');
+        const minRounded = String(Math.floor(minNum / 10) * 10).padStart(2, '0');
         const ampm = hour24 < 12 ? 'AM' : 'PM';
         let h12 = hour24 % 12;
         if (h12 === 0) h12 = 12;
-        const ampmEl = document.getElementById(prefix+'-ampm');
-        const hEl    = document.getElementById(prefix+'-h');
-        const mEl    = document.getElementById(prefix+'-m');
+        const ampmEl = document.getElementById(prefix + '-ampm');
+        const hEl = document.getElementById(prefix + '-h');
+        const mEl = document.getElementById(prefix + '-m');
         if (ampmEl) ampmEl.value = ampm;
-        if (hEl)    hEl.value    = String(h12);
-        if (mEl)    mEl.value    = minRounded;
+        if (hEl) hEl.value = String(h12);
+        if (mEl) mEl.value = minRounded;
     }
 
     // 수업 생성 모달 (mode: 'create'=수업생성, 'add'=회차 추가)
@@ -11888,25 +11888,22 @@ ${token}
         document.getElementById('genD1-endLoop').value = '';
         document.getElementById('genD1-addCount').value = '';
         // 시간 드롭다운 리셋 (오전 1시 00분 기본)
-        ['genD1-timeFrom-ampm','genD1-timeTo-ampm'].forEach(id => { const el=document.getElementById(id); if(el) el.value='AM'; });
-        ['genD1-timeFrom-h','genD1-timeTo-h'].forEach(id => { const el=document.getElementById(id); if(el) el.value='1'; });
-        ['genD1-timeFrom-m','genD1-timeTo-m'].forEach(id => { const el=document.getElementById(id); if(el) el.value='00'; });
-        ['genD1-bidStarttime-day','genD1-bidDatetime1-day','genD1-bidDatetime2-day'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+        ['genD1-timeFrom-ampm', 'genD1-timeTo-ampm'].forEach(id => { const el = document.getElementById(id); if (el) el.value = 'AM'; });
+        ['genD1-timeFrom-h', 'genD1-timeTo-h'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '1'; });
+        ['genD1-timeFrom-m', 'genD1-timeTo-m'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '00'; });
+        ['genD1-bidStarttime-day', 'genD1-bidDatetime1-day', 'genD1-bidDatetime2-day'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 
-        // 회차범위 체크박스: 회차추가 모드에서 비활성화
-        const copyStartLoopCb = document.getElementById('genD1-copy-startLoop');
-        const copyStartLoopLabel = document.getElementById('genD1-copy-startLoop-label');
-        if (mode === 'add') {
-            if (copyStartLoopCb) { copyStartLoopCb.checked = false; copyStartLoopCb.disabled = true; }
-            if (copyStartLoopLabel) copyStartLoopLabel.classList.add('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
-        } else {
-            if (copyStartLoopCb) { copyStartLoopCb.checked = true; copyStartLoopCb.disabled = false; }
-            if (copyStartLoopLabel) copyStartLoopLabel.classList.remove('opacity-40', 'cursor-not-allowed', 'pointer-events-none');
-        }
         // 회차 추가 모드: 현재 배치 batchKey 저장
         document.getElementById('generateD1Modal').dataset.batchKey = (mode === 'add' && d1Batches[d1BatchIdx]) ? d1Batches[d1BatchIdx].batchKey : '';
         document.getElementById('genD1-memberSection').classList.add('hidden');
         document.getElementById('genD1-memberList').innerHTML = '';
+        // 미리보기 영역 초기화
+        const previewSection = document.getElementById('genD1-previewSection');
+        if (previewSection) previewSection.classList.add('hidden');
+        const prevMemberSection = document.getElementById('prev-genD1-memberSection');
+        if (prevMemberSection) prevMemberSection.classList.add('hidden');
+        const prevMemberList = document.getElementById('prev-genD1-memberList');
+        if (prevMemberList) prevMemberList.innerHTML = '';
 
         // 회차 추가 모드: 마지막 회차의 날짜+루프 자동 계산
         if (mode === 'add' && allClassD1Data.length > 0) {
@@ -11917,11 +11914,11 @@ ${token}
                 const lastDateRaw = String(lastItem.class_date || '').replace(/-/g, '');
                 const loopUnit = parseInt(document.getElementById('genD1-loopUnit')?.value) || 1;
                 if (lastDateRaw.length >= 8) {
-                    const lastDate = new Date(parseInt(lastDateRaw.substring(0,4)), parseInt(lastDateRaw.substring(4,6))-1, parseInt(lastDateRaw.substring(6,8)));
+                    const lastDate = new Date(parseInt(lastDateRaw.substring(0, 4)), parseInt(lastDateRaw.substring(4, 6)) - 1, parseInt(lastDateRaw.substring(6, 8)));
                     lastDate.setDate(lastDate.getDate() + loopUnit * 7);
                     const yyyy = lastDate.getFullYear();
-                    const mm = String(lastDate.getMonth()+1).padStart(2,'0');
-                    const dd = String(lastDate.getDate()).padStart(2,'0');
+                    const mm = String(lastDate.getMonth() + 1).padStart(2, '0');
+                    const dd = String(lastDate.getDate()).padStart(2, '0');
                     document.getElementById('genD1-startDate').value = `${yyyy}-${mm}-${dd}`;
                 }
             }
@@ -11935,10 +11932,10 @@ ${token}
         d1Batches.forEach((b, i) => {
             const items = b.items || [];
             const sorted = items.slice().sort((a, c) => String(a.class_date).localeCompare(String(c.class_date)));
-            function fd(d) { const s = String(d||'').replace(/-/g,''); return s.length>=8?s.substring(4,6)+'/'+s.substring(6,8):s; }
+            function fd(d) { const s = String(d || '').replace(/-/g, ''); return s.length >= 8 ? s.substring(4, 6) + '/' + s.substring(6, 8) : s; }
             const label = items.length > 0
-                ? (fd(sorted[0]?.class_date) + ' ~ ' + fd(sorted[sorted.length-1]?.class_date) + ' (' + items.length + '회)')
-                : ('배치 ' + (i+1));
+                ? (fd(sorted[0]?.class_date) + ' ~ ' + fd(sorted[sorted.length - 1]?.class_date) + ' (' + items.length + '회)')
+                : ('배치 ' + (i + 1));
             const opt = document.createElement('option');
             opt.value = i;
             opt.textContent = label;
@@ -11955,101 +11952,205 @@ ${token}
         document.getElementById('generateD1Modal').classList.add('content-hidden');
     }
 
-    // 이전 배치 가져오기
+    // 이전 배치 가져오기 → 미리보기 영역에 데이터 채우기
     function applyPrevBatch() {
         const batchSel = document.getElementById('genD1-prevBatch');
         const idx = parseInt(batchSel.value);
         if (isNaN(idx) || !d1Batches[idx]) { showStatus('배치를 선택하세요.', 'error'); return; }
         const batch = d1Batches[idx];
-        // 날짜 기준 정렬 (마지막 날짜 정확하게 파악)
         const items = (batch.items || []).slice().sort((a, b) => String(a.class_date).localeCompare(String(b.class_date)));
+        if (items.length === 0) { showStatus('배치에 회차 데이터가 없습니다.', 'error'); return; }
 
         const mode_ = document.getElementById('generateD1Modal')?.dataset?.mode || 'create';
-        const copyLoopRange = document.getElementById('genD1-copy-startLoop').checked;
-        const copyTime      = document.getElementById('genD1-copy-time').checked;
-        const copyMembers   = document.getElementById('genD1-copy-members').checked;
 
-        if (copyLoopRange && items.length > 0) {
-            document.getElementById('genD1-startLoop').value = Number(items[0].class_loop) || 1;
-            document.getElementById('genD1-endLoop').value = Number(items[items.length-1].class_loop) || 10;
-        }
-        // 회차추가 모드: 가져오기 시 추가생성 회차수 1로 자동 설정
-        if (mode_ === 'add') {
-            const addCountEl = document.getElementById('genD1-addCount');
-            if (addCountEl) addCountEl.value = '1';
-        }
-        if (copyTime && items.length > 0) {
-            const tf = items[0].class_time_from || '';
-            const tt = items[0].class_time_to   || '';
-            // class_time_from/to는 "HH:mm" 또는 숫자(시간)로 올 수 있음
-            const normTime_ = v => {
-                const s = String(v);
-                if (s.includes(':')) return s;
-                const h = parseInt(s);
-                return isNaN(h) ? '' : String(h).padStart(2,'0') + ':00';
-            };
-            if (tf) setDropdownTime_('genD1-timeFrom', normTime_(tf));
-            if (tt) setDropdownTime_('genD1-timeTo',   normTime_(tt));
-        }
-        const copyBid1 = document.getElementById('genD1-copy-bid1')?.checked;
-        const copyBid2 = document.getElementById('genD1-copy-bid2')?.checked;
-        const copyBid3 = document.getElementById('genD1-copy-bid3')?.checked;
-        if ((copyBid1 || copyBid2 || copyBid3) && items.length > 0) {
-            // class_date 기준으로 day offset 역산
-            function extractBidOffset(classDateRaw, bidDatetimeStr) {
-                if (!bidDatetimeStr || !classDateRaw) return { day: '', time: '' };
-                const baseDate = new Date(classDateRaw.substring(0,4)+'-'+classDateRaw.substring(4,6)+'-'+classDateRaw.substring(6,8));
-                const bidDate  = new Date(String(bidDatetimeStr).replace('T',' '));
-                if (isNaN(baseDate)||isNaN(bidDate)) return { day: '', time: '' };
-                const dayOffset = Math.round((bidDate - baseDate) / 86400000);
-                const hh = String(bidDate.getHours()).padStart(2,'0');
-                const mm = String(bidDate.getMinutes()).padStart(2,'0');
-                return { day: String(dayOffset), time: hh+':'+mm };
-            }
-            const firstItem = items[0];
-            const classDateRaw = String(firstItem.class_date||'').replace(/-/g,'');
-            if (copyBid1) {
-                const bs = extractBidOffset(classDateRaw, firstItem.bid_starttime);
-                document.getElementById('genD1-bidStarttime-day').value = bs.day;
-                if (bs.time) setDropdownTime_('genD1-bidStarttime', bs.time);
-            }
-            if (copyBid2) {
-                const b1 = extractBidOffset(classDateRaw, firstItem.bid_datetime_1);
-                document.getElementById('genD1-bidDatetime1-day').value = b1.day;
-                if (b1.time) setDropdownTime_('genD1-bidDatetime1', b1.time);
-            }
-            if (copyBid3) {
-                const b2 = extractBidOffset(classDateRaw, firstItem.bid_datetime_2);
-                document.getElementById('genD1-bidDatetime2-day').value = b2.day;
-                if (b2.time) setDropdownTime_('genD1-bidDatetime2', b2.time);
-            }
-        }
-        // 마지막 회차 날짜 + 루프단위(주) = 자동 시작일 계산
-        if (items.length > 0) {
-            const lastItem = items[items.length - 1];
-            const lastDateRaw = String(lastItem.class_date || '').replace(/-/g, '');
-            if (lastDateRaw.length >= 8) {
-                const loopUnit = parseInt(document.getElementById('genD1-loopUnit')?.value) || 1;
-                const lastDate = new Date(
-                    parseInt(lastDateRaw.substring(0, 4)),
-                    parseInt(lastDateRaw.substring(4, 6)) - 1,
-                    parseInt(lastDateRaw.substring(6, 8))
-                );
-                lastDate.setDate(lastDate.getDate() + loopUnit * 7);
-                const yyyy = lastDate.getFullYear();
-                const mm = String(lastDate.getMonth() + 1).padStart(2, '0');
-                const dd = String(lastDate.getDate()).padStart(2, '0');
-                document.getElementById('genD1-startDate').value = `${yyyy}-${mm}-${dd}`;
-            }
-        }
-        if (copyMembers) {
-            // 해당 배치 회차 ID 목록으로 회원 로드
-            const d1Ids = items.map(d => String(d.class_d1_id));
-            loadGenD1Members_(d1Ids);
+        // 미리보기 영역 표시
+        const previewSection = document.getElementById('genD1-previewSection');
+        previewSection.classList.remove('hidden');
+        document.getElementById('prev-genD1-loopRange-section').classList.toggle('hidden', mode_ === 'add');
+        document.getElementById('prev-genD1-addCount-section').classList.toggle('hidden', mode_ !== 'add');
+
+        // 회차범위
+        if (mode_ === 'create') {
+            document.getElementById('prev-genD1-startLoop').value = Number(items[0].class_loop) || 1;
+            document.getElementById('prev-genD1-endLoop').value = Number(items[items.length - 1].class_loop) || 10;
         } else {
-            document.getElementById('genD1-memberSection').classList.add('hidden');
+            document.getElementById('prev-genD1-addCount').value = '1';
         }
+
+        // 수업시간
+        const normTime_ = v => {
+            const s = String(v);
+            if (s.includes(':')) return s;
+            const h = parseInt(s);
+            return isNaN(h) ? '' : String(h).padStart(2, '0') + ':00';
+        };
+        const tf = items[0].class_time_from || '';
+        const tt = items[0].class_time_to || '';
+        if (tf) setDropdownTime_('prev-genD1-timeFrom', normTime_(tf));
+        if (tt) setDropdownTime_('prev-genD1-timeTo', normTime_(tt));
+
+        // 입찰시간 역산
+        function extractBidOffset(classDateRaw, bidDatetimeStr) {
+            if (!bidDatetimeStr || !classDateRaw) return { day: '', time: '' };
+            const baseDate = new Date(classDateRaw.substring(0, 4) + '-' + classDateRaw.substring(4, 6) + '-' + classDateRaw.substring(6, 8));
+            const bidDate = new Date(String(bidDatetimeStr).replace('T', ' '));
+            if (isNaN(baseDate) || isNaN(bidDate)) return { day: '', time: '' };
+            const dayOffset = Math.round((bidDate - baseDate) / 86400000);
+            const hh = String(bidDate.getHours()).padStart(2, '0');
+            const mm = String(bidDate.getMinutes()).padStart(2, '0');
+            return { day: String(dayOffset), time: hh + ':' + mm };
+        }
+        const firstItem = items[0];
+        const classDateRaw = String(firstItem.class_date || '').replace(/-/g, '');
+        const bs = extractBidOffset(classDateRaw, firstItem.bid_starttime);
+        document.getElementById('prev-genD1-bidStarttime-day').value = bs.day;
+        if (bs.time) setDropdownTime_('prev-genD1-bidStarttime', bs.time);
+
+        const b1 = extractBidOffset(classDateRaw, firstItem.bid_datetime_1);
+        document.getElementById('prev-genD1-bidDatetime1-day').value = b1.day;
+        if (b1.time) setDropdownTime_('prev-genD1-bidDatetime1', b1.time);
+
+        const b2 = extractBidOffset(classDateRaw, firstItem.bid_datetime_2);
+        document.getElementById('prev-genD1-bidDatetime2-day').value = b2.day;
+        if (b2.time) setDropdownTime_('prev-genD1-bidDatetime2', b2.time);
+
+        // 선택개수 (1cha_bid, 2cha_bid)
+        document.getElementById('prev-genD1-bid1Count').value = firstItem['1cha_bid'] || '';
+        document.getElementById('prev-genD1-bid2Count').value = firstItem['2cha_bid'] || '';
+
+        // 시작일: 마지막 회차 날짜 + 루프단위
+        const lastItem = items[items.length - 1];
+        const lastDateRaw = String(lastItem.class_date || '').replace(/-/g, '');
+        if (lastDateRaw.length >= 8) {
+            const loopUnit = parseInt(document.getElementById('genD1-loopUnit')?.value) || 1;
+            const lastDate = new Date(
+                parseInt(lastDateRaw.substring(0, 4)),
+                parseInt(lastDateRaw.substring(4, 6)) - 1,
+                parseInt(lastDateRaw.substring(6, 8))
+            );
+            lastDate.setDate(lastDate.getDate() + loopUnit * 7);
+            const yyyy = lastDate.getFullYear();
+            const mm = String(lastDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(lastDate.getDate()).padStart(2, '0');
+            document.getElementById('prev-genD1-startDate').value = `${yyyy}-${mm}-${dd}`;
+        }
+        document.getElementById('prev-genD1-loopUnit').value = document.getElementById('genD1-loopUnit')?.value || '1';
+
+        // 마지막 회차 회원 로드
+        loadPreviewMembers_(String(lastItem.class_d1_id));
         showStatus('가져오기 완료', 'success');
+    }
+
+    // 미리보기 → 오른쪽 기본설정에 적용
+    function applyPreviewToRight() {
+        const previewSection = document.getElementById('genD1-previewSection');
+        if (!previewSection || previewSection.classList.contains('hidden')) {
+            showStatus('먼저 가져오기를 실행하세요.', 'error'); return;
+        }
+        const mode = document.getElementById('generateD1Modal')?.dataset?.mode || 'create';
+
+        // 회차범위 or 추가생성
+        if (mode === 'create') {
+            document.getElementById('genD1-startLoop').value = document.getElementById('prev-genD1-startLoop').value;
+            document.getElementById('genD1-endLoop').value = document.getElementById('prev-genD1-endLoop').value;
+        } else {
+            document.getElementById('genD1-addCount').value = document.getElementById('prev-genD1-addCount').value;
+        }
+
+        // 시작일 + 루프단위
+        document.getElementById('genD1-startDate').value = document.getElementById('prev-genD1-startDate').value;
+        document.getElementById('genD1-loopUnit').value = document.getElementById('prev-genD1-loopUnit').value;
+
+        // 수업시간
+        ['ampm', 'h', 'm'].forEach(k => {
+            const fromEl = document.getElementById(`prev-genD1-timeFrom-${k}`);
+            const toEl = document.getElementById(`prev-genD1-timeTo-${k}`);
+            const rFromEl = document.getElementById(`genD1-timeFrom-${k}`);
+            const rToEl = document.getElementById(`genD1-timeTo-${k}`);
+            if (fromEl && rFromEl) rFromEl.value = fromEl.value;
+            if (toEl && rToEl) rToEl.value = toEl.value;
+        });
+
+        // 입찰시간
+        ['day', 'ampm', 'h', 'm'].forEach(k => {
+            ['bidStarttime', 'bidDatetime1', 'bidDatetime2'].forEach(bid => {
+                const prevEl = document.getElementById(`prev-genD1-${bid}-${k}`);
+                const rightEl = document.getElementById(`genD1-${bid}-${k}`);
+                if (prevEl && rightEl) rightEl.value = prevEl.value;
+            });
+        });
+
+        // 선택개수
+        const pBid1 = document.getElementById('prev-genD1-bid1Count');
+        const pBid2 = document.getElementById('prev-genD1-bid2Count');
+        if (pBid1) document.getElementById('genD1-bid1Count').value = pBid1.value;
+        if (pBid2) document.getElementById('genD1-bid2Count').value = pBid2.value;
+
+        // 회원 - 미리보기 HTML 복사 (클래스명 교체)
+        const prevMemberList = document.getElementById('prev-genD1-memberList');
+        const rightMemberList = document.getElementById('genD1-memberList');
+        const rightMemberSection = document.getElementById('genD1-memberSection');
+        if (prevMemberList && rightMemberList) {
+            let html = prevMemberList.innerHTML;
+            html = html.replace(/prev-genD1-member-cb/g, 'genD1-member-cb');
+            html = html.replace(/prev-genD1-member-row/g, 'genD1-member-row');
+            rightMemberList.innerHTML = html;
+            if (rightMemberSection) rightMemberSection.classList.remove('hidden');
+            const prevAll = document.getElementById('prev-genD1-memberSelectAll');
+            const rightAll = document.getElementById('genD1-memberSelectAll');
+            if (prevAll && rightAll) rightAll.checked = prevAll.checked;
+        }
+        showStatus('적용 완료', 'success');
+    }
+
+    // 마지막 회차 회원을 미리보기 영역에 로드
+    function loadPreviewMembers_(lastD1Id) {
+        const memberSection = document.getElementById('prev-genD1-memberSection');
+        const memberList = document.getElementById('prev-genD1-memberList');
+        memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">불러오는 중...</div>';
+        memberSection.classList.remove('hidden');
+
+        function renderPreviewMembers(members) {
+            if (!members || members.length === 0) {
+                memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">회원 없음</div>';
+                return;
+            }
+            const filtered = members.filter(m => m.attendance && m.attendance[lastD1Id] === 'Y');
+            if (filtered.length === 0) {
+                memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">등록된 회원 없음</div>';
+                return;
+            }
+            const cls = allClassesData.find(c => String(c.class_id) === String(selectedClassId)) || {};
+            const clsInfo = [cls.class_name, cls.class_grade ? `[${cls.class_grade}]` : '', cls.class_loc ? `(${cls.class_loc})` : ''].filter(Boolean).join(' ');
+            const d1Map = {};
+            (allClassD1SummaryData.d1List || []).forEach(d => { d1Map[String(d.class_d1_id)] = d; });
+
+            memberList.innerHTML = filtered.map(m => {
+                const d1Info = d1Map[lastD1Id] || {};
+                const loopStr = d1Info.class_loop ? d1Info.class_loop + '회' : '-';
+                const lastDateRaw = String(d1Info.class_date || '').replace(/-/g, '');
+                const lastDateDisp = lastDateRaw.length >= 8 ? lastDateRaw.substring(2, 4) + '/' + lastDateRaw.substring(4, 6) + '/' + lastDateRaw.substring(6, 8) : '-';
+                const stuInfo = `ID:${m.member_id} | ${m.phone || ''} | ${escapeHtml(m.name1 || m.member_name || '')} - ${escapeHtml(clsInfo)}`;
+                return `<label class="grid items-center gap-1 px-2 py-1 text-[10px] cursor-pointer hover:bg-indigo-50 prev-genD1-member-row" style="grid-template-columns:20px 1fr 2fr 1fr 1fr">
+                    <input type="checkbox" class="prev-genD1-member-cb rounded" value="${m.member_id}" checked>
+                    <span class="font-medium truncate" title="${escapeHtml(m.member_name || '-')}">${escapeHtml(m.member_name || '-')}</span>
+                    <span class="text-gray-500 truncate" title="${stuInfo}">${stuInfo}</span>
+                    <span class="text-indigo-600 truncate">${loopStr}</span>
+                    <span class="text-gray-500">${lastDateDisp}</span>
+                </label>`;
+            }).join('');
+            document.getElementById('prev-genD1-memberSelectAll').checked = true;
+        }
+
+        google.script.run
+            .withSuccessHandler(data => {
+                allClassD1SummaryData = data;
+                renderPreviewMembers(data.members || []);
+            })
+            .withFailureHandler(() => {
+                memberList.innerHTML = '<div class="p-2 text-xs text-red-400 text-center">로드 실패</div>';
+            })
+            .readAllMembersByClassId(selectedClassId);
     }
 
     function loadGenD1Members_(d1Ids) {
@@ -12082,16 +12183,16 @@ ${token}
                 // 해당 배치 d1Ids 중 attendance='Y'인 것만
                 const attIds = d1Ids.filter(id => m.attendance && m.attendance[id] === 'Y');
                 // 회차정보: loop번호들 쉼표 구분
-                const loopNos = attIds.map(id => d1Map[id]?.class_loop).filter(Boolean).sort((a,b)=>Number(a)-Number(b));
-                const loopStr = loopNos.length ? loopNos.map(n=>n+'회').join(', ') : '-';
+                const loopNos = attIds.map(id => d1Map[id]?.class_loop).filter(Boolean).sort((a, b) => Number(a) - Number(b));
+                const loopStr = loopNos.length ? loopNos.map(n => n + '회').join(', ') : '-';
                 // 마지막 수업날짜
-                const lastDate = attIds.map(id => String(d1Map[id]?.class_date||'').replace(/-/g,'')).filter(Boolean).sort().pop() || '';
-                const lastDateDisp = lastDate.length>=8 ? lastDate.substring(2,4)+'/'+lastDate.substring(4,6)+'/'+lastDate.substring(6,8) : '-';
+                const lastDate = attIds.map(id => String(d1Map[id]?.class_date || '').replace(/-/g, '')).filter(Boolean).sort().pop() || '';
+                const lastDateDisp = lastDate.length >= 8 ? lastDate.substring(2, 4) + '/' + lastDate.substring(4, 6) + '/' + lastDate.substring(6, 8) : '-';
                 // 수업정보 포맷
-                const stuInfo = `ID:${m.member_id} | ${m.phone||''} | ${escapeHtml(m.name1||m.member_name||'')} - ${escapeHtml(clsInfo)}`;
+                const stuInfo = `ID:${m.member_id} | ${m.phone || ''} | ${escapeHtml(m.name1 || m.member_name || '')} - ${escapeHtml(clsInfo)}`;
                 return `<label class="grid items-center gap-1 px-2 py-1 text-[10px] cursor-pointer hover:bg-indigo-50 genD1-member-row" style="grid-template-columns:20px 1fr 2fr 1fr 1fr">
                     <input type="checkbox" class="genD1-member-cb rounded" value="${m.member_id}" checked>
-                    <span class="font-medium truncate" title="${escapeHtml(m.member_name||'-')}">${escapeHtml(m.member_name||'-')}</span>
+                    <span class="font-medium truncate" title="${escapeHtml(m.member_name || '-')}">${escapeHtml(m.member_name || '-')}</span>
                     <span class="text-gray-500 truncate" title="${stuInfo}">${stuInfo}</span>
                     <span class="text-indigo-600 truncate">${loopStr}</span>
                     <span class="text-gray-500">${lastDateDisp}</span>
@@ -12116,21 +12217,25 @@ ${token}
         document.querySelectorAll('.genD1-member-cb').forEach(cb => { cb.checked = checked; });
     }
 
+    function togglePrevAllMembers(checked) {
+        document.querySelectorAll('.prev-genD1-member-cb').forEach(cb => { cb.checked = checked; });
+    }
+
     function handleGenerateD1() {
-        const startDate     = document.getElementById('genD1-startDate')?.value?.replace(/-/g,'') || '';
-        const loopUnit      = document.getElementById('genD1-loopUnit')?.value || '1';
-        const startLoop     = parseInt(document.getElementById('genD1-startLoop')?.value) || 1;
-        const endLoop       = parseInt(document.getElementById('genD1-endLoop')?.value)   || 10;
-        const addCount      = parseInt(document.getElementById('genD1-addCount')?.value)  || 1;
-        const timeFrom      = getDropdownTime_('genD1-timeFrom');
-        const timeTo        = getDropdownTime_('genD1-timeTo');
-        const bidStarttimeDay  = document.getElementById('genD1-bidStarttime-day')?.value ?? '';
+        const startDate = document.getElementById('genD1-startDate')?.value?.replace(/-/g, '') || '';
+        const loopUnit = document.getElementById('genD1-loopUnit')?.value || '1';
+        const startLoop = parseInt(document.getElementById('genD1-startLoop')?.value) || 1;
+        const endLoop = parseInt(document.getElementById('genD1-endLoop')?.value) || 10;
+        const addCount = parseInt(document.getElementById('genD1-addCount')?.value) || 1;
+        const timeFrom = getDropdownTime_('genD1-timeFrom');
+        const timeTo = getDropdownTime_('genD1-timeTo');
+        const bidStarttimeDay = document.getElementById('genD1-bidStarttime-day')?.value ?? '';
         const bidStarttimeTime = bidStarttimeDay !== '' ? getDropdownTime_('genD1-bidStarttime') : '00:00';
-        const bidDatetime1Day  = document.getElementById('genD1-bidDatetime1-day')?.value ?? '';
+        const bidDatetime1Day = document.getElementById('genD1-bidDatetime1-day')?.value ?? '';
         const bidDatetime1Time = bidDatetime1Day !== '' ? getDropdownTime_('genD1-bidDatetime1') : '00:00';
-        const bidDatetime2Day  = document.getElementById('genD1-bidDatetime2-day')?.value ?? '';
+        const bidDatetime2Day = document.getElementById('genD1-bidDatetime2-day')?.value ?? '';
         const bidDatetime2Time = bidDatetime2Day !== '' ? getDropdownTime_('genD1-bidDatetime2') : '00:00';
-        const mode          = document.getElementById('generateD1Modal')?.dataset?.mode || 'create';
+        const mode = document.getElementById('generateD1Modal')?.dataset?.mode || 'create';
         const batchTimestamp = document.getElementById('generateD1Modal')?.dataset?.batchKey || '';
 
         if (!startDate) { showStatus('시작일을 입력하세요.', 'error'); return; }
@@ -12142,7 +12247,9 @@ ${token}
         const memberApplyRadio = document.querySelector('input[name="genD1-memberApply"]:checked');
         const memberApplyAll = !memberApplyRadio || memberApplyRadio.value === 'all';
 
-        const bidOpts = { bidStarttimeDay, bidStarttimeTime, bidDatetime1Day, bidDatetime1Time, bidDatetime2Day, bidDatetime2Time };
+        const bid1Count = parseInt(document.getElementById('genD1-bid1Count')?.value) || null;
+        const bid2Count = parseInt(document.getElementById('genD1-bid2Count')?.value) || null;
+        const bidOpts = { bidStarttimeDay, bidStarttimeTime, bidDatetime1Day, bidDatetime1Time, bidDatetime2Day, bidDatetime2Time, bid1Count, bid2Count };
         const options = mode === 'add'
             ? { addCount, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds, memberApplyAll }
             : { startLoop, endLoop, timeFrom, timeTo, ...bidOpts, memberIds, memberApplyAll };
@@ -12392,7 +12499,7 @@ ${token}
         // 4) 수업정보 카드 세로 높이 드래그
         (function setupHeightDrag() {
             const handle = document.getElementById('d1CardHeightHandle');
-            const area   = document.getElementById('d1CardArea');
+            const area = document.getElementById('d1CardArea');
             if (!handle || !area) return;
             const savedH = localStorage.getItem(LS_CARD_H);
             if (savedH) area.style.height = savedH;
@@ -13137,7 +13244,7 @@ ${token}
         if (!imageList || !placeholder) return;
 
         imageList.innerHTML = '';
-        
+
         // [OPTIMIZE] items 시트의 image_id가 있으면 즉시 1장만 렌더링
         if (currentModalItemData && currentModalItemData.image_id) {
             renderModalImagesByIDs([currentModalItemData.image_id]);
@@ -13335,7 +13442,7 @@ ${token}
         const okBtn = document.getElementById('bulk-apply-confirm-ok');
         if (!modal || !tbody || !okBtn) return;
         if (descEl) descEl.textContent = desc;
-        tbody.innerHTML = items.map(function(it) {
+        tbody.innerHTML = items.map(function (it) {
             return '<tr class="hover:bg-gray-50"><td class="px-2 py-1">' + (it['in-date'] || '') +
                 '</td><td class="px-2 py-1">' + (it.sakun_no || '') +
                 '</td><td class="px-2 py-1">' + (it.court || '') +
@@ -13343,7 +13450,7 @@ ${token}
                 '</td><td class="px-2 py-1">' + (it.m_name_id || '') +
                 '</td><td class="px-2 py-1 text-center"><span class="px-1.5 py-0.5 rounded text-xs bg-gray-100">' + (it.stu_member || '') + '</span></td></tr>';
         }).join('');
-        okBtn.onclick = function() { closeBulkApplyConfirmModal(); onConfirm(); };
+        okBtn.onclick = function () { closeBulkApplyConfirmModal(); onConfirm(); };
         modal.classList.remove('content-hidden');
     }
     function closeBulkApplyConfirmModal() {
@@ -13355,17 +13462,17 @@ ${token}
         var filtered = Array.from(cbs).filter(cb => (cb.getAttribute('data-status') || '') === '추천');
         var ids = filtered.map(cb => cb.getAttribute('data-id'));
         if (ids.length === 0) { showStatus('추천 상태인 항목이 없습니다.', 'warning'); return; }
-        var items = ids.map(function(id) { return allBiddingData.find(function(d) { return String(d.id) === String(id); }) || { id: id }; });
+        var items = ids.map(function (id) { return allBiddingData.find(function (d) { return String(d.id) === String(id); }) || { id: id }; });
         openBulkApplyConfirmModal(items,
             '다음 ' + ids.length + '건의 추천상태를 [' + state + ']으로 변경합니다.',
-            function() {
+            function () {
                 showStatus('처리 중...', 'info');
                 google.script.run
-                    .withSuccessHandler(function(res) {
+                    .withSuccessHandler(function (res) {
                         showStatus((res && res.updated ? res.updated : 0) + '건 변경완료', 'success');
                         loadData(); _autoApprovalStatsCache = null;
                     })
-                    .withFailureHandler(function(err) { showStatus('오류: ' + (err && err.message || ''), 'error'); })
+                    .withFailureHandler(function (err) { showStatus('오류: ' + (err && err.message || ''), 'error'); })
                     .updateChuchenStateApi(ids, state, new Date().toISOString());
             });
     }
@@ -13374,17 +13481,17 @@ ${token}
         var filtered = Array.from(cbs).filter(cb => (cb.getAttribute('data-status') || '') === '입찰');
         var ids = filtered.map(cb => cb.getAttribute('data-id'));
         if (ids.length === 0) { showStatus('입찰 상태인 항목이 없습니다.', 'warning'); return; }
-        var items = ids.map(function(id) { return allBiddingData.find(function(d) { return String(d.id) === String(id); }) || { id: id }; });
+        var items = ids.map(function (id) { return allBiddingData.find(function (d) { return String(d.id) === String(id); }) || { id: id }; });
         openBulkApplyConfirmModal(items,
             '다음 ' + ids.length + '건의 입찰상태를 [' + state + ']으로 변경합니다.',
-            function() {
+            function () {
                 showStatus('처리 중...', 'info');
                 google.script.run
-                    .withSuccessHandler(function(res) {
+                    .withSuccessHandler(function (res) {
                         showStatus((res && res.updated ? res.updated : 0) + '건 변경완료', 'success');
                         loadData(); _autoApprovalStatsCache = null;
                     })
-                    .withFailureHandler(function(err) { showStatus('오류: ' + (err && err.message || ''), 'error'); })
+                    .withFailureHandler(function (err) { showStatus('오류: ' + (err && err.message || ''), 'error'); })
                     .updateBidStateApi(ids, state);
             });
     }
@@ -13562,7 +13669,7 @@ MJ 이정우 팀장
             .withSuccessHandler(res => {
                 if (res && res.success) {
                     if (typeof showStatus === 'function') showStatus(res.message || '일괄 변경이 완료되었습니다.', 'success');
-                    
+
                     // [최적화] 로컬 캐시 일괄 갱신
                     if (allBiddingData && ids && ids.length > 0) {
                         ids.forEach(id => {
@@ -13575,7 +13682,7 @@ MJ 이정우 팀장
                     if (typeof showStatus === 'function') showStatus((res && res.message) ? res.message : '변경 중 일부 오류가 발생했습니다.', 'warning');
                 }
                 closeBulkStatusModal();
-                
+
                 // 리로딩 대신 로컬 갱신 후 화면만 리렌더링
                 applyFilters();
                 if (typeof renderCalendar === 'function') renderCalendar();
@@ -13601,7 +13708,7 @@ MJ 이정우 팀장
             .withSuccessHandler(res => {
                 if (res && res.success) {
                     if (typeof showStatus === 'function') showStatus(res.message || '일괄 삭제가 완료되었습니다.', 'success');
-                    
+
                     // [최적화] 로컬 캐시에서 일괄 제거
                     if (allBiddingData && ids && ids.length > 0) {
                         const idSet = new Set(ids.map(id => String(id)));
@@ -13611,7 +13718,7 @@ MJ 이정우 팀장
                 } else {
                     if (typeof showStatus === 'function') showStatus((res && res.message) ? res.message : '삭제 중 오류가 발생했습니다.', 'error');
                 }
-                
+
                 // 리로딩 대신 로컬 갱신 후 화면만 리렌더링
                 applyFilters();
                 if (typeof renderCalendar === 'function') renderCalendar();
@@ -13953,7 +14060,7 @@ MJ 이정우 팀장
         if (!body) return;
         var collapsed = body.classList.toggle('collapsed');
         if (btn) btn.textContent = collapsed ? '펼치기 ▼' : '접기 ▲';
-        try { localStorage.setItem('notice_collapsed', collapsed ? '1' : '0'); } catch(e) {}
+        try { localStorage.setItem('notice_collapsed', collapsed ? '1' : '0'); } catch (e) { }
     }
     function initNoticeState() {
         try {
@@ -13963,7 +14070,7 @@ MJ 이정우 팀장
                 if (body) body.classList.add('collapsed');
                 if (btn) btn.textContent = '펼치기 ▼';
             }
-        } catch(e) {}
+        } catch (e) { }
     }
 
     /** 입찰리스트 렌더링 */
@@ -14990,9 +15097,9 @@ MJ 이정우 팀장
         // 서버에서 최신 image_id 조회
         if (loading) loading.classList.remove('hidden');
         google.script.run
-            .withSuccessHandler(function(results) {
+            .withSuccessHandler(function (results) {
                 if (loading) loading.classList.add('hidden');
-                results.forEach(function(r) {
+                results.forEach(function (r) {
                     const row = tbody.querySelector(`tr[data-id="${r.id}"]`);
                     if (!row) return;
                     const latestCell = row.querySelector('.fill-row-latest');
@@ -15005,7 +15112,7 @@ MJ 이정우 팀장
                     }
                 });
             })
-            .withFailureHandler(function(err) {
+            .withFailureHandler(function (err) {
                 if (loading) loading.classList.add('hidden');
                 if (typeof showStatus === 'function') showStatus('최신 이미지 ID 조회 실패: ' + err.message, 'error');
             })
@@ -15021,7 +15128,7 @@ MJ 이정우 팀장
     function fillAllImageIds() {
         const rows = document.querySelectorAll('#fill-image-id-tbody tr');
         let filled = 0;
-        rows.forEach(function(row) {
+        rows.forEach(function (row) {
             const latest = row.querySelector('.fill-row-latest').getAttribute('data-latest');
             if (!latest) return;
             const input = row.querySelector('.fill-row-image-id');
@@ -15039,7 +15146,7 @@ MJ 이정우 팀장
     function saveFillImageIdToDB() {
         const rows = document.querySelectorAll('#fill-image-id-tbody tr');
         const updates = [];
-        rows.forEach(function(row) {
+        rows.forEach(function (row) {
             const id = row.getAttribute('data-id');
             const original = row.getAttribute('data-original');
             const newVal = row.querySelector('.fill-row-image-id').value.trim();
@@ -15055,11 +15162,11 @@ MJ 이정우 팀장
         showStatus(`일괄 저장 중... (${updates.length}건)`, 'info');
 
         google.script.run
-            .withSuccessHandler(function(res) {
+            .withSuccessHandler(function (res) {
                 if (res && res.success) {
                     // allBiddingData 캐시 업데이트
                     if (typeof allBiddingData !== 'undefined') {
-                        updates.forEach(function(u) {
+                        updates.forEach(function (u) {
                             const item = allBiddingData.find(d => String(d.id) === String(u.id));
                             if (item) item.image_id = u.value;
                         });
@@ -15070,7 +15177,7 @@ MJ 이정우 팀장
                     if (typeof showStatus === 'function') showStatus('일괄 저장 실패: ' + (res ? res.message : '알 수 없는 오류'), 'error');
                 }
             })
-            .withFailureHandler(function(err) {
+            .withFailureHandler(function (err) {
                 if (typeof showStatus === 'function') showStatus('서버 오류: ' + err.message, 'error');
             })
             .updateDataFieldBulkApi(updates, 'image_id');
@@ -15086,7 +15193,7 @@ MJ 이정우 팀장
             if (newImgId) row.querySelector('.bulk-row-image-id').value = newImgId;
             if (newAucId) row.querySelector('.bulk-row-auction-id').value = newAucId;
         });
-        
+
         if (typeof showStatus === 'function') showStatus('리스트에 적용되었습니다. (최종 저장을 눌러야 DB에 반영됩니다)', 'info');
     }
 
@@ -15122,7 +15229,7 @@ MJ 이정우 팀장
 
         let completed = 0;
         const total = rows.length;
-        
+
         if (typeof showStatus === 'function') showStatus('저장 중... (0/' + total + ')', 'info');
 
         rows.forEach(row => {
@@ -15138,19 +15245,19 @@ MJ 이정우 팀장
             }
 
             google.script.run
-                .withSuccessHandler(function() {
+                .withSuccessHandler(function () {
                     completed++;
                     finalizeBulkSave();
                 })
-                .withFailureHandler(function(err) {
+                .withFailureHandler(function (err) {
                     console.error('Update failed for ID ' + id, err);
                     completed++;
                     finalizeBulkSave();
                 })
                 .updateData(
-                    it.id, it['in-date'], it.sakun_no, it.court, it.stu_member, 
-                    it.m_name, it.bidprice, it.m_name_id, it.note, it.member_id, 
-                    it.bid_state, it.chuchen_state, newImgId, it.reg_member, 
+                    it.id, it['in-date'], it.sakun_no, it.court, it.stu_member,
+                    it.m_name, it.bidprice, it.m_name_id, it.note, it.member_id,
+                    it.bid_state, it.chuchen_state, newImgId, it.reg_member,
                     it.m_name2, newAucId
                 );
         });
@@ -15183,16 +15290,16 @@ MJ 이정우 팀장
     function saveSingleField(itemId, field, value) {
         if (!itemId || !field) return;
         const fieldLabel = (field === 'image_id' ? '이미지 ID' : '옥션 ID');
-        
+
         if (typeof google === 'undefined' || !google.script || !google.script.run) {
             showStatus('GAS 환경에서만 저장 가능합니다.', 'error');
             return;
         }
 
         showStatus(`${fieldLabel} 저장 중...`, 'loading');
-        
+
         google.script.run
-            .withSuccessHandler(function(res) {
+            .withSuccessHandler(function (res) {
                 if (res && res.success) {
                     showStatus(`${fieldLabel} 저장이 완료되었습니다.`, 'success');
                     // 현재 열려있는 데이터 객체 동기화 (상세 페인/모달 공지용)
@@ -15211,7 +15318,7 @@ MJ 이정우 팀장
                     showStatus('저장 실패: ' + (res ? res.message : '알 수 없는 오류'), 'error');
                 }
             })
-            .withFailureHandler(function(err) {
+            .withFailureHandler(function (err) {
                 showStatus('서버 오류: ' + (err.message || err), 'error');
             })
             .updateDataField([itemId], field, value);
@@ -15231,9 +15338,9 @@ MJ 이정우 팀장
     var smInvestigators = []; // 조사자 목록 캐시
 
     // navigateTo에서 SearchManagement 진입 시 데이터 로드
-    (function() {
+    (function () {
         var _origNavigateTo = navigateTo;
-        navigateTo = function(tabId) {
+        navigateTo = function (tabId) {
             _origNavigateTo(tabId);
             if (tabId === 'SearchManagement') {
                 loadSearchData();
@@ -15246,12 +15353,12 @@ MJ 이정우 팀장
         if (smInvestigators.length > 0) { if (cb) cb(smInvestigators); return; }
         if (typeof google === 'undefined' || !google.script || !google.script.run) { if (cb) cb([]); return; }
         google.script.run
-            .withSuccessHandler(function(list) {
+            .withSuccessHandler(function (list) {
                 smInvestigators = list || [];
                 buildSmJosajaDropdown();
                 if (cb) cb(smInvestigators);
             })
-            .withFailureHandler(function() { if (cb) cb([]); })
+            .withFailureHandler(function () { if (cb) cb([]); })
             .getInvestigators();
     }
 
@@ -15261,8 +15368,8 @@ MJ 이정우 팀장
         if (!dd) return;
         // 기존 조사자 항목 제거 후 재구성
         var existing = dd.querySelectorAll('[data-josaja]');
-        existing.forEach(function(el) { el.parentElement.remove(); });
-        smInvestigators.forEach(function(m) {
+        existing.forEach(function (el) { el.parentElement.remove(); });
+        smInvestigators.forEach(function (m) {
             var name = String(m.member_name || '').trim();
             if (!name) return;
             var label = document.createElement('label');
@@ -15274,7 +15381,7 @@ MJ 이정우 팀장
         // bulk select 동기화
         if (bulkSel) {
             bulkSel.innerHTML = '<option value="">-- 선택 --</option>' +
-                smInvestigators.map(function(m) {
+                smInvestigators.map(function (m) {
                     var n = String(m.member_name || '').trim();
                     return n ? '<option value="' + n + '">' + n + '</option>' : '';
                 }).join('');
@@ -15292,16 +15399,16 @@ MJ 이정우 팀장
         if (loading) loading.style.display = '';
         if (nodata) nodata.classList.add('content-hidden');
 
-        loadInvestigators(function() {
+        loadInvestigators(function () {
             google.script.run
-                .withSuccessHandler(function(items) {
+                .withSuccessHandler(function (items) {
                     allSearchData = items || [];
                     if (loading) loading.style.display = 'none';
                     buildSmTagDropdown();
                     buildSmGroupDropdown();
                     applySearchFilters();
                 })
-                .withFailureHandler(function(err) {
+                .withFailureHandler(function (err) {
                     if (loading) loading.style.display = 'none';
                     showStatus('조사물건 로드 실패: ' + (err.message || err), 'error');
                 })
@@ -15310,33 +15417,33 @@ MJ 이정우 팀장
     }
 
     // ── 태그 행 드롭다운 공통 유틸 ──────────────────────────────────────────
-    var _smTagDDs = ['sm-tagtype-dropdown','sm-tagarea-dropdown','sm-tagprice-dropdown','sm-group-dropdown','sm-status-dropdown','sm-josaja-dropdown'];
+    var _smTagDDs = ['sm-tagtype-dropdown', 'sm-tagarea-dropdown', 'sm-tagprice-dropdown', 'sm-group-dropdown', 'sm-status-dropdown', 'sm-josaja-dropdown'];
     function _closeAllSmDDs(exceptId) {
-        _smTagDDs.forEach(function(id) { if (id !== exceptId) { var el = document.getElementById(id); if (el) el.classList.add('content-hidden'); } });
+        _smTagDDs.forEach(function (id) { if (id !== exceptId) { var el = document.getElementById(id); if (el) el.classList.add('content-hidden'); } });
     }
     function _makeSmTagToggle(ddId) {
-        return function(e) { e.stopPropagation(); _closeAllSmDDs(ddId); var dd = document.getElementById(ddId); if (dd) dd.classList.toggle('content-hidden'); };
+        return function (e) { e.stopPropagation(); _closeAllSmDDs(ddId); var dd = document.getElementById(ddId); if (dd) dd.classList.toggle('content-hidden'); };
     }
     function _makeSmTagAllHandler(cbName, labelId, defaultLabel) {
-        return function(cb) { document.querySelectorAll('[name="' + cbName + '"]').forEach(function(el) { el.checked = cb.checked; }); var lbl = document.getElementById(labelId); if (lbl) lbl.textContent = defaultLabel; };
+        return function (cb) { document.querySelectorAll('[name="' + cbName + '"]').forEach(function (el) { el.checked = cb.checked; }); var lbl = document.getElementById(labelId); if (lbl) lbl.textContent = defaultLabel; };
     }
     function _makeSmTagOtherHandler(cbName, labelId, defaultLabel) {
-        return function(cb) {
+        return function (cb) {
             var allId = cbName.replace('-cb', '-all');
             var others = document.querySelectorAll('[name="' + cbName + '"]');
-            var allChecked = Array.from(others).every(function(el) { return el.checked; });
+            var allChecked = Array.from(others).every(function (el) { return el.checked; });
             var allEl = document.getElementById(allId); if (allEl) allEl.checked = allChecked;
-            var selected = Array.from(others).filter(function(el) { return el.checked; });
+            var selected = Array.from(others).filter(function (el) { return el.checked; });
             var lbl = document.getElementById(labelId); if (lbl) lbl.textContent = allChecked ? defaultLabel : (selected.length + '개');
         };
     }
     function _buildSmTagSubDropdown(ddId, allId, cbName, values, labelId, defaultLabel) {
         var dd = document.getElementById(ddId); if (!dd) return;
-        Array.from(dd.querySelectorAll('[name="' + cbName + '"]')).forEach(function(el) { el.closest('label').remove(); });
-        values.forEach(function(v) {
+        Array.from(dd.querySelectorAll('[name="' + cbName + '"]')).forEach(function (el) { el.closest('label').remove(); });
+        values.forEach(function (v) {
             var lbl = document.createElement('label');
             lbl.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-xs';
-            lbl.innerHTML = '<input type="checkbox" name="' + cbName + '" value="' + v + '" checked onchange="handleSmTagOther_' + cbName.replace(/-/g,'_') + '(this); applySearchFilters()" class="rounded"> ' + v;
+            lbl.innerHTML = '<input type="checkbox" name="' + cbName + '" value="' + v + '" checked onchange="handleSmTagOther_' + cbName.replace(/-/g, '_') + '(this); applySearchFilters()" class="rounded"> ' + v;
             dd.appendChild(lbl);
         });
         var lbl2 = document.getElementById(labelId); if (lbl2) lbl2.textContent = defaultLabel;
@@ -15356,35 +15463,35 @@ MJ 이정우 팀장
     var handleSmTagOther_sm_tagprice_cb = _makeSmTagOtherHandler('sm-tagprice-cb', 'sm-tagprice-label', '감정가');
     // 조사명(search_group) 드롭다운
     function toggleSmGroupDropdown(e) { e.stopPropagation(); _closeAllSmDDs('sm-group-dropdown'); var dd = document.getElementById('sm-group-dropdown'); if (dd) dd.classList.toggle('content-hidden'); }
-    function handleSmGroupAll(cb) { document.querySelectorAll('[name="sm-group-cb"]').forEach(function(el) { el.checked = cb.checked; }); var lbl = document.getElementById('sm-group-label'); if (lbl) lbl.textContent = '조사명 전체'; }
+    function handleSmGroupAll(cb) { document.querySelectorAll('[name="sm-group-cb"]').forEach(function (el) { el.checked = cb.checked; }); var lbl = document.getElementById('sm-group-label'); if (lbl) lbl.textContent = '조사명 전체'; }
     function handleSmGroupOther(cb) {
         var others = document.querySelectorAll('[name="sm-group-cb"]');
-        var allChecked = Array.from(others).every(function(el) { return el.checked; });
+        var allChecked = Array.from(others).every(function (el) { return el.checked; });
         var allEl = document.getElementById('sm-group-all'); if (allEl) allEl.checked = allChecked;
-        var selected = Array.from(others).filter(function(el) { return el.checked; });
+        var selected = Array.from(others).filter(function (el) { return el.checked; });
         var lbl = document.getElementById('sm-group-label');
         if (lbl) lbl.textContent = allChecked ? '조사명 전체' : (selected.length + '개선택');
     }
 
     // tags 멀티값 파싱 헬퍼: "아파트|84|2-10억;아파트|84|3-7억" → [{type,area,price}, ...]
     function _parseAllTags(item) {
-        return String(item.tags || '').split(';').filter(Boolean).map(function(t) {
+        return String(item.tags || '').split(';').filter(Boolean).map(function (t) {
             var p = t.split('|');
-            return { type: p[0]||'', area: p[1]||'', price: p[2]||'' };
+            return { type: p[0] || '', area: p[1] || '', price: p[2] || '' };
         });
     }
     // search_group 멀티값 파싱: "아파트 84 2-10억,아파트 84 3-7억" → [...]
     function _parseAllGroups(item) {
-        return String(item.search_group || '').split(',').map(function(g){return g.trim();}).filter(Boolean);
+        return String(item.search_group || '').split(',').map(function (g) { return g.trim(); }).filter(Boolean);
     }
 
     // 태그 서브 드롭다운 빌드 (데이터 로드 후 호출)
     function buildSmTagDropdown() {
         var typeSet = {}, areaSet = {}, priceSet = {};
-        allSearchData.forEach(function(item) {
-            _parseAllTags(item).forEach(function(t) {
-                if (t.type)  typeSet[t.type]   = true;
-                if (t.area)  areaSet[t.area]   = true;
+        allSearchData.forEach(function (item) {
+            _parseAllTags(item).forEach(function (t) {
+                if (t.type) typeSet[t.type] = true;
+                if (t.area) areaSet[t.area] = true;
                 if (t.price) priceSet[t.price] = true;
             });
         });
@@ -15394,14 +15501,14 @@ MJ 이정우 팀장
     }
     function buildSmGroupDropdown() {
         var groupSet = {};
-        allSearchData.forEach(function(item) {
-            _parseAllGroups(item).forEach(function(g) {
+        allSearchData.forEach(function (item) {
+            _parseAllGroups(item).forEach(function (g) {
                 if (!groupSet[g]) groupSet[g] = g; // 값 = 표시명 (동일)
             });
         });
         var dd = document.getElementById('sm-group-dropdown'); if (!dd) return;
-        Array.from(dd.querySelectorAll('[name="sm-group-cb"]')).forEach(function(el) { el.closest('label').remove(); });
-        Object.keys(groupSet).sort().forEach(function(g) {
+        Array.from(dd.querySelectorAll('[name="sm-group-cb"]')).forEach(function (el) { el.closest('label').remove(); });
+        Object.keys(groupSet).sort().forEach(function (g) {
             var lbl = document.createElement('label');
             lbl.className = 'flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-xs';
             lbl.innerHTML = '<input type="checkbox" name="sm-group-cb" value="' + g + '" checked onchange="handleSmGroupOther(this); applySearchFilters()" class="rounded"> ' + g;
@@ -15420,7 +15527,7 @@ MJ 이정우 팀장
         var isStatusAll = statusAll && statusAll.checked;
         var statusSelected = [];
         if (!isStatusAll) {
-            document.querySelectorAll('[name="sm-status-cb"]:checked').forEach(function(cb) {
+            document.querySelectorAll('[name="sm-status-cb"]:checked').forEach(function (cb) {
                 statusSelected.push(cb.value);
             });
         }
@@ -15430,7 +15537,7 @@ MJ 이정우 팀장
         var isJosajaAll = josajaAll && josajaAll.checked;
         var josajaSelected = [];
         if (!isJosajaAll) {
-            document.querySelectorAll('[name="sm-josaja-cb"]:checked').forEach(function(cb) {
+            document.querySelectorAll('[name="sm-josaja-cb"]:checked').forEach(function (cb) {
                 josajaSelected.push(cb.value);
             });
         }
@@ -15440,11 +15547,11 @@ MJ 이정우 팀장
             var allEl = document.getElementById(allId);
             var isAll = allEl && allEl.checked;
             var selected = [];
-            if (!isAll) document.querySelectorAll('[name="' + cbName + '"]:checked').forEach(function(cb) { selected.push(cb.value); });
+            if (!isAll) document.querySelectorAll('[name="' + cbName + '"]:checked').forEach(function (cb) { selected.push(cb.value); });
             return { isAll: isAll, selected: selected };
         }
-        var tfType  = _getSmTagFilter('sm-tagtype-all',  'sm-tagtype-cb');
-        var tfArea  = _getSmTagFilter('sm-tagarea-all',  'sm-tagarea-cb');
+        var tfType = _getSmTagFilter('sm-tagtype-all', 'sm-tagtype-cb');
+        var tfArea = _getSmTagFilter('sm-tagarea-all', 'sm-tagarea-cb');
         var tfPrice = _getSmTagFilter('sm-tagprice-all', 'sm-tagprice-cb');
 
         // 조사명(search_group) 필터
@@ -15452,10 +15559,10 @@ MJ 이정우 팀장
         var isGroupAll = groupAll && groupAll.checked;
         var groupSelected = [];
         if (!isGroupAll) {
-            document.querySelectorAll('[name="sm-group-cb"]:checked').forEach(function(cb) { groupSelected.push(cb.value); });
+            document.querySelectorAll('[name="sm-group-cb"]:checked').forEach(function (cb) { groupSelected.push(cb.value); });
         }
 
-        filteredSearchData = allSearchData.filter(function(item) {
+        filteredSearchData = allSearchData.filter(function (item) {
             if (indateVal && String(item['in-date'] || '').indexOf(indateVal) === -1) return false;
             if (sakunoVal && String(item.sakun_no || '').toLowerCase().indexOf(sakunoVal.toLowerCase()) === -1) return false;
             if (courtVal && String(item.court || '').indexOf(courtVal) === -1) return false;
@@ -15469,24 +15576,24 @@ MJ 이정우 팀장
             // 태그 서브 필터: 멀티값(;구분) 중 하나라도 선택 항목에 포함되면 통과
             var itemTags = _parseAllTags(item);
             if (!tfType.isAll && tfType.selected.length > 0) {
-                if (!itemTags.some(function(t){ return tfType.selected.indexOf(t.type) !== -1; })) return false;
+                if (!itemTags.some(function (t) { return tfType.selected.indexOf(t.type) !== -1; })) return false;
             }
             if (!tfArea.isAll && tfArea.selected.length > 0) {
-                if (!itemTags.some(function(t){ return tfArea.selected.indexOf(t.area) !== -1; })) return false;
+                if (!itemTags.some(function (t) { return tfArea.selected.indexOf(t.area) !== -1; })) return false;
             }
             if (!tfPrice.isAll && tfPrice.selected.length > 0) {
-                if (!itemTags.some(function(t){ return tfPrice.selected.indexOf(t.price) !== -1; })) return false;
+                if (!itemTags.some(function (t) { return tfPrice.selected.indexOf(t.price) !== -1; })) return false;
             }
             // 조사명 필터: 멀티값(,구분) 중 하나라도 일치하면 통과
             if (!isGroupAll && groupSelected.length > 0) {
                 var itemGroups = _parseAllGroups(item);
-                if (!itemGroups.some(function(g){ return groupSelected.indexOf(g) !== -1; })) return false;
+                if (!itemGroups.some(function (g) { return groupSelected.indexOf(g) !== -1; })) return false;
             }
             return true;
         });
 
         // 정렬
-        filteredSearchData.sort(function(a, b) {
+        filteredSearchData.sort(function (a, b) {
             var va = String(a[smSortKey] || '');
             var vb = String(b[smSortKey] || '');
             return smSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
@@ -15511,20 +15618,20 @@ MJ 이정우 팀장
 
     // 조사물건 보기 팝업 (allBiddingData에서 sakun_no 검색)
     function openJosaViewPopup(sakunNo) {
-        var matches = (typeof allBiddingData !== 'undefined' ? allBiddingData : []).filter(function(d) {
+        var matches = (typeof allBiddingData !== 'undefined' ? allBiddingData : []).filter(function (d) {
             return String(d.sakun_no || '').trim() === String(sakunNo).trim();
         });
         if (matches.length === 0) {
             showStatus('MAPS 등록 조사물건 없음: ' + sakunNo, 'info');
             return;
         }
-        var content = matches.map(function(it) {
+        var content = matches.map(function (it) {
             return '<div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px;margin-bottom:8px;">' +
-                '<div style="font-weight:bold;font-size:13px;">' + (it.sakun_no||'') + ' · ' + (it.court||'') + '</div>' +
-                '<div style="font-size:12px;color:#374151;margin-top:3px;">' + (it.address||'-') + '</div>' +
+                '<div style="font-weight:bold;font-size:13px;">' + (it.sakun_no || '') + ' · ' + (it.court || '') + '</div>' +
+                '<div style="font-size:12px;color:#374151;margin-top:3px;">' + (it.address || '-') + '</div>' +
                 '<div style="font-size:11px;color:#6b7280;margin-top:3px;">' +
-                    '담당: ' + (it.member_name||'-') + ' | 상태: ' + (it.stu_member||'-') +
-                    (it['in-date'] ? ' | 입찰: ' + it['in-date'] : '') +
+                '담당: ' + (it.member_name || '-') + ' | 상태: ' + (it.stu_member || '-') +
+                (it['in-date'] ? ' | 입찰: ' + it['in-date'] : '') +
                 '</div>' +
                 '</div>';
         }).join('');
@@ -15537,7 +15644,7 @@ MJ 이정우 팀장
             var ov = document.createElement('div');
             ov.id = 'sm-josa-overlay';
             ov.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:10001';
-            ov.onclick = function() { modal.style.display='none'; ov.style.display='none'; };
+            ov.onclick = function () { modal.style.display = 'none'; ov.style.display = 'none'; };
             document.body.appendChild(ov);
         }
         modal.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
@@ -15550,7 +15657,7 @@ MJ 이정우 팀장
 
     // 조사내용 팝업: allBiddingData에서 sakun_no 매칭 → getItemImages 호출 → 이미지 표시
     function openJosaContentPopup(sakunNo) {
-        var matches = (typeof allBiddingData !== 'undefined' ? allBiddingData : []).filter(function(d) {
+        var matches = (typeof allBiddingData !== 'undefined' ? allBiddingData : []).filter(function (d) {
             return String(d.sakun_no || '').trim() === String(sakunNo).trim();
         });
         if (matches.length === 0) {
@@ -15577,20 +15684,20 @@ MJ 이정우 팀장
                 'display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.4);overflow:hidden;';
             document.body.appendChild(modal);
         }
-        ov.onclick = function() { modal.style.display='none'; ov.style.display='none'; };
+        ov.onclick = function () { modal.style.display = 'none'; ov.style.display = 'none'; };
 
         // 헤더
         modal.innerHTML =
             '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #e5e7eb;flex-shrink:0;">' +
-                '<div>' +
-                    '<span style="font-weight:bold;font-size:14px;">조사내용 - ' + sakunNo + '</span>' +
-                    (item.address ? '<span style="font-size:12px;color:#6b7280;margin-left:8px;">' + item.address + '</span>' : '') +
-                '</div>' +
-                '<button onclick="document.getElementById(\'sm-josa-img-popup\').style.display=\'none\';document.getElementById(\'sm-josa-img-overlay\').style.display=\'none\';" ' +
-                    'style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;line-height:1;">×</button>' +
+            '<div>' +
+            '<span style="font-weight:bold;font-size:14px;">조사내용 - ' + sakunNo + '</span>' +
+            (item.address ? '<span style="font-size:12px;color:#6b7280;margin-left:8px;">' + item.address + '</span>' : '') +
+            '</div>' +
+            '<button onclick="document.getElementById(\'sm-josa-img-popup\').style.display=\'none\';document.getElementById(\'sm-josa-img-overlay\').style.display=\'none\';" ' +
+            'style="background:none;border:none;font-size:22px;cursor:pointer;color:#6b7280;line-height:1;">×</button>' +
             '</div>' +
             '<div id="sm-josa-img-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;align-items:center;">' +
-                '<div style="color:#9ca3af;font-size:13px;padding:40px 0;">이미지 로딩 중...</div>' +
+            '<div style="color:#9ca3af;font-size:13px;padding:40px 0;">이미지 로딩 중...</div>' +
             '</div>';
 
         modal.style.display = 'flex';
@@ -15609,14 +15716,14 @@ MJ 이정우 팀장
             return;
         }
         google.script.run
-            .withSuccessHandler(function(rows) {
+            .withSuccessHandler(function (rows) {
                 if (!rows || rows.length === 0) {
                     body.innerHTML = '<div style="color:#9ca3af;padding:40px 0;">등록된 조사 이미지 없음</div>';
                     return;
                 }
                 _renderJosaImgPopup(body, rows);
             })
-            .withFailureHandler(function(err) {
+            .withFailureHandler(function (err) {
                 body.innerHTML = '<div style="color:#ef4444;padding:40px 0;">로딩 실패: ' + (err.message || '') + '</div>';
             })
             .getItemImages(item.id);
@@ -15624,18 +15731,18 @@ MJ 이정우 팀장
 
     function _renderJosaImgPopup(body, rows) {
         body.innerHTML = '';
-        rows.forEach(function(r) {
+        rows.forEach(function (r) {
             if (!r.image_id) return;
             var thumbUrl = 'https://drive.google.com/thumbnail?sz=w1000&id=' + encodeURIComponent(r.image_id);
-            var origUrl  = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id);
+            var origUrl = 'https://drive.google.com/uc?export=view&id=' + encodeURIComponent(r.image_id);
             var wrap = document.createElement('div');
             wrap.style.cssText = 'width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;background:white;';
             var img = document.createElement('img');
             img.src = thumbUrl;
             img.alt = r.file_name || '조사 이미지';
             img.style.cssText = 'width:100%;display:block;cursor:pointer;';
-            img.onerror = function() { this.src = origUrl; };
-            img.onclick = function() { openLightbox(this.src, r.file_name || '조사 이미지'); };
+            img.onerror = function () { this.src = origUrl; };
+            img.onclick = function () { openLightbox(this.src, r.file_name || '조사 이미지'); };
             if (r.file_name || r.uploader) {
                 var info = document.createElement('div');
                 info.style.cssText = 'font-size:11px;color:#6b7280;padding:4px 8px;border-top:1px solid #f3f4f6;';
@@ -15683,23 +15790,23 @@ MJ 이정우 팀장
             '폐기': 'bg-red-100 text-red-600'
         };
 
-        var html = filteredSearchData.map(function(item) {
+        var html = filteredSearchData.map(function (item) {
             var statusCls = statusColorMap[item.josa_status] || 'bg-gray-100 text-gray-600';
             var inDate = String(item['in-date'] || '');
 
             // 입찰일 표시: 260401 → 26.04.01
             var inDateDisp = inDate.length === 6
-                ? inDate.substr(0,2) + '.' + inDate.substr(2,2) + '.' + inDate.substr(4,2)
+                ? inDate.substr(0, 2) + '.' + inDate.substr(2, 2) + '.' + inDate.substr(4, 2)
                 : inDate;
 
             // D-day 계산
             var ddayStr = '';
             if (inDate.length === 6) {
                 try {
-                    var bd = new Date('20' + inDate.substr(0,2) + '-' + inDate.substr(2,2) + '-' + inDate.substr(4,2));
+                    var bd = new Date('20' + inDate.substr(0, 2) + '-' + inDate.substr(2, 2) + '-' + inDate.substr(4, 2));
                     var diff = Math.round((bd - new Date()) / 86400000);
                     ddayStr = diff > 0 ? '입찰 ' + diff + '일전' : (diff === 0 ? '오늘' : '입찰마감');
-                } catch(e) {}
+                } catch (e) { }
             }
 
             // 썸네일 이미지
@@ -15717,7 +15824,7 @@ MJ 이정우 팀장
             // 조사물건 보기 버튼 (allBiddingData에서 sakun_no 매칭 여부)
             var sakunNo = String(item.sakun_no || '');
             var hasMapsItem = (typeof allBiddingData !== 'undefined') &&
-                allBiddingData.some(function(d) { return String(d.sakun_no||'').trim() === sakunNo.trim(); });
+                allBiddingData.some(function (d) { return String(d.sakun_no || '').trim() === sakunNo.trim(); });
             var josaBtnStyle = hasMapsItem
                 ? 'font-size:11px;padding:3px 0;width:100%;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer;text-align:center;display:block;margin-top:4px;'
                 : 'font-size:11px;padding:3px 0;width:100%;background:#e5e7eb;color:#9ca3af;border:none;border-radius:4px;cursor:pointer;text-align:center;display:block;margin-top:4px;';
@@ -15725,7 +15832,7 @@ MJ 이정우 팀장
 
             // 조사자 셀렉트
             var josajOpts = '<option value="">-미배정-</option>' +
-                smInvestigators.map(function(m) {
+                smInvestigators.map(function (m) {
                     var n = String(m.member_name || '');
                     var sel = n === String(item.josaja || '') ? ' selected' : '';
                     return '<option value="' + n + '"' + sel + '>' + n + '</option>';
@@ -15757,7 +15864,7 @@ MJ 이정우 팀장
             // 조사명(search_group) 표시: "아파트 84 2-10억" → "아파트, 84㎡, 2-10억"
             function fmtGroupLabel(g) {
                 var parts = g.trim().split(/\s+/);
-                return parts.map(function(p, i) {
+                return parts.map(function (p, i) {
                     return (i === 1 && /^\d+(\.\d+)?$/.test(p)) ? p + '㎡' : p;
                 }).join(', ');
             }
@@ -15775,7 +15882,7 @@ MJ 이정우 팀장
             var allTagGroups = _parseAllTags(item);
             if (allTagGroups.length > 0) {
                 tagsHtml = '<div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:3px;">' +
-                    allTagGroups.map(function(t) {
+                    allTagGroups.map(function (t) {
                         var areaDisp = t.area ? (/^\d+(\.\d+)?$/.test(t.area) ? t.area + '㎡' : t.area) : '';
                         var label = [t.type, areaDisp, t.price].filter(Boolean).join(', ');
                         return '<span style="font-size:9px;padding:1px 4px;background:#e0e7ff;color:#3730a3;border-radius:3px;">' + label + '</span>';
@@ -15786,65 +15893,65 @@ MJ 이정우 팀장
             return '<tr style="border-bottom:1px solid #e5e7eb;">' +
                 // 열1: 체크박스(크게) + 옥션버튼(크게) - 가로 나열
                 '<td class="px-1 py-2 text-center" style="vertical-align:middle;white-space:nowrap;">' +
-                    '<div style="display:flex;flex-direction:row;align-items:center;justify-content:center;gap:6px;">' +
-                        '<input type="checkbox" class="sm-row-check rounded" value="' + item.search_id + '" style="width:18px;height:18px;cursor:pointer;">' +
-                        auctionBtnHtml +
-                    '</div>' +
+                '<div style="display:flex;flex-direction:row;align-items:center;justify-content:center;gap:6px;">' +
+                '<input type="checkbox" class="sm-row-check rounded" value="' + item.search_id + '" style="width:18px;height:18px;cursor:pointer;">' +
+                auctionBtnHtml +
+                '</div>' +
                 '</td>' +
                 // 열2: 상태배지 + 조사자 셀렉트
                 '<td class="px-1 py-2 text-center" style="vertical-align:middle;width:48px;min-width:48px;max-width:48px;">' +
-                    '<span class="block px-1 py-0.5 rounded text-xs font-semibold mb-1 ' + statusCls + '">' + (item.josa_status || '신규') + '</span>' +
-                    '<select class="sm-josaja-select text-xs px-0.5 py-0.5 border border-gray-300 rounded w-full bg-white" ' +
-                        'title="선택 즉시 자동저장 + 상태→신규" ' +
-                        'data-search-id="' + item.search_id + '" ' +
-                        'onchange="saveSearchJosaja(this)">' +
-                        josajOpts +
-                    '</select>' +
+                '<span class="block px-1 py-0.5 rounded text-xs font-semibold mb-1 ' + statusCls + '">' + (item.josa_status || '신규') + '</span>' +
+                '<select class="sm-josaja-select text-xs px-0.5 py-0.5 border border-gray-300 rounded w-full bg-white" ' +
+                'title="선택 즉시 자동저장 + 상태→신규" ' +
+                'data-search-id="' + item.search_id + '" ' +
+                'onchange="saveSearchJosaja(this)">' +
+                josajOpts +
+                '</select>' +
                 '</td>' +
                 // 열3: 조사명 덩어리 + 조사내용 버튼
                 '<td class="px-1 py-2 text-center" style="vertical-align:middle;min-width:90px;">' +
-                    (sgDisplay
-                        ? '<div style="font-size:13px;color:#4f46e5;font-weight:600;line-height:1.5;word-break:keep-all;white-space:pre-line;">' + sgDisplay + '</div>'
-                        : '<div style="font-size:13px;color:#d1d5db;">-</div>') +
-                    josaBtnHtml +
+                (sgDisplay
+                    ? '<div style="font-size:13px;color:#4f46e5;font-weight:600;line-height:1.5;word-break:keep-all;white-space:pre-line;">' + sgDisplay + '</div>'
+                    : '<div style="font-size:13px;color:#d1d5db;">-</div>') +
+                josaBtnHtml +
                 '</td>' +
                 // 열4: 사진
                 '<td class="px-3 py-2 text-center" style="vertical-align:middle;">' +
-                    imgHtml +
+                imgHtml +
                 '</td>' +
                 // 열4: 사건번호 / 물건종류 / 태그 / item_summary
                 '<td class="px-2 py-2" style="vertical-align:top;min-width:110px">' +
-                    '<div class="font-bold text-sm text-gray-900">' + sakunNo + '</div>' +
-                    '<div class="text-xs text-blue-600 mt-0.5">' + String(item.item_type || '') + '</div>' +
-                    tagsHtml +
-                    (itemSummaryFull ? '<div style="font-size:11px;color:#2563eb;margin-top:3px;font-weight:600;">' + itemSummaryFull + '</div>' : '') +
+                '<div class="font-bold text-sm text-gray-900">' + sakunNo + '</div>' +
+                '<div class="text-xs text-blue-600 mt-0.5">' + String(item.item_type || '') + '</div>' +
+                tagsHtml +
+                (itemSummaryFull ? '<div style="font-size:11px;color:#2563eb;margin-top:3px;font-weight:600;">' + itemSummaryFull + '</div>' : '') +
                 '</td>' +
                 // 열5: 소재지 (주소 / 면적 / 특수물건태그) - 가로 제한 없음
                 '<td class="px-2 py-2" style="vertical-align:top;min-width:180px;">' +
-                    (item.address
-                        ? '<a href="https://new.land.naver.com/search?query=' + encodeURIComponent(String(item.address)) + '" target="_blank" style="font-size:13px;color:#111827;word-break:keep-all;overflow-wrap:break-word;line-height:1.4;text-decoration:none;cursor:pointer;" onmouseover="this.style.color=\'#2563eb\'" onmouseout="this.style.color=\'#111827\'">' + String(item.address) + '</a>'
-                        : '<div style="font-size:13px;color:#111827;">-</div>') +
-                    '<div style="font-size:12px;color:#6b7280;margin-top:3px;">' + String(item.item_area || '') + '</div>' +
-                    specialHtml +
+                (item.address
+                    ? '<a href="https://new.land.naver.com/search?query=' + encodeURIComponent(String(item.address)) + '" target="_blank" style="font-size:13px;color:#111827;word-break:keep-all;overflow-wrap:break-word;line-height:1.4;text-decoration:none;cursor:pointer;" onmouseover="this.style.color=\'#2563eb\'" onmouseout="this.style.color=\'#111827\'">' + String(item.address) + '</a>'
+                    : '<div style="font-size:13px;color:#111827;">-</div>') +
+                '<div style="font-size:12px;color:#6b7280;margin-top:3px;">' + String(item.item_area || '') + '</div>' +
+                specialHtml +
                 '</td>' +
                 // 열6: 감정가 / 최저매각가
                 '<td class="px-2 py-2 text-right" style="vertical-align:top;white-space:nowrap">' +
-                    '<div class="font-bold text-sm text-gray-900">' + kamjungkaDisp + '</div>' +
-                    '<div class="text-sm text-blue-600 mt-0.5">' + minBidDisp + '</div>' +
+                '<div class="font-bold text-sm text-gray-900">' + kamjungkaDisp + '</div>' +
+                '<div class="text-sm text-blue-600 mt-0.5">' + minBidDisp + '</div>' +
                 '</td>' +
                 // 열7: 유찰 + 낙찰율(퍼센트)
                 '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
-                    '<div class="text-xs text-gray-700">' + failStr + '</div>' +
-                    '<div class="text-xs text-orange-500">' + fmtRate(item.min_bid_rate) + '</div>' +
+                '<div class="text-xs text-gray-700">' + failStr + '</div>' +
+                '<div class="text-xs text-orange-500">' + fmtRate(item.min_bid_rate) + '</div>' +
                 '</td>' +
                 // 열8: 매각기일
                 '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
-                    '<div class="text-sm text-gray-900">' + inDateDisp + '</div>' +
-                    (ddayStr ? '<div class="text-xs text-gray-500 mt-0.5">' + ddayStr + '</div>' : '') +
+                '<div class="text-sm text-gray-900">' + inDateDisp + '</div>' +
+                (ddayStr ? '<div class="text-xs text-gray-500 mt-0.5">' + ddayStr + '</div>' : '') +
                 '</td>' +
                 // 열9: 등록일
                 '<td class="px-2 py-2 text-center" style="vertical-align:top;white-space:nowrap">' +
-                    '<div style="font-size:11px;color:#6b7280;">' + regDate + '</div>' +
+                '<div style="font-size:11px;color:#6b7280;">' + regDate + '</div>' +
                 '</td>' +
                 '</tr>';
         }).join('');
@@ -15853,7 +15960,7 @@ MJ 이정우 팀장
 
     // 전체 선택/해제
     function toggleAllSmCheckboxes(masterCb) {
-        document.querySelectorAll('.sm-row-check').forEach(function(cb) {
+        document.querySelectorAll('.sm-row-check').forEach(function (cb) {
             cb.checked = masterCb.checked;
         });
     }
@@ -15863,18 +15970,18 @@ MJ 이정우 팀장
         var josaja = (document.getElementById('sm-bulk-josaja-select') || {}).value || '';
         if (!josaja) { showStatus('조사자를 선택해 주세요.', 'error'); return; }
         var checked = [];
-        document.querySelectorAll('.sm-row-check:checked').forEach(function(cb) { checked.push(cb.value); });
+        document.querySelectorAll('.sm-row-check:checked').forEach(function (cb) { checked.push(cb.value); });
         if (checked.length === 0) { showStatus('저장할 항목을 체크해 주세요.', 'error'); return; }
         if (!confirm(checked.length + '건의 조사자를 [' + josaja + ']로 저장하시겠습니까?')) return;
         var done = 0, failed = 0;
-        checked.forEach(function(searchId) {
+        checked.forEach(function (searchId) {
             google.script.run
-                .withSuccessHandler(function(res) {
+                .withSuccessHandler(function (res) {
                     done++;
                     if (!res || !res.success) failed++;
                     else {
                         // 로컬 캐시 업데이트
-                        allSearchData.forEach(function(item) {
+                        allSearchData.forEach(function (item) {
                             if (item.search_id === searchId) item.josaja = josaja;
                         });
                     }
@@ -15883,7 +15990,7 @@ MJ 이정우 팀장
                         renderSearchList(); // 목록 다시 렌더
                     }
                 })
-                .withFailureHandler(function() {
+                .withFailureHandler(function () {
                     done++; failed++;
                     if (done === checked.length) showStatus('\uad6c한 오류 (' + failed + '건)', 'error');
                 })
@@ -15901,10 +16008,10 @@ MJ 이정우 팀장
         // 조사자 변경 시 상태를 '신규'로 초기화
         var newStatus = '신규';
         google.script.run
-            .withSuccessHandler(function(res) {
+            .withSuccessHandler(function (res) {
                 selectEl.disabled = false;
                 if (res && res.success) {
-                    allSearchData.forEach(function(item) {
+                    allSearchData.forEach(function (item) {
                         if (item.search_id === searchId) {
                             item.josaja = josaja;
                             item.josa_status = newStatus;
@@ -15917,7 +16024,7 @@ MJ 이정우 팀장
                     showStatus('저장 실패: ' + (res ? res.message : '오류'), 'error');
                 }
             })
-            .withFailureHandler(function(err) {
+            .withFailureHandler(function (err) {
                 selectEl.disabled = false;
                 showStatus('서버 오류: ' + (err.message || err), 'error');
             })
@@ -15927,7 +16034,7 @@ MJ 이정우 팀장
     // ── 검색물건 테이블 컬럼 드래그 리사이즈 ───────────────────────────────
     (function initSmColResize() {
         var STORE_KEY = 'smColWidths';
-        function getStoredWidths() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch(e) { return {}; } }
+        function getStoredWidths() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) { return {}; } }
         function saveWidth(idx, px) { var w = getStoredWidths(); w[idx] = px; localStorage.setItem(STORE_KEY, JSON.stringify(w)); }
         function applyStoredWidths() {
             var tbl = document.getElementById('searchTableBody');
@@ -15936,7 +16043,7 @@ MJ 이정우 팀장
             if (!thead) return;
             var ths = thead.querySelectorAll('th');
             var w = getStoredWidths();
-            Object.keys(w).forEach(function(i) { if (ths[i]) { ths[i].style.width = w[i] + 'px'; ths[i].style.minWidth = w[i] + 'px'; } });
+            Object.keys(w).forEach(function (i) { if (ths[i]) { ths[i].style.width = w[i] + 'px'; ths[i].style.minWidth = w[i] + 'px'; } });
         }
         function addResizeHandles() {
             var tbl = document.getElementById('searchTableBody');
@@ -15945,12 +16052,12 @@ MJ 이정우 팀장
             if (!thead || thead.getAttribute('data-resizable')) return;
             thead.setAttribute('data-resizable', '1');
             var ths = thead.querySelectorAll('th');
-            ths.forEach(function(th, idx) {
+            ths.forEach(function (th, idx) {
                 th.style.position = 'relative';
                 var handle = document.createElement('div');
                 handle.style.cssText = 'position:absolute;right:0;top:0;width:6px;height:100%;cursor:col-resize;z-index:10;background:transparent;';
                 handle.title = '드래그하여 열 너비 조정';
-                handle.addEventListener('mousedown', function(e) {
+                handle.addEventListener('mousedown', function (e) {
                     e.preventDefault();
                     var startX = e.pageX, startW = th.offsetWidth;
                     function onMove(ev) {
@@ -15974,18 +16081,18 @@ MJ 이정우 팀장
         function hookRender() {
             if (typeof renderSearchList === 'function' && !renderSearchList._resizeHooked) {
                 var orig = renderSearchList;
-                renderSearchList = function() { orig(); addResizeHandles(); applyStoredWidths(); };
+                renderSearchList = function () { orig(); addResizeHandles(); applyStoredWidths(); };
                 renderSearchList._resizeHooked = true;
             }
         }
         // 리셋 버튼: 컬럼폭 초기화
-        window.resetSmColWidths = function() {
+        window.resetSmColWidths = function () {
             localStorage.removeItem(STORE_KEY);
             var tbl = document.getElementById('searchTableBody');
-            if (tbl) { var ths = tbl.closest('table').querySelectorAll('thead th'); ths.forEach(function(th){ th.style.width=''; th.style.minWidth=''; }); }
+            if (tbl) { var ths = tbl.closest('table').querySelectorAll('thead th'); ths.forEach(function (th) { th.style.width = ''; th.style.minWidth = ''; }); }
         };
         setTimeout(hookRender, 500);
-        setTimeout(function(){ addResizeHandles(); applyStoredWidths(); }, 1500);
+        setTimeout(function () { addResizeHandles(); applyStoredWidths(); }, 1500);
     })();
 
     function _showSmSaveToast(msg) {
@@ -15999,18 +16106,18 @@ MJ 이정우 팀장
         t.textContent = msg;
         t.style.opacity = '1';
         clearTimeout(t._hideTimer);
-        t._hideTimer = setTimeout(function() { t.style.opacity = '0'; }, 2000);
+        t._hideTimer = setTimeout(function () { t.style.opacity = '0'; }, 2000);
     }
 
     // 선택 항목 삭제
     function handleSmDelete() {
-        var checked = Array.from(document.querySelectorAll('.sm-row-check:checked')).map(function(cb) { return cb.value; });
+        var checked = Array.from(document.querySelectorAll('.sm-row-check:checked')).map(function (cb) { return cb.value; });
         if (checked.length === 0) { showStatus('삭제할 항목을 선택해 주세요.', 'error'); return; }
         if (!confirm(checked.length + '건을 삭제하시겠습니까?')) return;
         google.script.run
-            .withSuccessHandler(function(res) {
+            .withSuccessHandler(function (res) {
                 if (res && res.success) {
-                    allSearchData = allSearchData.filter(function(item) { return checked.indexOf(item.search_id) === -1; });
+                    allSearchData = allSearchData.filter(function (item) { return checked.indexOf(item.search_id) === -1; });
                     applySearchFilters();
                     showStatus(checked.length + '건 삭제 완료', 'success');
                     var masterCb = document.getElementById('smCheckAll');
@@ -16019,7 +16126,7 @@ MJ 이정우 팀장
                     showStatus('삭제 실패: ' + (res ? res.message : '오류'), 'error');
                 }
             })
-            .withFailureHandler(function(err) { showStatus('서버 오류: ' + (err.message || err), 'error'); })
+            .withFailureHandler(function (err) { showStatus('서버 오류: ' + (err.message || err), 'error'); })
             .deleteSearchItems(checked);
     }
 
@@ -16030,19 +16137,19 @@ MJ 이정우 팀장
         if (!searchId) return;
         inputEl.disabled = true;
         google.script.run
-            .withSuccessHandler(function(res) {
+            .withSuccessHandler(function (res) {
                 inputEl.disabled = false;
                 if (res && res.success) {
-                    allSearchData.forEach(function(item) {
+                    allSearchData.forEach(function (item) {
                         if (item.search_id === searchId) item.note1 = note1;
                     });
                     inputEl.style.borderColor = '#22c55e';
-                    setTimeout(function() { inputEl.style.borderColor = ''; }, 1500);
+                    setTimeout(function () { inputEl.style.borderColor = ''; }, 1500);
                 } else {
                     showStatus('비고 저장 실패', 'error');
                 }
             })
-            .withFailureHandler(function(err) {
+            .withFailureHandler(function (err) {
                 inputEl.disabled = false;
                 showStatus('서버 오류: ' + (err.message || err), 'error');
             })
@@ -16052,7 +16159,7 @@ MJ 이정우 팀장
     // 단건 텔레그램 전송
     function sendJosaRequest(searchId) {
         if (!searchId) return;
-        var item = allSearchData.find(function(i) { return i.search_id === searchId; });
+        var item = allSearchData.find(function (i) { return i.search_id === searchId; });
         if (!item) return;
         if (!item.josaja) {
             showStatus('조사자를 먼저 배정해 주세요.', 'error');
@@ -16060,7 +16167,7 @@ MJ 이정우 팀장
         }
         if (!confirm('[' + item.sakun_no + '] ' + item.court + '\n조사자: ' + item.josaja + '\n\n조사요청 텔레그램을 전송하시겠습니까?')) return;
         google.script.run
-            .withSuccessHandler(function(res) {
+            .withSuccessHandler(function (res) {
                 if (res && res.success) {
                     showStatus('조사요청 전송 완료', 'success');
                     loadSearchData(true);
@@ -16068,7 +16175,7 @@ MJ 이정우 팀장
                     showStatus('전송 실패: ' + (res ? res.message : '오류'), 'error');
                 }
             })
-            .withFailureHandler(function(err) {
+            .withFailureHandler(function (err) {
                 showStatus('전송 오류: ' + (err.message || err), 'error');
             })
             .sendJosaRequestTelegram(searchId);
@@ -16077,16 +16184,16 @@ MJ 이정우 팀장
     // 선택 일괄 전송
     function handleJosaRequestBulk() {
         var checked = [];
-        document.querySelectorAll('.sm-row-check:checked').forEach(function(cb) {
+        document.querySelectorAll('.sm-row-check:checked').forEach(function (cb) {
             checked.push(cb.value);
         });
         if (checked.length === 0) { showStatus('전송할 항목을 선택하세요.', 'error'); return; }
         if (!confirm(checked.length + '건을 조사요청 전송하시겠습니까?')) return;
         var failed = 0;
         var done = 0;
-        checked.forEach(function(searchId) {
+        checked.forEach(function (searchId) {
             google.script.run
-                .withSuccessHandler(function(res) {
+                .withSuccessHandler(function (res) {
                     done++;
                     if (!res || !res.success) failed++;
                     if (done === checked.length) {
@@ -16094,7 +16201,7 @@ MJ 이정우 팀장
                         loadSearchData(true);
                     }
                 })
-                .withFailureHandler(function() {
+                .withFailureHandler(function () {
                     done++; failed++;
                     if (done === checked.length) {
                         showStatus('전송 완료: ' + (done - failed) + '건 성공, ' + failed + '건 실패', 'error');
@@ -16110,7 +16217,7 @@ MJ 이정우 팀장
         var dd = document.getElementById('sm-status-dropdown');
         if (!dd) return;
         var isHidden = dd.classList.contains('content-hidden');
-        document.querySelectorAll('#sm-status-dropdown, #sm-josaja-dropdown').forEach(function(el) {
+        document.querySelectorAll('#sm-status-dropdown, #sm-josaja-dropdown').forEach(function (el) {
             el.classList.add('content-hidden');
         });
         if (isHidden) dd.classList.remove('content-hidden');
@@ -16120,14 +16227,14 @@ MJ 이정우 팀장
         var dd = document.getElementById('sm-josaja-dropdown');
         if (!dd) return;
         var isHidden = dd.classList.contains('content-hidden');
-        document.querySelectorAll('#sm-status-dropdown, #sm-josaja-dropdown').forEach(function(el) {
+        document.querySelectorAll('#sm-status-dropdown, #sm-josaja-dropdown').forEach(function (el) {
             el.classList.add('content-hidden');
         });
         if (isHidden) dd.classList.remove('content-hidden');
     }
     function handleSmStatusAll(cb) {
         var isAll = cb.checked;
-        document.querySelectorAll('[name="sm-status-cb"]').forEach(function(c) { c.checked = false; });
+        document.querySelectorAll('[name="sm-status-cb"]').forEach(function (c) { c.checked = false; });
         if (!isAll) cb.checked = true;
         var lbl = document.getElementById('sm-status-label');
         if (lbl) lbl.textContent = '조사상태';
@@ -16141,7 +16248,7 @@ MJ 이정우 팀장
     }
     function handleSmJosajaAll(cb) {
         var isAll = cb.checked;
-        document.querySelectorAll('[name="sm-josaja-cb"]').forEach(function(c) { c.checked = false; });
+        document.querySelectorAll('[name="sm-josaja-cb"]').forEach(function (c) { c.checked = false; });
         if (!isAll) cb.checked = true;
         var lbl = document.getElementById('sm-josaja-label');
         if (lbl) lbl.textContent = '조사자';
@@ -16155,19 +16262,19 @@ MJ 이정우 팀장
     }
 
     // 클릭 외부 클릭 시 드롭다운 닫기 (전역 등록)
-    document.addEventListener('click', function(e) {
-        var wraps = ['#sm-status-wrap','#sm-josaja-wrap','#sm-tagtype-wrap','#sm-tagarea-wrap','#sm-tagprice-wrap','#sm-group-wrap'];
-        var inWrap = wraps.some(function(w) { return e.target.closest(w); });
+    document.addEventListener('click', function (e) {
+        var wraps = ['#sm-status-wrap', '#sm-josaja-wrap', '#sm-tagtype-wrap', '#sm-tagarea-wrap', '#sm-tagprice-wrap', '#sm-group-wrap'];
+        var inWrap = wraps.some(function (w) { return e.target.closest(w); });
         if (!inWrap) {
-            var dds = ['#sm-status-dropdown','#sm-josaja-dropdown','#sm-tagtype-dropdown','#sm-tagarea-dropdown','#sm-tagprice-dropdown','#sm-group-dropdown'];
-            dds.forEach(function(s) { var el = document.querySelector(s); if (el) el.classList.add('content-hidden'); });
+            var dds = ['#sm-status-dropdown', '#sm-josaja-dropdown', '#sm-tagtype-dropdown', '#sm-tagarea-dropdown', '#sm-tagprice-dropdown', '#sm-group-dropdown'];
+            dds.forEach(function (s) { var el = document.querySelector(s); if (el) el.classList.add('content-hidden'); });
         }
     });
 
     // ---- 회원관리 구분 다중선택 헬퍼 ----
     function updateGubunHidden() {
         var checked = [];
-        document.querySelectorAll('[name="mem-gubun-cb"]:checked').forEach(function(cb) {
+        document.querySelectorAll('[name="mem-gubun-cb"]:checked').forEach(function (cb) {
             checked.push(cb.value);
         });
         var hidden = document.getElementById('mem-gubun');
@@ -16176,8 +16283,8 @@ MJ 이정우 팀장
 
     // 회원 폼 로드 시 gubun 값 복원 (기존 setMemberFormData 등에서 호출)
     function setGubunCheckboxes(gubunValue) {
-        var vals = String(gubunValue || '').split(',').map(function(v) { return v.trim(); });
-        document.querySelectorAll('[name="mem-gubun-cb"]').forEach(function(cb) {
+        var vals = String(gubunValue || '').split(',').map(function (v) { return v.trim(); });
+        document.querySelectorAll('[name="mem-gubun-cb"]').forEach(function (cb) {
             cb.checked = vals.indexOf(cb.value) !== -1;
         });
         updateGubunHidden();
