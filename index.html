@@ -2073,7 +2073,7 @@
                 <!-- 우측: 수업 회차 -->
                 <div id="classScheduleDetailPane" class="flex-1 p-3 bg-gray-100 overflow-y-auto mobile-hidden flex flex-col gap-2">
                     <!-- 수업 회차 통합 카드 (헤더 + 수업리스트 + 회차카드) -->
-                    <div class="bg-white rounded-xl shadow-lg flex-none flex flex-col overflow-hidden">
+                    <div class="bg-white rounded-xl shadow-lg flex-none flex flex-col overflow-hidden w-full">
                         <!-- 헤더 -->
                         <div class="px-3 py-2 border-b border-gray-100 flex justify-between items-center flex-none">
                             <div class="flex items-center gap-2 min-w-0">
@@ -2082,15 +2082,15 @@
                             </div>
                             <div class="flex items-center gap-1">
                                 <button type="button" id="d1EditBtn" onclick="editSelectedD1()"
-                                    class="py-0.5 px-2 rounded-lg text-xs font-semibold bg-yellow-100 hover:bg-yellow-200 text-yellow-700">수정</button>
+                                    class="py-0.5 px-2 rounded-lg text-xs font-semibold bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-500">수정</button>
                                 <button type="button" id="d1DeleteBtn" onclick="deleteSelectedD1()"
-                                    class="py-0.5 px-2 rounded-lg text-xs font-semibold bg-red-100 hover:bg-red-200 text-red-700">삭제</button>
+                                    class="py-0.5 px-2 rounded-lg text-xs font-semibold bg-red-100 hover:bg-red-200 text-red-700 border border-red-400">삭제</button>
                                 <button type="button" onclick="showGenerateD1Modal()"
                                     class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+ 수업생성</button>
                             </div>
                         </div>
                         <!-- 수업리스트 그리드 + 회차카드 (2줄 고정 높이, 3줄+ 세로 스크롤) -->
-                        <div id="d1CardArea" class="flex items-stretch overflow-hidden" style="height:188px">
+                        <div id="d1CardArea" class="flex items-stretch" style="height:188px">
                             <!-- 수업리스트 그리드 (드래그 width) -->
                             <div id="d1BatchListGrid" class="flex-none overflow-y-auto text-xs border-r border-gray-100" style="width:155px"></div>
                             <!-- 드래그 구분선 -->
@@ -2114,7 +2114,7 @@
                         <!-- 물건 카드 -->
                         <div id="d1ItemCard" class="flex-none bg-white rounded-xl shadow-lg p-3 overflow-hidden flex flex-col" style="width:50%">
                             <div class="flex justify-between items-center mb-2">
-                                <h3 class="text-xs font-semibold text-gray-800">물건</h3>
+                                <h3 class="text-xs font-semibold text-gray-800">물건 <span id="d1ItemSectionInfo" class="text-[10px] text-indigo-500 font-normal"></span></h3>
                                 <button type="button" onclick="showD1ItemRegisterPanel()"
                                     class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+ 추가</button>
                             </div>
@@ -2144,7 +2144,7 @@
                         <!-- 회원 카드 -->
                         <div id="d1MemberCard" class="flex-1 bg-white rounded-xl shadow-lg p-3 overflow-hidden flex flex-col">
                             <div class="flex justify-between items-center mb-2">
-                                <h3 class="text-xs font-semibold text-gray-800">회원</h3>
+                                <h3 class="text-xs font-semibold text-gray-800">회원 <span id="d1MemberSectionInfo" class="text-[10px] text-indigo-500 font-normal"></span></h3>
                                 <button type="button" onclick="showAddMemberToD1Modal()"
                                     class="bg-green-600 hover:bg-green-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+ 추가</button>
                             </div>
@@ -2197,103 +2197,42 @@
                 </div>
             </div>
 
-            <!-- 수업 생성 모달 -->
+            <!-- 수업 생성 / 회차생성 모달 -->
             <div id="generateD1Modal" class="modal content-hidden" onclick="closeGenerateD1Modal(event)">
-                <div class="modal-content max-w-lg" onclick="event.stopPropagation()" style="max-height:90vh;overflow-y:auto">
-                    <h3 id="generateD1ModalTitle" class="text-lg font-bold text-gray-800 mb-3">수업 생성</h3>
+                <div class="modal-content max-w-md" onclick="event.stopPropagation()" style="max-height:90vh;overflow-y:auto">
+                    <h3 id="generateD1ModalTitle" class="text-base font-bold text-gray-800 mb-3">수업 생성</h3>
 
-                    <!-- ① 기본 설정 -->
-                    <div class="bg-gray-50 rounded-xl p-3 mb-3 space-y-2">
-                        <div class="text-xs font-bold text-gray-500 mb-1">기본 설정</div>
-                        <!-- 수업생성: 시작/최종 회차 -->
-                        <div id="genD1-loopRange-section" class="grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 mb-1">시작 회차</label>
-                                <input type="number" id="genD1-startLoop" value="1" min="1" placeholder="1"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 mb-1">최종 회차</label>
-                                <input type="number" id="genD1-endLoop" value="10" min="1"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                            </div>
-                        </div>
-                        <!-- 회차 추가: 추가 생성 회차 수 -->
-                        <div id="genD1-addCount-section" class="hidden">
-                            <label class="block text-xs font-medium text-gray-700 mb-1">추가 생성 회차 수</label>
-                            <input type="number" id="genD1-addCount" value="1" min="1"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">시작일 (기준일)</label>
-                            <input type="date" id="genD1-startDate" required
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">루프 단위</label>
-                            <select id="genD1-loopUnit" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                <option value="1">매주 (1주)</option>
-                                <option value="2">격주 (2주)</option>
-                                <option value="3">3주</option>
-                                <option value="4">4주</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">수업시간</label>
-                            <div class="flex items-center gap-2">
-                                <input type="time" id="genD1-timeFrom" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                                <span class="text-gray-400 text-sm">~</span>
-                                <input type="time" id="genD1-timeTo" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- ② 입찰 시간 설정 -->
-                    <div class="bg-amber-50 rounded-xl p-3 mb-3 border border-amber-200 space-y-2">
-                        <div class="text-xs font-bold text-amber-700 mb-1">입찰 시간 설정</div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">입찰등록 시작일시</label>
-                            <input type="datetime-local" id="genD1-bidStarttime"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">1차 마감일시</label>
-                            <input type="datetime-local" id="genD1-bidDatetime1"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-medium text-gray-700 mb-1">2차 마감일시</label>
-                            <input type="datetime-local" id="genD1-bidDatetime2"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                        </div>
-                    </div>
-
-                    <!-- ③ 이전 수업에서 가져오기 -->
+                    <!-- ① 이전 수업/회차에서 가져오기 (맨 위) -->
                     <div class="bg-indigo-50 rounded-xl p-3 mb-3 border border-indigo-200">
                         <div class="flex items-center justify-between mb-2">
-                            <span class="text-xs font-bold text-indigo-700">이전 수업에서 가져오기</span>
-                            <select id="genD1-prevBatch" class="text-xs px-2 py-1 border border-indigo-200 rounded-lg bg-white text-gray-700">
-                                <option value="">-- 배치 선택 --</option>
+                            <span id="genD1-prevBatchLabel" class="text-xs font-bold text-indigo-700">이전 수업에서 가져오기</span>
+                            <select id="genD1-prevBatch" class="text-xs px-2 py-1 border border-indigo-200 rounded-lg bg-white text-gray-700 max-w-[160px]">
+                                <option value="">-- 선택 --</option>
                             </select>
                         </div>
-                        <!-- 가져올 항목 체크박스 -->
-                        <div class="grid grid-cols-2 gap-1 mb-2 text-xs">
-                            <label class="flex items-center gap-1.5 cursor-pointer">
-                                <input type="checkbox" id="genD1-copy-startLoop" checked class="rounded"> 시작/최종회차
+                        <!-- 체크박스: 3열 그리드 -->
+                        <div class="grid grid-cols-3 gap-x-2 gap-y-1 mb-2 text-xs">
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" id="genD1-copy-startLoop" checked class="rounded"> 회차범위
                             </label>
-                            <label class="flex items-center gap-1.5 cursor-pointer">
+                            <label class="flex items-center gap-1 cursor-pointer">
                                 <input type="checkbox" id="genD1-copy-time" checked class="rounded"> 수업시간
                             </label>
-                            <label class="flex items-center gap-1.5 cursor-pointer">
-                                <input type="checkbox" id="genD1-copy-bidTimes" checked class="rounded"> 입찰시간
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" id="genD1-copy-members" checked class="rounded"> 회원목록
                             </label>
-                            <label class="flex items-center gap-1.5 cursor-pointer">
-                                <input type="checkbox" id="genD1-copy-members" checked class="rounded"> 회원 목록
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" id="genD1-copy-bid1" checked class="rounded"> 등록시작
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" id="genD1-copy-bid2" checked class="rounded"> 1차마감
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" id="genD1-copy-bid3" checked class="rounded"> 2차마감
                             </label>
                         </div>
                         <button type="button" onclick="applyPrevBatch()"
                             class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg mb-2">가져오기</button>
-
                         <!-- 회원 목록 -->
                         <div id="genD1-memberSection" class="hidden">
                             <div class="flex items-center justify-between mb-1">
@@ -2302,20 +2241,166 @@
                                     <input type="checkbox" id="genD1-memberSelectAll" checked onchange="toggleD1AllMembers(this.checked)"> 전체선택
                                 </label>
                             </div>
-                            <div id="genD1-memberList" class="max-h-36 overflow-y-auto border rounded-lg bg-white divide-y divide-gray-100"></div>
-                            <div class="flex gap-3 mt-2 text-xs">
+                            <div id="genD1-memberList" class="max-h-32 overflow-y-auto border rounded-lg bg-white divide-y divide-gray-100"></div>
+                            <div class="flex gap-3 mt-1.5 text-xs">
                                 <label class="flex items-center gap-1 cursor-pointer">
-                                    <input type="radio" name="genD1-memberApply" value="all" checked> 전 회차 적용
+                                    <input type="radio" name="genD1-memberApply" value="all" checked> 전 회차
                                 </label>
                                 <label class="flex items-center gap-1 cursor-pointer">
-                                    <input type="radio" name="genD1-memberApply" value="first"> 처음 회차만 적용
+                                    <input type="radio" name="genD1-memberApply" value="first"> 첫 회차만
                                 </label>
                             </div>
                         </div>
                     </div>
 
+                    <!-- ② 기본 설정 -->
+                    <div class="bg-gray-50 rounded-xl p-3 mb-0 space-y-2">
+                        <div class="text-xs font-bold text-gray-500 mb-1">기본 설정</div>
+                        <!-- 수업생성: 시작/최종 회차 -->
+                        <div id="genD1-loopRange-section" class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">시작 회차</label>
+                                <input type="number" id="genD1-startLoop" min="1" placeholder="1"
+                                    class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">최종 회차</label>
+                                <input type="number" id="genD1-endLoop" min="1" placeholder="10"
+                                    class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+                            </div>
+                        </div>
+                        <!-- 회차 추가: 추가 생성 회차 수 -->
+                        <div id="genD1-addCount-section" class="hidden">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">추가 생성 회차 수</label>
+                            <input type="number" id="genD1-addCount" value="1" min="1"
+                                class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+                        </div>
+                        <!-- 시작일 + 루프단위 1줄 -->
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">시작일</label>
+                                <input type="date" id="genD1-startDate"
+                                    class="w-full px-2 border border-gray-300 rounded-lg text-sm bg-white" style="height:34px">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-600 mb-1">루프 단위</label>
+                                <select id="genD1-loopUnit" class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                                    <option value="1">매주(1주)</option>
+                                    <option value="2">격주(2주)</option>
+                                    <option value="3">3주</option>
+                                    <option value="4">4주</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- 수업시간 + 입찰시간 (동일 스타일 연속) -->
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">수업시간</label>
+                            <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-1 flex-1">
+                                    <select id="genD1-timeFrom-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                        <option value="AM">오전</option><option value="PM">오후</option>
+                                    </select>
+                                    <select id="genD1-timeFrom-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                        <option value="1">1시</option><option value="2">2시</option><option value="3">3시</option><option value="4">4시</option><option value="5">5시</option><option value="6">6시</option><option value="7">7시</option><option value="8">8시</option><option value="9">9시</option><option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                    </select>
+                                    <select id="genD1-timeFrom-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                        <option value="00">00분</option><option value="10">10분</option><option value="20">20분</option><option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                    </select>
+                                </div>
+                                <span class="text-gray-400 text-xs">~</span>
+                                <div class="flex items-center gap-1 flex-1">
+                                    <select id="genD1-timeTo-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                        <option value="AM">오전</option><option value="PM">오후</option>
+                                    </select>
+                                    <select id="genD1-timeTo-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                        <option value="1">1시</option><option value="2">2시</option><option value="3">3시</option><option value="4">4시</option><option value="5">5시</option><option value="6">6시</option><option value="7">7시</option><option value="8">8시</option><option value="9">9시</option><option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                    </select>
+                                    <select id="genD1-timeTo-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                        <option value="00">00분</option><option value="10">10분</option><option value="20">20분</option><option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="border-t border-gray-200 pt-2">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">입찰 시간 설정 <span class="text-gray-400 font-normal">(수업일 기준)</span></label>
+                            <p class="text-[10px] text-gray-400 mb-1.5">* 공휴일·주말 제외 영업일 기준</p>
+                            <!-- 입찰등록시작 -->
+                            <div class="flex items-center gap-1.5 mb-1.5">
+                                <span class="text-xs text-gray-500 w-14 flex-none">등록시작</span>
+                                <select id="genD1-bidStarttime-day" class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
+                                    <option value="">미설정</option>
+                                    <option value="0">당일</option>
+                                    <option value="1">+1일</option>
+                                    <option value="2">+2일</option>
+                                    <option value="3">+3일</option>
+                                    <option value="4">+4일</option>
+                                    <option value="5">+5일</option>
+                                    <option value="6">+6일</option>
+                                    <option value="7">+7일</option>
+                                </select>
+                                <select id="genD1-bidStarttime-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="AM">오전</option><option value="PM">오후</option>
+                                </select>
+                                <select id="genD1-bidStarttime-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="1">1시</option><option value="2">2시</option><option value="3">3시</option><option value="4">4시</option><option value="5">5시</option><option value="6">6시</option><option value="7">7시</option><option value="8">8시</option><option value="9">9시</option><option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                </select>
+                                <select id="genD1-bidStarttime-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="00">00분</option><option value="10">10분</option><option value="20">20분</option><option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                </select>
+                            </div>
+                            <!-- 1차마감 -->
+                            <div class="flex items-center gap-1.5 mb-1.5">
+                                <span class="text-xs text-gray-500 w-14 flex-none">1차마감</span>
+                                <select id="genD1-bidDatetime1-day" class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
+                                    <option value="">미설정</option>
+                                    <option value="0">당일</option>
+                                    <option value="1">+1일</option>
+                                    <option value="2">+2일</option>
+                                    <option value="3">+3일</option>
+                                    <option value="4">+4일</option>
+                                    <option value="5">+5일</option>
+                                    <option value="6">+6일</option>
+                                    <option value="7">+7일</option>
+                                </select>
+                                <select id="genD1-bidDatetime1-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="AM">오전</option><option value="PM">오후</option>
+                                </select>
+                                <select id="genD1-bidDatetime1-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="1">1시</option><option value="2">2시</option><option value="3">3시</option><option value="4">4시</option><option value="5">5시</option><option value="6">6시</option><option value="7">7시</option><option value="8">8시</option><option value="9">9시</option><option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                </select>
+                                <select id="genD1-bidDatetime1-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="00">00분</option><option value="10">10분</option><option value="20">20분</option><option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                </select>
+                            </div>
+                            <!-- 2차마감 -->
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs text-gray-500 w-14 flex-none">2차마감</span>
+                                <select id="genD1-bidDatetime2-day" class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
+                                    <option value="">미설정</option>
+                                    <option value="0">당일</option>
+                                    <option value="1">+1일</option>
+                                    <option value="2">+2일</option>
+                                    <option value="3">+3일</option>
+                                    <option value="4">+4일</option>
+                                    <option value="5">+5일</option>
+                                    <option value="6">+6일</option>
+                                    <option value="7">+7일</option>
+                                </select>
+                                <select id="genD1-bidDatetime2-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="AM">오전</option><option value="PM">오후</option>
+                                </select>
+                                <select id="genD1-bidDatetime2-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="1">1시</option><option value="2">2시</option><option value="3">3시</option><option value="4">4시</option><option value="5">5시</option><option value="6">6시</option><option value="7">7시</option><option value="8">8시</option><option value="9">9시</option><option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                </select>
+                                <select id="genD1-bidDatetime2-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="00">00분</option><option value="10">10분</option><option value="20">20분</option><option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 버튼 -->
-                    <div class="flex justify-end gap-2">
+                    <div class="flex justify-end gap-2 mt-3">
                         <button type="button" onclick="closeGenerateD1Modal()"
                             class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm">취소</button>
                         <button type="button" onclick="handleGenerateD1()"

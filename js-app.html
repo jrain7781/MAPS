@@ -11152,6 +11152,7 @@ ${token}
         renderClassList(filtered);
     }
 
+    let selectedClassEditId = null;
     function renderClassList(classes) {
         const tbody = document.getElementById('classDataTableBody');
         if (!tbody) return;
@@ -11159,16 +11160,20 @@ ${token}
             tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-500">데이터가 없습니다.</td></tr>';
             return;
         }
-        tbody.innerHTML = classes.map(c => `
-            <tr class="cursor-pointer hover:bg-indigo-50" onclick="selectClass('${c.class_id}')">
-                <td class="px-2 py-2 text-center text-xs">${escapeHtml(c.class_id)}</td>
-                <td class="px-2 py-2 text-center text-xs">${escapeHtml(c.class_loop || '-')}</td>
-                <td class="px-2 py-2 text-center text-xs">${escapeHtml(c.class_type)}</td>
-                <td class="px-2 py-2 text-center text-xs font-medium">${escapeHtml(c.class_name)}</td>
-                <td class="px-2 py-2 text-center text-xs">${escapeHtml(c.class_grade)}</td>
-                <td class="px-2 py-2 text-center text-xs">${escapeHtml(c.class_loc)}</td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = classes.map(c => {
+            const isSel = selectedClassEditId === String(c.class_id);
+            const rowCls = isSel
+                ? 'bg-indigo-100 border-l-4 border-indigo-500'
+                : 'hover:bg-indigo-50 border-l-4 border-transparent';
+            return `<tr class="cursor-pointer ${rowCls} transition-colors" onclick="selectClass('${c.class_id}')">
+                <td class="px-2 py-2 text-center text-xs ${isSel?'font-semibold text-indigo-800':''}">${escapeHtml(c.class_id)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSel?'text-indigo-800':''}">${escapeHtml(c.class_loop || '-')}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSel?'font-semibold text-indigo-800':''}">${escapeHtml(c.class_type)}</td>
+                <td class="px-2 py-2 text-center text-xs font-medium ${isSel?'font-bold text-indigo-900':''}">${escapeHtml(c.class_name)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSel?'text-indigo-800':''}">${escapeHtml(c.class_grade)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isSel?'text-indigo-800':''}">${escapeHtml(c.class_loc)}</td>
+            </tr>`;
+        }).join('');
     }
 
     function sortClassList(key) {
@@ -11188,6 +11193,8 @@ ${token}
     function selectClass(classId) {
         const cls = allClassesData.find(c => String(c.class_id) === String(classId));
         if (!cls) return;
+        selectedClassEditId = String(classId);
+        filterClasses(); // re-render list for highlight
         showClassForm('edit', cls);
     }
 
@@ -11481,12 +11488,27 @@ ${token}
             }
         });
 
+        // 날짜+시간 포맷 (yy/mm/dd HH시)
+        function fmtDt_(v) {
+            if (!v) return '-';
+            const dt = new Date(String(v).replace('T',' '));
+            if (isNaN(dt.getTime())) return String(v);
+            const yy = String(dt.getFullYear()).substring(2);
+            const mm = String(dt.getMonth()+1).padStart(2,'0');
+            const dd = String(dt.getDate()).padStart(2,'0');
+            const hh = String(dt.getHours()).padStart(2,'0');
+            return `${yy}/${mm}/${dd} ${hh}시`;
+        }
         // 카드 공통 렌더 함수
-        function d1Card_(cls, titleCls, textCls, badgeHtml, titleHtml, bodyHtml, clickHandler) {
-            return `<div class="flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 ${cls} transition-all" style="min-width:82px" onclick="${clickHandler}">
+        function d1Card_(cls, titleCls, textCls, badgeHtml, titleHtml, bodyHtml, clickHandler, tooltipHtml) {
+            const tooltip = tooltipHtml
+                ? `<div class="absolute z-50 top-full left-0 mt-1 w-48 bg-gray-800 text-white text-[10px] rounded-lg p-2 shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" style="white-space:pre-line;z-index:9999">${tooltipHtml}</div>`
+                : '';
+            return `<div class="relative flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 ${cls} transition-all group" style="width:88px" onclick="${clickHandler}">
                 ${badgeHtml}
                 <div class="text-center text-sm font-bold ${titleCls} mb-1">${titleHtml}</div>
                 <ul class="text-xs ${textCls} space-y-0.5">${bodyHtml}</ul>
+                ${tooltip}
             </div>`;
         }
 
@@ -11500,7 +11522,7 @@ ${token}
             "selectClassD1('__summary__')"
         );
 
-        const addCardHtml = `<div class="flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 border-dashed border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50 transition-all flex flex-col items-center justify-center" style="min-width:72px" onclick="showGenerateD1Modal('add')" title="회차 추가">
+        const addCardHtml = `<div class="flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 border-dashed border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50 transition-all flex flex-col items-center justify-center" style="width:88px" onclick="showGenerateD1Modal('add')" title="회차 추가">
             <div class="text-2xl text-gray-400 leading-none">+</div>
             <div class="text-[10px] text-gray-400 mt-1">회차 추가</div>
         </div>`;
@@ -11529,7 +11551,7 @@ ${token}
                 } else if (isNearest) {
                     cls = 'border-red-400 bg-red-50 shadow-md';
                     titleCls = 'text-red-900'; textCls = 'text-red-700';
-                    badge = `<div class="text-[9px] bg-red-500 text-white text-center rounded leading-tight mb-1 px-1">오늘↑</div>`;
+                    badge = '';
                 } else if (isPast || isCompleted) {
                     cls = 'border-green-300 bg-green-50 hover:border-green-500 hover:shadow-sm';
                     titleCls = 'text-green-800'; textCls = 'text-green-600';
@@ -11540,19 +11562,67 @@ ${token}
                     badge = '';
                 }
 
-                const body = `<li>• <span class="text-blue-600 font-bold">${dateStr}</span>${weekStr ? ' (' + weekStr + ')' : ''}</li>` +
+                // 요일 계산 (class_date 기반)
+                const DAY_NAMES_ = ['일','월','화','수','목','금','토'];
+                let weekDisplayStr = weekStr;
+                if (!weekDisplayStr && rawDate.length >= 8) {
+                    const dtForDay = new Date(
+                        parseInt(rawDate.substring(0,4)),
+                        parseInt(rawDate.substring(4,6))-1,
+                        parseInt(rawDate.substring(6,8))
+                    );
+                    weekDisplayStr = DAY_NAMES_[dtForDay.getDay()];
+                }
+
+                const body = `<li>• <span class="text-blue-600 font-bold">${dateStr}${weekDisplayStr ? ' <span class="text-blue-600">('+weekDisplayStr+')</span>' : ''}</span></li>` +
                              `<li>• 물건: ${itemCount}</li>` +
                              `<li>• 회원: ${memberCount}</li>`;
 
+                // 마우스오버 툴팁 (시간만 표시, 날짜는 카드에 이미 있음)
+                function fmtClassTime_(v) {
+                    if (!v) return '-';
+                    const s = String(v);
+                    const h = s.includes(':') ? parseInt(s.split(':')[0]) : parseInt(s);
+                    return isNaN(h) ? '-' : h + '시';
+                }
+                const tfrom = fmtClassTime_(d.class_time_from);
+                const tto   = fmtClassTime_(d.class_time_to);
+                function fmtBidDt_(v) {
+                    if (!v) return '-';
+                    const dt = new Date(String(v));
+                    if (isNaN(dt.getTime())) return '-';
+                    const yy = String(dt.getFullYear()).substring(2);
+                    const mm = String(dt.getMonth()+1).padStart(2,'0');
+                    const dd = String(dt.getDate()).padStart(2,'0');
+                    const hh = String(dt.getHours()).padStart(2,'0');
+                    const dow = DAY_NAMES_[dt.getDay()];
+                    return `${yy}/${mm}/${dd} (${dow}) ${hh}시`;
+                }
+                const tooltipHtml = `수업: ${tfrom}~${tto}&#10;등록: ${fmtBidDt_(d.bid_starttime)}&#10;1차: ${fmtBidDt_(d.bid_datetime_1)}&#10;2차: ${fmtBidDt_(d.bid_datetime_2)}`;
+
                 return d1Card_(cls, titleCls, textCls, badge,
                     `${d.class_loop}회${completedMark}`, body,
-                    `selectClassD1('${d.class_d1_id}')`);
+                    `selectClassD1('${d.class_d1_id}')`, tooltipHtml);
             }).join('') + addCardHtml + `</div>`;
     }
 
     function selectClassD1(classD1Id) {
         selectedClassD1Id = classD1Id;
         renderClassD1Grid();
+        // 물건/회원 섹션 제목에 회차 정보 표시
+        let sectionInfo = '';
+        if (classD1Id && classD1Id !== '__summary__') {
+            const d1Info = allClassD1Data.find(d => String(d.class_d1_id) === String(classD1Id));
+            if (d1Info) {
+                const raw = String(d1Info.class_date||'').replace(/-/g,'');
+                const dateDisp = raw.length>=8 ? raw.substring(2,4)+'/'+raw.substring(4,6)+'/'+raw.substring(6,8) : raw;
+                sectionInfo = `[${d1Info.class_loop}회 | ${dateDisp}]`;
+            }
+        }
+        const itemInfo = document.getElementById('d1ItemSectionInfo');
+        const memInfo  = document.getElementById('d1MemberSectionInfo');
+        if (itemInfo) itemInfo.textContent = sectionInfo;
+        if (memInfo)  memInfo.textContent  = sectionInfo;
         // 등록 패널 닫기
         document.getElementById('d1ItemRegisterPanel')?.classList.add('content-hidden');
         d1PendingItems = [];
@@ -11768,12 +11838,42 @@ ${token}
         document.getElementById('d1m-name').textContent = fullMember.member_name || '-';
     }
 
+    // 시간 드롭다운 헬퍼
+    function getDropdownTime_(prefix) {
+        const ampm = document.getElementById(prefix+'-ampm')?.value || 'AM';
+        const h    = parseInt(document.getElementById(prefix+'-h')?.value) || 12;
+        const m    = document.getElementById(prefix+'-m')?.value || '00';
+        let hour24 = h;
+        if (ampm === 'AM') { hour24 = (h === 12) ? 0 : h; }
+        else               { hour24 = (h === 12) ? 12 : h + 12; }
+        return String(hour24).padStart(2,'0') + ':' + m;
+    }
+    function setDropdownTime_(prefix, timeStr) {
+        if (!timeStr) return;
+        const parts = String(timeStr).split(':');
+        const hour24 = parseInt(parts[0]) || 0;
+        const min = parts[1] ? parts[1].substring(0,2) : '00';
+        const minNum = parseInt(min) || 0;
+        const minRounded = String(Math.floor(minNum/10)*10).padStart(2,'0');
+        const ampm = hour24 < 12 ? 'AM' : 'PM';
+        let h12 = hour24 % 12;
+        if (h12 === 0) h12 = 12;
+        const ampmEl = document.getElementById(prefix+'-ampm');
+        const hEl    = document.getElementById(prefix+'-h');
+        const mEl    = document.getElementById(prefix+'-m');
+        if (ampmEl) ampmEl.value = ampm;
+        if (hEl)    hEl.value    = String(h12);
+        if (mEl)    mEl.value    = minRounded;
+    }
+
     // 수업 생성 모달 (mode: 'create'=수업생성, 'add'=회차 추가)
     function showGenerateD1Modal(mode) {
         if (!selectedClassId) { showStatus('먼저 수업을 선택하세요.', 'error'); return; }
         mode = mode || 'create';
         document.getElementById('generateD1Modal').classList.remove('content-hidden');
-        document.getElementById('generateD1ModalTitle').textContent = mode === 'add' ? '회차 추가' : '수업 생성';
+        document.getElementById('generateD1ModalTitle').textContent = mode === 'add' ? '회차생성' : '수업 생성';
+        const prevLabel = document.getElementById('genD1-prevBatchLabel');
+        if (prevLabel) prevLabel.textContent = mode === 'add' ? '이전회차에서 가져오기' : '이전수업에서 가져오기';
         // 모드별 섹션 토글
         document.getElementById('genD1-loopRange-section').classList.toggle('hidden', mode === 'add');
         document.getElementById('genD1-addCount-section').classList.toggle('hidden', mode !== 'add');
@@ -11782,11 +11882,11 @@ ${token}
         document.getElementById('genD1-startLoop').value = '1';
         document.getElementById('genD1-endLoop').value = '10';
         document.getElementById('genD1-addCount').value = '1';
-        document.getElementById('genD1-timeFrom').value = '';
-        document.getElementById('genD1-timeTo').value = '';
-        document.getElementById('genD1-bidStarttime').value = '';
-        document.getElementById('genD1-bidDatetime1').value = '';
-        document.getElementById('genD1-bidDatetime2').value = '';
+        // 드롭다운 리셋
+        ['genD1-timeFrom','genD1-timeTo'].forEach(p => { setDropdownTime_(p, '09:00'); });
+        ['genD1-bidStarttime-day','genD1-bidDatetime1-day','genD1-bidDatetime2-day'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+        // 회차 추가 모드: 현재 배치 batchKey 저장
+        document.getElementById('generateD1Modal').dataset.batchKey = (mode === 'add' && d1Batches[d1BatchIdx]) ? d1Batches[d1BatchIdx].batchKey : '';
         document.getElementById('genD1-memberSection').classList.add('hidden');
         document.getElementById('genD1-memberList').innerHTML = '';
 
@@ -11855,14 +11955,50 @@ ${token}
             document.getElementById('genD1-endLoop').value = Number(items[items.length-1].class_loop) || 10;
         }
         if (copyTime && items.length > 0) {
-            document.getElementById('genD1-timeFrom').value = items[0].class_time_from || '';
-            document.getElementById('genD1-timeTo').value   = items[0].class_time_to   || '';
+            const tf = items[0].class_time_from || '';
+            const tt = items[0].class_time_to   || '';
+            // class_time_from/to는 "HH:mm" 또는 숫자(시간)로 올 수 있음
+            const normTime_ = v => {
+                const s = String(v);
+                if (s.includes(':')) return s;
+                const h = parseInt(s);
+                return isNaN(h) ? '' : String(h).padStart(2,'0') + ':00';
+            };
+            if (tf) setDropdownTime_('genD1-timeFrom', normTime_(tf));
+            if (tt) setDropdownTime_('genD1-timeTo',   normTime_(tt));
         }
-        const copyBidTimes = document.getElementById('genD1-copy-bidTimes').checked;
-        if (copyBidTimes && items.length > 0) {
-            document.getElementById('genD1-bidStarttime').value = items[0].bid_starttime  || '';
-            document.getElementById('genD1-bidDatetime1').value  = items[0].bid_datetime_1 || '';
-            document.getElementById('genD1-bidDatetime2').value  = items[0].bid_datetime_2 || '';
+        const copyBid1 = document.getElementById('genD1-copy-bid1')?.checked;
+        const copyBid2 = document.getElementById('genD1-copy-bid2')?.checked;
+        const copyBid3 = document.getElementById('genD1-copy-bid3')?.checked;
+        if ((copyBid1 || copyBid2 || copyBid3) && items.length > 0) {
+            // class_date 기준으로 day offset 역산
+            function extractBidOffset(classDateRaw, bidDatetimeStr) {
+                if (!bidDatetimeStr || !classDateRaw) return { day: '', time: '' };
+                const baseDate = new Date(classDateRaw.substring(0,4)+'-'+classDateRaw.substring(4,6)+'-'+classDateRaw.substring(6,8));
+                const bidDate  = new Date(String(bidDatetimeStr).replace('T',' '));
+                if (isNaN(baseDate)||isNaN(bidDate)) return { day: '', time: '' };
+                const dayOffset = Math.round((bidDate - baseDate) / 86400000);
+                const hh = String(bidDate.getHours()).padStart(2,'0');
+                const mm = String(bidDate.getMinutes()).padStart(2,'0');
+                return { day: String(dayOffset), time: hh+':'+mm };
+            }
+            const firstItem = items[0];
+            const classDateRaw = String(firstItem.class_date||'').replace(/-/g,'');
+            if (copyBid1) {
+                const bs = extractBidOffset(classDateRaw, firstItem.bid_starttime);
+                document.getElementById('genD1-bidStarttime-day').value = bs.day;
+                if (bs.time) setDropdownTime_('genD1-bidStarttime', bs.time);
+            }
+            if (copyBid2) {
+                const b1 = extractBidOffset(classDateRaw, firstItem.bid_datetime_1);
+                document.getElementById('genD1-bidDatetime1-day').value = b1.day;
+                if (b1.time) setDropdownTime_('genD1-bidDatetime1', b1.time);
+            }
+            if (copyBid3) {
+                const b2 = extractBidOffset(classDateRaw, firstItem.bid_datetime_2);
+                document.getElementById('genD1-bidDatetime2-day').value = b2.day;
+                if (b2.time) setDropdownTime_('genD1-bidDatetime2', b2.time);
+            }
         }
         // 마지막 회차 날짜 + 루프단위(주) = 자동 시작일 계산
         if (items.length > 0) {
@@ -11942,12 +12078,16 @@ ${token}
         const startLoop     = parseInt(document.getElementById('genD1-startLoop')?.value) || 1;
         const endLoop       = parseInt(document.getElementById('genD1-endLoop')?.value)   || 10;
         const addCount      = parseInt(document.getElementById('genD1-addCount')?.value)  || 1;
-        const timeFrom      = document.getElementById('genD1-timeFrom')?.value || '';
-        const timeTo        = document.getElementById('genD1-timeTo')?.value   || '';
-        const bidStarttime  = document.getElementById('genD1-bidStarttime')?.value || '';
-        const bidDatetime1  = document.getElementById('genD1-bidDatetime1')?.value || '';
-        const bidDatetime2  = document.getElementById('genD1-bidDatetime2')?.value || '';
+        const timeFrom      = getDropdownTime_('genD1-timeFrom');
+        const timeTo        = getDropdownTime_('genD1-timeTo');
+        const bidStarttimeDay  = document.getElementById('genD1-bidStarttime-day')?.value ?? '';
+        const bidStarttimeTime = bidStarttimeDay !== '' ? getDropdownTime_('genD1-bidStarttime') : '00:00';
+        const bidDatetime1Day  = document.getElementById('genD1-bidDatetime1-day')?.value ?? '';
+        const bidDatetime1Time = bidDatetime1Day !== '' ? getDropdownTime_('genD1-bidDatetime1') : '00:00';
+        const bidDatetime2Day  = document.getElementById('genD1-bidDatetime2-day')?.value ?? '';
+        const bidDatetime2Time = bidDatetime2Day !== '' ? getDropdownTime_('genD1-bidDatetime2') : '00:00';
         const mode          = document.getElementById('generateD1Modal')?.dataset?.mode || 'create';
+        const batchTimestamp = document.getElementById('generateD1Modal')?.dataset?.batchKey || '';
 
         if (!startDate) { showStatus('시작일을 입력하세요.', 'error'); return; }
         if (mode === 'create' && startLoop > endLoop) { showStatus('시작회차가 최종회차보다 큽니다.', 'error'); return; }
@@ -11958,9 +12098,10 @@ ${token}
         const memberApplyRadio = document.querySelector('input[name="genD1-memberApply"]:checked');
         const memberApplyAll = !memberApplyRadio || memberApplyRadio.value === 'all';
 
+        const bidOpts = { bidStarttimeDay, bidStarttimeTime, bidDatetime1Day, bidDatetime1Time, bidDatetime2Day, bidDatetime2Time };
         const options = mode === 'add'
-            ? { addCount, timeFrom, timeTo, bidStarttime, bidDatetime1, bidDatetime2, memberIds, memberApplyAll }
-            : { startLoop, endLoop, timeFrom, timeTo, bidStarttime, bidDatetime1, bidDatetime2, memberIds, memberApplyAll };
+            ? { addCount, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds, memberApplyAll }
+            : { startLoop, endLoop, timeFrom, timeTo, ...bidOpts, memberIds, memberApplyAll };
 
         google.script.run
             .withSuccessHandler(result => {

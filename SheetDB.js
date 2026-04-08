@@ -2169,13 +2169,22 @@ function readClassD1ByClassId(classId) {
   if (lastRow < 2) return [];
 
   const data = sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+  const tz_ = Session.getScriptTimeZone();
+  const TIME_FIELDS_  = new Set(['class_time_from', 'class_time_to']);
+  const DATETIME_FIELDS_ = new Set(['bid_starttime', 'bid_datetime_1', 'bid_datetime_2']);
   const d1List = data
     .map(row => {
       const obj = {};
       CLASS_D1_HEADERS.forEach((h, i) => {
         const val = row[i];
         if (val instanceof Date) {
-          obj[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+          if (TIME_FIELDS_.has(h)) {
+            obj[h] = Utilities.formatDate(val, tz_, 'HH:mm');
+          } else if (DATETIME_FIELDS_.has(h)) {
+            obj[h] = Utilities.formatDate(val, tz_, "yyyy-MM-dd'T'HH:mm");
+          } else {
+            obj[h] = Utilities.formatDate(val, tz_, 'yyyy-MM-dd');
+          }
         } else {
           obj[h] = val !== undefined && val !== null ? val : '';
         }
@@ -2258,9 +2267,16 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   var addCount     = opts.addCount ? Number(opts.addCount) : null; // 회차 추가 모드
   var timeFrom     = opts.timeFrom || classInfo.class_time_from || '';
   var timeTo       = opts.timeTo   || classInfo.class_time_to   || '';
-  var bidStarttime = opts.bidStarttime || '';
-  var bidDatetime1 = opts.bidDatetime1 || '';
-  var bidDatetime2 = opts.bidDatetime2 || '';
+  // 입찰시간: 수업일 기준 day offset + time (예: bidStarttimeDay=1, bidStarttimeTime='14:00')
+  var bidStarttimeDay  = (opts.bidStarttimeDay  !== '' && opts.bidStarttimeDay  != null) ? parseInt(opts.bidStarttimeDay)  : null;
+  var bidStarttimeTime = opts.bidStarttimeTime  || '00:00';
+  var bidDatetime1Day  = (opts.bidDatetime1Day  !== '' && opts.bidDatetime1Day  != null) ? parseInt(opts.bidDatetime1Day)  : null;
+  var bidDatetime1Time = opts.bidDatetime1Time  || '00:00';
+  var bidDatetime2Day  = (opts.bidDatetime2Day  !== '' && opts.bidDatetime2Day  != null) ? parseInt(opts.bidDatetime2Day)  : null;
+  var bidDatetime2Time = opts.bidDatetime2Time  || '00:00';
+
+  // 회차 추가 모드: 기존 배치 timestamp 재사용 (동일 배치로 편입)
+  var batchTimestamp = opts.batchTimestamp || null;
   var memberIds    = Array.isArray(opts.memberIds) ? opts.memberIds : [];
   var memberApplyAll = opts.memberApplyAll !== false; // default true
 
@@ -2284,9 +2300,39 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   var day   = parseInt(startDate.substring(6, 8));
   var currentDate = new Date(year, month, day);
 
-  var timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMddHHmmss');
-  var regDate   = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var tz        = Session.getScriptTimeZone();
+  var timestamp = batchTimestamp || Utilities.formatDate(new Date(), tz, 'yyyyMMddHHmmss');
+  var regDate   = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   var weekNames = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // 한국 공휴일 (월/일 기준, 연도 무관 고정 공휴일)
+  var KOREAN_FIXED_HOLIDAYS_ = [
+    '01-01','03-01','05-05','06-06','08-15','10-03','10-09','12-25'
+  ];
+  function isHoliday_(d) {
+    var dow = d.getDay(); // 0=일, 6=토
+    if (dow === 0 || dow === 6) return true;
+    var md = Utilities.formatDate(d, tz, 'MM-dd');
+    return KOREAN_FIXED_HOLIDAYS_.indexOf(md) >= 0;
+  }
+  function addWorkingDays_(baseDate, days) {
+    var d = new Date(baseDate.getTime());
+    var remaining = Math.abs(days);
+    var step = days >= 0 ? 1 : -1;
+    while (remaining > 0) {
+      d.setDate(d.getDate() + step);
+      if (!isHoliday_(d)) remaining--;
+    }
+    return d;
+  }
+
+  // 수업일 기준 bid 일시 계산 헬퍼 (워킹데이 기준)
+  function calcBidDatetime_(baseDate, dayOffset, timeStr) {
+    if (dayOffset === null) return '';
+    var d = dayOffset === 0 ? new Date(baseDate.getTime()) : addWorkingDays_(baseDate, dayOffset);
+    var dateStr = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    return dateStr + 'T' + (timeStr || '00:00');
+  }
 
   // 기존 회차 날짜 중복 체크
   var lastRow = sheet.getLastRow();
@@ -2332,9 +2378,9 @@ function generateClassD1(classId, startDate, loopUnit, options) {
         case 'class_loop':     return loopNo;
         case 'completed':      return 'N';
         case 'reg_date':       return regDate;
-        case 'bid_starttime':  return bidStarttime;
-        case 'bid_datetime_1': return bidDatetime1;
-        case 'bid_datetime_2': return bidDatetime2;
+        case 'bid_starttime':  return calcBidDatetime_(currentDate, bidStarttimeDay, bidStarttimeTime);
+        case 'bid_datetime_1': return calcBidDatetime_(currentDate, bidDatetime1Day, bidDatetime1Time);
+        case 'bid_datetime_2': return calcBidDatetime_(currentDate, bidDatetime2Day, bidDatetime2Time);
         default:               return '';
       }
     });
