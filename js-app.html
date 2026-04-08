@@ -11964,6 +11964,7 @@ ${token}
         // 날짜 기준 정렬 (마지막 날짜 정확하게 파악)
         const items = (batch.items || []).slice().sort((a, b) => String(a.class_date).localeCompare(String(b.class_date)));
 
+        const mode_ = document.getElementById('generateD1Modal')?.dataset?.mode || 'create';
         const copyLoopRange = document.getElementById('genD1-copy-startLoop').checked;
         const copyTime      = document.getElementById('genD1-copy-time').checked;
         const copyMembers   = document.getElementById('genD1-copy-members').checked;
@@ -11971,6 +11972,11 @@ ${token}
         if (copyLoopRange && items.length > 0) {
             document.getElementById('genD1-startLoop').value = Number(items[0].class_loop) || 1;
             document.getElementById('genD1-endLoop').value = Number(items[items.length-1].class_loop) || 10;
+        }
+        // 회차추가 모드: 가져오기 시 추가생성 회차수 1로 자동 설정
+        if (mode_ === 'add') {
+            const addCountEl = document.getElementById('genD1-addCount');
+            if (addCountEl) addCountEl.value = '1';
         }
         if (copyTime && items.length > 0) {
             const tf = items[0].class_time_from || '';
