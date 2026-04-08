@@ -11897,34 +11897,17 @@ ${token}
         document.getElementById('generateD1Modal').dataset.batchKey = (mode === 'add' && d1Batches[d1BatchIdx]) ? d1Batches[d1BatchIdx].batchKey : '';
         document.getElementById('genD1-memberSection').classList.add('hidden');
         document.getElementById('genD1-memberList').innerHTML = '';
-        // 미리보기 영역 초기화
+        // 미리보기 영역 + 구분선 초기화
         const previewSection = document.getElementById('genD1-previewSection');
         if (previewSection) previewSection.classList.add('hidden');
+        const divider = document.getElementById('genD1-previewDivider');
+        if (divider) divider.classList.add('hidden');
         const prevMemberSection = document.getElementById('prev-genD1-memberSection');
         if (prevMemberSection) prevMemberSection.classList.add('hidden');
         const prevMemberList = document.getElementById('prev-genD1-memberList');
         if (prevMemberList) prevMemberList.innerHTML = '';
 
-        // 회차 추가 모드: 마지막 회차의 날짜+루프 자동 계산
-        if (mode === 'add' && allClassD1Data.length > 0) {
-            const batch = d1Batches[d1BatchIdx];
-            if (batch && batch.items.length > 0) {
-                const sorted = batch.items.slice().sort((a, b) => Number(a.class_loop) - Number(b.class_loop));
-                const lastItem = sorted[sorted.length - 1];
-                const lastDateRaw = String(lastItem.class_date || '').replace(/-/g, '');
-                const loopUnit = parseInt(document.getElementById('genD1-loopUnit')?.value) || 1;
-                if (lastDateRaw.length >= 8) {
-                    const lastDate = new Date(parseInt(lastDateRaw.substring(0, 4)), parseInt(lastDateRaw.substring(4, 6)) - 1, parseInt(lastDateRaw.substring(6, 8)));
-                    lastDate.setDate(lastDate.getDate() + loopUnit * 7);
-                    const yyyy = lastDate.getFullYear();
-                    const mm = String(lastDate.getMonth() + 1).padStart(2, '0');
-                    const dd = String(lastDate.getDate()).padStart(2, '0');
-                    document.getElementById('genD1-startDate').value = `${yyyy}-${mm}-${dd}`;
-                }
-            }
-        } else {
-            document.getElementById('genD1-startDate').value = new Date().toISOString().split('T')[0];
-        }
+        document.getElementById('genD1-startDate').value = '';
 
         // 이전 배치 드롭다운 채우기
         const batchSel = document.getElementById('genD1-prevBatch');
@@ -11963,9 +11946,14 @@ ${token}
 
         const mode_ = document.getElementById('generateD1Modal')?.dataset?.mode || 'create';
 
-        // 미리보기 영역 표시
+        // 미리보기 영역 + 구분선 표시
         const previewSection = document.getElementById('genD1-previewSection');
         previewSection.classList.remove('hidden');
+        const divider = document.getElementById('genD1-previewDivider');
+        if (divider) divider.classList.remove('hidden');
+        // 오른쪽 패널 왼쪽 패딩 추가
+        const rightPanel = previewSection.parentElement?.querySelector('.flex-1.pl-4');
+        if (rightPanel) rightPanel.classList.add('pl-4');
         document.getElementById('prev-genD1-loopRange-section').classList.toggle('hidden', mode_ === 'add');
         document.getElementById('prev-genD1-addCount-section').classList.toggle('hidden', mode_ !== 'add');
 
@@ -12215,6 +12203,43 @@ ${token}
 
     function toggleD1AllMembers(checked) {
         document.querySelectorAll('.genD1-member-cb').forEach(cb => { cb.checked = checked; });
+    }
+
+    // 현재 수업의 전체 회원을 오른쪽 회원목록에 로드
+    function loadAllClassMembersToRight_() {
+        const memberSection = document.getElementById('genD1-memberSection');
+        const memberList = document.getElementById('genD1-memberList');
+        memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">불러오는 중...</div>';
+        memberSection.classList.remove('hidden');
+
+        function renderAll(members) {
+            if (!members || members.length === 0) {
+                memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">회원 없음</div>';
+                return;
+            }
+            const cls = allClassesData.find(c => String(c.class_id) === String(selectedClassId)) || {};
+            const clsInfo = [cls.class_name, cls.class_grade ? `[${cls.class_grade}]` : '', cls.class_loc ? `(${cls.class_loc})` : ''].filter(Boolean).join(' ');
+            memberList.innerHTML = members.map(m => {
+                const stuInfo = `ID:${m.member_id} | ${m.phone || ''} | ${escapeHtml(m.name1 || m.member_name || '')} - ${escapeHtml(clsInfo)}`;
+                return `<label class="grid items-center gap-1 px-2 py-1 text-[10px] cursor-pointer hover:bg-indigo-50 genD1-member-row" style="grid-template-columns:20px 1fr 2fr 1fr 1fr">
+                    <input type="checkbox" class="genD1-member-cb rounded" value="${m.member_id}" checked>
+                    <span class="font-medium truncate" title="${escapeHtml(m.member_name || '-')}">${escapeHtml(m.member_name || '-')}</span>
+                    <span class="text-gray-500 truncate" title="${stuInfo}">${stuInfo}</span>
+                    <span class="text-indigo-600">-</span>
+                    <span class="text-gray-500">-</span>
+                </label>`;
+            }).join('');
+            document.getElementById('genD1-memberSelectAll').checked = true;
+        }
+
+        if (allClassD1SummaryData && allClassD1SummaryData.members && allClassD1SummaryData.members.length > 0) {
+            renderAll(allClassD1SummaryData.members);
+        } else {
+            google.script.run
+                .withSuccessHandler(data => { allClassD1SummaryData = data; renderAll(data.members || []); })
+                .withFailureHandler(() => { memberList.innerHTML = '<div class="p-2 text-xs text-red-400 text-center">로드 실패</div>'; })
+                .readAllMembersByClassId(selectedClassId);
+        }
     }
 
     function togglePrevAllMembers(checked) {
