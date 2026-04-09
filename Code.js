@@ -128,13 +128,12 @@ const CLASS_D1_HEADERS = [
 // --- 회원 수업 상세(member_class_details) 시트 헤더 ---
 const MEMBER_CLASS_DETAILS_HEADERS = [
   'detail_id',        // 상세 ID (PK)
-  'class_id',         // 수업 ID (FK)
+  'class_d1_id',      // 회차 ID (FK)
   'member_id',        // 회원 ID (FK)
-  'member_status',    // 회원 상태 (하드코딩 및 사용자 정의)
+  'attended',         // 출석 여부 (Y/N)
+  'attended_date',    // 출석일
   'reg_date',         // 등록일
-  'reg_id',           // 등록자
-  'no_1', 'no_2', 'no_3', 'no_4', 'no_5', 'no_6', 'no_7', 'no_8', 'no_9', 'no_10',
-  'no_11', 'no_12', 'no_13', 'no_14', 'no_15', 'no_16', 'no_17', 'no_18', 'no_19', 'no_20'
+  'reg_id'            // 등록자
 ];
 
 // --- 구분(gubun) 드롭다운 옵션 ---
@@ -403,6 +402,7 @@ function processMemberDashboardAction(memberToken, itemId, action) {
           note: 'dashboard auto-approved'
         });
       }
+
       // 텔레그램 알림 (있을 경우)
       if (chatId) {
         const itemData = getItemLiteById_(item);

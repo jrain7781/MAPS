@@ -639,6 +639,42 @@ function confirmBidPriceWithTelegramReply(memberToken, itemId) {
     return { success: false, message: '입찰 상태인 물건만 입찰가를 확인할 수 있습니다.' };
   }
 
+  // 3. 시트에서 해당 물건 찾아 bid_state 확인완료로 업데이트
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  if (!sheet) return { success: false, message: '시트를 찾을 수 없습니다.' };
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
+
+  const finder = sheet.getRange(2, 1, lastRow - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true);
+  const match = finder.findNext();
+  if (!match) {
+    return { success: false, message: '해당 물건을 찾을 수 없습니다.' };
+  }
+
+  const rowIndex = match.getRow();
+  const oldState = String(sheet.getRange(rowIndex, 12).getValue() || '').trim();
+  sheet.getRange(rowIndex, 12).setValue('확인완료');
+  SpreadsheetApp.flush();
+
+  // 3.5 히스토리 로깅 (PRICE_CONFIRMED)
+  if (oldState !== '확인완료' && typeof writeItemHistory_ === 'function') {
+    try {
+      writeItemHistory_({
+        action: 'PRICE_CONFIRMED',
+        item_id: String(itemId),
+        member_id: member.member_id,
+        member_name: member.member_name,
+        trigger_type: 'member-telegram',
+        field_name: 'bid_state',
+        from_value: oldState,
+        to_value: '확인완료',
+        note: '입찰가 확인 (빠른답장)'
+      });
+    } catch (e) {
+      Logger.log('입찰가확인(봇) 로깅 실패: ' + e.toString());
+    }
+  }
+
   // 4. 텔레그램으로 가격 공개 메시지 전송 (chatId 있을 때만)
   const chatId = String(member.telegram_chat_id || '').trim();
   if (chatId && typeof telegramSendMessage === 'function') {
@@ -2616,14 +2652,9 @@ function ensureMemberClassDetailsSheet_() {
     const headerRow = sheet.getRange(1, 1, 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues()[0];
     let needsUpdate = false;
     for (let i = 0; i < MEMBER_CLASS_DETAILS_HEADERS.length; i++) {
-      if (String(headerRow[i]) !== String(MEMBER_CLASS_DETAILS_HEADERS[i])) { needsUpdate = true; break; }
+      if (headerRow[i] !== MEMBER_CLASS_DETAILS_HEADERS[i]) { needsUpdate = true; break; }
     }
     if (needsUpdate) {
-      // 헤더를 덮어쓰기 전에 시트 전체 열 확보 확인
-      const currentMaxCols = sheet.getMaxColumns();
-      if (currentMaxCols < MEMBER_CLASS_DETAILS_HEADERS.length) {
-        sheet.insertColumnsAfter(currentMaxCols, MEMBER_CLASS_DETAILS_HEADERS.length - currentMaxCols);
-      }
       sheet.getRange(1, 1, 1, MEMBER_CLASS_DETAILS_HEADERS.length).setValues([MEMBER_CLASS_DETAILS_HEADERS]);
       SpreadsheetApp.flush();
     }
@@ -2632,63 +2663,28 @@ function ensureMemberClassDetailsSheet_() {
 }
 
 /**
- * [신규] 회원 상태 옵션 가져오기 (ScriptProperties)
- */
-function getMemberStatusOptions() {
-  try {
-    const props = PropertiesService.getScriptProperties();
-    const optionsJson = props.getProperty('MEMBER_STATUS_OPTIONS');
-    if (optionsJson) return JSON.parse(optionsJson);
-  } catch (e) {
-    Logger.log('getMemberStatusOptions 오류: ' + e.toString());
-  }
-  // 기본 옵션
-  return ['수강중', '휴학', '종료', '대기'];
-}
-
-/**
- * [신규] 회원 상태 옵션 저장하기
- */
-function saveMemberStatusOptions(options) {
-  if (!Array.isArray(options)) return { success: false, message: '배열 형식이 아닙니다.' };
-  try {
-    PropertiesService.getScriptProperties().setProperty('MEMBER_STATUS_OPTIONS', JSON.stringify(options));
-    return { success: true, message: '상태 옵션이 저장되었습니다.' };
-  } catch (e) {
-    return { success: false, message: e.toString() };
-  }
-}
-
-/**
- * 특정 수업 회차(classD1Id)의 회원 목록을 조회합니다.
- * (신규 구조: no_N 컬럼에 날짜가 있는 회원들)
+ * 특정 수업 회차의 회원 목록을 조회합니다.
  */
 function readMembersByClassD1Id(classD1Id) {
-  const allD1 = readAllClassD1();
-  const d1Info = allD1.find(d => String(d.class_d1_id) === String(classD1Id));
-  if (!d1Info) return [];
-
-  const classId = d1Info.class_id;
-  const loopNum = parseInt(d1Info.class_loop);
-  if (isNaN(loopNum) || loopNum < 1 || loopNum > 20) return [];
-
   const sheet = ensureMemberClassDetailsSheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
   const data = sheet.getRange(2, 1, lastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
-  const classIdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_id');
-  const memberIdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
-  const noNIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + loopNum);
-  const statusIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_status');
-
   const filtered = data
-    .filter(row => String(row[classIdIdx]) === String(classId) && row[noNIdx])
     .map(row => {
       const obj = {};
-      MEMBER_CLASS_DETAILS_HEADERS.forEach((h, i) => { obj[h] = row[i] || ''; });
+      MEMBER_CLASS_DETAILS_HEADERS.forEach((h, i) => {
+        const val = row[i];
+        if (val instanceof Date) {
+          obj[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        } else {
+          obj[h] = val !== undefined && val !== null ? val : '';
+        }
+      });
       return obj;
-    });
+    })
+    .filter(d => String(d.class_d1_id) === String(classD1Id));
 
   // 회원 정보 조인
   const allMembers = readAllMembersNew();
@@ -2696,7 +2692,6 @@ function readMembersByClassD1Id(classD1Id) {
     const member = allMembers.find(m => String(m.member_id) === String(d.member_id)) || {};
     return {
       ...d,
-      class_d1_id: classD1Id, // 호환성 유지
       member_name: member.member_name || '',
       phone: member.phone || '',
       gubun: member.gubun || ''
@@ -2705,55 +2700,51 @@ function readMembersByClassD1Id(classD1Id) {
 }
 
 /**
- * 특정 수업(classId)의 전체 회차에 대한 회원 참여 현황을 조회합니다. (신규 구조 대응)
+ * 특정 수업(classId)의 전체 회차에 대한 회원 출석 현황을 조회합니다.
+ * 반환: { d1List: [...], members: [{ member_id, member_name, phone, gubun, name1~3, attendance: {d1Id: 'Y'/'N'}, attendCount }] }
  */
 function readAllMembersByClassId(classId) {
   var d1List = readClassD1ByClassId(classId);
   if (!d1List || d1List.length === 0) return { d1List: [], members: [] };
+
+  var d1Ids = {};
+  d1List.forEach(function(d) { d1Ids[String(d.class_d1_id)] = true; });
 
   var sheet = ensureMemberClassDetailsSheet_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { d1List: d1List, members: [] };
 
   var data = sheet.getRange(2, 1, lastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
-  var classIdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_id');
-  
   var relevantRows = data
-    .filter(function(row) { return String(row[classIdIdx]) === String(classId); })
     .map(function(row) {
       var obj = {};
-      MEMBER_CLASS_DETAILS_HEADERS.forEach(function(h, i) { obj[h] = row[i] || ''; });
+      MEMBER_CLASS_DETAILS_HEADERS.forEach(function(h, i) { obj[h] = (row[i] !== undefined && row[i] !== null) ? row[i] : ''; });
       return obj;
-    });
+    })
+    .filter(function(d) { return d1Ids[String(d.class_d1_id)]; });
 
   var allMembers = readAllMembersNew();
-  var memberMap = {};
 
+  var memberMap = {};
   relevantRows.forEach(function(d) {
     var memberId = String(d.member_id);
-    var member = allMembers.find(function(m) { return String(m.member_id) === memberId; }) || {};
-    memberMap[memberId] = {
-      member_id: memberId,
-      member_name: member.member_name || '',
-      phone: member.phone || '',
-      gubun: member.gubun || '',
-      member_status: d.member_status || '',
-      attendance: {},
-      attendCount: 0
-    };
-    
-    // no_1 ~ no_20 체크
-    d1List.forEach(function(d1) {
-      var n = parseInt(d1.class_loop);
-      var d1Id = String(d1.class_d1_id);
-      var loopVal = d['no_' + n];
-      if (loopVal) {
-        memberMap[memberId].attendance[d1Id] = 'Y';
-        memberMap[memberId].attendCount++;
-      } else {
-        memberMap[memberId].attendance[d1Id] = 'N';
-      }
-    });
+    if (!memberMap[memberId]) {
+      var member = allMembers.find(function(m) { return String(m.member_id) === memberId; }) || {};
+      memberMap[memberId] = {
+        member_id: memberId,
+        member_name: member.member_name || '',
+        phone: member.phone || '',
+        gubun: member.gubun || '',
+        name1: member.name1 || '', name1_gubun: member.name1_gubun || '',
+        name2: member.name2 || '', name2_gubun: member.name2_gubun || '',
+        name3: member.name3 || '', name3_gubun: member.name3_gubun || '',
+        attendance: {},
+        attendCount: 0
+      };
+    }
+    var d1Id = String(d.class_d1_id);
+    memberMap[memberId].attendance[d1Id] = d.attended === 'Y' ? 'Y' : 'N';
+    if (d.attended === 'Y') memberMap[memberId].attendCount++;
   });
 
   var members = Object.values(memberMap).sort(function(a, b) {
@@ -2793,85 +2784,51 @@ function getMemberAttendanceCount(memberId, classId) {
 }
 
 /**
- * 수업 회차에 회원을 추가합니다. (신규 구조: 20개 컬럼 방식)
- * @param {string} classD1Id - 회차 ID
- * @param {string} memberId - 회원 ID
- * @param {string} memberStatus - 회원 상태
+ * 수업 회차에 회원을 추가합니다.
  */
-function addMemberToClassD1(classD1Id, memberId, memberStatus) {
-  const allD1 = readAllClassD1();
-  const d1Info = allD1.find(d => String(d.class_d1_id) === String(classD1Id));
-  if (!d1Info) return { success: false, message: '회차 정보를 찾을 수 없습니다.' };
-
-  const classId = d1Info.class_id;
-  const loopNum = parseInt(d1Info.class_loop);
-  if (isNaN(loopNum) || loopNum < 1 || loopNum > 20) {
-    return { success: false, message: '회차 번호가 유효하지 않습니다 (1~20).' };
-  }
-
+function addMemberToClassD1(classD1Id, memberId) {
   const sheet = ensureMemberClassDetailsSheet_();
-  const lastRow = sheet.getLastRow();
-  const classIdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_id');
-  const memberIdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
-  const statusIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_status');
-  const noNIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + loopNum);
-  const regDateIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('reg_date');
 
-  let rowIndex = -1;
-  if (lastRow >= 2) {
-    const data = sheet.getRange(2, 1, lastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
-    for (let i = 0; i < data.length; i++) {
-      if (String(data[i][classIdIdx]) === String(classId) && String(data[i][memberIdIdx]) === String(memberId)) {
-        rowIndex = i + 2;
-        break;
-      }
-    }
+  // 중복 검사 (같은 회차에 같은 회원이 있는지)
+  const existing = readMembersByClassD1Id(classD1Id);
+  if (existing.some(e => String(e.member_id) === String(memberId))) {
+    return { success: false, message: '해당 회원이 이미 등록되어 있습니다.' };
   }
 
-  const todayYYMMDD = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMdd');
+  const newId = new Date().getTime().toString();
+  const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
-  if (rowIndex === -1) {
-    // 신규 행 생성
-    const newId = new Date().getTime().toString();
-    const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    const newRow = MEMBER_CLASS_DETAILS_HEADERS.map(h => {
-      if (h === 'detail_id') return newId;
-      if (h === 'class_id') return classId;
-      if (h === 'member_id') return memberId;
-      if (h === 'member_status') return memberStatus || '수강중';
-      if (h === 'reg_date') return regDate;
-      if (h === 'no_' + loopNum) return todayYYMMDD;
-      return '';
-    });
-    sheet.appendRow(newRow);
-  } else {
-    // 기존 행 업데이트
-    if (memberStatus) {
-      sheet.getRange(rowIndex, statusIdx + 1).setValue(memberStatus);
+  const row = MEMBER_CLASS_DETAILS_HEADERS.map(h => {
+    switch (h) {
+      case 'detail_id': return newId;
+      case 'class_d1_id': return classD1Id;
+      case 'member_id': return memberId;
+      case 'attended': return 'N';
+      case 'reg_date': return regDate;
+      default: return '';
     }
-    sheet.getRange(rowIndex, noNIdx + 1).setValue(todayYYMMDD);
-  }
+  });
 
-  return { success: true, message: '회원 등록 완료' };
+  sheet.appendRow(row);
+  return { success: true, message: '회원 추가 완료' };
 }
 
 /**
  * 수업 회차에 여러 회원을 일괄 추가합니다.
  */
-function addMemberToClassD1Batch(classD1Id, memberIds, memberStatus) {
-  if (!Array.isArray(memberIds)) return { success: false, message: '회원 목록이 유효하지 않습니다.' };
+function addMemberToClassD1Batch(classD1Id, memberIds) {
   var added = 0;
-  var errors = [];
+  var skipped = [];
   memberIds.forEach(function(memberId) {
-    var r = addMemberToClassD1(classD1Id, memberId, memberStatus);
+    var r = addMemberToClassD1(classD1Id, memberId);
     if (r.success) {
       added++;
     } else {
-      errors.push(r.message);
+      skipped.push(r.message);
     }
   });
-  var msg = added + '명 등록 완료';
-  if (errors.length > 0) msg += ' (오류: ' + errors[0] + '...)';
+  var msg = added + '명 추가 완료';
+  if (skipped.length > 0) msg += ' (' + skipped.join(', ') + ')';
   return { success: added > 0, added: added, message: msg };
 }
 
