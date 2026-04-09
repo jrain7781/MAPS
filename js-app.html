@@ -12242,6 +12242,186 @@ ${token}
         }
     }
 
+    // ================================================================
+    // 회원등록 모달 (수업생성/회차생성용)
+    // ================================================================
+    let _memregFilteredData = [];
+
+    function showMemberRegisterModal() {
+        const modal = document.getElementById('memberRegisterModal');
+        modal.classList.remove('content-hidden');
+        _populateMemregDropdowns();
+        if (allMembersNewData && allMembersNewData.length > 0) {
+            filterMembersRegister();
+        } else {
+            const tbody = document.getElementById('memregDataTableBody');
+            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-500">불러오는 중...</td></tr>';
+            google.script.run
+                .withSuccessHandler(data => {
+                    allMembersNewData = Array.isArray(data) ? data : [];
+                    filterMembersRegister();
+                })
+                .withFailureHandler(() => {
+                    tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-red-400">로드 실패</td></tr>';
+                })
+                .readAllMembersNew();
+        }
+    }
+
+    function _populateMemregDropdowns() {
+        const opts = classDropdownOptions || {};
+        const populate = (id, arr, placeholder) => {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            const cur = sel.value;
+            sel.innerHTML = '<option value="">' + placeholder + '</option>';
+            (arr || []).forEach(v => {
+                const o = document.createElement('option');
+                o.value = v; o.textContent = v;
+                sel.appendChild(o);
+            });
+            if (cur) sel.value = cur;
+        };
+        populate('memreg-search-class-type', opts.class_types, '수업구분');
+        populate('memreg-search-class-name', opts.class_names, '수업이름');
+        populate('memreg-search-class-grade', opts.class_grades, '수업등급');
+        populate('memreg-search-class-loc', opts.class_locs, '지역');
+    }
+
+    function closeMemberRegisterModal() {
+        document.getElementById('memberRegisterModal').classList.add('content-hidden');
+    }
+
+    function resetMemberRegisterSearch() {
+        ['memreg-search-name', 'memreg-search-phone'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        ['memreg-search-class-type', 'memreg-search-class-name', 'memreg-search-class-grade', 'memreg-search-class-loc', 'memreg-search-gubun'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        filterMembersRegister();
+    }
+
+    function filterMembersRegister() {
+        const nameKw = (document.getElementById('memreg-search-name')?.value || '').toLowerCase();
+        const phoneKw = (document.getElementById('memreg-search-phone')?.value || '').replace(/[^0-9]/g, '');
+        const gubunKw = document.getElementById('memreg-search-gubun')?.value || '';
+        const classTypeKw = document.getElementById('memreg-search-class-type')?.value || '';
+        const classNameKw = document.getElementById('memreg-search-class-name')?.value || '';
+        const classGradeKw = document.getElementById('memreg-search-class-grade')?.value || '';
+        const classLocKw = document.getElementById('memreg-search-class-loc')?.value || '';
+
+        const classMap = {};
+        allClassesData.forEach(c => { classMap[String(c.class_id)] = c; });
+
+        _memregFilteredData = allMembersNewData.filter(m => {
+            const cls = classMap[String(m.class_id)] || {};
+            const name = String(m.member_name || '').toLowerCase();
+            const phone = String(m.phone || '').replace(/[^0-9]/g, '');
+            if (classTypeKw && (cls.class_type || '') !== classTypeKw) return false;
+            if (classNameKw && (cls.class_name || '') !== classNameKw) return false;
+            if (classGradeKw && (cls.class_grade || '') !== classGradeKw) return false;
+            if (classLocKw && (cls.class_loc || '') !== classLocKw) return false;
+            if (nameKw && !name.includes(nameKw)) return false;
+            if (phoneKw && !phone.includes(phoneKw)) return false;
+            if (gubunKw && (m.gubun || '') !== gubunKw) return false;
+            return true;
+        });
+
+        renderMembersRegisterList(_memregFilteredData, classMap);
+    }
+
+    function renderMembersRegisterList(members, classMap) {
+        const tbody = document.getElementById('memregDataTableBody');
+        if (!tbody) return;
+        if (!members || members.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-500">데이터가 없습니다.</td></tr>';
+            updateMemregSelectedCount();
+            return;
+        }
+        tbody.innerHTML = members.map(m => {
+            const cls = classMap[String(m.class_id)] || {};
+            return `<tr class="cursor-pointer hover:bg-indigo-50" onclick="toggleMemregRow(this)">
+                <td class="px-2 py-2 text-center"><input type="checkbox" class="memreg-cb rounded" value="${m.member_id}" onchange="updateMemregSelectedCount()" onclick="event.stopPropagation()"></td>
+                <td class="px-2 py-2 text-center text-sm">${escapeHtml(String(m.member_id))}</td>
+                <td class="px-2 py-2 text-center text-sm">${escapeHtml(m.gubun || '')}</td>
+                <td class="px-2 py-2 text-center text-sm font-medium">${escapeHtml(m.member_name || '')}</td>
+                <td class="px-2 py-2 text-center text-sm">${escapeHtml(m.phone || '')}</td>
+                <td class="px-2 py-2 text-center text-sm">${escapeHtml(cls.class_type || '')}</td>
+                <td class="px-2 py-2 text-center text-sm">${escapeHtml(cls.class_name || '')}</td>
+                <td class="px-2 py-2 text-center text-sm">${escapeHtml(cls.class_loc || '')}</td>
+            </tr>`;
+        }).join('');
+        const selAll = document.getElementById('memreg-select-all');
+        if (selAll) selAll.checked = false;
+        updateMemregSelectedCount();
+    }
+
+    function toggleMemregRow(tr) {
+        const cb = tr.querySelector('.memreg-cb');
+        if (cb) { cb.checked = !cb.checked; updateMemregSelectedCount(); }
+    }
+
+    function toggleMemberRegisterAll(checked) {
+        document.querySelectorAll('.memreg-cb').forEach(cb => { cb.checked = checked; });
+        updateMemregSelectedCount();
+    }
+
+    function updateMemregSelectedCount() {
+        const count = document.querySelectorAll('.memreg-cb:checked').length;
+        const el = document.getElementById('memreg-selected-count');
+        if (el) el.textContent = `선택 ${count}명`;
+    }
+
+    function confirmMemberRegister() {
+        const checked = document.querySelectorAll('.memreg-cb:checked');
+        if (checked.length === 0) { alert('등록할 회원을 선택해주세요.'); return; }
+
+        const cls = allClassesData.find(c => String(c.class_id) === String(selectedClassId)) || {};
+        const clsInfo = [cls.class_name, cls.class_grade ? `[${cls.class_grade}]` : '', cls.class_loc ? `(${cls.class_loc})` : ''].filter(Boolean).join(' ');
+
+        // 이미 등록된 member_id 수집
+        const existing = new Set();
+        document.querySelectorAll('.genD1-member-cb').forEach(cb => { existing.add(String(cb.value)); });
+
+        const memberList = document.getElementById('genD1-memberList');
+        const memberSection = document.getElementById('genD1-memberSection');
+        memberSection.classList.remove('hidden');
+
+        // 기존 "없음" 텍스트만 있는 경우 초기화
+        const emptyMsg = memberList.querySelector('.text-gray-400');
+        if (emptyMsg && memberList.children.length === 1) memberList.innerHTML = '';
+
+        let addedCount = 0;
+        checked.forEach(cb => {
+            const memberId = String(cb.value);
+            if (existing.has(memberId)) return;
+            const m = allMembersNewData.find(x => String(x.member_id) === memberId);
+            if (!m) return;
+            const stuInfo = `ID:${m.member_id} | ${m.phone || ''} | ${escapeHtml(m.name1 || m.member_name || '')} - ${escapeHtml(clsInfo)}`;
+            const label = document.createElement('label');
+            label.className = 'grid items-center gap-1 px-2 py-1 text-[10px] cursor-pointer hover:bg-indigo-50 genD1-member-row';
+            label.style.gridTemplateColumns = '20px 1fr 2fr 1fr 1fr';
+            label.innerHTML = `<input type="checkbox" class="genD1-member-cb rounded" value="${memberId}" checked>
+                <span class="font-medium truncate" title="${escapeHtml(m.member_name || '-')}">${escapeHtml(m.member_name || '-')}</span>
+                <span class="text-gray-500 truncate" title="${stuInfo}">${stuInfo}</span>
+                <span class="text-indigo-600">-</span>
+                <span class="text-gray-500">-</span>`;
+            memberList.appendChild(label);
+            addedCount++;
+        });
+
+        closeMemberRegisterModal();
+        if (addedCount > 0) {
+            const selAll = document.getElementById('genD1-memberSelectAll');
+            if (selAll) selAll.checked = true;
+        } else {
+            showStatus('선택한 회원이 이미 모두 등록되어 있습니다.', 'info');
+        }
+    }
+
     function togglePrevAllMembers(checked) {
         document.querySelectorAll('.prev-genD1-member-cb').forEach(cb => { cb.checked = checked; });
     }

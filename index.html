@@ -2848,8 +2848,10 @@
                                     <label class="flex items-center gap-1 text-xs cursor-pointer">
                                         <input type="radio" name="genD1-memberApply" value="first"> 첫회차만
                                     </label>
+                                    <button type="button" onclick="showMemberRegisterModal()"
+                                        class="ml-auto px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs rounded border border-indigo-300 font-semibold">회원등록</button>
                                     <button type="button" onclick="loadAllClassMembersToRight_()"
-                                        class="ml-auto px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs rounded border border-gray-300">전체회원 불러오기</button>
+                                        class="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs rounded border border-gray-300">수업회원전체</button>
                                 </div>
                                 <div class="grid text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-t-lg border border-gray-200 border-b-0"
                                     style="grid-template-columns:20px 1fr 2fr 1fr 1fr">
@@ -2864,6 +2866,85 @@
                         </div>
 
                     </div><!-- end 2단 -->
+                </div>
+            </div>
+
+            <!-- 회원등록 모달 (수업생성/회차생성용) -->
+            <div id="memberRegisterModal" class="modal content-hidden" style="z-index:10001">
+                <div class="modal-content max-w-4xl w-full" style="max-height:90vh;display:flex;flex-direction:column">
+                    <div class="flex items-center justify-between p-4 border-b flex-shrink-0">
+                        <h3 class="text-base font-bold text-gray-800">회원등록</h3>
+                        <button type="button" onclick="closeMemberRegisterModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                    </div>
+                    <!-- 필터 -->
+                    <div class="p-3 bg-gray-50 border-b space-y-2 flex-shrink-0">
+                        <div class="flex flex-wrap gap-2">
+                            <input type="text" id="memreg-search-name" oninput="filterMembersRegister()" placeholder="회원이름"
+                                class="flex-1 min-w-[100px] px-3 py-2 border border-gray-300 rounded-lg text-sm" onfocus="this.select()">
+                            <select id="memreg-search-class-type" onchange="filterMembersRegister()"
+                                class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                <option value="">수업구분</option>
+                            </select>
+                            <select id="memreg-search-class-name" onchange="filterMembersRegister()"
+                                class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                <option value="">수업이름</option>
+                            </select>
+                            <select id="memreg-search-class-grade" onchange="filterMembersRegister()"
+                                class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                <option value="">수업등급</option>
+                            </select>
+                            <select id="memreg-search-class-loc" onchange="filterMembersRegister()"
+                                class="flex-1 min-w-[60px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                <option value="">지역</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <input type="text" id="memreg-search-phone" oninput="filterMembersRegister()" placeholder="전화번호"
+                                class="flex-1 min-w-[100px] px-3 py-2 border border-gray-300 rounded-lg text-sm" onfocus="this.select()">
+                            <select id="memreg-search-gubun" onchange="filterMembersRegister()"
+                                class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                <option value="">조사자</option>
+                                <option value="회원">회원</option>
+                                <option value="직원">직원</option>
+                                <option value="관리자">관리자</option>
+                                <option value="조사자">조사자</option>
+                            </select>
+                            <button onclick="resetMemberRegisterSearch()"
+                                class="text-sm text-red-500 hover:text-red-700 border border-red-200 px-3 py-1.5 rounded-md hover:bg-red-50">초기화</button>
+                        </div>
+                    </div>
+                    <!-- 테이블 -->
+                    <div class="flex-1 overflow-y-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50 sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-2 py-2 text-center w-8">
+                                        <input type="checkbox" id="memreg-select-all" onchange="toggleMemberRegisterAll(this.checked)" class="rounded cursor-pointer">
+                                    </th>
+                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">ID</th>
+                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">구분</th>
+                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">이름</th>
+                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">전화번호</th>
+                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">수업구분</th>
+                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">수업이름</th>
+                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">지역</th>
+                                </tr>
+                            </thead>
+                            <tbody id="memregDataTableBody" class="bg-white divide-y divide-gray-100">
+                                <tr><td colspan="8" class="p-4 text-center text-gray-500">데이터를 불러오는 중...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- 하단 버튼 -->
+                    <div class="flex items-center justify-between p-3 border-t bg-white flex-shrink-0">
+                        <span id="memreg-selected-count" class="text-sm text-gray-600">선택 0명</span>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="closeMemberRegisterModal()"
+                                class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">취소</button>
+                            <button type="button" onclick="confirmMemberRegister()"
+                                class="px-4 py-2 text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 font-semibold">일괄등록</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
