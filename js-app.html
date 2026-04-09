@@ -11631,17 +11631,20 @@ ${token}
         // 등록 패널 닫기
         document.getElementById('d1ItemRegisterPanel')?.classList.add('content-hidden');
         d1PendingItems = [];
+        const addBtn = document.getElementById('d1AddMemberBtn');
         if (classD1Id === '__summary__') {
             document.getElementById('d1ItemCard')?.classList.add('hidden');
             document.getElementById('d1CardDivider')?.classList.add('hidden');
             document.getElementById('d1MemberNormalContent')?.classList.add('hidden');
             document.getElementById('d1SummaryGrid')?.classList.remove('hidden');
+            if (addBtn) addBtn.classList.remove('hidden');
             loadD1SummaryGrid(selectedClassId);
         } else {
             document.getElementById('d1ItemCard')?.classList.remove('hidden');
             document.getElementById('d1CardDivider')?.classList.remove('hidden');
             document.getElementById('d1MemberNormalContent')?.classList.remove('hidden');
             document.getElementById('d1SummaryGrid')?.classList.add('hidden');
+            if (addBtn) addBtn.classList.add('hidden');
             restoreD1MemberTableHead_();
             loadD1Members(classD1Id);
             loadD1Items(classD1Id);
@@ -12640,15 +12643,12 @@ ${token}
         // 선택된 회원 ID
         const memberIds = [];
         document.querySelectorAll('.genD1-member-cb:checked').forEach(cb => memberIds.push(cb.value));
-        const memberApplyRadio = document.querySelector('input[name="genD1-memberApply"]:checked');
-        const memberApplyAll = !memberApplyRadio || memberApplyRadio.value === 'all';
-
         const bid1Count = parseInt(document.getElementById('genD1-bid1Count')?.value) || null;
         const bid2Count = parseInt(document.getElementById('genD1-bid2Count')?.value) || null;
         const bidOpts = { bidStarttimeDay, bidStarttimeTime, bidDatetime1Day, bidDatetime1Time, bidDatetime2Day, bidDatetime2Time, bid1Count, bid2Count };
         const options = mode === 'add'
-            ? { addCount, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds, memberApplyAll }
-            : { startLoop, endLoop, timeFrom, timeTo, ...bidOpts, memberIds, memberApplyAll };
+            ? { addCount, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds }
+            : { startLoop, endLoop, timeFrom, timeTo, ...bidOpts, memberIds };
 
         // 생성 중 팝업 표시
         closeGenerateD1Modal();
@@ -12927,8 +12927,8 @@ ${token}
     var d1PendingMembers = []; // 임시 저장 목록 [{member_id, member_name, info}]
 
     function showAddMemberToD1Modal() {
-        if (!selectedClassD1Id) {
-            showStatus('먼저 회차를 선택하세요.', 'error');
+        if (selectedClassD1Id !== '__summary__') {
+            showStatus('회원 추가는 전체회차 카드에서만 가능합니다.', 'error');
             return;
         }
         d1PendingMembers = [];
