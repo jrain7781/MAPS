@@ -128,7 +128,8 @@ const CLASS_D1_HEADERS = [
 // --- 회원 수업 상세(member_class_details) 시트 헤더 ---
 const MEMBER_CLASS_DETAILS_HEADERS = [
   'detail_id',     // PK
-  'class_id',      // 수업 ID (FK)
+  'class_d1_id',   // 수업(회차) ID (FK → class_d1 시트)
+  'class_id',      // 수업 ID (FK → class 시트, 조회 편의용)
   'member_id',     // 회원 ID (FK)
   'member_status', // 수업별 회원 상태 (수강중/홀딩/종료 등)
   'no_1',  'no_2',  'no_3',  'no_4',  'no_5',

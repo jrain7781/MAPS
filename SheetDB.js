@@ -2381,6 +2381,8 @@ function generateClassD1(classId, startDate, loopUnit, options) {
         case 'bid_starttime':  return calcBidDatetime_(currentDate, bidStarttimeDay, bidStarttimeTime);
         case 'bid_datetime_1': return calcBidDatetime_(currentDate, bidDatetime1Day, bidDatetime1Time);
         case 'bid_datetime_2': return calcBidDatetime_(currentDate, bidDatetime2Day, bidDatetime2Time);
+        case '1cha_bid':       return (opts.bid1Count != null && opts.bid1Count !== '') ? Number(opts.bid1Count) : '';
+        case '2cha_bid':       return (opts.bid2Count != null && opts.bid2Count !== '') ? Number(opts.bid2Count) : '';
         default:               return '';
       }
     });
@@ -2394,49 +2396,12 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, CLASS_D1_HEADERS.length).setValues(newRows);
   SpreadsheetApp.flush();
 
-  // 회원 일괄 등록 (bulk: 시트 읽기 1회 + setValues 1회)
+  // 회원 일괄 등록 - 생성된 각 회차(class_d1_id)에 회원 1회씩 등록
   if (memberIds.length > 0) {
     var applyIds = memberApplyAll ? newD1Ids : [newD1Ids[0]];
-    var detailSheet = ensureMemberClassDetailsSheet_();
-    var detailRegDate = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
-
-    // 기존 등록 키 한 번에 읽어 중복 체크용 Set 구성
-    var existingKeys = {};
-    var detailLastRow = detailSheet.getLastRow();
-    if (detailLastRow >= 2) {
-      var existingData = detailSheet.getRange(2, 1, detailLastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
-      var _d1Idx  = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
-      var _memIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
-      existingData.forEach(function(r) {
-        existingKeys[String(r[_d1Idx]) + '|' + String(r[_memIdx])] = true;
-      });
-    }
-
-    // 전체 조합(회차 × 회원) 행 메모리 생성
-    var detailRows = [];
-    var baseTs = new Date().getTime();
-    var _counter = 0;
-    applyIds.forEach(function(did) {
-      memberIds.forEach(function(mid) {
-        if (existingKeys[String(did) + '|' + String(mid)]) return;
-        var detailId = String(baseTs + _counter++);
-        detailRows.push(MEMBER_CLASS_DETAILS_HEADERS.map(function(h) {
-          switch (h) {
-            case 'detail_id':   return detailId;
-            case 'class_d1_id': return did;
-            case 'member_id':   return mid;
-            case 'attended':    return 'N';
-            case 'reg_date':    return detailRegDate;
-            default:            return '';
-          }
-        }));
-      });
+    applyIds.forEach(function(d1Id) {
+      addMemberToClassD1Batch(d1Id, memberIds, classId);
     });
-
-    // 한 번에 일괄 저장
-    if (detailRows.length > 0) {
-      detailSheet.getRange(detailSheet.getLastRow() + 1, 1, detailRows.length, MEMBER_CLASS_DETAILS_HEADERS.length).setValues(detailRows);
-    }
   }
 
   return { success: true, message: newRows.length + '개 회차 생성 완료 (회원 ' + memberIds.length + '명)', created: newRows.length };
@@ -2635,14 +2600,37 @@ function getItemsByClassD1Id(classD1Id) {
 // ================================================================================================
 
 /**
- * 수업(classId)의 회원 상세 목록을 조회합니다. (신규 구조: 1행=1회원)
+ * 수업(classId)의 회원 상세 목록을 조회합니다.
+ * class_d1 시트에서 해당 classId의 모든 class_d1_id를 조회한 후
+ * member_class_details에서 class_d1_id 기준으로 매칭합니다.
  */
 function readMemberClassDetailsByClassId(classId) {
   var sheet = ensureMemberClassDetailsSheet_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
+  // class_d1 시트에서 해당 classId의 모든 class_d1_id 수집
+  var d1Sheet = ensureClassD1Sheet_();
+  var d1LastRow = d1Sheet.getLastRow();
+  var d1Ids = [];
+  if (d1LastRow >= 2) {
+    var d1Data = d1Sheet.getRange(2, 1, d1LastRow - 1, CLASS_D1_HEADERS.length).getValues();
+    var d1ClassIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
+    var d1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
+    d1Data.forEach(function(r) {
+      if (String(r[d1ClassIdIdx]) === String(classId)) {
+        d1Ids.push(String(r[d1IdIdx]));
+      }
+    });
+  }
+  if (d1Ids.length === 0) return [];
+
+  var d1IdSet = {};
+  d1Ids.forEach(function(id) { d1IdSet[id] = true; });
+
   var data = sheet.getRange(2, 1, lastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+  var d1IdColIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+
   var filtered = data
     .map(function(row) {
       var obj = {};
@@ -2656,7 +2644,7 @@ function readMemberClassDetailsByClassId(classId) {
       });
       return obj;
     })
-    .filter(function(d) { return String(d.class_id) === String(classId); });
+    .filter(function(d) { return d1IdSet[String(d.class_d1_id)]; });
 
   var allMembers = readAllMembersNew();
   return filtered.map(function(d) {
@@ -2676,18 +2664,18 @@ function readMemberClassDetailsByClassId(classId) {
  * 수업 회원 상세를 저장(upsert)합니다.
  * updates: 저장할 필드 객체 (e.g. { member_status: '수강중', no_1: '260409', remark1: '...' })
  */
-function saveMemberClassDetail(classId, memberId, updates) {
+function saveMemberClassDetail(classD1Id, memberId, updates) {
   var sheet = ensureMemberClassDetailsSheet_();
   var lastRow = sheet.getLastRow();
-  var classIdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_id');
+  var d1IdIdx   = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
   var memberIdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
 
   var existingRow = -1;
   if (lastRow >= 2) {
-    var ids = sheet.getRange(2, classIdIdx + 1, lastRow - 1, 1).getValues().flat();
+    var ids  = sheet.getRange(2, d1IdIdx + 1, lastRow - 1, 1).getValues().flat();
     var mids = sheet.getRange(2, memberIdIdx + 1, lastRow - 1, 1).getValues().flat();
     for (var i = 0; i < ids.length; i++) {
-      if (String(ids[i]) === String(classId) && String(mids[i]) === String(memberId)) {
+      if (String(ids[i]) === String(classD1Id) && String(mids[i]) === String(memberId)) {
         existingRow = i + 2;
         break;
       }
@@ -2703,10 +2691,10 @@ function saveMemberClassDetail(classId, memberId, updates) {
   } else {
     var regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     var newRow = MEMBER_CLASS_DETAILS_HEADERS.map(function(h) {
-      if (h === 'detail_id') return new Date().getTime().toString();
-      if (h === 'class_id') return classId;
-      if (h === 'member_id') return memberId;
-      if (h === 'reg_date') return regDate;
+      if (h === 'detail_id')   return new Date().getTime().toString();
+      if (h === 'class_d1_id') return classD1Id;
+      if (h === 'member_id')   return memberId;
+      if (h === 'reg_date')    return regDate;
       if (updates[h] !== undefined) return updates[h];
       return '';
     });
@@ -2867,25 +2855,46 @@ function getMemberAttendanceCount(memberId, classId) {
 /**
  * 수업에 회원을 추가합니다. (수업 단위 1회 등록)
  */
-function addMemberToClassD1(classId, memberId) {
+function addMemberToClassD1(classD1Id, memberId, classId) {
   const sheet = ensureMemberClassDetailsSheet_();
+  const tz = Session.getScriptTimeZone();
 
-  // 중복 검사 (같은 수업에 같은 회원이 이미 있는지)
-  const existing = readMemberClassDetailsByClassId(classId);
-  if (existing.some(e => String(e.member_id) === String(memberId))) {
-    return { success: false, message: '해당 회원이 이미 등록되어 있습니다.' };
+  // class_id 없으면 class_d1 시트에서 조회
+  if (!classId) {
+    var d1Sheet = ensureClassD1Sheet_();
+    var d1Last = d1Sheet.getLastRow();
+    if (d1Last >= 2) {
+      var d1Rows = d1Sheet.getRange(2, 1, d1Last - 1, CLASS_D1_HEADERS.length).getValues();
+      var d1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
+      var d1CidIdx = CLASS_D1_HEADERS.indexOf('class_id');
+      var found = d1Rows.find(function(r) { return String(r[d1IdIdx]) === String(classD1Id); });
+      if (found) classId = String(found[d1CidIdx]);
+    }
+  }
+
+  // 중복 검사 (같은 class_d1_id + 같은 회원)
+  const d1IdColIdx     = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+  const memberIdColIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    const existingData = sheet.getRange(2, 1, lastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+    const dup = existingData.some(function(r) {
+      return String(r[d1IdColIdx]) === String(classD1Id) && String(r[memberIdColIdx]) === String(memberId);
+    });
+    if (dup) return { success: false, message: '해당 회원이 이미 등록되어 있습니다.' };
   }
 
   const newId = new Date().getTime().toString();
-  const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const regDate = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
 
-  const row = MEMBER_CLASS_DETAILS_HEADERS.map(h => {
+  const row = MEMBER_CLASS_DETAILS_HEADERS.map(function(h) {
     switch (h) {
-      case 'detail_id': return newId;
-      case 'class_id': return classId;
-      case 'member_id': return memberId;
-      case 'reg_date': return regDate;
-      default: return '';
+      case 'detail_id':   return newId;
+      case 'class_d1_id': return classD1Id;
+      case 'class_id':    return classId || '';
+      case 'member_id':   return memberId;
+      case 'reg_date':    return regDate;
+      default:            return '';
     }
   });
 
@@ -2894,21 +2903,21 @@ function addMemberToClassD1(classId, memberId) {
 }
 
 /**
- * 수업에 여러 회원을 일괄 추가합니다. (수업 단위 1회 등록)
+ * 수업에 여러 회원을 일괄 추가합니다.
  */
-function addMemberToClassD1Batch(classId, memberIds) {
+function addMemberToClassD1Batch(classD1Id, memberIds, classId) {
   var added = 0;
   var skipped = [];
   memberIds.forEach(function(memberId) {
-    var r = addMemberToClassD1(classId, memberId);
+    var r = addMemberToClassD1(classD1Id, memberId, classId);
     if (r.success) {
       added++;
     } else {
-      skipped.push(r.message);
+      skipped.push(memberId);
     }
   });
   var msg = added + '명 추가 완료';
-  if (skipped.length > 0) msg += ' (' + skipped.join(', ') + ')';
+  if (skipped.length > 0) msg += ' (중복 ' + skipped.length + '명 스킵)';
   return { success: added > 0, added: added, message: msg };
 }
 

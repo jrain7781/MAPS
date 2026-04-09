@@ -164,7 +164,10 @@ function getClassSessions(classId) {
  * 회차 자동 생성 로직 (파라미터 확장 지원)
  * - 입력: class_id, 시작일(startDate), 반복 단위(loopUnit), 반복 횟수(loopCount)
  */
-function generateClassSessions(classId, startDateStr, loopUnit = 1, loopCount = 8) {
+function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts) {
+    loopUnit = loopUnit || 1;
+    loopCount = loopCount || 8;
+    opts = opts || {};
     // 1. 수업 정보 가져오기
     const classes = getClasses();
     const cls = classes.find(c => String(c.class_id) === String(classId));
@@ -192,35 +195,57 @@ function generateClassSessions(classId, startDateStr, loopUnit = 1, loopCount = 
 
     const newRows = [];
 
-    for (let i = 0; i < total; i++) {
+    var startLoopNo = parseInt(opts.startLoop) || 1;  // 시작 회차번호
+    var timeFrom = opts.timeFrom || '';
+    var timeTo = opts.timeTo || '';
+
+    // 입찰시간 계산 헬퍼
+    function calcBidDatetime(classDateStr, dayOffset, timeStr) {
+        if (dayOffset === '' || dayOffset === null || dayOffset === undefined) return '';
+        var base = new Date(classDateStr);
+        base.setDate(base.getDate() + parseInt(dayOffset));
+        var parts = String(timeStr || '00:00').split(':');
+        base.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0, 0);
+        return Utilities.formatDate(base, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+    }
+
+    for (var i = 0; i < total; i++) {
         // 날짜 계산 (unit 주 단위)
-        let d = new Date(startDateObj);
+        var d = new Date(startDateObj);
         d.setDate(d.getDate() + (i * 7 * unit));
-        const dStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        var dStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
-        const sessId = 'D1_' + new Date().getTime() + '_' + i + '_' + Math.floor(Math.random() * 100);
+        var sessId = 'D1_' + new Date().getTime() + '_' + i + '_' + Math.floor(Math.random() * 100);
 
-        // CLASS_D1_HEADERS: class_d1_id, class_id, class_type, class_name, class_grade, class_loc, class_date, class_week, class_time_from, class_time_to, class_loop, completed, reg_date
-        const sessRow = {};
+        var sessRow = {};
         sessRow['class_d1_id'] = sessId;
         sessRow['class_id'] = classId;
-
-        // Denormalized fields (from Class)
         sessRow['class_type'] = cls.class_type;
         sessRow['class_name'] = cls.class_name;
         sessRow['class_grade'] = cls.class_grade;
         sessRow['class_loc'] = cls.class_loc;
         sessRow['class_week'] = cls.class_week;
-        sessRow['class_time_from'] = cls.class_time_from;
-        sessRow['class_time_to'] = cls.class_time_to;
-
+        sessRow['class_time_from'] = timeFrom || cls.class_time_from;
+        sessRow['class_time_to'] = timeTo || cls.class_time_to;
         sessRow['class_date'] = dStr;
-        sessRow['class_loop'] = (i + 1) + '회차';
+        sessRow['class_loop'] = (startLoopNo + i);
         sessRow['completed'] = 'N';
         sessRow['reg_date'] = regDate;
 
-        // Array 변환
-        newRows.push(CLASS_D1_HEADERS.map(h => sessRow[h] || ''));
+        // 입찰시간 (opts에 있으면 적용)
+        if (opts.bidStarttimeDay !== '' && opts.bidStarttimeDay !== undefined) {
+            sessRow['bid_starttime'] = calcBidDatetime(dStr, opts.bidStarttimeDay, opts.bidStarttimeTime);
+        }
+        if (opts.bidDatetime1Day !== '' && opts.bidDatetime1Day !== undefined) {
+            sessRow['bid_datetime_1'] = calcBidDatetime(dStr, opts.bidDatetime1Day, opts.bidDatetime1Time);
+        }
+        if (opts.bidDatetime2Day !== '' && opts.bidDatetime2Day !== undefined) {
+            sessRow['bid_datetime_2'] = calcBidDatetime(dStr, opts.bidDatetime2Day, opts.bidDatetime2Time);
+        }
+        if (opts.bid1Count) sessRow['1cha_bid'] = opts.bid1Count;
+        if (opts.bid2Count) sessRow['2cha_bid'] = opts.bid2Count;
+
+        newRows.push(CLASS_D1_HEADERS.map(function(h) { return sessRow[h] !== undefined ? sessRow[h] : ''; }));
     }
 
     // 일괄 쓰기
@@ -349,14 +374,28 @@ function readClassD1ByClassId(classId) {
 }
 
 /**
- * 프론트엔드용 래퍼: 회차 생성
+ * 프론트엔드용 래퍼: 회차 생성 + 회원 등록
  * @param {string} classId
- * @param {string} startDateStr (YYYY-MM-DD or YYYYMMDD)
- * @param {number|string} loopUnit (주 단위: 1, 2, 3...)
- * @param {number|string} loopCount (생성할 횟수)
+ * @param {string} startDateStr (YYYYMMDD)
+ * @param {string|number} loopUnit (주 단위)
+ * @param {object} options { startLoop, endLoop, addCount, timeFrom, timeTo, memberIds, memberApplyAll, bid* ... }
  */
-function generateClassD1(classId, startDateStr, loopUnit, loopCount) {
-    return generateClassSessions(classId, startDateStr, loopUnit, loopCount);
+function generateClassD1(classId, startDateStr, loopUnit, options) {
+    var opts = (options && typeof options === 'object') ? options : {};
+    var mode = opts.addCount ? 'add' : 'create';
+    var loopCount = mode === 'add' ? (parseInt(opts.addCount) || 1) : (parseInt(opts.endLoop) - parseInt(opts.startLoop) + 1 || 10);
+
+    // 1. 회차 생성
+    var result = generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts);
+    if (!result.success) return result;
+
+    // 2. 회원 등록 (수업 단위 1회만 - 이미 등록된 회원은 중복 스킵)
+    var memberIds = opts.memberIds;
+    if (memberIds && memberIds.length > 0) {
+        addMemberToClassD1Batch(classId, memberIds);
+    }
+
+    return result;
 }
 
 /**
@@ -385,37 +424,7 @@ function getMembersForClass() {
     return readAllMembers(); // SheetDB.gs
 }
 
-/**
- * 프론트엔드용: 특정 회차에 멤버 수동 추가
- * - 이미 class에 속해있지 않은 멤버를 해당 회차에만 추가하거나,
- * - class에 속해있지만 member_class_details가 없는 경우 생성
- */
-function addMemberToClassD1(classD1Id, memberId) {
-    // member_class_details에 레코드 추가
-    // Default attended: 'N' or empty
-
-    ensureMemberClassDetailsSheet();
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MEMBER_CLASS_DETAILS_SHEET_NAME_DB);
-
-    // 중복 확인
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-        const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues(); // detail_id, class_d1_id, member_id
-        const exists = data.find(r => String(r[1]) === String(classD1Id) && String(r[2]) === String(memberId));
-        if (exists) {
-            return { success: false, message: '이미 해당 회차에 등록된 회원입니다.' };
-        }
-    }
-
-    const newId = 'ATT_' + new Date().getTime() + '_' + Math.floor(Math.random() * 10000);
-    const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-
-    // detail_id, class_d1_id, member_id, attended, attended_date, reg_date
-    sheet.appendRow([newId, classD1Id, memberId, '', '', regDate]);
-
-    return { success: true, message: '회원이 추가되었습니다.' };
-}
+// addMemberToClassD1 / addMemberToClassD1Batch → SheetDB.js 사용 (수업 단위 1회 등록)
 
 /**
  * 수업 드롭다운용 유니크 값 목록을 반환합니다.
