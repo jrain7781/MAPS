@@ -2394,12 +2394,49 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, CLASS_D1_HEADERS.length).setValues(newRows);
   SpreadsheetApp.flush();
 
-  // 회원 일괄 등록
+  // 회원 일괄 등록 (bulk: 시트 읽기 1회 + setValues 1회)
   if (memberIds.length > 0) {
     var applyIds = memberApplyAll ? newD1Ids : [newD1Ids[0]];
-    applyIds.forEach(function(d1Id) {
-      addMemberToClassD1Batch(d1Id, memberIds);
+    var detailSheet = ensureMemberClassDetailsSheet_();
+    var detailRegDate = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+
+    // 기존 등록 키 한 번에 읽어 중복 체크용 Set 구성
+    var existingKeys = {};
+    var detailLastRow = detailSheet.getLastRow();
+    if (detailLastRow >= 2) {
+      var existingData = detailSheet.getRange(2, 1, detailLastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+      var _d1Idx  = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+      var _memIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
+      existingData.forEach(function(r) {
+        existingKeys[String(r[_d1Idx]) + '|' + String(r[_memIdx])] = true;
+      });
+    }
+
+    // 전체 조합(회차 × 회원) 행 메모리 생성
+    var detailRows = [];
+    var baseTs = new Date().getTime();
+    var _counter = 0;
+    applyIds.forEach(function(did) {
+      memberIds.forEach(function(mid) {
+        if (existingKeys[String(did) + '|' + String(mid)]) return;
+        var detailId = String(baseTs + _counter++);
+        detailRows.push(MEMBER_CLASS_DETAILS_HEADERS.map(function(h) {
+          switch (h) {
+            case 'detail_id':   return detailId;
+            case 'class_d1_id': return did;
+            case 'member_id':   return mid;
+            case 'attended':    return 'N';
+            case 'reg_date':    return detailRegDate;
+            default:            return '';
+          }
+        }));
+      });
     });
+
+    // 한 번에 일괄 저장
+    if (detailRows.length > 0) {
+      detailSheet.getRange(detailSheet.getLastRow() + 1, 1, detailRows.length, MEMBER_CLASS_DETAILS_HEADERS.length).setValues(detailRows);
+    }
   }
 
   return { success: true, message: newRows.length + '개 회차 생성 완료 (회원 ' + memberIds.length + '명)', created: newRows.length };
