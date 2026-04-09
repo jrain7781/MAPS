@@ -611,3 +611,56 @@ function debugCloudflareProxy() {
     Logger.log(result);
     return result;
 }
+
+function checkItemDataForTelegram() {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 12).getValues();
+    var tz = Session.getScriptTimeZone();
+    var today = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
+
+    var debugRows = [];
+    var passDate = 0;
+    var passStatus = 0;
+    var passMember = 0;
+    var failMemberIds = [];
+
+    for (var i = 0; i < data.length; i++) {
+        var inDateRaw = data[i][1];
+        var inDate;
+        if (inDateRaw instanceof Date && !isNaN(inDateRaw.getTime())) {
+            inDate = Utilities.formatDate(inDateRaw, tz, 'yyyyMMdd');
+        } else {
+            inDate = String(inDateRaw || '').replace(/\D/g, '');
+            if (inDate.length === 6) inDate = '20' + inDate;
+            else if (inDate.length > 8) inDate = inDate.substring(0, 8);
+        }
+
+        var bidState = String(data[i][11] || '').trim();
+        var memberId = String(data[i][8] || '').trim();
+        var mNameId = String(data[i][5] || '').trim();
+
+        if (!inDate || inDate.length !== 8 || inDate < today) continue;
+        passDate++;
+
+        if (['추천', '입찰', '변경'].indexOf(bidState) === -1) continue;
+        passStatus++;
+
+        if (!memberId) {
+            failMemberIds.push({ id: data[i][0], bidState: bidState, mNameId: mNameId, memberId: memberId });
+            continue;
+        }
+        passMember++;
+
+        debugRows.push({ id: data[i][0], inDate: inDate, bidState: bidState, memberId: memberId, mNameId: mNameId });
+    }
+
+    return JSON.stringify({
+        total: data.length,
+        today: today,
+        passDate: passDate,
+        passStatus: passStatus,
+        passMember: passMember,
+        failedMembers: failMemberIds.slice(0, 5),
+        sample: debugRows.slice(0, 5)
+    }, null, 2);
+}

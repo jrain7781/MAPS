@@ -1954,67 +1954,6 @@
                         const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const hBadgeHtml = (bid.class_d1_id && bid.stu_member !== '미정') ? `<span style="font-size:9px;background:#fef08a;color:#dc2626;font-weight:bold;padding:0 3px;border-radius:3px;margin-right:2px;vertical-align:middle">H</span>` : '';
-                        const statusClass = getStatusTagClass(bid.stu_member);
-                        const courtButtonClass = 'button-like-content';
-
-                        const isNewBid = (bid.bid_state === '신규' || !bid.bid_state);
-                        const bidPriceMobileClass = isNewBid ? 'text-red-600 font-bold' : 'text-gray-700 font-bold';
-                        const bidPricePcClass = isNewBid ? 'bidprice-cell text-red-600' : 'bidprice-cell';
-
-                        const isNoPrice = (!bid.bidprice || bid.bidprice === 0 || bid.bidprice === '0');
-                        const mobileBorder = isNoPrice ? 'border-2 border-red-600' : 'border-2 border-slate-400';
-                        const desktopBorder = isNoPrice ? 'border-[2px] border-red-600' : 'border-[1px] border-slate-500';
-
-                        // 이미지 존재 여부 확인 (has_images 플래그 사용) 및 옥션 ID 확인
-                        const hasImages = !!bid.has_images;
-                        const hasAucId = !!bid.auction_id;
-                        let dotClass = "";
-                        let dotTitle = "";
-
-                        if (hasImages && hasAucId) {
-                            dotClass = "bg-green-500";
-                            dotTitle = "이미지+옥션 등록완료";
-                        } else if (hasImages) {
-                            dotClass = "bg-gray-400";
-                            dotTitle = "이미지만 등록됨";
-                        } else if (hasAucId) {
-                            dotClass = "bg-blue-600";
-                            dotTitle = "옥션ID만 연결됨";
-                        }
-
-                        const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${(hasImages || hasAucId) ? `<span class="inline-block w-3.5 h-3.5 rounded-full ${dotClass} cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="${dotTitle}"></span>` : ''}</span>`;
-
-                        // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
-                        const chuchenDateStr = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date) : '';
-                        const chuchenDateHtml = chuchenDateStr ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr}</div>` : '';
-                        const timerBarHtml = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
-
-                        const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
-                          <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
-                            <div class="p-3 bg-stone-50 flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div>
-                              <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
-                                  <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
-                                  <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
-                              </div>
-                              <div class="flex flex-col items-end w-[40%] space-y-1">
-                                  <div class="flex items-center space-x-1">
-                                      <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                                      ${tBadgeHtml}<span class="text-xs font-bold text-gray-800">${mNameValue}</span>
-                                  </div>
-                                  <div class="text-sm ${bidPriceMobileClass}">${bidpriceFormatted}</div>
-                              </div>
-                            </div>
-                            ${timerBarHtml}
-                          </div>
-                          <div class="hidden md:block mb-0.5">
-                          <table class="bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <tbody>
-                                  <tr>
-                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div></td>
-                                      <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
-                                      <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
-                                      <td class="m-name-cell" style="width: 22%;">${hBadgeHtml}${tBadgeHtml}${mNameValue}</td>
                                   </tr>
                                   <tr>
                                       <td class="${mNameIdClass}" style="width: 21%;">${bid.m_name_id || '대표님'}</td>
@@ -2665,55 +2604,6 @@
                         const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const hBadgeHtml = (bid.class_d1_id && bid.stu_member !== '미정') ? `<span style="font-size:9px;background:#fef08a;color:#dc2626;font-weight:bold;padding:0 3px;border-radius:3px;margin-right:2px;vertical-align:middle">H</span>` : '';
-                        const statusClass = getStatusTagClass(bid.stu_member);
-                        const courtButtonClass = 'button-like-content';
-
-                        const isNewBid = (bid.bid_state === '신규' || !bid.bid_state);
-                        const bidPriceMobileClass = isNewBid ? 'text-red-600 font-bold' : 'text-gray-700 font-bold';
-                        const bidPricePcClass = isNewBid ? 'bidprice-cell text-red-600' : 'bidprice-cell';
-
-                        const isNoPrice = (!bid.bidprice || bid.bidprice === 0 || bid.bidprice === '0');
-                        const mobileBorder = isNoPrice ? 'border-2 border-red-600' : 'border-2 border-slate-400';
-                        const desktopBorder = isNoPrice ? 'border-[2px] border-red-600' : 'border-[1px] border-slate-500';
-
-                        // 이미지 존재 여부 확인 (has_images 플래그 사용)
-                        const hasImages = !!bid.has_images;
-                        const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${hasImages ? `<span class="inline-block w-3.5 h-3.5 rounded-full bg-green-500 cursor-pointer" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="이미지 있음"></span>` : ''}</span>`;
-
-                        // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
-                        const chuchenDateStr2 = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date) : '';
-                        const chuchenDateHtml2 = chuchenDateStr2 ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr2}</div>` : '';
-                        const timerBarHtml2 = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
-
-                        const mobileHtml = `
-                          <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
-                            <div class="p-3 bg-stone-50 flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div>
-                              <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
-                                  <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
-                                  <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
-                              </div>
-                              <div class="flex flex-col items-end w-[40%] space-y-1">
-                                  <div class="flex items-center space-x-1">
-                                      <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                                      ${tBadgeHtml}<span class="text-xs font-bold text-gray-800">${mNameValue}</span>
-                                  </div>
-                                  <div class="text-sm ${bidPriceMobileClass}">${bidpriceFormatted}</div>
-                              </div>
-                            </div>
-                            ${timerBarHtml2}
-                          </div>
-                      `;
-
-                        const desktopHtml = `
-                          <div class="hidden md:block mb-0.5">
-                          <table class="bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <tbody>
-                                  <tr>
-                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div></td>
-                                      <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
-                                  <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
-                                      <td class="m-name-cell" style="width: 22%;">${hBadgeHtml}${tBadgeHtml}${mNameValue}</td>
                                   </tr>
                                   <tr>
                                       <td class="${mNameIdClass}" style="width: 21%;">${bid.m_name_id || '대표님'}</td>
@@ -2973,13 +2863,6 @@
         google.script.run
             .withSuccessHandler(function (stats) {
                 if (stats) stats._testMode = testMode;
-                _autoApprovalStatsCache = stats;
-                renderAutoApprovalStats(stats);
-            })
-            .withFailureHandler(function (err) {
-                if (el) el.innerHTML = '<div class="p-4 text-center text-red-500 text-sm">' + (err && err.message ? err.message : '오류 발생') + '</div>';
-            })
-            .getAutoApprovalStats(testMode);
     }
 
     function renderAutoApprovalStats(stats) {
@@ -3037,16 +2920,6 @@
             + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200">입찰물건</th>'
             + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200" colspan="2">입찰가</th>'
             + '<th class="py-1 px-1 text-center font-bold border-l border-gray-200" rowspan="2">변경<br>취소</th>'
-            + '</tr>'
-            + '<tr class="bg-gray-50 border-b border-gray-200 text-gray-500">'
-            + '<th class="py-1 px-1 text-center border-l border-gray-200">입찰확정</th>'
-            + '<th class="py-1 px-1 text-center">미선택</th>'
-            + '<th class="py-1 px-1 text-center border-l border-gray-200">입찰취소</th>'
-            + '<th class="py-1 px-1 text-center border-l border-gray-200">전달</th>'
-            + '<th class="py-1 px-1 text-center">확인</th>'
-            + '</tr></thead>'
-            + '<tbody>' + tbodyHtml + '</tbody>'
-            + '</table>';
     }
 
 
@@ -5704,6 +5577,7 @@ MJ 이정우 팀장
             renderMissingBidDashboard();
             renderStatusManagementDashboard();
             renderMemberBidChart();
+            if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
             return;
         }
         toggleDashboardLoading(true);
@@ -5716,6 +5590,9 @@ MJ 이정우 팀장
                 renderStatusManagementDashboard();
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
+                if (typeof loadDashboardImageStats === 'function') loadDashboardImageStats(); // 이미지 동기화 현황
+                if (typeof loadTelegramJoinStatsByItem === 'function') loadTelegramJoinStatsByItem(); // 텔레그램 가입현황 (물건 모드 디폴트)
+                if (typeof loadAutoApprovalStats === 'function') loadAutoApprovalStats(); // 텔레그램 승인현황
             })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
@@ -6224,92 +6101,6 @@ MJ 이정우 팀장
                 } else if (dashboardFilter.type === 'item_ids') {
                     const cnt = Array.isArray(dashboardFilter.status) ? dashboardFilter.status.length : 0;
                     filterDesc = `${dashboardFilter.label || '텔레그램'} (${cnt}건)`;
-                }
-            }
-            activeFilterText.textContent = `${filterDesc} 필터링 중`;
-        } else {
-            if (activeFilterBanner) activeFilterBanner.classList.add('content-hidden');
-            if (syncFilterBanner) syncFilterBanner.classList.add('content-hidden');
-        }
-
-        if (allBiddingData.length === 0 && loadingIndicator && !loadingIndicator.classList.contains('content-hidden')) {
-            renderFilteredData([]);
-            return;
-        }
-
-        // 수업 필터 사용 중인데 데이터 미로드 → 로드 후 재필터
-        if ((termBidClassType || termBidClassName || termBidClassGrade) &&
-            (allMembersNewData.length === 0 || allClassesData.length === 0)) {
-            ensureClassDataLoaded(() => applyFilters());
-            return;
-        }
-
-        let filteredData = allBiddingData.filter(item => {
-            const inDate = String(item['in-date'] || '');
-            const regDate = String(item.reg_date || '');
-            // 입찰일자 필터링: syncSakunFilter 활성 시 날짜 제한 없음
-            const inDateStr = String(inDate || '');
-            const inDateNum = inDateStr.replace(/\D/g, '');
-            // all_status/all_bid_state/item_ids 타입은 날짜 전체 범위를 조회 (과거 날짜 포함)
-            const bypassDateFilter = dashboardFilter.active &&
-                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids');
-            const matchesIndate = bypassDateFilter
-                ? true
-                : (syncSakunFilter.active
-                    ? true
-                    : (termIndate
-                        ? (inDateStr.includes(termIndate) || inDateNum.includes(termIndate.replace(/\D/g, '')))
-                        : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, '')))));
-            const matchesSakunNo = !termSakunNo || String(item.sakun_no || '').toLowerCase().includes(termSakunNo);
-            // 정확한 매칭: 입력값과 정확히 일치하는 경우만 통과
-            const matchesCourt = !termCourt || String(item.court || '').toLowerCase().trim() === termCourt.toLowerCase().trim();
-            // 상태 필터링: "전체" 체크 시 모든 상태 통과, 아무것도 선택 안 하면 조회 안 됨
-            const matchesStatus = isAllStatus ? true : (selectedStatuses.length > 0 && selectedStatuses.includes(String(item.stu_member || '').trim()));
-            const matchesRegDate = !termRegDate || regDate.includes(termRegDate) || regDate.replace(/\D/g, '').includes(String(termRegDate).replace(/\D/g, ''));
-            const matchesManager = isAllManager || (selectedManagers.length > 0 && selectedManagers.includes(String(item.m_name_id || '').trim()));
-            const matchesMName = !termMName || `${String(item.m_name || '')} ${String(item.m_name2 || '')}`.toLowerCase().includes(termMName);
-            // 수업 필터: member_id → allMembersNewData → class_id → allClassesData
-            let matchesClass = true;
-            if (termBidClassType || termBidClassName || termBidClassGrade) {
-                const mem = allMembersNewData.find(m => String(m.member_id) === String(item.member_id));
-                const cls = mem ? allClassesData.find(c => String(c.class_id) === String(mem.class_id)) : null;
-                if (termBidClassType && (cls?.class_type || '') !== termBidClassType) matchesClass = false;
-                if (termBidClassName && (cls?.class_name || '') !== termBidClassName) matchesClass = false;
-                if (termBidClassGrade && (cls?.class_grade || '') !== termBidClassGrade) matchesClass = false;
-            }
-            return matchesIndate && matchesSakunNo && matchesCourt && matchesStatus && matchesRegDate && matchesManager && matchesMName && matchesClass;
-        });
-
-        filteredData = filteredData.filter(item => {
-            const itemDate = String(item['in-date']);
-            const price = parseInt(String(item.bidprice || 0));
-
-            if (dashboardFilter.active) {
-                const isManagerMatch = (dashboardFilter.manager === 'All' || !dashboardFilter.manager) ||
-                    (item.m_name_id === dashboardFilter.manager);
-
-                if (!isManagerMatch) return false;
-
-                if (dashboardFilter.type === 'missing') {
-                    return itemDate === dashboardFilter.date && (isNaN(price) || price === 0) && item.stu_member === '입찰';
-                } else if (dashboardFilter.type === 'status') {
-                    return itemDate === dashboardFilter.date && item.stu_member === dashboardFilter.status;
-                } else if (dashboardFilter.type === 'total_status') {
-                    return itemDate >= todayYYMMDD && item.stu_member === dashboardFilter.status;
-                } else if (dashboardFilter.type === 'auto_all') {
-                    return itemDate === dashboardFilter.date && ['추천', '입찰', '변경'].includes(item.stu_member);
-                } else if (dashboardFilter.type === 'bid_state') {
-                    return itemDate === dashboardFilter.date && String(item.bid_state || '') === dashboardFilter.status;
-                } else if (dashboardFilter.type === 'all_status') {
-                    const st = Array.isArray(dashboardFilter.status) ? dashboardFilter.status : [dashboardFilter.status];
-                    return st.includes(item.stu_member);
-                } else if (dashboardFilter.type === 'all_bid_state') {
-                    return String(item.bid_state || '') === dashboardFilter.status;
-                } else if (dashboardFilter.type === 'item_ids') {
-                    // 텔레그램 승인현황/가입현황 클릭: 해당 item_id 목록에 속하는 물건만
-                    var ids = Array.isArray(dashboardFilter.status) ? dashboardFilter.status : [];
-                    var itemIdStr = String(item.id || '').trim();
-                    return ids.some(function (id) { return String(id).trim() === itemIdStr; });
                 }
             } else {
                 // 입찰물건 관리 기본은 "전체"를 보여주고, 필요 시 사용자가 검색/필터로 좁히도록 함
@@ -8193,106 +7984,6 @@ MJ 이정우 팀장
     function _esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     // ── END 대쉬보드 캘린더 ───────────────────────────────────────────────────
 
-    function loadDashboardImageStats() {
-        const tbody = document.getElementById('imageSyncStatsBody');
-        if (!tbody) return;
-        tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-gray-400">조회 중...</td></tr>';
-        google.script.run
-            .withSuccessHandler(renderDashboardImageStats)
-            .withFailureHandler(err => {
-                if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-red-500 py-4 text-center">${err.message}</td></tr>`;
-            })
-            .getSyncStats();
-
-    }
-
-    function renderDashboardImageStats(stats) {
-        const tbody = document.getElementById('imageSyncStatsBody');
-        if (!tbody) return;
-        if (!stats || stats.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="py-4 text-center text-gray-400">최근 동기화 이력이 없습니다.</td></tr>';
-            return;
-        }
-        _imgSyncStatsCache = stats;
-        // 20분 세션별 교대 색상: 같은 time = 같은 세션
-        const SESSION_BG = ['', 'bg-indigo-50'];
-        let sessionIdx = -1;
-        let prevTime = null;
-        let html = '';
-        stats.forEach((s, idx) => {
-            if (s.time !== prevTime) { sessionIdx++; prevTime = s.time; }
-            const bg = SESSION_BG[sessionIdx % 2];
-            const mk = (val, cls, type) => val > 0
-                ? `<span class="${cls} cursor-pointer hover:underline font-bold" onclick="navigateToSyncItemsBySakunNos(${idx},'${type}')">${val}</span>`
-                : '<span class="text-gray-300">-</span>';
-            const conflictCell = s.conflictCount > 0
-                ? `<span class="text-red-600 cursor-pointer hover:underline font-bold" onclick="navigateToSyncItemsBySakunNos(${idx},'충돌')" onmouseenter="showConflictTooltip(event)" onmouseleave="hideConflictTooltip()">${s.conflictCount}</span>`
-                : '<span class="text-gray-300">-</span>';
-            html += `<tr class="border-b border-gray-100 hover:brightness-95 ${bg}">
-                <td class="py-1 px-1 text-gray-600 whitespace-nowrap">${s.time}</td>
-                <td class="py-1 px-1 font-medium truncate">${s.manager}</td>
-                <td class="py-1 px-1">${conflictCell}</td>
-                <td class="py-1 px-1">${mk(s.total, 'text-indigo-600', '전체')}</td>
-                <td class="py-1 px-1">${mk(s.newCount, 'text-green-600', '신규등록')}</td>
-                <td class="py-1 px-1">${mk(s.matchCount, 'text-blue-600', '매칭')}</td>
-                <td class="py-1 px-1">${mk(s.aucMatch, 'text-blue-600', '옥션매칭')}</td>
-                <td class="py-1 px-1">${mk(s.aucNoMatch, 'text-orange-600', '옥션미매칭')}</td>
-            </tr>`;
-        });
-        tbody.innerHTML = html;
-    }
-
-    const _CONFLICT_TOOLTIP_MSG = '이미등록된 담당자는 변경되지 않습니다. 담당자 확인후 MAPS 시스템에서 직접 담당자 수정 해 주시고, 담당이 아닌 옥션 관심물건은 삭제 해 주세요~';
-
-    function showConflictTooltip(e) {
-        const t = document.getElementById('g-conflict-tooltip');
-        if (!t) return;
-        t.textContent = _CONFLICT_TOOLTIP_MSG;
-        t.style.display = 'block';
-        const r = e.target.getBoundingClientRect();
-        t.style.left = Math.max(4, r.left + r.width / 2 - 60) + 'px';
-        t.style.top = (r.top - t.offsetHeight - 10) + 'px';
-    }
-
-    function hideConflictTooltip() {
-        const t = document.getElementById('g-conflict-tooltip');
-        if (t) t.style.display = 'none';
-    }
-
-    /**
-     * 이미지 동기화 현황 숫자 클릭 → 해당 사건번호 목록으로 입찰물건관리 이동
-     * @param {number} statsIdx - _imgSyncStatsCache 인덱스
-     * @param {string} type - '전체'|'신규등록'|'매칭'|'충돌'|'옥션매칭'|'옥션미매칭'
-     */
-    function navigateToSyncItemsBySakunNos(statsIdx, type) {
-        const s = _imgSyncStatsCache[statsIdx];
-        if (!s) return;
-        let sakunNos, label;
-        if (type === '전체') { sakunNos = s.allSakunNos; label = '전체'; }
-        else if (type === '신규등록') { sakunNos = s.newSakunNos; label = '신규등록'; }
-        else if (type === '매칭') { sakunNos = s.matchSakunNos; label = '매칭(이미지)'; }
-        else if (type === '충돌') { sakunNos = s.conflictSakunNos; label = '충돌'; }
-        else if (type === '옥션매칭') { sakunNos = s.aucMatchSakunNos; label = '매칭(옥션ID)'; }
-        else if (type === '옥션미매칭') { sakunNos = s.aucNoMatchSakunNos; label = '매칭X(옥션ID)'; }
-        else { sakunNos = s.allSakunNos; label = '전체'; }
-
-        if (!sakunNos || sakunNos.length === 0) {
-            if (typeof showStatus === 'function') showStatus('조회할 사건번호가 없습니다.', 'warning');
-            return;
-        }
-
-        syncSakunFilter = { active: true, sakunNos, label: `${s.time} ${s.manager} [${label}] ${sakunNos.length}건` };
-        dashboardFilter = { active: false, date: null, status: null, type: null, manager: null };
-
-        navigateTo('ItemManagement');
-        setTimeout(() => {
-            // 모든 검색 필드 초기화
-            const allStatusCb = document.getElementById('search-status-all');
-            if (allStatusCb) { allStatusCb.checked = true; if (typeof handleStatusAll === 'function') handleStatusAll(allStatusCb); }
-            const allMgrCbR = document.getElementById('search-manager-all');
-            if (allMgrCbR) allMgrCbR.checked = true;
-            document.querySelectorAll('input[name="search-manager-cb"]').forEach(cb => cb.checked = false);
-            if (typeof updateManagerLabel === 'function') updateManagerLabel();
             const sakunInput = document.getElementById('search-sakunno');
             if (sakunInput) sakunInput.value = '';
             const indateInput = document.getElementById('search-indate');
@@ -10689,33 +10380,6 @@ MJ 이정우 팀장
         // 물건 모드: member_id 배열 기반 필터 (class_type 필터보다 우선)
         const pendingMemberIds = window._memberMgmtPendingMemberIds || null;
         if (pendingMemberIds) window._memberMgmtPendingMemberIds = null;
-
-        // 수업 정보 매핑
-        const classMap = {};
-        allClassesData.forEach(c => { classMap[String(c.class_id)] = c; });
-
-        let filtered = allMembersNewData.filter(m => {
-            const name = String(m.member_name || '').toLowerCase();
-            const name1 = String(m.name1 || '').toLowerCase();
-            const name2 = String(m.name2 || '').toLowerCase();
-            const name3 = String(m.name3 || '').toLowerCase();
-            const phone = String(m.phone || '').replace(/[^0-9]/g, '');
-            const gubun = String(m.gubun || '');
-            const cls = classMap[String(m.class_id)] || {};
-
-            // 물건 모드 member_id 필터 (설정된 경우 class_type 등 수업 필터 대신 사용)
-            if (pendingMemberIds) {
-                if (!pendingMemberIds.includes(String(m.member_id || ''))) return false;
-            } else {
-                if (classTypeKw && (cls.class_type || '') !== classTypeKw) return false;
-                if (classNameKw && (cls.class_name || '') !== classNameKw) return false;
-                if (classGradeKw && (cls.class_grade || '') !== classGradeKw) return false;
-                if (classLocKw && (cls.class_loc || '') !== classLocKw) return false;
-            }
-
-            if (nameKw && !name.includes(nameKw) && !name1.includes(nameKw) && !name2.includes(nameKw) && !name3.includes(nameKw)) return false;
-            if (phoneKw && !phone.includes(phoneKw)) return false;
-            if (gubunKw && gubun !== gubunKw) return false;
             if (telegramFilter === 'Y' && String(m.telegram_enabled || '').toUpperCase() !== 'Y') return false;
             if (telegramFilter === 'C' && !String(m.telegram_chat_id || '').trim()) return false;
             return true;
@@ -11679,12 +11343,13 @@ ${token}
 
         thead.innerHTML = `<tr>
             <th class="px-2 py-2 text-left text-xs font-bold text-purple-700">회원명</th>
+            <th class="px-2 py-2 text-center text-xs font-bold text-purple-700 w-16">상태</th>
             <th class="px-2 py-2 text-center text-xs font-bold text-purple-700 w-12">참석</th>
             ${d1List.map(d => `<th class="px-1 py-2 text-center text-xs font-bold text-gray-600 w-8">${d.class_loop}회</th>`).join('')}
         </tr>`;
 
         if (members.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="${colSpan}" class="p-4 text-center text-gray-500 text-sm">등록된 회원이 없습니다.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${colSpan + 1}" class="p-4 text-center text-gray-500 text-sm">등록된 회원이 없습니다.</td></tr>`;
             return;
         }
 
@@ -11706,6 +11371,7 @@ ${token}
 
             return `<tr class="hover:bg-purple-50">
                 <td class="px-2 py-1.5 text-sm" title="${escapeHtml(tooltip)}">${escapeHtml(m.member_name || '-')}</td>
+                <td class="px-2 py-1.5 text-center text-[10px] text-gray-500">${escapeHtml(m.member_status || '-')}</td>
                 <td class="px-2 py-1.5 text-center text-xs font-semibold text-purple-700">${m.attendCount}/${d1List.length}</td>
                 ${attendCells}
             </tr>`;
@@ -12764,6 +12430,10 @@ ${token}
         if (nameEl) nameEl.value = '';
         if (idEl) idEl.value = '';
         if (infoEl) infoEl.textContent = '';
+        
+        // 상태값 로드
+        loadMemberStatusOptions();
+
         document.getElementById('addMemberToD1Modal').classList.remove('content-hidden');
         if (nameEl) {
             bindD1MemberAc_();
@@ -12940,17 +12610,101 @@ ${token}
     function saveD1MembersBatch() {
         if (d1PendingMembers.length === 0) { showStatus('임시목록에 추가된 회원이 없습니다.', 'error'); return; }
         const memberIds = d1PendingMembers.map(p => p.member_id);
+        const memberStatus = document.getElementById('d1-add-member-status')?.value || '';
+        if (!memberStatus) { showStatus('회원 상태를 선택하세요.', 'error'); return; }
+
         showStatus('저장 중...', 'info');
         google.script.run
             .withSuccessHandler(result => {
                 showStatus(result.message, result.success ? 'success' : 'error');
                 if (result.added > 0) {
-                    loadD1Members(selectedClassD1Id);
+                    loadD1Members && loadD1Members(selectedClassD1Id);
                     closeAddMemberToD1Modal();
                 }
             })
             .withFailureHandler(e => showStatus(e.message || '저장 실패', 'error'))
-            .addMemberToClassD1Batch(selectedClassD1Id, memberIds);
+            .addMemberToClassD1Batch(selectedClassD1Id, memberIds, memberStatus);
+    }
+
+    // ── 회원 상태 관리 로직 ──────────────────────────────────────────
+    var currentStatusOptions = [];
+
+    function loadMemberStatusOptions() {
+        google.script.run
+            .withSuccessHandler(options => {
+                currentStatusOptions = options || [];
+                renderStatusOptionsToSelect();
+            })
+            .getMemberStatusOptions();
+    }
+
+    function renderStatusOptionsToSelect() {
+        const select = document.getElementById('d1-add-member-status');
+        if (!select) return;
+        const currentVal = select.value;
+        select.innerHTML = currentStatusOptions.map(opt => 
+            `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`
+        ).join('');
+        if (currentVal && currentStatusOptions.includes(currentVal)) {
+            select.value = currentVal;
+        }
+    }
+
+    function openMemberStatusModal() {
+        document.getElementById('memberStatusModal').classList.remove('content-hidden');
+        renderStatusManagementList();
+    }
+
+    function closeMemberStatusModal(event) {
+        if (event && event.target !== event.currentTarget) return;
+        document.getElementById('memberStatusModal').classList.add('content-hidden');
+    }
+
+    function renderStatusManagementList() {
+        const list = document.getElementById('status-options-list');
+        if (!list) return;
+        if (currentStatusOptions.length === 0) {
+            list.innerHTML = '<div class="p-3 text-xs text-gray-400 text-center">등록된 상태가 없습니다.</div>';
+            return;
+        }
+        list.innerHTML = currentStatusOptions.map(opt => `
+            <div class="flex items-center justify-between px-3 py-2 text-sm bg-white">
+                <span class="text-gray-700">${escapeHtml(opt)}</span>
+                <button type="button" onclick="removeStatusOption('${escapeHtml(opt)}')" class="text-red-400 hover:text-red-600 text-xs">삭제</button>
+            </div>
+        `).join('');
+    }
+
+    function addStatusOption() {
+        const input = document.getElementById('new-status-input');
+        const val = input?.value.trim();
+        if (!val) return;
+        if (currentStatusOptions.includes(val)) {
+            showStatus('이미 존재하는 상태입니다.', 'error');
+            return;
+        }
+        currentStatusOptions.push(val);
+        input.value = '';
+        saveAndRefreshStatusOptions();
+    }
+
+    function removeStatusOption(opt) {
+        if (!confirm('"' + opt + '" 상태를 삭제하시겠습니까?')) return;
+        currentStatusOptions = currentStatusOptions.filter(o => o !== opt);
+        saveAndRefreshStatusOptions();
+    }
+
+    function saveAndRefreshStatusOptions() {
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r.success) {
+                    renderStatusManagementList();
+                    renderStatusOptionsToSelect();
+                } else {
+                    showStatus(r.message, 'error');
+                }
+            })
+            .saveMemberStatusOptions(currentStatusOptions);
     }
 
     // 입찰물건관리에서 등록된 회원만 자동검색 (기존 함수 확장: 명의별 옵션 생성)
