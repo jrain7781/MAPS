@@ -11897,17 +11897,26 @@ ${token}
         document.getElementById('generateD1Modal').dataset.batchKey = (mode === 'add' && d1Batches[d1BatchIdx]) ? d1Batches[d1BatchIdx].batchKey : '';
         document.getElementById('genD1-memberSection').classList.add('hidden');
         document.getElementById('genD1-memberList').innerHTML = '';
-        // 미리보기 영역 + 구분선 초기화
+        // 미리보기 영역 + 구분선: 항상 표시 (데이터만 초기화)
         const previewSection = document.getElementById('genD1-previewSection');
-        if (previewSection) previewSection.classList.add('hidden');
+        if (previewSection) previewSection.classList.remove('hidden');
         const divider = document.getElementById('genD1-previewDivider');
-        if (divider) divider.classList.add('hidden');
+        if (divider) divider.classList.remove('hidden');
         const prevMemberSection = document.getElementById('prev-genD1-memberSection');
         if (prevMemberSection) prevMemberSection.classList.add('hidden');
         const prevMemberList = document.getElementById('prev-genD1-memberList');
         if (prevMemberList) prevMemberList.innerHTML = '';
 
+        // 왼쪽 필드 초기화 (데이터 없이 빈 값)
         document.getElementById('genD1-startDate').value = '';
+        ['prev-genD1-startLoop', 'prev-genD1-endLoop', 'prev-genD1-addCount'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        document.getElementById('prev-genD1-startDate').value = '';
+        document.getElementById('prev-genD1-loopUnit').value = '1';
+        ['prev-genD1-timeFrom-ampm','prev-genD1-timeTo-ampm'].forEach(id => { const el = document.getElementById(id); if (el) el.value = 'AM'; });
+        ['prev-genD1-timeFrom-h','prev-genD1-timeTo-h'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '1'; });
+        ['prev-genD1-timeFrom-m','prev-genD1-timeTo-m'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '00'; });
+        ['prev-genD1-bidStarttime-day','prev-genD1-bidDatetime1-day','prev-genD1-bidDatetime2-day'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        ['prev-genD1-bid1Count','prev-genD1-bid2Count'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 
         // 이전 배치 드롭다운 채우기
         const batchSel = document.getElementById('genD1-prevBatch');
@@ -12443,7 +12452,15 @@ ${token}
         const mode = document.getElementById('generateD1Modal')?.dataset?.mode || 'create';
         const batchTimestamp = document.getElementById('generateD1Modal')?.dataset?.batchKey || '';
 
-        if (!startDate) { showStatus('시작일을 입력하세요.', 'error'); return; }
+        // 필수항목 유효성 검사
+        if (mode === 'create') {
+            if (!document.getElementById('genD1-startLoop')?.value) { showStatus('시작 회차를 입력하세요.', 'error'); document.getElementById('genD1-startLoop').focus(); return; }
+            if (!document.getElementById('genD1-endLoop')?.value) { showStatus('최종 회차를 입력하세요.', 'error'); document.getElementById('genD1-endLoop').focus(); return; }
+        } else {
+            if (!document.getElementById('genD1-addCount')?.value) { showStatus('추가 생성 회차 수를 입력하세요.', 'error'); document.getElementById('genD1-addCount').focus(); return; }
+        }
+        if (!startDate) { showStatus('시작일을 입력하세요.', 'error'); document.getElementById('genD1-startDate').focus(); return; }
+        if (!getDropdownTime_('genD1-timeFrom') || getDropdownTime_('genD1-timeFrom') === '00:00') { showStatus('수업 시작 시간을 선택하세요.', 'error'); return; }
         if (mode === 'create' && startLoop > endLoop) { showStatus('시작회차가 최종회차보다 큽니다.', 'error'); return; }
 
         // 선택된 회원 ID
