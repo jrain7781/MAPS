@@ -2854,7 +2854,8 @@ function extractD1BatchKey_(classD1Id) {
   var lastUnderscore = s.lastIndexOf('_');
   if (lastUnderscore > 0) {
     var suffix = s.substring(lastUnderscore + 1);
-    if (/^\d+$/.test(suffix)) return s.substring(0, lastUnderscore);
+    // 회차 번호는 1~4자리 짧은 숫자, 타임스탬프(14자리)와 구별
+    if (/^\d{1,4}$/.test(suffix)) return s.substring(0, lastUnderscore);
   }
   return s;
 }
