@@ -313,6 +313,7 @@
     let syncSakunFilter = { active: false, sakunNos: [], label: '' };
     let _imgSyncStatsCache = [];
     let itemListSort = { key: null, dir: 1 };
+    let summaryClickFilter = null;
 
     // 데이터 캐시 관리
     let dataCache = { data: null, timestamp: 0 };
@@ -1051,6 +1052,48 @@
     // =============================================================================
 
     // --- [1] 입찰 목록 테이블 렌더링 ---
+    function renderItemListSummary(data) {
+        const bar = document.getElementById('itemListSummaryBar');
+        if (!bar) return;
+        if (data.length === 0) { bar.classList.add('content-hidden'); return; }
+
+        const statusOrder = ['상품', '미정', '추천', '입찰', '변경'];
+        const statusColors = { '상품': 'text-yellow-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '변경': 'text-orange-700' };
+        const countByStatus = {};
+        let missingBidCount = 0;
+        data.forEach(item => {
+            const st = item.stu_member || '미정';
+            countByStatus[st] = (countByStatus[st] || 0) + 1;
+            if (st === '입찰') {
+                const price = parseInt(String(item.bidprice || 0));
+                if (isNaN(price) || price === 0) missingBidCount++;
+            }
+        });
+
+        const isActive = (key) => summaryClickFilter === key ? 'font-bold underline' : '';
+        const btnClass = 'cursor-pointer hover:opacity-70 transition';
+
+        let html = `<span class="${btnClass} text-gray-600 ${isActive('__all__')}" onclick="setSummaryFilter('__all__')">전체 ${data.length}건</span>`;
+        statusOrder.forEach(st => {
+            const cnt = countByStatus[st] || 0;
+            if (cnt === 0) return;
+            const col = statusColors[st] || 'text-gray-600';
+            html += `<span class="text-gray-400">|</span>`;
+            html += `<span class="${btnClass} ${col} ${isActive(st)}" onclick="setSummaryFilter('${st}')">${st} ${cnt}건</span>`;
+            if (st === '입찰' && missingBidCount > 0) {
+                html += `<span class="${btnClass} text-red-600 font-semibold ${isActive('bid_missing')}" onclick="setSummaryFilter('bid_missing')">(미입력 ${missingBidCount}건)</span>`;
+            }
+        });
+
+        bar.innerHTML = html;
+        bar.classList.remove('content-hidden');
+    }
+
+    function setSummaryFilter(key) {
+        summaryClickFilter = (summaryClickFilter === key) ? null : key;
+        applyFilters();
+    }
+
     function renderFilteredData(data) {
         if (!dataTableBody) return;
         _dupMap = null; // 렌더 전 dupMap 초기화
@@ -6387,6 +6430,18 @@ MJ 이정우 팀장
                 return d * (va < vb ? -1 : va > vb ? 1 : 0);
             });
         }
+        // summaryClickFilter: 썸머리 클릭 시 현재 조회 결과 내 추가 필터
+        renderItemListSummary(filteredData); // 클릭 필터 적용 전 전체 기준으로 썸머리 표시
+        if (summaryClickFilter && summaryClickFilter !== '__all__') {
+            if (summaryClickFilter === 'bid_missing') {
+                filteredData = filteredData.filter(item => {
+                    const price = parseInt(String(item.bidprice || 0));
+                    return item.stu_member === '입찰' && (isNaN(price) || price === 0);
+                });
+            } else {
+                filteredData = filteredData.filter(item => item.stu_member === summaryClickFilter);
+            }
+        }
         renderFilteredData(filteredData);
 
         // 전송 컬럼 제거 (렌더링 후 즉시 + 지연 실행)
@@ -6409,6 +6464,7 @@ MJ 이정우 팀장
     function clearDashboardFilter() {
         dashboardFilter = { active: false, date: null, status: null, type: null, manager: null };
         syncSakunFilter = { active: false, sakunNos: [], label: '' };
+        summaryClickFilter = null;
         applyFilters();
     }
 
@@ -6480,6 +6536,7 @@ MJ 이정우 팀장
     }
 
     function resetItemManagementSearch() {
+        summaryClickFilter = null;
         // 모든 입력 필드 강조 제거
         document.querySelectorAll('#ItemManagement .filter-active-input').forEach(el => {
             el.classList.remove('filter-active-input');
