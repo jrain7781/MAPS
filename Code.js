@@ -668,15 +668,17 @@ function parseIcalDate_(key, val) {
     return { ms: new Date(y, m, d).getTime(), allDay: true };
   }
   // 일반 날짜시간
+  var isUTC = val.slice(-1) === 'Z'; // Z 제거 전에 먼저 확인
   val = val.replace('Z','');
   var y = parseInt(val.substr(0,4)), mo = parseInt(val.substr(4,2))-1, d = parseInt(val.substr(6,2));
   var h = parseInt(val.substr(9,2)||'0'), mi = parseInt(val.substr(11,2)||'0'), s = parseInt(val.substr(13,2)||'0');
   var ms;
-  if (val.slice(-1) === 'Z' || key.indexOf('TZID') < 0) {
-    // UTC
+  if (isUTC) {
+    // Z → UTC 그대로 사용 (브라우저가 KST로 자동 변환)
     ms = Date.UTC(y, mo, d, h, mi, s);
   } else {
-    ms = new Date(y, mo, d, h, mi, s).getTime();
+    // TZID(KST) 또는 floating → KST로 간주하여 UTC로 변환 (-9h)
+    ms = Date.UTC(y, mo, d, h, mi, s) - 9 * 60 * 60 * 1000;
   }
   return { ms: ms, allDay: false };
 }
