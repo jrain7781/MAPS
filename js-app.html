@@ -11661,8 +11661,10 @@ ${token}
     }
 
     // ─── 전체회차 요약 그리드 (신규 구조) ────────────────────────────────────
-    let summaryMemberData_ = [];   // 현재 로드된 회원 상세 배열
+    let summaryMemberData_ = [];
     let selectedSummaryMemberId_ = null;
+    let summarySortKey_ = 'name';
+    let summarySortAsc_ = true;
 
     function loadD1SummaryGrid(classId) {
         if (!classId) return;
@@ -11673,7 +11675,6 @@ ${token}
         if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">불러오는 중...</td></tr>';
         if (detail) detail.innerHTML = '<div class="text-gray-400 text-xs text-center py-4">회원을 선택하세요</div>';
         selectedSummaryMemberId_ = null;
-
         google.script.run
             .withSuccessHandler(function(data) {
                 summaryMemberData_ = data || [];
@@ -11690,67 +11691,122 @@ ${token}
         const tbody = document.getElementById('d1SummaryTbody');
         if (!thead || !tbody) return;
 
-        // 회차 수: allClassD1Data 정렬된 순서로 N회까지
-        const d1List = (allClassD1Data || []).slice().sort(function(a, b) { return Number(a.class_loop) - Number(b.class_loop); });
+        const d1List = (allClassD1Data || [])
+            .filter(function(d) { return String(d.class_id) === String(selectedClassId); })
+            .slice().sort(function(a, b) { return Number(a.class_loop) - Number(b.class_loop); });
         const N = d1List.length;
+        const totalCols = 4 + N;
 
-        // 헤더 (회차번호 + 날짜 + 요일)
+        // 수업 총 회차 (class 시트 class_loop)
+        const classInfo = (allClassesData || []).find(function(c) { return String(c.class_id) === String(selectedClassId); });
+        const totalLoop = classInfo ? (Number(classInfo.class_loop) || N) : N;
+
+        // 연도 추출
+        let yearStr = '';
+        if (d1List.length > 0) {
+            const raw = String(d1List[0].class_date || '').replace(/-/g, '');
+            if (raw.length >= 4) yearStr = raw.substring(0, 4) + '년';
+        }
+
         const dayNames_ = ['일','월','화','수','목','금','토'];
-        const sessionCols = d1List.map(function(d) {
-            var raw = String(d.class_date || '').replace(/-/g, '');
-            var dateDisp = '', dayDisp = '';
+        const sessionColHeaders = d1List.map(function(d, idx) {
+            const raw = String(d.class_date || '').replace(/-/g, '');
+            let dateDisp = '', dayDisp = '';
             if (raw.length >= 8) {
-                dateDisp = raw.substring(2,4)+'/'+raw.substring(4,6)+'/'+raw.substring(6,8);
-                var dt = new Date(raw.substring(0,4)+'-'+raw.substring(4,6)+'-'+raw.substring(6,8));
+                dateDisp = raw.substring(4,6)+'/'+raw.substring(6,8);
+                const dt = new Date(raw.substring(0,4)+'-'+raw.substring(4,6)+'-'+raw.substring(6,8));
                 if (!isNaN(dt)) dayDisp = '('+dayNames_[dt.getDay()]+')';
             }
-            return `<th class="px-1 py-1 text-center font-bold text-gray-600 border-l border-gray-200" style="min-width:52px">
-                <div class="text-[11px]">${d.class_loop}회</div>
-                <div class="text-[9px] font-normal text-gray-400">${dateDisp}</div>
-                <div class="text-[9px] font-normal text-gray-400">${dayDisp}</div>
+            const isActive = summarySortKey_ === 'no_'+(idx+1);
+            return `<th class="px-1 py-1 text-center border-l border-gray-200 cursor-pointer ${isActive?'bg-blue-200':'hover:bg-blue-100'}" style="min-width:50px" onclick="sortSummaryBySession_(${idx+1})">
+                <div class="text-[11px] font-bold text-blue-600">${d.class_loop}회</div>
+                <div class="text-[9px] font-semibold text-blue-500 whitespace-nowrap">${dateDisp} ${dayDisp}</div>
             </th>`;
         }).join('');
-        thead.innerHTML = `<tr>
-            <th class="px-2 py-2 text-center w-6"><input type="checkbox" id="summaryCheckAll" onchange="toggleAllSummaryRows(this.checked)" class="w-3 h-3"></th>
-            <th class="px-2 py-2 text-left font-bold text-purple-700" style="min-width:60px">회원명</th>
-            <th class="px-2 py-2 text-left font-bold text-gray-600" style="min-width:80px">전화번호</th>
-            <th class="px-2 py-2 text-center font-bold text-gray-600" style="min-width:52px">상태</th>
-            ${sessionCols}
-        </tr>`;
 
-        if (members.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="${4 + N}" class="p-4 text-center text-gray-500 text-xs">등록된 회원이 없습니다.</td></tr>`;
+        thead.innerHTML = `
+            <tr class="bg-gray-100 border-b border-gray-200">
+                <th colspan="${totalCols}" class="px-2 py-0.5 text-left text-[10px] font-bold text-gray-500">${yearStr}</th>
+            </tr>
+            <tr class="bg-blue-50">
+                <th class="px-2 py-2 text-center w-6"><input type="checkbox" id="summaryCheckAll" onchange="toggleAllSummaryRows(this.checked)" class="w-3 h-3"></th>
+                <th class="px-2 py-2 text-left font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="min-width:60px" onclick="sortSummaryByName_()">이름 ↕</th>
+                <th class="px-2 py-2 text-left font-bold text-gray-600" style="min-width:80px">전화번호</th>
+                <th class="px-2 py-2 text-center font-bold text-gray-600" style="min-width:44px">상태</th>
+                ${sessionColHeaders}
+            </tr>`;
+
+        // 정렬
+        let sorted = members.slice();
+        if (summarySortKey_ === 'name') {
+            sorted.sort(function(a,b){ return (a.member_name||'').localeCompare(b.member_name||''); });
+            if (!summarySortAsc_) sorted.reverse();
+        } else if (summarySortKey_.startsWith('no_')) {
+            sorted.sort(function(a,b){
+                const aO = String(a[summarySortKey_]||'').trim().toUpperCase()==='O'?0:1;
+                const bO = String(b[summarySortKey_]||'').trim().toUpperCase()==='O'?0:1;
+                if (aO !== bO) return aO - bO;
+                return (a.member_name||'').localeCompare(b.member_name||'');
+            });
+        }
+
+        if (sorted.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${totalCols}" class="p-4 text-center text-gray-500 text-xs">등록된 회원이 없습니다.</td></tr>`;
             return;
         }
 
-        tbody.innerHTML = members.map(function(m) {
-            const isSelected = m.member_id === selectedSummaryMemberId_;
-            const rowBg = isSelected ? 'bg-purple-50' : 'hover:bg-gray-50';
+        tbody.innerHTML = sorted.map(function(m) {
+            const isSelected = String(m.member_id) === String(selectedSummaryMemberId_);
+            const rowBg = isSelected ? 'bg-blue-50' : 'hover:bg-gray-50';
+
+            // 참여/잔여 계산
+            let attended = 0;
+            for (let i = 1; i <= N; i++) {
+                if (String(m['no_'+i]||'').trim().toUpperCase() === 'O') attended++;
+            }
+            const remaining = Math.max(0, totalLoop - attended);
+
+            // 만료 회차 인덱스 (미참석 중 remaining번째)
+            let expiryIdx = -1, remCount = remaining;
+            for (let i = 0; i < N && remCount > 0; i++) {
+                if (String(m['no_'+(i+1)]||'').trim().toUpperCase() !== 'O') {
+                    remCount--;
+                    if (remCount === 0) expiryIdx = i;
+                }
+            }
+
             const statusBadge = m.member_status
                 ? `<span class="px-1 py-0.5 rounded text-[10px] font-semibold ${statusColor_(m.member_status)}">${escapeHtml(m.member_status)}</span>`
                 : '<span class="text-gray-300">-</span>';
+
             const sessionCells = d1List.map(function(d, idx) {
-                const noKey = 'no_' + (idx + 1);
-                const val = String(m[noKey] || '').trim();
-                const disp = val ? fmtSummaryDate_(val) : '';
-                return `<td class="px-1 py-1.5 text-center border-l border-gray-100 text-[11px] ${disp ? 'text-indigo-700 font-semibold' : 'text-gray-300'}">${disp || '·'}</td>`;
+                const val = String(m['no_'+(idx+1)]||'').trim().toUpperCase();
+                const isO = val === 'O';
+                const cellBg = idx === expiryIdx ? 'bg-amber-100' : '';
+                return `<td class="px-1 py-1.5 text-center border-l border-gray-100 text-[11px] ${cellBg} ${isO?'text-blue-700 font-bold':'text-gray-300'}">${isO?'O':'·'}</td>`;
             }).join('');
+
             return `<tr class="cursor-pointer ${rowBg} transition-colors" onclick="selectSummaryMember('${m.member_id}')" data-summary-row="${m.member_id}">
                 <td class="px-2 py-1.5 text-center" onclick="event.stopPropagation()"><input type="checkbox" class="summary-row-chk w-3 h-3" value="${m.member_id}"></td>
-                <td class="px-2 py-1.5 font-medium text-gray-800 text-xs">${escapeHtml(m.member_name || '-')}</td>
-                <td class="px-2 py-1.5 text-gray-500 text-[11px]">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-2 py-1.5 font-medium text-gray-800 text-xs">${escapeHtml(m.member_name||'-')}</td>
+                <td class="px-2 py-1.5 text-gray-500 text-[11px]">${escapeHtml(m.phone||'-')}</td>
                 <td class="px-2 py-1.5 text-center">${statusBadge}</td>
                 ${sessionCells}
             </tr>`;
         }).join('');
     }
 
-    function fmtSummaryDate_(v) {
-        if (!v) return '';
-        const s = String(v).replace(/\D/g, '');
-        if (s.length === 6) return s.substring(0, 2) + '/' + s.substring(2, 4) + '/' + s.substring(4, 6);
-        if (s.length === 8) return s.substring(2, 4) + '/' + s.substring(4, 6) + '/' + s.substring(6, 8);
-        return v;
+    function sortSummaryByName_() {
+        if (summarySortKey_ === 'name') summarySortAsc_ = !summarySortAsc_;
+        else { summarySortKey_ = 'name'; summarySortAsc_ = true; }
+        renderD1SummaryGrid(summaryMemberData_);
+    }
+
+    function sortSummaryBySession_(loopNo) {
+        const key = 'no_' + loopNo;
+        if (summarySortKey_ === key) summarySortAsc_ = !summarySortAsc_;
+        else { summarySortKey_ = key; summarySortAsc_ = true; }
+        renderD1SummaryGrid(summaryMemberData_);
     }
 
     function statusColor_(status) {
@@ -11762,15 +11818,10 @@ ${token}
 
     function selectSummaryMember(memberId) {
         selectedSummaryMemberId_ = memberId;
-        // 행 하이라이트 갱신
         document.querySelectorAll('[data-summary-row]').forEach(function(tr) {
-            if (tr.dataset.summaryRow === String(memberId)) {
-                tr.classList.add('bg-purple-50');
-                tr.classList.remove('hover:bg-gray-50');
-            } else {
-                tr.classList.remove('bg-purple-50');
-                tr.classList.add('hover:bg-gray-50');
-            }
+            const isSel = tr.dataset.summaryRow === String(memberId);
+            tr.classList.toggle('bg-blue-50', isSel);
+            tr.classList.toggle('hover:bg-gray-50', !isSel);
         });
         const member = summaryMemberData_.find(function(m) { return String(m.member_id) === String(memberId); });
         if (!member) return;
@@ -11778,58 +11829,81 @@ ${token}
     }
 
     function renderSummaryMemberDetail(m) {
-        const d1List = (allClassD1Data || []).slice().sort(function(a, b) { return Number(a.class_loop) - Number(b.class_loop); });
+        const d1List = (allClassD1Data || [])
+            .filter(function(d) { return String(d.class_id) === String(selectedClassId); })
+            .slice().sort(function(a,b){ return Number(a.class_loop)-Number(b.class_loop); });
+        const N = d1List.length;
         const detail = document.getElementById('d1SummaryDetail');
         if (!detail) return;
 
-        const nameRows = ['name1', 'name2', 'name3'].map(function(k) {
-            const n = m[k], g = m[k + '_gubun'];
-            return n ? `<div class="flex gap-1"><span class="text-gray-400">명의:</span><span class="px-1 bg-gray-100 rounded text-[10px]">${escapeHtml(g||'')}</span><span class="font-medium">${escapeHtml(n)}</span></div>` : '';
+        const classInfo = (allClassesData||[]).find(function(c){ return String(c.class_id)===String(selectedClassId); });
+        const totalLoop = classInfo ? (Number(classInfo.class_loop)||N) : N;
+
+        let attended = 0;
+        for (let i = 1; i <= N; i++) {
+            if (String(m['no_'+i]||'').trim().toUpperCase() === 'O') attended++;
+        }
+        const remaining = Math.max(0, totalLoop - attended);
+        let remBg = 'bg-green-100 text-green-700';
+        if (remaining <= 2) remBg = 'bg-red-100 text-red-700';
+        else if (remaining <= 5) remBg = 'bg-amber-100 text-amber-700';
+
+        // 만료 회차 표시
+        let expiryStr = '';
+        let remCount = remaining, expiryLoop = null;
+        for (let i = 0; i < N && remCount > 0; i++) {
+            if (String(m['no_'+(i+1)]||'').trim().toUpperCase() !== 'O') {
+                remCount--;
+                if (remCount === 0) expiryLoop = d1List[i] ? d1List[i].class_loop : null;
+            }
+        }
+        if (expiryLoop) {
+            expiryStr = `<div class="text-[10px] text-amber-700 mt-0.5">→ ${expiryLoop}회차 만료 예정</div>`;
+        } else if (remaining > 0) {
+            expiryStr = `<div class="text-[10px] text-blue-600 mt-0.5">→ 다음 수업으로 이월 (${remaining}회 남음)</div>`;
+        }
+
+        const nameRows = ['name1','name2','name3'].map(function(k){
+            const n=m[k], g=m[k+'_gubun'];
+            return n?`<div class="flex gap-1"><span class="text-gray-400">명의:</span><span class="px-1 bg-gray-100 rounded text-[10px]">${escapeHtml(g||'')}</span><span class="font-medium">${escapeHtml(n)}</span></div>`:'';
         }).filter(Boolean).join('');
 
-        const sessionRows = d1List.map(function(d, idx) {
-            const noKey = 'no_' + (idx + 1);
-            const val = String(m[noKey] || '').trim();
-            const dateDisp = val ? fmtSummaryDate_(val) : '-';
-            const raw = String(d.class_date || '').replace(/-/g, '');
-            const classDateDisp = raw.length >= 8 ? raw.substring(2, 4) + '/' + raw.substring(4, 6) + '/' + raw.substring(6, 8) : raw;
-            return `<tr class="${val ? 'bg-indigo-50' : ''}">
-                <td class="px-2 py-1 text-gray-500 text-[10px] border-b border-gray-100">${d.class_loop}회 <span class="text-gray-400">(${classDateDisp})</span></td>
-                <td class="px-2 py-1 text-center text-[11px] border-b border-gray-100 font-medium ${val ? 'text-indigo-700' : 'text-gray-300'}">${dateDisp}</td>
-            </tr>`;
-        }).join('');
+        const batchKey = escapeHtml(String(m.class_d1_id||''));
+        const memId = escapeHtml(String(m.member_id||''));
 
         detail.innerHTML = `
             <div class="mb-3 pb-2 border-b border-gray-100">
-                <div class="font-bold text-sm text-gray-800 mb-1">${escapeHtml(m.member_name || '-')}</div>
-                <div class="text-[11px] text-gray-500 space-y-0.5">
-                    <div class="flex gap-1"><span class="text-gray-400">전화:</span><span>${escapeHtml(m.phone || '-')}</span></div>
-                    <div class="flex gap-1"><span class="text-gray-400">구분:</span><span>${escapeHtml(m.gubun || '-')}</span></div>
-                    <div class="flex gap-1"><span class="text-gray-400">상태:</span><span class="font-semibold ${statusColor_(m.member_status)} px-1 rounded text-[10px]">${escapeHtml(m.member_status || '-')}</span></div>
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                    <span class="font-bold text-sm text-gray-800">${escapeHtml(m.member_name||'-')}</span>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${remBg}">잔여: ${remaining}회 (${attended} / ${totalLoop})</span>
+                </div>
+                ${expiryStr}
+                <div class="text-[11px] text-gray-500 space-y-0.5 mt-1">
+                    <div class="flex gap-1"><span class="text-gray-400">전화:</span><span>${escapeHtml(m.phone||'-')}</span></div>
+                    <div class="flex gap-1"><span class="text-gray-400">구분:</span><span>${escapeHtml(m.gubun||'-')}</span></div>
+                    <div class="flex gap-1"><span class="text-gray-400">상태:</span><span class="font-semibold ${statusColor_(m.member_status)} px-1 rounded text-[10px]">${escapeHtml(m.member_status||'-')}</span></div>
                     ${nameRows}
                 </div>
             </div>
-            <div class="mb-3">
-                <div class="text-[10px] font-bold text-gray-500 mb-1">회차별 입찰 현황</div>
-                <div class="border rounded-lg overflow-hidden">
-                    <table class="w-full text-xs">
-                        <thead class="bg-gray-50"><tr>
-                            <th class="px-2 py-1 text-left text-[10px] text-gray-500 font-semibold">회차</th>
-                            <th class="px-2 py-1 text-center text-[10px] text-gray-500 font-semibold">날짜</th>
-                        </tr></thead>
-                        <tbody>${sessionRows}</tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="bg-gray-50 rounded-lg p-2 text-xs">
-                <div class="text-[10px] font-bold text-gray-500 mb-1">비고</div>
-                <div class="text-gray-600 whitespace-pre-wrap">${escapeHtml(m.remark1 || '') || '<span class="text-gray-300">-</span>'}</div>
-                ${m.remark2 ? `<div class="mt-1 pt-1 border-t border-gray-200 text-gray-600 whitespace-pre-wrap">${escapeHtml(m.remark2)}</div>` : ''}
+            <div>
+                <div class="text-[10px] font-bold text-gray-500 mb-1">비고 <span class="font-normal text-gray-400">(remark1)</span></div>
+                <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400" rows="3" placeholder="비고를 입력하세요">${escapeHtml(m.remark1||'')}</textarea>
+                <button onclick="saveSummaryRemark_('${memId}','${batchKey}')" class="mt-1 w-full py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">저장</button>
             </div>`;
     }
 
+    function saveSummaryRemark_(memberId, batchKey) {
+        const textarea = document.getElementById('summaryRemarkInput');
+        if (!textarea) return;
+        showStatus('저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function(r){ showStatus(r.success?'비고 저장 완료':r.message||'저장 실패', r.success?'success':'error'); })
+            .withFailureHandler(function(e){ showStatus(e.message||'저장 실패','error'); })
+            .saveMemberClassDetail(batchKey, memberId, { remark1: textarea.value });
+    }
+
     function toggleAllSummaryRows(checked) {
-        document.querySelectorAll('.summary-row-chk').forEach(function(chk) { chk.checked = checked; });
+        document.querySelectorAll('.summary-row-chk').forEach(function(chk){ chk.checked = checked; });
     }
     function selectAllSummaryRows() { document.getElementById('summaryCheckAll').checked = true; toggleAllSummaryRows(true); }
     function deselectAllSummaryRows() { document.getElementById('summaryCheckAll').checked = false; toggleAllSummaryRows(false); }
