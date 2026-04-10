@@ -2809,11 +2809,38 @@
         }
     }
 
+    function toggleAllMissingBidChecks(checked) {
+        document.querySelectorAll('.missing-bid-cb').forEach(cb => cb.checked = checked);
+        updateMissingBidMoveBtn();
+    }
+
+    function updateMissingBidMoveBtn() {
+        const btn = document.getElementById('missingBidMoveBtn');
+        const checked = document.querySelectorAll('.missing-bid-cb:checked');
+        if (btn) btn.classList.toggle('hidden', checked.length === 0);
+    }
+
+    function goToItemManagementFromMissingSelection() {
+        const checked = document.querySelectorAll('.missing-bid-cb:checked');
+        const dates = Array.from(checked).map(cb => cb.dataset.date);
+        if (dates.length === 0) return;
+        const filterMember = document.getElementById('missingBidFilterMember')?.value || '';
+        if (dates.length === 1) {
+            filterFromDashboard(dates[0], 'missing', null, filterMember);
+        } else {
+            dashboardFilter = { active: true, dates: dates, type: 'missing_multi', status: null, manager: filterMember };
+            navigateTo('ItemManagement');
+        }
+    }
+
     function renderMissingBidDashboard() {
         if (!missingBidTableBody) return;
         missingBidTableBody.innerHTML = '';
         const missingBidTableFoot = document.getElementById('missingBidTableFoot');
         if (missingBidTableFoot) missingBidTableFoot.innerHTML = '';
+        const selectAll = document.getElementById('missingBidSelectAll');
+        if (selectAll) selectAll.checked = false;
+        updateMissingBidMoveBtn();
 
         const targetDates = getWorkingDaysFromToday();
         const filterMember = document.getElementById('missingBidFilterMember') ? document.getElementById('missingBidFilterMember').value : '';
@@ -2847,6 +2874,9 @@
             const row = document.createElement('tr');
             row.className = `border-b border-gray-100 transition ${cursorClass}`;
             row.innerHTML = `
+              <td class="py-2 px-2 text-center w-8" onclick="event.stopPropagation()">
+                  ${missingCount > 0 ? `<input type="checkbox" class="missing-bid-cb cursor-pointer" data-date="${targetYYMMDD}" onchange="updateMissingBidMoveBtn()">` : ''}
+              </td>
               <td class="py-2 px-3 text-left whitespace-nowrap">
                   <span class="${dDayColor} font-bold mr-2 text-sm">${dDay}</span>
                   <span class="text-gray-500 text-sm">${dateStr}</span>
@@ -6205,6 +6235,8 @@ MJ 이정우 팀장
                 : '';
             if (dashboardFilter.type === 'total_status') {
                 filterDesc = `당일 이후 전체 [${dashboardFilter.status}] 건`;
+            } else if (dashboardFilter.type === 'missing_multi') {
+                filterDesc = `${(dashboardFilter.dates || []).length}개 날짜 입찰가 미입력 건`;
             } else {
                 const d = dashboardFilter.date;
                 const niceDate = `${d.substring(0, 2)}/${d.substring(2, 4)}/${d.substring(4, 6)}`;
@@ -6252,7 +6284,7 @@ MJ 이정우 팀장
             const inDateNum = inDateStr.replace(/\D/g, '');
             // all_status/all_bid_state/item_ids 타입은 날짜 전체 범위를 조회 (과거 날짜 포함)
             const bypassDateFilter = dashboardFilter.active &&
-                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids');
+                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids' || dashboardFilter.type === 'missing_multi');
             const matchesIndate = bypassDateFilter
                 ? true
                 : (syncSakunFilter.active
@@ -6292,6 +6324,8 @@ MJ 이정우 팀장
 
                 if (dashboardFilter.type === 'missing') {
                     return itemDate === dashboardFilter.date && (isNaN(price) || price === 0) && item.stu_member === '입찰';
+                } else if (dashboardFilter.type === 'missing_multi') {
+                    return (dashboardFilter.dates || []).includes(itemDate) && (isNaN(price) || price === 0) && item.stu_member === '입찰';
                 } else if (dashboardFilter.type === 'status') {
                     return itemDate === dashboardFilter.date && item.stu_member === dashboardFilter.status;
                 } else if (dashboardFilter.type === 'total_status') {
