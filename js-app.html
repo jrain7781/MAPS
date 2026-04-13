@@ -11113,15 +11113,25 @@ MJ 이정우 팀장
         });
 
         // 정렬
+        const CLASS_SORT_KEYS = ['class_type', 'class_name', 'class_loc'];
         filtered.sort((a, b) => {
-            let va = a[memberSortKey] || '';
-            let vb = b[memberSortKey] || '';
+            let va, vb;
+            if (CLASS_SORT_KEYS.includes(memberSortKey)) {
+                const clsA = classMap[String(a.class_id)] || {};
+                const clsB = classMap[String(b.class_id)] || {};
+                va = clsA[memberSortKey] || '';
+                vb = clsB[memberSortKey] || '';
+            } else {
+                va = a[memberSortKey] ?? '';
+                vb = b[memberSortKey] ?? '';
+            }
             if (typeof va === 'number' && typeof vb === 'number') {
                 return memberSortAsc ? va - vb : vb - va;
             }
             return memberSortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
         });
 
+        _updateMemberSortArrows();
         renderMemberListNew(filtered, classMap);
     }
 
@@ -11162,6 +11172,23 @@ MJ 이정우 팀장
             memberSortAsc = true;
         }
         filterMembersNew();
+    }
+
+    function _updateMemberSortArrows() {
+        document.querySelectorAll('#memberDataTable th[data-sort-key]').forEach(th => {
+            const key = th.dataset.sortKey;
+            const arrow = th.querySelector('.sort-arrow');
+            if (!arrow) return;
+            if (key === memberSortKey) {
+                arrow.textContent = memberSortAsc ? ' ↑' : ' ↓';
+                arrow.classList.remove('text-gray-300');
+                arrow.classList.add('text-white');
+            } else {
+                arrow.textContent = ' ↕';
+                arrow.classList.remove('text-white');
+                arrow.classList.add('text-gray-300');
+            }
+        });
     }
 
     function resetMemberSearch() {
