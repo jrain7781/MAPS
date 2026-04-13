@@ -5364,6 +5364,30 @@ MJ 이정우 팀장
         .catch(() => showStatus('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.', 'error'));
     }
 
+    // --- 카카오톡 채팅창 바로가기 ---
+    function openKakaoChat(ctx) {
+        const data = ctx === 'item' ? currentDetailItem : currentModalItemData;
+        if (!data || !data.member_id) { showStatus('회원 정보가 없습니다.', 'error'); return; }
+
+        const mem = getMemberById_(data.member_id);
+        if (!mem) { showStatus('회원 정보를 찾을 수 없습니다.', 'error'); return; }
+        const kName = mem.kakao_name || mem.member_name || mem.name1 || '';
+        if (!kName) { showStatus('카카오 이름이 없습니다. 회원관리에서 설정해주세요.', 'error'); return; }
+
+        showStatus(`채팅창 여는 중: ${kName}...`, 'warning');
+        fetch('http://127.0.0.1:8000/open_kakao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_name: kName })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.status === 'success') showStatus(`${kName} 채팅창 열기 완료`, 'success');
+            else showStatus('채팅창 열기 실패: ' + d.message, 'error');
+        })
+        .catch(() => showStatus('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.', 'error'));
+    }
+
     // --- 카카오 환경설정 ---
     function loadKakaoAutoEnterSetting() {
         if (typeof google === 'undefined') return;

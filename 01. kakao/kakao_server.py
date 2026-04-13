@@ -21,7 +21,54 @@ class KakaoHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        if self.path == '/send_kakao':
+        if self.path == '/open_kakao':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+
+            target_name = data.get('target_name', '')
+            if not target_name:
+                self._send_json(400, {"status": "error", "message": "target_name이 없습니다."})
+                return
+
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 카카오톡 채팅창 열기 요청: {target_name}")
+
+            try:
+                import pygetwindow as gw
+
+                kakao_wins = gw.getWindowsWithTitle('카카오톡')
+                if not kakao_wins:
+                    raise Exception("카카오톡이 실행되어 있지 않습니다. 카카오톡을 먼저 켜주세요.")
+
+                kakao_win = kakao_wins[0]
+                try:
+                    if kakao_win.isMinimized:
+                        kakao_win.restore()
+                    kakao_win.activate()
+                except Exception as win_err:
+                    if "Error code from Windows: 0" not in str(win_err):
+                        print(f"  >> 창 활성화 경고 (무시 가능): {win_err}")
+
+                time.sleep(0.5)
+
+                pyautogui.hotkey('ctrl', 'f')
+                time.sleep(0.3)
+                pyperclip.copy(target_name)
+                pyautogui.hotkey('ctrl', 'v')
+                time.sleep(0.8)
+
+                pyautogui.press('enter')
+                time.sleep(0.5)
+
+                print(f"  >> 채팅창 열기 완료")
+                self._send_json(200, {"status": "success", "message": "채팅창 열기 완료"})
+
+            except Exception as e:
+                error_msg = str(e)
+                print(f"  !! 오류: {error_msg}")
+                self._send_json(500, {"status": "error", "message": error_msg})
+
+        elif self.path == '/send_kakao':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data.decode('utf-8'))
@@ -90,6 +137,7 @@ class KakaoHandler(http.server.SimpleHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+            return
 
     def _send_json(self, code, obj):
         body = json.dumps(obj, ensure_ascii=False).encode('utf-8')
