@@ -1285,17 +1285,15 @@
                                         <!-- 메시지 탭 -->
                                         <div id="item-sub-panel-message" class="p-3 hidden">
                                             <div class="flex justify-between items-end mb-0 border-b border-gray-200">
-                                                <div class="flex space-x-1">
-                                                    <button type="button" id="item-tab-bid-check"
-                                                        onclick="switchTemplateTab('check')"
-                                                        class="px-4 py-2 text-sm font-bold text-indigo-700 border-b-2 border-indigo-700 bg-indigo-50 rounded-t-lg hover:bg-indigo-100 transition">추천물건안내</button>
-                                                    <button type="button" id="item-tab-bid-guide"
-                                                        onclick="switchTemplateTab('guide')"
-                                                        class="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-indigo-600 hover:bg-gray-50 rounded-t-lg transition">입찰가
-                                                        안내</button>
+                                                <div class="flex flex-wrap gap-0.5" id="item-kakao-tabs-container">
+                                                    <!-- 동적으로 채워짐 -->
                                                 </div>
-                                                <button type="button" onclick="copyTemplateText('item')"
-                                                    class="mb-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">복사하기</button>
+                                                <div class="flex items-center gap-1 mb-1 flex-shrink-0">
+                                                    <button type="button" onclick="openKakaoTemplateModal('item', true)" class="p-1 px-2 text-xs border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 font-semibold" title="새 템플릿 추가">➕</button>
+                                                    <button type="button" onclick="openKakaoTemplateModal('item', false)" class="p-1 px-2 text-xs border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 font-semibold" title="현재 템플릿 편집">✏️</button>
+                                                    <button type="button" onclick="copyTemplateText('item')" class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">복사</button>
+                                                    <button type="button" onclick="sendToKakao('item')" class="px-2 py-1 bg-yellow-400 text-yellow-900 text-xs font-bold rounded hover:bg-yellow-500 transition">💬카톡</button>
+                                                </div>
                                             </div>
                                             <div class="mt-2 text-xs">
                                                 <textarea id="item-template-textarea" rows="12"
@@ -1690,11 +1688,12 @@
                                     <th class="px-2 py-2 text-center text-xs md:text-sm font-bold text-gray-700">수업이름
                                     </th>
                                     <th class="px-2 py-2 text-center text-xs md:text-sm font-bold text-gray-700">지역</th>
+                                    <th class="px-2 py-2 text-center text-xs md:text-sm font-bold text-gray-700">카카오명</th>
                                 </tr>
                             </thead>
                             <tbody id="memberDataTableBody" class="bg-white divide-y divide-gray-100">
                                 <tr>
-                                    <td colspan="9" class="p-4 text-center text-gray-500">데이터를 불러오는 중...</td>
+                                    <td colspan="10" class="p-4 text-center text-gray-500">데이터를 불러오는 중...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1828,6 +1827,11 @@
                                         <div><label class="block text-xs font-medium text-gray-600 mb-1">가입일</label>
                                             <input type="date" id="mem-kaib_date" name="kaib_date"
                                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                        </div>
+                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">💬 카카오톡 매칭 이름 <span class="text-gray-400 font-normal">(기본: 회원 이름)</span></label>
+                                            <input type="text" id="mem-kakao_name" name="kakao_name" placeholder="카카오톡에서 검색할 이름"
+                                                class="w-full px-3 py-2 border border-yellow-300 rounded-lg text-sm bg-yellow-50"
+                                                onfocus="this.select()">
                                         </div>
                                         <div><label class="block text-xs font-medium text-gray-600 mb-1">회원 비고1</label>
                                             <textarea id="mem-note1" name="note1" rows="3"
@@ -3080,6 +3084,8 @@
                             class="pref-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-indigo-500 text-indigo-600 bg-white">이미지동기화/옥션연동</button>
                         <button id="pref-tab-btn-telegram" onclick="switchPrefTab('telegram')"
                             class="pref-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">텔레그램</button>
+                        <button id="pref-tab-btn-kakao" onclick="switchPrefTab('kakao')"
+                            class="pref-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">카카오전송</button>
                         <button id="pref-tab-btn-appinfo" onclick="switchPrefTab('appinfo')"
                             class="pref-tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-transparent text-gray-500 hover:text-gray-700 bg-white">앱정보</button>
                     </div>
@@ -3494,7 +3500,31 @@
                     </div><!-- /하위 탭 패널 컨테이너 -->
                 </div><!-- /pref-panel-telegram -->
 
-                <!-- ── 탭 3: 앱정보 ─────────────────────────────────────────── -->
+                <!-- ── 탭 3: 카카오전송 ─────────────────────────────────────── -->
+                <div id="pref-panel-kakao" class="pref-panel flex-1 overflow-y-auto p-4 md:p-8" style="display:none">
+                    <div class="max-w-2xl bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                            <span class="text-2xl">💬</span> 카카오톡 자동화 설정
+                        </h2>
+                        <div class="mb-6 bg-yellow-50 rounded-lg p-4 text-sm text-yellow-800 border border-yellow-200">
+                            <strong>안내:</strong> 로컬 파이썬 서버(<code>kakao_server.py</code>)가 백그라운드에서 실행 중이어야 작동합니다.
+                        </div>
+                        <div class="flex items-center justify-between border-b pb-4 mb-4">
+                            <div>
+                                <h3 class="font-bold text-gray-700 text-base">자동 엔터(전송) 모드</h3>
+                                <p class="text-xs text-gray-500 mt-1">창을 열고 메시지 붙여넣기 후 엔터까지 쳐서 즉시 전송<br>(OFF 시 붙여넣기까지만 수행)</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="pref-kakao-auto-enter" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-400"></div>
+                            </label>
+                        </div>
+                        <button type="button" onclick="saveKakaoAutoEnterSetting()"
+                            class="px-4 py-2 bg-yellow-400 text-yellow-900 font-bold rounded-lg hover:bg-yellow-500 transition shadow">설정 저장</button>
+                    </div>
+                </div><!-- /pref-panel-kakao -->
+
+                <!-- ── 탭 4: 앱정보 ─────────────────────────────────────────── -->
                 <div id="pref-panel-appinfo" class="pref-panel flex-1 overflow-y-auto p-4 md:p-8" style="display:none">
                     <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200 max-w-lg">
                         <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">앱 정보</h2>
@@ -3741,18 +3771,15 @@
 
                         <div id="modal-detail-template-section" class="mb-4 md:col-span-2 border-t pt-4">
                             <div class="flex justify-between items-end mb-0 border-b border-gray-200">
-                                <div class="flex space-x-1">
-                                    <button type="button" id="tab-bid-check" onclick="switchTemplateTab('check')"
-                                        class="px-4 py-2 text-sm font-bold text-indigo-700 border-b-2 border-indigo-700 bg-indigo-50 rounded-t-lg hover:bg-indigo-100 transition">추천물건안내</button>
-                                    <button type="button" id="tab-bid-guide" onclick="switchTemplateTab('guide')"
-                                        class="px-4 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-indigo-600 hover:bg-gray-50 rounded-t-lg transition">입찰가
-                                        안내</button>
+                                <div class="flex flex-wrap gap-0.5" id="modal-kakao-tabs-container">
+                                    <!-- 동적으로 채워짐 -->
                                 </div>
-                                <div class="flex items-center gap-2 mb-2">
-                                    <button type="button" onclick="copyTemplateText()"
-                                        class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">복사하기</button>
-                                    <button type="button" onclick="toggleTemplateArea()"
-                                        class="text-xs text-gray-500 underline">접기/펴기</button>
+                                <div class="flex items-center gap-1 mb-1 flex-shrink-0">
+                                    <button type="button" onclick="openKakaoTemplateModal('modal', true)" class="p-1 px-2 text-xs border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 font-semibold" title="새 템플릿 추가">➕</button>
+                                    <button type="button" onclick="openKakaoTemplateModal('modal', false)" class="p-1 px-2 text-xs border border-gray-300 rounded bg-white hover:bg-gray-100 text-gray-700 font-semibold" title="현재 템플릿 편집">✏️</button>
+                                    <button type="button" onclick="copyTemplateText('modal')" class="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition">복사</button>
+                                    <button type="button" onclick="sendToKakao('modal')" class="px-2 py-1 bg-yellow-400 text-yellow-900 text-xs font-bold rounded hover:bg-yellow-500 transition">💬카톡</button>
+                                    <button type="button" onclick="toggleTemplateArea()" class="text-xs text-gray-500 underline ml-1">접기/펴기</button>
                                 </div>
                             </div>
                             <div id="template-area-container" class="hidden">
@@ -4191,6 +4218,52 @@
                     class="text-gray-400 hover:text-gray-600 text-lg leading-none flex-shrink-0">✕</button>
             </div>
             <div id="cal-popup-body" class="text-xs text-gray-600 space-y-1.5"></div>
+        </div>
+    </div>
+
+    <!-- ── 카카오 템플릿 추가/편집 모달 ─────────────────────────────── -->
+    <div id="kakaoTemplateModal" class="content-hidden fixed inset-0 z-[6000] flex items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 flex flex-col" onclick="event.stopPropagation()">
+            <div class="px-5 py-3 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h3 class="text-base font-bold text-gray-800 flex items-center gap-2">
+                    <span class="text-lg">💬</span> <span id="kakaoTemplateModalTitle">카카오 템플릿 추가/편집</span>
+                </h3>
+                <button onclick="closeKakaoTemplateModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="p-5 flex-1 overflow-y-auto space-y-4">
+                <input type="hidden" id="kakao-template-id"/>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">탭 이름</label>
+                    <input type="text" id="kakao-template-name" class="w-full border border-gray-300 rounded px-3 py-2 text-sm" placeholder="예: 추천물건안내, 홍길동 전용"/>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">적용 대상</label>
+                    <div class="flex gap-4">
+                        <label class="flex items-center text-sm"><input type="radio" name="kakao-tpl-type" value="public" checked onchange="toggleKakaoTplTarget(this.value)" class="mr-1"> 공용 (전체)</label>
+                        <label class="flex items-center text-sm"><input type="radio" name="kakao-tpl-type" value="individual" onchange="toggleKakaoTplTarget(this.value)" class="mr-1"> 개별 (특정 회원)</label>
+                    </div>
+                </div>
+                <div id="kakao-tpl-target-wrap" class="hidden">
+                    <label class="block text-xs font-bold text-gray-700 mb-1">대상 Member ID (자동입력)</label>
+                    <input type="text" id="kakao-template-member-id" class="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-50 text-gray-500" readonly/>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">템플릿 내용</label>
+                    <div class="text-xs text-gray-400 mb-1">치환 가능: <code>{{이름}}</code>, <code>{{입찰일자}}</code>, <code>{{사건번호}}</code>, <code>{{법원}}</code>, <code>{{입찰가}}</code></div>
+                    <textarea id="kakao-template-content" rows="10" class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono"></textarea>
+                </div>
+            </div>
+            <div class="px-5 py-3 border-t border-gray-200 bg-gray-50 rounded-b-xl flex justify-between items-center">
+                <button type="button" id="kakao-tpl-delete-btn" onclick="deleteKakaoTemplateConfirm()" class="px-4 py-2 bg-red-100 text-red-600 text-sm font-bold rounded hover:bg-red-200 hidden">삭제</button>
+                <div class="flex gap-2 ml-auto">
+                    <button type="button" onclick="closeKakaoTemplateModal()" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-bold rounded hover:bg-gray-100">취소</button>
+                    <button type="button" onclick="saveKakaoTemplateData()" class="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded hover:bg-indigo-700 shadow" style="min-width:70px">
+                        <span id="kakao-tpl-save-text">저장</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </body>

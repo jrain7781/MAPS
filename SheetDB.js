@@ -46,8 +46,11 @@ const ITEM_MEMBER_HEADERS = [
   'telegram_enabled',
   'kaib_date',
   'reg_date',
-  'reg_id'
+  'reg_id',
+  'kakao_name'
 ];
+
+const KAKAO_TEMPLATES_SHEET_NAME = 'kakao_templates';
 
 // 수업 관리 헤더 (Code.js의 CLASS_HEADERS 사용)
 // const CLASS_HEADERS_DB = ... (Removed to use global CLASS_HEADERS)
@@ -5066,6 +5069,60 @@ function saveMsgTemplatesBatch(pairs) {
     Logger.log('[saveMsgTemplatesBatch] 오류: ' + e.toString());
     return { success: false, message: e.toString() };
   }
+}
+
+// ─── 카카오 템플릿 CRUD ───────────────────────────────────────────────────────
+function _ensureKakaoSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(KAKAO_TEMPLATES_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(KAKAO_TEMPLATES_SHEET_NAME);
+    sheet.getRange(1, 1, 1, 5).setValues([['id', 'name', 'content', 'type', 'member_id']]);
+    sheet.getRange(2, 1, 2, 5).setValues([
+      ['check', '추천물건안내', '안녕하세요?\n엠제이경매스쿨입니다.\n\n추천물건 전달드립니다.\n입찰 여부 회신 부탁드려요~ (48시간 이후 자동취소)\n\n====================================\n회 원 명:    {{이름}}\n입찰일자:   {{입찰일자}}\n사건번호:   {{사건번호}}\n법     원:   {{법원}}\n====================================', 'public', ''],
+      ['guide', '입찰가 안내', '안녕하세요?\n엠제이경매스쿨입니다.\n\n입찰가 전달드립니다. 회원님의 낙찰을 기원드립니다!\n\n====================================\n회 원 명:    {{이름}}\n입찰일자:   {{입찰일자}}\n사건번호:   {{사건번호}}\n법     원:   {{법원}}\n====================================\n입 찰 가:    {{입찰가}}원\n====================================', 'public', '']
+    ]);
+    SpreadsheetApp.flush();
+  }
+  return sheet;
+}
+
+function getAllKakaoTemplates() {
+  try {
+    const sheet = _ensureKakaoSheet_();
+    if (sheet.getLastRow() < 2) return [];
+    return sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues()
+      .filter(r => r[0])
+      .map(r => ({ id: String(r[0]), name: String(r[1]), content: String(r[2]), type: String(r[3]), member_id: String(r[4]) }));
+  } catch (e) {
+    Logger.log('[getAllKakaoTemplates] ' + e);
+    return [];
+  }
+}
+
+function saveKakaoTemplate(obj) {
+  try {
+    const sheet = _ensureKakaoSheet_();
+    if (!obj.id) obj.id = 'kt_' + new Date().getTime();
+    const ids = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues() : [];
+    let rowIdx = -1;
+    for (let i = 0; i < ids.length; i++) { if (String(ids[i][0]) === String(obj.id)) { rowIdx = i + 2; break; } }
+    const row = [obj.id, obj.name, obj.content, obj.type, obj.type === 'individual' ? (obj.member_id || '') : ''];
+    if (rowIdx > -1) sheet.getRange(rowIdx, 1, 1, 5).setValues([row]);
+    else sheet.appendRow(row);
+    return { success: true, id: obj.id };
+  } catch (e) { return { success: false, message: e.toString() }; }
+}
+
+function deleteKakaoTemplate(id) {
+  try {
+    const sheet = _ensureKakaoSheet_();
+    const ids = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues() : [];
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) { sheet.deleteRow(i + 2); return { success: true }; }
+    }
+    return { success: false, message: 'not found' };
+  } catch (e) { return { success: false, message: e.toString() }; }
 }
 
 /**

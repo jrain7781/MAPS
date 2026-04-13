@@ -3658,8 +3658,7 @@
         if (tab === 'history') renderItemSubHistory();
         if (tab === 'info') renderItemSubInfo('main');
         if (tab === 'message') {
-            // 상세 탭에서의 메시지 템플릿 기본값(추천물건안내) 표시
-            switchTemplateTab('check', false);
+            renderKakaoTemplateTabs(currentDetailItem ? currentDetailItem.member_id : null, 'item');
         }
     }
 
@@ -4863,7 +4862,8 @@
         const templateContainer = document.getElementById('template-area-container');
         if (templateContainer) templateContainer.classList.add('hidden');
 
-        switchTemplateTab('check', false);
+        // 카카오 템플릿 탭 렌더링 (모달이 열린 후에 실행되도록 지연)
+        setTimeout(() => renderKakaoTemplateTabs(data.member_id, 'modal'), 0);
 
         // 기본적으로 상세 탭 표시
         switchModalTab('detail');
@@ -5092,6 +5092,252 @@ MJ 이정우 팀장
         }
         return '';
     }
+
+    // ─── 카카오 동적 템플릿 시스템 ────────────────────────────────────────────
+    let allKakaoTemplates = [];
+    let _kakaoActiveId = {};   // { modal: 'id', item: 'id' }
+    let _kakaoAutoEnter = false;
+    let _kakaoCtx = null;      // 현재 편집 중인 context
+
+    function _parseKakaoTpl(content, data) {
+        if (!content || !data) return content || '';
+        let s = content;
+        let dateStr = String(data['in-date'] || '').trim();
+        if (dateStr.length === 6) dateStr = `20${dateStr.slice(0,2)}년 ${dateStr.slice(2,4)}월 ${dateStr.slice(4,6)}일`;
+        let price = (data.bidprice == 0 || data.bidprice === '0') ? '0' : new Intl.NumberFormat('ko-KR').format(data.bidprice);
+        s = s.replace(/\{\{이름\}\}/g, data.m_name || '');
+        s = s.replace(/\{\{입찰일자\}\}/g, dateStr);
+        s = s.replace(/\{\{사건번호\}\}/g, data.sakun_no || '');
+        s = s.replace(/\{\{법원\}\}/g, data.court || '');
+        s = s.replace(/\{\{입찰가\}\}/g, price);
+        return s;
+    }
+
+    function renderKakaoTemplateTabs(memberId, ctx) {
+        try {
+            const containerId = ctx === 'item' ? 'item-kakao-tabs-container' : 'modal-kakao-tabs-container';
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const matched = allKakaoTemplates.filter(t =>
+                t.type === 'public' || (t.type === 'individual' && t.member_id === memberId));
+
+            container.innerHTML = '';
+            if (matched.length === 0) {
+                container.innerHTML = '<span class="text-xs text-gray-400 py-2 px-1">템플릿 없음 (➕추가)</span>';
+                _kakaoActiveId[ctx] = null;
+                _updateKakaoTextarea(ctx);
+                return;
+            }
+
+            matched.forEach(t => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.dataset.id = t.id;
+                btn.textContent = t.name;
+                btn.className = 'kakao-tab-btn px-3 py-1.5 text-xs font-medium border-b-2 transition rounded-t';
+                btn.onclick = () => _switchKakaoTab(t.id, ctx);
+                container.appendChild(btn);
+            });
+
+            if (!_kakaoActiveId[ctx] || !matched.find(t => t.id === _kakaoActiveId[ctx])) {
+                _kakaoActiveId[ctx] = matched[0].id;
+            }
+            _applyKakaoTabStyle(ctx);
+            _updateKakaoTextarea(ctx);
+        } catch (e) { console.error('[renderKakaoTemplateTabs]', e); }
+    }
+
+    function _switchKakaoTab(id, ctx) {
+        _kakaoActiveId[ctx] = id;
+        _applyKakaoTabStyle(ctx);
+        _updateKakaoTextarea(ctx);
+        // 탭 클릭 시 textarea 영역 펼치기
+        if (ctx === 'modal') {
+            const tc = document.getElementById('template-area-container');
+            if (tc) tc.classList.remove('hidden');
+        }
+    }
+
+    function _applyKakaoTabStyle(ctx) {
+        const containerId = ctx === 'item' ? 'item-kakao-tabs-container' : 'modal-kakao-tabs-container';
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.querySelectorAll('.kakao-tab-btn').forEach(btn => {
+            const isActive = btn.dataset.id === _kakaoActiveId[ctx];
+            btn.className = 'kakao-tab-btn px-3 py-1.5 text-xs font-medium border-b-2 transition rounded-t '
+                + (isActive ? 'text-indigo-700 border-indigo-700 bg-indigo-50 font-bold'
+                            : 'text-gray-500 border-transparent hover:text-indigo-600 hover:bg-gray-50');
+        });
+    }
+
+    function _updateKakaoTextarea(ctx) {
+        const taId = ctx === 'item' ? 'item-template-textarea' : 'template-textarea';
+        const ta = document.getElementById(taId);
+        if (!ta) return;
+        const tpl = allKakaoTemplates.find(t => t.id === _kakaoActiveId[ctx]);
+        const data = ctx === 'item' ? currentDetailItem : currentModalItemData;
+        ta.value = tpl && data ? _parseKakaoTpl(tpl.content, data) : '';
+    }
+
+    function loadKakaoTemplatesFromServer() {
+        if (typeof google === 'undefined') return;
+        google.script.run
+            .withSuccessHandler(data => {
+                allKakaoTemplates = Array.isArray(data) ? data : [];
+                // 열려있는 모달/패널이 있으면 탭 갱신
+                if (currentModalItemData) renderKakaoTemplateTabs(currentModalItemData.member_id, 'modal');
+                if (currentDetailItem) renderKakaoTemplateTabs(currentDetailItem.member_id, 'item');
+            })
+            .getAllKakaoTemplates();
+    }
+
+    // --- 카카오 템플릿 편집 모달 ---
+    function openKakaoTemplateModal(ctx, isNew) {
+        _kakaoCtx = ctx;
+        const data = ctx === 'item' ? currentDetailItem : currentModalItemData;
+        if (!data) { showStatus('물건 정보가 없습니다.', 'error'); return; }
+
+        document.getElementById('kakao-template-member-id').value = data.member_id || '';
+
+        if (isNew) {
+            document.getElementById('kakaoTemplateModalTitle').textContent = '카카오 템플릿 추가';
+            document.getElementById('kakao-template-id').value = '';
+            document.getElementById('kakao-template-name').value = '';
+            document.getElementById('kakao-template-content').value = '안녕하세요?\n엠제이경매스쿨입니다.\n\n{{이름}}님, {{사건번호}} 안내드립니다.';
+            document.querySelector('input[name="kakao-tpl-type"][value="public"]').checked = true;
+            toggleKakaoTplTarget('public');
+            document.getElementById('kakao-tpl-delete-btn').classList.add('hidden');
+        } else {
+            const tId = _kakaoActiveId[ctx];
+            if (!tId) { showStatus('편집할 템플릿이 없습니다.', 'error'); return; }
+            const tpl = allKakaoTemplates.find(t => t.id === tId);
+            if (!tpl) { showStatus('템플릿을 찾을 수 없습니다.', 'error'); return; }
+            document.getElementById('kakaoTemplateModalTitle').textContent = '카카오 템플릿 편집';
+            document.getElementById('kakao-template-id').value = tpl.id;
+            document.getElementById('kakao-template-name').value = tpl.name;
+            document.getElementById('kakao-template-content').value = tpl.content;
+            const rType = tpl.type === 'individual' ? 'individual' : 'public';
+            document.querySelector(`input[name="kakao-tpl-type"][value="${rType}"]`).checked = true;
+            toggleKakaoTplTarget(rType);
+            if (tpl.type === 'individual') document.getElementById('kakao-template-member-id').value = tpl.member_id || data.member_id;
+            document.getElementById('kakao-tpl-delete-btn').classList.remove('hidden');
+        }
+        document.getElementById('kakaoTemplateModal').classList.remove('content-hidden');
+    }
+
+    function closeKakaoTemplateModal() {
+        document.getElementById('kakaoTemplateModal').classList.add('content-hidden');
+    }
+
+    function toggleKakaoTplTarget(val) {
+        const wrap = document.getElementById('kakao-tpl-target-wrap');
+        if (wrap) wrap.classList.toggle('hidden', val !== 'individual');
+    }
+
+    function saveKakaoTemplateData() {
+        const id = document.getElementById('kakao-template-id').value;
+        const name = document.getElementById('kakao-template-name').value.trim();
+        const content = document.getElementById('kakao-template-content').value.trim();
+        const type = document.querySelector('input[name="kakao-tpl-type"]:checked').value;
+        const memberId = document.getElementById('kakao-template-member-id').value.trim();
+        if (!name) { showStatus('탭 이름을 입력해주세요.', 'error'); return; }
+        if (!content) { showStatus('내용을 입력해주세요.', 'error'); return; }
+
+        const saveBtn = document.getElementById('kakao-tpl-save-text');
+        if (saveBtn) saveBtn.textContent = '저장 중..';
+        google.script.run
+            .withSuccessHandler(res => {
+                if (saveBtn) saveBtn.textContent = '저장';
+                if (res && res.success) {
+                    showStatus('템플릿이 저장되었습니다.', 'success');
+                    closeKakaoTemplateModal();
+                    loadKakaoTemplatesFromServer();
+                } else {
+                    showStatus('저장 실패: ' + (res && res.message || ''), 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                if (saveBtn) saveBtn.textContent = '저장';
+                showStatus('오류: ' + err, 'error');
+            })
+            .saveKakaoTemplate({ id, name, content, type, member_id: memberId });
+    }
+
+    function deleteKakaoTemplateConfirm() {
+        const id = document.getElementById('kakao-template-id').value;
+        if (!id || !confirm('이 템플릿을 삭제하시겠습니까?')) return;
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res && res.success) {
+                    showStatus('삭제되었습니다.', 'success');
+                    closeKakaoTemplateModal();
+                    _kakaoActiveId[_kakaoCtx] = null;
+                    loadKakaoTemplatesFromServer();
+                } else {
+                    showStatus('삭제 실패: ' + (res && res.message || ''), 'error');
+                }
+            })
+            .deleteKakaoTemplate(id);
+    }
+
+    // --- 카카오톡 로컬 서버 전송 ---
+    function sendToKakao(ctx) {
+        const taId = ctx === 'item' ? 'item-template-textarea' : 'template-textarea';
+        const ta = document.getElementById(taId);
+        if (!ta || !ta.value.trim()) { showStatus('전송할 내용이 없습니다.', 'error'); return; }
+
+        const data = ctx === 'item' ? currentDetailItem : currentModalItemData;
+        if (!data || !data.member_id) { showStatus('회원 정보가 없습니다.', 'error'); return; }
+
+        const mem = getMemberById_(data.member_id);
+        if (!mem) { showStatus('회원 정보를 찾을 수 없습니다.', 'error'); return; }
+        const kName = mem.kakao_name || mem.member_name || mem.name1 || '';
+        if (!kName) { showStatus('카카오 이름이 없습니다. 회원관리에서 설정해주세요.', 'error'); return; }
+
+        showStatus(`카카오 전송 중: ${kName}...`, 'warning');
+        fetch('http://127.0.0.1:8000/send_kakao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_name: kName, message: ta.value, auto_enter: _kakaoAutoEnter })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.status === 'success') showStatus('카톡 전송 완료!', 'success');
+            else showStatus('카톡 전송 실패: ' + d.message, 'error');
+        })
+        .catch(() => showStatus('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.', 'error'));
+    }
+
+    // --- 카카오 환경설정 ---
+    function loadKakaoAutoEnterSetting() {
+        if (typeof google === 'undefined') return;
+        google.script.run
+            .withSuccessHandler(val => {
+                _kakaoAutoEnter = val;
+                const toggle = document.getElementById('pref-kakao-auto-enter');
+                if (toggle) toggle.checked = _kakaoAutoEnter;
+            })
+            .getKakaoAutoEnterSetting();
+    }
+
+    function saveKakaoAutoEnterSetting() {
+        const toggle = document.getElementById('pref-kakao-auto-enter');
+        if (!toggle) return;
+        showStatus('저장 중...', 'warning');
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res && res.success) {
+                    _kakaoAutoEnter = res.kakaoAutoEnter;
+                    showStatus('카카오 설정이 저장되었습니다.', 'success');
+                } else {
+                    showStatus('저장 실패.', 'error');
+                }
+            })
+            .withFailureHandler(err => showStatus('오류: ' + err, 'error'))
+            .setKakaoAutoEnterSetting(toggle.checked);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     function setBidState(state) {
         const bidInput = document.getElementById('modal-form-bidprice');
@@ -8676,7 +8922,7 @@ MJ 이정우 팀장
     // ─── 환경설정 탭 전환 ────────────────────────────────────────────────────────
     function switchPrefTab(tab) {
         // 상단 탭 버튼 스타일
-        ['image', 'telegram', 'appinfo'].forEach(function (t) {
+        ['image', 'telegram', 'kakao', 'appinfo'].forEach(function (t) {
             var btn = document.getElementById('pref-tab-btn-' + t);
             var panel = document.getElementById('pref-panel-' + t);
             if (!btn || !panel) return;
@@ -8691,6 +8937,10 @@ MJ 이정우 팀장
         // 텔레그램 탭 진입 시 첫 하위탭 활성화
         if (tab === 'telegram') {
             switchPrefSubTab('msgEditor');
+        }
+        // 카카오 탭 진입 시 설정 로드
+        if (tab === 'kakao') {
+            loadKakaoAutoEnterSetting();
         }
         // 이미지 탭 진입 시 캐시 즉시 적용, 없으면 GAS 호출
         if (tab === 'image') {
@@ -10849,6 +11099,7 @@ MJ 이정우 팀장
                 <td class="px-2 py-2 text-center text-sm">${escapeHtml(cls.class_type || '')}</td>
                 <td class="px-2 py-2 text-center text-sm">${escapeHtml(cls.class_name || '')}</td>
                 <td class="px-2 py-2 text-center text-sm">${escapeHtml(cls.class_loc || '')}</td>
+                <td class="px-2 py-2 text-center text-sm">${m.kakao_name ? `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded">${escapeHtml(m.kakao_name)}</span>` : '<span class="text-gray-300 text-xs">-</span>'}</td>
             </tr>`;
         }).join('');
     }
@@ -11047,7 +11298,7 @@ MJ 이정우 팀장
             btnBack.classList.remove('content-hidden');
 
             // 폼 필드 채우기
-            ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'member_token', 'telegram_chat_id', 'telegram_username', 'telegram_enabled', 'kaib_date'].forEach(key => {
+            ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'member_token', 'telegram_chat_id', 'telegram_username', 'telegram_enabled', 'kaib_date', 'kakao_name'].forEach(key => {
                 const el = document.getElementById('mem-' + key);
                 if (el) el.value = member[key] || '';
             });
@@ -11076,7 +11327,7 @@ MJ 이정우 팀장
         const isEdit = !!memberId;
 
         const data = {};
-        ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'telegram_enabled', 'kaib_date'].forEach(key => {
+        ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'telegram_enabled', 'kaib_date', 'kakao_name'].forEach(key => {
             data[key] = document.getElementById('mem-' + key)?.value || '';
         });
 
@@ -15288,6 +15539,8 @@ MJ 이정우 팀장
         }
         // 모든 설정 한 번에 사전 로딩
         loadAllPrefSettings_();
+        // 카카오 템플릿 사전 로딩
+        loadKakaoTemplatesFromServer();
     });
 
     // =====================================================================

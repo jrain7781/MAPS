@@ -60,7 +60,8 @@ const MEMBER_HEADERS = [
   'telegram_enabled',
   'kaib_date',
   'reg_date',
-  'reg_id'
+  'reg_id',
+  'kakao_name'
 ];
 
 // --- 수업(class) 시트 헤더 ---
@@ -100,6 +101,19 @@ function setAutoApproveSetting(isOn) {
   const p = PropertiesService.getScriptProperties();
   p.setProperty('MJAPS_AUTO_APPROVE', isOn ? 'true' : 'false');
   return { success: true, autoApprove: isOn };
+}
+
+// --- 카카오 설정 ---
+function getKakaoAutoEnterSetting() {
+  try {
+    const val = PropertiesService.getScriptProperties().getProperty('KAKAO_AUTO_ENTER');
+    return val === 'true';
+  } catch (e) { return false; }
+}
+
+function setKakaoAutoEnterSetting(isOn) {
+  PropertiesService.getScriptProperties().setProperty('KAKAO_AUTO_ENTER', isOn ? 'true' : 'false');
+  return { success: true, kakaoAutoEnter: isOn };
 }
 
 // --- 수업 회차(class_d1) 시트 헤더 ---
