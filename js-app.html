@@ -5134,6 +5134,7 @@ MJ 이정우 팀장
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.dataset.id = t.id;
+                btn.dataset.type = t.type;   // 색상 구분용
                 btn.textContent = t.name;
                 btn.className = 'kakao-tab-btn px-3 py-1.5 text-xs font-medium border-b-2 transition rounded-t';
                 btn.onclick = () => _switchKakaoTab(t.id, ctx);
@@ -5145,6 +5146,7 @@ MJ 이정우 팀장
             }
             _applyKakaoTabStyle(ctx);
             _updateKakaoTextarea(ctx);
+            _renderKakaoNameField(memberId, ctx);
         } catch (e) { console.error('[renderKakaoTemplateTabs]', e); }
     }
 
@@ -5165,9 +5167,18 @@ MJ 이정우 팀장
         if (!container) return;
         container.querySelectorAll('.kakao-tab-btn').forEach(btn => {
             const isActive = btn.dataset.id === _kakaoActiveId[ctx];
-            btn.className = 'kakao-tab-btn px-3 py-1.5 text-xs font-medium border-b-2 transition rounded-t '
-                + (isActive ? 'text-indigo-700 border-indigo-700 bg-indigo-50 font-bold'
-                            : 'text-gray-500 border-transparent hover:text-indigo-600 hover:bg-gray-50');
+            const isIndividual = btn.dataset.type === 'individual';
+            let style;
+            if (isIndividual) {
+                style = isActive
+                    ? 'text-red-700 border-red-600 bg-red-50 font-bold'
+                    : 'text-red-400 border-transparent hover:text-red-600 hover:bg-red-50';
+            } else {
+                style = isActive
+                    ? 'text-indigo-700 border-indigo-700 bg-indigo-50 font-bold'
+                    : 'text-gray-500 border-transparent hover:text-indigo-600 hover:bg-gray-50';
+            }
+            btn.className = 'kakao-tab-btn px-3 py-1.5 text-xs font-medium border-b-2 transition rounded-t ' + style;
         });
     }
 
@@ -5178,6 +5189,45 @@ MJ 이정우 팀장
         const tpl = allKakaoTemplates.find(t => t.id === _kakaoActiveId[ctx]);
         const data = ctx === 'item' ? currentDetailItem : currentModalItemData;
         ta.value = tpl && data ? _parseKakaoTpl(tpl.content, data) : '';
+    }
+
+    function _renderKakaoNameField(memberId, ctx) {
+        const rowId = ctx === 'item' ? 'item-kakao-name-row' : 'modal-kakao-name-row';
+        const row = document.getElementById(rowId);
+        if (!row) return;
+        const mem = memberId ? getMemberById_(memberId) : null;
+        const currentName = mem ? (mem.kakao_name || '') : '';
+        row.innerHTML = `
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500 whitespace-nowrap">💬 카카오명</span>
+                <input type="text" id="${rowId}-input" value="${currentName}"
+                    placeholder="${mem ? (mem.member_name || '이름 미설정') : '-'}"
+                    class="flex-1 px-2 py-1 border border-yellow-300 rounded text-xs bg-yellow-50 focus:outline-none focus:border-yellow-500">
+                <button type="button" onclick="saveKakaoNameFromTemplate('${ctx}')"
+                    class="px-2 py-1 text-xs bg-yellow-400 text-yellow-900 font-bold rounded hover:bg-yellow-500 whitespace-nowrap">저장</button>
+            </div>`;
+    }
+
+    function saveKakaoNameFromTemplate(ctx) {
+        const rowId = ctx === 'item' ? 'item-kakao-name-row' : 'modal-kakao-name-row';
+        const input = document.getElementById(rowId + '-input');
+        if (!input) return;
+        const data = ctx === 'item' ? currentDetailItem : currentModalItemData;
+        if (!data || !data.member_id) { showStatus('회원 정보가 없습니다.', 'error'); return; }
+        const newName = input.value.trim();
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res && res.success) {
+                    // 로컬 캐시도 즉시 반영
+                    const mem = getMemberById_(data.member_id);
+                    if (mem) mem.kakao_name = newName;
+                    showStatus('카카오명이 저장되었습니다.', 'success');
+                } else {
+                    showStatus('저장 실패: ' + (res && res.message || ''), 'error');
+                }
+            })
+            .withFailureHandler(err => showStatus('오류: ' + err, 'error'))
+            .updateMemberField(String(data.member_id), 'kakao_name', newName);
     }
 
     function loadKakaoTemplatesFromServer() {

@@ -3483,6 +3483,26 @@ function updateMemberNew(data) {
 }
 
 /**
+ * 회원의 특정 단일 필드만 업데이트합니다.
+ */
+function updateMemberField(memberId, field, value) {
+  try {
+    const colIdx = MEMBER_HEADERS.indexOf(field);
+    if (colIdx < 0) return { success: false, message: '알 수 없는 필드: ' + field };
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_MEMBERS_SHEET_NAME);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '회원 데이터 없음' };
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    const idx = ids.findIndex(id => String(id) === String(memberId));
+    if (idx < 0) return { success: false, message: '회원을 찾을 수 없습니다.' };
+    sheet.getRange(idx + 2, colIdx + 1).setValue(value);
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e.toString() };
+  }
+}
+
+/**
  * 회원을 삭제합니다. (신규 구조)
  */
 function deleteMemberNew(memberId) {
