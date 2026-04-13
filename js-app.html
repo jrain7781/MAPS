@@ -546,11 +546,16 @@
     const todayYYMMDD = getTodayYYMMDD();
 
     // 데이터 정렬 함수
+    function _sakunNum(sakun) {
+        const m = String(sakun || '').match(/\d+/);
+        return m ? parseInt(m[0], 10) : 0;
+    }
+
     function dataComparator(a, b) {
         if (a['in-date'] < b['in-date']) return -1;
         if (a['in-date'] > b['in-date']) return 1;
-        if (a.sakun_no < b.sakun_no) return -1;
-        if (a.sakun_no > b.sakun_no) return 1;
+        const na = _sakunNum(a.sakun_no), nb = _sakunNum(b.sakun_no);
+        if (na !== nb) return na - nb;
         if (a.m_name < b.m_name) return -1;
         if (a.m_name > b.m_name) return 1;
         return 0;
@@ -6719,6 +6724,11 @@ MJ 이정우 팀장
                     const va = parseFloat(String(a.bidprice || 0).replace(/,/g, '')) || 0;
                     const vb = parseFloat(String(b.bidprice || 0).replace(/,/g, '')) || 0;
                     return d * (va < vb ? -1 : va > vb ? 1 : 0);
+                }
+                // 사건번호: 숫자 추출 후 숫자 비교
+                if (k === 'sakun_no') {
+                    const na = _sakunNum(a.sakun_no), nb = _sakunNum(b.sakun_no);
+                    return d * (na - nb);
                 }
                 let va = a[k] != null ? String(a[k]) : '';
                 let vb = b[k] != null ? String(b[k]) : '';
