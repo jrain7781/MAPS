@@ -2939,20 +2939,30 @@
             missingBidTableBody.appendChild(row);
         });
 
-        // <tfoot> 요약 추가
-        if (missingBidTableFoot) {
-            const footRow = document.createElement('tr');
-            const textColor = totalMissing > 0 ? "text-red-600" : "text-blue-800";
-            footRow.innerHTML = `
-                <td class="py-2 px-3 text-left text-blue-800 text-sm">전체 (오늘~)</td>
-                <td class="py-2 px-3 text-center text-sm ${textColor}">${totalMissing}건</td>
-            `;
-            if (totalMissing > 0) {
-                footRow.className = "cursor-pointer hover:bg-blue-100";
-                footRow.onclick = () => filterFromDashboard(todayYYMMDD, 'total_missing', null, filterMember);
-            }
-            missingBidTableFoot.appendChild(footRow);
+        // 요약 행 추가 (tbody 내부에 정규 행처럼 추가)
+        const totalRow = document.createElement('tr');
+        totalRow.className = `bg-blue-50 font-bold border-t-2 border-blue-100 transition ${totalMissing > 0 ? 'cursor-pointer hover:bg-blue-100' : ''}`;
+        
+        const countColor = totalMissing > 0 ? "text-red-600" : "text-blue-800";
+        
+        totalRow.innerHTML = `
+            <td class="py-2 px-2 text-center w-8"></td>
+            <td class="py-2 px-3 text-left whitespace-nowrap">
+                <span class="text-blue-800 mr-2 text-sm">전체</span>
+                <span class="text-gray-500 text-sm font-normal">(오늘~)</span>
+            </td>
+            <td class="py-2 px-3 text-center text-sm">
+                <span class="${countColor}">${totalMissing}건</span>
+            </td>
+        `;
+        
+        if (totalMissing > 0) {
+            totalRow.onclick = () => filterFromDashboard(todayYYMMDD, 'total_missing', null, filterMember);
         }
+        missingBidTableBody.appendChild(totalRow);
+
+        // tfoot는 비워둠 (혹은 CSS로 숨김)
+        if (missingBidTableFoot) missingBidTableFoot.innerHTML = '';
     }
 
     function renderStatusManagementDashboard() {
