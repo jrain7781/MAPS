@@ -77,7 +77,7 @@ class KakaoHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
 
     def _focus_kakao(self):
-        """카카오톡 창을 최상단으로 올리고 창 중앙 클릭으로 키보드 포커스 확보"""
+        """카카오톡 창 활성화 + 500x800 리사이즈 + 채팅탭 이동(B, 1)"""
         import pygetwindow as gw
 
         kakao_wins = gw.getWindowsWithTitle('카카오톡')
@@ -86,35 +86,56 @@ class KakaoHandler(http.server.SimpleHTTPRequestHandler):
 
         win = kakao_wins[0]
         try:
+            pyautogui.press('alt')
+            win.activate()
             if win.isMinimized:
                 win.restore()
-                time.sleep(0.3)
-            win.activate()
-        except Exception as e:
-            # pygetwindow 알려진 버그: 에러코드 0은 성공인데 예외를 던지는 경우
-            if "Error code from Windows: 0" not in str(e):
-                print(f"  >> 창 활성화 경고 (무시 가능): {e}")
-
-        time.sleep(0.4)
-
-        # Windows 포커스 탈취 방지 우회: 창 중앙 클릭으로 키보드 포커스 강제 확보
-        try:
-            cx = win.left + win.width // 2
-            cy = win.top + win.height // 2
-            pyautogui.click(cx, cy)
+            
+            # 창 크기 고정 (좌표 일관성 유지)
+            win.resizeTo(500, 800)
             time.sleep(0.3)
+            win.activate()
+
+            # [단계 1] 사이드바 채팅 아이콘(B) 클릭
+            pyautogui.moveTo(win.left + 35, win.top + 110, duration=0.1)
+            pyautogui.click()
+            time.sleep(0.3)
+
+            # [단계 1-1] 상단 '채팅(1)' 탭 클릭 (위치 수정: 왼쪽 위로 20px씩 이동)
+            pyautogui.moveTo(win.left + 100, win.top + 50, duration=0.1)
+            pyautogui.click()
+            time.sleep(0.3)
+            
         except Exception as e:
-            print(f"  >> 클릭 경고: {e}")
+            if "Error code from Windows: 0" not in str(e):
+                print(f"  >> 창 활성화 경고: {e}")
+
+        time.sleep(0.2)
 
     def _search_and_enter(self, target_name):
-        """Ctrl+F 검색창 열고 이름 입력 후 첫 번째 결과 채팅방 진입"""
+        """Ctrl+F -> 검색창 더블클릭 -> 이름 입력"""
+        import pygetwindow as gw
+        
+        # [단계 2] Ctrl + F 로 검색창 포커스
         pyautogui.hotkey('ctrl', 'f')
-        time.sleep(0.4)
+        time.sleep(0.3)
+
+        # [단계 3] 검색창 위치 더블클릭 (위치 수정: 오른쪽으로 2cm 이동)
+        win = gw.getWindowsWithTitle('카카오톡')[0]
+        search_x, search_y = win.left + 165, win.top + 105
+        pyautogui.moveTo(search_x, search_y) # 순간이동
+        pyautogui.doubleClick()
+        time.sleep(0.2)
+
+        # [단계 4] 회원 이름 붙여넣기 및 엔터
+        print(f"  >> '{target_name}' 이름 입력 중...")
         pyperclip.copy(target_name)
         pyautogui.hotkey('ctrl', 'v')
-        time.sleep(0.8)
+        time.sleep(0.5) # 이름 입력 후 대기시간 단축
+        
+        # 엔터를 쳐서 채팅방 열기
         pyautogui.press('enter')
-        time.sleep(0.6)
+        time.sleep(0.5)
 
     def _send_json(self, code, obj):
         body = json.dumps(obj, ensure_ascii=False).encode('utf-8')
