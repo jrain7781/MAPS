@@ -1009,7 +1009,8 @@
             case '상품': return 'stu-tag stu-tag-product';
             case '입찰': return 'stu-tag stu-tag-bid';
             case '추천': return 'stu-tag stu-tag-recommend';
-            case '변경': return 'stu-tag stu-tag-changed';
+            case '검증': return 'stu-tag stu-tag-verified';
+            case '취소': return 'stu-tag stu-tag-changed';
             case '미정':
             default: return 'stu-tag stu-tag-default';
         }
@@ -1062,8 +1063,8 @@
         if (!bar) return;
         if (data.length === 0) { bar.classList.add('content-hidden'); return; }
 
-        const statusOrder = ['상품', '미정', '추천', '입찰', '변경'];
-        const statusColors = { '상품': 'text-yellow-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '변경': 'text-orange-700' };
+        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '취소'];
+        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-amber-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '취소': 'text-orange-700' };
         const countByStatus = {};
         let missingBidCount = 0;
         data.forEach(item => {
@@ -2971,14 +2972,15 @@
         if (statusTableFoot) statusTableFoot.innerHTML = '';
 
         const targetDates = getWorkingDaysFromToday();
-        const statuses = ['상품', '미정', '추천', '입찰', '변경'];
+        const statuses = ['상품', '검증', '미정', '추천', '입찰', '취소'];
         const filterMember = document.getElementById('statusFilterMember') ? document.getElementById('statusFilterMember').value : '';
         const statusStyles = {
             '상품': 'bg-yellow-100 text-yellow-800',
+            '검증': 'bg-amber-100 text-amber-800',
             '미정': 'bg-green-100 text-green-800',
             '추천': 'bg-orange-100 text-orange-800',
             '입찰': 'bg-indigo-100 text-indigo-800',
-            '변경': 'bg-gray-600 text-white'
+            '취소': 'bg-gray-600 text-white'
         };
         targetDates.forEach((dateObj, index) => {
             const year = String(dateObj.getFullYear()).slice(-2);
@@ -2994,7 +2996,7 @@
             const row = document.createElement('tr');
             row.className = "border-b border-gray-100 hover:bg-gray-50";
 
-            let html = `<td class="py-2 px-3 text-left border-r bg-gray-50 whitespace-nowrap">
+            let html = `<td class="py-2 px-2 text-left border-r bg-gray-50 whitespace-nowrap" style="min-width:150px; width:150px;">
               <span class="${dDayColor} font-bold mr-1 text-sm">${dDay}</span>
               <span class="text-gray-400 text-sm">${dateStr}</span>
           </td>`;
@@ -3175,13 +3177,14 @@
             const status = item.stu_member;
             if (status === '추천') summaryCounts.recommend++;
             else if (status === '입찰') summaryCounts.bid++;
-            else if (status === '변경') summaryCounts.change++;
+            else if (status === '취소') summaryCounts.change++;
+            else if (status === '검증') summaryCounts.verify++;
 
             if (!memberData[memberName]) {
-                memberData[memberName] = { '추천': 0, '입찰': 0, '변경': 0 };
+                memberData[memberName] = { '추천': 0, '입찰': 0, '검증': 0, '취소': 0 };
             }
 
-            if (['추천', '입찰', '변경'].includes(status)) {
+            if (['추천', '입찰', '검증', '취소'].includes(status)) {
                 memberData[memberName][status]++;
             }
         });
@@ -3189,13 +3192,15 @@
           전체 회원수: ${uniqueMembers.size}명
           (<span class="summary-item" onclick="filterCalendarByStatus('추천')">추천 ${summaryCounts.recommend}건</span> |
            <span class="summary-item" onclick="filterCalendarByStatus('입찰')">입찰 ${summaryCounts.bid}건</span> |
-           <span class="summary-item" onclick="filterCalendarByStatus('변경')">변경 ${summaryCounts.change}건</span>)
+           <span class="summary-item" onclick="filterCalendarByStatus('검증')">검증 ${summaryCounts.verify}건</span> |
+           <span class="summary-item" onclick="filterCalendarByStatus('취소')">취소 ${summaryCounts.change}건</span>)
        `;
         const labels = Object.keys(memberData).sort();
 
         const recommendData = labels.map(name => memberData[name]['추천']);
         const bidData = labels.map(name => memberData[name]['입찰']);
-        const changeData = labels.map(name => memberData[name]['변경']);
+        const verifyData = labels.map(name => memberData[name]['검증']);
+        const changeData = labels.map(name => memberData[name]['취소']);
         if (memberBidChartInstance) {
             memberBidChartInstance.destroy();
         }
@@ -3207,7 +3212,8 @@
                 datasets: [
                     { label: '추천', data: recommendData, backgroundColor: 'rgba(251, 191, 36, 0.8)', stack: 'Stack 0' },
                     { label: '입찰', data: bidData, backgroundColor: 'rgba(79, 70, 229, 0.8)', stack: 'Stack 0' },
-                    { label: '변경', data: changeData, backgroundColor: 'rgba(75, 85, 99, 0.8)', stack: 'Stack 0' }
+                    { label: '검증', data: verifyData, backgroundColor: 'rgba(201, 149, 108, 0.8)', stack: 'Stack 0' },
+                    { label: '취소', data: changeData, backgroundColor: 'rgba(75, 85, 99, 0.8)', stack: 'Stack 0' }
                 ]
             },
             options: {
@@ -5613,14 +5619,11 @@ MJ 이정우 팀장
         // "(MJ) 임준희" 또는 "임준희 (MJ) 한한한" 형식에서 기본 이름 추출
         const cleanMName = String(mName || '').replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
 
-        // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과 (필수 아님)
-        const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
+        // 추천, 입찰만 회원명 필수 / 나머지 상태는 회원명 없어도 허용
+        const isRequiredMemberStatus = (stuMember === '추천' || stuMember === '입찰');
 
-        if (isOptionalMemberStatus && !cleanMName) {
-            // 회원명이 없어도 등록 허용
-        } else {
+        if (isRequiredMemberStatus) {
             const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
-            // member_id가 있으면 ID 기반 검증, 없으면 이름 기반 검증
             const isValidMember = memberId
                 ? memberList.some(m => String(m.member_id || '').trim() === memberId)
                 : memberList && memberList.some(m => {
@@ -5805,14 +5808,11 @@ MJ 이정우 팀장
         // "(MJ) 임준희" 또는 "임준희 (MJ) 한한한" 형식에서 기본 이름 추출
         const cleanMName = String(mName || '').replace(/^\([^)]+\)\s*/, '').split(/[\s(]/)[0].trim();
 
-        // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과 (필수 아님)
-        const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
+        // 추천, 입찰만 회원명 필수 / 나머지 상태는 회원명 없어도 허용
+        const isRequiredMemberStatus = (stuMember === '추천' || stuMember === '입찰');
 
-        if (isOptionalMemberStatus && !cleanMName) {
-            // 회원명이 없어도 등록 허용
-        } else {
+        if (isRequiredMemberStatus) {
             const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
-            // member_id가 있으면 ID 기반 검증, 없으면 이름 기반 검증
             const isValidMember = memberId
                 ? memberList.some(m => String(m.member_id || '').trim() === memberId)
                 : memberList && memberList.some(m => {
@@ -6708,7 +6708,7 @@ MJ 이정우 팀장
                 } else if (dashboardFilter.type === 'total_status') {
                     return itemDate >= todayYYMMDD && item.stu_member === dashboardFilter.status;
                 } else if (dashboardFilter.type === 'auto_all') {
-                    return itemDate === dashboardFilter.date && ['추천', '입찰', '변경'].includes(item.stu_member);
+                    return itemDate === dashboardFilter.date && ['추천', '입찰', '검증', '취소'].includes(item.stu_member);
                 } else if (dashboardFilter.type === 'bid_state') {
                     return itemDate === dashboardFilter.date && String(item.bid_state || '') === dashboardFilter.status;
                 } else if (dashboardFilter.type === 'all_status') {
@@ -9304,7 +9304,7 @@ MJ 이정우 팀장
     }
 
     function _buildMapsCardEditor_(item) {
-        var statusMap = { 'item_card.card': '추천', 'item_card.check_request': '입찰', 'item_card.status': '변경' };
+        var statusMap = { 'item_card.card': '추천', 'item_card.check_request': '입찰', 'item_card.status': '취소' };
         var status = statusMap[item.mainKey] || '추천';
         var hasBidPrice = (item.mainKey !== 'item_card.card');
 
@@ -9448,7 +9448,7 @@ MJ 이정우 팀장
         var bottomKey = item.mainKey + '.bottom';
         var mainTpl = getVal('msgFlowTmpl_main', _getTpl(item.mainKey));
         var bottomTpl = getVal('msgFlowTmpl_bottom', _getTpl(bottomKey));
-        var statusMap = { 'item_card.card': '추천', 'item_card.check_request': '입찰', 'item_card.status': '변경' };
+        var statusMap = { 'item_card.card': '추천', 'item_card.check_request': '입찰', 'item_card.status': '취소' };
         var status = statusMap[item.mainKey] || '추천';
         var statusIcon = status === '입찰' ? '🔵' : '🔴';
         var hasBidPrice = (item.mainKey !== 'item_card.card');
@@ -14690,7 +14690,8 @@ MJ 이정우 팀장
     const MEMBER_DASH_STATUS_COLORS = {
         '입찰': '#818cf8',   // Vivid Indigo
         '추천': '#fb923c',   // Vivid Orange
-        '변경': '#6b7280',   // Gray (기존 유지)
+        '검증': '#c9956c',   // Warm Brown
+        '취소': '#6b7280',   // Gray
         '미정': '#e5e7eb',
         '상품': '#fef9c3'
     };
@@ -14712,7 +14713,7 @@ MJ 이정우 팀장
        ============================================= */
     var mD = new Date(); // 현재 캘린더 월
     var mS = [];         // [수정] 다중 선택을 위해 배열로 변경
-    var fS = ['입찰', '추천', '변경']; // 활성 필터
+    var fS = ['입찰', '추천', '검증', '취소']; // 활성 필터
     var tR = 'today';    // 범위: 'today'(오늘부터) 또는 'all'(전체)
 
     // [전역 변수] 오늘 날짜 문자열 (YYMMDD) - rCal과 selD 공용
@@ -14762,7 +14763,7 @@ MJ 이정우 팀장
         else fS.push(f);
 
         // 상단바 버튼 투명도 조절로 선택 상태 표시
-        var btnMap = { '입찰': 'btn-top-bid', '추천': 'btn-top-rec', '변경': 'btn-top-chg' };
+        var btnMap = { '입찰': 'btn-top-bid', '추천': 'btn-top-rec', '검증': 'btn-top-ver', '취소': 'btn-top-chg' };
         if (btnMap[f]) {
             var el = document.getElementById(btnMap[f]);
             if (el) {
@@ -14793,7 +14794,7 @@ MJ 이정우 팀장
 
         // 데이터 요약: 숫자는 오늘부터/전체(tR)에만 반응하고 필터(fS)에는 반응하지 않음
         var counts = {};
-        var counts_month = { '입찰': 0, '추천': 0, '변경': 0 };
+        var counts_month = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
 
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
@@ -14809,7 +14810,7 @@ MJ 이정우 팀장
                     counts_month[s]++;
                 }
 
-                if (!counts[dt]) counts[dt] = { '입찰': 0, '추천': 0, '변경': 0 };
+                if (!counts[dt]) counts[dt] = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
                 counts[dt][s]++;
             }
         });
@@ -14821,7 +14822,8 @@ MJ 이정우 팀장
                 '(' +
                 '<span class="ms-it bid">입찰 ' + (counts_month['입찰'] || 0) + '</span>' +
                 ' <span class="ms-it rec">추천 ' + (counts_month['추천'] || 0) + '</span>' +
-                ' <span class="ms-it chg">변경 ' + (counts_month['변경'] || 0) + '</span>' +
+                ' <span class="ms-it ver">검증 ' + (counts_month['검증'] || 0) + '</span>' +
+                ' <span class="ms-it chg">취소 ' + (counts_month['취소'] || 0) + '</span>' +
                 ')';
         }
 
@@ -14850,16 +14852,16 @@ MJ 이정우 팀장
             var isPastToday = (tR === 'today' && dS < tS);
 
             var items = counts[dS] || {};
-            var has = (items['입찰'] > 0 || items['추천'] > 0 || items['변경'] > 0);
+            var has = (items['입찰'] > 0 || items['추천'] > 0 || items['검증'] > 0 || items['취소'] > 0);
             var isT = (dS === tS);
             var isS = (mS.indexOf(dS) > -1);
 
             // [지시사항] 지표 형태 다변화 및 겹침 로직
             var dotH = '';
             if (!isPastToday) {
-                var sOrder = ['입찰', '추천', '변경'];
-                var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '변경': '#1f2937' };
-                var shapes = { '입찰': '', '추천': 'tri', '변경': 'sq' };
+                var sOrder = ['입찰', '추천', '검증', '취소'];
+                var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '검증': '#c9956c', '취소': '#1f2937' };
+                var shapes = { '입찰': '', '추천': 'tri', '검증': 'cir', '취소': 'sq' };
 
                 var lastS = '';
                 sOrder.forEach(function (s) {
@@ -14907,8 +14909,8 @@ MJ 이정우 팀장
         var nY = String(nM.getFullYear()).slice(-2);
         var nM_s = String(nM.getMonth() + 1).padStart(2, '0');
 
-        var pC = { '입찰': 0, '추천': 0, '변경': 0 };
-        var nC = { '입찰': 0, '추천': 0, '변경': 0 };
+        var pC = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
+        var nC = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
 
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
@@ -14922,9 +14924,9 @@ MJ 이정우 팀장
 
         pEl.innerHTML = '';
         nEl.innerHTML = '';
-        var sOrder = ['입찰', '추천', '변경'];
-        var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '변경': '#1f2937' };
-        var shapes = { '입찰': 'cir', '추천': 'tri', '변경': 'sq' };
+        var sOrder = ['입찰', '추천', '검증', '취소'];
+        var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '검증': '#c9956c', '취소': '#1f2937' };
+        var shapes = { '입찰': 'cir', '추천': 'tri', '검증': 'cir', '취소': 'sq' };
 
         sOrder.forEach(function (s) {
             if (pC[s] > 0) {
@@ -14951,10 +14953,10 @@ MJ 이정우 팀장
             return String(it['in-date'] || '').substring(0, 6) === d;
         });
 
-        // 필터링된 데이터 중 실제 '입찰', '추천', '변경' 상태인 것이 하나라도 있어야 함
+        // 필터링된 데이터 중 실제 '입찰', '추천', '검증', '취소' 상태인 것이 하나라도 있어야 함
         var hasTrueItems = items.some(function (it) {
             var s = it.stu_member || '';
-            return s === '입찰' || s === '추천' || s === '변경';
+            return s === '입찰' || s === '추천' || s === '검증' || s === '취소';
         });
 
         if (!hasTrueItems) {
@@ -14983,7 +14985,7 @@ MJ 이정우 팀장
     // 입찰리스트 (MemberItemList) - 상태 필터 버튼 + 카드 리스트
     // =============================================================================
 
-    var ilFS = ['입찰', '추천', '변경']; // 입찰리스트 상태 필터 (초기: 전체 켜짐)
+    var ilFS = ['입찰', '추천', '검증', '취소']; // 입찰리스트 상태 필터 (초기: 전체 켜짐)
 
     /** 필터 버튼 토글 */
     function ilTogF(f) {
@@ -14991,7 +14993,7 @@ MJ 이정우 팀장
         if (idx > -1) ilFS.splice(idx, 1);
         else ilFS.push(f);
 
-        var btnMap = { '입찰': 'il-btn-bid', '추천': 'il-btn-rec', '변경': 'il-btn-chg' };
+        var btnMap = { '입찰': 'il-btn-bid', '추천': 'il-btn-rec', '검증': 'il-btn-ver', '취소': 'il-btn-chg' };
         if (btnMap[f]) {
             var el = document.getElementById(btnMap[f]);
             if (el) {
@@ -15028,7 +15030,7 @@ MJ 이정우 팀장
         if (!el) return;
 
         // 카운트 계산
-        var counts = { '입찰': 0, '추천': 0, '변경': 0 };
+        var counts = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
             if (dt < todayYYMMDD) return; // 오늘 이전 날짜 제외
@@ -15039,10 +15041,12 @@ MJ 이정우 팀장
         // 버튼 텍스트 업데이트 (예: "2입찰", "4추천")
         var bidBtn = document.getElementById('il-btn-bid');
         var recBtn = document.getElementById('il-btn-rec');
+        var verBtn = document.getElementById('il-btn-ver');
         var chgBtn = document.getElementById('il-btn-chg');
         if (bidBtn) bidBtn.textContent = counts['입찰'] + '입찰';
         if (recBtn) recBtn.textContent = counts['추천'] + '추천';
-        if (chgBtn) chgBtn.textContent = counts['변경'] + '변경';
+        if (verBtn) verBtn.textContent = counts['검증'] + '검증';
+        if (chgBtn) chgBtn.textContent = counts['취소'] + '취소';
 
         // 필터링 (오늘부터 + 상태 필터)
         var filtered = allBiddingData.filter(function (item) {
@@ -15269,12 +15273,14 @@ MJ 이정우 팀장
         var borderCol = '#e2e8f0';
         if (s === '입찰') { cls += ' sb'; borderCol = '#4f46e5'; }
         else if (s === '추천') { cls += ' sr'; borderCol = '#fb923c'; }
-        else if (s === '변경') { cls += ' sc'; borderCol = '#1f2937'; }
+        else if (s === '검증') { cls += ' sv'; borderCol = '#c9956c'; }
+        else if (s === '취소') { cls += ' sc'; borderCol = '#1f2937'; }
 
         var bCls = 'badge';
         if (s === '입찰') bCls += ' bb';
         else if (s === '추천') bCls += ' br';
-        else if (s === '변경') bCls += ' bc';
+        else if (s === '검증') bCls += ' bv';
+        else if (s === '취소') bCls += ' bc';
 
         var sk = String(i.sakun_no || '');
         var ct = String(i.court || '');

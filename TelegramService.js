@@ -773,7 +773,7 @@ function telegramBuildItemMessage_(item, member, styleKey) {
     subtitle = (typeof getMessageTemplate_ === 'function')
       ? (getMessageTemplate_('item_card.status') || 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.')
       : 'MJ 경매 스쿨입니다. 입찰불가 안내 드립니다.\n해당 물건은 입찰이 취소 되었습니다.';
-    statusValuePlain = '변경';
+    statusValuePlain = '취소';
     includeBidPrice = true;
     onlyViewButton = true;
   } else if (style === 'check_request') {

@@ -183,9 +183,9 @@ function formatParamsDate(value, format = 'yyMMdd') {
 function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
 
-  // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과
-  const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
-  if (!(isOptionalMemberStatus && !String(mName || '').trim())) {
+  // 추천, 입찰만 회원명 필수 / 나머지 상태는 회원명 없어도 허용
+  const isRequiredMemberStatus = (stuMember === '추천' || stuMember === '입찰');
+  if (isRequiredMemberStatus) {
     if (!isValidMemberName_(mName)) return { success: false, message: '등록된 회원이 아닙니다.' };
   }
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
@@ -298,9 +298,9 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
 function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
 
-  // 물건상태가 '미정' 또는 '상품'이면서 회원명이 없는 경우 검증 통과
-  const isOptionalMemberStatus = (stuMember === '미정' || stuMember === '상품');
-  if (!(isOptionalMemberStatus && !String(mName || '').trim())) {
+  // 추천, 입찰만 회원명 필수 / 나머지 상태는 회원명 없어도 허용
+  const isRequiredMemberStatus = (stuMember === '추천' || stuMember === '입찰');
+  if (isRequiredMemberStatus) {
     if (!isValidMemberName_(mName)) return { success: false, message: '등록된 회원이 아닙니다.' };
   }
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
@@ -3376,7 +3376,7 @@ function getAutoApprovalStats(testMode) {
       // ── 변경/취소 안내 ────────────────────────────────────────────────
     } else if (action === 'TELEGRAM_SENT' && note === 'status') {
       addId(ds.status_tele, itemId);                                             // 12번
-    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '변경') {
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '취소') {
       addId(ds.status_web, itemId);                                              // 8번
     }
   });
@@ -4593,7 +4593,7 @@ function getMemberItemHistory(memberId, months) {
     CHUCHEN: '추천',
     BID: '입찰',
     CANCEL: '취소',
-    CHANGE: '변경'
+    CHANGE: '취소'
   };
 
   const CANCEL_ACTIONS = ['AUTO_EXPIRE', 'REQUEST_CANCEL_CHUCHEN', 'REQUEST_CANCEL_BID', 'CANCEL_BID'];
@@ -4667,9 +4667,9 @@ function getMemberItemHistory(memberId, months) {
 
       let category = '';
       if (CANCEL_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue === '미정')) category = CATEGORIES.CANCEL;
-      else if (fieldName === 'stu_member' && toValue === '변경') category = CATEGORIES.CHANGE;
+      else if (fieldName === 'stu_member' && toValue === '취소') category = CATEGORIES.CHANGE;
       else if (BID_ACTIONS.indexOf(action) !== -1) category = CATEGORIES.BID;
-      else if (CHUCHEN_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue && toValue !== '미정' && toValue !== '변경')) category = CATEGORIES.CHUCHEN;
+      else if (CHUCHEN_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue && toValue !== '미정' && toValue !== '취소')) category = CATEGORIES.CHUCHEN;
 
       if (!category) continue;
 

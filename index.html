@@ -231,7 +231,7 @@
                 <!-- 대시보드 메인 그리드 (업무현황 이동 및 높이 조정) -->
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mb-6">
 
-                    <!-- [1] 입찰가 미입력 현황 (3/12) - 높이 750px 고정, 스크롤 추가 -->
+                    <!-- [1] 입찰가 미입력 현황 (3/12 = 25%) - 높이 750px 고정, 스크롤 추가 -->
                     <div class="lg:col-span-3 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
                         style="height:750px;">
                         <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
@@ -272,8 +272,8 @@
                         </div>
                     </div>
 
-                    <!-- [2] 물건 상태 관리 (4/12) - 높이 750px 고정, 스크롤 추가 -->
-                    <div class="lg:col-span-4 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
+                    <!-- [2] 물건 상태 관리 (5/12 = 41.7%) - 높이 750px 고정, 스크롤 추가 -->
+                    <div class="lg:col-span-5 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
                         style="height:750px;">
                         <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
                             <div class="flex justify-between items-center mb-1">
@@ -289,17 +289,18 @@
                             <table class="w-full text-center border-collapse text-xs">
                                 <thead class="sticky top-0 bg-gray-50 z-10">
                                     <tr class="border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
-                                        <th class="py-1 px-2 font-bold border-r">날짜</th>
-                                        <th class="py-1 px-1 font-bold w-1/6">상품</th>
-                                        <th class="py-1 px-1 font-bold w-1/6">미정</th>
-                                        <th class="py-1 px-1 font-bold w-1/6">추천</th>
-                                        <th class="py-1 px-1 font-bold w-1/6">입찰</th>
-                                        <th class="py-1 px-1 font-bold w-1/6">변경</th>
+                                        <th class="py-1 px-2 font-bold border-r text-left" style="min-width:150px; width:150px;">날짜</th>
+                                        <th class="py-1 px-1 font-bold">상품</th>
+                                        <th class="py-1 px-1 font-bold" style="color:#c9956c;">검증</th>
+                                        <th class="py-1 px-1 font-bold">미정</th>
+                                        <th class="py-1 px-1 font-bold">추천</th>
+                                        <th class="py-1 px-1 font-bold">입찰</th>
+                                        <th class="py-1 px-1 font-bold">취소</th>
                                     </tr>
                                 </thead>
                                 <tbody id="statusTableBody" class="text-gray-700 text-xs text-nowrap">
                                     <tr>
-                                        <td colspan="6" class="py-4 text-center">데이터 로딩 중...</td>
+                                        <td colspan="7" class="py-4 text-center">데이터 로딩 중...</td>
                                     </tr>
                                 </tbody>
                                 <tfoot id="statusTableFoot"
@@ -310,8 +311,8 @@
                         </div>
                     </div>
 
-                    <!-- [3] 오른쪽 컬럼 (5/12) - 업무/텔그/자동물건 스택 -->
-                    <div class="lg:col-span-5 flex flex-col gap-4">
+                    <!-- [3] 오른쪽 컬럼 (4/12) - 업무/텔그/자동물건 스택 -->
+                    <div class="lg:col-span-4 flex flex-col gap-4">
 
                         <!-- 업무현황 (높이 250px 고정) - 이중 스크롤 방지를 위해 overflow-y-auto 제거하고 내부 padding 조정 -->
                         <div id="auto-approval-panel"
@@ -445,8 +446,10 @@
                                     onclick="togF('입찰')">입찰</button>
                                 <button class="sp rec pointer-events-auto" id="btn-top-rec"
                                     onclick="togF('추천')">추천</button>
+                                <button class="sp ver pointer-events-auto" id="btn-top-ver"
+                                    onclick="togF('검증')">검증</button>
                                 <button class="sp chg pointer-events-auto" id="btn-top-chg"
-                                    onclick="togF('변경')">변경</button>
+                                    onclick="togF('취소')">취소</button>
                             </div>
                         </div>
                     </div>
@@ -504,8 +507,10 @@
                                     onclick="ilTogF('입찰')">입찰</button>
                                 <button class="sp rec il-sp pointer-events-auto" id="il-btn-rec"
                                     onclick="ilTogF('추천')">추천</button>
+                                <button class="sp ver il-sp pointer-events-auto" id="il-btn-ver"
+                                    onclick="ilTogF('검증')">검증</button>
                                 <button class="sp chg il-sp pointer-events-auto" id="il-btn-chg"
-                                    onclick="ilTogF('변경')">변경</button>
+                                    onclick="ilTogF('취소')">취소</button>
                             </div>
                             <button class="refresh-btn pointer-events-auto" onclick="loadAndRenderMemberItemList(true)"
                                 title="새로고침">&#8635;</button>
@@ -659,6 +664,11 @@
                                                         class="rounded"> 상품</label>
                                                 <label
                                                     class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                                        type="checkbox" name="cal-search-status-cb" value="검증"
+                                                        onchange="handleCalendarStatusOther(this); renderCalendar()"
+                                                        class="rounded"> 검증</label>
+                                                <label
+                                                    class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
                                                         type="checkbox" name="cal-search-status-cb" value="미정"
                                                         onchange="handleCalendarStatusOther(this); renderCalendar()"
                                                         class="rounded"> 미정</label>
@@ -674,9 +684,9 @@
                                                         class="rounded"> 입찰</label>
                                                 <label
                                                     class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
-                                                        type="checkbox" name="cal-search-status-cb" value="변경"
+                                                        type="checkbox" name="cal-search-status-cb" value="취소"
                                                         onchange="handleCalendarStatusOther(this); renderCalendar()"
-                                                        class="rounded"> 변경</label>
+                                                        class="rounded"> 취소</label>
                                             </div>
                                         </div>
                                         <div class="flex-1 md:flex-[0.75] min-w-[6rem] md:min-w-[8rem]"><input
@@ -926,6 +936,11 @@
                                         상품</label>
                                     <label
                                         class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                            type="checkbox" name="search-status-cb" value="검증"
+                                            onchange="handleStatusOther(this); applyFilters()" class="rounded">
+                                        검증</label>
+                                    <label
+                                        class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
                                             type="checkbox" name="search-status-cb" value="미정"
                                             onchange="handleStatusOther(this); applyFilters()" class="rounded">
                                         미정</label>
@@ -941,9 +956,9 @@
                                         입찰</label>
                                     <label
                                         class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
-                                            type="checkbox" name="search-status-cb" value="변경"
+                                            type="checkbox" name="search-status-cb" value="취소"
                                             onchange="handleStatusOther(this); applyFilters()" class="rounded">
-                                        변경</label>
+                                        취소</label>
                                 </div>
                             </div>
                             <div class="flex-1 md:flex-[0.75] min-w-[6rem] md:min-w-[8rem]"><input type="text"
@@ -1166,10 +1181,11 @@
                                             <select id="form-stu-member" name="stu_member" required
                                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                                 <option value="상품">상품</option>
+                                                <option value="검증">검증</option>
                                                 <option value="미정">미정</option>
                                                 <option value="추천">추천</option>
                                                 <option value="입찰">입찰</option>
-                                                <option value="변경">변경</option>
+                                                <option value="취소">취소</option>
                                             </select>
                                         </div>
                                         <div class="col-span-1 md:col-span-2">
@@ -3677,10 +3693,11 @@
                             <select id="modal-form-stu-member"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
                                 <option value="상품">상품</option>
+                                <option value="검증">검증</option>
                                 <option value="미정">미정</option>
                                 <option value="추천">추천</option>
                                 <option value="입찰">입찰</option>
-                                <option value="변경">변경</option>
+                                <option value="취소">취소</option>
                             </select>
                         </div>
                         <div class="mb-4 md:col-span-2">
@@ -3971,10 +3988,11 @@
                                     <select id="bulk-new-status"
                                         class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm">
                                         <option value="상품">상품</option>
+                                        <option value="검증">검증</option>
                                         <option value="미정">미정</option>
                                         <option value="추천">추천</option>
                                         <option value="입찰">입찰</option>
-                                        <option value="변경">변경</option>
+                                        <option value="취소">취소</option>
                                     </select>
                                 </div>
                             </div>
