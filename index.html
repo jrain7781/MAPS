@@ -228,180 +228,208 @@
                     <div id="cal-grid" class="grid grid-cols-7"></div>
                 </div>
 
-                <!-- 대시보드 메인 그리드 (업무현황 이동 및 높이 조정) -->
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full mb-6">
+                <!-- 대시보드 메인 그리드 - 경계선 드래그로 카드 크기 조정 가능 -->
+                <div id="dashboardMainGrid" class="flex w-full mb-6" style="align-items:flex-start;">
 
-                    <!-- [1] 입찰가 미입력 현황 (3/12 = 25%) - 높이 750px 고정, 스크롤 추가 -->
-                    <div class="lg:col-span-3 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
-                        style="height:750px;">
-                        <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
-                            <div class="flex justify-between items-center mb-1">
-                                <h2 class="text-sm font-bold text-gray-800">입찰가 미입력 현황</h2>
-                                <div class="flex items-center gap-2">
-                                    <button id="missingBidMoveBtn" onclick="goToItemManagementFromMissingSelection()"
-                                        class="hidden text-xs bg-blue-500 text-white rounded px-2 py-1 hover:bg-blue-600">물건관리이동</button>
-                                    <select id="missingBidFilterMember" onchange="renderMissingBidDashboard()"
-                                        class="text-xs text-gray-800 bg-gray-50 border border-gray-300 rounded px-2 py-1 focus:outline-none cursor-pointer">
-                                        <option value="All">전체</option>
-                                        <option value="대표님" selected>대표님</option>
-                                    </select>
+                    <!-- ① 입찰가 미입력 현황 -->
+                    <div id="dashCol1" style="flex:0 0 25%; min-width:160px; padding-right:8px; box-sizing:border-box;">
+                        <div style="position:relative;">
+                            <div id="missingBidCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:750px;">
+                                <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <h2 class="text-sm font-bold text-gray-800">입찰가 미입력 현황</h2>
+                                        <div class="flex items-center gap-2">
+                                            <button id="missingBidMoveBtn" onclick="goToItemManagementFromMissingSelection()"
+                                                class="hidden text-xs bg-blue-500 text-white rounded px-2 py-1 hover:bg-blue-600">물건관리이동</button>
+                                            <select id="missingBidFilterMember" onchange="renderMissingBidDashboard()"
+                                                class="text-xs text-gray-800 bg-gray-50 border border-gray-300 rounded px-2 py-1 focus:outline-none cursor-pointer">
+                                                <option value="All">전체</option>
+                                                <option value="대표님" selected>대표님</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex-1 overflow-y-auto">
+                                    <table class="w-full text-left border-collapse">
+                                        <thead class="sticky top-0 bg-gray-50 z-10">
+                                            <tr class="border-b border-gray-200 text-gray-600 text-sm uppercase leading-normal">
+                                                <th class="py-2 px-2 text-center font-bold w-8">
+                                                    <input type="checkbox" id="missingBidSelectAll" onchange="toggleAllMissingBidChecks(this.checked)" class="cursor-pointer">
+                                                </th>
+                                                <th class="py-2 px-3 text-center font-bold">날짜</th>
+                                                <th class="py-2 px-3 text-center font-bold">미입력 건수</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="missingBidTableBody" class="text-gray-700 text-sm">
+                                            <tr>
+                                                <td colspan="2" class="py-4 text-center">데이터 로딩 중...</td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot id="missingBidTableFoot"
+                                            class="sticky bottom-0 bg-blue-50 z-10 font-bold border-t-2 border-blue-100">
+                                            <!-- JS에서 채움 -->
+                                        </tfoot>
+                                    </table>
                                 </div>
                             </div>
-                        </div>
-                        <div class="flex-1 overflow-y-auto">
-                            <table class="w-full text-left border-collapse">
-                                <thead class="sticky top-0 bg-gray-50 z-10">
-                                    <tr class="border-b border-gray-200 text-gray-600 text-sm uppercase leading-normal">
-                                        <th class="py-2 px-2 text-center font-bold w-8">
-                                            <input type="checkbox" id="missingBidSelectAll" onchange="toggleAllMissingBidChecks(this.checked)" class="cursor-pointer">
-                                        </th>
-                                        <th class="py-2 px-3 text-center font-bold">날짜</th>
-                                        <th class="py-2 px-3 text-center font-bold">미입력 건수</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="missingBidTableBody" class="text-gray-700 text-sm">
-                                    <tr>
-                                        <td colspan="2" class="py-4 text-center">데이터 로딩 중...</td>
-                                    </tr>
-                                </tbody>
-                                <tfoot id="missingBidTableFoot"
-                                    class="sticky bottom-0 bg-blue-50 z-10 font-bold border-t-2 border-blue-100">
-                                    <!-- JS에서 채움 -->
-                                </tfoot>
-                            </table>
+                            <div class="dash-card-h-resizer" data-card="missingBidCard"></div>
                         </div>
                     </div>
 
-                    <!-- [2] 물건 상태 관리 (5/12 = 41.7%) - 높이 750px 고정, 스크롤 추가 -->
-                    <div class="lg:col-span-5 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
-                        style="height:750px;">
-                        <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
-                            <div class="flex justify-between items-center mb-1">
-                                <h2 class="text-sm font-bold text-gray-800">물건 상태 관리</h2>
-                                <select id="statusFilterMember" onchange="renderStatusManagementDashboard()"
-                                    class="text-xs text-gray-800 bg-gray-50 border border-gray-300 rounded px-2 py-1 focus:outline-none cursor-pointer">
-                                    <option value="All">전체</option>
-                                    <option value="대표님" selected>대표님</option>
-                                </select>
+                    <!-- 경계 ①↔② -->
+                    <div class="dash-col-resizer" data-left="dashCol1" data-right="dashCol2"></div>
+
+                    <!-- ② 물건 상태 관리 -->
+                    <div id="dashCol2" style="flex:0 0 41.7%; min-width:180px; padding:0 8px; box-sizing:border-box;">
+                        <div style="position:relative;">
+                            <div id="statusManagementCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:750px;">
+                                <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <h2 class="text-sm font-bold text-gray-800">물건 상태 관리</h2>
+                                        <select id="statusFilterMember" onchange="renderStatusManagementDashboard()"
+                                            class="text-xs text-gray-800 bg-gray-50 border border-gray-300 rounded px-2 py-1 focus:outline-none cursor-pointer">
+                                            <option value="All">전체</option>
+                                            <option value="대표님" selected>대표님</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="flex-1 overflow-y-auto">
+                                    <table id="statusTable" class="w-full text-center border-collapse text-xs" style="table-layout:fixed;">
+                                        <colgroup id="statusTableColgroup">
+                                            <col style="width:52%;">
+                                            <col style="width:8%;">
+                                            <col style="width:8%;">
+                                            <col style="width:8%;">
+                                            <col style="width:8%;">
+                                            <col style="width:8%;">
+                                            <col style="width:8%;">
+                                        </colgroup>
+                                        <thead class="sticky top-0 bg-gray-50 z-10">
+                                            <tr class="border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
+                                                <th class="py-1 px-2 font-bold border-r text-left" style="position:relative;">날짜<div class="th-resize-handle" data-col="0"></div></th>
+                                                <th class="py-1 px-1 font-bold" style="position:relative;">상품<div class="th-resize-handle" data-col="1"></div></th>
+                                                <th class="py-1 px-1 font-bold" style="position:relative; color:#c9956c;">검증<div class="th-resize-handle" data-col="2"></div></th>
+                                                <th class="py-1 px-1 font-bold" style="position:relative;">미정<div class="th-resize-handle" data-col="3"></div></th>
+                                                <th class="py-1 px-1 font-bold" style="position:relative;">추천<div class="th-resize-handle" data-col="4"></div></th>
+                                                <th class="py-1 px-1 font-bold" style="position:relative;">입찰<div class="th-resize-handle" data-col="5"></div></th>
+                                                <th class="py-1 px-1 font-bold">취소</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="statusTableBody" class="text-gray-700 text-xs text-nowrap">
+                                            <tr>
+                                                <td colspan="7" class="py-4 text-center">데이터 로딩 중...</td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot id="statusTableFoot"
+                                            class="sticky bottom-0 bg-blue-50 z-10 font-bold border-t-2 border-blue-100">
+                                            <!-- JS에서 채움 -->
+                                        </tfoot>
+                                    </table>
+                                </div>
                             </div>
-                        </div>
-                        <div class="flex-1 overflow-y-auto">
-                            <table class="w-full text-center border-collapse text-xs" style="table-layout:fixed;">
-                                <thead class="sticky top-0 bg-gray-50 z-10">
-                                    <tr class="border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
-                                        <th class="py-1 px-2 font-bold border-r text-left" style="min-width:300px; width:300px;">날짜</th>
-                                        <th class="py-1 px-1 font-bold">상품</th>
-                                        <th class="py-1 px-1 font-bold" style="color:#c9956c;">검증</th>
-                                        <th class="py-1 px-1 font-bold">미정</th>
-                                        <th class="py-1 px-1 font-bold">추천</th>
-                                        <th class="py-1 px-1 font-bold">입찰</th>
-                                        <th class="py-1 px-1 font-bold">취소</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="statusTableBody" class="text-gray-700 text-xs text-nowrap">
-                                    <tr>
-                                        <td colspan="7" class="py-4 text-center">데이터 로딩 중...</td>
-                                    </tr>
-                                </tbody>
-                                <tfoot id="statusTableFoot"
-                                    class="sticky bottom-0 bg-blue-50 z-10 font-bold border-t-2 border-blue-100">
-                                    <!-- JS에서 채움 -->
-                                </tfoot>
-                            </table>
+                            <div class="dash-card-h-resizer" data-card="statusManagementCard"></div>
                         </div>
                     </div>
 
-                    <!-- [3] 오른쪽 컬럼 (4/12) - 업무/텔그/자동물건 스택 -->
-                    <div class="lg:col-span-4 flex flex-col gap-4">
+                    <!-- 경계 ②↔③ -->
+                    <div class="dash-col-resizer" data-left="dashCol2" data-right="dashCol3"></div>
 
-                        <!-- 업무현황 (높이 250px 고정) - 이중 스크롤 방지를 위해 overflow-y-auto 제거하고 내부 padding 조정 -->
-                        <div id="auto-approval-panel"
-                            class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
-                            style="height:250px">
-                            <div
-                                class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
-                                <h2 class="text-sm font-bold text-gray-800">업무현황</h2>
-                                <div class="flex items-center gap-2">
-                                    <label class="flex items-center gap-1 cursor-pointer select-none"
-                                        title="체크: 직원/관리자 건만 조회 / 미체크: 직원/관리자 제외">
-                                        <input type="checkbox" id="approvalTestMode"
-                                            onchange="loadAutoApprovalStats(true)" class="rounded text-indigo-600">
-                                        <span class="text-xs text-gray-500">테스트</span>
-                                    </label>
-                                    <button onclick="loadAutoApprovalStats(true)"
+                    <!-- ③ 오른쪽 3개 카드 -->
+                    <div id="dashCol3" style="flex:1; min-width:180px; padding-left:8px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px;">
+
+                        <!-- 업무현황 -->
+                        <div style="position:relative;">
+                            <div id="auto-approval-panel"
+                                class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
+                                style="height:250px">
+                                <div class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
+                                    <h2 class="text-sm font-bold text-gray-800">업무현황</h2>
+                                    <div class="flex items-center gap-2">
+                                        <label class="flex items-center gap-1 cursor-pointer select-none"
+                                            title="체크: 직원/관리자 건만 조회 / 미체크: 직원/관리자 제외">
+                                            <input type="checkbox" id="approvalTestMode"
+                                                onchange="loadAutoApprovalStats(true)" class="rounded text-indigo-600">
+                                            <span class="text-xs text-gray-500">테스트</span>
+                                        </label>
+                                        <button onclick="loadAutoApprovalStats(true)"
+                                            class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-medium px-3 py-1 rounded-lg transition duration-150">새로고침</button>
+                                    </div>
+                                </div>
+                                <div id="autoApprovalBody" class="flex-1 overflow-y-auto text-center text-gray-400 text-sm">
+                                    데이터 로딩 중...</div>
+                            </div>
+                            <div class="dash-card-h-resizer" data-card="auto-approval-panel"></div>
+                        </div>
+
+                        <!-- 텔레그램 가입현황 -->
+                        <div style="position:relative;">
+                            <div id="telegram-join-panel"
+                                class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
+                                style="height:230px">
+                                <div class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
+                                    <h2 class="text-sm font-bold text-gray-800">텔레그램 가입현황</h2>
+                                    <div class="flex items-center gap-3 text-xs">
+                                        <label class="flex items-center gap-1 cursor-pointer">
+                                            <input type="radio" name="telegram-join-mode" id="tjm-item" value="item"
+                                                onchange="onTelegramJoinModeChange(this)" checked>
+                                            <span class="font-semibold text-gray-600">물건</span>
+                                        </label>
+                                        <label class="flex items-center gap-1 cursor-pointer">
+                                            <input type="radio" name="telegram-join-mode" id="tjm-member" value="member"
+                                                onchange="onTelegramJoinModeChange(this)">
+                                            <span class="font-semibold text-gray-600">회원</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div id="telegramJoinBody"
+                                    class="flex-1 overflow-y-auto p-4 text-center text-gray-400 text-sm">데이터 로딩 중...</div>
+                            </div>
+                            <div class="dash-card-h-resizer" data-card="telegram-join-panel"></div>
+                        </div>
+
+                        <!-- 자동물건등록/매칭현황 -->
+                        <div style="position:relative;">
+                            <div id="imageStatCard"
+                                class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
+                                style="height:250px">
+                                <div class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
+                                    <h2 class="text-sm font-bold text-gray-800">자동 물건 등록/매칭 현황</h2>
+                                    <button onclick="loadDashboardImageStats()"
                                         class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-medium px-3 py-1 rounded-lg transition duration-150">새로고침</button>
                                 </div>
-                            </div>
-                            <!-- 내부 스크롤만 유지 -->
-                            <div id="autoApprovalBody" class="flex-1 overflow-y-auto text-center text-gray-400 text-sm">
-                                데이터 로딩 중...</div>
-                        </div>
-
-                        <!-- 텔레그램 가입현황 (높이 230px 고정) -->
-                        <div id="telegram-join-panel"
-                            class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
-                            style="height:230px">
-                            <div
-                                class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
-                                <h2 class="text-sm font-bold text-gray-800">텔레그램 가입현황</h2>
-                                <div class="flex items-center gap-3 text-xs">
-                                    <label class="flex items-center gap-1 cursor-pointer">
-                                        <input type="radio" name="telegram-join-mode" id="tjm-item" value="item"
-                                            onchange="onTelegramJoinModeChange(this)" checked>
-                                        <span class="font-semibold text-gray-600">물건</span>
-                                    </label>
-                                    <label class="flex items-center gap-1 cursor-pointer">
-                                        <input type="radio" name="telegram-join-mode" id="tjm-member" value="member"
-                                            onchange="onTelegramJoinModeChange(this)">
-                                        <span class="font-semibold text-gray-600">회원</span>
-                                    </label>
+                                <div class="flex-1 overflow-y-auto">
+                                    <table class="w-full text-xs text-center border-collapse table-fixed">
+                                        <colgroup>
+                                            <col style="width:16%">
+                                            <col style="width:12%">
+                                            <col style="width:12%">
+                                            <col style="width:12%">
+                                            <col style="width:12%">
+                                            <col style="width:12%">
+                                            <col style="width:12%">
+                                            <col style="width:12%">
+                                        </colgroup>
+                                        <thead class="sticky top-0 bg-gray-50 z-10">
+                                            <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
+                                                <th class="py-1 px-1 font-bold">실행시간</th>
+                                                <th class="py-1 px-1 font-bold">담당자</th>
+                                                <th class="py-1 px-1 font-bold">충돌 ⓘ</th>
+                                                <th class="py-1 px-1 font-bold">전체</th>
+                                                <th class="py-1 px-1 font-bold">신규등록</th>
+                                                <th class="py-1 px-1 font-bold">매칭<br>(이미지)</th>
+                                                <th class="py-1 px-1 font-bold">매칭<br>(옥션ID)</th>
+                                                <th class="py-1 px-1 font-bold">매칭X<br>(옥션ID)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="imageSyncStatsBody" class="text-gray-700">
+                                            <tr>
+                                                <td colspan="8" class="py-4 text-center text-gray-400">데이터 로딩 중...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
-                            <div id="telegramJoinBody"
-                                class="flex-1 overflow-y-auto p-4 text-center text-gray-400 text-sm">데이터 로딩 중...</div>
-                        </div>
-
-                        <!-- 자동물건등록/매칭현황 (높이 250px 고정) -->
-                        <div class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
-                            style="height:250px">
-                            <div
-                                class="bg-white border-b border-gray-200 px-4 py-3 flex justify-between items-center flex-shrink-0">
-                                <h2 class="text-sm font-bold text-gray-800">자동 물건 등록/매칭 현황</h2>
-                                <button onclick="loadDashboardImageStats()"
-                                    class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-medium px-3 py-1 rounded-lg transition duration-150">새로고침</button>
-                            </div>
-                            <div class="flex-1 overflow-y-auto">
-                                <table class="w-full text-xs text-center border-collapse table-fixed">
-                                    <colgroup>
-                                        <col style="width:16%">
-                                        <col style="width:12%">
-                                        <col style="width:12%">
-                                        <col style="width:12%">
-                                        <col style="width:12%">
-                                        <col style="width:12%">
-                                        <col style="width:12%">
-                                        <col style="width:12%">
-                                    </colgroup>
-                                    <thead class="sticky top-0 bg-gray-50 z-10">
-                                        <tr
-                                            class="bg-gray-50 border-b border-gray-200 text-gray-600 text-xs uppercase leading-normal">
-                                            <th class="py-1 px-1 font-bold">실행시간</th>
-                                            <th class="py-1 px-1 font-bold">담당자</th>
-                                            <th class="py-1 px-1 font-bold">충돌 ⓘ</th>
-                                            <th class="py-1 px-1 font-bold">전체</th>
-                                            <th class="py-1 px-1 font-bold">신규등록</th>
-                                            <th class="py-1 px-1 font-bold">매칭<br>(이미지)</th>
-                                            <th class="py-1 px-1 font-bold">매칭<br>(옥션ID)</th>
-                                            <th class="py-1 px-1 font-bold">매칭X<br>(옥션ID)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="imageSyncStatsBody" class="text-gray-700">
-                                        <tr>
-                                            <td colspan="8" class="py-4 text-center text-gray-400">데이터 로딩 중...</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                            <div class="dash-card-h-resizer" data-card="imageStatCard"></div>
                         </div>
                     </div>
                 </div>

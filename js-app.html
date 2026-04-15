@@ -2965,6 +2965,150 @@
         }
     }
 
+    // ── 대시보드 카드 드래그 리사이즈 ────────────────────────────
+    function initDashboardResize() {
+        _loadDashLayout();
+
+        // ① 카드 높이 — 하단 경계 드래그
+        document.querySelectorAll('.dash-card-h-resizer').forEach(handle => {
+            handle.addEventListener('mousedown', e => {
+                const card = document.getElementById(handle.dataset.card);
+                if (!card) return;
+                const startY = e.clientY, startH = card.offsetHeight;
+                handle.classList.add('active');
+                document.body.style.cursor = 'row-resize';
+                document.body.style.userSelect = 'none';
+                const onMove = e2 => {
+                    card.style.height = Math.max(100, startH + (e2.clientY - startY)) + 'px';
+                };
+                const onUp = () => {
+                    handle.classList.remove('active');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    _saveDashLayout();
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                e.preventDefault();
+            });
+        });
+
+        // ② 컬럼 너비 — 수직 경계 드래그
+        document.querySelectorAll('.dash-col-resizer').forEach(handle => {
+            handle.addEventListener('mousedown', e => {
+                const leftEl  = document.getElementById(handle.dataset.left);
+                const rightEl = document.getElementById(handle.dataset.right);
+                if (!leftEl || !rightEl) return;
+                const startX = e.clientX, startLW = leftEl.offsetWidth, startRW = rightEl.offsetWidth;
+                const isLastCol = handle.dataset.right === 'dashCol3';
+                handle.classList.add('active');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                const onMove = e2 => {
+                    const dx = e2.clientX - startX;
+                    const newLW = Math.max(120, startLW + dx);
+                    leftEl.style.flex  = `0 0 ${newLW}px`;
+                    leftEl.style.width = newLW + 'px';
+                    if (!isLastCol) {
+                        const newRW = Math.max(120, startRW - dx);
+                        rightEl.style.flex  = `0 0 ${newRW}px`;
+                        rightEl.style.width = newRW + 'px';
+                    }
+                };
+                const onUp = () => {
+                    handle.classList.remove('active');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    _saveDashLayout();
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                e.preventDefault();
+            });
+        });
+
+        // ③ 물건 상태 관리 테이블 컬럼 — 헤더 우측 드래그
+        document.querySelectorAll('#statusTable .th-resize-handle').forEach(handle => {
+            handle.addEventListener('mousedown', e => {
+                const colIdx = parseInt(handle.dataset.col);
+                const cols   = document.querySelectorAll('#statusTableColgroup col');
+                const table  = document.getElementById('statusTable');
+                if (!cols[colIdx] || !table) return;
+                const tableW = table.offsetWidth;
+                const startX = e.clientX;
+                const startW = parseFloat(cols[colIdx].style.width) / 100 * tableW;
+                handle.classList.add('active');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                const onMove = e2 => {
+                    const newW = Math.max(28, startW + (e2.clientX - startX));
+                    cols[colIdx].style.width = (newW / tableW * 100).toFixed(2) + '%';
+                };
+                const onUp = () => {
+                    handle.classList.remove('active');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    const widths = Array.from(cols).map(c => c.style.width);
+                    localStorage.setItem('statusColWidths', JSON.stringify(widths));
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        // 저장된 테이블 컬럼 너비 복원
+        try {
+            const saved = localStorage.getItem('statusColWidths');
+            if (saved) {
+                const widths = JSON.parse(saved);
+                const cols = document.querySelectorAll('#statusTableColgroup col');
+                widths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w; });
+            }
+        } catch(e) {}
+    }
+
+    function _saveDashLayout() {
+        const layout = {};
+        ['dashCol1', 'dashCol2'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) layout[id] = el.offsetWidth;
+        });
+        ['missingBidCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) layout[id + '_h'] = el.offsetHeight;
+        });
+        localStorage.setItem('dashLayout', JSON.stringify(layout));
+    }
+
+    function _loadDashLayout() {
+        try {
+            const saved = localStorage.getItem('dashLayout');
+            if (!saved) return;
+            const layout = JSON.parse(saved);
+            ['dashCol1', 'dashCol2'].forEach(id => {
+                if (layout[id]) {
+                    const el = document.getElementById(id);
+                    if (el) { el.style.flex = `0 0 ${layout[id]}px`; el.style.width = layout[id] + 'px'; }
+                }
+            });
+            ['missingBidCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
+                if (layout[id + '_h']) {
+                    const el = document.getElementById(id);
+                    if (el) el.style.height = layout[id + '_h'] + 'px';
+                }
+            });
+        } catch(e) {}
+    }
+    // ─────────────────────────────────────────────────────────────
+
     function renderStatusManagementDashboard() {
         if (!statusTableBody) return;
         statusTableBody.innerHTML = '';
@@ -2996,7 +3140,7 @@
             const row = document.createElement('tr');
             row.className = "border-b border-gray-100 hover:bg-gray-50";
 
-            let html = `<td class="py-2 px-2 text-left border-r bg-gray-50 whitespace-nowrap" style="min-width:300px; width:300px;">
+            let html = `<td class="py-2 px-2 text-left border-r bg-gray-50 whitespace-nowrap">
               <span class="${dDayColor} font-bold mr-1 text-sm">${dDay}</span>
               <span class="text-gray-400 text-sm">${dateStr}</span>
           </td>`;
@@ -6438,6 +6582,9 @@ MJ 이정우 팀장
             }
         }
     }
+
+    // 대시보드 드래그 리사이즈 초기화
+    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); });
 
     // 상태 체크박스 변경 시 라벨 업데이트
     document.addEventListener('DOMContentLoaded', () => {
