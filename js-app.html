@@ -2040,38 +2040,34 @@
 
                         const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
-                            <div class="p-3 bg-stone-50 flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div>
-                              <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
-                                  <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
-                                  <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
-                              </div>
-                              <div class="flex flex-col items-end w-[40%] space-y-1">
-                                  <div class="flex items-center space-x-1">
-                                      <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                                      ${tBadgeHtml}<span class="text-xs font-bold text-gray-800">${mNameValue}</span>
-                                  </div>
-                                  <div class="text-sm ${bidPriceMobileClass}">${bidpriceFormatted}</div>
+                            <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                              <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs font-bold text-gray-800 ml-1">${mNameValue}</span>
+                            </div>
+                            <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                              <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div>
+                              <div class="border-l border-gray-200 flex flex-col" style="min-width:42%">
+                                <div class="px-2 py-1 text-[10px] text-gray-700 border-b border-gray-200 whitespace-nowrap"><span class="${courtButtonClass}">${bid.court || '미상'}</span><span class="mx-1 text-gray-400">/</span><span class="font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                                <div class="px-2 py-1 text-xs font-bold ${bidPriceMobileClass} whitespace-nowrap">${bidpriceFormatted}</div>
                               </div>
                             </div>
                             ${timerBarHtml}
                           </div>
                           <div class="hidden md:block mb-0.5">
-                          <table class="bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <tbody>
-                                  <tr>
-                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div></td>
-                                      <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
-                                      <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
-                                      <td class="m-name-cell" style="width: 22%;">${hBadgeHtml}${tBadgeHtml}${mNameValue}</td>
-                                  </tr>
-                                  <tr>
-                                      <td class="${mNameIdClass}" style="width: 21%;">${bid.m_name_id || '대표님'}</td>
-                                      <td colspan="2" class="${bidPricePcClass}">${bidpriceFormatted}</td>
-                                  </tr>
-                                  ${timerBarHtml ? `<tr><td colspan="4" class="chuchen-timer-td">${timerBarHtml}</td></tr>` : ''}
-                              </tbody>
-                          </table>
+                          <div class="bid-item-card ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                            <div class="bid-row-top">
+                              <div class="bid-top-left">${imgButtonHtml}</div>
+                              <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
+                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>${hBadgeHtml}<span style="margin-left:6px;">${tBadgeHtml}</span><span style="font-weight:bold;margin-left:4px;">${mNameValue}</span></div>
+                            </div>
+                            <div class="bid-card-bottom">
+                              <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div>
+                              <div class="bid-bid-col-resizer" data-bid-section="bot" onclick="event.stopPropagation()"></div>
+                              <div class="bid-court-cell"><span class="${courtButtonClass}">${bid.court || '미상'}</span> / <span class="${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                              <div class="bid-price-cell ${bidPricePcClass}">${bidpriceFormatted}</div>
+                            </div>
+                            ${timerBarHtml ? `<div style="padding:0">${timerBarHtml}</div>` : ''}
+                          </div>
                           </div>
                       `;
                         contentHtml += itemHtml;
@@ -2277,34 +2273,34 @@
                     const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${(hasImages || hasAucId) ? `<span class="inline-block w-3.5 h-3.5 rounded-full ${dotClass} cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="${dotTitle}"></span>` : ''}</span>`;
 
                     const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
-                      <div class="md:hidden border-2 border-green-300 rounded-xl p-3 mb-2 bg-stone-50 shadow-sm flex items-center justify-between cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="openDetailModalById('${bid.id}')">
-                          <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<span>${dupSakunHtml(bid)}</span></div>
-                          <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
-                              <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
-                              <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
+                      <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm" onmouseenter="preloadItemImage('${bid.image_id}')">
+                        <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                          <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                          <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs font-bold text-gray-800 ml-1">${mNameValue}</span>
+                        </div>
+                        <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                          <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1">${dupSakunHtml(bid)}</div></div>
+                          <div class="border-l border-gray-200 flex flex-col" style="min-width:42%">
+                            <div class="px-2 py-1 text-[10px] text-gray-700 border-b border-gray-200 whitespace-nowrap"><span class="${courtButtonClass}">${bid.court || '미상'}</span><span class="mx-1 text-gray-400">/</span><span class="font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                            <div class="px-2 py-1 text-xs font-bold ${bidPriceMobileClass} whitespace-nowrap">${bidpriceFormatted}</div>
                           </div>
-                          <div class="flex flex-col items-end w-[40%] space-y-1">
-                              <div class="flex items-center space-x-1">
-                                      <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                                  ${tBadgeHtml}<span class="text-xs font-bold text-gray-800">${mNameValue}</span>
-                              </div>
-                              <div class="text-sm ${bidPriceMobileClass}">${bidpriceFormatted}</div>
-                          </div>
+                        </div>
                       </div>
-                      <table class="hidden md:table bid-item-table ${desktopBorder} cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="openDetailModalById('${bid.id}')">
-                          <tbody>
-                              <tr>
-                                  <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<span>${dupSakunHtml(bid)}</span></div></td>
-                                  <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
-                                  <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
-                                  <td class="m-name-cell" style="width: 22%;">${tBadgeHtml}${mNameValue}</td>
-                              </tr>
-                              <tr>
-                                  <td class="${mNameIdClass}" style="width: 21%;">${bid.m_name_id || '대표님'}</td>
-                                  <td colspan="2" class="${bidPricePcClass}">${bidpriceFormatted}</td>
-                              </tr>
-                          </tbody>
-                      </table>
+                      <div class="hidden md:block mb-0.5">
+                      <div class="bid-item-card ${desktopBorder} cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="openDetailModalById('${bid.id}')">
+                        <div class="bid-row-top">
+                          <div class="bid-top-left">${imgButtonHtml}</div>
+                          <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
+                          <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="font-weight:bold;margin-left:4px;">${mNameValue}</span></div>
+                        </div>
+                        <div class="bid-card-bottom">
+                          <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div></div>
+                          <div class="bid-bid-col-resizer" data-bid-section="bot" onclick="event.stopPropagation()"></div>
+                          <div class="bid-court-cell"><span class="${courtButtonClass}">${bid.court || '미상'}</span> / <span class="${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                          <div class="bid-price-cell ${bidPricePcClass}">${bidpriceFormatted}</div>
+                        </div>
+                      </div>
+                      </div>
                   `;
                     contentHtml += itemHtml;
                 });
@@ -2736,18 +2732,15 @@
 
                         const mobileHtml = `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
-                            <div class="p-3 bg-stone-50 flex items-center justify-between cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <div class="text-indigo-600 font-bold text-sm sm:text-base w-[40%] flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div>
-                              <div class="flex flex-col items-center justify-center w-[20%] space-y-1">
-                                  <span class="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded text-gray-600 whitespace-nowrap">${bid.court || '미상'}</span>
-                                  <span class="text-xs font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span>
-                              </div>
-                              <div class="flex flex-col items-end w-[40%] space-y-1">
-                                  <div class="flex items-center space-x-1">
-                                      <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                                      ${tBadgeHtml}<span class="text-xs font-bold text-gray-800">${mNameValue}</span>
-                                  </div>
-                                  <div class="text-sm ${bidPriceMobileClass}">${bidpriceFormatted}</div>
+                            <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                              <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs font-bold text-gray-800 ml-1">${mNameValue}</span>
+                            </div>
+                            <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                              <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div>
+                              <div class="border-l border-gray-200 flex flex-col" style="min-width:42%">
+                                <div class="px-2 py-1 text-[10px] text-gray-700 border-b border-gray-200 whitespace-nowrap"><span class="${courtButtonClass}">${bid.court || '미상'}</span><span class="mx-1 text-gray-400">/</span><span class="font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                                <div class="px-2 py-1 text-xs font-bold ${bidPriceMobileClass} whitespace-nowrap">${bidpriceFormatted}</div>
                               </div>
                             </div>
                             ${timerBarHtml2}
@@ -2756,21 +2749,20 @@
 
                         const desktopHtml = `
                           <div class="hidden md:block mb-0.5">
-                          <table class="bid-item-table ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <tbody>
-                                  <tr>
-                                      <td rowspan="2" class="sakun-no-cell" style="width: 40%;"><div class="flex items-start">${imgButtonHtml}<div><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div></td>
-                                      <td class="court-cell" style="width: 21%;"><span class="${courtButtonClass}">${bid.court || '미상'}</span></td>
-                                  <td class="stu-cell" style="width: 17%;"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span></td>
-                                      <td class="m-name-cell" style="width: 22%;">${hBadgeHtml}${tBadgeHtml}${mNameValue}</td>
-                                  </tr>
-                                  <tr>
-                                      <td class="${mNameIdClass}" style="width: 21%;">${bid.m_name_id || '대표님'}</td>
-                                      <td colspan="2" class="${bidPricePcClass}">${bidpriceFormatted}</td>
-                                  </tr>
-                                  ${timerBarHtml2 ? `<tr><td colspan="4" class="chuchen-timer-td">${timerBarHtml2}</td></tr>` : ''}
-                              </tbody>
-                          </table>
+                          <div class="bid-item-card ${desktopBorder} cursor-pointer" onclick="openDetailModalById('${bid.id}')">
+                            <div class="bid-row-top">
+                              <div class="bid-top-left">${imgButtonHtml}</div>
+                              <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
+                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>${hBadgeHtml}<span style="margin-left:6px;">${tBadgeHtml}</span><span style="font-weight:bold;margin-left:4px;">${mNameValue}</span></div>
+                            </div>
+                            <div class="bid-card-bottom">
+                              <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div>
+                              <div class="bid-bid-col-resizer" data-bid-section="bot" onclick="event.stopPropagation()"></div>
+                              <div class="bid-court-cell"><span class="${courtButtonClass}">${bid.court || '미상'}</span> / <span class="${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                              <div class="bid-price-cell ${bidPricePcClass}">${bidpriceFormatted}</div>
+                            </div>
+                            ${timerBarHtml2 ? `<div style="padding:0">${timerBarHtml2}</div>` : ''}
+                          </div>
                           </div>
                       `;
                         contentHtml += mobileHtml + desktopHtml;
@@ -2963,6 +2955,47 @@
             }
             missingBidTableFoot.appendChild(totalRow);
         }
+    }
+
+    // ── 물건카드 Div 컬럼 드래그 리사이즈 ──────────────────────
+    function initBidCardResize() {
+        const STORAGE_KEY = 'bidCardColWidths';
+        let widths = { top: 15, bot: 45 };
+        try { const s = localStorage.getItem(STORAGE_KEY); if (s) widths = { ...widths, ...JSON.parse(s) }; } catch(e) {}
+
+        function applyWidths() {
+            let st = document.getElementById('bid-card-col-style');
+            if (!st) { st = document.createElement('style'); st.id = 'bid-card-col-style'; document.head.appendChild(st); }
+            st.textContent = `.bid-top-left{width:${widths.top}%!important}.bid-card-bottom{grid-template-columns:${widths.bot}% 6px 1fr!important}`;
+        }
+        applyWidths();
+
+        let active = null;
+        document.addEventListener('mousedown', e => {
+            const handle = e.target.closest('.bid-bid-col-resizer');
+            if (!handle) return;
+            const section = handle.dataset.bidSection;
+            const row = handle.parentElement;
+            handle.classList.add('active');
+            active = { section, startX: e.clientX, startW: widths[section], rowW: row.offsetWidth };
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault(); e.stopPropagation();
+        });
+        document.addEventListener('mousemove', e => {
+            if (!active) return;
+            const dx = e.clientX - active.startX;
+            widths[active.section] = Math.max(8, Math.min(85, active.startW + dx / active.rowW * 100));
+            applyWidths();
+        });
+        document.addEventListener('mouseup', () => {
+            if (!active) return;
+            document.querySelectorAll('.bid-bid-col-resizer.active').forEach(el => el.classList.remove('active'));
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(widths));
+            active = null;
+        });
     }
 
     // ── 대시보드 카드 드래그 리사이즈 ────────────────────────────
@@ -6583,8 +6616,8 @@ MJ 이정우 팀장
         }
     }
 
-    // 대시보드 드래그 리사이즈 초기화
-    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); });
+    // 드래그 리사이즈 초기화
+    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); });
 
     // 상태 체크박스 변경 시 라벨 업데이트
     document.addEventListener('DOMContentLoaded', () => {
