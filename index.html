@@ -1807,6 +1807,9 @@
                                                 <label class="flex items-center gap-1 cursor-pointer"><input
                                                         type="checkbox" name="mem-gubun-cb" value="조사자"
                                                         onchange="updateGubunHidden()" class="rounded"> 조사자</label>
+                                                <label class="flex items-center gap-1 cursor-pointer"><input
+                                                        type="checkbox" name="mem-gubun-cb" value="강사"
+                                                        onchange="updateGubunHidden()" class="rounded"> 강사</label>
                                             </div>
                                         </div>
                                         <div><label class="block text-xs font-medium text-gray-600 mb-1">이름 *</label>
@@ -2243,28 +2246,22 @@
                 <div id="classScheduleListPane"
                     class="flex-none flex flex-col border-r border-gray-200 bg-white overflow-hidden hidden md:flex"
                     style="width:65%">
-                    <div
-                        class="p-4 flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50 border-b shadow-sm gap-2">
-                        <h2 class="text-xl font-semibold text-gray-800">수업상세</h2>
-                        <div class="flex space-x-2">
-                            <button onclick="loadClassScheduleList()"
-                                class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
+                    <!-- 탭 + 새로고침 -->
+                    <div class="flex items-center justify-between px-3 py-2 bg-gray-50 border-b shadow-sm">
+                        <div class="flex" id="classScheduleTypeTabs">
+                            <button type="button" onclick="switchClassScheduleTab('CLASS')" id="csd-tab-CLASS"
+                                class="px-4 py-1.5 text-sm font-semibold rounded-l-md border border-gray-300 bg-indigo-600 text-white transition-colors">CLASS</button>
+                            <button type="button" onclick="switchClassScheduleTab('PT')" id="csd-tab-PT"
+                                class="px-4 py-1.5 text-sm font-semibold border-t border-b border-r border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors">PT</button>
+                            <button type="button" onclick="switchClassScheduleTab('돈클')" id="csd-tab-돈클"
+                                class="px-4 py-1.5 text-sm font-semibold rounded-r-md border-t border-b border-r border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors">돈클</button>
                         </div>
+                        <button onclick="loadClassScheduleList()"
+                            class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
                     </div>
                     <!-- 수업 상세 조회 항목 -->
                     <div class="p-3 bg-gray-50 border-b">
                         <div class="flex flex-wrap gap-2">
-                            <input type="text" id="csd-search-member" oninput="filterClassScheduleList()"
-                                placeholder="회원이름"
-                                class="flex-1 min-w-[80px] px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                            <select id="csd-search-type" onchange="filterClassScheduleList()"
-                                class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                <option value="">수업구분</option>
-                            </select>
-                            <select id="csd-search-name" onchange="filterClassScheduleList()"
-                                class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                <option value="">수업이름</option>
-                            </select>
                             <select id="csd-search-grade" onchange="filterClassScheduleList()"
                                 class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                                 <option value="">수업등급</option>
@@ -2280,10 +2277,10 @@
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50 sticky top-0 z-10">
                                 <tr>
-                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">수업구분</th>
-                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">수업이름</th>
-                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">수업등급</th>
-                                    <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">지역</th>
+                                    <th onclick="sortClassScheduleList('class_type')" data-csd-sort="class_type" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">수업구분 <span class="csd-sort-arrow"></span></th>
+                                    <th onclick="sortClassScheduleList('class_name')" data-csd-sort="class_name" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">수업이름 <span class="csd-sort-arrow"></span></th>
+                                    <th onclick="sortClassScheduleList('class_grade')" data-csd-sort="class_grade" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">수업등급 <span class="csd-sort-arrow"></span></th>
+                                    <th onclick="sortClassScheduleList('class_loc')" data-csd-sort="class_loc" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">지역 <span class="csd-sort-arrow"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="classScheduleListTableBody" class="bg-white divide-y divide-gray-100">
@@ -2558,6 +2555,14 @@
                                         </select>
                                     </div>
                                 </div>
+                                <!-- 강사 -->
+                                <div class="mb-2">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">강사 <span class="text-red-500">*</span></label>
+                                    <select id="prev-genD1-teacherId"
+                                        class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                                        <option value="">강사 선택</option>
+                                    </select>
+                                </div>
                                 <!-- 수업시간 -->
                                 <div class="mb-2">
                                     <label class="block text-xs font-medium text-gray-600 mb-1">수업시간 <span class="text-red-500">*</span></label>
@@ -2746,6 +2751,14 @@
                                         <option value="4">4주</option>
                                     </select>
                                 </div>
+                            </div>
+                            <!-- 강사 -->
+                            <div class="mb-2">
+                                <label class="block text-xs font-medium text-gray-600 mb-1">강사 <span class="text-red-500">*</span></label>
+                                <select id="genD1-teacherId"
+                                    class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                                    <option value="">강사 선택</option>
+                                </select>
                             </div>
                             <!-- 수업시간 -->
                             <div class="mb-2">
@@ -2992,6 +3005,146 @@
                         </div>
 
                     </div><!-- end 2단 -->
+                </div>
+            </div>
+
+            <!-- 수업리스트 수정 모달 -->
+            <div id="editD1BatchModal" class="modal content-hidden" onclick="closeEditD1BatchModal(event)">
+                <div class="modal-content" onclick="event.stopPropagation()" style="max-width:480px">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-base font-bold text-gray-800">수업리스트 수정</h3>
+                        <button type="button" onclick="closeEditD1BatchModal()"
+                            class="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none px-1">&times;</button>
+                    </div>
+                    <div class="border border-gray-200 rounded-lg p-4 bg-white space-y-3">
+                        <!-- 강사 -->
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">강사 <span class="text-red-500">*</span></label>
+                            <select id="editD1-teacherId"
+                                class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                                <option value="">강사 선택</option>
+                            </select>
+                        </div>
+                        <!-- 수업시간 -->
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 mb-1">수업시간</label>
+                            <div class="flex items-center gap-1 flex-wrap">
+                                <select id="editD1-timeFrom-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="AM">오전</option><option value="PM">오후</option>
+                                </select>
+                                <select id="editD1-timeFrom-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="1">1시</option><option value="2">2시</option><option value="3">3시</option>
+                                    <option value="4">4시</option><option value="5">5시</option><option value="6">6시</option>
+                                    <option value="7">7시</option><option value="8">8시</option><option value="9">9시</option>
+                                    <option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                </select>
+                                <select id="editD1-timeFrom-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="00">00분</option><option value="10">10분</option><option value="20">20분</option>
+                                    <option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                </select>
+                                <span class="text-gray-400 text-xs px-1">~</span>
+                                <select id="editD1-timeTo-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="AM">오전</option><option value="PM">오후</option>
+                                </select>
+                                <select id="editD1-timeTo-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="1">1시</option><option value="2">2시</option><option value="3">3시</option>
+                                    <option value="4">4시</option><option value="5">5시</option><option value="6">6시</option>
+                                    <option value="7">7시</option><option value="8">8시</option><option value="9">9시</option>
+                                    <option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                </select>
+                                <select id="editD1-timeTo-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="00">00분</option><option value="10">10분</option><option value="20">20분</option>
+                                    <option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                </select>
+                            </div>
+                        </div>
+                        <!-- 입찰 시간 설정 -->
+                        <div class="border-t border-gray-200 pt-3">
+                            <label class="block text-xs font-medium text-gray-600 mb-2">입찰 시간 설정 <span class="text-gray-400 font-normal">(수업일 기준)</span></label>
+                            <!-- 등록시작 -->
+                            <div class="flex items-center gap-1 mb-1.5 flex-wrap">
+                                <span class="text-xs text-gray-500 w-14 flex-none">등록시작</span>
+                                <select id="editD1-bidStarttime-day" class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
+                                    <option value="">미설정</option>
+                                    <option value="0">당일</option><option value="1">+1일</option><option value="2">+2일</option>
+                                    <option value="3">+3일</option><option value="4">+4일</option><option value="5">+5일</option>
+                                    <option value="6">+6일</option><option value="7">+7일</option>
+                                </select>
+                                <select id="editD1-bidStarttime-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="AM">오전</option><option value="PM">오후</option>
+                                </select>
+                                <select id="editD1-bidStarttime-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="1">1시</option><option value="2">2시</option><option value="3">3시</option>
+                                    <option value="4">4시</option><option value="5">5시</option><option value="6">6시</option>
+                                    <option value="7">7시</option><option value="8">8시</option><option value="9">9시</option>
+                                    <option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                </select>
+                                <select id="editD1-bidStarttime-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="00">00분</option><option value="10">10분</option><option value="20">20분</option>
+                                    <option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                </select>
+                                <span class="text-xs text-gray-500 flex-none ml-1">선택개수</span>
+                                <input type="number" id="editD1-bid1Count" min="1" placeholder="-"
+                                    class="w-12 px-1 py-1 border border-gray-300 rounded-lg text-xs">
+                            </div>
+                            <!-- 1차마감 -->
+                            <div class="flex items-center gap-1 mb-1.5 flex-wrap">
+                                <span class="text-xs text-gray-500 w-14 flex-none">1차마감</span>
+                                <select id="editD1-bidDatetime1-day" class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
+                                    <option value="">미설정</option>
+                                    <option value="0">당일</option><option value="1">+1일</option><option value="2">+2일</option>
+                                    <option value="3">+3일</option><option value="4">+4일</option><option value="5">+5일</option>
+                                    <option value="6">+6일</option><option value="7">+7일</option>
+                                </select>
+                                <select id="editD1-bidDatetime1-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="AM">오전</option><option value="PM">오후</option>
+                                </select>
+                                <select id="editD1-bidDatetime1-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="1">1시</option><option value="2">2시</option><option value="3">3시</option>
+                                    <option value="4">4시</option><option value="5">5시</option><option value="6">6시</option>
+                                    <option value="7">7시</option><option value="8">8시</option><option value="9">9시</option>
+                                    <option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                </select>
+                                <select id="editD1-bidDatetime1-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="00">00분</option><option value="10">10분</option><option value="20">20분</option>
+                                    <option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                </select>
+                                <span class="text-xs text-gray-500 flex-none ml-1">선택개수</span>
+                                <input type="number" id="editD1-bid2Count" min="1" placeholder="-"
+                                    class="w-12 px-1 py-1 border border-gray-300 rounded-lg text-xs">
+                            </div>
+                            <!-- 2차마감 -->
+                            <div class="flex items-center gap-1 flex-wrap">
+                                <span class="text-xs text-gray-500 w-14 flex-none">2차마감</span>
+                                <select id="editD1-bidDatetime2-day" class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
+                                    <option value="">미설정</option>
+                                    <option value="0">당일</option><option value="1">+1일</option><option value="2">+2일</option>
+                                    <option value="3">+3일</option><option value="4">+4일</option><option value="5">+5일</option>
+                                    <option value="6">+6일</option><option value="7">+7일</option>
+                                </select>
+                                <select id="editD1-bidDatetime2-ampm" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="AM">오전</option><option value="PM">오후</option>
+                                </select>
+                                <select id="editD1-bidDatetime2-h" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="1">1시</option><option value="2">2시</option><option value="3">3시</option>
+                                    <option value="4">4시</option><option value="5">5시</option><option value="6">6시</option>
+                                    <option value="7">7시</option><option value="8">8시</option><option value="9">9시</option>
+                                    <option value="10">10시</option><option value="11">11시</option><option value="12">12시</option>
+                                </select>
+                                <select id="editD1-bidDatetime2-m" class="px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white">
+                                    <option value="">-</option><option value="00">00분</option><option value="10">10분</option><option value="20">20분</option>
+                                    <option value="30">30분</option><option value="40">40분</option><option value="50">50분</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 버튼 -->
+                    <div class="flex gap-2 mt-4">
+                        <button type="button" onclick="closeEditD1BatchModal()"
+                            class="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded-lg text-sm font-semibold">취소</button>
+                        <button type="button" onclick="handleEditD1Batch()"
+                            class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold">저장</button>
+                    </div>
                 </div>
             </div>
 

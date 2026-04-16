@@ -244,6 +244,7 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
         }
         if (opts.bid1Count) sessRow['1cha_bid'] = opts.bid1Count;
         if (opts.bid2Count) sessRow['2cha_bid'] = opts.bid2Count;
+        if (opts.teacherId) sessRow['teacher_id'] = opts.teacherId;
 
         newRows.push(CLASS_D1_HEADERS.map(function(h) { return sessRow[h] !== undefined ? sessRow[h] : ''; }));
     }
@@ -425,6 +426,89 @@ function getMembersForClass() {
 }
 
 // addMemberToClassD1 / addMemberToClassD1Batch → SheetDB.js 사용 (수업 단위 1회 등록)
+
+/**
+ * 배치(여러 회차)를 일괄 업데이트합니다.
+ * @param {string[]} classD1Ids - 수정할 class_d1_id 배열
+ * @param {Object} updateData - 수정할 필드/값 (예: { teacher_id, class_time_from, class_time_to, ... })
+ */
+function updateClassD1Batch(classD1Ids, updateData) {
+    if (!Array.isArray(classD1Ids) || classD1Ids.length === 0) {
+        return { success: false, message: '수정할 회차가 없습니다.' };
+    }
+    const sheet = ensureClassD1Sheet_();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
+
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat().map(String);
+    const directFields = ['teacher_id', 'class_time_from', 'class_time_to', '1cha_bid', '2cha_bid'];
+    const dateColIdx = CLASS_D1_HEADERS.indexOf('class_date');
+    let count = 0;
+
+    function calcBidDt(classDateStr, dayOffset, timeStr) {
+        if (dayOffset === '' || dayOffset === null || dayOffset === undefined) return '';
+        var base = new Date(String(classDateStr));
+        base.setDate(base.getDate() + parseInt(dayOffset));
+        var parts = String(timeStr || '00:00').split(':');
+        base.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0, 0);
+        return Utilities.formatDate(base, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+    }
+
+    classD1Ids.forEach(function(d1Id) {
+        const idx = ids.indexOf(String(d1Id));
+        if (idx < 0) return;
+        const rowNum = idx + 2;
+        // 직접 값 업데이트
+        directFields.forEach(function(field) {
+            if (updateData.hasOwnProperty(field)) {
+                const colIdx = CLASS_D1_HEADERS.indexOf(field);
+                if (colIdx >= 0) sheet.getRange(rowNum, colIdx + 1).setValue(updateData[field]);
+            }
+        });
+        // 입찰시간: day 기준으로 해당 회차 날짜에서 계산
+        if (updateData.hasOwnProperty('bidStarttimeDay')) {
+            const classDate = sheet.getRange(rowNum, dateColIdx + 1).getValue();
+            const col = CLASS_D1_HEADERS.indexOf('bid_starttime') + 1;
+            sheet.getRange(rowNum, col).setValue(calcBidDt(classDate, updateData.bidStarttimeDay, updateData.bidStarttimeTime));
+        }
+        if (updateData.hasOwnProperty('bidDatetime1Day')) {
+            const classDate = sheet.getRange(rowNum, dateColIdx + 1).getValue();
+            const col = CLASS_D1_HEADERS.indexOf('bid_datetime_1') + 1;
+            sheet.getRange(rowNum, col).setValue(calcBidDt(classDate, updateData.bidDatetime1Day, updateData.bidDatetime1Time));
+        }
+        if (updateData.hasOwnProperty('bidDatetime2Day')) {
+            const classDate = sheet.getRange(rowNum, dateColIdx + 1).getValue();
+            const col = CLASS_D1_HEADERS.indexOf('bid_datetime_2') + 1;
+            sheet.getRange(rowNum, col).setValue(calcBidDt(classDate, updateData.bidDatetime2Day, updateData.bidDatetime2Time));
+        }
+        count++;
+    });
+
+    return { success: true, message: count + '개 회차가 수정되었습니다.' };
+}
+
+/**
+ * 배치(여러 회차)를 일괄 삭제합니다.
+ * @param {string[]} classD1Ids - 삭제할 class_d1_id 배열
+ */
+function deleteClassD1Batch(classD1Ids) {
+    if (!Array.isArray(classD1Ids) || classD1Ids.length === 0) {
+        return { success: false, message: '삭제할 회차가 없습니다.' };
+    }
+    const sheet = ensureClassD1Sheet_();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
+
+    const idSet = new Set(classD1Ids.map(String));
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    // 뒤에서부터 삭제해야 행 번호 어긋나지 않음
+    for (let i = ids.length - 1; i >= 0; i--) {
+        if (idSet.has(String(ids[i]))) {
+            sheet.deleteRow(i + 2);
+        }
+    }
+    return { success: true, message: classD1Ids.length + '개 회차가 삭제되었습니다.' };
+}
 
 /**
  * 수업 드롭다운용 유니크 값 목록을 반환합니다.
