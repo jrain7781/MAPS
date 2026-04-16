@@ -12132,11 +12132,20 @@ ${token}
             const items = b.items || b;
             const isSelected = i === d1BatchIdx;
             const rowCls = isSelected ? 'bg-indigo-50 border-l-4 border-indigo-400' : 'hover:bg-gray-50 border-l-4 border-transparent';
+            const txtCls = isSelected ? 'font-semibold text-indigo-900' : 'text-gray-700';
+            const firstDate = items[0].class_date || '-';
+            const lastDate = items[items.length - 1].class_date || '-';
+            const periodHtml = firstDate === lastDate
+                ? firstDate
+                : `${firstDate}<br>${lastDate}`;
+            const teacherId = items[0].teacher_id || '';
+            const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
+            const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '-');
             html += `<tr class="${rowCls} cursor-pointer" onclick="selectD1Batch(${i})">
-                <td class="px-2 py-1.5 text-center text-[11px] font-medium text-gray-900">${i + 1}</td>
-                <td class="px-2 py-1.5 text-center text-[11px] text-gray-600">${items.length}회</td>
-                <td class="px-2 py-1.5 text-center text-[10px] text-gray-500">${items[0].class_date} ~ ${items[items.length - 1].class_date}</td>
-                <td class="px-2 py-1.5 text-center text-[11px] text-indigo-600 font-semibold">${escapeHtml(items[0].teacher_name || '-')}</td>
+                <td class="px-2 py-2 text-center text-xs ${txtCls}">${i + 1}</td>
+                <td class="px-2 py-2 text-center text-xs ${txtCls}">${items.length}회</td>
+                <td class="px-2 py-2 text-center text-xs ${txtCls} leading-tight">${periodHtml}</td>
+                <td class="px-2 py-2 text-center text-xs ${txtCls}">${escapeHtml(teacherName)}</td>
             </tr>`;
         }
         tbody.innerHTML = html;
