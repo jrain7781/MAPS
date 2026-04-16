@@ -2242,12 +2242,12 @@
 
             <!-- ================================ 수업회차 (ClassSchedule) ================================ -->
             <div id="ClassSchedule" class="tab-content h-full flex content-hidden">
-                <!-- 좌측: 수업 선택 + 회차 리스트 -->
+                <!-- 좌측: 종목/수업 리스트 사이드바 -->
                 <div id="classScheduleListPane"
                     class="flex-none flex flex-col border-r border-gray-200 bg-white overflow-hidden hidden md:flex"
-                    style="width:65%">
+                    style="width:300px">
                     <!-- 탭 + 새로고침 -->
-                    <div class="flex items-center justify-between px-3 py-2 bg-gray-50 border-b shadow-sm">
+                    <div class="flex items-center justify-between px-3 py-2 bg-gray-50 border-b shadow-sm flex-none">
                         <div class="flex" id="classScheduleTypeTabs">
                             <button type="button" onclick="switchClassScheduleTab('CLASS')" id="csd-tab-CLASS"
                                 class="px-4 py-1.5 text-sm font-semibold rounded-l-md border border-gray-300 bg-indigo-600 text-white transition-colors">CLASS</button>
@@ -2260,7 +2260,7 @@
                             class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
                     </div>
                     <!-- 수업 상세 조회 항목 -->
-                    <div class="p-3 bg-gray-50 border-b">
+                    <div class="p-3 bg-gray-50 border-b flex-none">
                         <div class="flex flex-wrap gap-2">
                             <select id="csd-search-grade" onchange="filterClassScheduleList()"
                                 class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
@@ -2272,15 +2272,16 @@
                             </select>
                         </div>
                     </div>
-                    <!-- 수업 상세 조회 리스트 -->
-                    <div class="flex-1 overflow-y-auto">
+                    
+                    <!-- 종목 리스트 영역 -->
+                    <div id="csd-list-area" class="flex-1 overflow-y-auto" style="min-height:100px">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50 sticky top-0 z-10">
                                 <tr>
                                     <th class="px-2 py-2 text-center w-7"><input type="checkbox" id="csd-list-check-all" onchange="toggleAllClassChecks(this.checked)" class="rounded cursor-pointer"></th>
-                                    <th onclick="sortClassScheduleList('class_type')" data-csd-sort="class_type" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">수업구분 <span class="csd-sort-arrow"></span></th>
-                                    <th onclick="sortClassScheduleList('class_name')" data-csd-sort="class_name" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">수업이름 <span class="csd-sort-arrow"></span></th>
-                                    <th onclick="sortClassScheduleList('class_grade')" data-csd-sort="class_grade" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">수업등급 <span class="csd-sort-arrow"></span></th>
+                                    <th onclick="sortClassScheduleList('class_type')" data-csd-sort="class_type" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">구분 <span class="csd-sort-arrow"></span></th>
+                                    <th onclick="sortClassScheduleList('class_name')" data-csd-sort="class_name" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">종목명 <span class="csd-sort-arrow"></span></th>
+                                    <th onclick="sortClassScheduleList('class_grade')" data-csd-sort="class_grade" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">등급 <span class="csd-sort-arrow"></span></th>
                                     <th onclick="sortClassScheduleList('class_loc')" data-csd-sort="class_loc" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">지역 <span class="csd-sort-arrow"></span></th>
                                 </tr>
                             </thead>
@@ -2291,19 +2292,33 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- 사이드바 가로 구분선 (수업리스트 높이 조절) -->
+                    <div id="classScheduleListPaneDivider"
+                        class="h-1.5 cursor-row-resize bg-gray-100 hover:bg-indigo-400 transition-colors flex items-center justify-center select-none flex-none"
+                        title="드래그로 수업리스트 높이 조절">
+                        <div class="w-8 h-0.5 bg-gray-300 rounded-full"></div>
+                    </div>
+
+                    <!-- 수업 리스트 영역 -->
+                    <div id="d1BatchArea" class="flex-none flex flex-col overflow-hidden bg-white" style="height:350px">
+                         <div class="px-3 py-1 bg-gray-50 border-b text-[11px] font-bold text-gray-600">수업리스트 (배치)</div>
+                         <div id="d1BatchListGrid" class="flex-1 overflow-y-auto text-xs"></div>
+                    </div>
                 </div>
+
                 <!-- 패널 구분선 (드래그로 폭 조절) -->
                 <div id="classScheduleDivider"
                     class="hidden md:flex w-1.5 cursor-col-resize bg-gray-200 hover:bg-indigo-400 active:bg-indigo-500 flex-none items-center justify-center transition-colors select-none"
                     title="드래그로 폭 조절">
                     <div class="w-0.5 h-8 bg-gray-400 rounded-full"></div>
                 </div>
-                <!-- 우측: 수업 회차 -->
+
+                <!-- 우측: 메인 상세 영역 -->
                 <div id="classScheduleDetailPane"
-                    class="flex-1 p-3 bg-gray-100 overflow-y-auto mobile-hidden flex flex-col gap-2">
-                    <!-- 수업 회차 통합 카드 (헤더 + 수업리스트 + 회차카드) -->
+                    class="flex-1 p-3 bg-gray-100 overflow-hidden mobile-hidden flex flex-col gap-2">
+                    <!-- 상단: 선택된 수업 정보 -->
                     <div class="bg-white rounded-xl shadow-lg flex-none flex flex-col overflow-hidden w-full">
-                        <!-- 헤더 -->
                         <div class="px-3 py-2 border-b border-gray-100 flex justify-between items-center flex-none">
                             <div class="flex items-center gap-2 min-w-0">
                                 <h3 class="text-sm font-semibold text-gray-800 flex-none">수업정보</h3>
@@ -2320,144 +2335,28 @@
                                     수업생성</button>
                             </div>
                         </div>
-                        <!-- 수업리스트 그리드 + 회차카드 (2줄 고정 높이, 3줄+ 세로 스크롤) -->
-                        <div id="d1CardArea" class="flex items-stretch" style="height:188px">
-                            <!-- 수업리스트 그리드 (드래그 width) -->
-                            <div id="d1BatchListGrid" class="flex-none overflow-y-auto text-xs border-r border-gray-100"
-                                style="width:155px"></div>
-                            <!-- 드래그 구분선 -->
-                            <div id="d1BatchDivider"
-                                class="w-1.5 cursor-col-resize bg-gray-100 hover:bg-indigo-400 flex-none flex items-center justify-center transition-colors select-none"
-                                title="드래그로 폭 조절">
-                                <div class="w-0.5 h-8 bg-gray-300 rounded-full"></div>
-                            </div>
-                            <!-- 회차 카드 영역 (flex-wrap, 세로 스크롤) -->
-                            <div class="flex-1 overflow-y-auto p-1.5 min-w-0" style="scrollbar-width:thin">
-                                <div id="classD1Grid">
-                                    <div class="text-gray-400 py-2 text-xs text-center">수업을 선택하세요</div>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- 세로 드래그 핸들 (수업정보 카드 높이 조절) -->
-                        <div id="d1CardHeightHandle"
-                            class="h-1.5 cursor-row-resize bg-gray-100 hover:bg-indigo-400 transition-colors flex items-center justify-center select-none flex-none"
-                            title="드래그로 높이 조절">
-                            <div class="w-8 h-0.5 bg-gray-300 rounded-full"></div>
-                        </div>
                     </div>
-                    <!-- 물건/회원 카드 (가로 나란히, 드래그 폭 조절) -->
-                    <div id="d1NormalView" class="flex gap-0 min-h-0">
-                        <!-- 물건 카드 -->
-                        <div id="d1ItemCard"
-                            class="flex-none bg-white rounded-xl shadow-lg p-3 overflow-hidden flex flex-col"
-                            style="width:50%">
-                            <div class="flex justify-between items-center mb-2">
-                                <h3 class="text-xs font-semibold text-gray-800">물건 <span id="d1ItemSectionInfo"
-                                        class="text-[10px] text-indigo-500 font-normal"></span></h3>
-                                <button type="button" onclick="showD1ItemRegisterPanel()"
-                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+
-                                    추가</button>
-                            </div>
-                            <!-- 물건 등록 패널 -->
-                            <div id="d1ItemRegisterPanel"
-                                class="mb-2 p-2 bg-indigo-50 rounded-lg border border-indigo-200 content-hidden">
-                                <div class="relative mb-1.5">
-                                    <input type="text" id="d1-item-search" placeholder="사건번호 검색"
-                                        oninput="searchD1Items()"
-                                        class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs">
-                                    <div id="d1-item-dropdown"
-                                        class="absolute z-20 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto hidden">
-                                    </div>
-                                </div>
-                                <div id="d1-item-pending-list" class="mb-1.5 space-y-1 max-h-28 overflow-y-auto"></div>
-                                <button type="button" onclick="registerD1Items()"
-                                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-1 rounded-lg">일괄
-                                    등록</button>
-                            </div>
-                            <!-- 등록된 물건 리스트 -->
-                            <div id="d1-item-list" class="flex-1 overflow-y-auto">
-                                <div class="text-gray-400 py-2 text-xs text-center">회차를 선택하세요</div>
-                            </div>
+
+                    <!-- 상세 탭 (회원 / 물건) -->
+                    <div class="flex-1 bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-0">
+                        <div class="flex border-b border-gray-100 bg-gray-50 flex-none">
+                            <button onclick="switchD1DetailTab('member')" id="d1-tab-member"
+                                class="flex-1 py-2.5 text-sm font-bold border-r border-gray-100 transition-colors bg-indigo-600 text-white">회원</button>
+                            <button onclick="switchD1DetailTab('item')" id="d1-tab-item"
+                                class="flex-1 py-2.5 text-sm font-bold transition-colors bg-white text-gray-600 hover:bg-gray-100">물건</button>
                         </div>
 
-                        <!-- 카드 구분선 (드래그) -->
-                        <div id="d1CardDivider"
-                            class="w-1.5 cursor-col-resize bg-gray-200 hover:bg-indigo-400 flex-none flex items-center justify-center transition-colors select-none mx-1 rounded"
-                            title="드래그로 폭 조절">
-                            <div class="w-0.5 h-8 bg-gray-400 rounded-full"></div>
-                        </div>
-
-                        <!-- 회원 카드 -->
-                        <div id="d1MemberCard"
-                            class="flex-1 bg-white rounded-xl shadow-lg p-3 overflow-hidden flex flex-col">
-                            <div class="flex justify-between items-center mb-2">
-                                <h3 class="text-xs font-semibold text-gray-800">회원 <span id="d1MemberSectionInfo"
-                                        class="text-[10px] text-indigo-500 font-normal"></span></h3>
-                                <button type="button" id="d1AddMemberBtn" onclick="showAddMemberToD1Modal()"
-                                    class="hidden bg-green-600 hover:bg-green-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+
-                                    추가</button>
-                            </div>
-
-                            <!-- 일반 회차: 검색 + 리스트 -->
-                            <div id="d1MemberNormalContent">
-                            <div class="mb-2">
-                                <input type="text" id="csd-member-search" oninput="filterD1Members()"
-                                    placeholder="이름 검색"
-                                    class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs">
-                            </div>
-                            <!-- 회원 리스트 -->
-                            <div class="border rounded-lg overflow-hidden flex-1 overflow-y-auto">
-                                <table class="min-w-full divide-y divide-gray-200">
-                                    <thead id="classD1MemberTableHead" class="bg-gray-50 sticky top-0">
-                                        <tr>
-                                            <th class="px-2 py-1.5 text-left text-xs font-bold text-gray-700">회원명</th>
-                                            <th class="px-2 py-1.5 text-center text-xs font-bold text-gray-700 w-10">출석
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="classD1MemberTableBody" class="bg-white divide-y divide-gray-100">
-                                        <tr>
-                                            <td colspan="2" class="p-4 text-center text-gray-500 text-xs">회차를 선택하세요</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <!-- 회원 상세 정보 -->
-                            <div id="classD1MemberDetail" class="mt-2 p-3 bg-gray-50 rounded-lg content-hidden text-xs">
-                                <div class="grid grid-cols-1 gap-1.5">
-                                    <div class="flex gap-1"><span class="text-gray-500">구분:</span> <span id="d1m-gubun"
-                                            class="font-medium">-</span></div>
-                                    <div class="flex gap-1"><span class="text-gray-500">이름:</span> <span id="d1m-name"
-                                            class="font-medium">-</span></div>
-                                    <div class="flex gap-1"><span class="text-gray-500">전화:</span> <span id="d1m-phone"
-                                            class="font-medium">-</span></div>
-                                    <div class="flex gap-1"><span class="text-gray-500">가입일:</span> <span
-                                            id="d1m-kaib_date" class="font-medium">-</span></div>
-                                    <div class="flex gap-1">
-                                        <span class="text-gray-500">명의1:</span>
-                                        <span id="d1m-name1_gubun" class="px-1 bg-gray-200 rounded text-xs">-</span>
-                                        <span id="d1m-name1" class="font-medium">-</span>
-                                    </div>
-                                    <div class="flex gap-1">
-                                        <span class="text-gray-500">명의2:</span>
-                                        <span id="d1m-name2_gubun" class="px-1 bg-gray-200 rounded text-xs">-</span>
-                                        <span id="d1m-name2" class="font-medium">-</span>
-                                    </div>
-                                    <div class="flex gap-1">
-                                        <span class="text-gray-500">명의3:</span>
-                                        <span id="d1m-name3_gubun" class="px-1 bg-gray-200 rounded text-xs">-</span>
-                                        <span id="d1m-name3" class="font-medium">-</span>
-                                    </div>
-                                </div>
-                            </div>
-                            </div><!-- /d1MemberNormalContent -->
-
-                            <!-- 전체회차 요약 그리드 (기본 hidden) -->
-                            <div id="d1SummaryGrid" class="hidden flex-1 flex gap-0 min-h-0">
+                        <!-- 회원 탭 패널 (Summary Grid) -->
+                        <div id="d1TabPanel-member" class="flex-1 flex flex-col min-h-0 p-3">
+                            <div id="d1SummaryGrid" class="flex-1 flex gap-2 min-h-0">
                                 <!-- 왼쪽: 회원 목록 -->
                                 <div id="d1SummaryLeft" class="flex-none flex flex-col overflow-hidden" style="width:70%">
                                     <div class="flex items-center justify-between mb-1.5">
-                                        <span class="text-[10px] text-purple-700 font-semibold">전체 회원 현황</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[10px] text-purple-700 font-semibold">전체 회원 현황</span>
+                                            <button type="button" id="d1AddMemberBtn" onclick="showAddMemberToD1Modal()"
+                                                class="bg-green-600 hover:bg-green-700 text-white font-semibold py-0.5 px-2 rounded text-[10px]">+ 회원추가</button>
+                                        </div>
                                         <div class="flex gap-1">
                                             <button type="button" onclick="selectAllSummaryRows()" class="text-[10px] px-1.5 py-0.5 bg-gray-100 hover:bg-gray-200 rounded text-gray-600">전체</button>
                                             <button type="button" onclick="deselectAllSummaryRows()" class="text-[10px] px-1.5 py-0.5 bg-gray-100 hover:bg-gray-200 rounded text-gray-600">해제</button>
@@ -2471,7 +2370,7 @@
                                     </div>
                                 </div>
                                 <!-- 드래그 핸들 -->
-                                <div id="d1SummaryDivider" class="w-1.5 cursor-col-resize bg-gray-200 hover:bg-purple-400 flex-none flex items-center justify-center transition-colors select-none mx-1 rounded">
+                                <div id="d1SummaryDivider" class="w-1.5 cursor-col-resize bg-gray-200 hover:bg-purple-400 flex-none flex items-center justify-center transition-colors select-none rounded mx-1">
                                     <div class="w-0.5 h-8 bg-gray-400 rounded-full"></div>
                                 </div>
                                 <!-- 오른쪽: 선택 회원 상세 -->
@@ -2480,11 +2379,60 @@
                                         <div class="text-gray-400 text-xs text-center py-4">회원을 선택하세요</div>
                                     </div>
                                 </div>
-                            </div><!-- /d1SummaryGrid -->
+                            </div>
+                        </div>
+
+                        <!-- 물건 탭 패널 (Cards + Items) -->
+                        <div id="d1TabPanel-item" class="hidden flex-1 flex flex-col min-h-0 p-3">
+                            <!-- 회차 카드 영역 -->
+                            <div id="d1ItemTabCardArea" class="flex-none flex flex-col overflow-hidden bg-gray-50 border border-gray-200 rounded-lg p-2" style="height:150px">
+                                <div class="text-[11px] font-bold text-gray-600 mb-1 flex-none">회차 선택</div>
+                                <div id="classD1Grid" class="flex-1 flex flex-wrap gap-2 overflow-y-auto p-1 bg-white rounded border border-gray-100">
+                                    <div class="text-gray-400 py-2 text-xs text-center w-full">수업을 선택하세요</div>
+                                </div>
+                            </div>
+
+                            <!-- 물건 탭 가로 구분선 (물건 리스트 높이 조절) -->
+                            <div id="d1ItemTabDivider"
+                                class="h-1.5 cursor-row-resize bg-gray-100 hover:bg-indigo-400 transition-colors flex items-center justify-center select-none flex-none my-1"
+                                title="드래그로 물건 리스트 높이 조절">
+                                <div class="w-8 h-0.5 bg-gray-300 rounded-full"></div>
+                            </div>
+
+                            <!-- 물건 등록/리스트 -->
+                            <div id="d1ItemCard" class="flex-1 bg-white border border-gray-200 rounded-lg p-3 overflow-hidden flex flex-col min-h-[150px]">
+                                <div class="flex justify-between items-center mb-2 flex-none">
+                                    <h3 class="text-xs font-semibold text-gray-800">물건 등록 <span id="d1ItemSectionInfo"
+                                            class="text-[10px] text-indigo-500 font-normal"></span></h3>
+                                    <button type="button" onclick="showD1ItemRegisterPanel()"
+                                        class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+
+                                        추가</button>
+                                </div>
+                                <!-- 물건 등록 패널 -->
+                                <div id="d1ItemRegisterPanel" class="mb-2 p-2 bg-indigo-50 rounded-lg border border-indigo-200 content-hidden flex-none">
+                                    <div class="relative mb-1.5">
+                                        <input type="text" id="d1-item-search" placeholder="사건번호 검색"
+                                            oninput="searchD1Items()"
+                                            class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs">
+                                        <div id="d1-item-dropdown"
+                                            class="absolute z-60 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-40 overflow-y-auto hidden">
+                                        </div>
+                                    </div>
+                                    <div id="d1-item-pending-list" class="mb-1.5 space-y-1 max-h-28 overflow-y-auto"></div>
+                                    <button type="button" onclick="registerD1Items()"
+                                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-1 rounded-lg">일괄 등록</button>
+                                </div>
+                                <!-- 등록된 물건 리스트 -->
+                                <div id="d1-item-list" class="flex-1 overflow-y-auto">
+                                    <div class="text-gray-400 py-2 text-xs text-center">회차를 선택하세요</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+
 
             <!-- 수업 생성 / 회차생성 모달 -->
             <div id="generateD1Modal" class="modal content-hidden" onclick="closeGenerateD1Modal(event)">
