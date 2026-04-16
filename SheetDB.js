@@ -2470,8 +2470,15 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터 없음' };
 
+  // items 시트 컬럼 수 확인 및 확장 (chuchen_state ~ bid_datetime_2 열 자동 추가)
+  var maxCols = sheet.getMaxColumns();
+  if (maxCols < ITEM_HEADERS.length) {
+    sheet.insertColumnsAfter(maxCols, ITEM_HEADERS.length - maxCols);
+    sheet.getRange(1, 1, 1, ITEM_HEADERS.length).setValues([ITEM_HEADERS]);
+    SpreadsheetApp.flush();
+  }
+
   // 회차 정보에서 bid_datetime_2 조회
-  var d1List = readClassD1ByClassId_ ? null : null;
   var d1Sheet = ensureClassD1Sheet_();
   var d1LastRow = d1Sheet.getLastRow();
   var bidDatetime2Val = '';
