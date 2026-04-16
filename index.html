@@ -2260,14 +2260,14 @@
                             class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
                     </div>
                     <!-- 수업 상세 조회 항목 -->
-                    <div class="p-3 bg-gray-50 border-b flex-none">
+                    <div class="px-3 py-1.5 bg-gray-50 border-b flex-none">
                         <div class="flex flex-wrap gap-2">
                             <select id="csd-search-grade" onchange="filterClassScheduleList()"
-                                class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                <option value="">수업등급</option>
+                                class="flex-1 min-w-[70px] px-2 py-1 border border-gray-300 rounded-lg text-[11px] bg-white">
+                                <option value="">등급</option>
                             </select>
                             <select id="csd-search-loc" onchange="filterClassScheduleList()"
-                                class="flex-1 min-w-[60px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                class="flex-1 min-w-[55px] px-2 py-1 border border-gray-300 rounded-lg text-[11px] bg-white">
                                 <option value="">지역</option>
                             </select>
                         </div>
@@ -2278,7 +2278,6 @@
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50 sticky top-0 z-10">
                                 <tr>
-                                    <th class="px-2 py-2 text-center w-7"><input type="checkbox" id="csd-list-check-all" onchange="toggleAllClassChecks(this.checked)" class="rounded cursor-pointer"></th>
                                     <th onclick="sortClassScheduleList('class_type')" data-csd-sort="class_type" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">구분 <span class="csd-sort-arrow"></span></th>
                                     <th onclick="sortClassScheduleList('class_name')" data-csd-sort="class_name" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">종목명 <span class="csd-sort-arrow"></span></th>
                                     <th onclick="sortClassScheduleList('class_grade')" data-csd-sort="class_grade" class="px-2 py-2 text-center text-xs font-bold text-gray-700 cursor-pointer select-none hover:bg-gray-100">등급 <span class="csd-sort-arrow"></span></th>
@@ -2300,10 +2299,34 @@
                         <div class="w-8 h-0.5 bg-gray-300 rounded-full"></div>
                     </div>
 
-                    <!-- 수업 리스트 영역 -->
+                    <!-- 수업리스트 영역 -->
                     <div id="d1BatchArea" class="flex-none flex flex-col overflow-hidden bg-white" style="height:350px">
-                         <div class="px-3 py-1 bg-gray-50 border-b text-[11px] font-bold text-gray-600">수업리스트 (배치)</div>
-                         <div id="d1BatchListGrid" class="flex-1 overflow-y-auto text-xs"></div>
+                        <div class="px-3 py-1.5 bg-gray-50 border-b flex justify-between items-center flex-none">
+                            <h3 class="text-sm font-bold text-gray-700">수업리스트</h3>
+                            <div class="flex items-center gap-1">
+                                <button type="button" id="d1EditBtn" onclick="showEditD1BatchModal()"
+                                    class="py-0.5 px-2 rounded-lg text-[10px] font-semibold bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-500">수정</button>
+                                <button type="button" id="d1DeleteBtn" onclick="deleteCurrentD1Batch()"
+                                    class="py-0.5 px-2 rounded-lg text-[10px] font-semibold bg-red-100 hover:bg-red-200 text-red-700 border border-red-400">삭제</button>
+                                <button type="button" onclick="showGenerateD1Modal()"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-0.5 px-2 rounded-lg text-[10px]">+ 수업생성</button>
+                            </div>
+                        </div>
+                        <div id="d1BatchListGrid" class="flex-1 overflow-y-auto text-xs">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">순번</th>
+                                        <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">총회차</th>
+                                        <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">기간</th>
+                                        <th class="px-2 py-2 text-center text-xs font-bold text-gray-700">강사</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="classD1BatchListTableBody" class="bg-white divide-y divide-gray-100">
+                                    <tr><td colspan="4" class="p-4 text-center text-gray-400">수업을 선택하세요.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -2314,36 +2337,13 @@
                     <div class="w-0.5 h-8 bg-gray-400 rounded-full"></div>
                 </div>
 
-                <!-- 우측: 메인 상세 영역 -->
-                <div id="classScheduleDetailPane"
-                    class="flex-1 p-3 bg-gray-100 overflow-hidden mobile-hidden flex flex-col gap-2">
-                    <!-- 상단: 선택된 수업 정보 -->
-                    <div class="bg-white rounded-xl shadow-lg flex-none flex flex-col overflow-hidden w-full">
-                        <div class="px-3 py-2 border-b border-gray-100 flex justify-between items-center flex-none">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <h3 class="text-sm font-semibold text-gray-800 flex-none">수업정보</h3>
-                                <span id="d1SelectedClassInfo"
-                                    class="hidden text-xs text-indigo-600 font-medium truncate"></span>
-                            </div>
-                            <div class="flex items-center gap-1">
-                                <button type="button" id="d1EditBtn" onclick="editSelectedD1()"
-                                    class="py-0.5 px-2 rounded-lg text-xs font-semibold bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-500">수정</button>
-                                <button type="button" id="d1DeleteBtn" onclick="deleteSelectedD1()"
-                                    class="py-0.5 px-2 rounded-lg text-xs font-semibold bg-red-100 hover:bg-red-200 text-red-700 border border-red-400">삭제</button>
-                                <button type="button" onclick="showGenerateD1Modal()"
-                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+
-                                    수업생성</button>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- 상세 탭 (회원 / 물건) -->
                     <div class="flex-1 bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-0">
-                        <div class="flex border-b border-gray-100 bg-gray-50 flex-none">
+                        <div class="flex p-2 bg-gray-50 border-b border-gray-100 flex-none gap-2">
                             <button onclick="switchD1DetailTab('member')" id="d1-tab-member"
-                                class="flex-1 py-2.5 text-sm font-bold border-r border-gray-100 transition-colors bg-indigo-600 text-white">회원</button>
+                                class="flex-1 py-1.5 text-sm font-semibold rounded-md border border-indigo-600 bg-indigo-600 text-white transition-colors">회원</button>
                             <button onclick="switchD1DetailTab('item')" id="d1-tab-item"
-                                class="flex-1 py-2.5 text-sm font-bold transition-colors bg-white text-gray-600 hover:bg-gray-100">물건</button>
+                                class="flex-1 py-1.5 text-sm font-semibold rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors">물건</button>
                         </div>
 
                         <!-- 회원 탭 패널 (Summary Grid) -->
@@ -2356,10 +2356,6 @@
                                             <span class="text-[10px] text-purple-700 font-semibold">전체 회원 현황</span>
                                             <button type="button" id="d1AddMemberBtn" onclick="showAddMemberToD1Modal()"
                                                 class="bg-green-600 hover:bg-green-700 text-white font-semibold py-0.5 px-2 rounded text-[10px]">+ 회원추가</button>
-                                        </div>
-                                        <div class="flex gap-1">
-                                            <button type="button" onclick="selectAllSummaryRows()" class="text-[10px] px-1.5 py-0.5 bg-gray-100 hover:bg-gray-200 rounded text-gray-600">전체</button>
-                                            <button type="button" onclick="deselectAllSummaryRows()" class="text-[10px] px-1.5 py-0.5 bg-gray-100 hover:bg-gray-200 rounded text-gray-600">해제</button>
                                         </div>
                                     </div>
                                     <div class="flex-1 overflow-auto border rounded-lg">
@@ -2429,7 +2425,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
             </div>
 
 
@@ -2437,7 +2432,7 @@
             <!-- 수업 생성 / 회차생성 모달 -->
             <div id="generateD1Modal" class="modal content-hidden" onclick="closeGenerateD1Modal(event)">
                 <div class="modal-content" onclick="event.stopPropagation()"
-                    style="max-width:1040px;max-height:92vh;overflow-y:auto">
+                    style="max-width:1200px;max-height:92vh;overflow-y:auto">
                     <div class="flex items-center justify-between mb-3">
                         <h3 id="generateD1ModalTitle" class="text-base font-bold text-gray-800">수업 생성</h3>
                         <button type="button" onclick="closeGenerateD1Modal()"

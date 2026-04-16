@@ -2937,9 +2937,9 @@
             missingBidTableFoot.innerHTML = '';
             const totalRow = document.createElement('tr');
             totalRow.className = `bg-blue-50 font-bold transition ${totalMissing > 0 ? 'cursor-pointer hover:bg-blue-100' : ''}`;
-            
+
             const countColor = totalMissing > 0 ? "text-red-600" : "text-blue-800";
-            
+
             totalRow.innerHTML = `
                 <td class="py-2 px-2 text-center w-8"></td>
                 <td class="py-2 px-3 text-left whitespace-nowrap">
@@ -2949,7 +2949,7 @@
                     <span class="${countColor}">${totalMissing}건</span>
                 </td>
             `;
-            
+
             if (totalMissing > 0) {
                 totalRow.onclick = () => filterFromDashboard(todayYYMMDD, 'total_missing', null, filterMember);
             }
@@ -2961,7 +2961,7 @@
     function initBidCardResize() {
         const STORAGE_KEY = 'bidCardColWidths';
         let widths = { top: 15, bot: 45 };
-        try { const s = localStorage.getItem(STORAGE_KEY); if (s) widths = { ...widths, ...JSON.parse(s) }; } catch(e) {}
+        try { const s = localStorage.getItem(STORAGE_KEY); if (s) widths = { ...widths, ...JSON.parse(s) }; } catch (e) { }
 
         function applyWidths() {
             let st = document.getElementById('bid-card-col-style');
@@ -3031,7 +3031,7 @@
         // ② 컬럼 너비 — 수직 경계 드래그
         document.querySelectorAll('.dash-col-resizer').forEach(handle => {
             handle.addEventListener('mousedown', e => {
-                const leftEl  = document.getElementById(handle.dataset.left);
+                const leftEl = document.getElementById(handle.dataset.left);
                 const rightEl = document.getElementById(handle.dataset.right);
                 if (!leftEl || !rightEl) return;
                 const startX = e.clientX, startLW = leftEl.offsetWidth, startRW = rightEl.offsetWidth;
@@ -3042,11 +3042,11 @@
                 const onMove = e2 => {
                     const dx = e2.clientX - startX;
                     const newLW = Math.max(120, startLW + dx);
-                    leftEl.style.flex  = `0 0 ${newLW}px`;
+                    leftEl.style.flex = `0 0 ${newLW}px`;
                     leftEl.style.width = newLW + 'px';
                     if (!isLastCol) {
                         const newRW = Math.max(120, startRW - dx);
-                        rightEl.style.flex  = `0 0 ${newRW}px`;
+                        rightEl.style.flex = `0 0 ${newRW}px`;
                         rightEl.style.width = newRW + 'px';
                     }
                 };
@@ -3068,8 +3068,8 @@
         document.querySelectorAll('#statusTable .th-resize-handle').forEach(handle => {
             handle.addEventListener('mousedown', e => {
                 const colIdx = parseInt(handle.dataset.col);
-                const cols   = document.querySelectorAll('#statusTableColgroup col');
-                const table  = document.getElementById('statusTable');
+                const cols = document.querySelectorAll('#statusTableColgroup col');
+                const table = document.getElementById('statusTable');
                 if (!cols[colIdx] || !table) return;
                 const tableW = table.offsetWidth;
                 const startX = e.clientX;
@@ -3105,7 +3105,7 @@
                 const cols = document.querySelectorAll('#statusTableColgroup col');
                 widths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w; });
             }
-        } catch(e) {}
+        } catch (e) { }
     }
 
     function _saveDashLayout() {
@@ -3138,7 +3138,7 @@
                     if (el) el.style.height = layout[id + '_h'] + 'px';
                 }
             });
-        } catch(e) {}
+        } catch (e) { }
     }
     // ─────────────────────────────────────────────────────────────
 
@@ -5300,7 +5300,7 @@ MJ 이정우 팀장
         if (!content || !data) return content || '';
         let s = content;
         let dateStr = String(data['in-date'] || '').trim();
-        if (dateStr.length === 6) dateStr = `20${dateStr.slice(0,2)}년 ${dateStr.slice(2,4)}월 ${dateStr.slice(4,6)}일`;
+        if (dateStr.length === 6) dateStr = `20${dateStr.slice(0, 2)}년 ${dateStr.slice(2, 4)}월 ${dateStr.slice(4, 6)}일`;
         let price = (data.bidprice == 0 || data.bidprice === '0') ? '0' : new Intl.NumberFormat('ko-KR').format(data.bidprice);
         s = s.replace(/\{\{이름\}\}/g, data.m_name || '');
         s = s.replace(/\{\{입찰일자\}\}/g, dateStr);
@@ -5548,12 +5548,12 @@ MJ 이정우 팀장
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ target_name: kName, message: ta.value, auto_enter: _kakaoAutoEnter })
         })
-        .then(r => r.json())
-        .then(d => {
-            if (d.status === 'success') showStatus('카톡 전송 완료!', 'success');
-            else showStatus('카톡 전송 실패: ' + d.message, 'error');
-        })
-        .catch(() => showStatus('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.', 'error'));
+            .then(r => r.json())
+            .then(d => {
+                if (d.status === 'success') showStatus('카톡 전송 완료!', 'success');
+                else showStatus('카톡 전송 실패: ' + d.message, 'error');
+            })
+            .catch(() => showStatus('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.', 'error'));
     }
 
     // --- 카카오톡 채팅창 바로가기 ---
@@ -5572,12 +5572,12 @@ MJ 이정우 팀장
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ target_name: kName })
         })
-        .then(r => r.json())
-        .then(d => {
-            if (d.status === 'success') showStatus(`${kName} 채팅창 열기 완료`, 'success');
-            else showStatus('채팅창 열기 실패: ' + d.message, 'error');
-        })
-        .catch(() => showStatus('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.', 'error'));
+            .then(r => r.json())
+            .then(d => {
+                if (d.status === 'success') showStatus(`${kName} 채팅창 열기 완료`, 'success');
+                else showStatus('채팅창 열기 실패: ' + d.message, 'error');
+            })
+            .catch(() => showStatus('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.', 'error'));
     }
 
     // --- 카카오 환경설정 ---
@@ -11991,8 +11991,8 @@ ${token}
 
         const tabTypes = {
             'CLASS': ['CLASS'],
-            'PT':    ['PT', '프리미엄 PT'],
-            '돈클':  ['돈클']
+            'PT': ['PT', '프리미엄 PT'],
+            '돈클': ['돈클']
         };
         const allowedTypes = tabTypes[currentClassScheduleTab] || [];
 
@@ -12017,115 +12017,66 @@ ${token}
         const tbody = document.getElementById('classScheduleListTableBody');
         if (!tbody) return;
         if (classes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">수업이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500 text-xs">수업이 없습니다.</td></tr>';
             return;
         }
-        tbody.innerHTML = classes.map(c => {
-            const isChecked = checkedClassIds.has(String(c.class_id));
-            const rowCls = isChecked
+
+        let html = '';
+        for (let i = 0; i < classes.length; i++) {
+            const c = classes[i];
+            const isSelected = String(c.class_id) === String(selectedClassId);
+            const rowCls = isSelected
                 ? 'bg-indigo-100 border-l-4 border-indigo-500'
                 : 'hover:bg-indigo-50 border-l-4 border-transparent';
-            return `<tr class="cursor-pointer ${rowCls} transition-colors" onclick="toggleClassCheck('${c.class_id}')">
-                <td class="px-2 py-2 text-center w-7" onclick="event.stopPropagation()">
-                    <input type="checkbox" class="csd-list-cb rounded cursor-pointer" value="${c.class_id}"
-                        ${isChecked ? 'checked' : ''} onchange="onClassCheckChange(this)">
-                </td>
-                <td class="px-2 py-2 text-center text-xs ${isChecked ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_type)}</td>
-                <td class="px-2 py-2 text-center text-xs ${isChecked ? 'font-bold text-indigo-900' : 'font-medium'}">${escapeHtml(c.class_name)}</td>
-                <td class="px-2 py-2 text-center text-xs ${isChecked ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_grade)}</td>
-                <td class="px-2 py-2 text-center text-xs ${isChecked ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_loc)}</td>
+            const txtCls = isSelected ? 'font-semibold text-indigo-900' : 'text-gray-700';
+
+            html += `<tr class="cursor-pointer ${rowCls} transition-colors" onclick="selectClassForSchedule('${c.class_id}')">
+                <td class="px-2 py-1.5 text-center text-xs ${txtCls}">${escapeHtml(c.class_type)}</td>
+                <td class="px-2 py-1.5 text-center text-xs ${txtCls}">${escapeHtml(c.class_name)}</td>
+                <td class="px-2 py-1.5 text-center text-xs ${txtCls}">${escapeHtml(c.class_grade)}</td>
+                <td class="px-2 py-1.5 text-center text-xs ${txtCls}">${escapeHtml(c.class_loc)}</td>
             </tr>`;
-        }).join('');
+        }
+        tbody.innerHTML = html;
     }
 
     // ─── 수업 리스트 다중 체크 ────────────────────────────────────────
 
-    function toggleClassCheck(classId) {
-        const id = String(classId);
-        if (checkedClassIds.has(id)) checkedClassIds.delete(id);
-        else checkedClassIds.add(id);
-        _syncClassHeaderCheckbox();
-        loadCheckedClassesSessions();
-        filterClassScheduleList(); // 행 하이라이트 갱신
-    }
+    function selectClassForSchedule(classId) {
+        if (!classId) return;
+        selectedClassId = String(classId);
+        selectedClassD1Id = null;
 
-    function onClassCheckChange(cb) {
-        if (cb.checked) checkedClassIds.add(String(cb.value));
-        else checkedClassIds.delete(String(cb.value));
-        _syncClassHeaderCheckbox();
-        loadCheckedClassesSessions();
+        // UI 즉시 반영 (사이드바 리스트 하이라이트)
         filterClassScheduleList();
-    }
 
-    function toggleAllClassChecks(checked) {
-        document.querySelectorAll('.csd-list-cb').forEach(cb => {
-            cb.checked = checked;
-            if (checked) checkedClassIds.add(String(cb.value));
-            else checkedClassIds.delete(String(cb.value));
-        });
-        loadCheckedClassesSessions();
-        filterClassScheduleList();
-    }
-
-    function _syncClassHeaderCheckbox() {
-        const all = document.querySelectorAll('.csd-list-cb');
-        const checked = document.querySelectorAll('.csd-list-cb:checked').length;
-        const hdr = document.getElementById('csd-list-check-all');
-        if (!hdr) return;
-        hdr.checked = all.length > 0 && checked === all.length;
-        hdr.indeterminate = checked > 0 && checked < all.length;
-    }
-
-    function loadCheckedClassesSessions() {
-        checkedBatchIndices = new Set();
-        if (checkedClassIds.size === 0) {
-            selectedClassId = null;
-            allClassD1Data = [];
-            buildD1Batches_();
-            renderClassD1Grid();
-            return;
-        }
-        // 첫 번째 체크된 종목을 selectedClassId로 설정 (수업생성 등에서 사용)
-        selectedClassId = [...checkedClassIds][0];
         const grid = document.getElementById('classD1Grid');
         if (grid) grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
-        const classIds = [...checkedClassIds];
-        let done = 0;
-        let merged = [];
-        classIds.forEach(classId => {
-            google.script.run
-                .withSuccessHandler(data => {
-                    merged = merged.concat(Array.isArray(data) ? data : []);
-                    done++;
-                    if (done === classIds.length) _onCheckedSessionsLoaded(merged);
-                })
-                .withFailureHandler(() => {
-                    done++;
-                    if (done === classIds.length) _onCheckedSessionsLoaded(merged);
-                })
-                .readClassD1ByClassId(classId);
-        });
-        // 우측 헤더 정보: 첫 번째 체크된 수업 표시
-        const firstId = classIds[0];
-        const cls = allClassesData.find(c => String(c.class_id) === String(firstId));
+
+        // 우측 헤더 정보 표시
+        const cls = allClassesData.find(c => String(c.class_id) === String(classId));
         const infoEl = document.getElementById('d1SelectedClassInfo');
         if (infoEl && cls) {
             const label = [cls.class_type, cls.class_name, cls.class_grade ? `[${cls.class_grade}]` : '', cls.class_loc ? `(${cls.class_loc})` : ''].filter(Boolean).join(' ');
-            infoEl.textContent = checkedClassIds.size > 1 ? label + ` 외 ${checkedClassIds.size - 1}개` : label;
+            infoEl.textContent = label;
             infoEl.classList.remove('hidden');
         }
-    }
 
-    function _onCheckedSessionsLoaded(merged) {
-        allClassD1Data = merged;
-        allClassD1Data.forEach(d => {
-            if (d.class_d1_id) allD1DatetimeMap[String(d.class_d1_id)] = { bid_datetime_1: d.bid_datetime_1 || '', bid_datetime_2: d.bid_datetime_2 || '' };
-        });
-        buildD1Batches_();
-        renderClassD1Grid();
-        
-        // 데이터 로드 완료 후 기본적으로 회원 탭(전체현황) 표시
-        switchD1DetailTab('member');
+        google.script.run
+            .withSuccessHandler(data => {
+                allClassD1Data = Array.isArray(data) ? data : [];
+                allClassD1Data.forEach(d => {
+                    if (d.class_d1_id) allD1DatetimeMap[String(d.class_d1_id)] = { bid_datetime_1: d.bid_datetime_1 || '', bid_datetime_2: d.bid_datetime_2 || '' };
+                });
+                buildD1Batches_();
+                d1BatchIdx = 0; // 최신 배치 선택
+                renderClassD1Grid();
+                switchD1DetailTab('member');
+            })
+            .withFailureHandler(err => {
+                showStatus('수업 데이터 로드 실패: ' + err.message, 'error');
+            })
+            .readClassD1ByClassId(classId);
     }
 
     // ─── 상세 탭 전환 ───────────────────────────────────────────
@@ -12144,97 +12095,74 @@ ${token}
                 panel?.classList.add('hidden');
             }
         });
-        
+
         // 탭 전환 시 필요한 데이터 로드
         if (tabName === 'member') {
             loadD1SummaryGrid(selectedClassId);
+        } else if (tabName === 'item') {
+            loadD1Items(selectedClassD1Id);
         }
+    }
+
+    function buildD1Batches_() {
+        d1Batches = [];
+        if (allClassD1Data.length === 0) return;
+
+        let currentBatch = [];
+        let currentKey = '';
+
+        allClassD1Data.forEach(d => {
+            if (d.batch_timestamp !== currentKey) {
+                if (currentBatch.length > 0) d1Batches.push(currentBatch);
+                currentBatch = [d];
+                currentKey = d.batch_timestamp;
+            } else {
+                currentBatch.push(d);
+            }
+        });
+        if (currentBatch.length > 0) d1Batches.push(currentBatch);
+
+        // 정렬 (최신순)
+        d1Batches.reverse();
+    }
+
+    function renderD1BatchListGrid_() {
+        const tbody = document.getElementById('classD1BatchListTableBody');
+        if (!tbody) return;
+        if (d1Batches.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500 text-xs">수업이 없습니다.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        for (let i = 0; i < d1Batches.length; i++) {
+            const b = d1Batches[i];
+            const isSelected = i === d1BatchIdx;
+            const rowCls = isSelected ? 'bg-indigo-50 border-l-4 border-indigo-400' : 'hover:bg-gray-50 border-l-4 border-transparent';
+
+            html += `<tr class="${rowCls} cursor-pointer" onclick="selectD1Batch(${i})">
+                <td class="px-2 py-1.5 text-center text-[11px] font-medium text-gray-900">${i + 1}</td>
+                <td class="px-2 py-1.5 text-center text-[11px] text-gray-600">${b.length}회</td>
+                <td class="px-2 py-1.5 text-center text-[10px] text-gray-500">${b[0].class_date} ~ ${b[b.length - 1].class_date}</td>
+                <td class="px-2 py-1.5 text-center text-[11px] text-indigo-600 font-semibold">${escapeHtml(b[0].teacher_name || '-')}</td>
+            </tr>`;
+        }
+        tbody.innerHTML = html;
     }
 
     // ─── 수업정보 리스트 다중 체크 ───────────────────────────────────
 
-    function toggleBatchCheck(idx) {
-        if (checkedBatchIndices.has(idx)) checkedBatchIndices.delete(idx);
-        else checkedBatchIndices.add(idx);
+    function selectD1Batch(idx) {
         d1BatchIdx = idx;
-        _syncBatchHeaderCheckbox();
         renderD1BatchListGrid_();
-        _updateCheckedBatchView();
-        
-        // 수업리스트 선택 시 회원 탭으로 전환 및 갱신
+        renderClassD1Grid();
+
+        // 배치 선택 시 회원 탭으로 전환 및 갱신 (선택사항: 유지하고 싶으면 제거)
         switchD1DetailTab('member');
     }
 
-    function onBatchCheckChange(cb) {
-        const idx = parseInt(cb.value);
-        if (cb.checked) checkedBatchIndices.add(idx);
-        else checkedBatchIndices.delete(idx);
-        d1BatchIdx = idx;
-        _syncBatchHeaderCheckbox();
-        _updateCheckedBatchView();
-    }
+    // _updateCheckedBatchView and _renderMultiD1Members removed (legacy)
 
-    function toggleAllBatchChecks(checked) {
-        document.querySelectorAll('.batch-list-cb').forEach(cb => {
-            cb.checked = checked;
-            const idx = parseInt(cb.value);
-            if (checked) checkedBatchIndices.add(idx);
-            else checkedBatchIndices.delete(idx);
-        });
-        _updateCheckedBatchView();
-    }
-
-    function _syncBatchHeaderCheckbox() {
-        const all = document.querySelectorAll('.batch-list-cb');
-        const checked = document.querySelectorAll('.batch-list-cb:checked').length;
-        const hdr = document.getElementById('batch-list-check-all');
-        if (!hdr) return;
-        hdr.checked = all.length > 0 && checked === all.length;
-        hdr.indeterminate = checked > 0 && checked < all.length;
-    }
-
-    function _updateCheckedBatchView() {
-        renderClassD1Grid(); // 회차 카드 갱신 (체크 배치 합산)
-        if (checkedBatchIndices.size === 0) return;
-        // 체크된 모든 배치의 class_d1_ids 수집
-        const allD1Ids = [];
-        checkedBatchIndices.forEach(idx => {
-            const b = d1Batches[idx];
-            if (b) b.items.forEach(d => allD1Ids.push(d.class_d1_id));
-        });
-        if (allD1Ids.length === 0) return;
-        // 물건 카드
-        const itemEl = document.getElementById('d1-item-list');
-        if (itemEl) itemEl.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
-        google.script.run
-            .withSuccessHandler(data => { d1ItemsData = Array.isArray(data) ? data : []; renderD1Items(); })
-            .withFailureHandler(() => {})
-            .readItemsByMultipleD1Ids(allD1Ids);
-        // 회원 카드
-        const tbody = document.getElementById('classD1MemberTableBody');
-        if (tbody) tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-400 text-xs">불러오는 중...</td></tr>';
-        google.script.run
-            .withSuccessHandler(data => _renderMultiD1Members(Array.isArray(data) ? data : []))
-            .withFailureHandler(() => {})
-            .readMembersForMultipleD1s(allD1Ids);
-    }
-
-    function _renderMultiD1Members(members) {
-        const tbody = document.getElementById('classD1MemberTableBody');
-        if (!tbody) return;
-        if (members.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-500 text-xs">회원이 없습니다.</td></tr>';
-            return;
-        }
-        const memberInfoEl = document.getElementById('d1MemberSectionInfo');
-        if (memberInfoEl) memberInfoEl.textContent = `(${members.length}명)`;
-        tbody.innerHTML = members.map(m =>
-            `<tr class="hover:bg-gray-50">
-                <td class="px-2 py-1.5 text-xs text-gray-700">${escapeHtml(m.member_name || '-')}</td>
-                <td class="px-2 py-1.5 text-xs text-center text-gray-400">-</td>
-            </tr>`
-        ).join('');
-    }
 
     function selectClassForSchedule(classId) {
         selectedClassId = classId;
@@ -12280,7 +12208,7 @@ ${token}
                 });
                 buildD1Batches_();
                 renderClassD1Grid();
-                
+
                 // 데이터 로드 완료 시 회원 탭 표시
                 switchD1DetailTab('member');
             })
@@ -12314,69 +12242,6 @@ ${token}
         renderClassD1Grid();
     }
 
-    function renderD1BatchListGrid_() {
-        const el = document.getElementById('d1BatchListGrid');
-        if (!el) return;
-        if (d1Batches.length === 0) { el.innerHTML = ''; return; }
-
-        function fd(d) {
-            const s = String(d || '').replace(/-/g, '');
-            return s.length >= 8 ? s.substring(4, 6) + '/' + s.substring(6, 8) : (d || '-');
-        }
-
-        const rows = d1Batches.map((b, i) => {
-            const items = (b.items || []).slice().sort((a, c) => String(a.class_date).localeCompare(String(c.class_date)));
-            const total = items.length;
-            const firstRaw = total > 0 ? String(items[0].class_date || '').replace(/-/g, '') : '';
-            const lastRaw = total > 0 ? String(items[total - 1].class_date || '').replace(/-/g, '') : '';
-            const firstFull = firstRaw.length >= 8 ? firstRaw.substring(2, 4) + '/' + firstRaw.substring(4, 6) + '/' + firstRaw.substring(6, 8) : '-';
-            const lastFull = lastRaw.length >= 8 ? lastRaw.substring(2, 4) + '/' + lastRaw.substring(4, 6) + '/' + lastRaw.substring(6, 8) : firstFull;
-            const isSel = i === d1BatchIdx;
-            const rowCls = isSel
-                ? 'bg-indigo-100 border-l-4 border-indigo-500 cursor-pointer'
-                : 'border-l-4 border-transparent hover:bg-indigo-50 cursor-pointer';
-            const txtCls = isSel ? 'font-bold text-indigo-800' : 'text-gray-700';
-            const periodHtml = firstFull === lastFull
-                ? `<span class="whitespace-nowrap">${firstFull}</span>`
-                : `<span class="whitespace-nowrap">${firstFull}</span><br><span class="whitespace-nowrap">~${lastFull}</span>`;
-            // 강사: 배치 첫 번째 회차의 teacher_id로 이름 조회
-            const firstTeacherId = total > 0 ? (items[0].teacher_id || '') : '';
-            const teacherMember = firstTeacherId
-                ? allMembersNewData.find(m => String(m.member_id) === String(firstTeacherId))
-                : null;
-            const teacherName = teacherMember ? teacherMember.member_name : firstTeacherId;
-            const isBatchChecked = checkedBatchIndices.has(i);
-            return `<tr class="${rowCls} transition-colors" onclick="toggleBatchCheck(${i})">
-                <td class="px-2 py-1.5 text-center w-6" onclick="event.stopPropagation()">
-                    <input type="checkbox" class="batch-list-cb rounded cursor-pointer" value="${i}"
-                        ${isBatchChecked ? 'checked' : ''} onchange="onBatchCheckChange(this)">
-                </td>
-                <td class="px-2 py-1.5 text-center ${txtCls}">${i + 1}</td>
-                <td class="px-2 py-1.5 text-center ${txtCls}">${total}회</td>
-                <td class="px-2 py-1.5 text-center leading-tight ${txtCls}">${periodHtml}</td>
-                <td class="px-2 py-1.5 text-center ${txtCls}">${escapeHtml(teacherName)}</td>
-            </tr>`;
-        }).join('');
-
-        el.innerHTML = `<div class="flex gap-1 px-2 py-1.5 border-b border-gray-100 bg-gray-50">
-            <button type="button" onclick="showEditD1BatchModal()"
-                class="flex-1 py-1 text-xs font-semibold rounded-md bg-yellow-100 hover:bg-yellow-200 text-yellow-700 border border-yellow-400">수정</button>
-            <button type="button" onclick="deleteCurrentD1Batch()"
-                class="flex-1 py-1 text-xs font-semibold rounded-md bg-red-100 hover:bg-red-200 text-red-700 border border-red-400">삭제</button>
-        </div>
-        <table class="divide-y divide-gray-100 w-full">
-            <thead class="bg-gray-50 sticky top-0">
-                <tr>
-                    <th class="px-2 py-1.5 text-center w-6"><input type="checkbox" id="batch-list-check-all" onchange="toggleAllBatchChecks(this.checked)" class="rounded cursor-pointer"></th>
-                    <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">순번</th>
-                    <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">총회차</th>
-                    <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">기간</th>
-                    <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">강사</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">${rows}</tbody>
-        </table>`;
-    }
 
     function renderClassD1Grid() {
         renderD1BatchListGrid_();
@@ -12388,19 +12253,12 @@ ${token}
             return;
         }
 
-        let items;
-        if (checkedBatchIndices.size > 0) {
-            items = [];
-            checkedBatchIndices.forEach(idx => {
-                const b = d1Batches[idx];
-                if (b) items = items.concat(b.items);
-            });
-            items.sort((a, b) => String(a.class_date).localeCompare(String(b.class_date)));
-        } else {
-            const batch = d1Batches[d1BatchIdx];
-            if (!batch) return;
-            items = batch.items;
+        const batch = d1Batches[d1BatchIdx];
+        if (!batch) {
+            grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">배치를 선택해 주세요.</div>';
+            return;
         }
+        const items = batch.items;
 
         // 오늘 기준 배치별 가장 가까운 미래 회차 찾기 (배치마다 독립 하이라이트)
         const todayStr = (() => {
@@ -12447,7 +12305,7 @@ ${token}
         }
 
         // 전체요약 카드 제거 (탭 시스템으로 이관됨)
-            
+
         const addCardHtml = `<div class="flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 border-dashed border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50 transition-all flex flex-col items-center justify-center" style="width:88px" onclick="showGenerateD1Modal('add')" title="회차 추가">
             <div class="text-2xl text-gray-400 leading-none">+</div>
             <div class="text-[10px] text-gray-400 mt-1">회차 추가</div>
@@ -12547,11 +12405,11 @@ ${token}
         }
         const itemInfo = document.getElementById('d1ItemSectionInfo');
         if (itemInfo) itemInfo.textContent = sectionInfo;
-        
+
         // 등록 패널 닫기
         document.getElementById('d1ItemRegisterPanel')?.classList.add('content-hidden');
         d1PendingItems = [];
-        
+
         // 물건 탭 내의 리스트 로드 (회원 정보 섹션은 제거됨)
         loadD1Items(classD1Id);
     }
@@ -12581,11 +12439,11 @@ ${token}
         if (detail) detail.innerHTML = '<div class="text-gray-400 text-xs text-center py-4">회원을 선택하세요</div>';
         selectedSummaryMemberId_ = null;
         google.script.run
-            .withSuccessHandler(function(data) {
+            .withSuccessHandler(function (data) {
                 summaryMemberData_ = data || [];
                 renderD1SummaryGrid(summaryMemberData_);
             })
-            .withFailureHandler(function() {
+            .withFailureHandler(function () {
                 if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-red-500 text-xs">로드 실패</td></tr>';
             })
             .readMemberClassDetailsByClassId(classId);
@@ -12597,71 +12455,71 @@ ${token}
         if (!thead || !tbody) return;
 
         const d1List = (allClassD1Data || [])
-            .filter(function(d) { return String(d.class_id) === String(selectedClassId); })
-            .slice().sort(function(a, b) { return Number(a.class_loop) - Number(b.class_loop); });
+            .filter(function (d) { return String(d.class_id) === String(selectedClassId); })
+            .slice().sort(function (a, b) { return Number(a.class_loop) - Number(b.class_loop); });
         const N = d1List.length;
-        const totalCols = 4 + N;
+        const totalCols = 3 + N;
 
-        // 수업 총 회차 (class 시트 class_loop)
-        const classInfo = (allClassesData || []).find(function(c) { return String(c.class_id) === String(selectedClassId); });
+        const classInfo = (allClassesData || []).find(function (c) { return String(c.class_id) === String(selectedClassId); });
         const totalLoop = classInfo ? (Number(classInfo.class_loop) || N) : N;
 
-        const dayNames_ = ['일','월','화','수','목','금','토'];
-        const sessionColHeaders = d1List.map(function(d, idx) {
+        const dayNames_ = ['일', '월', '화', '수', '목', '금', '토'];
+        let sessionColHeaders = '';
+        for (let i = 0; i < d1List.length; i++) {
+            const d = d1List[i];
             const raw = String(d.class_date || '').replace(/-/g, '');
             let dateDisp = '', dayDisp = '';
             if (raw.length >= 8) {
-                dateDisp = raw.substring(4,6)+'/'+raw.substring(6,8);
-                const dt = new Date(raw.substring(0,4)+'-'+raw.substring(4,6)+'-'+raw.substring(6,8));
-                if (!isNaN(dt)) dayDisp = '('+dayNames_[dt.getDay()]+')';
+                dateDisp = raw.substring(4, 6) + '/' + raw.substring(6, 8);
+                const dt = new Date(raw.substring(0, 4) + '-' + raw.substring(4, 6) + '-' + raw.substring(6, 8));
+                if (!isNaN(dt)) dayDisp = '(' + dayNames_[dt.getDay()] + ')';
             }
-            const isActive = summarySortKey_ === 'no_'+(idx+1);
-            return `<th class="px-1 py-1 text-center border-l border-gray-200 cursor-pointer ${isActive?'bg-blue-200':'hover:bg-blue-100'}" style="min-width:50px" onclick="sortSummaryBySession_(${idx+1})">
+            const isActive = summarySortKey_ === 'no_' + (i + 1);
+            sessionColHeaders += `<th class="px-1 py-1 text-center border-l border-gray-200 cursor-pointer ${isActive ? 'bg-blue-200' : 'hover:bg-blue-100'}" style="min-width:50px" onclick="sortSummaryBySession_(${i + 1})">
                 <div class="text-[11px] font-bold text-blue-600">${d.class_loop}회</div>
                 <div class="text-[9px] font-semibold text-blue-500 whitespace-nowrap">${dateDisp} ${dayDisp}</div>
             </th>`;
-        }).join('');
+        }
 
-        // 연도 변경 감지: 연도별 그룹 colspan 계산
         const yearGroups = [];
-        d1List.forEach(function(d) {
-            const raw = String(d.class_date || '').replace(/-/g, '');
+        for (let i = 0; i < d1List.length; i++) {
+            const raw = String(d1List[i].class_date || '').replace(/-/g, '');
             const yr = raw.length >= 4 ? raw.substring(0, 4) : '?';
-            if (yearGroups.length === 0 || yearGroups[yearGroups.length-1].year !== yr) {
+            if (yearGroups.length === 0 || yearGroups[yearGroups.length - 1].year !== yr) {
                 yearGroups.push({ year: yr, count: 1 });
             } else {
-                yearGroups[yearGroups.length-1].count++;
+                yearGroups[yearGroups.length - 1].count++;
             }
-        });
+        }
         const yearColors = ['text-blue-600', 'text-purple-600', 'text-teal-600', 'text-rose-600'];
-        const yearColHeaders = yearGroups.map(function(g, i) {
-            return `<th colspan="${g.count}" class="px-1 py-0.5 text-center text-[9px] font-bold bg-gray-100 ${yearColors[i % yearColors.length]} border-l border-gray-200">${g.year}년</th>`;
-        }).join('');
+        let yearColHeaders = '';
+        for (let i = 0; i < yearGroups.length; i++) {
+            const g = yearGroups[i];
+            yearColHeaders += `<th colspan="${g.count}" class="px-1 py-0.5 text-center text-[9px] font-bold bg-gray-100 ${yearColors[i % yearColors.length]} border-l border-gray-200">${g.year}년</th>`;
+        }
 
         thead.innerHTML = `
             <tr>
-                <th colspan="4" class="bg-white"></th>
+                <th colspan="3" class="bg-white"></th>
                 ${yearColHeaders}
             </tr>
             <tr class="bg-blue-50">
-                <th class="px-2 py-2 text-center w-6"><input type="checkbox" id="summaryCheckAll" onchange="toggleAllSummaryRows(this.checked)" class="w-3 h-3"></th>
                 <th class="px-2 py-2 text-left font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="min-width:60px" onclick="sortSummaryByName_()">이름 ↕</th>
                 <th class="px-2 py-2 text-left font-bold text-gray-600" style="min-width:80px">전화번호</th>
                 <th class="px-2 py-2 text-center font-bold text-gray-600" style="min-width:44px">상태</th>
                 ${sessionColHeaders}
             </tr>`;
 
-        // 정렬
         let sorted = members.slice();
         if (summarySortKey_ === 'name') {
-            sorted.sort(function(a,b){ return (a.member_name||'').localeCompare(b.member_name||''); });
+            sorted.sort(function (a, b) { return (a.member_name || '').localeCompare(b.member_name || ''); });
             if (!summarySortAsc_) sorted.reverse();
         } else if (summarySortKey_.startsWith('no_')) {
-            sorted.sort(function(a,b){
-                const aO = String(a[summarySortKey_]||'').trim().toUpperCase()==='O'?0:1;
-                const bO = String(b[summarySortKey_]||'').trim().toUpperCase()==='O'?0:1;
+            sorted.sort(function (a, b) {
+                const aO = String(a[summarySortKey_] || '').trim().toUpperCase() === 'O' ? 0 : 1;
+                const bO = String(b[summarySortKey_] || '').trim().toUpperCase() === 'O' ? 0 : 1;
                 if (aO !== bO) return aO - bO;
-                return (a.member_name||'').localeCompare(b.member_name||'');
+                return (a.member_name || '').localeCompare(b.member_name || '');
             });
         }
 
@@ -12670,21 +12528,21 @@ ${token}
             return;
         }
 
-        tbody.innerHTML = sorted.map(function(m) {
+        let bodyHtml = '';
+        for (let j = 0; j < sorted.length; j++) {
+            const m = sorted[j];
             const isSelected = String(m.member_id) === String(selectedSummaryMemberId_);
             const rowBg = isSelected ? 'bg-blue-50' : 'hover:bg-gray-50';
 
-            // 참여/잔여 계산
             let attended = 0;
             for (let i = 1; i <= N; i++) {
-                if (String(m['no_'+i]||'').trim().toUpperCase() === 'O') attended++;
+                if (String(m['no_' + i] || '').trim().toUpperCase() === 'O') attended++;
             }
             const remaining = Math.max(0, totalLoop - attended);
 
-            // 만료 회차 인덱스 (미참석 중 remaining번째)
             let expiryIdx = -1, remCount = remaining;
             for (let i = 0; i < N && remCount > 0; i++) {
-                if (String(m['no_'+(i+1)]||'').trim().toUpperCase() !== 'O') {
+                if (String(m['no_' + (i + 1)] || '').trim().toUpperCase() !== 'O') {
                     remCount--;
                     if (remCount === 0) expiryIdx = i;
                 }
@@ -12694,21 +12552,22 @@ ${token}
                 ? `<span class="px-1 py-0.5 rounded text-[10px] font-semibold ${statusColor_(m.member_status)}">${escapeHtml(m.member_status)}</span>`
                 : '<span class="text-gray-300">-</span>';
 
-            const sessionCells = d1List.map(function(d, idx) {
-                const val = String(m['no_'+(idx+1)]||'').trim().toUpperCase();
+            let sessionCells = '';
+            for (let i = 0; i < d1List.length; i++) {
+                const val = String(m['no_' + (i + 1)] || '').trim().toUpperCase();
                 const isO = val === 'O';
-                const cellBg = idx === expiryIdx ? 'bg-amber-100' : '';
-                return `<td class="px-1 py-1.5 text-center border-l border-gray-100 text-[11px] ${cellBg} ${isO?'text-blue-700 font-bold':'text-gray-300'}">${isO?'O':'·'}</td>`;
-            }).join('');
+                const cellBg = i === expiryIdx ? 'bg-amber-100' : '';
+                sessionCells += `<td class="px-1 py-1.5 text-center border-l border-gray-100 text-[11px] ${cellBg} ${isO ? 'text-blue-700 font-bold' : 'text-gray-300'}">${isO ? 'O' : '·'}</td>`;
+            }
 
-            return `<tr class="cursor-pointer ${rowBg} transition-colors" onclick="selectSummaryMember('${m.member_id}')" data-summary-row="${m.member_id}">
-                <td class="px-2 py-1.5 text-center" onclick="event.stopPropagation()"><input type="checkbox" class="summary-row-chk w-3 h-3" value="${m.member_id}"></td>
-                <td class="px-2 py-1.5 font-medium text-gray-800 text-xs">${escapeHtml(m.member_name||'-')}</td>
-                <td class="px-2 py-1.5 text-gray-500 text-[11px]">${escapeHtml(m.phone||'-')}</td>
+            bodyHtml += `<tr class="cursor-pointer ${rowBg} transition-colors" onclick="selectSummaryMember('${m.member_id}')" data-summary-row="${m.member_id}">
+                <td class="px-2 py-1.5 font-medium text-gray-800 text-xs">${escapeHtml(m.member_name || '-')}</td>
+                <td class="px-2 py-1.5 text-gray-500 text-[11px]">${escapeHtml(m.phone || '-')}</td>
                 <td class="px-2 py-1.5 text-center">${statusBadge}</td>
                 ${sessionCells}
             </tr>`;
-        }).join('');
+        }
+        tbody.innerHTML = bodyHtml;
     }
 
     function sortSummaryByName_() {
@@ -12733,30 +12592,30 @@ ${token}
 
     function selectSummaryMember(memberId) {
         selectedSummaryMemberId_ = memberId;
-        document.querySelectorAll('[data-summary-row]').forEach(function(tr) {
+        document.querySelectorAll('[data-summary-row]').forEach(function (tr) {
             const isSel = tr.dataset.summaryRow === String(memberId);
             tr.classList.toggle('bg-blue-50', isSel);
             tr.classList.toggle('hover:bg-gray-50', !isSel);
         });
-        const member = summaryMemberData_.find(function(m) { return String(m.member_id) === String(memberId); });
+        const member = summaryMemberData_.find(function (m) { return String(m.member_id) === String(memberId); });
         if (!member) return;
         renderSummaryMemberDetail(member);
     }
 
     function renderSummaryMemberDetail(m) {
         const d1List = (allClassD1Data || [])
-            .filter(function(d) { return String(d.class_id) === String(selectedClassId); })
-            .slice().sort(function(a,b){ return Number(a.class_loop)-Number(b.class_loop); });
+            .filter(function (d) { return String(d.class_id) === String(selectedClassId); })
+            .slice().sort(function (a, b) { return Number(a.class_loop) - Number(b.class_loop); });
         const N = d1List.length;
         const detail = document.getElementById('d1SummaryDetail');
         if (!detail) return;
 
-        const classInfo = (allClassesData||[]).find(function(c){ return String(c.class_id)===String(selectedClassId); });
-        const totalLoop = classInfo ? (Number(classInfo.class_loop)||N) : N;
+        const classInfo = (allClassesData || []).find(function (c) { return String(c.class_id) === String(selectedClassId); });
+        const totalLoop = classInfo ? (Number(classInfo.class_loop) || N) : N;
 
         let attended = 0;
         for (let i = 1; i <= N; i++) {
-            if (String(m['no_'+i]||'').trim().toUpperCase() === 'O') attended++;
+            if (String(m['no_' + i] || '').trim().toUpperCase() === 'O') attended++;
         }
         const remaining = Math.max(0, totalLoop - attended);
         let remBg = 'bg-green-100 text-green-700';
@@ -12767,7 +12626,7 @@ ${token}
         let expiryStr = '';
         let remCount = remaining, expiryLoop = null;
         for (let i = 0; i < N && remCount > 0; i++) {
-            if (String(m['no_'+(i+1)]||'').trim().toUpperCase() !== 'O') {
+            if (String(m['no_' + (i + 1)] || '').trim().toUpperCase() !== 'O') {
                 remCount--;
                 if (remCount === 0) expiryLoop = d1List[i] ? d1List[i].class_loop : null;
             }
@@ -12778,31 +12637,31 @@ ${token}
             expiryStr = `<div class="text-[10px] text-blue-600 mt-0.5">→ 다음 수업으로 이월 (${remaining}회 남음)</div>`;
         }
 
-        const nameRows = ['name1','name2','name3'].map(function(k){
-            const n=m[k], g=m[k+'_gubun'];
-            return n?`<div class="flex gap-1"><span class="text-gray-400">명의:</span><span class="px-1 bg-gray-100 rounded text-[10px]">${escapeHtml(g||'')}</span><span class="font-medium">${escapeHtml(n)}</span></div>`:'';
+        const nameRows = ['name1', 'name2', 'name3'].map(function (k) {
+            const n = m[k], g = m[k + '_gubun'];
+            return n ? `<div class="flex gap-1"><span class="text-gray-400">명의:</span><span class="px-1 bg-gray-100 rounded text-[10px]">${escapeHtml(g || '')}</span><span class="font-medium">${escapeHtml(n)}</span></div>` : '';
         }).filter(Boolean).join('');
 
-        const batchKey = escapeHtml(String(m.class_d1_id||''));
-        const memId = escapeHtml(String(m.member_id||''));
+        const batchKey = escapeHtml(String(m.class_d1_id || ''));
+        const memId = escapeHtml(String(m.member_id || ''));
 
         detail.innerHTML = `
             <div class="mb-3 pb-2 border-b border-gray-100">
                 <div class="flex items-center gap-2 mb-1 flex-wrap">
-                    <span class="font-bold text-sm text-gray-800">${escapeHtml(m.member_name||'-')}</span>
+                    <span class="font-bold text-sm text-gray-800">${escapeHtml(m.member_name || '-')}</span>
                     <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${remBg}">잔여: ${remaining}회 (${attended} / ${totalLoop})</span>
                 </div>
                 ${expiryStr}
                 <div class="text-[11px] text-gray-500 space-y-0.5 mt-1">
-                    <div class="flex gap-1"><span class="text-gray-400">전화:</span><span>${escapeHtml(m.phone||'-')}</span></div>
-                    <div class="flex gap-1"><span class="text-gray-400">구분:</span><span>${escapeHtml(m.gubun||'-')}</span></div>
-                    <div class="flex gap-1"><span class="text-gray-400">상태:</span><span class="font-semibold ${statusColor_(m.member_status)} px-1 rounded text-[10px]">${escapeHtml(m.member_status||'-')}</span></div>
+                    <div class="flex gap-1"><span class="text-gray-400">전화:</span><span>${escapeHtml(m.phone || '-')}</span></div>
+                    <div class="flex gap-1"><span class="text-gray-400">구분:</span><span>${escapeHtml(m.gubun || '-')}</span></div>
+                    <div class="flex gap-1"><span class="text-gray-400">상태:</span><span class="font-semibold ${statusColor_(m.member_status)} px-1 rounded text-[10px]">${escapeHtml(m.member_status || '-')}</span></div>
                     ${nameRows}
                 </div>
             </div>
             <div>
                 <div class="text-[10px] font-bold text-gray-500 mb-1">비고 <span class="font-normal text-gray-400">(remark1)</span></div>
-                <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400" rows="3" placeholder="비고를 입력하세요">${escapeHtml(m.remark1||'')}</textarea>
+                <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400" rows="3" placeholder="비고를 입력하세요">${escapeHtml(m.remark1 || '')}</textarea>
                 <button onclick="saveSummaryRemark_('${memId}','${batchKey}')" class="mt-1 w-full py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">저장</button>
             </div>`;
     }
@@ -12812,16 +12671,11 @@ ${token}
         if (!textarea) return;
         showStatus('저장 중...', 'info');
         google.script.run
-            .withSuccessHandler(function(r){ showStatus(r.success?'비고 저장 완료':r.message||'저장 실패', r.success?'success':'error'); })
-            .withFailureHandler(function(e){ showStatus(e.message||'저장 실패','error'); })
+            .withSuccessHandler(function (r) { showStatus(r.success ? '비고 저장 완료' : r.message || '저장 실패', r.success ? 'success' : 'error'); })
+            .withFailureHandler(function (e) { showStatus(e.message || '저장 실패', 'error'); })
             .saveMemberClassDetail(batchKey, memberId, { remark1: textarea.value });
     }
 
-    function toggleAllSummaryRows(checked) {
-        document.querySelectorAll('.summary-row-chk').forEach(function(chk){ chk.checked = checked; });
-    }
-    function selectAllSummaryRows() { document.getElementById('summaryCheckAll').checked = true; toggleAllSummaryRows(true); }
-    function deselectAllSummaryRows() { document.getElementById('summaryCheckAll').checked = false; toggleAllSummaryRows(false); }
     // ─────────────────────────────────────────────────────────────────────────
 
     function loadD1Summary(classId) {
@@ -13087,11 +12941,11 @@ ${token}
         ['prev-genD1-startLoop', 'prev-genD1-endLoop', 'prev-genD1-addCount'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
         document.getElementById('prev-genD1-startDate').value = '';
         document.getElementById('prev-genD1-loopUnit').value = '1';
-        ['prev-genD1-timeFrom-ampm','prev-genD1-timeTo-ampm'].forEach(id => { const el = document.getElementById(id); if (el) el.value = 'AM'; });
-        ['prev-genD1-timeFrom-h','prev-genD1-timeTo-h'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '1'; });
-        ['prev-genD1-timeFrom-m','prev-genD1-timeTo-m'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '00'; });
-        ['prev-genD1-bidStarttime-day','prev-genD1-bidDatetime1-day','prev-genD1-bidDatetime2-day'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-        ['prev-genD1-bid1Count','prev-genD1-bid2Count'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        ['prev-genD1-timeFrom-ampm', 'prev-genD1-timeTo-ampm'].forEach(id => { const el = document.getElementById(id); if (el) el.value = 'AM'; });
+        ['prev-genD1-timeFrom-h', 'prev-genD1-timeTo-h'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '1'; });
+        ['prev-genD1-timeFrom-m', 'prev-genD1-timeTo-m'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '00'; });
+        ['prev-genD1-bidStarttime-day', 'prev-genD1-bidDatetime1-day', 'prev-genD1-bidDatetime2-day'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        ['prev-genD1-bid1Count', 'prev-genD1-bid2Count'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 
         // 이전 배치 드롭다운 채우기
         const batchSel = document.getElementById('genD1-prevBatch');
@@ -13159,7 +13013,7 @@ ${token}
         if (first.class_time_from) setDropdownTime_('editD1-timeFrom', String(first.class_time_from));
         if (first.class_time_to) setDropdownTime_('editD1-timeTo', String(first.class_time_to));
         // 입찰시간은 절대 datetime이므로 day값 세팅 불가 → 빈값
-        ['editD1-bidStarttime-day','editD1-bidDatetime1-day','editD1-bidDatetime2-day'].forEach(id => {
+        ['editD1-bidStarttime-day', 'editD1-bidDatetime1-day', 'editD1-bidDatetime2-day'].forEach(id => {
             const el = document.getElementById(id); if (el) el.value = '';
         });
         const bid1El = document.getElementById('editD1-bid1Count');
@@ -13443,10 +13297,10 @@ ${token}
         memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">불러오는 중...</div>';
 
         google.script.run
-            .withSuccessHandler(function(members) {
+            .withSuccessHandler(function (members) {
                 renderMemberGrid_(members, memberList, 'prev-genD1-member-cb', 'prev-genD1-member-row', 'prev-genD1-memberSelectAll');
             })
-            .withFailureHandler(function() {
+            .withFailureHandler(function () {
                 memberList.innerHTML = '<div class="p-2 text-xs text-red-400 text-center">로드 실패</div>';
             })
             .readMemberClassDetailsByClassId(selectedClassId);
@@ -13524,10 +13378,10 @@ ${token}
         memberSection.classList.remove('hidden');
 
         google.script.run
-            .withSuccessHandler(function(members) {
+            .withSuccessHandler(function (members) {
                 renderMemberGrid_(members, memberList, 'genD1-member-cb', 'genD1-member-row', 'genD1-memberSelectAll');
             })
-            .withFailureHandler(function() {
+            .withFailureHandler(function () {
                 memberList.innerHTML = '<div class="p-2 text-xs text-red-400 text-center">로드 실패</div>';
             })
             .readMemberClassDetailsByClassId(selectedClassId);
@@ -13992,22 +13846,22 @@ ${token}
         }
 
         // 세로 조절용 헬퍼 (위-아래)
-        function makeDraggableHeight(dividerId, topElId, bottomElId, lsKey, minTop, minBottom) {
+        function makeDraggableHeight(dividerId, targetElId, otherElId, lsKey, minTarget, minOther, isBottomTarget = false) {
             function setup() {
                 const divider = document.getElementById(dividerId);
-                const topEl = document.getElementById(topElId);
-                if (!divider || !topEl) return;
+                const targetEl = document.getElementById(targetElId);
+                if (!divider || !targetEl) return;
 
                 // localStorage 복원
                 const saved = localStorage.getItem(lsKey);
-                if (saved) topEl.style.height = saved;
+                if (saved) targetEl.style.height = saved;
 
                 let dragging = false, startY = 0, startHeight = 0;
 
                 divider.addEventListener('mousedown', e => {
                     dragging = true;
                     startY = e.clientY;
-                    startHeight = topEl.getBoundingClientRect().height;
+                    startHeight = targetEl.getBoundingClientRect().height;
                     document.body.style.cursor = 'row-resize';
                     document.body.style.userSelect = 'none';
                     e.preventDefault();
@@ -14015,12 +13869,13 @@ ${token}
 
                 document.addEventListener('mousemove', e => {
                     if (!dragging) return;
-                    const parent = topEl.parentElement;
+                    const parent = targetEl.parentElement;
                     if (!parent) return;
                     const containerHeight = parent.getBoundingClientRect().height;
                     const delta = e.clientY - startY;
-                    const newHeight = Math.min(Math.max(startHeight + delta, minTop), containerHeight - minBottom);
-                    topEl.style.height = newHeight + 'px';
+                    const sign = isBottomTarget ? -1 : 1;
+                    const newHeight = Math.min(Math.max(startHeight + (delta * sign), minTarget), containerHeight - minOther);
+                    targetEl.style.height = newHeight + 'px';
                 });
 
                 document.addEventListener('mouseup', () => {
@@ -14029,7 +13884,7 @@ ${token}
                     document.body.style.cursor = '';
                     document.body.style.userSelect = '';
                     // 저장
-                    localStorage.setItem(lsKey, topEl.style.height);
+                    localStorage.setItem(lsKey, targetEl.style.height);
                 });
             }
             if (document.readyState === 'loading') {
@@ -14045,9 +13900,10 @@ ${token}
 
         // 1) 사이드바 - 메인 상세 영역 구분 (가로)
         makeDraggable('classScheduleDivider', 'classScheduleListPane', 'classScheduleDetailPane', LS_LIST, 200, 200);
-        
+
         // 2) 사이드바 내부: 종목리스트 ↔ 수업리스트 (세로)
-        makeDraggableHeight('classScheduleListPaneDivider', 'csd-list-area', 'd1BatchArea', LS_SIDEBAR_H, 100, 100);
+        // 하단 요소(d1BatchArea)의 높이를 조절하도록 변경하여 리사이징 정합성 확보
+        makeDraggableHeight('classScheduleListPaneDivider', 'd1BatchArea', null, LS_SIDEBAR_H, 100, 100, true);
 
         // 3) 전체요약 그리드 좌우 (회원 상세 탭 내부)
         makeDraggable('d1SummaryDivider', 'd1SummaryLeft', 'd1SummaryRight', 'csd_summary_width', 200, 150);
@@ -14175,6 +14031,12 @@ ${token}
             node.addEventListener('mouseenter', () => { _d1AcIdx = parseInt(node.getAttribute('data-idx')); renderD1Ac_(inputEl); });
             node.addEventListener('click', e => { e.stopPropagation(); selectD1AcItem_(_d1AcItems[parseInt(node.getAttribute('data-idx'))]); });
         });
+    }
+
+    function showAddMemberToD1Modal() {
+        if (!selectedClassId) { showStatus('수업을 선택하세요.', 'error'); return; }
+        const modal = document.getElementById('addMemberToD1Modal');
+        if (modal) modal.classList.remove('content-hidden');
     }
 
     function selectD1AcItem_(it) {
