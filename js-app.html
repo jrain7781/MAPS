@@ -12133,11 +12133,15 @@ ${token}
             const isSelected = i === d1BatchIdx;
             const rowCls = isSelected ? 'bg-indigo-50 border-l-4 border-indigo-400' : 'hover:bg-gray-50 border-l-4 border-transparent';
             const txtCls = isSelected ? 'font-semibold text-indigo-900' : 'text-gray-700';
-            const firstDate = items[0].class_date || '-';
-            const lastDate = items[items.length - 1].class_date || '-';
+            function fmtYYMMDD(d) {
+                const s = String(d || '').replace(/-/g, '');
+                return s.length >= 8 ? s.substring(2,4)+'/'+s.substring(4,6)+'/'+s.substring(6,8) : (d || '-');
+            }
+            const firstDate = fmtYYMMDD(items[0].class_date);
+            const lastDate = fmtYYMMDD(items[items.length - 1].class_date);
             const periodHtml = firstDate === lastDate
                 ? firstDate
-                : `${firstDate}<br>${lastDate}`;
+                : `${firstDate}~<br>${lastDate}`;
             const teacherId = items[0].teacher_id || '';
             const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
             const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '-');
@@ -12149,6 +12153,24 @@ ${token}
             </tr>`;
         }
         tbody.innerHTML = html;
+    }
+
+    function switchD1DetailTab(tabName) {
+        ['member', 'item'].forEach(t => {
+            const btn = document.getElementById('d1-tab-' + t);
+            const panel = document.getElementById('d1TabPanel-' + t);
+            if (t === tabName) {
+                btn?.classList.add('bg-indigo-600', 'text-white');
+                btn?.classList.remove('bg-white', 'text-gray-600');
+                panel?.classList.remove('hidden');
+            } else {
+                btn?.classList.remove('bg-indigo-600', 'text-white');
+                btn?.classList.add('bg-white', 'text-gray-600');
+                panel?.classList.add('hidden');
+            }
+        });
+        if (tabName === 'member') loadD1SummaryGrid(selectedClassId);
+        else if (tabName === 'item') loadD1Items(selectedClassD1Id);
     }
 
     function renderClassD1Grid() {
