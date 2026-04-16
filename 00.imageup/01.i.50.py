@@ -1,3 +1,5 @@
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 print("📢 MJ경매 최종 완결 (법원명수정 + 공매강제 + 괄호인식 + 합체캡처)...")
 
 import base64

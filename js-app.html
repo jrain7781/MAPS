@@ -11051,6 +11051,8 @@ MJ 이정우 팀장
     let currentClassScheduleTab = 'CLASS';
     let csdSortKey = 'class_type';
     let csdSortAsc = true;
+    let checkedClassIds = new Set();      // 수업 리스트 다중 체크
+    let checkedBatchIndices = new Set();  // 수업정보 리스트 다중 체크
     let d1MembersData = [];
     let d1Batches = [];       // 배치 그룹 배열 [{ batchKey, items[] }]
     let d1BatchIdx = 0;       // 현재 배치 인덱스
@@ -11957,7 +11959,14 @@ ${token}
                 btn.classList.add('bg-white', 'text-gray-600');
             }
         });
+        // 탭 이동 시 체크 초기화
+        checkedClassIds = new Set();
+        checkedBatchIndices = new Set();
+        selectedClassId = null;
+        allClassD1Data = [];
+        buildD1Batches_();
         filterClassScheduleList();
+        renderClassD1Grid();
     }
 
     function sortClassScheduleList(key) {
@@ -12012,17 +12021,190 @@ ${token}
             return;
         }
         tbody.innerHTML = classes.map(c => {
-            const isSelected = String(selectedClassId) === String(c.class_id);
-            const rowCls = isSelected
+            const isChecked = checkedClassIds.has(String(c.class_id));
+            const rowCls = isChecked
                 ? 'bg-indigo-100 border-l-4 border-indigo-500'
                 : 'hover:bg-indigo-50 border-l-4 border-transparent';
-            return `<tr class="cursor-pointer ${rowCls} transition-colors" onclick="selectClassForSchedule('${c.class_id}')">
-                <td class="px-2 py-2 text-center text-xs ${isSelected ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_type)}</td>
-                <td class="px-2 py-2 text-center text-xs ${isSelected ? 'font-bold text-indigo-900' : 'font-medium'}">${escapeHtml(c.class_name)}</td>
-                <td class="px-2 py-2 text-center text-xs ${isSelected ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_grade)}</td>
-                <td class="px-2 py-2 text-center text-xs ${isSelected ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_loc)}</td>
+            return `<tr class="cursor-pointer ${rowCls} transition-colors" onclick="toggleClassCheck('${c.class_id}')">
+                <td class="px-2 py-2 text-center w-7" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="csd-list-cb rounded cursor-pointer" value="${c.class_id}"
+                        ${isChecked ? 'checked' : ''} onchange="onClassCheckChange(this)">
+                </td>
+                <td class="px-2 py-2 text-center text-xs ${isChecked ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_type)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isChecked ? 'font-bold text-indigo-900' : 'font-medium'}">${escapeHtml(c.class_name)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isChecked ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_grade)}</td>
+                <td class="px-2 py-2 text-center text-xs ${isChecked ? 'font-semibold text-indigo-800' : ''}">${escapeHtml(c.class_loc)}</td>
             </tr>`;
         }).join('');
+    }
+
+    // ─── 수업 리스트 다중 체크 ────────────────────────────────────────
+
+    function toggleClassCheck(classId) {
+        const id = String(classId);
+        if (checkedClassIds.has(id)) checkedClassIds.delete(id);
+        else checkedClassIds.add(id);
+        _syncClassHeaderCheckbox();
+        loadCheckedClassesSessions();
+        filterClassScheduleList(); // 행 하이라이트 갱신
+    }
+
+    function onClassCheckChange(cb) {
+        if (cb.checked) checkedClassIds.add(String(cb.value));
+        else checkedClassIds.delete(String(cb.value));
+        _syncClassHeaderCheckbox();
+        loadCheckedClassesSessions();
+        filterClassScheduleList();
+    }
+
+    function toggleAllClassChecks(checked) {
+        document.querySelectorAll('.csd-list-cb').forEach(cb => {
+            cb.checked = checked;
+            if (checked) checkedClassIds.add(String(cb.value));
+            else checkedClassIds.delete(String(cb.value));
+        });
+        loadCheckedClassesSessions();
+        filterClassScheduleList();
+    }
+
+    function _syncClassHeaderCheckbox() {
+        const all = document.querySelectorAll('.csd-list-cb');
+        const checked = document.querySelectorAll('.csd-list-cb:checked').length;
+        const hdr = document.getElementById('csd-list-check-all');
+        if (!hdr) return;
+        hdr.checked = all.length > 0 && checked === all.length;
+        hdr.indeterminate = checked > 0 && checked < all.length;
+    }
+
+    function loadCheckedClassesSessions() {
+        checkedBatchIndices = new Set();
+        if (checkedClassIds.size === 0) {
+            selectedClassId = null;
+            allClassD1Data = [];
+            buildD1Batches_();
+            renderClassD1Grid();
+            return;
+        }
+        // 첫 번째 체크된 종목을 selectedClassId로 설정 (수업생성 등에서 사용)
+        selectedClassId = [...checkedClassIds][0];
+        const grid = document.getElementById('classD1Grid');
+        if (grid) grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
+        const classIds = [...checkedClassIds];
+        let done = 0;
+        let merged = [];
+        classIds.forEach(classId => {
+            google.script.run
+                .withSuccessHandler(data => {
+                    merged = merged.concat(Array.isArray(data) ? data : []);
+                    done++;
+                    if (done === classIds.length) _onCheckedSessionsLoaded(merged);
+                })
+                .withFailureHandler(() => {
+                    done++;
+                    if (done === classIds.length) _onCheckedSessionsLoaded(merged);
+                })
+                .readClassD1ByClassId(classId);
+        });
+        // 우측 헤더 정보: 첫 번째 체크된 수업 표시
+        const firstId = classIds[0];
+        const cls = allClassesData.find(c => String(c.class_id) === String(firstId));
+        const infoEl = document.getElementById('d1SelectedClassInfo');
+        if (infoEl && cls) {
+            const label = [cls.class_type, cls.class_name, cls.class_grade ? `[${cls.class_grade}]` : '', cls.class_loc ? `(${cls.class_loc})` : ''].filter(Boolean).join(' ');
+            infoEl.textContent = checkedClassIds.size > 1 ? label + ` 외 ${checkedClassIds.size - 1}개` : label;
+            infoEl.classList.remove('hidden');
+        }
+    }
+
+    function _onCheckedSessionsLoaded(merged) {
+        allClassD1Data = merged;
+        allClassD1Data.forEach(d => {
+            if (d.class_d1_id) allD1DatetimeMap[String(d.class_d1_id)] = { bid_datetime_1: d.bid_datetime_1 || '', bid_datetime_2: d.bid_datetime_2 || '' };
+        });
+        buildD1Batches_();
+        renderClassD1Grid();
+    }
+
+    // ─── 수업정보 리스트 다중 체크 ───────────────────────────────────
+
+    function toggleBatchCheck(idx) {
+        if (checkedBatchIndices.has(idx)) checkedBatchIndices.delete(idx);
+        else checkedBatchIndices.add(idx);
+        d1BatchIdx = idx;
+        _syncBatchHeaderCheckbox();
+        renderD1BatchListGrid_();
+        _updateCheckedBatchView();
+    }
+
+    function onBatchCheckChange(cb) {
+        const idx = parseInt(cb.value);
+        if (cb.checked) checkedBatchIndices.add(idx);
+        else checkedBatchIndices.delete(idx);
+        d1BatchIdx = idx;
+        _syncBatchHeaderCheckbox();
+        _updateCheckedBatchView();
+    }
+
+    function toggleAllBatchChecks(checked) {
+        document.querySelectorAll('.batch-list-cb').forEach(cb => {
+            cb.checked = checked;
+            const idx = parseInt(cb.value);
+            if (checked) checkedBatchIndices.add(idx);
+            else checkedBatchIndices.delete(idx);
+        });
+        _updateCheckedBatchView();
+    }
+
+    function _syncBatchHeaderCheckbox() {
+        const all = document.querySelectorAll('.batch-list-cb');
+        const checked = document.querySelectorAll('.batch-list-cb:checked').length;
+        const hdr = document.getElementById('batch-list-check-all');
+        if (!hdr) return;
+        hdr.checked = all.length > 0 && checked === all.length;
+        hdr.indeterminate = checked > 0 && checked < all.length;
+    }
+
+    function _updateCheckedBatchView() {
+        renderClassD1Grid(); // 회차 카드 갱신 (체크 배치 합산)
+        if (checkedBatchIndices.size === 0) return;
+        // 체크된 모든 배치의 class_d1_ids 수집
+        const allD1Ids = [];
+        checkedBatchIndices.forEach(idx => {
+            const b = d1Batches[idx];
+            if (b) b.items.forEach(d => allD1Ids.push(d.class_d1_id));
+        });
+        if (allD1Ids.length === 0) return;
+        // 물건 카드
+        const itemEl = document.getElementById('d1-item-list');
+        if (itemEl) itemEl.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
+        google.script.run
+            .withSuccessHandler(data => { d1ItemsData = Array.isArray(data) ? data : []; renderD1Items(); })
+            .withFailureHandler(() => {})
+            .readItemsByMultipleD1Ids(allD1Ids);
+        // 회원 카드
+        const tbody = document.getElementById('classD1MemberTableBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-400 text-xs">불러오는 중...</td></tr>';
+        google.script.run
+            .withSuccessHandler(data => _renderMultiD1Members(Array.isArray(data) ? data : []))
+            .withFailureHandler(() => {})
+            .readMembersForMultipleD1s(allD1Ids);
+    }
+
+    function _renderMultiD1Members(members) {
+        const tbody = document.getElementById('classD1MemberTableBody');
+        if (!tbody) return;
+        if (members.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-500 text-xs">회원이 없습니다.</td></tr>';
+            return;
+        }
+        const memberInfoEl = document.getElementById('d1MemberSectionInfo');
+        if (memberInfoEl) memberInfoEl.textContent = `(${members.length}명)`;
+        tbody.innerHTML = members.map(m =>
+            `<tr class="hover:bg-gray-50">
+                <td class="px-2 py-1.5 text-xs text-gray-700">${escapeHtml(m.member_name || '-')}</td>
+                <td class="px-2 py-1.5 text-xs text-center text-gray-400">-</td>
+            </tr>`
+        ).join('');
     }
 
     function selectClassForSchedule(classId) {
@@ -12131,7 +12313,12 @@ ${token}
                 ? allMembersNewData.find(m => String(m.member_id) === String(firstTeacherId))
                 : null;
             const teacherName = teacherMember ? teacherMember.member_name : firstTeacherId;
-            return `<tr class="${rowCls} transition-colors" onclick="selectD1Batch(${i})">
+            const isBatchChecked = checkedBatchIndices.has(i);
+            return `<tr class="${rowCls} transition-colors" onclick="toggleBatchCheck(${i})">
+                <td class="px-2 py-1.5 text-center w-6" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="batch-list-cb rounded cursor-pointer" value="${i}"
+                        ${isBatchChecked ? 'checked' : ''} onchange="onBatchCheckChange(this)">
+                </td>
                 <td class="px-2 py-1.5 text-center ${txtCls}">${i + 1}</td>
                 <td class="px-2 py-1.5 text-center ${txtCls}">${total}회</td>
                 <td class="px-2 py-1.5 text-center leading-tight ${txtCls}">${periodHtml}</td>
@@ -12148,6 +12335,7 @@ ${token}
         <table class="divide-y divide-gray-100 w-full">
             <thead class="bg-gray-50 sticky top-0">
                 <tr>
+                    <th class="px-2 py-1.5 text-center w-6"><input type="checkbox" id="batch-list-check-all" onchange="toggleAllBatchChecks(this.checked)" class="rounded cursor-pointer"></th>
                     <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">순번</th>
                     <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">총회차</th>
                     <th class="px-2 py-1.5 text-gray-500 font-semibold text-center">기간</th>
@@ -12168,9 +12356,19 @@ ${token}
             return;
         }
 
-        const batch = d1Batches[d1BatchIdx];
-        if (!batch) return;
-        const items = batch.items;
+        let items;
+        if (checkedBatchIndices.size > 0) {
+            items = [];
+            checkedBatchIndices.forEach(idx => {
+                const b = d1Batches[idx];
+                if (b) items = items.concat(b.items);
+            });
+            items.sort((a, b) => String(a.class_date).localeCompare(String(b.class_date)));
+        } else {
+            const batch = d1Batches[d1BatchIdx];
+            if (!batch) return;
+            items = batch.items;
+        }
 
         // 오늘 기준 배치별 가장 가까운 미래 회차 찾기 (배치마다 독립 하이라이트)
         const todayStr = (() => {

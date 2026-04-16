@@ -428,6 +428,64 @@ function getMembersForClass() {
 // addMemberToClassD1 / addMemberToClassD1Batch → SheetDB.js 사용 (수업 단위 1회 등록)
 
 /**
+ * 여러 class_d1_id에 해당하는 회원 목록을 합산 반환합니다. (class 기준 중복 제거)
+ */
+function readMembersForMultipleD1s(classD1Ids) {
+    if (!Array.isArray(classD1Ids) || classD1Ids.length === 0) return [];
+    const sheet = ensureClassD1Sheet_();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return [];
+
+    const d1Rows = sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+    const d1IdSet = new Set(classD1Ids.map(String));
+    const d1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
+    const classIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
+
+    const involvedClassIds = new Set();
+    d1Rows.forEach(r => {
+        if (d1IdSet.has(String(r[d1IdIdx]))) involvedClassIds.add(String(r[classIdIdx]));
+    });
+
+    const allMembers = readAllMembers();
+    const result = [];
+    const seen = new Set();
+    involvedClassIds.forEach(classId => {
+        allMembers
+            .filter(m => String(m.class_id) === classId)
+            .forEach(m => {
+                if (!seen.has(String(m.member_id))) {
+                    seen.add(String(m.member_id));
+                    result.push({ member_id: m.member_id, member_name: m.member_name, phone: m.phone, class_id: m.class_id });
+                }
+            });
+    });
+    return result;
+}
+
+/**
+ * 여러 class_d1_id에 등록된 물건 목록을 합산 반환합니다.
+ */
+function readItemsByMultipleD1Ids(classD1Ids) {
+    if (!Array.isArray(classD1Ids) || classD1Ids.length === 0) return [];
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return [];
+
+    const d1IdSet = new Set(classD1Ids.map(String));
+    const d1IdColIdx = ITEM_HEADERS.indexOf('class_d1_id');
+    const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, ITEM_HEADERS.length).getValues();
+    const result = [];
+    data.forEach(row => {
+        if (d1IdSet.has(String(row[d1IdColIdx] || ''))) {
+            const obj = {};
+            ITEM_HEADERS.forEach((h, i) => { obj[h] = row[i]; });
+            result.push({ id: obj.id, sakun_no: obj.sakun_no, court: obj.court, m_name: obj.m_name, bidprice: obj.bidprice, stu_member: obj.stu_member, class_d1_id: obj.class_d1_id });
+        }
+    });
+    return result;
+}
+
+/**
  * 배치(여러 회차)를 일괄 업데이트합니다.
  * @param {string[]} classD1Ids - 수정할 class_d1_id 배열
  * @param {Object} updateData - 수정할 필드/값 (예: { teacher_id, class_time_from, class_time_to, ... })
