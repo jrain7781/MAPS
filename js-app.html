@@ -12040,130 +12040,6 @@ ${token}
         tbody.innerHTML = html;
     }
 
-    // ─── 수업 리스트 다중 체크 ────────────────────────────────────────
-
-    function selectClassForSchedule(classId) {
-        if (!classId) return;
-        selectedClassId = String(classId);
-        selectedClassD1Id = null;
-
-        // UI 즉시 반영 (사이드바 리스트 하이라이트)
-        filterClassScheduleList();
-
-        const grid = document.getElementById('classD1Grid');
-        if (grid) grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
-
-        // 우측 헤더 정보 표시
-        const cls = allClassesData.find(c => String(c.class_id) === String(classId));
-        const infoEl = document.getElementById('d1SelectedClassInfo');
-        if (infoEl && cls) {
-            const label = [cls.class_type, cls.class_name, cls.class_grade ? `[${cls.class_grade}]` : '', cls.class_loc ? `(${cls.class_loc})` : ''].filter(Boolean).join(' ');
-            infoEl.textContent = label;
-            infoEl.classList.remove('hidden');
-        }
-
-        google.script.run
-            .withSuccessHandler(data => {
-                allClassD1Data = Array.isArray(data) ? data : [];
-                allClassD1Data.forEach(d => {
-                    if (d.class_d1_id) allD1DatetimeMap[String(d.class_d1_id)] = { bid_datetime_1: d.bid_datetime_1 || '', bid_datetime_2: d.bid_datetime_2 || '' };
-                });
-                buildD1Batches_();
-                d1BatchIdx = 0; // 최신 배치 선택
-                renderClassD1Grid();
-                switchD1DetailTab('member');
-            })
-            .withFailureHandler(err => {
-                showStatus('수업 데이터 로드 실패: ' + err.message, 'error');
-            })
-            .readClassD1ByClassId(classId);
-    }
-
-    // ─── 상세 탭 전환 ───────────────────────────────────────────
-    function switchD1DetailTab(tabName) {
-        const tabs = ['member', 'item'];
-        tabs.forEach(t => {
-            const btn = document.getElementById(`d1-tab-${t}`);
-            const panel = document.getElementById(`d1TabPanel-${t}`);
-            if (t === tabName) {
-                btn?.classList.add('bg-indigo-600', 'text-white');
-                btn?.classList.remove('bg-white', 'text-gray-600', 'hover:bg-gray-100');
-                panel?.classList.remove('hidden');
-            } else {
-                btn?.classList.remove('bg-indigo-600', 'text-white');
-                btn?.classList.add('bg-white', 'text-gray-600', 'hover:bg-gray-100');
-                panel?.classList.add('hidden');
-            }
-        });
-
-        // 탭 전환 시 필요한 데이터 로드
-        if (tabName === 'member') {
-            loadD1SummaryGrid(selectedClassId);
-        } else if (tabName === 'item') {
-            loadD1Items(selectedClassD1Id);
-        }
-    }
-
-    function buildD1Batches_() {
-        d1Batches = [];
-        if (allClassD1Data.length === 0) return;
-
-        let currentBatch = [];
-        let currentKey = '';
-
-        allClassD1Data.forEach(d => {
-            if (d.batch_timestamp !== currentKey) {
-                if (currentBatch.length > 0) d1Batches.push(currentBatch);
-                currentBatch = [d];
-                currentKey = d.batch_timestamp;
-            } else {
-                currentBatch.push(d);
-            }
-        });
-        if (currentBatch.length > 0) d1Batches.push(currentBatch);
-
-        // 정렬 (최신순)
-        d1Batches.reverse();
-    }
-
-    function renderD1BatchListGrid_() {
-        const tbody = document.getElementById('classD1BatchListTableBody');
-        if (!tbody) return;
-        if (d1Batches.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500 text-xs">수업이 없습니다.</td></tr>';
-            return;
-        }
-
-        let html = '';
-        for (let i = 0; i < d1Batches.length; i++) {
-            const b = d1Batches[i];
-            const isSelected = i === d1BatchIdx;
-            const rowCls = isSelected ? 'bg-indigo-50 border-l-4 border-indigo-400' : 'hover:bg-gray-50 border-l-4 border-transparent';
-
-            html += `<tr class="${rowCls} cursor-pointer" onclick="selectD1Batch(${i})">
-                <td class="px-2 py-1.5 text-center text-[11px] font-medium text-gray-900">${i + 1}</td>
-                <td class="px-2 py-1.5 text-center text-[11px] text-gray-600">${b.length}회</td>
-                <td class="px-2 py-1.5 text-center text-[10px] text-gray-500">${b[0].class_date} ~ ${b[b.length - 1].class_date}</td>
-                <td class="px-2 py-1.5 text-center text-[11px] text-indigo-600 font-semibold">${escapeHtml(b[0].teacher_name || '-')}</td>
-            </tr>`;
-        }
-        tbody.innerHTML = html;
-    }
-
-    // ─── 수업정보 리스트 다중 체크 ───────────────────────────────────
-
-    function selectD1Batch(idx) {
-        d1BatchIdx = idx;
-        renderD1BatchListGrid_();
-        renderClassD1Grid();
-
-        // 배치 선택 시 회원 탭으로 전환 및 갱신 (선택사항: 유지하고 싶으면 제거)
-        switchD1DetailTab('member');
-    }
-
-    // _updateCheckedBatchView and _renderMultiD1Members removed (legacy)
-
-
     function selectClassForSchedule(classId) {
         selectedClassId = classId;
         selectedClassD1Id = null;
@@ -12242,6 +12118,29 @@ ${token}
         renderClassD1Grid();
     }
 
+
+    function renderD1BatchListGrid_() {
+        const tbody = document.getElementById('classD1BatchListTableBody');
+        if (!tbody) return;
+        if (d1Batches.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500 text-xs">수업이 없습니다.</td></tr>';
+            return;
+        }
+        let html = '';
+        for (let i = 0; i < d1Batches.length; i++) {
+            const b = d1Batches[i];
+            const items = b.items || b;
+            const isSelected = i === d1BatchIdx;
+            const rowCls = isSelected ? 'bg-indigo-50 border-l-4 border-indigo-400' : 'hover:bg-gray-50 border-l-4 border-transparent';
+            html += `<tr class="${rowCls} cursor-pointer" onclick="selectD1Batch(${i})">
+                <td class="px-2 py-1.5 text-center text-[11px] font-medium text-gray-900">${i + 1}</td>
+                <td class="px-2 py-1.5 text-center text-[11px] text-gray-600">${items.length}회</td>
+                <td class="px-2 py-1.5 text-center text-[10px] text-gray-500">${items[0].class_date} ~ ${items[items.length - 1].class_date}</td>
+                <td class="px-2 py-1.5 text-center text-[11px] text-indigo-600 font-semibold">${escapeHtml(items[0].teacher_name || '-')}</td>
+            </tr>`;
+        }
+        tbody.innerHTML = html;
+    }
 
     function renderClassD1Grid() {
         renderD1BatchListGrid_();
