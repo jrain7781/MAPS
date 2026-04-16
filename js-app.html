@@ -13568,30 +13568,35 @@ ${token}
     var d1ItemsData = [];    // 등록된 물건 조회 결과
 
     // ─── 물건 선택 모달 ──────────────────────────────────────────────
-    let d1PickerSelected = new Set(); // 선택된 item.id Set
+    // ─── 물건 선택 모달 (클릭→카트 방식) ─────────────────────────────
+    let d1PickerCart = []; // { id, sakun_no, court, stu_member, m_name }
 
     function showD1ItemPickerModal() {
         if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
             showStatus('먼저 회차를 선택하세요.', 'error');
             return;
         }
-        d1PickerSelected = new Set();
+        d1PickerCart = [];
         // 필터 초기화
-        ['d1picker-sakun','d1picker-court','d1picker-member'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
+        ['d1picker-date','d1picker-sakun','d1picker-court','d1picker-member','d1picker-regdate'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.value = '';
         });
-        ['d1picker-status','d1picker-class-type'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
+        ['d1picker-status','d1picker-class-type','d1picker-manager'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.value = '';
         });
-        // 수업구분 드롭다운 채우기
+        // 드롭다운 채우기
         const ctSel = document.getElementById('d1picker-class-type');
         if (ctSel) {
-            const types = [...new Set((allBiddingData||[]).map(it => it.class_type||'').filter(Boolean))].sort();
-            ctSel.innerHTML = '<option value="">수업구분 전체</option>' + types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+            const types = [...new Set((allBiddingData||[]).map(it=>it.class_type||'').filter(Boolean))].sort();
+            ctSel.innerHTML = '<option value="">수업구분 전체</option>' + types.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+        }
+        const mgSel = document.getElementById('d1picker-manager');
+        if (mgSel) {
+            const mgrs = [...new Set((allBiddingData||[]).map(it=>it.m_name_id||'').filter(Boolean))].sort();
+            mgSel.innerHTML = '<option value="">담당자</option>' + mgrs.map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
         }
         renderD1ItemPickerList();
+        d1PickerRenderCart_();
         document.getElementById('d1ItemPickerModal')?.classList.remove('content-hidden');
     }
 
@@ -13603,101 +13608,117 @@ ${token}
     function renderD1ItemPickerList() {
         const tbody = document.getElementById('d1ItemPickerTbody');
         if (!tbody) return;
-        const fSakun  = (document.getElementById('d1picker-sakun')?.value  || '').toLowerCase().trim();
-        const fCourt  = (document.getElementById('d1picker-court')?.value  || '').toLowerCase().trim();
+        const fDate   = (document.getElementById('d1picker-date')?.value    || '').replace(/-/g,'').trim();
+        const fSakun  = (document.getElementById('d1picker-sakun')?.value   || '').toLowerCase().trim();
+        const fCourt  = (document.getElementById('d1picker-court')?.value   || '').toLowerCase().trim();
         const fStatus = (document.getElementById('d1picker-status')?.value  || '').trim();
-        const fMember = (document.getElementById('d1picker-member')?.value || '').toLowerCase().trim();
+        const fMember = (document.getElementById('d1picker-member')?.value  || '').toLowerCase().trim();
+        const fRegdate= (document.getElementById('d1picker-regdate')?.value || '').replace(/-/g,'').trim();
+        const fMgr    = (document.getElementById('d1picker-manager')?.value || '').trim();
         const fCtype  = (document.getElementById('d1picker-class-type')?.value || '').trim();
 
         const filtered = (allBiddingData || []).filter(it => {
-            if (fSakun  && !String(it.sakun_no||'').toLowerCase().includes(fSakun))   return false;
-            if (fCourt  && !String(it.court   ||'').toLowerCase().includes(fCourt))   return false;
-            if (fStatus && String(it.stu_member||'').trim() !== fStatus)               return false;
-            if (fMember && !String(it.m_name  ||'').toLowerCase().includes(fMember))  return false;
-            if (fCtype  && String(it.class_type||'').trim() !== fCtype)                return false;
+            if (fDate   && !String(it['in-date']||'').replace(/-/g,'').includes(fDate))     return false;
+            if (fSakun  && !String(it.sakun_no||'').toLowerCase().includes(fSakun))          return false;
+            if (fCourt  && !String(it.court||'').toLowerCase().includes(fCourt))              return false;
+            if (fStatus && String(it.stu_member||'').trim() !== fStatus)                      return false;
+            if (fMember && !String(it.m_name||'').toLowerCase().includes(fMember))            return false;
+            if (fRegdate&& !String(it.reg_date||'').replace(/-/g,'').includes(fRegdate))      return false;
+            if (fMgr    && String(it.m_name_id||'').trim() !== fMgr)                          return false;
+            if (fCtype  && String(it.class_type||'').trim() !== fCtype)                       return false;
             return true;
         });
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-400 text-xs">조회 결과가 없습니다.</td></tr>';
-            d1PickerUpdateCount_();
+            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400 text-xs">조회 결과가 없습니다.</td></tr>';
             return;
         }
 
         tbody.innerHTML = filtered.map(it => {
-            const checked = d1PickerSelected.has(String(it.id));
+            const inCart    = d1PickerCart.some(c => String(c.id) === String(it.id));
             const alreadyIn = String(it.class_d1_id||'') === String(selectedClassD1Id||'');
             const imgDot = (it.image_ids || it.image_id)
-                ? '<span class="inline-block w-2 h-2 rounded-full bg-green-500"></span>'
-                : '';
+                ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>' : '';
             const statusCls = getStatusTagClass ? getStatusTagClass(it.stu_member) : '';
-            const rowBg = checked ? 'bg-indigo-50' : (alreadyIn ? 'bg-gray-50' : '');
-            return `<tr class="cursor-pointer hover:bg-indigo-50 transition-colors ${rowBg}" onclick="d1PickerToggleRow('${it.id}', this)">
-                <td class="px-2 py-1.5 text-center" onclick="event.stopPropagation()">
-                    <input type="checkbox" class="d1picker-cb rounded cursor-pointer" value="${it.id}"
-                        ${checked ? 'checked' : ''} ${alreadyIn ? 'disabled title="이미 등록됨"' : ''}
-                        onchange="d1PickerOnCheck(this)">
-                </td>
-                <td class="px-2 py-1.5 text-center text-gray-600 whitespace-nowrap">${escapeHtml(it['in-date']||'')}</td>
-                <td class="px-2 py-1.5 text-center">${imgDot}</td>
-                <td class="px-2 py-1.5 text-left font-medium text-gray-800">${escapeHtml(it.sakun_no||'')}</td>
-                <td class="px-2 py-1.5 text-center text-gray-600">${escapeHtml(it.court||'')}</td>
-                <td class="px-2 py-1.5 text-center"><span class="${statusCls}">${escapeHtml(it.stu_member||'')}</span></td>
-                <td class="px-2 py-1.5 text-center text-gray-700">${escapeHtml(it.m_name||'')}</td>
-                <td class="px-2 py-1.5 text-center text-gray-500">${escapeHtml(it.m_name_id||'')}</td>
+            const rowBg = inCart ? 'bg-indigo-50 border-l-4 border-indigo-400'
+                        : alreadyIn ? 'bg-gray-50 opacity-50' : '';
+            const cursor = alreadyIn ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-indigo-50';
+            return `<tr class="${cursor} transition-colors ${rowBg}"
+                onclick="${alreadyIn ? '' : `d1PickerClickRow('${it.id}')`}"
+                title="${alreadyIn ? '이미 이 회차에 등록된 물건' : '클릭하면 우측에 추가됩니다'}">
+                <td class="item-col-date text-center text-gray-600 whitespace-nowrap">${escapeHtml(it['in-date']||'')}</td>
+                <td class="item-col-img text-center">${imgDot}</td>
+                <td class="item-col-sakun text-left font-medium ${inCart?'text-indigo-700':'text-gray-800'}">${escapeHtml(it.sakun_no||'')}</td>
+                <td class="item-col-court text-left text-gray-600">${escapeHtml(it.court||'')}</td>
+                <td class="item-col-status text-center"><span class="${statusCls}">${escapeHtml(it.stu_member||'')}</span></td>
+                <td class="item-col-member text-center text-gray-700">${escapeHtml(it.m_name||'')}</td>
+                <td class="item-col-manager text-center text-gray-500">${escapeHtml(it.m_name_id||'')}</td>
             </tr>`;
         }).join('');
-        d1PickerUpdateCount_();
     }
 
-    function d1PickerToggleRow(itemId, tr) {
-        const cb = tr.querySelector('.d1picker-cb');
-        if (!cb || cb.disabled) return;
-        cb.checked = !cb.checked;
-        d1PickerOnCheck(cb);
+    function d1PickerClickRow(itemId) {
+        const item = allBiddingData.find(it => String(it.id) === String(itemId));
+        if (!item) return;
+        if (d1PickerCart.some(c => String(c.id) === String(itemId))) {
+            // 이미 있으면 제거 (토글)
+            d1PickerCart = d1PickerCart.filter(c => String(c.id) !== String(itemId));
+        } else {
+            d1PickerCart.push({ id: item.id, sakun_no: item.sakun_no, court: item.court, stu_member: item.stu_member, m_name: item.m_name });
+        }
+        renderD1ItemPickerList();
+        d1PickerRenderCart_();
     }
 
-    function d1PickerOnCheck(cb) {
-        if (cb.checked) d1PickerSelected.add(String(cb.value));
-        else d1PickerSelected.delete(String(cb.value));
-        const tr = cb.closest('tr');
-        if (tr) tr.classList.toggle('bg-indigo-50', cb.checked);
-        d1PickerUpdateCount_();
+    function d1PickerRemoveCart(itemId) {
+        d1PickerCart = d1PickerCart.filter(c => String(c.id) !== String(itemId));
+        renderD1ItemPickerList();
+        d1PickerRenderCart_();
     }
 
-    function d1PickerToggleAll(checked) {
-        document.querySelectorAll('.d1picker-cb:not(:disabled)').forEach(cb => {
-            cb.checked = checked;
-            if (checked) d1PickerSelected.add(String(cb.value));
-            else d1PickerSelected.delete(String(cb.value));
-            const tr = cb.closest('tr');
-            if (tr) tr.classList.toggle('bg-indigo-50', checked);
-        });
-        d1PickerUpdateCount_();
-    }
-
-    function d1PickerUpdateCount_() {
-        const el = document.getElementById('d1ItemPickerSelectedCount');
-        if (el) el.textContent = d1PickerSelected.size > 0 ? `(${d1PickerSelected.size}개 선택됨)` : '';
+    function d1PickerRenderCart_() {
+        const cart = document.getElementById('d1ItemPickerCart');
+        const countEl = document.getElementById('d1ItemPickerSelectedCount');
+        if (countEl) countEl.textContent = d1PickerCart.length > 0 ? `${d1PickerCart.length}개` : '';
+        if (!cart) return;
+        if (d1PickerCart.length === 0) {
+            cart.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">클릭하면 추가됩니다</div>';
+            return;
+        }
+        cart.innerHTML = d1PickerCart.map(c => {
+            const statusCls = getStatusTagClass ? getStatusTagClass(c.stu_member) : '';
+            return `<div class="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-gray-800 truncate flex-1 mr-1">${escapeHtml(c.sakun_no||'')}</span>
+                    <button type="button" onclick="d1PickerRemoveCart('${c.id}')"
+                        class="text-red-400 hover:text-red-600 flex-none text-sm leading-none">✕</button>
+                </div>
+                <div class="flex items-center gap-1 mt-0.5">
+                    <span class="text-gray-400">${escapeHtml(c.court||'')}</span>
+                    <span class="${statusCls} text-[10px]">${escapeHtml(c.stu_member||'')}</span>
+                </div>
+            </div>`;
+        }).join('');
     }
 
     function confirmD1ItemPicker() {
-        if (d1PickerSelected.size === 0) { showStatus('선택된 물건이 없습니다.', 'error'); return; }
+        if (d1PickerCart.length === 0) { showStatus('선택된 물건이 없습니다.', 'error'); return; }
         if (!selectedClassD1Id || selectedClassD1Id === '__summary__') { showStatus('회차를 선택하세요.', 'error'); return; }
 
         const d1Info = allClassD1Data.find(d => String(d.class_d1_id) === String(selectedClassD1Id));
         const className = d1Info ? [d1Info.class_type, d1Info.class_name].filter(Boolean).join('') : '';
-
-        const itemIds = [...d1PickerSelected];
+        const classDate = d1Info ? String(d1Info.class_date||'').replace(/-/g,'') : '';
+        const classLoop = d1Info ? (d1Info.class_loop||'') : '';
+        const itemIds = d1PickerCart.map(c => c.id);
         closeD1ItemPickerModal();
 
         google.script.run
             .withSuccessHandler(r => {
-                showStatus(r.success ? `${itemIds.length}개 물건이 등록되었습니다.` : (r.message || '등록 실패'), r.success ? 'success' : 'error');
+                showStatus(r.success ? `${itemIds.length}개 물건이 등록되었습니다.` : (r.message||'등록 실패'), r.success ? 'success' : 'error');
                 if (r.success) loadD1Items(selectedClassD1Id);
             })
-            .withFailureHandler(e => showStatus(e.message || '등록 실패', 'error'))
-            .assignItemsToClassD1(selectedClassD1Id, itemIds, selectedClassId, className);
+            .withFailureHandler(e => showStatus(e.message||'등록 실패', 'error'))
+            .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate, classLoop);
     }
 
     function showD1ItemRegisterPanel() {
