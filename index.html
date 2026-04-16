@@ -2341,9 +2341,9 @@
                     <div class="flex-1 bg-white rounded-xl shadow-lg overflow-hidden flex flex-col min-h-0">
                         <div class="flex px-2 py-1.5 bg-gray-50 border-b border-gray-100 flex-none">
                             <button onclick="switchD1DetailTab('member')" id="d1-tab-member"
-                                class="px-4 py-1.5 text-sm font-semibold rounded-l-md border border-gray-300 bg-indigo-600 text-white transition-colors">회원</button>
+                                class="px-8 py-1.5 text-sm font-semibold rounded-l-md border border-gray-300 bg-indigo-600 text-white transition-colors">회원</button>
                             <button onclick="switchD1DetailTab('item')" id="d1-tab-item"
-                                class="px-4 py-1.5 text-sm font-semibold rounded-r-md border-t border-b border-r border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors">물건</button>
+                                class="px-8 py-1.5 text-sm font-semibold rounded-r-md border-t border-b border-r border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition-colors">물건</button>
                         </div>
 
                         <!-- 회원 탭 패널 (Summary Grid) -->
@@ -2400,7 +2400,7 @@
                                 <div class="flex justify-between items-center mb-2 flex-none">
                                     <h3 class="text-xs font-semibold text-gray-800">물건 등록 <span id="d1ItemSectionInfo"
                                             class="text-[10px] text-indigo-500 font-normal"></span></h3>
-                                    <button type="button" onclick="showD1ItemRegisterPanel()"
+                                    <button type="button" onclick="showD1ItemPickerModal()"
                                         class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-0.5 px-2 rounded-lg text-xs">+
                                         추가</button>
                                 </div>
@@ -2428,6 +2428,71 @@
             </div>
 
 
+
+            <!-- 물건 선택 모달 -->
+            <div id="d1ItemPickerModal" class="modal content-hidden" onclick="closeD1ItemPickerModal(event)">
+                <div class="modal-content flex flex-col" onclick="event.stopPropagation()"
+                    style="max-width:900px;max-height:90vh;width:95vw">
+                    <!-- 헤더 -->
+                    <div class="flex items-center justify-between px-4 py-3 border-b flex-none">
+                        <h3 class="text-base font-bold text-gray-800">물건 선택
+                            <span id="d1ItemPickerSelectedCount" class="ml-2 text-xs text-indigo-600 font-semibold"></span>
+                        </h3>
+                        <button type="button" onclick="closeD1ItemPickerModal()"
+                            class="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none px-1">&times;</button>
+                    </div>
+                    <!-- 필터 -->
+                    <div class="flex flex-wrap gap-2 px-4 py-2 bg-gray-50 border-b flex-none">
+                        <input type="text" id="d1picker-sakun" placeholder="사건번호" oninput="renderD1ItemPickerList()"
+                            class="px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-32 text-center">
+                        <input type="text" id="d1picker-court" placeholder="법원" oninput="renderD1ItemPickerList()"
+                            class="px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-20 text-center">
+                        <select id="d1picker-status" onchange="renderD1ItemPickerList()"
+                            class="px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                            <option value="">상태 전체</option>
+                            <option value="상품">상품</option>
+                            <option value="검증">검증</option>
+                            <option value="미정">미정</option>
+                            <option value="추천">추천</option>
+                            <option value="입찰">입찰</option>
+                            <option value="취소">취소</option>
+                        </select>
+                        <input type="text" id="d1picker-member" placeholder="회원" oninput="renderD1ItemPickerList()"
+                            class="px-2 py-1.5 border border-gray-300 rounded-lg text-sm w-24 text-center">
+                        <select id="d1picker-class-type" onchange="renderD1ItemPickerList()"
+                            class="px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
+                            <option value="">수업구분 전체</option>
+                        </select>
+                    </div>
+                    <!-- 리스트 -->
+                    <div class="flex-1 overflow-y-auto min-h-0">
+                        <table class="min-w-full text-xs border-collapse">
+                            <thead class="bg-gray-50 sticky top-0 z-10">
+                                <tr>
+                                    <th class="px-2 py-2 text-center w-8"><input type="checkbox" id="d1picker-check-all" onchange="d1PickerToggleAll(this.checked)" class="rounded cursor-pointer"></th>
+                                    <th class="px-2 py-2 text-center text-gray-600 font-bold">일자</th>
+                                    <th class="px-2 py-2 text-center text-gray-600 font-bold w-8">IMG</th>
+                                    <th class="px-2 py-2 text-left text-gray-600 font-bold">사건번호</th>
+                                    <th class="px-2 py-2 text-center text-gray-600 font-bold">법원</th>
+                                    <th class="px-2 py-2 text-center text-gray-600 font-bold">상태</th>
+                                    <th class="px-2 py-2 text-center text-gray-600 font-bold">회원</th>
+                                    <th class="px-2 py-2 text-center text-gray-600 font-bold">담당</th>
+                                </tr>
+                            </thead>
+                            <tbody id="d1ItemPickerTbody" class="divide-y divide-gray-100 bg-white">
+                                <tr><td colspan="8" class="p-4 text-center text-gray-400">데이터를 불러오는 중...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- 푸터 -->
+                    <div class="flex justify-end items-center gap-2 px-4 py-3 border-t bg-gray-50 flex-none">
+                        <button type="button" onclick="closeD1ItemPickerModal()"
+                            class="px-4 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100">취소</button>
+                        <button type="button" onclick="confirmD1ItemPicker()"
+                            class="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg">등록</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- 수업 생성 / 회차생성 모달 -->
             <div id="generateD1Modal" class="modal content-hidden" onclick="closeGenerateD1Modal(event)">

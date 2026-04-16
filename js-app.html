@@ -13567,6 +13567,139 @@ ${token}
     var d1PendingItems = []; // 물건 임시 목록 [{id, sakun_no, court, stu_member}]
     var d1ItemsData = [];    // 등록된 물건 조회 결과
 
+    // ─── 물건 선택 모달 ──────────────────────────────────────────────
+    let d1PickerSelected = new Set(); // 선택된 item.id Set
+
+    function showD1ItemPickerModal() {
+        if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
+            showStatus('먼저 회차를 선택하세요.', 'error');
+            return;
+        }
+        d1PickerSelected = new Set();
+        // 필터 초기화
+        ['d1picker-sakun','d1picker-court','d1picker-member'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        ['d1picker-status','d1picker-class-type'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        // 수업구분 드롭다운 채우기
+        const ctSel = document.getElementById('d1picker-class-type');
+        if (ctSel) {
+            const types = [...new Set((allBiddingData||[]).map(it => it.class_type||'').filter(Boolean))].sort();
+            ctSel.innerHTML = '<option value="">수업구분 전체</option>' + types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+        }
+        renderD1ItemPickerList();
+        document.getElementById('d1ItemPickerModal')?.classList.remove('content-hidden');
+    }
+
+    function closeD1ItemPickerModal(e) {
+        if (e && e.target !== e.currentTarget) return;
+        document.getElementById('d1ItemPickerModal')?.classList.add('content-hidden');
+    }
+
+    function renderD1ItemPickerList() {
+        const tbody = document.getElementById('d1ItemPickerTbody');
+        if (!tbody) return;
+        const fSakun  = (document.getElementById('d1picker-sakun')?.value  || '').toLowerCase().trim();
+        const fCourt  = (document.getElementById('d1picker-court')?.value  || '').toLowerCase().trim();
+        const fStatus = (document.getElementById('d1picker-status')?.value  || '').trim();
+        const fMember = (document.getElementById('d1picker-member')?.value || '').toLowerCase().trim();
+        const fCtype  = (document.getElementById('d1picker-class-type')?.value || '').trim();
+
+        const filtered = (allBiddingData || []).filter(it => {
+            if (fSakun  && !String(it.sakun_no||'').toLowerCase().includes(fSakun))   return false;
+            if (fCourt  && !String(it.court   ||'').toLowerCase().includes(fCourt))   return false;
+            if (fStatus && String(it.stu_member||'').trim() !== fStatus)               return false;
+            if (fMember && !String(it.m_name  ||'').toLowerCase().includes(fMember))  return false;
+            if (fCtype  && String(it.class_type||'').trim() !== fCtype)                return false;
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-400 text-xs">조회 결과가 없습니다.</td></tr>';
+            d1PickerUpdateCount_();
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(it => {
+            const checked = d1PickerSelected.has(String(it.id));
+            const alreadyIn = String(it.class_d1_id||'') === String(selectedClassD1Id||'');
+            const imgDot = (it.image_ids || it.image_id)
+                ? '<span class="inline-block w-2 h-2 rounded-full bg-green-500"></span>'
+                : '';
+            const statusCls = getStatusTagClass ? getStatusTagClass(it.stu_member) : '';
+            const rowBg = checked ? 'bg-indigo-50' : (alreadyIn ? 'bg-gray-50' : '');
+            return `<tr class="cursor-pointer hover:bg-indigo-50 transition-colors ${rowBg}" onclick="d1PickerToggleRow('${it.id}', this)">
+                <td class="px-2 py-1.5 text-center" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="d1picker-cb rounded cursor-pointer" value="${it.id}"
+                        ${checked ? 'checked' : ''} ${alreadyIn ? 'disabled title="이미 등록됨"' : ''}
+                        onchange="d1PickerOnCheck(this)">
+                </td>
+                <td class="px-2 py-1.5 text-center text-gray-600 whitespace-nowrap">${escapeHtml(it['in-date']||'')}</td>
+                <td class="px-2 py-1.5 text-center">${imgDot}</td>
+                <td class="px-2 py-1.5 text-left font-medium text-gray-800">${escapeHtml(it.sakun_no||'')}</td>
+                <td class="px-2 py-1.5 text-center text-gray-600">${escapeHtml(it.court||'')}</td>
+                <td class="px-2 py-1.5 text-center"><span class="${statusCls}">${escapeHtml(it.stu_member||'')}</span></td>
+                <td class="px-2 py-1.5 text-center text-gray-700">${escapeHtml(it.m_name||'')}</td>
+                <td class="px-2 py-1.5 text-center text-gray-500">${escapeHtml(it.m_name_id||'')}</td>
+            </tr>`;
+        }).join('');
+        d1PickerUpdateCount_();
+    }
+
+    function d1PickerToggleRow(itemId, tr) {
+        const cb = tr.querySelector('.d1picker-cb');
+        if (!cb || cb.disabled) return;
+        cb.checked = !cb.checked;
+        d1PickerOnCheck(cb);
+    }
+
+    function d1PickerOnCheck(cb) {
+        if (cb.checked) d1PickerSelected.add(String(cb.value));
+        else d1PickerSelected.delete(String(cb.value));
+        const tr = cb.closest('tr');
+        if (tr) tr.classList.toggle('bg-indigo-50', cb.checked);
+        d1PickerUpdateCount_();
+    }
+
+    function d1PickerToggleAll(checked) {
+        document.querySelectorAll('.d1picker-cb:not(:disabled)').forEach(cb => {
+            cb.checked = checked;
+            if (checked) d1PickerSelected.add(String(cb.value));
+            else d1PickerSelected.delete(String(cb.value));
+            const tr = cb.closest('tr');
+            if (tr) tr.classList.toggle('bg-indigo-50', checked);
+        });
+        d1PickerUpdateCount_();
+    }
+
+    function d1PickerUpdateCount_() {
+        const el = document.getElementById('d1ItemPickerSelectedCount');
+        if (el) el.textContent = d1PickerSelected.size > 0 ? `(${d1PickerSelected.size}개 선택됨)` : '';
+    }
+
+    function confirmD1ItemPicker() {
+        if (d1PickerSelected.size === 0) { showStatus('선택된 물건이 없습니다.', 'error'); return; }
+        if (!selectedClassD1Id || selectedClassD1Id === '__summary__') { showStatus('회차를 선택하세요.', 'error'); return; }
+
+        const d1Info = allClassD1Data.find(d => String(d.class_d1_id) === String(selectedClassD1Id));
+        const className = d1Info ? [d1Info.class_type, d1Info.class_name].filter(Boolean).join('') : '';
+
+        const itemIds = [...d1PickerSelected];
+        closeD1ItemPickerModal();
+
+        google.script.run
+            .withSuccessHandler(r => {
+                showStatus(r.success ? `${itemIds.length}개 물건이 등록되었습니다.` : (r.message || '등록 실패'), r.success ? 'success' : 'error');
+                if (r.success) loadD1Items(selectedClassD1Id);
+            })
+            .withFailureHandler(e => showStatus(e.message || '등록 실패', 'error'))
+            .assignItemsToClassD1(selectedClassD1Id, itemIds, selectedClassId, className);
+    }
+
     function showD1ItemRegisterPanel() {
         if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
             showStatus('먼저 회차를 선택하세요.', 'error');
