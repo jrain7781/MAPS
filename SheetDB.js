@@ -2752,6 +2752,19 @@ function readMemberClassDetailsByBatchKey(batchKey) {
 }
 
 /**
+ * 선택된 회원들의 상태값을 일괄 업데이트합니다.
+ * batchKey: 배치키, memberIds: [memberId, ...], status: 새 상태값
+ */
+function bulkUpdateMemberStatus(batchKey, memberIds, status) {
+  var updated = 0;
+  for (var i = 0; i < memberIds.length; i++) {
+    var r = saveMemberClassDetail(batchKey, memberIds[i], { member_status: status });
+    if (r && r.success) updated++;
+  }
+  return { success: true, message: updated + '명 상태 변경 완료 (' + status + ')' };
+}
+
+/**
  * 수업 회원 상세를 저장(upsert)합니다.
  * updates: 저장할 필드 객체 (e.g. { member_status: '수강중', no_1: '260409', remark1: '...' })
  */
@@ -2949,15 +2962,30 @@ function getMemberAttendanceCount(memberId, classId) {
  * - mData.status === '진행중' → 앞에서 remaining개 O, 나머지 X (remaining=0이면 전체X)
  * - 그 외 (종료/홀딩/빈값 등) → 전체 X
  */
-function buildInitialAttendance_(mData, totalSessions) {
+/**
+ * sessionDates: ['20260311', '20260318', ...] 형식 배열 (no_1부터 순서대로)
+ * isNew + sessionDates → 지나간 회차 X, 미래/오늘 회차 O
+ * isNew + sessionDates 없음 → 전체 O (하위 호환)
+ * 가져오기 → remaining 개수만큼 O, 나머지 X
+ */
+function buildInitialAttendance_(mData, totalSessions, sessionDates) {
   var result = {};
   if (totalSessions <= 0) return result;
-  // remaining이 -1 = 직접등록(신규) → 전체 O
-  // 가져오기 회원 → remaining 개수만큼 O, 나머지 X
-  var isNew     = !mData || mData.remaining === -1;
-  var remaining = isNew ? totalSessions : Math.max(0, parseInt(mData.remaining) || 0);
-  for (var n = 1; n <= totalSessions && n <= 20; n++) {
-    result['no_' + n] = (n <= remaining) ? 'O' : 'X';
+  var isNew = !mData || mData.remaining === -1;
+
+  if (isNew && Array.isArray(sessionDates) && sessionDates.length > 0) {
+    // 신규 중간 추가: 지나간 날짜 → X, 오늘 이후 → O
+    var tz    = Session.getScriptTimeZone();
+    var today = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
+    for (var n = 1; n <= Math.min(sessionDates.length, 20); n++) {
+      var ds = String(sessionDates[n - 1] || '').replace(/-/g, '');
+      result['no_' + n] = (ds !== '' && ds < today) ? 'X' : 'O';
+    }
+  } else {
+    var remaining = isNew ? totalSessions : Math.max(0, parseInt(mData.remaining) || 0);
+    for (var n = 1; n <= totalSessions && n <= 20; n++) {
+      result['no_' + n] = (n <= remaining) ? 'O' : 'X';
+    }
   }
   return result;
 }
@@ -3018,8 +3046,24 @@ function addMemberToClassD1(classD1IdOrBatchKey, memberId, classId, mData, total
   const newId = new Date().getTime().toString();
   const regDate = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
 
-  // 출석 초기값 계산 (신규=전체O, 진행중=잔여만O+나머지X, 기타=전체X)
-  const attendance = buildInitialAttendance_(mData || null, totalSessions || 0);
+  // 배치 세션 날짜 조회 (신규 중간 추가 시 지나간 회차 X 처리용)
+  var sessionDates = [];
+  try {
+    var d1Sh = ensureClassD1Sheet_();
+    var d1Last2 = d1Sh.getLastRow();
+    if (d1Last2 >= 2) {
+      var d1Rows2 = d1Sh.getRange(2, 1, d1Last2 - 1, CLASS_D1_HEADERS.length).getValues();
+      var d1IdIdx2   = CLASS_D1_HEADERS.indexOf('class_d1_id');
+      var d1DateIdx  = CLASS_D1_HEADERS.indexOf('class_date');
+      var d1LoopIdx  = CLASS_D1_HEADERS.indexOf('class_loop');
+      var batchRows  = d1Rows2.filter(function(r) { return extractD1BatchKey_(String(r[d1IdIdx2])) === batchKey; });
+      batchRows.sort(function(a, b) { return Number(a[d1LoopIdx]) - Number(b[d1LoopIdx]); });
+      sessionDates = batchRows.map(function(r) { return String(r[d1DateIdx] || '').replace(/-/g, ''); });
+    }
+  } catch(e) { /* 날짜 조회 실패 시 전체 O 폴백 */ }
+
+  // 출석 초기값 계산 (신규=지나간X/미래O, 가져오기=잔여만큼O)
+  const attendance = buildInitialAttendance_(mData || null, totalSessions || 0, sessionDates);
 
   const row = MEMBER_CLASS_DETAILS_HEADERS.map(function(h) {
     switch (h) {

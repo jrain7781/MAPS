@@ -5312,7 +5312,9 @@ MJ 이정우 팀장
 
     function renderKakaoTemplateTabs(memberId, ctx) {
         try {
-            const containerId = ctx === 'item' ? 'item-kakao-tabs-container' : 'modal-kakao-tabs-container';
+            const containerId = ctx === 'item' ? 'item-kakao-tabs-container'
+                : ctx === 'd1member' ? 'd1member-kakao-tabs-container'
+                : 'modal-kakao-tabs-container';
             const container = document.getElementById(containerId);
             if (!container) return;
 
@@ -5359,7 +5361,9 @@ MJ 이정우 팀장
     }
 
     function _applyKakaoTabStyle(ctx) {
-        const containerId = ctx === 'item' ? 'item-kakao-tabs-container' : 'modal-kakao-tabs-container';
+        const containerId = ctx === 'item' ? 'item-kakao-tabs-container'
+            : ctx === 'd1member' ? 'd1member-kakao-tabs-container'
+            : 'modal-kakao-tabs-container';
         const container = document.getElementById(containerId);
         if (!container) return;
         container.querySelectorAll('.kakao-tab-btn').forEach(btn => {
@@ -5380,16 +5384,26 @@ MJ 이정우 팀장
     }
 
     function _updateKakaoTextarea(ctx) {
-        const taId = ctx === 'item' ? 'item-template-textarea' : 'template-textarea';
+        const taId = ctx === 'item' ? 'item-template-textarea'
+            : ctx === 'd1member' ? 'd1member-template-textarea'
+            : 'template-textarea';
         const ta = document.getElementById(taId);
         if (!ta) return;
         const tpl = allKakaoTemplates.find(t => t.id === _kakaoActiveId[ctx]);
-        const data = ctx === 'item' ? currentDetailItem : currentModalItemData;
+        let data;
+        if (ctx === 'd1member') {
+            const mem = getMemberById_(selectedSummaryMemberId_);
+            data = mem ? { m_name: mem.member_name || mem.name1 || '', member_id: mem.member_id } : null;
+        } else {
+            data = ctx === 'item' ? currentDetailItem : currentModalItemData;
+        }
         ta.value = tpl && data ? _parseKakaoTpl(tpl.content, data) : '';
     }
 
     function _renderKakaoNameField(memberId, ctx) {
-        const rowId = ctx === 'item' ? 'item-kakao-name-row' : 'modal-kakao-name-row';
+        const rowId = ctx === 'item' ? 'item-kakao-name-row'
+            : ctx === 'd1member' ? 'd1member-kakao-name-row'
+            : 'modal-kakao-name-row';
         const row = document.getElementById(rowId);
         if (!row) return;
         const mem = memberId ? getMemberById_(memberId) : null;
@@ -12514,10 +12528,10 @@ ${token}
                 <th class="px-1 py-2 text-center" style="min-width:24px">
                     <input type="checkbox" id="d1SummaryCheckAll" onchange="toggleAllSummaryCheck(this.checked)" class="cursor-pointer">
                 </th>
-                <th class="px-2 py-2 text-left font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="min-width:60px" onclick="sortSummaryByName_()">이름 ↕</th>
-                <th class="px-2 py-2 text-left font-bold text-gray-600" style="min-width:80px">전화번호</th>
-                <th class="px-2 py-2 text-center font-bold text-gray-600" style="min-width:64px">상태</th>
-                <th class="px-2 py-2 text-center font-bold text-purple-600" style="min-width:36px">잔여</th>
+                <th class="px-2 py-2 text-left text-sm font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="min-width:70px" onclick="sortSummaryByName_()">이름 ↕</th>
+                <th class="px-2 py-2 text-left text-xs font-bold text-gray-600" style="min-width:90px">전화번호</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-gray-600" style="min-width:68px">상태</th>
+                <th class="px-2 py-2 text-center text-sm font-bold text-purple-600" style="min-width:36px">잔여</th>
                 ${sessionColHeaders}
             </tr>`;
 
@@ -12545,9 +12559,9 @@ ${token}
         for (let j = 0; j < sorted.length; j++) {
             const m = sorted[j];
             const isSelected = String(m.member_id) === String(selectedSummaryMemberId_);
-            const rowBg = isSelected ? 'bg-blue-50' : 'hover:bg-gray-50';
+            const isLastRow  = j === sorted.length - 1;
 
-            // 잔여 차수 계산: 오늘 이후 세션 중 X가 아닌 것 (= 아직 수강 예정인 것)
+            // 잔여 차수 계산: 오늘 이후 세션 중 X가 아닌 것
             let remaining = 0;
             for (let i = 0; i < d1List.length; i++) {
                 const val = String(m['no_' + (i + 1)] || '').trim().toUpperCase();
@@ -12556,11 +12570,16 @@ ${token}
             }
             const remColor = remaining <= 2 ? 'text-red-600 font-bold' : remaining <= 5 ? 'text-amber-600 font-semibold' : 'text-gray-700';
 
+            // 텔레그램 아이콘 (allMembersNewData에서 조회)
+            const mInfo = allMembersNewData ? allMembersNewData.find(x => String(x.member_id) === String(m.member_id)) : null;
+            const tgIcon = (mInfo && mInfo.telegram_enabled === 'Y') ? '<span class="ml-0.5 text-[10px] text-blue-500" title="텔레그램 사용">✈</span>' : '';
+            const memberTitle = `전화: ${m.phone || '-'} | 상태: ${m.member_status || '-'}`;
+
             // 상태 드롭다운
             const statusOpts = statusList.map(function(s) {
                 return `<option value="${escapeHtml(s)}" ${m.member_status === s ? 'selected' : ''}>${escapeHtml(s)}</option>`;
             }).join('');
-            const statusSel = `<select class="text-[10px] border border-gray-200 rounded px-0.5 py-0 ${statusColor_(m.member_status)} cursor-pointer focus:outline-none bg-white"
+            const statusSel = `<select class="text-xs border border-gray-200 rounded px-1 py-0.5 ${statusColor_(m.member_status)} cursor-pointer focus:outline-none bg-white"
                 onclick="event.stopPropagation()"
                 onchange="saveSummaryStatus_('${escapeHtml(String(m.member_id))}','${escapeHtml(String(m.class_d1_id||''))}',this.value)">
                 <option value="">-</option>
@@ -12581,32 +12600,33 @@ ${token}
                 if (val === 'X') {
                     display = '✕'; colorClass = 'text-gray-400 font-semibold'; cellBg = 'bg-gray-100';
                 } else if (isPast) {
-                    display = '●'; colorClass = 'text-green-500 text-[14px]'; cellBg = '';
+                    display = '●'; colorClass = 'text-green-500 text-[15px]'; cellBg = '';
                 } else {
-                    // 미래 O 또는 빈값 → 예정 회색 심볼 (수정 불가)
-                    display = '●'; colorClass = 'text-gray-300 text-[14px]'; cellBg = '';
+                    display = '●'; colorClass = 'text-gray-300 text-[15px]'; cellBg = '';
                 }
 
-                const upcomingTdClass = isUpcoming
-                    ? 'border-l-2 border-r-2 border-red-400'
-                    : 'border-l border-gray-300';
+                const upcomingTdClass = isUpcoming ? 'border-l-2 border-r-2 border-red-400' : 'border-l border-gray-300';
                 const d1IdEsc = escapeHtml(String(d1List[i].class_d1_id));
                 const batchKeyEsc = escapeHtml(getD1BatchKey_(String(d1List[i].class_d1_id)));
-                // 미래 예정(비X)은 클릭 불가 (O는 수정 안 됨)
                 const tdInteract = isFutureNonX ? 'cursor-default' : 'cursor-pointer';
-                const tdOnclick  = isFutureNonX ? '' : `onclick="showAttendDropdown_(event,'${escapeHtml(String(m.member_id))}',${i+1},'${d1IdEsc}','${batchKeyEsc}')"`;
-                sessionCells += `<td class="px-1 py-1.5 text-center text-[11px] ${upcomingTdClass} ${cellBg} ${tdInteract} group-hover:bg-indigo-100 select-none" ${tdOnclick}>${`<span class="${colorClass}">${display}</span>`}</td>`;
+                const tdOnclick  = isFutureNonX ? '' : `onclick="event.stopPropagation(); showAttendDropdown_(event,'${escapeHtml(String(m.member_id))}',${i+1},'${d1IdEsc}','${batchKeyEsc}')"`;
+                sessionCells += `<td class="px-1 py-2 text-center text-xs ${upcomingTdClass} ${cellBg} ${tdInteract} group-hover:bg-indigo-100 select-none" ${tdOnclick}><span class="${colorClass}">${display}</span></td>`;
             }
 
             const memIdEsc = escapeHtml(String(m.member_id));
-            bodyHtml += `<tr class="group ${isSelected ? 'bg-blue-100' : ''} transition-colors" data-summary-row="${memIdEsc}">
-                <td class="px-1 py-1.5 text-center group-hover:bg-indigo-100" onclick="event.stopPropagation()">
+            const selCls  = isSelected ? 'bg-indigo-100' : '';
+            const lastCls = isLastRow  ? 'border-b-2 border-gray-400' : '';
+            const selBorderCls = isSelected ? 'border-l-4 border-indigo-500' : '';
+            bodyHtml += `<tr class="group ${selCls} ${lastCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
+                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls}" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
-                <td class="px-2 py-1.5 font-medium text-gray-800 text-xs cursor-pointer group-hover:bg-indigo-100" onclick="selectSummaryMember('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</td>
-                <td class="px-2 py-1.5 text-gray-500 text-[11px] cursor-pointer group-hover:bg-indigo-100" onclick="selectSummaryMember('${memIdEsc}')">${escapeHtml(m.phone || '-')}</td>
-                <td class="px-1 py-1 text-center group-hover:bg-indigo-100" onclick="event.stopPropagation()">${statusSel}</td>
-                <td class="px-1 py-1.5 text-center text-[11px] ${remColor} cursor-pointer group-hover:bg-indigo-100" onclick="selectSummaryMember('${memIdEsc}')">${remaining}</td>
+                <td class="px-2 py-2 font-semibold text-sm group-hover:bg-indigo-100">
+                    <span class="text-gray-800 hover:text-indigo-600 hover:underline" title="${memberTitle}" onclick="event.stopPropagation(); navigateToMemberFromD1_('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</span>${tgIcon}
+                </td>
+                <td class="px-2 py-2 text-gray-500 text-xs group-hover:bg-indigo-100">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-1 py-2 text-center group-hover:bg-indigo-100" onclick="event.stopPropagation()">${statusSel}</td>
+                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100">${remaining}</td>
                 ${sessionCells}
             </tr>`;
         }
@@ -12641,8 +12661,42 @@ ${token}
             }
         });
 
+        // 일괄 상태변경 컨트롤
+        const bulkStatusOpts = ['', ...getD1StatusList_()].map(s =>
+            `<option value="${escapeHtml(s)}">${s || '-- 상태 선택 --'}</option>`
+        ).join('');
+        html += `<span class="text-gray-200 mx-1">|</span>
+            <span class="text-gray-500 text-[10px]">선택:</span>
+            <select id="d1BulkStatusSel" class="text-[10px] border border-gray-300 rounded px-1 py-0.5 focus:outline-none bg-white">${bulkStatusOpts}</select>
+            <button onclick="bulkUpdateSummaryStatus_()" class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] rounded font-semibold">일괄변경</button>`;
+
         bar.innerHTML = html;
         bar.classList.remove('content-hidden');
+    }
+
+    function bulkUpdateSummaryStatus_() {
+        const sel = document.getElementById('d1BulkStatusSel');
+        const status = sel ? sel.value : '';
+        if (!status) { showStatus('변경할 상태를 선택하세요.', 'error'); return; }
+        const checked = Array.from(document.querySelectorAll('.d1-summary-check:checked'));
+        if (checked.length === 0) { showStatus('변경할 회원을 선택하세요.', 'error'); return; }
+        const memberIds = checked.map(cb => String(cb.dataset.memberId));
+        const batchKey = getCurrentBatchKey_();
+        if (!batchKey) { showStatus('배치를 선택하세요.', 'error'); return; }
+        showStatus('상태 변경 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function(r) {
+                showStatus(r.message || '완료', r.success ? 'success' : 'error');
+                if (r.success) {
+                    memberIds.forEach(id => {
+                        const m = summaryMemberData_.find(x => String(x.member_id) === id);
+                        if (m) m.member_status = status;
+                    });
+                    renderD1SummaryGrid(summaryMemberData_);
+                }
+            })
+            .withFailureHandler(function(e) { showStatus(e.message || '오류', 'error'); })
+            .bulkUpdateMemberStatus(batchKey, memberIds, status);
     }
 
     function setD1SummaryFilter_(status) {
@@ -12845,14 +12899,48 @@ ${token}
 
     function selectSummaryMember(memberId) {
         selectedSummaryMemberId_ = memberId;
-        document.querySelectorAll('[data-summary-row]').forEach(function (tr) {
-            const isSel = tr.dataset.summaryRow === String(memberId);
-            tr.classList.toggle('bg-blue-50', isSel);
-            tr.classList.toggle('hover:bg-gray-50', !isSel);
-        });
+        // 선택 행 강조: 기존 행 클래스 재렌더링
+        renderD1SummaryGrid(summaryMemberData_);
         const member = summaryMemberData_.find(function (m) { return String(m.member_id) === String(memberId); });
         if (!member) return;
         renderSummaryMemberDetail(member);
+        // 카카오 탭 초기화
+        setTimeout(function() {
+            renderKakaoTemplateTabs(memberId, 'd1member');
+            _renderKakaoNameField(memberId, 'd1member');
+        }, 50);
+    }
+
+    function navigateToMemberFromD1_(memberId) {
+        const mem = summaryMemberData_.find(m => String(m.member_id) === String(memberId));
+        if (!mem) return;
+        navigateTo('MemberManagement');
+        setTimeout(() => {
+            const si = document.getElementById('mem-search-name');
+            if (si) {
+                si.value = mem.member_name || '';
+                if (typeof filterMembersNew === 'function') filterMembersNew();
+                else if (typeof filterMembers === 'function') filterMembers();
+            }
+        }, 150);
+    }
+
+    function sendD1MemberKakao_() {
+        const ta = document.getElementById('d1member-template-textarea');
+        if (!ta || !ta.value.trim()) { showStatus('전송할 내용이 없습니다.', 'error'); return; }
+        const mem = getMemberById_(selectedSummaryMemberId_);
+        if (!mem) { showStatus('회원 정보를 찾을 수 없습니다.', 'error'); return; }
+        const kName = mem.kakao_name || mem.member_name || '';
+        if (!kName) { showStatus('카카오 이름이 없습니다. 회원관리에서 설정해주세요.', 'error'); return; }
+        showStatus(`카카오 전송 중: ${kName}...`, 'warning');
+        fetch('http://127.0.0.1:8000/send_kakao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_name: kName, message: ta.value, auto_enter: _kakaoAutoEnter })
+        })
+        .then(r => r.json())
+        .then(d => { showStatus(d.success ? '카카오 전송 완료!' : '전송 실패: ' + (d.message || ''), d.success ? 'success' : 'error'); })
+        .catch(e => showStatus('카카오 서버 오류: ' + e.message, 'error'));
     }
 
     function renderSummaryMemberDetail(m) {
@@ -12924,8 +13012,17 @@ ${token}
             </div>
             <div>
                 <div class="text-[10px] font-bold text-gray-500 mb-1">비고 <span class="font-normal text-gray-400">(remark1)</span></div>
-                <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400" rows="3" placeholder="비고를 입력하세요">${escapeHtml(m.remark1 || '')}</textarea>
+                <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400" rows="9" placeholder="비고를 입력하세요">${escapeHtml(m.remark1 || '')}</textarea>
                 <button onclick="saveSummaryRemark_('${memId}','${batchKey}')" class="mt-1 w-full py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">저장</button>
+            </div>
+            <div class="mt-3 pt-2 border-t border-gray-200">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-[10px] font-bold text-gray-500">💬 카카오 메시지</span>
+                    <button onclick="sendD1MemberKakao_()" class="px-2 py-1 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-xs font-bold rounded">💬카톡</button>
+                </div>
+                <div class="flex flex-wrap gap-0.5 border-b border-gray-200 mb-1" id="d1member-kakao-tabs-container"></div>
+                <div id="d1member-kakao-name-row" class="py-1"></div>
+                <textarea id="d1member-template-textarea" rows="5" readonly class="w-full px-2 py-1 border border-blue-200 rounded text-xs font-mono bg-blue-50 focus:outline-none"></textarea>
             </div>`;
     }
 
@@ -13196,7 +13293,9 @@ ${token}
         if (prevMemberSection) prevMemberSection.classList.remove('hidden');
         const prevMemberList = document.getElementById('prev-genD1-memberList');
         if (prevMemberList) prevMemberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">배치 선택 후 가져오기를 눌러주세요</div>';
-        // 오른쪽 회원 그리드: 가져오기 버튼 누를 때 로드 (초기엔 빈 상태)
+        // 오른쪽 회원 그리드: 모달 열릴 때 바로 표시 (빈 상태로)
+        const rightMemberSection = document.getElementById('genD1-memberSection');
+        if (rightMemberSection) rightMemberSection.classList.remove('hidden');
         const rightMemberList = document.getElementById('genD1-memberList');
         if (rightMemberList) rightMemberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">직접 추가하거나 왼쪽에서 가져오세요</div>';
         const rightMemberCount = document.getElementById('genD1-memberCount');
@@ -13569,20 +13668,17 @@ ${token}
             const status = m.member_status || '';
             let remaining;
             if (totalLoop > 0) {
-                // renderD1SummaryGrid와 동일: 오늘 이후 X가 아닌 세션 = 잔여
-                remaining = 0;
+                // 이월 잔여 = 배치 총 회차 - 이번 배치에서 참석한/예정인 회차(X 아닌 것)
+                // 예) 8회차 합류(1~7=X, 8~10=O): 10 - 3 = 7 → 다음 배치에 7회 이월
+                let nonX = 0;
                 for (let i = 0; i < batchSessions.length; i++) {
                     const val = String(m['no_' + (i + 1)] || '').trim().toUpperCase();
-                    const raw = String(batchSessions[i].class_date || '').replace(/-/g, '');
-                    if (raw >= todayStr && val !== 'X') remaining++;
+                    if (val !== 'X') nonX++;
                 }
+                remaining = Math.max(0, totalLoop - nonX);
             } else {
-                // 날짜 정보 없을 때 fallback: O 개수를 잔여로
+                // 날짜 정보 없을 때 fallback
                 remaining = 0;
-                for (let n = 1; n <= 20; n++) {
-                    const v = String(m['no_' + n] || '').trim().toUpperCase();
-                    if (v === 'O') remaining++;
-                }
             }
             const statusDisp = status || '-';
             return `<label class="grid items-center gap-1 px-2 py-1 text-[10px] cursor-pointer hover:bg-indigo-50 ${rowClass}" style="grid-template-columns:20px 1fr 1fr 1fr 1fr">
@@ -13708,9 +13804,10 @@ ${token}
     }
 
     // ================================================================
-    // 회원등록 모달 (수업생성/회차생성용)
+    // 회원등록 모달 (수업생성/회차생성용 + 회원탭 직접등록용)
     // ================================================================
     let _memregFilteredData = [];
+    let _memregCtx_ = 'genD1'; // 'genD1': 수업생성 패널에 추가 | 'batch': 현재 배치에 직접 저장
 
     function showMemberRegisterModal() {
         const modal = document.getElementById('memberRegisterModal');
@@ -13843,6 +13940,26 @@ ${token}
     function confirmMemberRegister() {
         const checked = document.querySelectorAll('.memreg-cb:checked');
         if (checked.length === 0) { alert('등록할 회원을 선택해주세요.'); return; }
+
+        // ── 회원탭에서 직접 현재 배치에 추가 ──
+        if (_memregCtx_ === 'batch') {
+            _memregCtx_ = 'genD1';
+            const batchKey = getCurrentBatchKey_();
+            if (!batchKey) { showStatus('배치를 선택하세요.', 'error'); return; }
+            const totalSessions = d1Batches[d1BatchIdx]?.items?.length || 0;
+            const memberIds = Array.from(checked).map(cb => String(cb.value));
+            const memberData = memberIds.map(id => ({ id, status: '', remaining: -1 }));
+            closeMemberRegisterModal();
+            showStatus('추가 중...', 'info');
+            google.script.run
+                .withSuccessHandler(function(r) {
+                    showStatus(r.message || '추가 완료', r.success ? 'success' : 'error');
+                    if (r.success) loadD1SummaryGrid();
+                })
+                .withFailureHandler(function(e) { showStatus(e.message || '오류', 'error'); })
+                .addMemberToClassD1Batch(batchKey, memberIds, selectedClassId, memberData, totalSessions);
+            return;
+        }
 
         const cls = allClassesData.find(c => String(c.class_id) === String(selectedClassId)) || {};
         const clsInfo = [cls.class_name, cls.class_grade ? `[${cls.class_grade}]` : '', cls.class_loc ? `(${cls.class_loc})` : ''].filter(Boolean).join(' ');
@@ -14518,8 +14635,9 @@ ${token}
 
     function showAddMemberToD1Modal() {
         if (!selectedClassId) { showStatus('수업을 선택하세요.', 'error'); return; }
-        const modal = document.getElementById('addMemberToD1Modal');
-        if (modal) modal.classList.remove('content-hidden');
+        if (!getCurrentBatchKey_()) { showStatus('배치를 선택하세요.', 'error'); return; }
+        _memregCtx_ = 'batch';
+        showMemberRegisterModal();
     }
 
     function selectD1AcItem_(it) {
