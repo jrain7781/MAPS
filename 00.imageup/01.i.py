@@ -20,7 +20,7 @@ from selenium.webdriver.support import expected_conditions as EC
 ACCOUNTS = [
     {"id": "mjgold",   "pw": "28471296",    "manager": "대표님"},
     {"id": "mjjang1",  "pw": "28471298",    "manager": "대표님"},
-    {"id": "jjhsm81",  "pw": "marlboro81!", "manager": "전제혁"}
+    #{"id": "jjhsm81",  "pw": "marlboro81!", "manager": "전제혁"}
 ]
 
 # 저장 경로: 구글 드라이브 (웹 등록과 동일하게 유지)
