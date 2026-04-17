@@ -12116,6 +12116,11 @@ ${token}
     function selectD1Batch(idx) {
         d1BatchIdx = idx;
         renderClassD1Grid();
+        // 회원 탭이 현재 열려 있으면 해당 배치 회원으로 갱신
+        const memberPanel = document.getElementById('d1TabPanel-member');
+        if (memberPanel && !memberPanel.classList.contains('hidden')) {
+            loadD1SummaryGrid();
+        }
     }
 
 
@@ -12169,7 +12174,7 @@ ${token}
                 panel?.classList.add('hidden');
             }
         });
-        if (tabName === 'member') loadD1SummaryGrid(selectedClassId);
+        if (tabName === 'member') loadD1SummaryGrid();
         else if (tabName === 'item') loadD1Items(selectedClassD1Id);
     }
 
@@ -12358,14 +12363,53 @@ ${token}
     let selectedSummaryMemberId_ = null;
     let summarySortKey_ = 'name';
     let summarySortAsc_ = true;
+    let d1SummaryStatusFilter_ = null;
 
-    function loadD1SummaryGrid(classId) {
-        if (!classId) return;
+    // 상태값 목록 (localStorage 저장)
+    const D1_STATUS_LS_KEY = 'd1StatusList_v1';
+    const D1_STATUS_DEFAULTS = ['진행중', '종료', '홀딩'];
+    function getD1StatusList_() {
+        try {
+            const raw = localStorage.getItem(D1_STATUS_LS_KEY);
+            if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr) && arr.length) return arr; }
+        } catch(e) {}
+        return D1_STATUS_DEFAULTS.slice();
+    }
+    function saveD1StatusList_(list) {
+        try { localStorage.setItem(D1_STATUS_LS_KEY, JSON.stringify(list)); } catch(e) {}
+    }
+
+    // 출석 드롭다운 상태
+    var _attendDropCtx = null; // { memberId, loopNo, d1Id, classD1IdBatch }
+
+    // class_d1_id에서 배치키 추출 (GAS extractD1BatchKey_ 동일 로직)
+    function getD1BatchKey_(classD1Id) {
+        var s = String(classD1Id || '');
+        var last = s.lastIndexOf('_');
+        if (last > 0 && /^\d{1,4}$/.test(s.substring(last + 1))) return s.substring(0, last);
+        return s;
+    }
+
+    // 현재 선택된 배치의 전체 배치키 반환 (member_class_details.class_d1_id 형식)
+    function getCurrentBatchKey_() {
+        const batch = d1Batches[d1BatchIdx];
+        if (!batch || !batch.items || batch.items.length === 0) return null;
+        return getD1BatchKey_(String(batch.items[0].class_d1_id));
+    }
+
+    function loadD1SummaryGrid() {
+        const batchKey = getCurrentBatchKey_();
         const thead = document.getElementById('d1SummaryThead');
         const tbody = document.getElementById('d1SummaryTbody');
         const detail = document.getElementById('d1SummaryDetail');
         if (thead) thead.innerHTML = '';
-        if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">불러오는 중...</td></tr>';
+        if (tbody) {
+            if (!batchKey) {
+                tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">배치를 선택하세요</td></tr>';
+                return;
+            }
+            tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">불러오는 중...</td></tr>';
+        }
         if (detail) detail.innerHTML = '<div class="text-gray-400 text-xs text-center py-4">회원을 선택하세요</div>';
         selectedSummaryMemberId_ = null;
         google.script.run
@@ -12376,7 +12420,7 @@ ${token}
             .withFailureHandler(function () {
                 if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-red-500 text-xs">로드 실패</td></tr>';
             })
-            .readMemberClassDetailsByClassId(classId);
+            .readMemberClassDetailsByBatchKey(batchKey);
     }
 
     function renderD1SummaryGrid(members) {
@@ -12384,33 +12428,41 @@ ${token}
         const tbody = document.getElementById('d1SummaryTbody');
         if (!thead || !tbody) return;
 
+        const todayStr = (function() {
+            const n = new Date();
+            return String(n.getFullYear()) + String(n.getMonth()+1).padStart(2,'0') + String(n.getDate()).padStart(2,'0');
+        })();
+
+        // 현재 배치의 세션만 표시 (member_class_details.class_d1_id 기준)
+        const currentBatchKey = getCurrentBatchKey_();
         const d1List = (allClassD1Data || [])
-            .filter(function (d) { return String(d.class_id) === String(selectedClassId); })
+            .filter(function (d) { return currentBatchKey ? getD1BatchKey_(String(d.class_d1_id)) === currentBatchKey : String(d.class_id) === String(selectedClassId); })
             .slice().sort(function (a, b) { return Number(a.class_loop) - Number(b.class_loop); });
         const N = d1List.length;
-        const totalCols = 3 + N;
 
-        const classInfo = (allClassesData || []).find(function (c) { return String(c.class_id) === String(selectedClassId); });
-        const totalLoop = classInfo ? (Number(classInfo.class_loop) || N) : N;
+        // 총 차수: 현재 배치 세션 수 (no_N 인덱스와 1:1 대응)
+        const totalLoop = N;
 
-        const dayNames_ = ['일', '월', '화', '수', '목', '금', '토'];
-        let sessionColHeaders = '';
+        // 다가오는 수업(오늘 이후 가장 빠른) 인덱스
+        let upcomingIdx = -1;
         for (let i = 0; i < d1List.length; i++) {
-            const d = d1List[i];
-            const raw = String(d.class_date || '').replace(/-/g, '');
-            let dateDisp = '', dayDisp = '';
-            if (raw.length >= 8) {
-                dateDisp = raw.substring(4, 6) + '/' + raw.substring(6, 8);
-                const dt = new Date(raw.substring(0, 4) + '-' + raw.substring(4, 6) + '-' + raw.substring(6, 8));
-                if (!isNaN(dt)) dayDisp = '(' + dayNames_[dt.getDay()] + ')';
-            }
-            const isActive = summarySortKey_ === 'no_' + (i + 1);
-            sessionColHeaders += `<th class="px-1 py-1 text-center border-l border-gray-200 cursor-pointer ${isActive ? 'bg-blue-200' : 'hover:bg-blue-100'}" style="min-width:50px" onclick="sortSummaryBySession_(${i + 1})">
-                <div class="text-[11px] font-bold text-blue-600">${d.class_loop}회</div>
-                <div class="text-[9px] font-semibold text-blue-500 whitespace-nowrap">${dateDisp} ${dayDisp}</div>
-            </th>`;
+            const raw = String(d1List[i].class_date || '').replace(/-/g, '');
+            if (raw >= todayStr) { upcomingIdx = i; break; }
         }
 
+        const statusList = getD1StatusList_();
+
+        // 상태 필터링
+        const filtered = d1SummaryStatusFilter_
+            ? members.filter(function(m){ return m.member_status === d1SummaryStatusFilter_; })
+            : members;
+
+        // 전체회원 현황 요약 바 렌더링
+        renderD1MemberSummaryBar_(members, statusList);
+
+        const dayNames_ = ['일', '월', '화', '수', '목', '금', '토'];
+
+        // 연도 그룹 헤더
         const yearGroups = [];
         for (let i = 0; i < d1List.length; i++) {
             const raw = String(d1List[i].class_date || '').replace(/-/g, '');
@@ -12428,27 +12480,58 @@ ${token}
             yearColHeaders += `<th colspan="${g.count}" class="px-1 py-0.5 text-center text-[9px] font-bold bg-gray-100 ${yearColors[i % yearColors.length]} border-l border-gray-200">${g.year}년</th>`;
         }
 
+        // 회차 컬럼 헤더
+        let sessionColHeaders = '';
+        for (let i = 0; i < d1List.length; i++) {
+            const d = d1List[i];
+            const raw = String(d.class_date || '').replace(/-/g, '');
+            let dateDisp = '', dayDisp = '';
+            if (raw.length >= 8) {
+                dateDisp = raw.substring(4, 6) + '/' + raw.substring(6, 8);
+                const dt = new Date(raw.substring(0, 4) + '-' + raw.substring(4, 6) + '-' + raw.substring(6, 8));
+                if (!isNaN(dt)) dayDisp = '(' + dayNames_[dt.getDay()] + ')';
+            }
+            const isActive = summarySortKey_ === 'no_' + (i + 1);
+            const isUpcoming = i === upcomingIdx;
+            const upcomingThClass = isUpcoming
+                ? 'border-l-2 border-r-2 border-t-2 border-red-400 bg-red-50'
+                : (isActive ? 'border-l border-gray-200 bg-blue-200' : 'border-l border-gray-200 hover:bg-blue-100');
+            sessionColHeaders += `<th class="px-1 py-1 text-center cursor-pointer ${upcomingThClass}" style="min-width:48px" onclick="sortSummaryBySession_(${i + 1})">
+                <div class="text-[11px] font-bold ${isUpcoming ? 'text-red-600' : 'text-blue-600'}">${d.class_loop}회</div>
+                <div class="text-[9px] font-semibold ${isUpcoming ? 'text-red-400' : 'text-blue-500'} whitespace-nowrap">${dateDisp} ${dayDisp}</div>
+            </th>`;
+        }
+
+        // 총 컬럼 수 (checkbox + 이름 + 전화 + 상태 + 잔여 + 회차들)
+        const totalCols = 5 + N;
+
         thead.innerHTML = `
             <tr>
-                <th colspan="3" class="bg-white"></th>
+                <th colspan="5" class="bg-white"></th>
                 ${yearColHeaders}
             </tr>
             <tr class="bg-blue-50">
+                <th class="px-1 py-2 text-center" style="min-width:24px">
+                    <input type="checkbox" id="d1SummaryCheckAll" onchange="toggleAllSummaryCheck(this.checked)" class="cursor-pointer">
+                </th>
                 <th class="px-2 py-2 text-left font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="min-width:60px" onclick="sortSummaryByName_()">이름 ↕</th>
                 <th class="px-2 py-2 text-left font-bold text-gray-600" style="min-width:80px">전화번호</th>
-                <th class="px-2 py-2 text-center font-bold text-gray-600" style="min-width:44px">상태</th>
+                <th class="px-2 py-2 text-center font-bold text-gray-600" style="min-width:64px">상태</th>
+                <th class="px-2 py-2 text-center font-bold text-purple-600" style="min-width:36px">잔여</th>
                 ${sessionColHeaders}
             </tr>`;
 
-        let sorted = members.slice();
+        let sorted = filtered.slice();
         if (summarySortKey_ === 'name') {
             sorted.sort(function (a, b) { return (a.member_name || '').localeCompare(b.member_name || ''); });
             if (!summarySortAsc_) sorted.reverse();
         } else if (summarySortKey_.startsWith('no_')) {
             sorted.sort(function (a, b) {
-                const aO = String(a[summarySortKey_] || '').trim().toUpperCase() === 'O' ? 0 : 1;
-                const bO = String(b[summarySortKey_] || '').trim().toUpperCase() === 'O' ? 0 : 1;
-                if (aO !== bO) return aO - bO;
+                const aV = String(a[summarySortKey_] || '').trim().toUpperCase();
+                const bV = String(b[summarySortKey_] || '').trim().toUpperCase();
+                const aRank = aV === 'O' ? 0 : aV === 'X' ? 2 : 1;
+                const bRank = bV === 'O' ? 0 : bV === 'X' ? 2 : 1;
+                if (aRank !== bRank) return summarySortAsc_ ? aRank - bRank : bRank - aRank;
                 return (a.member_name || '').localeCompare(b.member_name || '');
             });
         }
@@ -12464,40 +12547,107 @@ ${token}
             const isSelected = String(m.member_id) === String(selectedSummaryMemberId_);
             const rowBg = isSelected ? 'bg-blue-50' : 'hover:bg-gray-50';
 
+            // 잔여 차수 계산: 날짜 지난 차수 중 X가 아닌 것 + 명시적 O
             let attended = 0;
-            for (let i = 1; i <= N; i++) {
-                if (String(m['no_' + i] || '').trim().toUpperCase() === 'O') attended++;
+            for (let i = 0; i < d1List.length; i++) {
+                const val = String(m['no_' + (i + 1)] || '').trim().toUpperCase();
+                const raw = String(d1List[i].class_date || '').replace(/-/g, '');
+                const isPast = raw < todayStr;
+                if (val === 'O' || (isPast && val !== 'X' && val !== 'O')) attended++;
             }
             const remaining = Math.max(0, totalLoop - attended);
+            const remColor = remaining <= 2 ? 'text-red-600 font-bold' : remaining <= 5 ? 'text-amber-600 font-semibold' : 'text-gray-700';
 
-            let expiryIdx = -1, remCount = remaining;
-            for (let i = 0; i < N && remCount > 0; i++) {
-                if (String(m['no_' + (i + 1)] || '').trim().toUpperCase() !== 'O') {
-                    remCount--;
-                    if (remCount === 0) expiryIdx = i;
-                }
-            }
+            // 상태 드롭다운
+            const statusOpts = statusList.map(function(s) {
+                return `<option value="${escapeHtml(s)}" ${m.member_status === s ? 'selected' : ''}>${escapeHtml(s)}</option>`;
+            }).join('');
+            const statusSel = `<select class="text-[10px] border border-gray-200 rounded px-0.5 py-0 ${statusColor_(m.member_status)} cursor-pointer focus:outline-none bg-white"
+                onclick="event.stopPropagation()"
+                onchange="saveSummaryStatus_('${escapeHtml(String(m.member_id))}','${escapeHtml(String(m.class_d1_id||''))}',this.value)">
+                <option value="">-</option>
+                ${statusOpts}
+            </select>`;
 
-            const statusBadge = m.member_status
-                ? `<span class="px-1 py-0.5 rounded text-[10px] font-semibold ${statusColor_(m.member_status)}">${escapeHtml(m.member_status)}</span>`
-                : '<span class="text-gray-300">-</span>';
-
+            // 회차 셀
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const val = String(m['no_' + (i + 1)] || '').trim().toUpperCase();
-                const isO = val === 'O';
-                const cellBg = i === expiryIdx ? 'bg-amber-100' : '';
-                sessionCells += `<td class="px-1 py-1.5 text-center border-l border-gray-100 text-[11px] ${cellBg} ${isO ? 'text-blue-700 font-bold' : 'text-gray-300'}">${isO ? 'O' : '·'}</td>`;
+                const raw = String(d1List[i].class_date || '').replace(/-/g, '');
+                const isPast = raw < todayStr;
+                const isUpcoming = i === upcomingIdx;
+
+                let display, colorClass;
+                if (val === 'O') {
+                    display = 'O'; colorClass = 'text-blue-700 font-bold';
+                } else if (val === 'X') {
+                    display = '✕'; colorClass = 'text-red-500 font-bold';
+                } else if (isPast) {
+                    display = '●'; colorClass = 'text-green-500 text-[14px]';
+                } else {
+                    display = '●'; colorClass = 'text-gray-300 text-[14px]';
+                }
+
+                const upcomingTdClass = isUpcoming
+                    ? 'border-l-2 border-r-2 border-red-400 bg-red-50'
+                    : 'border-l border-gray-100';
+                const d1IdEsc = escapeHtml(String(d1List[i].class_d1_id));
+                // 해당 회차가 속한 배치키를 session의 class_d1_id에서 추출 (회원별 기본 배치키가 아님)
+                const batchKeyEsc = escapeHtml(getD1BatchKey_(String(d1List[i].class_d1_id)));
+                sessionCells += `<td class="px-1 py-1.5 text-center text-[11px] ${upcomingTdClass} cursor-pointer hover:bg-blue-50 select-none"
+                    onclick="showAttendDropdown_(event,'${escapeHtml(String(m.member_id))}',${i+1},'${d1IdEsc}','${batchKeyEsc}')">${`<span class="${colorClass}">${display}</span>`}</td>`;
             }
 
-            bodyHtml += `<tr class="cursor-pointer ${rowBg} transition-colors" onclick="selectSummaryMember('${m.member_id}')" data-summary-row="${m.member_id}">
-                <td class="px-2 py-1.5 font-medium text-gray-800 text-xs">${escapeHtml(m.member_name || '-')}</td>
-                <td class="px-2 py-1.5 text-gray-500 text-[11px]">${escapeHtml(m.phone || '-')}</td>
-                <td class="px-2 py-1.5 text-center">${statusBadge}</td>
+            const memIdEsc = escapeHtml(String(m.member_id));
+            bodyHtml += `<tr class="${rowBg} transition-colors" data-summary-row="${memIdEsc}">
+                <td class="px-1 py-1.5 text-center" onclick="event.stopPropagation()">
+                    <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
+                </td>
+                <td class="px-2 py-1.5 font-medium text-gray-800 text-xs cursor-pointer" onclick="selectSummaryMember('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</td>
+                <td class="px-2 py-1.5 text-gray-500 text-[11px] cursor-pointer" onclick="selectSummaryMember('${memIdEsc}')">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-1 py-1 text-center" onclick="event.stopPropagation()">${statusSel}</td>
+                <td class="px-1 py-1.5 text-center text-[11px] ${remColor} cursor-pointer" onclick="selectSummaryMember('${memIdEsc}')">${remaining}</td>
                 ${sessionCells}
             </tr>`;
         }
         tbody.innerHTML = bodyHtml;
+    }
+
+    function renderD1MemberSummaryBar_(members, statusList) {
+        const bar = document.getElementById('d1MemberSummaryBar');
+        if (!bar) return;
+        if (!members || members.length === 0) { bar.classList.add('content-hidden'); return; }
+
+        const counts = {};
+        members.forEach(function(m) {
+            const s = m.member_status || '(없음)';
+            counts[s] = (counts[s] || 0) + 1;
+        });
+
+        const isAct = function(k) { return d1SummaryStatusFilter_ === k ? 'font-bold underline' : ''; };
+        const btn = 'cursor-pointer hover:opacity-70 transition';
+
+        let html = `<span class="${btn} text-gray-600 ${isAct(null)}" onclick="setD1SummaryFilter_(null)">전체 ${members.length}명</span>`;
+        statusList.forEach(function(s) {
+            const cnt = counts[s] || 0;
+            if (!cnt) return;
+            const col = statusColor_(s).split(' ')[1] || 'text-gray-600';
+            html += `<span class="text-gray-300">|</span><span class="${btn} ${col} ${isAct(s)}" onclick="setD1SummaryFilter_('${escapeHtml(s)}')">${escapeHtml(s)} ${cnt}명</span>`;
+        });
+        // 기타 상태
+        Object.keys(counts).forEach(function(s) {
+            if (statusList.indexOf(s) === -1 && counts[s]) {
+                html += `<span class="text-gray-300">|</span><span class="${btn} text-gray-500 ${isAct(s)}" onclick="setD1SummaryFilter_('${escapeHtml(s)}')">${escapeHtml(s)} ${counts[s]}명</span>`;
+            }
+        });
+
+        bar.innerHTML = html;
+        bar.classList.remove('content-hidden');
+    }
+
+    function setD1SummaryFilter_(status) {
+        d1SummaryStatusFilter_ = (d1SummaryStatusFilter_ === status) ? null : status;
+        renderD1SummaryGrid(summaryMemberData_);
     }
 
     function sortSummaryByName_() {
@@ -12514,10 +12664,183 @@ ${token}
     }
 
     function statusColor_(status) {
-        if (status === '수강중') return 'bg-green-100 text-green-700';
+        if (status === '수강중' || status === '진행중') return 'bg-green-100 text-green-700';
         if (status === '홀딩') return 'bg-yellow-100 text-yellow-700';
         if (status === '종료') return 'bg-gray-100 text-gray-500';
         return 'bg-blue-100 text-blue-700';
+    }
+
+    // ─── 전체 체크박스 ────────────────────────────────────────────────────────
+    function toggleAllSummaryCheck(checked) {
+        document.querySelectorAll('.d1-summary-check').forEach(function(cb) { cb.checked = checked; });
+    }
+
+    // ─── 회원 삭제 (체크된 항목) ──────────────────────────────────────────────
+    function deleteCheckedSummaryMembers() {
+        const checked = Array.from(document.querySelectorAll('.d1-summary-check:checked'));
+        if (checked.length === 0) { showStatus('삭제할 회원을 선택하세요.', 'error'); return; }
+        if (!confirm(checked.length + '명을 이 수업에서 삭제하시겠습니까?')) return;
+        const detailIds = checked.map(function(cb) { return cb.dataset.detailId; }).filter(Boolean);
+        if (detailIds.length === 0) { showStatus('삭제할 수 없습니다 (detail_id 없음).', 'error'); return; }
+        let done = 0;
+        detailIds.forEach(function(did) {
+            google.script.run
+                .withSuccessHandler(function(r) {
+                    done++;
+                    if (done === detailIds.length) {
+                        showStatus('삭제 완료', 'success');
+                        loadD1SummaryGrid(selectedClassId);
+                    }
+                })
+                .withFailureHandler(function(e) { showStatus(e.message || '삭제 실패', 'error'); })
+                .removeMemberFromClassD1(did);
+        });
+    }
+
+    // ─── 회원 수정 (체크된 1명) ──────────────────────────────────────────────
+    function editCheckedSummaryMember() {
+        const checked = Array.from(document.querySelectorAll('.d1-summary-check:checked'));
+        if (checked.length === 0) { showStatus('수정할 회원을 선택하세요.', 'error'); return; }
+        if (checked.length > 1) { showStatus('수정은 1명씩 선택해 주세요.', 'error'); return; }
+        const memberId = checked[0].dataset.memberId;
+        if (!memberId) return;
+        // 회원관리 탭의 수정 모달 재사용 (기존 editMember 함수 활용)
+        const m = summaryMemberData_.find(function(x){ return String(x.member_id) === String(memberId); });
+        if (!m) { showStatus('회원 정보를 찾을 수 없습니다.', 'error'); return; }
+        selectSummaryMember(memberId);
+        showStatus('오른쪽 패널에서 회원 정보를 확인하세요.', 'info');
+    }
+
+    // ─── 상태 저장 ────────────────────────────────────────────────────────────
+    function saveSummaryStatus_(memberId, batchKey, newStatus) {
+        google.script.run
+            .withSuccessHandler(function(r) {
+                if (r && r.success) {
+                    // 로컬 데이터 업데이트
+                    const m = summaryMemberData_.find(function(x){ return String(x.member_id) === String(memberId); });
+                    if (m) m.member_status = newStatus;
+                    renderD1MemberSummaryBar_(summaryMemberData_, getD1StatusList_());
+                    showStatus('상태 저장 완료', 'success');
+                } else {
+                    showStatus((r && r.message) || '저장 실패', 'error');
+                }
+            })
+            .withFailureHandler(function(e) { showStatus(e.message || '저장 실패', 'error'); })
+            .saveMemberClassDetail(batchKey, memberId, { member_status: newStatus });
+    }
+
+    // ─── 출석 드롭다운 ────────────────────────────────────────────────────────
+    function showAttendDropdown_(event, memberId, loopNo, d1Id, batchKey) {
+        event.stopPropagation();
+        _attendDropCtx = { memberId: memberId, loopNo: loopNo, d1Id: d1Id, batchKey: batchKey };
+        const dd = document.getElementById('d1AttendDropdown');
+        if (!dd) return;
+        dd.classList.remove('content-hidden');
+        const x = Math.min(event.clientX, window.innerWidth - 110);
+        const y = Math.min(event.clientY + 4, window.innerHeight - 110);
+        dd.style.left = x + 'px';
+        dd.style.top = y + 'px';
+    }
+
+    function hideAttendDropdown_() {
+        const dd = document.getElementById('d1AttendDropdown');
+        if (dd) dd.classList.add('content-hidden');
+        _attendDropCtx = null;
+    }
+
+    function setAttendValue_(val) {
+        if (!_attendDropCtx) return;
+        const { memberId, loopNo, batchKey } = _attendDropCtx;
+        hideAttendDropdown_();
+        const fieldKey = 'no_' + loopNo;
+        const saveVal = val === 'auto' ? '' : val;
+        showStatus('저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function(r) {
+                if (r && r.success) {
+                    const m = summaryMemberData_.find(function(x){ return String(x.member_id) === String(memberId); });
+                    if (m) m[fieldKey] = saveVal;
+                    renderD1SummaryGrid(summaryMemberData_);
+                    showStatus('출석 저장 완료', 'success');
+                } else {
+                    showStatus((r && r.message) || '저장 실패', 'error');
+                }
+            })
+            .withFailureHandler(function(e) { showStatus(e.message || '저장 실패', 'error'); })
+            .saveMemberClassDetail(batchKey, memberId, { [fieldKey]: saveVal });
+    }
+
+    // 드롭다운 외부 클릭 시 닫기
+    document.addEventListener('click', function(e) {
+        const dd = document.getElementById('d1AttendDropdown');
+        if (dd && !dd.classList.contains('content-hidden') && !dd.contains(e.target)) {
+            hideAttendDropdown_();
+        }
+    });
+
+    // ─── 상태값 관리 모달 ────────────────────────────────────────────────────
+    function openD1StatusMgmtModal() {
+        renderD1StatusMgmtList_();
+        const modal = document.getElementById('d1StatusMgmtModal');
+        if (modal) modal.classList.remove('content-hidden');
+    }
+
+    function closeD1StatusMgmtModal(event) {
+        if (event && event.target !== event.currentTarget) return;
+        const modal = document.getElementById('d1StatusMgmtModal');
+        if (modal) modal.classList.add('content-hidden');
+    }
+
+    function renderD1StatusMgmtList_() {
+        const list = document.getElementById('d1StatusMgmtList');
+        if (!list) return;
+        const statusList = getD1StatusList_();
+        if (statusList.length === 0) {
+            list.innerHTML = '<div class="text-gray-400 text-xs text-center py-2">등록된 상태값이 없습니다.</div>';
+            return;
+        }
+        list.innerHTML = statusList.map(function(s, idx) {
+            return `<div class="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded border border-gray-100">
+                <input type="text" value="${escapeHtml(s)}" class="flex-1 text-xs border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400"
+                    onblur="updateD1Status_(${idx}, this.value)" onkeydown="if(event.key==='Enter') this.blur()">
+                <button onclick="deleteD1Status_(${idx})" class="text-red-400 hover:text-red-600 text-sm font-bold leading-none" title="삭제">&times;</button>
+            </div>`;
+        }).join('');
+    }
+
+    function addD1Status_() {
+        const inp = document.getElementById('d1StatusNewInput');
+        if (!inp) return;
+        const val = inp.value.trim();
+        if (!val) return;
+        const list = getD1StatusList_();
+        if (list.indexOf(val) >= 0) { showStatus('이미 존재하는 상태값입니다.', 'error'); return; }
+        list.push(val);
+        saveD1StatusList_(list);
+        inp.value = '';
+        renderD1StatusMgmtList_();
+        renderD1SummaryGrid(summaryMemberData_);
+    }
+
+    function updateD1Status_(idx, newVal) {
+        const val = (newVal || '').trim();
+        if (!val) { renderD1StatusMgmtList_(); return; }
+        const list = getD1StatusList_();
+        if (idx < 0 || idx >= list.length) return;
+        list[idx] = val;
+        saveD1StatusList_(list);
+        renderD1StatusMgmtList_();
+        renderD1SummaryGrid(summaryMemberData_);
+    }
+
+    function deleteD1Status_(idx) {
+        const list = getD1StatusList_();
+        if (idx < 0 || idx >= list.length) return;
+        if (!confirm('"' + list[idx] + '" 상태값을 삭제하시겠습니까?')) return;
+        list.splice(idx, 1);
+        saveD1StatusList_(list);
+        renderD1StatusMgmtList_();
+        renderD1SummaryGrid(summaryMemberData_);
     }
 
     function selectSummaryMember(memberId) {
@@ -12533,19 +12856,29 @@ ${token}
     }
 
     function renderSummaryMemberDetail(m) {
+        // 현재 배치 세션만 표시
+        const cbk = getCurrentBatchKey_();
         const d1List = (allClassD1Data || [])
-            .filter(function (d) { return String(d.class_id) === String(selectedClassId); })
+            .filter(function (d) { return cbk ? getD1BatchKey_(String(d.class_d1_id)) === cbk : String(d.class_id) === String(selectedClassId); })
             .slice().sort(function (a, b) { return Number(a.class_loop) - Number(b.class_loop); });
         const N = d1List.length;
         const detail = document.getElementById('d1SummaryDetail');
         if (!detail) return;
 
-        const classInfo = (allClassesData || []).find(function (c) { return String(c.class_id) === String(selectedClassId); });
-        const totalLoop = classInfo ? (Number(classInfo.class_loop) || N) : N;
+        const todayStr = (function() {
+            const n = new Date();
+            return String(n.getFullYear()) + String(n.getMonth()+1).padStart(2,'0') + String(n.getDate()).padStart(2,'0');
+        })();
+
+        // 총 차수 = 현재 배치 세션 수
+        const totalLoop = N;
 
         let attended = 0;
-        for (let i = 1; i <= N; i++) {
-            if (String(m['no_' + i] || '').trim().toUpperCase() === 'O') attended++;
+        for (let i = 0; i < d1List.length; i++) {
+            const val = String(m['no_' + (i+1)] || '').trim().toUpperCase();
+            const raw = String(d1List[i].class_date || '').replace(/-/g, '');
+            const isPast = raw < todayStr;
+            if (val === 'O' || (isPast && val !== 'X' && val !== 'O')) attended++;
         }
         const remaining = Math.max(0, totalLoop - attended);
         let remBg = 'bg-green-100 text-green-700';
@@ -12863,8 +13196,11 @@ ${token}
         if (prevMemberSection) prevMemberSection.classList.remove('hidden');
         const prevMemberList = document.getElementById('prev-genD1-memberList');
         if (prevMemberList) prevMemberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">배치 선택 후 가져오기를 눌러주세요</div>';
-        // 오른쪽 회원 그리드: 열릴 때 현재 수업 회원 로드
-        loadAllClassMembersToRight_();
+        // 오른쪽 회원 그리드: 가져오기 버튼 누를 때 로드 (초기엔 빈 상태)
+        const rightMemberList = document.getElementById('genD1-memberList');
+        if (rightMemberList) rightMemberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">직접 추가하거나 왼쪽에서 가져오세요</div>';
+        const rightMemberCount = document.getElementById('genD1-memberCount');
+        if (rightMemberCount) rightMemberCount.textContent = '0명';
 
         // 왼쪽 필드 초기화 (데이터 없이 빈 값)
         document.getElementById('genD1-startDate').value = '';
@@ -13208,22 +13544,33 @@ ${token}
             return;
         }
         listEl.innerHTML = members.map(m => {
-            const info = `${m.phone || ''} | ${escapeHtml(m.member_name || '')}`;
             const status = m.member_status || '-';
-            return `<label class="grid items-center gap-1 px-2 py-1 text-[10px] cursor-pointer hover:bg-indigo-50 ${rowClass}" style="grid-template-columns:20px 1fr 2fr 1fr">
-                <input type="checkbox" class="${cbClass} rounded" value="${m.member_id}" checked>
+            // 잔여: no_1..no_20 중 '●' 값 개수, 총차수: 비어있지 않은 no_N 개수
+            let total = 0, remaining = 0;
+            for (let n = 1; n <= 20; n++) {
+                const v = String(m['no_' + n] || '').trim();
+                if (v !== '') { total++; if (v === '●') remaining++; }
+            }
+            const remainStr = `${remaining}/${total}`;
+            return `<label class="grid items-center gap-1 px-2 py-1 text-[10px] cursor-pointer hover:bg-indigo-50 ${rowClass}" style="grid-template-columns:20px 1fr 1fr 1fr 1fr">
+                <input type="checkbox" class="${cbClass} rounded" value="${m.member_id}"
+                    data-status="${escapeHtml(status)}" data-remaining="${remaining}" checked>
                 <span class="font-medium truncate">${escapeHtml(m.member_name || '-')}</span>
-                <span class="text-gray-500 truncate">${info}</span>
+                <span class="text-gray-500 truncate">${m.phone || '-'}</span>
                 <span class="text-indigo-600 text-[10px]">${escapeHtml(status)}</span>
+                <span class="text-gray-500">${remainStr}</span>
             </label>`;
         }).join('');
         const allChk = document.getElementById(selectAllId);
         if (allChk) allChk.checked = true;
     }
 
-    // 마지막 회차 회원을 미리보기 영역에 로드 (신규 구조)
+    // 마지막 회차 회원을 미리보기 영역에 로드 (배치키 기준)
     function loadPreviewMembers_(lastD1Id) {
+        const batchKey = getD1BatchKey_(String(lastD1Id));
         const memberList = document.getElementById('prev-genD1-memberList');
+        const memberSection = document.getElementById('prev-genD1-memberSection');
+        if (memberSection) memberSection.classList.remove('hidden');
         memberList.innerHTML = '<div class="p-2 text-xs text-gray-400 text-center">불러오는 중...</div>';
 
         google.script.run
@@ -13233,7 +13580,7 @@ ${token}
             .withFailureHandler(function () {
                 memberList.innerHTML = '<div class="p-2 text-xs text-red-400 text-center">로드 실패</div>';
             })
-            .readMemberClassDetailsByClassId(selectedClassId);
+            .readMemberClassDetailsByBatchKey(batchKey);
     }
 
     function loadGenD1Members_(d1Ids) {
@@ -13478,12 +13825,12 @@ ${token}
             const stuInfo = `ID:${m.member_id} | ${m.phone || ''} | ${escapeHtml(m.name1 || m.member_name || '')} - ${escapeHtml(clsInfo)}`;
             const label = document.createElement('label');
             label.className = 'grid items-center gap-1 px-2 py-1 text-[10px] cursor-pointer hover:bg-indigo-50 genD1-member-row';
-            label.style.gridTemplateColumns = '20px 1fr 2fr 1fr 1fr';
-            label.innerHTML = `<input type="checkbox" class="genD1-member-cb rounded" value="${memberId}" checked>
+            label.style.gridTemplateColumns = '20px 1fr 1fr 1fr 1fr';
+            label.innerHTML = `<input type="checkbox" class="genD1-member-cb rounded" value="${memberId}" data-status="" data-remaining="-1" checked>
                 <span class="font-medium truncate" title="${escapeHtml(m.member_name || '-')}">${escapeHtml(m.member_name || '-')}</span>
-                <span class="text-gray-500 truncate" title="${stuInfo}">${stuInfo}</span>
-                <span class="text-indigo-600">-</span>
-                <span class="text-gray-500">-</span>`;
+                <span class="text-gray-500 truncate">${m.phone || '-'}</span>
+                <span class="text-indigo-600">신규</span>
+                <span class="text-gray-500">전체</span>`;
             memberList.appendChild(label);
             addedCount++;
         });
@@ -13531,15 +13878,24 @@ ${token}
         if (!getDropdownTime_('genD1-timeFrom') || getDropdownTime_('genD1-timeFrom') === '00:00') { showStatus('수업 시작 시간을 선택하세요.', 'error'); return; }
         if (mode === 'create' && startLoop > endLoop) { showStatus('시작회차가 최종회차보다 큽니다.', 'error'); return; }
 
-        // 선택된 회원 ID
+        // 선택된 회원 데이터 (ID + 이전 배치 상태/잔여)
         const memberIds = [];
-        document.querySelectorAll('.genD1-member-cb:checked').forEach(cb => memberIds.push(cb.value));
+        const memberData = [];
+        document.querySelectorAll('.genD1-member-cb:checked').forEach(cb => {
+            memberIds.push(cb.value);
+            memberData.push({
+                id: String(cb.value),
+                status: cb.dataset.status || '',      // '' = 직접등록(신규) → 전체 O
+                remaining: parseInt(cb.dataset.remaining) ?? -1  // -1 = 신규
+            });
+        });
+        const totalSessions = mode === 'add' ? addCount : (endLoop - startLoop + 1);
         const bid1Count = parseInt(document.getElementById('genD1-bid1Count')?.value) || null;
         const bid2Count = parseInt(document.getElementById('genD1-bid2Count')?.value) || null;
         const bidOpts = { bidStarttimeDay, bidStarttimeTime, bidDatetime1Day, bidDatetime1Time, bidDatetime2Day, bidDatetime2Time, bid1Count, bid2Count };
         const options = mode === 'add'
-            ? { addCount, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds, teacherId }
-            : { startLoop, endLoop, timeFrom, timeTo, ...bidOpts, memberIds, teacherId };
+            ? { addCount, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds, memberData, totalSessions, teacherId }
+            : { startLoop, endLoop, timeFrom, timeTo, ...bidOpts, memberIds, memberData, totalSessions, teacherId };
 
         // 생성 중 팝업 표시
         closeGenerateD1Modal();
