@@ -12574,37 +12574,39 @@ ${token}
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
                 const isPast = raw < todayStr;
                 const isUpcoming = i === upcomingIdx;
+                const isFutureNonX = !isPast && val !== 'X';
 
+                // 표시: X=취소, 과거=● 녹색(출석), 미래=● 회색(예정)
                 let display, colorClass, cellBg;
-                if (val === 'O') {
-                    display = 'O'; colorClass = 'text-green-700 font-bold'; cellBg = 'bg-green-100';
-                } else if (val === 'X') {
+                if (val === 'X') {
                     display = '✕'; colorClass = 'text-gray-400 font-semibold'; cellBg = 'bg-gray-100';
                 } else if (isPast) {
                     display = '●'; colorClass = 'text-green-500 text-[14px]'; cellBg = '';
                 } else {
+                    // 미래 O 또는 빈값 → 예정 회색 심볼 (수정 불가)
                     display = '●'; colorClass = 'text-gray-300 text-[14px]'; cellBg = '';
                 }
 
                 const upcomingTdClass = isUpcoming
                     ? 'border-l-2 border-r-2 border-red-400'
-                    : 'border-l border-gray-100';
+                    : 'border-l border-gray-300';
                 const d1IdEsc = escapeHtml(String(d1List[i].class_d1_id));
-                // 해당 회차가 속한 배치키를 session의 class_d1_id에서 추출 (회원별 기본 배치키가 아님)
                 const batchKeyEsc = escapeHtml(getD1BatchKey_(String(d1List[i].class_d1_id)));
-                sessionCells += `<td class="px-1 py-1.5 text-center text-[11px] ${upcomingTdClass} ${cellBg} cursor-pointer hover:bg-blue-50 select-none"
-                    onclick="showAttendDropdown_(event,'${escapeHtml(String(m.member_id))}',${i+1},'${d1IdEsc}','${batchKeyEsc}')">${`<span class="${colorClass}">${display}</span>`}</td>`;
+                // 미래 예정(비X)은 클릭 불가 (O는 수정 안 됨)
+                const tdInteract = isFutureNonX ? 'cursor-default' : 'cursor-pointer';
+                const tdOnclick  = isFutureNonX ? '' : `onclick="showAttendDropdown_(event,'${escapeHtml(String(m.member_id))}',${i+1},'${d1IdEsc}','${batchKeyEsc}')"`;
+                sessionCells += `<td class="px-1 py-1.5 text-center text-[11px] ${upcomingTdClass} ${cellBg} ${tdInteract} group-hover:bg-blue-50 select-none" ${tdOnclick}>${`<span class="${colorClass}">${display}</span>`}</td>`;
             }
 
             const memIdEsc = escapeHtml(String(m.member_id));
-            bodyHtml += `<tr class="${rowBg} transition-colors" data-summary-row="${memIdEsc}">
-                <td class="px-1 py-1.5 text-center" onclick="event.stopPropagation()">
+            bodyHtml += `<tr class="group ${isSelected ? 'bg-blue-50' : ''} transition-colors" data-summary-row="${memIdEsc}">
+                <td class="px-1 py-1.5 text-center group-hover:bg-blue-50" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
-                <td class="px-2 py-1.5 font-medium text-gray-800 text-xs cursor-pointer" onclick="selectSummaryMember('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</td>
-                <td class="px-2 py-1.5 text-gray-500 text-[11px] cursor-pointer" onclick="selectSummaryMember('${memIdEsc}')">${escapeHtml(m.phone || '-')}</td>
-                <td class="px-1 py-1 text-center" onclick="event.stopPropagation()">${statusSel}</td>
-                <td class="px-1 py-1.5 text-center text-[11px] ${remColor} cursor-pointer" onclick="selectSummaryMember('${memIdEsc}')">${remaining}</td>
+                <td class="px-2 py-1.5 font-medium text-gray-800 text-xs cursor-pointer group-hover:bg-blue-50" onclick="selectSummaryMember('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</td>
+                <td class="px-2 py-1.5 text-gray-500 text-[11px] cursor-pointer group-hover:bg-blue-50" onclick="selectSummaryMember('${memIdEsc}')">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-1 py-1 text-center group-hover:bg-blue-50" onclick="event.stopPropagation()">${statusSel}</td>
+                <td class="px-1 py-1.5 text-center text-[11px] ${remColor} cursor-pointer group-hover:bg-blue-50" onclick="selectSummaryMember('${memIdEsc}')">${remaining}</td>
                 ${sessionCells}
             </tr>`;
         }
@@ -12664,7 +12666,7 @@ ${token}
     function statusColor_(status) {
         if (status === '수강중' || status === '진행중') return 'bg-green-100 text-green-700';
         if (status === '홀딩') return 'bg-yellow-100 text-yellow-700';
-        if (status === '종료') return 'bg-gray-100 text-gray-500';
+        if (status === '종료') return 'bg-gray-300 text-gray-700 font-semibold';
         return 'bg-blue-100 text-blue-700';
     }
 
