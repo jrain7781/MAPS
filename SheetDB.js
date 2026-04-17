@@ -2953,17 +2953,11 @@ function buildInitialAttendance_(mData, totalSessions) {
   var result = {};
   if (totalSessions <= 0) return result;
   // remaining이 -1 = 직접등록(신규) → 전체 O
+  // 가져오기 회원 → remaining 개수만큼 O, 나머지 X
   var isNew     = !mData || mData.remaining === -1;
-  var isActive  = !isNew && mData && String(mData.status) === '진행중';
-  var remaining = mData ? (parseInt(mData.remaining) || 0) : 0;
+  var remaining = isNew ? totalSessions : Math.max(0, parseInt(mData.remaining) || 0);
   for (var n = 1; n <= totalSessions && n <= 20; n++) {
-    if (isNew) {
-      result['no_' + n] = 'O';
-    } else if (isActive && n <= remaining) {
-      result['no_' + n] = 'O';
-    } else {
-      result['no_' + n] = 'X';
-    }
+    result['no_' + n] = (n <= remaining) ? 'O' : 'X';
   }
   return result;
 }
@@ -3032,9 +3026,10 @@ function addMemberToClassD1(classD1IdOrBatchKey, memberId, classId, mData, total
       case 'detail_id':   return newId;
       case 'class_d1_id': return batchKey;
       case 'class_id':    return classId || '';
-      case 'member_id':   return memberId;
-      case 'reg_date':    return regDate;
-      default:            return attendance[h] !== undefined ? attendance[h] : '';
+      case 'member_id':     return memberId;
+      case 'member_status': return mData ? (mData.status || '') : '';
+      case 'reg_date':      return regDate;
+      default:              return attendance[h] !== undefined ? attendance[h] : '';
     }
   });
 
