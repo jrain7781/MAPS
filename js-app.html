@@ -12045,10 +12045,10 @@ ${token}
             const txtCls = isSelected ? 'font-semibold text-indigo-900' : 'text-gray-700';
 
             html += `<tr class="cursor-pointer ${rowCls} transition-colors" onclick="selectClassForSchedule('${c.class_id}')">
-                <td class="px-2 py-1.5 text-center text-xs ${txtCls}">${escapeHtml(c.class_type)}</td>
-                <td class="px-2 py-1.5 text-center text-xs ${txtCls}">${escapeHtml(c.class_name)}</td>
-                <td class="px-2 py-1.5 text-center text-xs ${txtCls}">${escapeHtml(c.class_grade)}</td>
-                <td class="px-2 py-1.5 text-center text-xs ${txtCls}">${escapeHtml(c.class_loc)}</td>
+                <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${escapeHtml(c.class_type)}</td>
+                <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${escapeHtml(c.class_name)}</td>
+                <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${escapeHtml(c.class_grade)}</td>
+                <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${escapeHtml(c.class_loc)}</td>
             </tr>`;
         }
         tbody.innerHTML = html;
@@ -12395,7 +12395,11 @@ ${token}
     }
 
     // 출석 드롭다운 상태
-    var _attendDropCtx = null; // { memberId, loopNo, d1Id, classD1IdBatch }
+    var _attendDropCtx = null; // { memberId, loopNo, d1Id, batchKey }
+
+    // 출석 변경 모드
+    let d1AttendEditMode_ = false;
+    let d1AttendPending_ = {}; // key: "memberId|loopNo" → newVal ('O' or 'X')
 
     // class_d1_id에서 배치키 추출 (GAS extractD1BatchKey_ 동일 로직)
     function getD1BatchKey_(classD1Id) {
@@ -12530,10 +12534,10 @@ ${token}
                 <th class="px-1 py-2 text-center relative" style="min-width:24px">
                     <input type="checkbox" id="d1SummaryCheckAll" onchange="toggleAllSummaryCheck(this.checked)" class="cursor-pointer">
                 </th>
-                <th class="px-2 py-2 text-left text-[13px] font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none relative" style="min-width:70px" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
-                <th class="px-2 py-2 text-left text-[11px] font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none relative" style="min-width:90px" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
-                <th class="px-2 py-2 text-center text-[11px] font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none relative" style="min-width:68px" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
-                <th class="px-2 py-2 text-center text-[13px] font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none relative" style="min-width:36px" onclick="sortSummaryByField_('remaining')">잔여${sortArrow('remaining')}</th>
+                <th class="px-2 py-2 text-left text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none relative" style="min-width:70px" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
+                <th class="px-2 py-2 text-left text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none relative" style="min-width:90px" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none relative" style="min-width:68px" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none relative" style="min-width:36px" onclick="sortSummaryByField_('remaining')">잔여${sortArrow('remaining')}</th>
                 ${sessionColHeaders}
             </tr>`;
 
@@ -12613,11 +12617,16 @@ ${token}
             // 회차 셀
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
-                const val = String(m['no_' + (i + 1)] || '').trim().toUpperCase();
+                const loopNo = i + 1;
+                const pendingKey = String(m.member_id) + '|' + loopNo;
+                const hasPending = d1AttendEditMode_ && d1AttendPending_[pendingKey] !== undefined;
+                const rawVal = String(m['no_' + loopNo] || '').trim().toUpperCase();
+                const val = hasPending ? String(d1AttendPending_[pendingKey]).toUpperCase() : rawVal;
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
-                const isPast = raw < todayStr;
+                // 오늘 포함 이전은 과거 취급 (버그 수정: < → <=)
+                const isPast = raw !== '' && raw <= todayStr;
                 const isUpcoming = i === upcomingIdx;
-                const isFutureNonX = !isPast && val !== 'X';
+                const isFutureNonX = !d1AttendEditMode_ && !isPast && val !== 'X';
 
                 // 표시: X=취소, 과거=● 녹색(출석), 미래=● 회색(예정)
                 let display, colorClass, cellBg;
@@ -12632,9 +12641,19 @@ ${token}
                 const upcomingTdClass = isUpcoming ? 'border-l-2 border-r-2 border-red-400' : 'border-l border-gray-300';
                 const d1IdEsc = escapeHtml(String(d1List[i].class_d1_id));
                 const batchKeyEsc = escapeHtml(getD1BatchKey_(String(d1List[i].class_d1_id)));
-                const tdInteract = isFutureNonX ? 'cursor-default' : 'cursor-pointer';
-                const tdOnclick  = isFutureNonX ? '' : `onclick="event.stopPropagation(); showAttendDropdown_(event,'${escapeHtml(String(m.member_id))}',${i+1},'${d1IdEsc}','${batchKeyEsc}')"`;
-                const tdBg = isSelected ? 'bg-indigo-100' : cellBg;
+                let tdBg, tdInteract, tdOnclick;
+                if (d1AttendEditMode_) {
+                    tdBg = hasPending ? 'bg-yellow-100' : (isSelected ? 'bg-indigo-100' : cellBg);
+                    tdInteract = 'cursor-pointer';
+                    tdOnclick = `onclick="event.stopPropagation(); markAttendPending_('${escapeHtml(String(m.member_id))}',${loopNo})"`;
+                } else if (isFutureNonX) {
+                    tdBg = isSelected ? 'bg-indigo-100' : cellBg;
+                    tdInteract = 'cursor-default'; tdOnclick = '';
+                } else {
+                    tdBg = isSelected ? 'bg-indigo-100' : cellBg;
+                    tdInteract = 'cursor-pointer';
+                    tdOnclick = `onclick="event.stopPropagation(); showAttendDropdown_(event,'${escapeHtml(String(m.member_id))}',${loopNo},'${d1IdEsc}','${batchKeyEsc}',${isPast})"`;
+                }
                 sessionCells += `<td class="px-1 py-2 text-center text-xs ${upcomingTdClass} ${tdBg} ${tdInteract} group-hover:bg-indigo-100 select-none" ${tdOnclick}><span class="${colorClass}">${display}</span></td>`;
             }
 
@@ -12646,12 +12665,12 @@ ${token}
                 <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls}" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
-                <td class="px-2 py-2 font-semibold text-[13px] group-hover:bg-indigo-100">
+                <td class="px-2 py-2 font-semibold text-sm group-hover:bg-indigo-100">
                     <span class="text-gray-800 hover:text-indigo-600 hover:underline" title="${memberTitle}" onclick="event.stopPropagation(); navigateToMemberFromD1_('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</span>${tgIcon}
                 </td>
-                <td class="px-2 py-2 text-gray-500 text-[11px] group-hover:bg-indigo-100">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-2 py-2 text-gray-500 text-sm group-hover:bg-indigo-100">${escapeHtml(m.phone || '-')}</td>
                 <td class="px-1 py-2 text-center group-hover:bg-indigo-100" onclick="event.stopPropagation()">${statusSel}</td>
-                <td class="px-1 py-2 text-center text-[13px] font-bold ${remColor} group-hover:bg-indigo-100">${remaining}</td>
+                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100">${remaining}</td>
                 ${sessionCells}
             </tr>`;
         }
@@ -12691,10 +12710,26 @@ ${token}
         const bulkStatusOpts = ['', ...getD1StatusList_()].map(s =>
             `<option value="${escapeHtml(s)}">${s || '-- 상태 선택 --'}</option>`
         ).join('');
+        // 상태값 일괄변경
         html += `<span class="text-gray-200 mx-1">|</span>
-            <span class="text-gray-500 text-xs">선택:</span>
-            <select id="d1BulkStatusSel" class="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none bg-white">${bulkStatusOpts}</select>
+            <select id="d1BulkStatusSel" class="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none bg-white">
+                <option value="">상태값</option>${bulkStatusOpts}
+            </select>
             <button onclick="bulkUpdateSummaryStatus_()" class="px-2.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">일괄변경</button>`;
+
+        // 출석 변경 모드 버튼 그룹
+        const editActive = d1AttendEditMode_;
+        const pendingCount = Object.keys(d1AttendPending_).length;
+        html += `<span class="text-gray-200 mx-1">|</span>
+            <span class="inline-flex items-center gap-1 border ${editActive ? 'border-orange-400 bg-orange-50' : 'border-gray-300 bg-white'} rounded px-1.5 py-0.5">
+                <button onclick="toggleD1AttendEditMode_()" class="text-xs font-semibold ${editActive ? 'text-orange-600' : 'text-gray-600 hover:text-orange-500'} whitespace-nowrap">
+                    ${editActive ? '✎ 편집 중' : '✎ 출석 변경 모드'}
+                </button>
+                ${editActive ? `<span class="text-gray-300">|</span>
+                <button onclick="applyD1AttendChanges_()" class="text-xs font-semibold text-green-700 hover:text-green-900 whitespace-nowrap">
+                    적용${pendingCount > 0 ? ` (${pendingCount})` : ''}
+                </button>` : ''}
+            </span>`;
 
         bar.innerHTML = html;
         bar.classList.remove('content-hidden');
@@ -12747,6 +12782,66 @@ ${token}
         if (summarySortKey_ === field) summarySortAsc_ = !summarySortAsc_;
         else { summarySortKey_ = field; summarySortAsc_ = true; }
         renderD1SummaryGrid(summaryMemberData_);
+    }
+
+    // ─── 출석 변경 모드 ────────────────────────────────────────────────────────
+    function toggleD1AttendEditMode_() {
+        d1AttendEditMode_ = !d1AttendEditMode_;
+        if (!d1AttendEditMode_) d1AttendPending_ = {}; // 취소 시 초기화
+        renderD1MemberSummaryBar_(summaryMemberData_, getD1StatusList_());
+        renderD1SummaryGrid(summaryMemberData_);
+    }
+
+    function markAttendPending_(memberId, loopNo) {
+        const key = String(memberId) + '|' + loopNo;
+        const fieldKey = 'no_' + loopNo;
+        const m = summaryMemberData_.find(function(x) { return String(x.member_id) === String(memberId); });
+        if (!m) return;
+        // 현재 표시값 (이미 pending 변경이 있으면 그걸 기준으로)
+        const curVal = d1AttendPending_[key] !== undefined ? String(d1AttendPending_[key]).toUpperCase() : String(m[fieldKey] || '').toUpperCase();
+        // O→X, 그 외(X, '')→O 토글
+        const newVal = curVal === 'O' ? 'X' : 'O';
+        d1AttendPending_[key] = newVal;
+        renderD1MemberSummaryBar_(summaryMemberData_, getD1StatusList_());
+        renderD1SummaryGrid(summaryMemberData_);
+    }
+
+    function applyD1AttendChanges_() {
+        const entries = Object.entries(d1AttendPending_);
+        if (entries.length === 0) { showStatus('변경된 출석이 없습니다.', 'info'); return; }
+        const batchKey = getCurrentBatchKey_();
+        if (!batchKey) { showStatus('배치를 선택하세요.', 'error'); return; }
+        // 회원별 필드 묶기
+        const byMember = {};
+        entries.forEach(function([key, val]) {
+            const parts = key.split('|');
+            const memberId = parts[0]; const loopNo = parts[1];
+            if (!byMember[memberId]) byMember[memberId] = {};
+            byMember[memberId]['no_' + loopNo] = val;
+        });
+        const changes = Object.entries(byMember).map(function([memberId, fields]) {
+            return { batchKey: batchKey, memberId: memberId, fields: fields };
+        });
+        showStatus('출석 저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function(r) {
+                showStatus(r.message || '완료', r.success ? 'success' : 'error');
+                if (r.success) {
+                    // 로컬 데이터 업데이트
+                    entries.forEach(function([key, val]) {
+                        const parts = key.split('|');
+                        const memberId = parts[0]; const loopNo = parts[1];
+                        const m = summaryMemberData_.find(function(x) { return String(x.member_id) === String(memberId); });
+                        if (m) m['no_' + loopNo] = val;
+                    });
+                    d1AttendPending_ = {};
+                    d1AttendEditMode_ = false;
+                    renderD1MemberSummaryBar_(summaryMemberData_, getD1StatusList_());
+                    renderD1SummaryGrid(summaryMemberData_);
+                }
+            })
+            .withFailureHandler(function(e) { showStatus(e.message || '오류', 'error'); })
+            .bulkSaveAttendance(changes);
     }
 
     // 컬럼 너비 드래그 조절
@@ -12847,14 +12942,30 @@ ${token}
     }
 
     // ─── 출석 드롭다운 ────────────────────────────────────────────────────────
-    function showAttendDropdown_(event, memberId, loopNo, d1Id, batchKey) {
+    function showAttendDropdown_(event, memberId, loopNo, d1Id, batchKey, isPast) {
         event.stopPropagation();
         _attendDropCtx = { memberId: memberId, loopNo: loopNo, d1Id: d1Id, batchKey: batchKey };
         const dd = document.getElementById('d1AttendDropdown');
         if (!dd) return;
+
+        // 과거 여부에 따라 참여 항목 동적 구성
+        let html = `<div class="px-2 py-1 border-b border-gray-100 text-[10px] text-gray-400 font-semibold">출석 설정</div>
+            <div onclick="setAttendValue_('auto')" class="px-3 py-1.5 cursor-pointer hover:bg-gray-50 flex items-center gap-2 text-gray-500">
+                <span class="text-gray-400 text-base">●</span> 자동 (기본)
+            </div>`;
+        if (isPast) {
+            html += `<div onclick="setAttendValue_('O')" class="px-3 py-1.5 cursor-pointer hover:bg-green-50 flex items-center gap-2 text-green-700">
+                <span class="text-green-500 text-base">●</span> 참여
+            </div>`;
+        }
+        html += `<div onclick="setAttendValue_('X')" class="px-3 py-1.5 cursor-pointer hover:bg-red-50 flex items-center gap-2 text-red-600">
+            <span class="font-bold">✕</span> 불참
+        </div>`;
+        dd.innerHTML = html;
+
         dd.classList.remove('content-hidden');
-        const x = Math.min(event.clientX, window.innerWidth - 110);
-        const y = Math.min(event.clientY + 4, window.innerHeight - 110);
+        const x = Math.min(event.clientX, window.innerWidth - 120);
+        const y = Math.min(event.clientY + 4, window.innerHeight - 120);
         dd.style.left = x + 'px';
         dd.style.top = y + 'px';
     }

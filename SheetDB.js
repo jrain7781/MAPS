@@ -2765,6 +2765,20 @@ function bulkUpdateMemberStatus(batchKey, memberIds, status) {
 }
 
 /**
+ * 출석 일괄 저장
+ * changes: [{batchKey, memberId, fields: {no_1:'O', no_3:'X', ...}}]
+ */
+function bulkSaveAttendance(changes) {
+  var updated = 0;
+  for (var i = 0; i < changes.length; i++) {
+    var c = changes[i];
+    var r = saveMemberClassDetail(c.batchKey, c.memberId, c.fields);
+    if (r && r.success) updated++;
+  }
+  return { success: true, message: updated + '명 출석 변경 완료' };
+}
+
+/**
  * 수업 회원 상세를 저장(upsert)합니다.
  * updates: 저장할 필드 객체 (e.g. { member_status: '수강중', no_1: '260409', remark1: '...' })
  */
