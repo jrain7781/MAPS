@@ -12638,7 +12638,11 @@ ${token}
                     display = '●'; colorClass = 'text-gray-300 text-[15px]'; cellBg = '';
                 }
 
-                const upcomingTdClass = isUpcoming ? 'border-l-2 border-r-2 border-red-400' : 'border-l border-gray-300';
+                // 마지막 행: 하단 테두리 (upcoming=붉은색, 일반=회색)
+                const lastBorderCls = isLastRow ? (isUpcoming ? 'border-b-2 border-red-400' : 'border-b-2 border-gray-300') : '';
+                const upcomingTdClass = isUpcoming
+                    ? `border-l-2 border-r-2 border-red-400 ${lastBorderCls}`
+                    : `border-l border-gray-300 ${lastBorderCls}`;
                 const d1IdEsc = escapeHtml(String(d1List[i].class_d1_id));
                 const batchKeyEsc = escapeHtml(getD1BatchKey_(String(d1List[i].class_d1_id)));
                 let tdBg, tdInteract, tdOnclick;
@@ -12659,18 +12663,18 @@ ${token}
 
             const memIdEsc = escapeHtml(String(m.member_id));
             const selCls  = isSelected ? 'bg-indigo-100' : '';
-            const lastCls = isLastRow  ? 'border-b-2 border-gray-400' : '';
+            const lastTdCls = isLastRow ? 'border-b-2 border-gray-300' : '';
             const selBorderCls = isSelected ? 'border-l-4 border-indigo-500' : '';
-            bodyHtml += `<tr class="group ${selCls} ${lastCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
-                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls}" onclick="event.stopPropagation()">
+            bodyHtml += `<tr class="group ${selCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
+                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls} ${lastTdCls}" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
-                <td class="px-2 py-2 font-semibold text-sm group-hover:bg-indigo-100">
+                <td class="px-2 py-2 font-semibold text-sm group-hover:bg-indigo-100 ${lastTdCls}">
                     <span class="text-gray-800 hover:text-indigo-600 hover:underline" title="${memberTitle}" onclick="event.stopPropagation(); navigateToMemberFromD1_('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</span>${tgIcon}
                 </td>
-                <td class="px-2 py-2 text-gray-500 text-sm group-hover:bg-indigo-100">${escapeHtml(m.phone || '-')}</td>
-                <td class="px-1 py-2 text-center group-hover:bg-indigo-100" onclick="event.stopPropagation()">${statusSel}</td>
-                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100">${remaining}</td>
+                <td class="px-2 py-2 text-gray-500 text-sm group-hover:bg-indigo-100 ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation()">${statusSel}</td>
+                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}">${remaining}</td>
                 ${sessionCells}
             </tr>`;
         }
