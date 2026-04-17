@@ -13426,20 +13426,13 @@ ${token}
         document.getElementById('prev-genD1-bid1Count').value = firstItem['1cha_bid'] || '';
         document.getElementById('prev-genD1-bid2Count').value = firstItem['2cha_bid'] || '';
 
-        // 시작일: 마지막 회차 날짜 + 루프단위
+        // 마지막 수업일: 이전 배치의 실제 마지막 날짜 그대로 표시
         const lastItem = items[items.length - 1];
         const lastDateRaw = String(lastItem.class_date || '').replace(/-/g, '');
         if (lastDateRaw.length >= 8) {
-            const loopUnit = parseInt(document.getElementById('genD1-loopUnit')?.value) || 1;
-            const lastDate = new Date(
-                parseInt(lastDateRaw.substring(0, 4)),
-                parseInt(lastDateRaw.substring(4, 6)) - 1,
-                parseInt(lastDateRaw.substring(6, 8))
-            );
-            lastDate.setDate(lastDate.getDate() + loopUnit * 7);
-            const yyyy = lastDate.getFullYear();
-            const mm = String(lastDate.getMonth() + 1).padStart(2, '0');
-            const dd = String(lastDate.getDate()).padStart(2, '0');
+            const yyyy = lastDateRaw.substring(0, 4);
+            const mm = lastDateRaw.substring(4, 6);
+            const dd = lastDateRaw.substring(6, 8);
             document.getElementById('prev-genD1-startDate').value = `${yyyy}-${mm}-${dd}`;
         }
         document.getElementById('prev-genD1-loopUnit').value = document.getElementById('genD1-loopUnit')?.value || '1';
@@ -13493,8 +13486,17 @@ ${token}
             document.getElementById('genD1-addCount').value = document.getElementById('prev-genD1-addCount').value;
         }
 
-        // 시작일 + 루프단위
-        document.getElementById('genD1-startDate').value = document.getElementById('prev-genD1-startDate').value;
+        // 시작일: 마지막 수업일 + 루프단위(주) → 오른쪽 시작일 계산
+        const lastDateVal = document.getElementById('prev-genD1-startDate')?.value || '';
+        const loopUnitVal = parseInt(document.getElementById('prev-genD1-loopUnit')?.value) || 1;
+        if (lastDateVal) {
+            const lastDate = new Date(lastDateVal);
+            lastDate.setDate(lastDate.getDate() + loopUnitVal * 7);
+            const ny = lastDate.getFullYear();
+            const nm = String(lastDate.getMonth() + 1).padStart(2, '0');
+            const nd = String(lastDate.getDate()).padStart(2, '0');
+            document.getElementById('genD1-startDate').value = `${ny}-${nm}-${nd}`;
+        }
         document.getElementById('genD1-loopUnit').value = document.getElementById('prev-genD1-loopUnit').value;
 
         // 수업시간
