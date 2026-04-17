@@ -2946,14 +2946,15 @@ function getMemberAttendanceCount(memberId, classId) {
 /**
  * 회원 등록 시 no_1..no_N 초기값 계산
  * - mData가 없거나 remaining=-1 → 신규(직접등록): 전체 O
- * - mData.status === '진행중' && remaining > 0 → 앞에서 remaining개 O, 나머지 X
- * - 그 외 → 전체 X
+ * - mData.status === '진행중' → 앞에서 remaining개 O, 나머지 X (remaining=0이면 전체X)
+ * - 그 외 (종료/홀딩/빈값 등) → 전체 X
  */
 function buildInitialAttendance_(mData, totalSessions) {
   var result = {};
   if (totalSessions <= 0) return result;
-  var isNew     = !mData || mData.remaining === -1 || mData.status === '';
-  var isActive  = mData && String(mData.status) === '진행중';
+  // remaining이 -1 = 직접등록(신규) → 전체 O
+  var isNew     = !mData || mData.remaining === -1;
+  var isActive  = !isNew && mData && String(mData.status) === '진행중';
   var remaining = mData ? (parseInt(mData.remaining) || 0) : 0;
   for (var n = 1; n <= totalSessions && n <= 20; n++) {
     if (isNew) {
