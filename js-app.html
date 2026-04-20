@@ -14615,7 +14615,7 @@ ${token}
         const arrow = k => d1ItemsSortKey_ === k ? (d1ItemsSortAsc_ ? ' ↑' : ' ↓') : '';
         let tbodyHtml;
         if (d1ItemsData.length === 0) {
-            tbodyHtml = '<tr><td colspan="6" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
+            tbodyHtml = '<tr><td colspan="9" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
         } else {
             const sorted = d1ItemsData.slice().sort((a, b) => {
                 const va = String(a[d1ItemsSortKey_] || '');
@@ -14624,28 +14624,49 @@ ${token}
             });
             tbodyHtml = sorted.map(item => {
                 const sc = getStatusTagClass(item.stu_member);
-                const rawDate = String(item['in-date'] || '').replace(/-/g, '');
-                const dateShort = rawDate.length >= 6 ? rawDate.substring(0,2)+'/'+rawDate.substring(2,4)+'/'+rawDate.substring(4,6) : (rawDate || '-');
-                return `<tr class="hover:bg-gray-50">
-                    <td class="px-2 py-1.5 text-center text-gray-500 whitespace-nowrap">${escapeHtml(dateShort)}</td>
-                    <td class="px-2 py-1.5 font-medium text-indigo-600 cursor-pointer hover:underline" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.sakun_no||'')}</td>
-                    <td class="px-2 py-1.5 text-gray-600">${escapeHtml(item.court||'')}</td>
-                    <td class="px-2 py-1.5 text-center"><span class="${sc}">${escapeHtml(item.stu_member||'-')}</span></td>
-                    <td class="px-2 py-1.5 text-center text-gray-500">${escapeHtml(item.m_name_id||item.m_name||'-')}</td>
-                    <td class="px-1 py-1.5 text-center"><button type="button" onclick="cancelD1Item('${item.id}')" class="text-[9px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 text-red-500 font-semibold">취소</button></td>
+                // 날짜: Date객체면 yyMMdd 변환, 아니면 raw
+                let inDate = item['in-date'];
+                if (inDate instanceof Date) {
+                    inDate = String(inDate.getFullYear()).substring(2) + String(inDate.getMonth()+1).padStart(2,'0') + String(inDate.getDate()).padStart(2,'0');
+                } else {
+                    inDate = String(inDate||'').replace(/[TZ\-]/g,'').substring(0,6) || '';
+                }
+                // IMG dot
+                const hasImg = !!(item.image_id || item.has_images);
+                const hasAuc = !!(item.auction_id);
+                let imgHtml = '';
+                if (hasImg && hasAuc) imgHtml = '<span class="list-has-image-dot status-complete"></span>';
+                else if (hasImg)      imgHtml = '<span class="list-has-image-dot status-image-only"></span>';
+                else if (hasAuc)      imgHtml = '<span class="list-has-image-dot status-auction-only"></span>';
+                // T badge
+                const tEnabled = typeof getMemberTelegramEnabled_ === 'function' ? getMemberTelegramEnabled_(item.member_id) : '';
+                const tHtml = tEnabled === 'Y' ? '<span class="telegram-badge">T</span>' : '';
+                return `<tr class="cursor-pointer hover:bg-gray-100 transition duration-150" onclick="openDetailModalById('${item.id}')">
+                    <td class="item-col-date text-center">${escapeHtml(inDate)}</td>
+                    <td class="item-col-img list-img-cell text-center">${imgHtml}</td>
+                    <td class="item-col-sakun text-left font-medium">${escapeHtml(item.sakun_no||'')}</td>
+                    <td class="item-col-court text-left">${escapeHtml(item.court||'')}</td>
+                    <td class="item-col-status text-center"><span class="${sc}">${escapeHtml(item.stu_member||'-')}</span></td>
+                    <td class="item-col-telegram text-center">${tHtml}</td>
+                    <td class="item-col-member text-center">${escapeHtml(item.m_name||'')}</td>
+                    <td class="item-col-manager text-center">${escapeHtml(item.m_name_id||'')}</td>
+                    <td class="px-1 py-1 text-center" onclick="event.stopPropagation()"><button type="button" onclick="cancelD1Item('${item.id}')" class="text-[9px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 text-red-500 font-semibold">취소</button></td>
                 </tr>`;
             }).join('');
         }
         el.innerHTML = `<div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-            <table class="min-w-full text-xs">
+            <table class="min-w-full">
             <thead class="bg-gray-50 border-b border-gray-200">
                 <tr>
-                    <th class="px-2 py-1.5 text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" onclick="d1ItemsSort_('in-date')">입찰일${arrow('in-date')}</th>
-                    <th class="px-2 py-1.5 text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
-                    <th class="px-2 py-1.5 text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('court')">법원${arrow('court')}</th>
-                    <th class="px-2 py-1.5 text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('stu_member')">상태${arrow('stu_member')}</th>
-                    <th class="px-2 py-1.5 text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name_id')">담당${arrow('m_name_id')}</th>
-                    <th class="px-1 py-1.5 w-8"></th>
+                    <th class="item-col-date text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('in-date')">일자${arrow('in-date')}</th>
+                    <th class="item-col-img text-center font-bold text-gray-600">IMG</th>
+                    <th class="item-col-sakun text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
+                    <th class="item-col-court text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('court')">법원${arrow('court')}</th>
+                    <th class="item-col-status text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('stu_member')">상태${arrow('stu_member')}</th>
+                    <th class="item-col-telegram text-center font-bold text-gray-600">T</th>
+                    <th class="item-col-member text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name')">회원${arrow('m_name')}</th>
+                    <th class="item-col-manager text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name_id')">담당${arrow('m_name_id')}</th>
+                    <th class="w-8"></th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 bg-white">${tbodyHtml}</tbody>
