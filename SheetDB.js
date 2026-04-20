@@ -2203,7 +2203,7 @@ function readClassD1ByClassId(classId) {
   const d1Ids = new Set(d1List.map(d => String(d.class_d1_id)));
 
   // 물건 카운트 (items 시트)
-  const itemSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  const itemSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   const itemCountMap = {};
   if (itemSheet && itemSheet.getLastRow() >= 2) {
     const d1IdCol = ITEM_HEADERS.indexOf('class_d1_id');
@@ -2473,18 +2473,35 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
   if (!classD1Id || !Array.isArray(itemIds) || itemIds.length === 0) {
     return { success: false, message: '파라미터 오류' };
   }
-  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) return { success: false, message: 'items 시트 없음' };
 
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터 없음' };
 
-  // items 시트 컬럼 수 확인 및 확장 (chuchen_state ~ bid_datetime_2 열 자동 추가)
-  var maxCols = sheet.getMaxColumns();
-  if (maxCols < ITEM_HEADERS.length) {
-    sheet.insertColumnsAfter(maxCols, ITEM_HEADERS.length - maxCols);
-    sheet.getRange(1, 1, 1, ITEM_HEADERS.length).setValues([ITEM_HEADERS]);
-    SpreadsheetApp.flush();
+  // 헤더 행에서 컬럼 위치 확인
+  var lastCol = Math.max(sheet.getLastColumn(), ITEM_HEADERS.length);
+  // 시트 컬럼 수 부족하면 확장
+  if (sheet.getMaxColumns() < lastCol) sheet.insertColumnsAfter(sheet.getMaxColumns(), lastCol - sheet.getMaxColumns());
+  var headerRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(v){ return String(v||'').trim(); });
+
+  // 헤더 없는 컬럼은 ITEM_HEADERS 위치에 직접 헤더 씀 (새 컬럼 삽입 NO)
+  var headerUpdated = false;
+  ITEM_HEADERS.forEach(function(h, posIdx) {
+    if (headerRow.indexOf(h) < 0) { // 이름으로 못 찾으면
+      sheet.getRange(1, posIdx + 1).setValue(h); // 위치에 헤더 쓰기
+      headerRow[posIdx] = h;
+      headerUpdated = true;
+    }
+  });
+  if (headerUpdated) SpreadsheetApp.flush();
+
+  function colByName(name) {
+    var i = headerRow.indexOf(name);
+    if (i >= 0) return i + 1;
+    // 이름 없으면 ITEM_HEADERS 위치 폴백
+    var pi = ITEM_HEADERS.indexOf(name);
+    return pi >= 0 ? pi + 1 : -1;
   }
 
   // 회차 정보에서 bid_datetime_2 조회
@@ -2499,12 +2516,14 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
     if (found && bd2Idx >= 0) bidDatetime2Val = found[bd2Idx] || '';
   }
 
-  var idCol           = ITEM_HEADERS.indexOf('id') + 1;
-  var stuMemberCol    = ITEM_HEADERS.indexOf('stu_member') + 1;
-  var classD1IdCol    = ITEM_HEADERS.indexOf('class_d1_id') + 1;
-  var chuchenStateCol = ITEM_HEADERS.indexOf('chuchen_state') + 1;
-  var chuchenDateCol  = ITEM_HEADERS.indexOf('chuchen_date') + 1;
-  var bd2Col          = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
+  var idCol           = colByName('id');
+  var stuMemberCol    = colByName('stu_member');
+  var classD1IdCol    = colByName('class_d1_id');
+  var chuchenStateCol = colByName('chuchen_state');
+  var chuchenDateCol  = colByName('chuchen_date');
+  var bd2Col          = colByName('bid_datetime_2');
+
+  if (idCol < 0 || classD1IdCol < 0) return { success: false, message: 'items 시트 컬럼 오류' };
 
   var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues().flat().map(String);
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
@@ -2530,7 +2549,7 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
  * 회차에서 물건을 취소합니다 (class_d1_id/bid_datetime_2 초기화, stu_member='미정').
  */
 function removeItemFromClassD1(itemId) {
-  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) return { success: false, message: 'items 시트 없음' };
 
   var lastRow = sheet.getLastRow();
@@ -2558,7 +2577,7 @@ function removeItemFromClassD1(itemId) {
  * class_d1_id는 유지, bid_datetime_2는 유지.
  */
 function expireClassD1Items(classD1Id) {
-  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) return { success: false, message: 'items 시트 없음' };
 
   var lastRow = sheet.getLastRow();
@@ -2593,20 +2612,28 @@ function expireClassD1Items(classD1Id) {
  */
 function getItemsByClassD1Id(classD1Id) {
   if (!classD1Id) return [];
-  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
-  if (!sheet) return [];
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  if (!sheet || sheet.getLastRow() < 2) return [];
 
-  var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
+  // getDataRange()로 시트 전체 읽기 (컬럼 수 문제 없음)
+  var allData = sheet.getDataRange().getValues();
+  var headers = allData[0].map(function(v){ return String(v||'').trim(); });
 
-  var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
-  var classD1IdIdx = ITEM_HEADERS.indexOf('class_d1_id');
+  // class_d1_id 컬럼: 이름 → 없으면 S열(index 18) 폴백
+  var d1Col = headers.indexOf('class_d1_id');
+  if (d1Col < 0) d1Col = ITEM_HEADERS.indexOf('class_d1_id'); // = 18
 
-  return data
-    .filter(function(row) { return String(row[classD1IdIdx]) === String(classD1Id); })
-    .map(function(row) {
+  var searchId = String(classD1Id).trim();
+
+  return allData.slice(1)
+    .filter(function(row){ return String(row[d1Col]||'').trim() === searchId; })
+    .map(function(row){
       var obj = {};
-      ITEM_HEADERS.forEach(function(h, i) { obj[h] = row[i] !== undefined && row[i] !== null ? row[i] : ''; });
+      ITEM_HEADERS.forEach(function(h){
+        var col = headers.indexOf(h);
+        if (col < 0) col = ITEM_HEADERS.indexOf(h);
+        obj[h] = (col >= 0 && col < row.length && row[col] != null) ? row[col] : '';
+      });
       return obj;
     });
 }

@@ -12290,12 +12290,12 @@ ${token}
 
                 let cls, titleCls, textCls, badge;
                 if (isSelected) {
-                    cls = 'border-gray-600 bg-gray-300 shadow-lg';
-                    titleCls = 'text-gray-900'; textCls = 'text-gray-700';
+                    cls = 'border-blue-500 bg-blue-100 shadow-lg';
+                    titleCls = 'text-blue-900'; textCls = 'text-blue-700';
                     badge = '';
                 } else if (isNearest) {
-                    cls = 'border-red-400 bg-red-50 shadow-md';
-                    titleCls = 'text-red-900'; textCls = 'text-red-700';
+                    cls = 'border-red-400 bg-white shadow-md';
+                    titleCls = 'text-red-700'; textCls = 'text-red-600';
                     badge = '';
                 } else if (isPast || isCompleted) {
                     cls = 'border-green-300 bg-green-50 hover:border-green-500 hover:shadow-sm';
@@ -13199,21 +13199,6 @@ ${token}
         if (remaining <= 2) remBg = 'bg-red-100 text-red-700';
         else if (remaining <= 5) remBg = 'bg-amber-100 text-amber-700';
 
-        // 만료 회차 표시
-        let expiryStr = '';
-        let remCount = remaining, expiryLoop = null;
-        for (let i = 0; i < N && remCount > 0; i++) {
-            if (String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase() !== 'O') {
-                remCount--;
-                if (remCount === 0) expiryLoop = d1List[i] ? d1List[i].class_loop : null;
-            }
-        }
-        if (expiryLoop) {
-            expiryStr = `<div class="text-[10px] text-amber-700 mt-0.5">→ ${expiryLoop}회차 만료 예정</div>`;
-        } else if (remaining > 0) {
-            expiryStr = `<div class="text-[10px] text-blue-600 mt-0.5">→ 다음 수업으로 이월 (${remaining}회 남음)</div>`;
-        }
-
         const nameRows = ['name1', 'name2', 'name3'].map(function (k) {
             const n = m[k], g = m[k + '_gubun'];
             return n ? `<div class="flex gap-1"><span class="text-gray-400">명의:</span><span class="px-1 bg-gray-100 rounded text-[10px]">${escapeHtml(g || '')}</span><span class="font-medium">${escapeHtml(n)}</span></div>` : '';
@@ -13228,7 +13213,6 @@ ${token}
                     <span class="font-bold text-sm text-gray-800">${escapeHtml(m.member_name || '-')}</span>
                     <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${remBg}">잔여: ${remaining}회 (${attended} / ${totalLoop})</span>
                 </div>
-                ${expiryStr}
                 <div class="text-[11px] text-gray-500 space-y-0.5 mt-1">
                     <div class="flex gap-1"><span class="text-gray-400">전화:</span><span>${escapeHtml(m.phone || '-')}</span></div>
                     <div class="flex gap-1"><span class="text-gray-400">구분:</span><span>${escapeHtml(m.gubun || '-')}</span></div>
@@ -14311,7 +14295,10 @@ ${token}
 
     // ─── 물건 선택 모달 ──────────────────────────────────────────────
     // ─── 물건 선택 모달 (클릭→카트 방식) ─────────────────────────────
-    let d1PickerCart = []; // { id, sakun_no, court, stu_member, m_name }
+    let d1PickerCart = []; // { id, sakun_no, court, stu_member, m_name, in-date, m_name_id }
+    let d1PickerSortKey_ = 'in-date', d1PickerSortAsc_ = true;
+    let d1CartSortKey_ = 'in-date', d1CartSortAsc_ = true;
+    let d1ItemsSortKey_ = 'in-date', d1ItemsSortAsc_ = true;
 
     function showD1ItemPickerModal() {
         if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
@@ -14323,15 +14310,10 @@ ${token}
         ['d1picker-date','d1picker-sakun','d1picker-court','d1picker-member','d1picker-regdate'].forEach(id => {
             const el = document.getElementById(id); if (el) el.value = '';
         });
-        ['d1picker-status','d1picker-class-type','d1picker-manager'].forEach(id => {
+        ['d1picker-status','d1picker-manager'].forEach(id => {
             const el = document.getElementById(id); if (el) el.value = '';
         });
-        // 드롭다운 채우기
-        const ctSel = document.getElementById('d1picker-class-type');
-        if (ctSel) {
-            const types = [...new Set((allBiddingData||[]).map(it=>it.class_type||'').filter(Boolean))].sort();
-            ctSel.innerHTML = '<option value="">수업구분 전체</option>' + types.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
-        }
+        // 담당자 드롭다운 채우기
         const mgSel = document.getElementById('d1picker-manager');
         if (mgSel) {
             const mgrs = [...new Set((allBiddingData||[]).map(it=>it.m_name_id||'').filter(Boolean))].sort();
@@ -14340,6 +14322,7 @@ ${token}
         renderD1ItemPickerList();
         d1PickerRenderCart_();
         document.getElementById('d1ItemPickerModal')?.classList.remove('content-hidden');
+        setTimeout(function() { initTableColResize_(document.getElementById('d1PickerTable')); }, 100);
     }
 
     function closeD1ItemPickerModal(e) {
@@ -14359,8 +14342,11 @@ ${token}
         const fMgr    = (document.getElementById('d1picker-manager')?.value || '').trim();
         const fCtype  = (document.getElementById('d1picker-class-type')?.value || '').trim();
 
+        const _td = new Date(); const todayStr = String(_td.getFullYear()).substring(2) + String(_td.getMonth()+1).padStart(2,'0') + String(_td.getDate()).padStart(2,'0');
         const filtered = (allBiddingData || []).filter(it => {
-            if (fDate   && !String(it['in-date']||'').replace(/-/g,'').includes(fDate))     return false;
+            const rawDate = String(it['in-date']||'').replace(/-/g,'');
+            if (!rawDate || rawDate < todayStr) return false;                                 // 오늘 이후만 (yyMMdd 비교)
+            if (fDate   && !rawDate.includes(fDate))                                          return false;
             if (fSakun  && !String(it.sakun_no||'').toLowerCase().includes(fSakun))          return false;
             if (fCourt  && !String(it.court||'').toLowerCase().includes(fCourt))              return false;
             if (fStatus && String(it.stu_member||'').trim() !== fStatus)                      return false;
@@ -14375,6 +14361,20 @@ ${token}
             tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400 text-xs">조회 결과가 없습니다.</td></tr>';
             return;
         }
+
+        filtered.sort((a, b) => {
+            const va = String(a[d1PickerSortKey_] || '');
+            const vb = String(b[d1PickerSortKey_] || '');
+            return d1PickerSortAsc_ ? va.localeCompare(vb) : vb.localeCompare(va);
+        });
+        // 정렬 화살표 갱신
+        ['date','sakun','court','status','member','mgr'].forEach(k => {
+            const el = document.getElementById('dpk-sort-' + k);
+            if (el) el.textContent = '';
+        });
+        const keyMap = {'in-date':'date','sakun_no':'sakun','court':'court','stu_member':'status','m_name':'member','m_name_id':'mgr'};
+        const arrowEl = document.getElementById('dpk-sort-' + (keyMap[d1PickerSortKey_] || ''));
+        if (arrowEl) arrowEl.textContent = d1PickerSortAsc_ ? ' ↑' : ' ↓';
 
         tbody.innerHTML = filtered.map(it => {
             const inCart    = d1PickerCart.some(c => String(c.id) === String(it.id));
@@ -14406,7 +14406,7 @@ ${token}
             // 이미 있으면 제거 (토글)
             d1PickerCart = d1PickerCart.filter(c => String(c.id) !== String(itemId));
         } else {
-            d1PickerCart.push({ id: item.id, sakun_no: item.sakun_no, court: item.court, stu_member: item.stu_member, m_name: item.m_name });
+            d1PickerCart.push({ id: item.id, sakun_no: item.sakun_no, court: item.court, stu_member: item.stu_member, m_name: item.m_name, 'in-date': item['in-date'] || '', m_name_id: item.m_name_id || '' });
         }
         renderD1ItemPickerList();
         d1PickerRenderCart_();
@@ -14420,27 +14420,57 @@ ${token}
 
     function d1PickerRenderCart_() {
         const cart = document.getElementById('d1ItemPickerCart');
+        const cnt = d1PickerCart.length > 0 ? `${d1PickerCart.length}건` : '';
         const countEl = document.getElementById('d1ItemPickerSelectedCount');
-        if (countEl) countEl.textContent = d1PickerCart.length > 0 ? `${d1PickerCart.length}개` : '';
+        if (countEl) countEl.textContent = cnt;
+        const cartCountEl = document.getElementById('d1PickerCartCount');
+        if (cartCountEl) cartCountEl.textContent = cnt;
         if (!cart) return;
-        if (d1PickerCart.length === 0) {
-            cart.innerHTML = '<div class="text-xs text-gray-400 text-center py-4">클릭하면 추가됩니다</div>';
+
+        const searchKw = (document.getElementById('d1cart-search-sakun')?.value || '').toLowerCase().trim();
+        let list = d1PickerCart.filter(c => !searchKw || String(c.sakun_no || '').toLowerCase().includes(searchKw));
+        list.sort((a, b) => {
+            const va = String(a[d1CartSortKey_] || '');
+            const vb = String(b[d1CartSortKey_] || '');
+            return d1CartSortAsc_ ? va.localeCompare(vb) : vb.localeCompare(va);
+        });
+        // 정렬 화살표 갱신
+        ['date','sakun','court','status','mgr'].forEach(k => {
+            const el = document.getElementById('d1cart-sort-' + k);
+            if (el) el.textContent = '';
+        });
+        const cartKeyMap = {'in-date':'date','sakun_no':'sakun','court':'court','stu_member':'status','m_name_id':'mgr'};
+        const cartArrow = document.getElementById('d1cart-sort-' + (cartKeyMap[d1CartSortKey_] || ''));
+        if (cartArrow) cartArrow.textContent = d1CartSortAsc_ ? ' ↑' : ' ↓';
+
+        if (list.length === 0) {
+            cart.innerHTML = '<tr><td colspan="6" class="text-xs text-gray-400 text-center py-4">' + (searchKw ? '조회 결과 없음' : '클릭하면 추가됩니다') + '</td></tr>';
             return;
         }
-        cart.innerHTML = d1PickerCart.map(c => {
+        cart.innerHTML = list.map(c => {
             const statusCls = getStatusTagClass ? getStatusTagClass(c.stu_member) : '';
-            return `<div class="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs shadow-sm">
-                <div class="flex items-center justify-between">
-                    <span class="font-semibold text-gray-800 truncate flex-1 mr-1">${escapeHtml(c.sakun_no||'')}</span>
-                    <button type="button" onclick="d1PickerRemoveCart('${c.id}')"
-                        class="text-red-400 hover:text-red-600 flex-none text-sm leading-none">✕</button>
-                </div>
-                <div class="flex items-center gap-1 mt-0.5">
-                    <span class="text-gray-400">${escapeHtml(c.court||'')}</span>
-                    <span class="${statusCls} text-[10px]">${escapeHtml(c.stu_member||'')}</span>
-                </div>
-            </div>`;
+            const dateShort = String(c['in-date'] || '').replace(/-/g, '').substring(2, 8) || '-';
+            return `<tr class="hover:bg-indigo-50 border-b border-gray-100">
+                <td class="px-1 py-1 text-center text-gray-500 whitespace-nowrap">${escapeHtml(dateShort)}</td>
+                <td class="px-1 py-1 font-medium text-gray-800 truncate max-w-[90px]">${escapeHtml(c.sakun_no||'')}</td>
+                <td class="px-1 py-1 text-gray-600 truncate max-w-[60px]">${escapeHtml(c.court||'')}</td>
+                <td class="px-1 py-1 text-center"><span class="${statusCls} text-[10px]">${escapeHtml(c.stu_member||'')}</span></td>
+                <td class="px-1 py-1 text-center text-gray-500">${escapeHtml(c.m_name_id||'')}</td>
+                <td class="px-1 py-1 text-center"><button type="button" onclick="d1PickerRemoveCart('${c.id}')" class="text-red-400 hover:text-red-600 text-xs leading-none">✕</button></td>
+            </tr>`;
         }).join('');
+    }
+
+    function d1PickerSortBy_(key) {
+        if (d1PickerSortKey_ === key) d1PickerSortAsc_ = !d1PickerSortAsc_;
+        else { d1PickerSortKey_ = key; d1PickerSortAsc_ = true; }
+        renderD1ItemPickerList();
+    }
+
+    function d1CartSort_(key) {
+        if (d1CartSortKey_ === key) d1CartSortAsc_ = !d1CartSortAsc_;
+        else { d1CartSortKey_ = key; d1CartSortAsc_ = true; }
+        d1PickerRenderCart_();
     }
 
     function confirmD1ItemPicker() {
@@ -14582,25 +14612,50 @@ ${token}
     function renderD1Items() {
         const el = document.getElementById('d1-item-list');
         if (!el) return;
+        const arrow = k => d1ItemsSortKey_ === k ? (d1ItemsSortAsc_ ? ' ↑' : ' ↓') : '';
+        let tbodyHtml;
         if (d1ItemsData.length === 0) {
-            el.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">등록된 물건이 없습니다.</div>';
-            return;
+            tbodyHtml = '<tr><td colspan="6" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
+        } else {
+            const sorted = d1ItemsData.slice().sort((a, b) => {
+                const va = String(a[d1ItemsSortKey_] || '');
+                const vb = String(b[d1ItemsSortKey_] || '');
+                return d1ItemsSortAsc_ ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+            tbodyHtml = sorted.map(item => {
+                const sc = getStatusTagClass(item.stu_member);
+                const rawDate = String(item['in-date'] || '').replace(/-/g, '');
+                const dateShort = rawDate.length >= 6 ? rawDate.substring(0,2)+'/'+rawDate.substring(2,4)+'/'+rawDate.substring(4,6) : (rawDate || '-');
+                return `<tr class="hover:bg-gray-50">
+                    <td class="px-2 py-1.5 text-center text-gray-500 whitespace-nowrap">${escapeHtml(dateShort)}</td>
+                    <td class="px-2 py-1.5 font-medium text-indigo-600 cursor-pointer hover:underline" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.sakun_no||'')}</td>
+                    <td class="px-2 py-1.5 text-gray-600">${escapeHtml(item.court||'')}</td>
+                    <td class="px-2 py-1.5 text-center"><span class="${sc}">${escapeHtml(item.stu_member||'-')}</span></td>
+                    <td class="px-2 py-1.5 text-center text-gray-500">${escapeHtml(item.m_name_id||item.m_name||'-')}</td>
+                    <td class="px-1 py-1.5 text-center"><button type="button" onclick="cancelD1Item('${item.id}')" class="text-[9px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 text-red-500 font-semibold">취소</button></td>
+                </tr>`;
+            }).join('');
         }
-        el.innerHTML = d1ItemsData.map(item => {
-            const statusClass = getStatusTagClass(item.stu_member);
-            const sakun = escapeHtml(String(item.sakun_no || ''));
-            const court = escapeHtml(String(item.court || ''));
-            const member = escapeHtml(String(item.m_name || ''));
-            const bidprice = item.bidprice ? Number(item.bidprice).toLocaleString() + '원' : '-';
-            return `<div class="flex items-center gap-1.5 px-2 py-1.5 border-b border-gray-100 text-xs hover:bg-gray-50">
-                <span class="px-1.5 py-0.5 rounded text-xs font-semibold ${statusClass}">${escapeHtml(item.stu_member || '-')}</span>
-                <span class="font-medium text-gray-800 flex-1 truncate cursor-pointer hover:text-indigo-600" onclick="openDetailModalById('${item.id}')">${sakun}</span>
-                <span class="text-gray-400">${court}</span>
-                <span class="text-gray-500 truncate max-w-[50px]">${member}</span>
-                <button type="button" onclick="cancelD1Item('${item.id}')"
-                    class="ml-1 text-[9px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 text-red-500 font-semibold flex-none">취소</button>
-            </div>`;
-        }).join('');
+        el.innerHTML = `<div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+            <table class="min-w-full text-xs">
+            <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                    <th class="px-2 py-1.5 text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none whitespace-nowrap" onclick="d1ItemsSort_('in-date')">입찰일${arrow('in-date')}</th>
+                    <th class="px-2 py-1.5 text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
+                    <th class="px-2 py-1.5 text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('court')">법원${arrow('court')}</th>
+                    <th class="px-2 py-1.5 text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('stu_member')">상태${arrow('stu_member')}</th>
+                    <th class="px-2 py-1.5 text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name_id')">담당${arrow('m_name_id')}</th>
+                    <th class="px-1 py-1.5 w-8"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 bg-white">${tbodyHtml}</tbody>
+            </table></div>`;
+    }
+
+    function d1ItemsSort_(key) {
+        if (d1ItemsSortKey_ === key) d1ItemsSortAsc_ = !d1ItemsSortAsc_;
+        else { d1ItemsSortKey_ = key; d1ItemsSortAsc_ = true; }
+        renderD1Items();
     }
 
     // 수업회차 물건 취소 (회차 등록 취소 - 실제 물건 삭제 아님)
@@ -14720,9 +14775,36 @@ ${token}
             }
         }
 
+        function makeDraggableWidth(dividerId, rightPanelId, lsKey, minLeft, minRight) {
+            const divider = document.getElementById(dividerId);
+            const rightEl = document.getElementById(rightPanelId);
+            if (!divider || !rightEl) return;
+            const saved = localStorage.getItem(lsKey);
+            if (saved) rightEl.style.width = saved;
+            let dragging = false, startX = 0, startW = 0;
+            divider.addEventListener('mousedown', e => {
+                dragging = true; startX = e.clientX; startW = rightEl.getBoundingClientRect().width;
+                document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; e.preventDefault();
+            });
+            document.addEventListener('mousemove', e => {
+                if (!dragging) return;
+                const container = rightEl.parentElement;
+                if (!container) return;
+                const containerW = container.getBoundingClientRect().width;
+                const newW = Math.min(Math.max(startW - (e.clientX - startX), minRight), containerW - minLeft);
+                rightEl.style.width = newW + 'px';
+            });
+            document.addEventListener('mouseup', () => {
+                if (!dragging) return;
+                dragging = false; document.body.style.cursor = ''; document.body.style.userSelect = '';
+                localStorage.setItem(lsKey, rightEl.style.width);
+            });
+        }
+
         const LS_BATCH = 'csd_batch_grid_width';
         const LS_SIDEBAR_H = 'csd_sidebar_top_height';
         const LS_ITEM_TAB_H = 'csd_item_tab_top_height';
+        const LS_PICKER_RIGHT_W = 'csd_picker_right_width';
 
         // 1) 사이드바 - 메인 상세 영역 구분 (가로)
         makeDraggable('classScheduleDivider', 'classScheduleListPane', 'classScheduleDetailPane', LS_LIST, 200, 200);
@@ -14735,7 +14817,10 @@ ${token}
         makeDraggable('d1SummaryDivider', 'd1SummaryLeft', 'd1SummaryRight', 'csd_summary_width', 200, 150);
 
         // 4) 물건 탭 내부: 회차 카드 ↔ 물건 등록/리스트 (세로)
-        makeDraggableHeight('d1ItemTabDivider', 'd1ItemTabCardArea', 'd1ItemCard', LS_ITEM_TAB_H, 100, 100);
+        makeDraggableHeight('d1ItemTabDivider', 'd1ItemTabCardArea', 'd1ItemCard', LS_ITEM_TAB_H, 80, 120);
+
+        // 5) 물건 선택 모달: 좌/우 패널 가로 리사이즈
+        makeDraggableWidth('d1PickerPanelDivider', 'd1PickerRightPanel', LS_PICKER_RIGHT_W, 300, 200);
 
         // 5) 기타 (레거시 또는 유지보수용)
         // makeDraggable('d1BatchDivider', 'd1BatchListGrid', null, LS_BATCH, 80, 150);
