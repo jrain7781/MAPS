@@ -2305,7 +2305,12 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   var currentDate = new Date(year, month, day);
 
   var tz        = Session.getScriptTimeZone();
-  var timestamp = batchTimestamp || Utilities.formatDate(new Date(), tz, 'yyyyMMddHHmmss');
+  // class_d1_id 배치키: {startyyMMdd}_{endyyMMdd}
+  var startFmt_ = Utilities.formatDate(currentDate, tz, 'yyMMdd');
+  var endDateObj_ = new Date(currentDate.getTime());
+  endDateObj_.setDate(endDateObj_.getDate() + ((endLoop - startLoop) * dayInterval));
+  var endFmt_   = Utilities.formatDate(endDateObj_, tz, 'yyMMdd');
+  var timestamp = batchTimestamp || (startFmt_ + '_' + endFmt_);
   var regDate   = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   var weekNames = ['일', '월', '화', '수', '목', '금', '토'];
 
