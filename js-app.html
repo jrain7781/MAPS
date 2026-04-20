@@ -12002,6 +12002,7 @@ ${token}
     function filterClassScheduleList() {
         const gradeKw = document.getElementById('csd-search-grade')?.value || '';
         const locKw = document.getElementById('csd-search-loc')?.value || '';
+        const memberKw = (document.getElementById('csd-search-member')?.value || '').trim().toLowerCase();
 
         const tabTypes = {
             'CLASS': ['CLASS'],
@@ -12015,6 +12016,13 @@ ${token}
             if (!allowedTypes.includes(ct)) return false;
             if (gradeKw && c.class_grade !== gradeKw) return false;
             if (locKw && c.class_loc !== locKw) return false;
+            if (memberKw) {
+                const hasMember = (allMembersNewData || []).some(m =>
+                    String(m.class_id) === String(c.class_id) &&
+                    (m.member_name || '').toLowerCase().includes(memberKw)
+                );
+                if (!hasMember) return false;
+            }
             return true;
         });
 
@@ -12142,7 +12150,7 @@ ${token}
         const tbody = document.getElementById('classD1BatchListTableBody');
         if (!tbody) return;
         if (d1Batches.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500 text-xs">수업이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500 text-xs">수업이 없습니다.</td></tr>';
             return;
         }
         let html = '';
@@ -12164,11 +12172,14 @@ ${token}
             const teacherId = items[0].teacher_id || '';
             const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
             const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '-');
+            const batchMember = (i === d1BatchIdx && summaryMemberData_.length > 0)
+                ? escapeHtml(summaryMemberData_[0].member_name || '-') : '-';
             html += `<tr class="${rowCls} cursor-pointer" onclick="selectD1Batch(${i})">
                 <td class="px-2 py-2 text-center text-sm ${txtCls}">${i + 1}</td>
                 <td class="px-2 py-2 text-center text-sm ${txtCls}">${items.length}회</td>
                 <td class="px-2 py-2 text-center text-sm ${txtCls} leading-tight">${periodHtml}</td>
                 <td class="px-2 py-2 text-center text-sm ${txtCls}">${escapeHtml(teacherName)}</td>
+                <td class="px-2 py-2 text-center text-sm ${txtCls} text-indigo-600" id="batchMemberCell_${i}">${batchMember}</td>
             </tr>`;
         }
         tbody.innerHTML = html;
@@ -12435,6 +12446,7 @@ ${token}
             .withSuccessHandler(function (data) {
                 summaryMemberData_ = data || [];
                 renderD1SummaryGrid(summaryMemberData_);
+                renderD1BatchListGrid_();
             })
             .withFailureHandler(function () {
                 if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-red-500 text-xs">로드 실패</td></tr>';
@@ -13229,7 +13241,7 @@ ${token}
                 <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400" rows="9" placeholder="비고를 입력하세요">${escapeHtml(m.remark1 || '')}</textarea>
                 <button onclick="saveSummaryRemark_('${memId}','${batchKey}')" class="mt-1 w-full py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">저장</button>
             </div>
-            <div class="mt-3 pt-2 border-t border-gray-200">
+            <div class="mt-3 pt-2 border-t border-gray-200 hidden">
                 <div class="flex justify-between items-center mb-1">
                     <span class="text-[10px] font-bold text-gray-500">💬 카카오 메시지</span>
                     <button onclick="sendD1MemberKakao_()" class="px-2 py-1 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-xs font-bold rounded">💬카톡</button>
