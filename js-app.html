@@ -12510,12 +12510,12 @@ ${token}
                 const dt = new Date(raw.substring(0, 4) + '-' + raw.substring(4, 6) + '-' + raw.substring(6, 8));
                 if (!isNaN(dt)) dayDisp = '(' + dayNames_[dt.getDay()] + ')';
             }
-            const isActive = summarySortKey_ === 'no_' + (i + 1);
+            const isActive = summarySortKey_ === 'no_' + d.class_loop;
             const isUpcoming = i === upcomingIdx;
             const upcomingThClass = isUpcoming
                 ? 'border-l-2 border-r-2 border-t-2 border-red-400'
                 : (isActive ? 'border-l border-gray-200 bg-blue-200' : 'border-l border-gray-200 hover:bg-blue-100');
-            sessionColHeaders += `<th class="px-1 py-1 text-center cursor-pointer ${upcomingThClass}" style="min-width:48px" onclick="sortSummaryBySession_(${i + 1})">
+            sessionColHeaders += `<th class="px-1 py-1 text-center cursor-pointer ${upcomingThClass}" style="min-width:48px" onclick="sortSummaryBySession_(${d.class_loop})">
                 <div class="text-[11px] font-bold ${isUpcoming ? 'text-red-600' : 'text-blue-600'}">${d.class_loop}회</div>
                 <div class="text-[9px] font-semibold ${isUpcoming ? 'text-red-400' : 'text-blue-500'} whitespace-nowrap">${dateDisp} ${dayDisp}</div>
             </th>`;
@@ -12546,7 +12546,7 @@ ${token}
         filtered.forEach(function(m) {
             let rem = 0;
             for (let i = 0; i < d1List.length; i++) {
-                const val = String(m['no_' + (i + 1)] || '').trim().toUpperCase();
+                const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
                 if (raw >= todayStr && val !== 'X') rem++;
             }
@@ -12601,7 +12601,14 @@ ${token}
             // 텔레그램 아이콘 (telegram-badge 스타일 - 동그라미 T)
             const mInfo = allMembersNewData ? allMembersNewData.find(x => String(x.member_id) === String(m.member_id)) : null;
             const tgIcon = (mInfo && mInfo.telegram_enabled === 'Y') ? '<span class="telegram-badge ml-0.5" style="width:14px;height:14px;font-size:9px" title="텔레그램 사용">T</span>' : '';
-            const memberTitle = classTooltip_ || `전화: ${m.phone || '-'} | 상태: ${m.member_status || '-'}`;
+            let memberTitle;
+            if (mInfo) {
+                const nameMismatch = (mInfo.member_name || '') !== (m.member_name || '') ? ` ⚠이름불일치(DB:${mInfo.member_name})` : '';
+                const phoneMismatch = (mInfo.phone || '') !== (m.phone || '') ? ` ⚠전화불일치(DB:${mInfo.phone || '-'})` : '';
+                memberTitle = `[회원DB] ${mInfo.member_name || '-'} | ${mInfo.phone || '-'}${mInfo.telegram_enabled === 'Y' ? ' | TG:Y' : ''}${nameMismatch}${phoneMismatch}`;
+            } else {
+                memberTitle = `⚠ 회원DB 미등록 (ID:${m.member_id})`;
+            }
 
             // 상태 드롭다운
             const statusOpts = statusList.map(function(s) {
@@ -12617,7 +12624,7 @@ ${token}
             // 회차 셀
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
-                const loopNo = i + 1;
+                const loopNo = Number(d1List[i].class_loop);
                 const pendingKey = String(m.member_id) + '|' + loopNo;
                 const hasPending = d1AttendEditMode_ && d1AttendPending_[pendingKey] !== undefined;
                 const rawVal = String(m['no_' + loopNo] || '').trim().toUpperCase();
@@ -12630,8 +12637,10 @@ ${token}
 
                 // 표시: X=취소, 과거=● 녹색(출석), 미래=● 회색(예정)
                 let display, colorClass, cellBg;
-                if (val === 'X') {
-                    display = '✕'; colorClass = 'text-gray-400 font-semibold'; cellBg = 'bg-gray-100';
+                if (val === 'X' && isPast) {
+                    display = '✕'; colorClass = 'text-red-500 font-semibold'; cellBg = 'bg-red-50';
+                } else if (val === 'X') {
+                    display = '✕'; colorClass = 'text-gray-400 font-semibold'; cellBg = '';
                 } else if (isPast) {
                     display = '●'; colorClass = 'text-green-500 text-[15px]'; cellBg = '';
                 } else {
@@ -12650,15 +12659,12 @@ ${token}
                     tdBg = hasPending ? 'bg-yellow-100' : (isSelected ? 'bg-indigo-100' : cellBg);
                     tdInteract = 'cursor-pointer';
                     tdOnclick = `onclick="event.stopPropagation(); markAttendPending_('${escapeHtml(String(m.member_id))}',${loopNo})"`;
-                } else if (isFutureNonX) {
-                    tdBg = isSelected ? 'bg-indigo-100' : cellBg;
-                    tdInteract = 'cursor-default'; tdOnclick = '';
                 } else {
                     tdBg = isSelected ? 'bg-indigo-100' : cellBg;
                     tdInteract = 'cursor-pointer';
-                    tdOnclick = `onclick="event.stopPropagation(); showAttendDropdown_(event,'${escapeHtml(String(m.member_id))}',${loopNo},'${d1IdEsc}','${batchKeyEsc}',${isPast})"`;
+                    tdOnclick = `onclick="event.stopPropagation(); toggleAndSaveAttend_('${escapeHtml(String(m.member_id))}',${loopNo},'${batchKeyEsc}')"`;
                 }
-                sessionCells += `<td class="px-1 py-2 text-center text-xs ${upcomingTdClass} ${tdBg} ${tdInteract} group-hover:bg-indigo-100 select-none" ${tdOnclick}><span class="${colorClass}">${display}</span></td>`;
+                sessionCells += `<td data-attend-cell="${escapeHtml(String(m.member_id))}|${loopNo}" class="px-1 py-2 text-center text-xs ${upcomingTdClass} ${tdBg} ${tdInteract} group-hover:bg-indigo-100 select-none" ${tdOnclick}><span class="${colorClass}">${display}</span></td>`;
             }
 
             const memIdEsc = escapeHtml(String(m.member_id));
@@ -12803,8 +12809,8 @@ ${token}
         if (!m) return;
         // 현재 표시값 (이미 pending 변경이 있으면 그걸 기준으로)
         const curVal = d1AttendPending_[key] !== undefined ? String(d1AttendPending_[key]).toUpperCase() : String(m[fieldKey] || '').toUpperCase();
-        // O→X, 그 외(X, '')→O 토글
-        const newVal = curVal === 'O' ? 'X' : 'O';
+        // X→O, 그 외(O, '')→X 토글 (1클릭으로 X 전환)
+        const newVal = curVal === 'X' ? 'O' : 'X';
         d1AttendPending_[key] = newVal;
         renderD1MemberSummaryBar_(summaryMemberData_, getD1StatusList_());
         renderD1SummaryGrid(summaryMemberData_);
@@ -12980,6 +12986,36 @@ ${token}
         _attendDropCtx = null;
     }
 
+    function toggleAndSaveAttend_(memberId, loopNo, batchKey) {
+        const fieldKey = 'no_' + loopNo;
+        const m = summaryMemberData_.find(function(x){ return String(x.member_id) === String(memberId); });
+        if (!m) return;
+        const curVal = String(m[fieldKey] || '').trim().toUpperCase();
+        const newVal = curVal === 'X' ? 'O' : 'X';
+        // 해당 셀에 로딩 스피너 표시
+        const cellEl = document.querySelector('[data-attend-cell="' + memberId + '|' + loopNo + '"]');
+        if (cellEl) {
+            cellEl.innerHTML = '<svg class="animate-spin h-3 w-3 text-indigo-400 inline-block" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
+            cellEl.style.pointerEvents = 'none';
+        }
+        google.script.run
+            .withSuccessHandler(function(r) {
+                if (r && r.success) {
+                    m[fieldKey] = newVal;
+                    renderD1SummaryGrid(summaryMemberData_);
+                    showStatus('출석 저장 완료', 'success');
+                } else {
+                    renderD1SummaryGrid(summaryMemberData_);
+                    showStatus((r && r.message) || '저장 실패', 'error');
+                }
+            })
+            .withFailureHandler(function(e) {
+                renderD1SummaryGrid(summaryMemberData_);
+                showStatus(e.message || '저장 실패', 'error');
+            })
+            .saveMemberClassDetail(batchKey, memberId, { [fieldKey]: newVal });
+    }
+
     function setAttendValue_(val) {
         if (!_attendDropCtx) return;
         const { memberId, loopNo, batchKey } = _attendDropCtx;
@@ -13141,7 +13177,7 @@ ${token}
 
         let attended = 0;
         for (let i = 0; i < d1List.length; i++) {
-            const val = String(m['no_' + (i+1)] || '').trim().toUpperCase();
+            const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
             const raw = String(d1List[i].class_date || '').replace(/-/g, '');
             const isPast = raw < todayStr;
             if (val === 'O' || (isPast && val !== 'X' && val !== 'O')) attended++;
@@ -13155,7 +13191,7 @@ ${token}
         let expiryStr = '';
         let remCount = remaining, expiryLoop = null;
         for (let i = 0; i < N && remCount > 0; i++) {
-            if (String(m['no_' + (i + 1)] || '').trim().toUpperCase() !== 'O') {
+            if (String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase() !== 'O') {
                 remCount--;
                 if (remCount === 0) expiryLoop = d1List[i] ? d1List[i].class_loop : null;
             }
@@ -13850,7 +13886,7 @@ ${token}
                 // 예) 8회차 합류(1~7=X, 8~10=O): 10 - 3 = 7 → 다음 배치에 7회 이월
                 let nonX = 0;
                 for (let i = 0; i < batchSessions.length; i++) {
-                    const val = String(m['no_' + (i + 1)] || '').trim().toUpperCase();
+                    const val = String(m['no_' + batchSessions[i].class_loop] || '').trim().toUpperCase();
                     if (val !== 'X') nonX++;
                 }
                 remaining = Math.max(0, totalLoop - nonX);
