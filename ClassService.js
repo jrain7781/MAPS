@@ -186,18 +186,34 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
     const unit = parseInt(loopUnit, 10) || 1;
     const total = parseInt(loopCount, 10) || parseInt(cls.class_loop, 10) || 8;
 
-    // 3. 기존 회차 확인 (중복 생성 방지? 혹은 추가 생성?)
-    // 여기서는 단순 추가
-
     ensureClassD1Sheet();
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_D1_SHEET_NAME_DB);
     const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
     const newRows = [];
 
-    var startLoopNo = parseInt(opts.startLoop) || 1;  // 시작 회차번호
+    var startLoopNo = parseInt(opts.startLoop) || 1;
     var timeFrom = opts.timeFrom || '';
     var timeTo = opts.timeTo || '';
+
+    // sessId 기반: {classId}_{시작일yyyyMMdd}_{종료일yyyyMMdd}_{회차}
+    var endDateObj = new Date(startDateObj);
+    endDateObj.setDate(endDateObj.getDate() + ((total - 1) * 7 * unit));
+    var startFmt = Utilities.formatDate(startDateObj, Session.getScriptTimeZone(), 'yyyyMMdd');
+    var endFmt   = Utilities.formatDate(endDateObj,   Session.getScriptTimeZone(), 'yyyyMMdd');
+    var sessIdBase = String(classId) + '_' + startFmt + '_' + endFmt;
+
+    // 중복 체크: 같은 sessIdBase로 시작하는 ID가 이미 있으면 오류
+    var existingData = sheet.getLastRow() > 1 ? sheet.getDataRange().getValues() : [];
+    var existingHeaders = existingData.length > 0 ? existingData[0] : [];
+    var d1IdColIdx = existingHeaders.indexOf('class_d1_id');
+    if (d1IdColIdx >= 0 && existingData.length > 1) {
+        var existingIds = existingData.slice(1).map(function(r){ return String(r[d1IdColIdx] || ''); });
+        var hasDup = existingIds.some(function(id){ return id.indexOf(sessIdBase + '_') === 0; });
+        if (hasDup) {
+            return { success: false, message: '이미 동일한 기간의 회차가 존재합니다. (' + sessIdBase + ')' };
+        }
+    }
 
     // 입찰시간 계산 헬퍼
     function calcBidDatetime(classDateStr, dayOffset, timeStr) {
@@ -215,7 +231,7 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
         d.setDate(d.getDate() + (i * 7 * unit));
         var dStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
-        var sessId = 'D1_' + new Date().getTime() + '_' + i + '_' + Math.floor(Math.random() * 100);
+        var sessId = sessIdBase + '_' + (startLoopNo + i);
 
         var sessRow = {};
         sessRow['class_d1_id'] = sessId;
