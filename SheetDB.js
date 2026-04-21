@@ -2504,10 +2504,17 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
   // ITEM_HEADERS 고정 인덱스 사용 (1-based)
   var idCol           = ITEM_HEADERS.indexOf('id') + 1;
   var stuMemberCol    = ITEM_HEADERS.indexOf('stu_member') + 1;
+  var mNameCol        = ITEM_HEADERS.indexOf('m_name') + 1;
   var classD1IdCol    = ITEM_HEADERS.indexOf('class_d1_id') + 1;    // S열 = 19
   var chuchenStateCol = ITEM_HEADERS.indexOf('chuchen_state') + 1;
   var chuchenDateCol  = ITEM_HEADERS.indexOf('chuchen_date') + 1;
   var bd2Col          = ITEM_HEADERS.indexOf('bid_datetime_2') + 1; // T열 = 20
+
+  // m_name: 종목_수업일(yymmdd)_N회차
+  var dateStr = String(classDate || '');
+  // yyyymmdd → yymmdd, 이미 yymmdd면 그대로
+  if (dateStr.length === 8) dateStr = dateStr.slice(2);
+  var mNameVal = (className || '') + '_' + dateStr + '_' + (classLoop || '') + '회차';
 
   // 회차 정보에서 bid_datetime_2 조회
   var d1Sheet = ensureClassD1Sheet_();
@@ -2548,6 +2555,7 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
     if (idx < 0) { notFound.push(itemId); return; }
     var row = idx + 2;
     sheet.getRange(row, stuMemberCol).setValue('추천');
+    sheet.getRange(row, mNameCol).setValue(mNameVal);
     sheet.getRange(row, classD1IdCol).setValue(classD1Id);
     sheet.getRange(row, chuchenStateCol).setValue('신규');
     sheet.getRange(row, chuchenDateCol).setValue(today);
