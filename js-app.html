@@ -14828,23 +14828,24 @@ ${token}
             }).join('');
         }
         el.innerHTML = `<div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-            <table class="min-w-full">
+            <table id="d1ItemsTable" class="min-w-full text-[11px]">
             <thead class="bg-gray-50 border-b border-gray-200">
                 <tr>
-                    <th class="item-col-check text-center font-bold text-gray-600"><input type="checkbox" class="rounded" id="d1-items-select-all-th" ${allSelected ? 'checked' : ''} onchange="d1ItemsSelectAll_(this)"></th>
-                    <th class="item-col-date text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('in-date')">일자${arrow('in-date')}</th>
-                    <th class="item-col-img text-center font-bold text-gray-600">IMG</th>
-                    <th class="item-col-sakun text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
-                    <th class="item-col-court text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('court')">법원${arrow('court')}</th>
-                    <th class="item-col-status text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('stu_member')">상태${arrow('stu_member')}</th>
-                    <th class="item-col-telegram text-center font-bold text-gray-600">T</th>
-                    <th class="item-col-member text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name')">회원${arrow('m_name')}</th>
-                    <th class="item-col-manager text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name_id')">담당${arrow('m_name_id')}</th>
-                    <th class="w-8"></th>
+                    <th class="item-col-check text-center font-bold text-gray-500"><input type="checkbox" class="rounded" id="d1-items-select-all-th" ${allSelected ? 'checked' : ''} onchange="d1ItemsSelectAll_(this)"></th>
+                    <th class="item-col-date text-center font-bold text-gray-500 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('in-date')">일자${arrow('in-date')}</th>
+                    <th class="item-col-img text-center font-bold text-gray-500">IMG</th>
+                    <th class="item-col-sakun text-left font-bold text-gray-500 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
+                    <th class="item-col-court text-left font-bold text-gray-500 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('court')">법원${arrow('court')}</th>
+                    <th class="item-col-status text-center font-bold text-gray-500 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('stu_member')">상태${arrow('stu_member')}</th>
+                    <th class="item-col-telegram text-center font-bold text-gray-500">T</th>
+                    <th class="item-col-member text-center font-bold text-gray-500 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name')">회원${arrow('m_name')}</th>
+                    <th class="item-col-manager text-center font-bold text-gray-500 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name_id')">담당${arrow('m_name_id')}</th>
+                    <th class="w-6"></th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 bg-white">${tbodyHtml}</tbody>
             </table></div>`;
+        setTimeout(function() { initTableColResize_(document.getElementById('d1ItemsTable'), 'd1items_col_widths'); }, 50);
     }
 
     function d1ItemsSort_(key) {
@@ -14948,6 +14949,146 @@ ${token}
                 .removeItemFromClassD1(itemId);
         });
     }
+
+    // ── 신규물건 등록 폼 ───────────────────────────────────────────────
+
+    // 법원명 자동완성
+    function d1NewCourtInput_(input) {
+        const val = input.value.trim().toLowerCase();
+        const dd = document.getElementById('d1new-court-dropdown');
+        if (!dd) return;
+        if (!val) { dd.classList.add('hidden'); return; }
+        const matches = (typeof COURT_CODES !== 'undefined' ? COURT_CODES : [])
+            .filter(c => c.toLowerCase().includes(val)).slice(0, 12);
+        if (matches.length === 0) { dd.classList.add('hidden'); return; }
+        dd.innerHTML = matches.map(c =>
+            `<div class="px-2 py-1 text-xs cursor-pointer hover:bg-indigo-50"
+                onmousedown="document.getElementById('d1new-court').value='${c}';document.getElementById('d1new-court-dropdown').classList.add('hidden');">${c}</div>`
+        ).join('');
+        dd.classList.remove('hidden');
+    }
+    function d1NewCourtBlur_(input) {
+        setTimeout(function() {
+            const dd = document.getElementById('d1new-court-dropdown');
+            if (dd) dd.classList.add('hidden');
+            if (input.value.trim() && typeof COURT_CODES !== 'undefined' && !COURT_CODES.includes(input.value.trim())) {
+                alert('허용되지 않은 법원명입니다.\n목록에서 선택해주세요.');
+                input.value = ''; input.focus();
+            }
+        }, 200);
+    }
+
+    // 회원명 자동완성
+    function d1NewMemberInput_(input) {
+        const val = input.value.trim().toLowerCase();
+        document.getElementById('d1new-member-id').value = '';
+        const dd = document.getElementById('d1new-member-dropdown');
+        if (!dd) return;
+        if (!val) { dd.classList.add('hidden'); return; }
+        const memberList = (typeof allMembersNewData !== 'undefined' && allMembersNewData.length > 0) ? allMembersNewData : (allMemberData || []);
+        const matches = memberList.filter(m => {
+            const name = String(m.member_name || m.name || '').trim();
+            return name.toLowerCase().includes(val);
+        }).slice(0, 12);
+        if (matches.length === 0) { dd.classList.add('hidden'); return; }
+        dd.innerHTML = matches.map(m => {
+            const name = String(m.member_name || m.name || '');
+            const mid = String(m.member_id || '');
+            return `<div class="px-2 py-1 text-xs cursor-pointer hover:bg-indigo-50"
+                onmousedown="document.getElementById('d1new-m-name').value='${name.replace(/'/g,"\\'")}';document.getElementById('d1new-member-id').value='${mid}';document.getElementById('d1new-member-dropdown').classList.add('hidden');">${escapeHtml(name)}</div>`;
+        }).join('');
+        dd.classList.remove('hidden');
+    }
+    function d1NewMemberBlur_() {
+        setTimeout(function() {
+            const dd = document.getElementById('d1new-member-dropdown');
+            if (dd) dd.classList.add('hidden');
+        }, 200);
+    }
+
+    // 입찰가담당 Enter → 등록
+    function d1NewSelectKeydown_(e) {
+        if (e.key === 'Enter') { e.preventDefault(); submitD1NewItem_(); }
+    }
+
+    // 신규물건 등록 제출
+    function submitD1NewItem_() {
+        if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
+            showStatus('회차를 먼저 선택하세요.', 'error'); return;
+        }
+        const inDate   = (document.getElementById('d1new-in-date')?.value  || '').trim();
+        const sakunNo  = (document.getElementById('d1new-sakun-no')?.value || '').trim();
+        const court    = (document.getElementById('d1new-court')?.value    || '').trim();
+        const mName    = (document.getElementById('d1new-m-name')?.value   || '').trim();
+        const memberId = (document.getElementById('d1new-member-id')?.value|| '').trim();
+        const bidPrice = (document.getElementById('d1new-bidprice')?.value || '').trim();
+        const mNameId  = (document.getElementById('d1new-m-name-id')?.value|| '대표님');
+        if (!inDate)   { showStatus('입찰일자를 입력하세요.', 'error'); document.getElementById('d1new-in-date')?.focus(); return; }
+        if (!sakunNo)  { showStatus('사건번호를 입력하세요.', 'error'); document.getElementById('d1new-sakun-no')?.focus(); return; }
+        if (!court)    { showStatus('법원명을 입력하세요.', 'error'); document.getElementById('d1new-court')?.focus(); return; }
+        if (!mName)    { showStatus('회원명을 입력하세요.', 'error'); document.getElementById('d1new-m-name')?.focus(); return; }
+        const d1Info = (allClassD1Data || []).find(d => String(d.class_d1_id) === String(selectedClassD1Id));
+        const className = d1Info ? [d1Info.class_type, d1Info.class_name].filter(Boolean).join('') : '';
+        const classDate = d1Info ? String(d1Info.class_date||'').replace(/-/g,'') : '';
+        const classLoop = d1Info ? (d1Info.class_loop||'') : '';
+        const label = [className, classDate.substring(2,8), classLoop+'회차'].filter(Boolean).join('_');
+        if (!confirm(`신규물건 추가 및 [${label}]에 물건을 등록 하시겠습니까?\n\n입찰일: ${inDate} | 사건번호: ${sakunNo} | 법원: ${court}\n회원: ${mName} | 담당: ${mNameId}`)) return;
+        showStatus('등록 중...', 'info');
+        google.script.run
+            .withSuccessHandler(r => {
+                showStatus(r.success ? r.message : (r.message||'등록 실패'), r.success ? 'success' : 'error');
+                if (r.success) {
+                    ['d1new-in-date','d1new-sakun-no','d1new-court','d1new-m-name','d1new-bidprice'].forEach(id => {
+                        const el = document.getElementById(id); if (el) el.value = '';
+                    });
+                    document.getElementById('d1new-member-id').value = '';
+                    document.getElementById('d1new-m-name-id').value = '대표님';
+                    loadD1Items(selectedClassD1Id);
+                }
+            })
+            .withFailureHandler(e => showStatus(e.message||'등록 실패', 'error'))
+            .createItemAndRegisterToD1(selectedClassD1Id,
+                { inDate, sakunNo, court, mName, memberId, bidPrice, mNameId },
+                className, classDate, classLoop);
+    }
+
+    // ── d1ItemCard 좌/우 패널 너비 드래그 리사이즈 ────────────────────
+    (function initD1ItemCardResize_() {
+        const LS_KEY = 'd1item_list_panel_width';
+        function setup() {
+            const divider = document.getElementById('d1ItemCardDivider');
+            const leftEl  = document.getElementById('d1ItemListPanel');
+            if (!divider || !leftEl) return;
+            const saved = localStorage.getItem(LS_KEY);
+            if (saved) leftEl.style.width = saved;
+            let dragging = false, startX = 0, startW = 0;
+            divider.addEventListener('mousedown', e => {
+                dragging = true; startX = e.clientX;
+                startW = leftEl.getBoundingClientRect().width;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', e => {
+                if (!dragging) return;
+                const parent = leftEl.parentElement;
+                if (!parent) return;
+                const pW = parent.getBoundingClientRect().width;
+                const newW = Math.max(180, Math.min(pW - 200, startW + e.clientX - startX));
+                leftEl.style.width = newW + 'px';
+                leftEl.style.flexShrink = '0';
+            });
+            document.addEventListener('mouseup', () => {
+                if (!dragging) return;
+                dragging = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                try { localStorage.setItem(LS_KEY, leftEl.style.width); } catch(e) {}
+            });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup);
+        else setup();
+    })();
 
     // 수업회차 물건 취소 (회차 등록 취소 - 실제 물건 삭제 아님)
     function cancelD1Item(itemId) {

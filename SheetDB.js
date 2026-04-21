@@ -2485,6 +2485,37 @@ function deleteClassD1(classD1Id) {
  * 회차에 물건들을 일괄 등록합니다.
  * - stu_member = '추천', class_d1_id 강제 업데이트, bid_datetime_2 복사
  */
+/**
+ * 신규 물건을 items 시트에 생성하고 해당 수업회차에 동시 등록합니다.
+ */
+function createItemAndRegisterToD1(classD1Id, itemData, className, classDate, classLoop) {
+  if (!classD1Id) return { success: false, message: '회차 ID 없음' };
+  var inDate = String(itemData.inDate || '').trim();
+  var result = createData(
+    inDate,
+    String(itemData.sakunNo || '').trim(),
+    String(itemData.court || '').trim(),
+    '추천',
+    String(itemData.mNameId || '대표님').trim(),
+    String(itemData.mName || '').trim(),
+    parseInt(String(itemData.bidPrice || '0').replace(/[^0-9]/g, '')) || '',
+    String(itemData.memberId || '').trim(),
+    '',    // bidState
+    '',    // imageId
+    '',    // note
+    '',    // mName2
+    '신규', // chuchenState
+    '',    // regMember
+    ''     // auctionId
+  );
+  if (!result || !result.success) return result || { success: false, message: '물건 생성 실패' };
+  var newId = result.data && result.data.id;
+  if (!newId) return { success: false, message: '생성된 물건 ID를 찾을 수 없습니다.' };
+  var regResult = addItemsToClassD1(classD1Id, [newId], className, classDate, classLoop);
+  if (!regResult.success) return { success: false, message: '물건 생성 완료, 회차 등록 실패: ' + regResult.message };
+  return { success: true, message: '신규 물건 생성 및 회차 등록 완료' };
+}
+
 function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) {
   if (!classD1Id || !Array.isArray(itemIds) || itemIds.length === 0) {
     return { success: false, message: '파라미터 오류' };
