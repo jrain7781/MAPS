@@ -14486,7 +14486,7 @@ ${token}
 
         google.script.run
             .withSuccessHandler(r => {
-                showStatus(r.success ? `${itemIds.length}개 물건이 등록되었습니다.` : (r.message||'등록 실패'), r.success ? 'success' : 'error');
+                showStatus(r.success ? (r.message || '등록 완료') : (r.message||'등록 실패'), r.success ? 'success' : 'error');
                 if (r.success) loadD1Items(selectedClassD1Id);
             })
             .withFailureHandler(e => showStatus(e.message||'등록 실패', 'error'))
@@ -14596,15 +14596,23 @@ ${token}
     function loadD1Items(classD1Id) {
         const el = document.getElementById('d1-item-list');
         if (!el) return;
-        el.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
+        el.innerHTML = `<div class="text-gray-400 py-2 text-xs text-center">조회 중... (${classD1Id || '미선택'})</div>`;
+        console.log('[loadD1Items] 요청 ID:', classD1Id);
 
         google.script.run
             .withSuccessHandler(data => {
+                const cnt = Array.isArray(data) ? data.length : '배열아님';
+                console.log('[loadD1Items] 응답 건수:', cnt, '/ ID:', classD1Id);
                 d1ItemsData = Array.isArray(data) ? data : [];
-                renderD1Items();
+                if (d1ItemsData.length === 0 && classD1Id) {
+                    el.innerHTML = `<div class="text-amber-500 py-2 text-xs text-center">조회키: ${classD1Id} | 결과: 0건</div>`;
+                } else {
+                    renderD1Items();
+                }
             })
-            .withFailureHandler(() => {
-                el.innerHTML = '<div class="text-red-400 py-2 text-xs text-center">로드 실패</div>';
+            .withFailureHandler(e => {
+                console.error('[loadD1Items] 오류:', e);
+                el.innerHTML = `<div class="text-red-400 py-2 text-xs text-center">로드 실패: ${e.message||e}</div>`;
             })
             .getItemsByClassD1Id(classD1Id);
     }

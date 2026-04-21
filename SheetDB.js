@@ -1397,25 +1397,25 @@ function readDataWithImageIdsByMemberToken(memberToken) {
 
   // 2. 필터된 행만 객체 변환
   const memberItems = memberRows.map(row => ({
-    'id':            row[0],
-    'in-date':       formatParamsDate(row[1]),
-    'sakun_no':      row[2],
-    'court':         row[3],
-    'stu_member':    row[4],
-    'm_name_id':     row[5],
-    'm_name':        row[6],
-    'bidprice':      row[7],
-    'member_id':     row[8],
-    'reg_date':      formatParamsDate(row[9], 'yyyy-MM-dd'),
-    'reg_member':    row[10],
-    'bid_state':     (row.length > 11) ? (row[11] || '') : '',
-    'image_id':      (row.length > 12) ? (row[12] || '') : '',
-    'note':          (row.length > 13) ? (row[13] || '') : '',
-    'm_name2':       (row.length > 14) ? (row[14] || '') : '',
-    'auction_id':    (row.length > 15) ? (row[15] || '') : '',
-    'chuchen_state': (row.length > 16) ? (row[16] || '') : '',
-    'chuchen_date':  (row.length > 17) ? (row[17] || '') : '',
-    'has_images':    false
+    'id':             row[0],
+    'in-date':        formatParamsDate(row[1]),
+    'sakun_no':       row[2],
+    'court':          row[3],
+    'stu_member':     row[4],
+    'm_name_id':      row[5],
+    'm_name':         row[6],
+    'bidprice':       row[7],
+    'member_id':      row[8],
+    'reg_date':       formatParamsDate(row[9], 'yyyy-MM-dd'),
+    'reg_member':     row[10],
+    'bid_state':      (row.length > 11) ? (row[11] || '') : '',
+    'image_id':       (row.length > 12) ? (row[12] || '') : '',
+    'note':           (row.length > 13) ? (row[13] || '') : '',
+    'm_name2':        (row.length > 14) ? (row[14] || '') : '',
+    'auction_id':     (row.length > 15) ? (row[15] || '') : '',
+    'chuchen_state':  (row.length > 16) ? (row[16] || '') : '',
+    'chuchen_date':   (row.length > 17) ? (row[17] || '') : '',
+    'has_images':     false
   }));
 
   // 3. 이 회원 물건 ID 목록으로 item_images 부분 조회
@@ -2484,30 +2484,19 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터 없음' };
 
-  // 헤더 행에서 컬럼 위치 확인
-  var lastCol = Math.max(sheet.getLastColumn(), ITEM_HEADERS.length);
-  // 시트 컬럼 수 부족하면 확장
-  if (sheet.getMaxColumns() < lastCol) sheet.insertColumnsAfter(sheet.getMaxColumns(), lastCol - sheet.getMaxColumns());
-  var headerRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(v){ return String(v||'').trim(); });
-
-  // 헤더 없는 컬럼은 ITEM_HEADERS 위치에 직접 헤더 씀 (새 컬럼 삽입 NO)
-  var headerUpdated = false;
-  ITEM_HEADERS.forEach(function(h, posIdx) {
-    if (headerRow.indexOf(h) < 0) { // 이름으로 못 찾으면
-      sheet.getRange(1, posIdx + 1).setValue(h); // 위치에 헤더 쓰기
-      headerRow[posIdx] = h;
-      headerUpdated = true;
-    }
-  });
-  if (headerUpdated) SpreadsheetApp.flush();
-
-  function colByName(name) {
-    var i = headerRow.indexOf(name);
-    if (i >= 0) return i + 1;
-    // 이름 없으면 ITEM_HEADERS 위치 폴백
-    var pi = ITEM_HEADERS.indexOf(name);
-    return pi >= 0 ? pi + 1 : -1;
+  // 시트 컬럼 수 부족하면 확장 (헤더 텍스트는 건드리지 않음)
+  var needCols = ITEM_HEADERS.length;
+  if (sheet.getMaxColumns() < needCols) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), needCols - sheet.getMaxColumns());
   }
+
+  // ITEM_HEADERS 고정 인덱스 사용 (1-based)
+  var idCol           = ITEM_HEADERS.indexOf('id') + 1;
+  var stuMemberCol    = ITEM_HEADERS.indexOf('stu_member') + 1;
+  var classD1IdCol    = ITEM_HEADERS.indexOf('class_d1_id') + 1;    // S열 = 19
+  var chuchenStateCol = ITEM_HEADERS.indexOf('chuchen_state') + 1;
+  var chuchenDateCol  = ITEM_HEADERS.indexOf('chuchen_date') + 1;
+  var bd2Col          = ITEM_HEADERS.indexOf('bid_datetime_2') + 1; // T열 = 20
 
   // 회차 정보에서 bid_datetime_2 조회
   var d1Sheet = ensureClassD1Sheet_();
@@ -2521,33 +2510,41 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
     if (found && bd2Idx >= 0) bidDatetime2Val = found[bd2Idx] || '';
   }
 
-  var idCol           = colByName('id');
-  var stuMemberCol    = colByName('stu_member');
-  var classD1IdCol    = colByName('class_d1_id');
-  var chuchenStateCol = colByName('chuchen_state');
-  var chuchenDateCol  = colByName('chuchen_date');
-  var bd2Col          = colByName('bid_datetime_2');
+  // id + member_id 컬럼만 한 번에 읽기 (캐시 무효화 대상 수집용)
+  var memberIdCol = ITEM_HEADERS.indexOf('member_id') + 1;
+  var scanFrom = Math.min(idCol, memberIdCol);
+  var scanTo   = Math.max(idCol, memberIdCol);
+  var scanWidth = scanTo - scanFrom + 1;
+  var scanData = sheet.getRange(2, scanFrom, lastRow - 1, scanWidth).getValues();
+  var idColRel = idCol - scanFrom;
+  var midColRel = memberIdCol - scanFrom;
+  var ids = scanData.map(function(r){ return String(r[idColRel]); });
 
-  if (idCol < 0 || classD1IdCol < 0) return { success: false, message: 'items 시트 컬럼 오류' };
-
-  var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues().flat().map(String);
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
   var updated = 0;
+  var notFound = [];
+  var affectedMemberIds = {};
 
   itemIds.forEach(function(itemId) {
     var idx = ids.indexOf(String(itemId));
-    if (idx < 0) return;
+    if (idx < 0) { notFound.push(itemId); return; }
     var row = idx + 2;
     sheet.getRange(row, stuMemberCol).setValue('추천');
-    sheet.getRange(row, classD1IdCol).setValue(classD1Id); // 기존값 있어도 강제 업데이트
+    sheet.getRange(row, classD1IdCol).setValue(classD1Id);
     sheet.getRange(row, chuchenStateCol).setValue('신규');
     sheet.getRange(row, chuchenDateCol).setValue(today);
-    if (bd2Col > 0) sheet.getRange(row, bd2Col).setValue(bidDatetime2Val);
+    sheet.getRange(row, bd2Col).setValue(bidDatetime2Val);
+    var mid = String(scanData[idx][midColRel] || '').trim();
+    if (mid) affectedMemberIds[mid] = true;
     updated++;
   });
 
   SpreadsheetApp.flush();
-  return { success: true, message: updated + '개 물건 등록 완료' };
+  invalidateMemberItemsCache_(Object.keys(affectedMemberIds));
+
+  var msg = updated + '개 물건 등록 완료';
+  if (notFound.length > 0) msg += ' (미매칭 ' + notFound.length + '건)';
+  return { success: true, message: msg, updated: updated, notFound: notFound };
 }
 
 /**
@@ -2614,30 +2611,30 @@ function expireClassD1Items(classD1Id) {
 
 /**
  * 특정 회차(classD1Id)에 등록된 물건 목록을 조회합니다.
+ * - 컬럼 위치는 ITEM_HEADERS 고정 인덱스 기준(S열 = index 18).
+ *   헤더 셀 텍스트에 의존하지 않아 시트 상태와 무관하게 안전.
  */
 function getItemsByClassD1Id(classD1Id) {
   if (!classD1Id) return [];
   var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
-  if (!sheet || sheet.getLastRow() < 2) return [];
+  if (!sheet) return [];
 
-  // getDataRange()로 시트 전체 읽기 (컬럼 수 문제 없음)
-  var allData = sheet.getDataRange().getValues();
-  var headers = allData[0].map(function(v){ return String(v||'').trim(); });
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
 
-  // class_d1_id 컬럼: 이름 → 없으면 S열(index 18) 폴백
-  var d1Col = headers.indexOf('class_d1_id');
-  if (d1Col < 0) d1Col = ITEM_HEADERS.indexOf('class_d1_id'); // = 18
+  var d1ColIdx = ITEM_HEADERS.indexOf('class_d1_id'); // = 18
+  var numCols  = Math.min(Math.max(sheet.getLastColumn(), ITEM_HEADERS.length), sheet.getMaxColumns());
+  var data     = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
 
   var searchId = String(classD1Id).trim();
+  var matched = data.filter(function(row){ return String(row[d1ColIdx]||'').trim() === searchId; });
+  Logger.log('[getItemsByClassD1Id] id=' + searchId + ' | rows=' + data.length + ' | matched=' + matched.length + ' | numCols=' + numCols + ' | sample19=' + JSON.stringify(data.slice(0,3).map(function(r){return String(r[18]||'');})));
 
-  return allData.slice(1)
-    .filter(function(row){ return String(row[d1Col]||'').trim() === searchId; })
+  return matched
     .map(function(row){
       var obj = {};
-      ITEM_HEADERS.forEach(function(h){
-        var col = headers.indexOf(h);
-        if (col < 0) col = ITEM_HEADERS.indexOf(h);
-        obj[h] = (col >= 0 && col < row.length && row[col] != null) ? row[col] : '';
+      ITEM_HEADERS.forEach(function(h, i){
+        obj[h] = (i < row.length && row[i] != null) ? row[i] : '';
       });
       return obj;
     });
