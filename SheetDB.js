@@ -165,7 +165,7 @@ function readAllData() {
     if (row.length > 19 && row[19]) {
       var bd2v = row[19];
       rowData['bid_datetime_2'] = (bd2v instanceof Date)
-        ? (isNaN(bd2v.getTime()) ? '' : Utilities.formatDate(bd2v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'))
+        ? (isNaN(bd2v.getTime()) ? '' : Utilities.formatDate(bd2v, Session.getScriptTimeZone(), 'yyMMddHHmm'))
         : String(bd2v);
     } else {
       rowData['bid_datetime_2'] = '';
@@ -2518,7 +2518,14 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
     var d1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
     var bd2Idx  = CLASS_D1_HEADERS.indexOf('bid_datetime_2');
     var found = d1Data.find(function(r) { return String(r[d1IdIdx]) === String(classD1Id); });
-    if (found && bd2Idx >= 0) bidDatetime2Val = found[bd2Idx] || '';
+    if (found && bd2Idx >= 0) {
+      var raw = found[bd2Idx];
+      if (raw instanceof Date && !isNaN(raw.getTime())) {
+        bidDatetime2Val = Utilities.formatDate(raw, Session.getScriptTimeZone(), 'yyMMddHHmm');
+      } else {
+        bidDatetime2Val = raw ? String(raw) : '';
+      }
+    }
   }
 
   // id + member_id 컬럼만 한 번에 읽기 (캐시 무효화 대상 수집용)
@@ -2568,10 +2575,11 @@ function removeItemFromClassD1(itemId) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터 없음' };
 
-  var idCol        = ITEM_HEADERS.indexOf('id') + 1;
-  var d1IdCol      = ITEM_HEADERS.indexOf('class_d1_id') + 1;
-  var bd2Col       = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
-  var stuMemberCol = ITEM_HEADERS.indexOf('stu_member') + 1;
+  var idCol          = ITEM_HEADERS.indexOf('id') + 1;
+  var d1IdCol        = ITEM_HEADERS.indexOf('class_d1_id') + 1;
+  var bd2Col         = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
+  var stuMemberCol   = ITEM_HEADERS.indexOf('stu_member') + 1;
+  var chuchenDateCol = ITEM_HEADERS.indexOf('chuchen_date') + 1;
 
   var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues().flat().map(String);
   var idx = ids.indexOf(String(itemId));
@@ -2581,6 +2589,7 @@ function removeItemFromClassD1(itemId) {
   sheet.getRange(row, d1IdCol).setValue('');
   sheet.getRange(row, stuMemberCol).setValue('미정');
   if (bd2Col > 0) sheet.getRange(row, bd2Col).setValue('');
+  if (chuchenDateCol > 0) sheet.getRange(row, chuchenDateCol).setValue('');
   SpreadsheetApp.flush();
   return { success: true, message: '물건 취소 완료' };
 }
