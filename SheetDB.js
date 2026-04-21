@@ -159,17 +159,6 @@ function readAllData() {
     rowData['chuchen_state'] = (row.length > 16) ? (row[16] || '') : '';
     // [추가] 18번째 열(17번 인덱스) chuchen_date 매핑
     rowData['chuchen_date'] = (row.length > 17) ? (row[17] || '') : '';
-    // [추가] 19번째 열(18번 인덱스) class_d1_id 매핑
-    rowData['class_d1_id'] = (row.length > 18) ? (row[18] || '') : '';
-    // [추가] 20번째 열(19번 인덱스) bid_datetime_2 매핑 (Date 객체 → 문자열 변환)
-    if (row.length > 19 && row[19]) {
-      var bd2v = row[19];
-      rowData['bid_datetime_2'] = (bd2v instanceof Date)
-        ? (isNaN(bd2v.getTime()) ? '' : Utilities.formatDate(bd2v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'))
-        : String(bd2v);
-    } else {
-      rowData['bid_datetime_2'] = '';
-    }
 
     // [추가] item_images 테이블에 이미지가 있는지 확인
     rowData['has_images'] = itemsWithImages.has(String(row[0]).trim());
@@ -2622,8 +2611,8 @@ function expireClassD1Items(classD1Id) {
 
 /**
  * 특정 회차(classD1Id)에 등록된 물건 목록을 조회합니다.
- * - getDataRange()로 전체 읽기 → 헤더 이름으로 class_d1_id 컬럼 탐지
- * - Date 객체를 문자열로 변환하여 google.script.run 직렬화 오류 방지
+ * - 컬럼 위치는 ITEM_HEADERS 고정 인덱스 기준(S열 = index 18).
+ *   헤더 셀 텍스트에 의존하지 않아 시트 상태와 무관하게 안전.
  */
 function getItemsByClassD1Id(classD1Id) {
   if (!classD1Id) return [];
@@ -2633,36 +2622,22 @@ function getItemsByClassD1Id(classD1Id) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  var allData = sheet.getDataRange().getValues();
-  var headers = allData[0].map(function(v){ return String(v||'').trim(); });
-
-  // class_d1_id 컬럼 탐지: 헤더명 → 고정인덱스 폴백
-  var d1Col = headers.indexOf('class_d1_id');
-  if (d1Col < 0) d1Col = ITEM_HEADERS.indexOf('class_d1_id'); // = 18
+  var d1ColIdx = ITEM_HEADERS.indexOf('class_d1_id'); // = 18
+  var numCols  = Math.min(Math.max(sheet.getLastColumn(), ITEM_HEADERS.length), sheet.getMaxColumns());
+  var data     = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
 
   var searchId = String(classD1Id).trim();
-  var tz = Session.getScriptTimeZone();
-  var result = [];
+  var matched = data.filter(function(row){ return String(row[d1ColIdx]||'').trim() === searchId; });
+  Logger.log('[getItemsByClassD1Id] id=' + searchId + ' | rows=' + data.length + ' | matched=' + matched.length + ' | numCols=' + numCols + ' | sample19=' + JSON.stringify(data.slice(0,3).map(function(r){return String(r[18]||'');})));
 
-  for (var i = 1; i < allData.length; i++) {
-    var row = allData[i];
-    if (String(row[d1Col]||'').trim() !== searchId) continue;
-    var obj = {};
-    ITEM_HEADERS.forEach(function(h, idx) {
-      var col = headers.indexOf(h);
-      if (col < 0) col = idx;
-      var v = (col >= 0 && col < row.length && row[col] != null) ? row[col] : '';
-      // Date 객체 → 문자열 변환 (직렬화 오류 방지)
-      if (v instanceof Date) {
-        v = isNaN(v.getTime()) ? '' : Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm:ss');
-      }
-      obj[h] = v;
+  return matched
+    .map(function(row){
+      var obj = {};
+      ITEM_HEADERS.forEach(function(h, i){
+        obj[h] = (i < row.length && row[i] != null) ? row[i] : '';
+      });
+      return obj;
     });
-    result.push(obj);
-  }
-
-  Logger.log('[getItemsByClassD1Id] id=' + searchId + ' | d1Col=' + d1Col + ' | hdr=' + (headers[d1Col]||'?') + ' | totalRows=' + (allData.length-1) + ' | matched=' + result.length);
-  return result;
 }
 
 // ================================================================================================
