@@ -991,6 +991,13 @@
             const startAt = parseChuchenDate_(chuchenDate);
             if (isNaN(startAt)) return '';
 
+            // 남은 시간 → "N일 Nh" 형식
+            function fmtRemain_(ms) {
+                const totalH = Math.max(0, Math.floor(ms / (1000*3600)));
+                const d = Math.floor(totalH / 24), h = totalH % 24;
+                return String(d).padStart(2,'0') + 'd ' + String(h).padStart(2,'0') + 'h';
+            }
+
             // 수업회차 물건: items T열 bid_datetime_2 직접 사용
             const bd2Str = item && String(item.bid_datetime_2 || '').trim();
             if (item && item.class_d1_id && bd2Str) {
@@ -1002,10 +1009,10 @@
                         return `<div class="chuchen-timer-bar" style="background:#ef4444"><div class="chuchen-timer-badge" style="left:94%">만료</div></div>`;
                     }
                     const elapsedPct = Math.min(100, (elapsedMs / totalMs) * 100).toFixed(2);
-                    const remainHours = Math.max(0, Math.floor((endAt - now) / (1000*3600)));
+                    const remainLabel = fmtRemain_(endAt - now);
                     const badgePct = Math.min(94, Math.max(6, parseFloat(elapsedPct)));
                     const bg = `linear-gradient(to right, #ef4444 ${elapsedPct}%, #22c55e ${elapsedPct}%)`;
-                    return `<div class="chuchen-timer-bar" style="background:${bg};position:relative"><div class="chuchen-timer-badge" style="left:${badgePct}%">${remainHours}h</div></div>`;
+                    return `<div class="chuchen-timer-bar" style="background:${bg};position:relative"><div class="chuchen-timer-badge" style="left:${badgePct}%">${remainLabel}</div></div>`;
                 }
                 return ''; // bid_datetime_2 파싱 실패 or 미래 시작점 → 바 숨김
             }
@@ -1015,10 +1022,10 @@
             const MAX_HOURS = 48;
             if (elapsedHours >= MAX_HOURS) return `<div class="chuchen-timer-bar" style="background:#ef4444"><div class="chuchen-timer-badge" style="left:94%">만료</div></div>`;
             const elapsedPct = Math.min(100, (elapsedHours / MAX_HOURS) * 100).toFixed(2);
-            const remainHours = Math.max(0, MAX_HOURS - Math.floor(elapsedHours));
+            const remainLabel = fmtRemain_((MAX_HOURS - elapsedHours) * 3600 * 1000);
             const badgePct = Math.min(94, Math.max(6, parseFloat(elapsedPct)));
             const bg = `linear-gradient(to right, #ef4444 ${elapsedPct}%, #22c55e ${elapsedPct}%)`;
-            return `<div class="chuchen-timer-bar" style="background:${bg}"><div class="chuchen-timer-badge" style="left:${badgePct}%">${remainHours}h</div></div>`;
+            return `<div class="chuchen-timer-bar" style="background:${bg}"><div class="chuchen-timer-badge" style="left:${badgePct}%">${remainLabel}</div></div>`;
         } catch (e) { return ''; }
     }
 
