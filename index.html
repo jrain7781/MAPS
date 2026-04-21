@@ -2472,7 +2472,7 @@
 
 
             <!-- 물건 선택 모달 -->
-            <div id="d1ItemPickerModal" class="modal content-hidden" onclick="closeD1ItemPickerModal(event)">
+            <div id="d1ItemPickerModal" class="modal content-hidden" onclick="closeD1ItemPickerModal(event)" onkeydown="d1PickerModalKeydown_(event)">
                 <div class="modal-content flex flex-col" onclick="event.stopPropagation()"
                     style="max-width:1200px;max-height:90vh;width:98vw;padding:0">
                     <!-- 헤더 -->
@@ -2492,7 +2492,7 @@
                                 <div class="flex gap-1.5 items-center flex-wrap">
                                     <input type="text" id="d1picker-date" placeholder="입찰일자" oninput="renderD1ItemPickerList()" onfocus="this.select()"
                                         class="w-20 px-1.5 py-1 border border-gray-300 rounded text-xs text-center placeholder-gray-400 flex-none">
-                                    <input type="text" id="d1picker-sakun" placeholder="사건번호" oninput="renderD1ItemPickerList()" onfocus="this.select()"
+                                    <input type="text" id="d1picker-sakun" placeholder="사건번호" oninput="renderD1ItemPickerList()" onfocus="this.select()" onkeydown="d1PickerInputKeydown_(event)"
                                         class="w-24 px-1.5 py-1 border border-gray-300 rounded text-xs text-center placeholder-gray-400 flex-none">
                                     <input type="text" id="d1picker-court" placeholder="법원" oninput="renderD1ItemPickerList()" onfocus="this.select()"
                                         class="w-16 px-1.5 py-1 border border-gray-300 rounded text-xs text-center placeholder-gray-400 flex-none">
@@ -2539,21 +2539,31 @@
                             </div>
                             </div>
                         </div>
-                        <!-- 우: 선택된 물건 리스트 -->
                         <!-- 좌우 구분선 (가로 리사이즈) -->
                         <div id="d1PickerPanelDivider"
                             class="w-1.5 cursor-col-resize bg-gray-200 hover:bg-indigo-400 transition-colors flex-none select-none"
                             title="드래그로 너비 조절"></div>
                         <!-- 우: 선택된 물건 -->
                         <div id="d1PickerRightPanel" class="flex flex-col bg-gray-50" style="width:360px;min-width:200px;max-width:600px">
-                            <div class="px-3 py-2 border-b border-gray-200 bg-white flex items-center justify-between flex-none">
-                                <span class="text-xs font-bold text-gray-700">선택된 물건 <span id="d1PickerCartCount" class="text-indigo-600 font-semibold"></span></span>
+                            <!-- 헤더: 제목 + 일괄등록/취소 버튼 -->
+                            <div class="px-3 py-2 border-b border-gray-200 bg-white flex items-center justify-between gap-2 flex-none">
+                                <span class="text-xs font-bold text-gray-700 flex-none">선택된 물건 <span id="d1PickerCartCount" class="text-indigo-600 font-semibold"></span></span>
+                                <div class="flex gap-1 flex-none">
+                                    <button type="button" onclick="confirmD1ItemPicker()"
+                                        class="px-2.5 py-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded">일괄 등록</button>
+                                    <button type="button" onclick="closeD1ItemPickerModal()"
+                                        class="px-2.5 py-1 text-xs border border-gray-300 rounded text-gray-600 hover:bg-gray-100">취소</button>
+                                </div>
                             </div>
+                            <!-- 수업 정보 바 -->
+                            <div id="d1PickerClassInfoBar" class="px-3 py-1 bg-indigo-50 border-b border-indigo-100 text-[10px] text-indigo-700 flex flex-wrap gap-x-2 gap-y-0.5 flex-none"></div>
+                            <!-- 요약 바 -->
+                            <div id="d1CartSummaryBar" class="px-2 py-1 bg-blue-50 border-b border-blue-100 text-xs flex flex-wrap gap-x-2 gap-y-1 items-center flex-none hidden"></div>
                             <!-- 사건번호 조회 -->
                             <div class="px-2 py-1.5 bg-white border-b border-gray-100 flex-none">
                                 <input type="text" id="d1cart-search-sakun" placeholder="사건번호 조회"
-                                    oninput="d1PickerRenderCart_()"
-                                    class="w-full px-2 py-1 border border-gray-300 rounded text-[11px]">
+                                    oninput="d1PickerRenderCart_()" onfocus="this.select()"
+                                    class="w-full px-2 py-1 border border-gray-300 rounded text-xs">
                             </div>
                             <!-- 테이블 -->
                             <div class="flex-1 overflow-y-auto p-2">
@@ -2561,25 +2571,20 @@
                                 <table class="min-w-full text-[11px]">
                                     <thead class="sticky top-0 bg-gray-100 z-10 border-b border-gray-200">
                                         <tr>
-                                            <th class="px-1 py-1.5 text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" onclick="d1CartSort_('in-date')">입찰일<span id="d1cart-sort-date"></span></th>
-                                            <th class="px-1 py-1.5 text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('sakun_no')">사건번호<span id="d1cart-sort-sakun"></span></th>
-                                            <th class="px-1 py-1.5 text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('court')">법원<span id="d1cart-sort-court"></span></th>
-                                            <th class="px-1 py-1.5 text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('stu_member')">상태<span id="d1cart-sort-status"></span></th>
-                                            <th class="px-1 py-1.5 text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('m_name_id')">담당<span id="d1cart-sort-mgr"></span></th>
-                                            <th class="px-1 py-1.5 w-5"></th>
+                                            <th class="item-col-date text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" onclick="d1CartSort_('in-date')">일자<span id="d1cart-sort-date"></span></th>
+                                            <th class="item-col-sakun text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('sakun_no')">사건번호<span id="d1cart-sort-sakun"></span></th>
+                                            <th class="item-col-court text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('court')">법원<span id="d1cart-sort-court"></span></th>
+                                            <th class="item-col-status text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('stu_member')">상태<span id="d1cart-sort-status"></span></th>
+                                            <th class="item-col-member text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('m_name')">회원<span id="d1cart-sort-member"></span></th>
+                                            <th class="item-col-manager text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('m_name_id')">담당<span id="d1cart-sort-mgr"></span></th>
+                                            <th class="w-5"></th>
                                         </tr>
                                     </thead>
                                     <tbody id="d1ItemPickerCart">
-                                        <tr><td colspan="6" class="text-xs text-gray-400 text-center py-4">클릭하면 추가됩니다</td></tr>
+                                        <tr><td colspan="7" class="text-xs text-gray-400 text-center py-4">클릭하면 추가됩니다</td></tr>
                                     </tbody>
                                 </table>
                             </div>
-                            </div>
-                            <div class="px-3 py-2 border-t border-gray-200 bg-white flex-none">
-                                <button type="button" onclick="confirmD1ItemPicker()"
-                                    class="w-full py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg">일괄 등록</button>
-                                <button type="button" onclick="closeD1ItemPickerModal()"
-                                    class="w-full mt-1 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100">취소</button>
                             </div>
                         </div>
                     </div>

@@ -14366,6 +14366,7 @@ ${token}
         }
         renderD1ItemPickerList();
         d1PickerRenderCart_();
+        d1PickerUpdateClassInfo_();
         document.getElementById('d1ItemPickerModal')?.classList.remove('content-hidden');
         setTimeout(function() { initTableColResize_(document.getElementById('d1PickerTable'), 'd1picker_col_widths'); }, 100);
     }
@@ -14373,6 +14374,70 @@ ${token}
     function closeD1ItemPickerModal(e) {
         if (e && e.target !== e.currentTarget) return;
         document.getElementById('d1ItemPickerModal')?.classList.add('content-hidden');
+    }
+
+    function d1PickerUpdateClassInfo_() {
+        const bar = document.getElementById('d1PickerClassInfoBar');
+        if (!bar) return;
+        const d1Info = (allClassD1Data || []).find(d => String(d.class_d1_id) === String(selectedClassD1Id || ''));
+        if (!d1Info) { bar.innerHTML = ''; return; }
+        const fmtDate = v => { const s = String(v||'').replace(/-/g,''); return s.length >= 8 ? s.substring(2,8) : s; };
+        const fmtDt = v => {
+            const s = String(v||'').trim();
+            if (s.length === 10) return `${s.slice(0,2)}/${s.slice(2,4)}/${s.slice(4,6)} ${s.slice(6,8)}:${s.slice(8,10)}`;
+            return s || '-';
+        };
+        const today = (function(){ const d=new Date(); return String(d.getFullYear()).substring(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); })();
+        const items = [
+            ['종목', String(d1Info.class_type||'').trim() || '-'],
+            ['수업일', fmtDate(d1Info.class_date) || '-'],
+            ['회차', d1Info.class_loop ? d1Info.class_loop+'회차' : '-'],
+            ['등록시작', today],
+            ['1차마감', fmtDt(d1Info.bid_datetime_1)],
+            ['2차마감', fmtDt(d1Info.bid_datetime_2)],
+        ];
+        bar.innerHTML = items.map(([k,v]) =>
+            `<span><b class="font-semibold">${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`
+        ).join('<span class="text-indigo-300 mx-0.5">|</span>');
+    }
+
+    function d1PickerModalKeydown_(e) {
+        if (e.key === 'F2') {
+            e.preventDefault();
+            const input = document.getElementById('d1picker-sakun');
+            if (input) { input.focus(); input.select(); }
+        }
+    }
+
+    function d1PickerInputKeydown_(e) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const firstRow = document.querySelector('#d1ItemPickerTbody tr[tabindex="0"]');
+            if (firstRow) firstRow.focus();
+        }
+    }
+
+    function d1PickerRowKeydown_(e, itemId) {
+        const row = e.currentTarget;
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            d1PickerClickRow(itemId);
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = row.nextElementSibling;
+            if (next && next.getAttribute('tabindex') === '0') next.focus();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prev = row.previousElementSibling;
+            if (prev && prev.getAttribute('tabindex') === '0') prev.focus();
+            else {
+                const input = document.getElementById('d1picker-sakun');
+                if (input) input.focus();
+            }
+        } else if (e.key === 'Escape') {
+            const input = document.getElementById('d1picker-sakun');
+            if (input) input.focus();
+        }
     }
 
     function renderD1ItemPickerList() {
@@ -14429,8 +14494,10 @@ ${token}
             const statusCls = getStatusTagClass ? getStatusTagClass(it.stu_member) : '';
             const rowBg = inCart ? 'bg-indigo-50 border-l-4 border-indigo-400'
                         : alreadyIn ? 'bg-gray-50 opacity-50' : '';
-            const cursor = alreadyIn ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-indigo-50';
-            return `<tr class="${cursor} transition-colors ${rowBg}"
+            const cursor = alreadyIn ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-indigo-50 focus:outline-none focus:bg-indigo-100';
+            const tabIdx = alreadyIn ? '' : 'tabindex="0"';
+            const kd = alreadyIn ? '' : `onkeydown="d1PickerRowKeydown_(event,'${it.id}')"`;
+            return `<tr class="${cursor} transition-colors ${rowBg}" ${tabIdx} ${kd}
                 onclick="${alreadyIn ? '' : `d1PickerClickRow('${it.id}')`}"
                 title="${alreadyIn ? '이미 이 회차에 등록된 물건' : '클릭하면 우측에 추가됩니다'}">
                 <td class="item-col-date text-center text-gray-600 whitespace-nowrap">${escapeHtml(it['in-date']||'')}</td>
@@ -14438,7 +14505,7 @@ ${token}
                 <td class="item-col-sakun text-left font-medium ${inCart?'text-indigo-700':'text-gray-800'}">${escapeHtml(it.sakun_no||'')}</td>
                 <td class="item-col-court text-left text-gray-600">${escapeHtml(it.court||'')}</td>
                 <td class="item-col-status text-center"><span class="${statusCls}">${escapeHtml(it.stu_member||'')}</span></td>
-                <td class="item-col-member text-center text-gray-700">${escapeHtml(it.m_name||'')}</td>
+                <td class="item-col-member text-center text-gray-700 max-w-[70px] truncate overflow-hidden" style="max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(it.m_name||'')}">${escapeHtml(it.m_name||'')}</td>
                 <td class="item-col-manager text-center text-gray-500">${escapeHtml(it.m_name_id||'')}</td>
             </tr>`;
         }).join('');
@@ -14488,6 +14555,7 @@ ${token}
         if (countEl) countEl.textContent = cnt;
         const cartCountEl = document.getElementById('d1PickerCartCount');
         if (cartCountEl) cartCountEl.textContent = cnt;
+        d1CartRenderSummary_();
         if (!cart) return;
 
         const searchKw = (document.getElementById('d1cart-search-sakun')?.value || '').toLowerCase().trim();
@@ -14498,30 +14566,48 @@ ${token}
             return d1CartSortAsc_ ? va.localeCompare(vb) : vb.localeCompare(va);
         });
         // 정렬 화살표 갱신
-        ['date','sakun','court','status','mgr'].forEach(k => {
+        ['date','sakun','court','status','member','mgr'].forEach(k => {
             const el = document.getElementById('d1cart-sort-' + k);
             if (el) el.textContent = '';
         });
-        const cartKeyMap = {'in-date':'date','sakun_no':'sakun','court':'court','stu_member':'status','m_name_id':'mgr'};
+        const cartKeyMap = {'in-date':'date','sakun_no':'sakun','court':'court','stu_member':'status','m_name':'member','m_name_id':'mgr'};
         const cartArrow = document.getElementById('d1cart-sort-' + (cartKeyMap[d1CartSortKey_] || ''));
         if (cartArrow) cartArrow.textContent = d1CartSortAsc_ ? ' ↑' : ' ↓';
 
         if (list.length === 0) {
-            cart.innerHTML = '<tr><td colspan="6" class="text-xs text-gray-400 text-center py-4">' + (searchKw ? '조회 결과 없음' : '클릭하면 추가됩니다') + '</td></tr>';
+            cart.innerHTML = '<tr><td colspan="7" class="text-xs text-gray-400 text-center py-4">' + (searchKw ? '조회 결과 없음' : '클릭하면 추가됩니다') + '</td></tr>';
             return;
         }
         cart.innerHTML = list.map(c => {
             const statusCls = getStatusTagClass ? getStatusTagClass(c.stu_member) : '';
             const dateShort = String(c['in-date'] || '').replace(/-/g, '').substring(2, 8) || '-';
             return `<tr class="hover:bg-indigo-50 border-b border-gray-100">
-                <td class="px-1 py-1 text-center text-gray-500 whitespace-nowrap">${escapeHtml(dateShort)}</td>
-                <td class="px-1 py-1 font-medium text-gray-800 truncate max-w-[90px]">${escapeHtml(c.sakun_no||'')}</td>
-                <td class="px-1 py-1 text-gray-600 truncate max-w-[60px]">${escapeHtml(c.court||'')}</td>
-                <td class="px-1 py-1 text-center"><span class="${statusCls} text-[10px]">${escapeHtml(c.stu_member||'')}</span></td>
-                <td class="px-1 py-1 text-center text-gray-500">${escapeHtml(c.m_name_id||'')}</td>
-                <td class="px-1 py-1 text-center"><button type="button" onclick="d1PickerRemoveCart('${c.id}')" class="text-red-400 hover:text-red-600 text-xs leading-none">✕</button></td>
+                <td class="item-col-date text-center text-gray-500 whitespace-nowrap">${escapeHtml(dateShort)}</td>
+                <td class="item-col-sakun font-medium text-gray-800 overflow-hidden" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.sakun_no||'')}</td>
+                <td class="item-col-court text-gray-600 overflow-hidden" style="max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.court||'')}</td>
+                <td class="item-col-status text-center"><span class="${statusCls} text-[10px]">${escapeHtml(c.stu_member||'')}</span></td>
+                <td class="item-col-member text-center text-gray-700 overflow-hidden" style="max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.m_name||'')}">${escapeHtml(c.m_name||'')}</td>
+                <td class="item-col-manager text-center text-gray-500">${escapeHtml(c.m_name_id||'')}</td>
+                <td class="text-center w-5"><button type="button" onclick="d1PickerRemoveCart('${c.id}')" class="text-red-400 hover:text-red-600 text-xs leading-none">✕</button></td>
             </tr>`;
         }).join('');
+    }
+
+    function d1CartRenderSummary_() {
+        const bar = document.getElementById('d1CartSummaryBar');
+        if (!bar) return;
+        if (d1PickerCart.length === 0) { bar.classList.add('hidden'); return; }
+        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '취소'];
+        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '취소': 'text-orange-700' };
+        const cnt = {};
+        d1PickerCart.forEach(c => { const st = c.stu_member||'미정'; cnt[st] = (cnt[st]||0) + 1; });
+        let html = `<span class="text-gray-600">전체 ${d1PickerCart.length}건</span>`;
+        statusOrder.forEach(st => {
+            if (!cnt[st]) return;
+            html += `<span class="text-gray-400">|</span><span class="${statusColors[st]||'text-gray-600'}">${st} ${cnt[st]}건</span>`;
+        });
+        bar.innerHTML = html;
+        bar.classList.remove('hidden');
     }
 
     function d1PickerSortBy_(key) {
