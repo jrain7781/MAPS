@@ -12894,9 +12894,17 @@ ${token}
     }
 
     // 컬럼 너비 드래그 조절
-    function initTableColResize_(tableEl) {
+    function initTableColResize_(tableEl, storageKey) {
         if (!tableEl) return;
         const ths = Array.from(tableEl.querySelectorAll('thead tr:last-child th'));
+        if (storageKey) {
+            try {
+                const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                ths.forEach(function(th, i) {
+                    if (saved[i]) { th.style.minWidth = saved[i]; th.style.maxWidth = saved[i]; th.style.width = saved[i]; }
+                });
+            } catch(e) {}
+        }
         ths.forEach(function(th) {
             const existing = th.querySelector('.col-resize-handle');
             if (existing) existing.remove();
@@ -12916,6 +12924,14 @@ ${token}
                 const onUp = function() {
                     document.removeEventListener('mousemove', onMove);
                     document.removeEventListener('mouseup', onUp);
+                    if (storageKey) {
+                        try {
+                            const allThs = Array.from(tableEl.querySelectorAll('thead tr:last-child th'));
+                            const widths = {};
+                            allThs.forEach(function(t, i) { if (t.style.width) widths[i] = t.style.width; });
+                            localStorage.setItem(storageKey, JSON.stringify(widths));
+                        } catch(e) {}
+                    }
                 };
                 document.addEventListener('mousemove', onMove);
                 document.addEventListener('mouseup', onUp);
@@ -14326,6 +14342,8 @@ ${token}
     let d1PickerSortKey_ = 'in-date', d1PickerSortAsc_ = true;
     let d1CartSortKey_ = 'in-date', d1CartSortAsc_ = true;
     let d1ItemsSortKey_ = 'in-date', d1ItemsSortAsc_ = true;
+    let d1ItemsSelectedIds_ = new Set();
+    let d1ItemsFilteredData_ = null;
 
     function showD1ItemPickerModal() {
         if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
@@ -14349,7 +14367,7 @@ ${token}
         renderD1ItemPickerList();
         d1PickerRenderCart_();
         document.getElementById('d1ItemPickerModal')?.classList.remove('content-hidden');
-        setTimeout(function() { initTableColResize_(document.getElementById('d1PickerTable')); }, 100);
+        setTimeout(function() { initTableColResize_(document.getElementById('d1PickerTable'), 'd1picker_col_widths'); }, 100);
     }
 
     function closeD1ItemPickerModal(e) {
@@ -14424,6 +14442,24 @@ ${token}
                 <td class="item-col-manager text-center text-gray-500">${escapeHtml(it.m_name_id||'')}</td>
             </tr>`;
         }).join('');
+        renderD1PickerSummary_(filtered);
+    }
+
+    function renderD1PickerSummary_(filtered) {
+        const bar = document.getElementById('d1PickerSummaryBar');
+        if (!bar) return;
+        if (!filtered || filtered.length === 0) { bar.classList.add('hidden'); return; }
+        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '취소'];
+        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '취소': 'text-orange-700' };
+        const cnt = {};
+        filtered.forEach(it => { const st = it.stu_member||'미정'; cnt[st] = (cnt[st]||0) + 1; });
+        let html = `<span class="text-gray-600">전체 ${filtered.length}건</span>`;
+        statusOrder.forEach(st => {
+            if (!cnt[st]) return;
+            html += `<span class="text-gray-400">|</span><span class="${statusColors[st]||'text-gray-600'}">${st} ${cnt[st]}건</span>`;
+        });
+        bar.innerHTML = html;
+        bar.classList.remove('hidden');
     }
 
     function d1PickerClickRow(itemId) {
@@ -14631,6 +14667,9 @@ ${token}
                 const cnt = Array.isArray(data) ? data.length : '배열아님';
                 console.log('[loadD1Items] 응답 건수:', cnt, '/ ID:', classD1Id);
                 d1ItemsData = Array.isArray(data) ? data : [];
+                d1ItemsSelectedIds_.clear();
+                d1ItemsFilteredData_ = null;
+                d1ItemsUpdateDeleteBtn_();
                 if (d1ItemsData.length === 0 && classD1Id) {
                     el.innerHTML = `<div class="text-amber-500 py-2 text-xs text-center">조회키: ${classD1Id} | 결과: 0건</div>`;
                 } else {
@@ -14647,44 +14686,49 @@ ${token}
     function renderD1Items() {
         const el = document.getElementById('d1-item-list');
         if (!el) return;
+        const data = d1ItemsFilteredData_ !== null ? d1ItemsFilteredData_ : d1ItemsData;
+        renderD1ItemsSummary_(data);
         const arrow = k => d1ItemsSortKey_ === k ? (d1ItemsSortAsc_ ? ' ↑' : ' ↓') : '';
+        const allSelected = data.length > 0 && data.every(item => d1ItemsSelectedIds_.has(String(item.id)));
         let tbodyHtml;
-        if (d1ItemsData.length === 0) {
-            tbodyHtml = '<tr><td colspan="9" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
+        if (data.length === 0) {
+            tbodyHtml = '<tr><td colspan="10" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
         } else {
-            const sorted = d1ItemsData.slice().sort((a, b) => {
+            const sorted = data.slice().sort((a, b) => {
                 const va = String(a[d1ItemsSortKey_] || '');
                 const vb = String(b[d1ItemsSortKey_] || '');
                 return d1ItemsSortAsc_ ? va.localeCompare(vb) : vb.localeCompare(va);
             });
             tbodyHtml = sorted.map(item => {
                 const sc = getStatusTagClass(item.stu_member);
-                // 날짜: Date객체면 yyMMdd 변환, 아니면 raw
                 let inDate = item['in-date'];
                 if (inDate instanceof Date) {
                     inDate = String(inDate.getFullYear()).substring(2) + String(inDate.getMonth()+1).padStart(2,'0') + String(inDate.getDate()).padStart(2,'0');
                 } else {
                     inDate = String(inDate||'').replace(/[TZ\-]/g,'').substring(0,6) || '';
                 }
-                // IMG dot
                 const hasImg = !!(item.image_id || item.has_images);
                 const hasAuc = !!(item.auction_id);
                 let imgHtml = '';
                 if (hasImg && hasAuc) imgHtml = '<span class="list-has-image-dot status-complete"></span>';
                 else if (hasImg)      imgHtml = '<span class="list-has-image-dot status-image-only"></span>';
                 else if (hasAuc)      imgHtml = '<span class="list-has-image-dot status-auction-only"></span>';
-                // T badge
                 const tEnabled = typeof getMemberTelegramEnabled_ === 'function' ? getMemberTelegramEnabled_(item.member_id) : '';
                 const tHtml = tEnabled === 'Y' ? '<span class="telegram-badge">T</span>' : '';
-                return `<tr class="cursor-pointer hover:bg-gray-100 transition duration-150" onclick="openDetailModalById('${item.id}')">
-                    <td class="item-col-date text-center">${escapeHtml(inDate)}</td>
-                    <td class="item-col-img list-img-cell text-center">${imgHtml}</td>
-                    <td class="item-col-sakun text-left font-medium">${escapeHtml(item.sakun_no||'')}</td>
-                    <td class="item-col-court text-left">${escapeHtml(item.court||'')}</td>
-                    <td class="item-col-status text-center"><span class="${sc}">${escapeHtml(item.stu_member||'-')}</span></td>
-                    <td class="item-col-telegram text-center">${tHtml}</td>
-                    <td class="item-col-member text-center">${escapeHtml(item.m_name||'')}</td>
-                    <td class="item-col-manager text-center">${escapeHtml(item.m_name_id||'')}</td>
+                const isChecked = d1ItemsSelectedIds_.has(String(item.id));
+                return `<tr class="hover:bg-gray-100 transition duration-150">
+                    <td class="item-col-check text-center" onclick="event.stopPropagation()">
+                        <input type="checkbox" class="rounded" ${isChecked ? 'checked' : ''}
+                            onchange="d1ItemsToggle_('${item.id}', this.checked)">
+                    </td>
+                    <td class="item-col-date text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(inDate)}</td>
+                    <td class="item-col-img list-img-cell text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${imgHtml}</td>
+                    <td class="item-col-sakun text-left font-medium cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.sakun_no||'')}</td>
+                    <td class="item-col-court text-left cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.court||'')}</td>
+                    <td class="item-col-status text-center cursor-pointer" onclick="openDetailModalById('${item.id}')"><span class="${sc}">${escapeHtml(item.stu_member||'-')}</span></td>
+                    <td class="item-col-telegram text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${tHtml}</td>
+                    <td class="item-col-member text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.m_name||'')}</td>
+                    <td class="item-col-manager text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.m_name_id||'')}</td>
                     <td class="px-1 py-1 text-center" onclick="event.stopPropagation()"><button type="button" onclick="cancelD1Item('${item.id}')" class="text-[9px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 text-red-500 font-semibold">취소</button></td>
                 </tr>`;
             }).join('');
@@ -14693,6 +14737,7 @@ ${token}
             <table class="min-w-full">
             <thead class="bg-gray-50 border-b border-gray-200">
                 <tr>
+                    <th class="item-col-check text-center font-bold text-gray-600"><input type="checkbox" class="rounded" id="d1-items-select-all-th" ${allSelected ? 'checked' : ''} onchange="d1ItemsSelectAll_(this)"></th>
                     <th class="item-col-date text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('in-date')">일자${arrow('in-date')}</th>
                     <th class="item-col-img text-center font-bold text-gray-600">IMG</th>
                     <th class="item-col-sakun text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
@@ -14712,6 +14757,102 @@ ${token}
         if (d1ItemsSortKey_ === key) d1ItemsSortAsc_ = !d1ItemsSortAsc_;
         else { d1ItemsSortKey_ = key; d1ItemsSortAsc_ = true; }
         renderD1Items();
+    }
+
+    function applyD1ItemsFilters_() {
+        const fDate   = (document.getElementById('d1items-f-date')?.value   || '').replace(/-/g,'').trim();
+        const fSakun  = (document.getElementById('d1items-f-sakun')?.value  || '').toLowerCase().trim();
+        const fCourt  = (document.getElementById('d1items-f-court')?.value  || '').toLowerCase().trim();
+        const fStatus = (document.getElementById('d1items-f-status')?.value || '').trim();
+        const fMember = (document.getElementById('d1items-f-member')?.value || '').toLowerCase().trim();
+        const fMgr    = (document.getElementById('d1items-f-manager')?.value|| '').toLowerCase().trim();
+        const hasFilter = fDate || fSakun || fCourt || fStatus || fMember || fMgr;
+        if (!hasFilter) {
+            d1ItemsFilteredData_ = null;
+        } else {
+            d1ItemsFilteredData_ = d1ItemsData.filter(item => {
+                const rawDate = String(item['in-date']||'').replace(/[TZ\-]/g,'').substring(0,6);
+                if (fDate   && !rawDate.includes(fDate))                                        return false;
+                if (fSakun  && !String(item.sakun_no||'').toLowerCase().includes(fSakun))       return false;
+                if (fCourt  && !String(item.court||'').toLowerCase().includes(fCourt))          return false;
+                if (fStatus && String(item.stu_member||'').trim() !== fStatus)                  return false;
+                if (fMember && !String(item.m_name||'').toLowerCase().includes(fMember))        return false;
+                if (fMgr    && !String(item.m_name_id||'').toLowerCase().includes(fMgr))        return false;
+                return true;
+            });
+        }
+        renderD1Items();
+    }
+
+    function renderD1ItemsSummary_(data) {
+        const bar = document.getElementById('d1ItemsSummaryBar');
+        if (!bar) return;
+        if (!data || data.length === 0) { bar.classList.add('content-hidden'); return; }
+        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '취소'];
+        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '취소': 'text-orange-700' };
+        const cnt = {};
+        data.forEach(item => { const st = item.stu_member||'미정'; cnt[st] = (cnt[st]||0) + 1; });
+        let html = `<span class="text-gray-600">전체 ${data.length}건</span>`;
+        statusOrder.forEach(st => {
+            if (!cnt[st]) return;
+            html += `<span class="text-gray-400">|</span><span class="${statusColors[st]||'text-gray-600'}">${st} ${cnt[st]}건</span>`;
+        });
+        bar.innerHTML = html;
+        bar.classList.remove('content-hidden');
+    }
+
+    function d1ItemsSelectAll_(cb) {
+        const data = d1ItemsFilteredData_ !== null ? d1ItemsFilteredData_ : d1ItemsData;
+        if (cb.checked) data.forEach(item => d1ItemsSelectedIds_.add(String(item.id)));
+        else d1ItemsSelectedIds_.clear();
+        renderD1Items();
+        ['d1-items-select-all', 'd1-items-select-all-th'].forEach(id_ => {
+            const el = document.getElementById(id_);
+            if (el) el.checked = cb.checked;
+        });
+        d1ItemsUpdateDeleteBtn_();
+    }
+
+    function d1ItemsToggle_(id, checked) {
+        if (checked) d1ItemsSelectedIds_.add(String(id));
+        else d1ItemsSelectedIds_.delete(String(id));
+        const data = d1ItemsFilteredData_ !== null ? d1ItemsFilteredData_ : d1ItemsData;
+        const allChecked = data.length > 0 && data.every(item => d1ItemsSelectedIds_.has(String(item.id)));
+        ['d1-items-select-all', 'd1-items-select-all-th'].forEach(id_ => {
+            const cb = document.getElementById(id_);
+            if (cb) cb.checked = allChecked;
+        });
+        d1ItemsUpdateDeleteBtn_();
+    }
+
+    function d1ItemsUpdateDeleteBtn_() {
+        const btn = document.getElementById('d1-items-delete-btn');
+        if (!btn) return;
+        if (d1ItemsSelectedIds_.size > 0) btn.classList.remove('hidden');
+        else btn.classList.add('hidden');
+    }
+
+    function deleteSelectedD1Items_() {
+        const ids = Array.from(d1ItemsSelectedIds_);
+        if (ids.length === 0) { showStatus('삭제할 물건을 선택하세요.', 'error'); return; }
+        if (!confirm(`${ids.length}개 물건의 회차 등록을 취소하시겠습니까?\n실제 물건은 삭제되지 않으며 상태가 미정으로 변경됩니다.`)) return;
+        let done = 0;
+        ids.forEach(itemId => {
+            google.script.run
+                .withSuccessHandler(() => {
+                    done++;
+                    if (done === ids.length) {
+                        d1ItemsSelectedIds_.clear();
+                        showStatus(`${ids.length}개 취소 완료`, 'success');
+                        loadD1Items(selectedClassD1Id);
+                    }
+                })
+                .withFailureHandler(e => {
+                    done++;
+                    showStatus(e.message || '취소 실패', 'error');
+                })
+                .removeItemFromClassD1(itemId);
+        });
     }
 
     // 수업회차 물건 취소 (회차 등록 취소 - 실제 물건 삭제 아님)
