@@ -952,47 +952,52 @@
         } catch (e) { return ''; }
     }
 
-    // [추천 전달] 48시간 타이머 바: 왼쪽=빨강(경과), 오른쪽=초록(남음), 경계에 시간 뱃지
+    // yymmddhhmm 문자열 → timestamp
+    function parseYymmddHHmm_(s) {
+        s = String(s || '').trim();
+        if (s.length !== 10) return NaN;
+        const yy=parseInt(s.slice(0,2),10), mo=parseInt(s.slice(2,4),10)-1,
+              dd=parseInt(s.slice(4,6),10), hh=parseInt(s.slice(6,8),10),
+              mi=parseInt(s.slice(8,10),10);
+        const d = new Date(2000+yy, mo, dd, hh, mi);
+        return isNaN(d.getTime()) ? NaN : d.getTime();
+    }
+    // yyyymmdd 또는 ISO 문자열 → timestamp
+    function parseChuchenDate_(s) {
+        s = String(s || '').trim();
+        if (/^\d{8}$/.test(s)) return new Date(s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8)).getTime();
+        return new Date(s).getTime();
+    }
+
+    // [추천 전달] 타이머 바: 왼쪽=빨강(경과), 오른쪽=초록(남음)
     function createChuchenTimerBar(chuchenDate, item) {
         if (!chuchenDate) return '';
         try {
             const now = Date.now();
+            const startAt = parseChuchenDate_(chuchenDate);
+            if (isNaN(startAt)) return '';
 
-            // class_d1_id 있는 물건: bid_datetime_1/2 기준
-            const d1Id = item && String(item.class_d1_id || '').trim();
-            if (d1Id && allD1DatetimeMap[d1Id]) {
-                const dtInfo = allD1DatetimeMap[d1Id];
-                const dt1 = dtInfo.bid_datetime_1 ? new Date(dtInfo.bid_datetime_1).getTime() : 0;
-                const dt2 = dtInfo.bid_datetime_2 ? new Date(dtInfo.bid_datetime_2).getTime() : 0;
-                const startAt = new Date(chuchenDate).getTime();
-                const endAt = dt2 || dt1;
-                if (!endAt || isNaN(startAt) || isNaN(endAt) || endAt <= startAt) {
-                    // datetime 정보 부족 → 기존 48h 로직 폴백
-                } else {
+            // 수업회차 물건: items T열 bid_datetime_2 직접 사용
+            const bd2Str = item && String(item.bid_datetime_2 || '').trim();
+            if (item && item.class_d1_id && bd2Str) {
+                const endAt = parseYymmddHHmm_(bd2Str);
+                if (!isNaN(endAt) && endAt > startAt) {
                     const totalMs = endAt - startAt;
                     const elapsedMs = now - startAt;
                     if (elapsedMs >= totalMs) {
                         return `<div class="chuchen-timer-bar" style="background:#ef4444"><div class="chuchen-timer-badge" style="left:94%">만료</div></div>`;
                     }
                     const elapsedPct = Math.min(100, (elapsedMs / totalMs) * 100).toFixed(2);
-                    const remainHours = Math.max(0, Math.floor((endAt - now) / (1000 * 3600)));
+                    const remainHours = Math.max(0, Math.floor((endAt - now) / (1000*3600)));
                     const badgePct = Math.min(94, Math.max(6, parseFloat(elapsedPct)));
                     const bg = `linear-gradient(to right, #ef4444 ${elapsedPct}%, #22c55e ${elapsedPct}%)`;
-
-                    // 1차만료 경계 표시
-                    let firstExpireMarker = '';
-                    if (dt1 && dt2 && dt1 < dt2 && dt1 > startAt) {
-                        const dt1Pct = Math.min(99, Math.max(1, ((dt1 - startAt) / totalMs * 100))).toFixed(2);
-                        firstExpireMarker = `<div class="chuchen-timer-badge" style="left:${dt1Pct}%;background:#f59e0b;color:#fff">1차</div>`;
-                    }
-                    return `<div class="chuchen-timer-bar" style="background:${bg};position:relative">${firstExpireMarker}<div class="chuchen-timer-badge" style="left:${badgePct}%">${remainHours}h</div></div>`;
+                    return `<div class="chuchen-timer-bar" style="background:${bg};position:relative"><div class="chuchen-timer-badge" style="left:${badgePct}%">${remainHours}h</div></div>`;
                 }
+                return ''; // bid_datetime_2 파싱 실패 or 미래 시작점 → 바 숨김
             }
 
-            // 기존 로직 (class_d1_id 없는 물건: chuchen_date 기준 48h)
-            const sentAt = new Date(chuchenDate).getTime();
-            if (isNaN(sentAt)) return '';
-            const elapsedHours = (now - sentAt) / (1000 * 3600);
+            // 일반 추천 물건: chuchen_date 기준 48h
+            const elapsedHours = (now - startAt) / (1000 * 3600);
             const MAX_HOURS = 48;
             if (elapsedHours >= MAX_HOURS) return `<div class="chuchen-timer-bar" style="background:#ef4444"><div class="chuchen-timer-badge" style="left:94%">만료</div></div>`;
             const elapsedPct = Math.min(100, (elapsedHours / MAX_HOURS) * 100).toFixed(2);

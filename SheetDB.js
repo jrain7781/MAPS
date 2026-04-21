@@ -2603,6 +2603,19 @@ function removeItemFromClassD1(itemId) {
 }
 
 /**
+ * yymmddhhmm 문자열 → timestamp. 파싱 실패 시 NaN.
+ */
+function parseBd2Str_(s) {
+  s = String(s || '').trim();
+  if (s.length !== 10) return NaN;
+  var yy = parseInt(s.slice(0,2),10), mo = parseInt(s.slice(2,4),10)-1,
+      dd = parseInt(s.slice(4,6),10), hh = parseInt(s.slice(6,8),10),
+      mi = parseInt(s.slice(8,10),10);
+  var d = new Date(2000+yy, mo, dd, hh, mi);
+  return isNaN(d.getTime()) ? NaN : d.getTime();
+}
+
+/**
  * 특정 회차의 bid_datetime_2가 경과된 경우 추천 물건을 미정으로 일괄 변경.
  * class_d1_id는 유지, bid_datetime_2는 유지.
  */
@@ -2627,8 +2640,8 @@ function expireClassD1Items(classD1Id) {
     if (String(row[stuIdx]) !== '추천') return;
     var bd2 = row[bd2Idx];
     if (!bd2) return;
-    var expiry = new Date(bd2);
-    if (isNaN(expiry.getTime()) || now < expiry) return;
+    var expTs = parseBd2Str_(String(bd2));
+    if (isNaN(expTs) || now.getTime() < expTs) return;
     sheet.getRange(i + 2, stuCol).setValue('미정');
     updated++;
   });
@@ -4624,8 +4637,37 @@ function autoExpireRecommended() {
       const mName = String(row[6] || '').trim();
       const chuchenState = String(row[16] || '').trim();  // Q열: chuchen_state
       const chuchenDate = row[17];                        // R열: chuchen_date
+      const classD1Id   = String(row[18] || '').trim();  // S열: class_d1_id
+      const bd2Str      = String(row[19] || '').trim();  // T열: bid_datetime_2
 
       if (stuMember !== '추천') return;
+
+      // 수업회차 물건: bid_datetime_2 기준 만료 (chuchen_state 무관)
+      if (classD1Id && bd2Str) {
+        const expTs = parseBd2Str_(bd2Str);
+        if (!isNaN(expTs) && now.getTime() >= expTs) {
+          if (getSetting_('AUTO_EXPIRE_ENABLED', 'true') === 'true') {
+            sheet.getRange(realRow, 5).setValue('미정');
+            writeItemHistory_({
+              action: 'AUTO_EXPIRE',
+              item_id: itemId,
+              member_id: memberId,
+              member_name: mName,
+              field_name: 'stu_member',
+              from_value: '추천',
+              to_value: '미정',
+              trigger_type: 'system',
+              note: 'class_d1_expire'
+            });
+            if (getSetting_('EXPIRY_NOTIFY_DONE', 'true') === 'true') {
+              sendExpiryNotification_(memberId, itemId, 'done');
+            }
+          }
+        }
+        return; // class_d1 물건은 48h 로직 건너뜀
+      }
+
+      // 일반 추천 물건: chuchen_state='전달완료' + 48h 기준
       if (chuchenState !== '전달완료') return;
       if (!chuchenDate) return;
 
