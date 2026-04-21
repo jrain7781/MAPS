@@ -936,19 +936,34 @@
         }
     }
 
-    // [추천 전달] chuchen_date 포맷 함수: "26-02-03 14:00 59" 형식
-    function formatChuchenDate(dateStr) {
-        if (!dateStr) return '';
+    // chuchen_date(yyyymmdd 숫자/문자 또는 ISO) → Date 객체
+    function parseChuchen_(v) {
+        const s = String(v || '').trim();
+        if (/^\d{8}$/.test(s)) return new Date(s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8));
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    // Date → "yymmdd hh:mm"
+    function fmtD_(d) {
+        if (!d) return '';
+        return String(d.getFullYear()).slice(2)
+            + String(d.getMonth()+1).padStart(2,'0')
+            + String(d.getDate()).padStart(2,'0')
+            + ' ' + String(d.getHours()).padStart(2,'0')
+            + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+    // 시작 ~ 만료 표시: "yymmdd hh:mm ~ yymmdd hh:mm"
+    function formatChuchenDate(chuchenDate, bd2Str) {
+        if (!chuchenDate) return '';
         try {
-            const d = new Date(dateStr);
-            if (isNaN(d.getTime())) return '';
-            const yy = String(d.getFullYear()).slice(2);
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            const hh = String(d.getHours()).padStart(2, '0');
-            const mi = String(d.getMinutes()).padStart(2, '0');
-            const ss = String(d.getSeconds()).padStart(2, '0');
-            return `${yy}-${mm}-${dd} ${hh}:${mi} ${ss}`;
+            const start = parseChuchen_(chuchenDate);
+            if (!start) return '';
+            const startStr = fmtD_(start);
+            if (bd2Str) {
+                const endTs = parseYymmddHHmm_(bd2Str);
+                if (!isNaN(endTs)) return startStr + ' ~ ' + fmtD_(new Date(endTs));
+            }
+            return startStr;
         } catch (e) { return ''; }
     }
 
@@ -964,9 +979,8 @@
     }
     // yyyymmdd 또는 ISO 문자열 → timestamp
     function parseChuchenDate_(s) {
-        s = String(s || '').trim();
-        if (/^\d{8}$/.test(s)) return new Date(s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8)).getTime();
-        return new Date(s).getTime();
+        const d = parseChuchen_(s);
+        return d ? d.getTime() : NaN;
     }
 
     // [추천 전달] 타이머 바: 왼쪽=빨강(경과), 오른쪽=초록(남음)
@@ -2039,7 +2053,7 @@
                         const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${(hasImages || hasAucId) ? `<span class="inline-block w-3.5 h-3.5 rounded-full ${dotClass} cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="${dotTitle}"></span>` : ''}</span>`;
 
                         // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
-                        const chuchenDateStr = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date) : '';
+                        const chuchenDateStr = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date, bid.bid_datetime_2) : '';
                         const chuchenDateHtml = chuchenDateStr ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr}</div>` : '';
                         const timerBarHtml = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
 
@@ -2732,7 +2746,7 @@
                         const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${hasImages ? `<span class="inline-block w-3.5 h-3.5 rounded-full bg-green-500 cursor-pointer" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="이미지 있음"></span>` : ''}</span>`;
 
                         // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
-                        const chuchenDateStr2 = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date) : '';
+                        const chuchenDateStr2 = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date, bid.bid_datetime_2) : '';
                         const chuchenDateHtml2 = chuchenDateStr2 ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr2}</div>` : '';
                         const timerBarHtml2 = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
 
