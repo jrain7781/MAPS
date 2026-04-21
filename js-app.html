@@ -2000,9 +2000,9 @@
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                         const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                         const mNameValue = bid.m_name || '';
+                        const mNameHtml = bid.class_d1_id ? `<span style="background:#fef08a;padding:0 3px;border-radius:2px;font-weight:bold;">${mNameValue}</span>` : `<span style="font-weight:bold;">${mNameValue}</span>`;
                         const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
-                        const hBadgeHtml = (bid.class_d1_id && bid.stu_member !== '미정') ? `<span style="font-size:9px;background:#fef08a;color:#dc2626;font-weight:bold;padding:0 3px;border-radius:3px;margin-right:2px;vertical-align:middle">H</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
 
@@ -2042,7 +2042,7 @@
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs font-bold text-gray-800 ml-1">${mNameValue}</span>
+                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div>
@@ -2058,7 +2058,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>${hBadgeHtml}<span style="margin-left:6px;">${tBadgeHtml}</span><span style="font-weight:bold;margin-left:4px;">${mNameValue}</span></div>
+                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div>
@@ -2241,6 +2241,7 @@
                     const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                     const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                     const mNameValue = bid.m_name || '';
+                    const mNameHtml = bid.class_d1_id ? `<span style="background:#fef08a;padding:0 3px;border-radius:2px;font-weight:bold;">${mNameValue}</span>` : `<span style="font-weight:bold;">${mNameValue}</span>`;
                     const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? '<span class="telegram-badge">T</span>' : '';
                     const statusClass = getStatusTagClass(bid.stu_member);
                     const courtButtonClass = 'button-like-content';
@@ -2276,7 +2277,7 @@
                       <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm" onmouseenter="preloadItemImage('${bid.image_id}')">
                         <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                           <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                          <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs font-bold text-gray-800 ml-1">${mNameValue}</span>
+                          <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}</span>
                         </div>
                         <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                           <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1">${dupSakunHtml(bid)}</div></div>
@@ -2291,7 +2292,7 @@
                         <div class="bid-row-top">
                           <div class="bid-top-left">${imgButtonHtml}</div>
                           <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                          <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="font-weight:bold;margin-left:4px;">${mNameValue}</span></div>
+                          <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}</span></div>
                         </div>
                         <div class="bid-card-bottom">
                           <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div></div>
@@ -2707,9 +2708,9 @@
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                         const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                         const mNameValue = bid.m_name || '';
+                        const mNameHtml = bid.class_d1_id ? `<span style="background:#fef08a;padding:0 3px;border-radius:2px;font-weight:bold;">${mNameValue}</span>` : `<span style="font-weight:bold;">${mNameValue}</span>`;
                         const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
-                        const hBadgeHtml = (bid.class_d1_id && bid.stu_member !== '미정') ? `<span style="font-size:9px;background:#fef08a;color:#dc2626;font-weight:bold;padding:0 3px;border-radius:3px;margin-right:2px;vertical-align:middle">H</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
 
@@ -2734,7 +2735,7 @@
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs font-bold text-gray-800 ml-1">${mNameValue}</span>
+                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div>
@@ -2753,7 +2754,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>${hBadgeHtml}<span style="margin-left:6px;">${tBadgeHtml}</span><span style="font-weight:bold;margin-left:4px;">${mNameValue}</span></div>
+                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div>
