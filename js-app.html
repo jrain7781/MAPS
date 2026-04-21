@@ -14368,12 +14368,28 @@ ${token}
         d1PickerRenderCart_();
         d1PickerUpdateClassInfo_();
         document.getElementById('d1ItemPickerModal')?.classList.remove('content-hidden');
-        setTimeout(function() { initTableColResize_(document.getElementById('d1PickerTable'), 'd1picker_col_widths'); }, 100);
+        setTimeout(function() {
+            initTableColResize_(document.getElementById('d1PickerTable'), 'd1picker_col_widths');
+            initTableColResize_(document.getElementById('d1CartTable'), 'd1cart_col_widths');
+            document.getElementById('d1picker-sakun')?.focus();
+        }, 100);
+        document.addEventListener('keydown', d1PickerDocKeydown_);
     }
 
     function closeD1ItemPickerModal(e) {
         if (e && e.target !== e.currentTarget) return;
         document.getElementById('d1ItemPickerModal')?.classList.add('content-hidden');
+        document.removeEventListener('keydown', d1PickerDocKeydown_);
+    }
+
+    function d1PickerDocKeydown_(e) {
+        const modal = document.getElementById('d1ItemPickerModal');
+        if (!modal || modal.classList.contains('content-hidden')) return;
+        if (e.key === 'F2') {
+            e.preventDefault();
+            const input = document.getElementById('d1picker-sakun');
+            if (input) { input.focus(); input.select(); }
+        }
     }
 
     function d1PickerUpdateClassInfo_() {
@@ -14399,14 +14415,6 @@ ${token}
         bar.innerHTML = items.map(([k,v]) =>
             `<span><b class="font-semibold">${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`
         ).join('<span class="text-indigo-300 mx-0.5">|</span>');
-    }
-
-    function d1PickerModalKeydown_(e) {
-        if (e.key === 'F2') {
-            e.preventDefault();
-            const input = document.getElementById('d1picker-sakun');
-            if (input) { input.focus(); input.select(); }
-        }
     }
 
     function d1PickerInputKeydown_(e) {
