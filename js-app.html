@@ -1004,6 +1004,74 @@
     }
 
     // 상태값에 따른 태그 클래스 반환
+    // ── H badge (수업회차 등록 표시) ──────────────────────────────────
+    function getHBadgeHtml_(item) {
+        const d1Id = String(item.class_d1_id || '').trim();
+        if (!d1Id) return '';
+        // 2차마감 경과 시 숨김
+        const bd2Raw = item.bid_datetime_2 || '';
+        if (bd2Raw) {
+            const exp = new Date(bd2Raw);
+            if (!isNaN(exp.getTime()) && new Date() > exp) return '';
+        }
+        const info = allD1InfoMap_[d1Id] || {};
+        const classDesc = [info.class_type || '', info.class_name || ''].filter(Boolean).join(' ');
+        const classDate = info.class_date || '';
+        const classLoop = info.class_loop || (d1Id.split('_').pop() || '');
+        const bd2 = info.bid_datetime_2 || bd2Raw;
+        return `<span class="h-badge-dot"
+            data-hbd-desc="${escapeHtml(classDesc)}"
+            data-hbd-date="${escapeHtml(classDate)}"
+            data-hbd-loop="${escapeHtml(String(classLoop))}"
+            data-hbd-bd2="${escapeHtml(String(bd2))}"
+            onmouseenter="showHBadgeTip_(this)" onmouseleave="hideHBadgeTip_()"
+            style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#dc2626;color:#fef08a;font-size:9px;font-weight:900;margin-right:2px;vertical-align:middle;cursor:help;flex-shrink:0;line-height:1">H</span>`;
+    }
+    function showHBadgeTip_(el) {
+        const desc  = el.getAttribute('data-hbd-desc') || '';
+        const date  = el.getAttribute('data-hbd-date') || '';
+        const loop  = el.getAttribute('data-hbd-loop') || '';
+        const bd2   = el.getAttribute('data-hbd-bd2')  || '';
+        let html = '<div style="min-width:150px;font-size:11px;line-height:1.8">';
+        if (desc) html += `<div><span style="color:#6b7280">수업:</span> <b>${escapeHtml(desc)}</b></div>`;
+        if (date) {
+            const s = String(date).replace(/-/g,'').substring(2,8);
+            const fmt = s.length >= 6 ? s.slice(0,2)+'/'+s.slice(2,4)+'/'+s.slice(4,6) : date;
+            html += `<div><span style="color:#6b7280">일자:</span> ${escapeHtml(fmt)}</div>`;
+        }
+        if (loop) html += `<div><span style="color:#6b7280">회차:</span> ${escapeHtml(loop)}회</div>`;
+        if (bd2) {
+            const dt = new Date(bd2);
+            const bd2Fmt = !isNaN(dt.getTime())
+                ? [String(dt.getFullYear()).slice(2), String(dt.getMonth()+1).padStart(2,'0'), String(dt.getDate()).padStart(2,'0')].join('/')
+                  + ' ' + String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0')
+                : bd2.substring(0,16);
+            html += `<div><span style="color:#6b7280">2차마감:</span> <span style="color:#dc2626;font-weight:bold">${escapeHtml(bd2Fmt)}</span></div>`;
+        }
+        html += '</div>';
+        let tip = document.getElementById('_hBadgeTip_');
+        if (!tip) {
+            tip = document.createElement('div');
+            tip.id = '_hBadgeTip_';
+            tip.style.cssText = 'position:fixed;z-index:99999;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:6px 10px;box-shadow:0 4px 12px rgba(0,0,0,.15);pointer-events:none;display:none';
+            document.body.appendChild(tip);
+        }
+        tip.innerHTML = html;
+        tip.style.display = 'block';
+        const r = el.getBoundingClientRect();
+        let left = r.left, top = r.bottom + 4;
+        const tw = tip.offsetWidth;
+        if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+        if (left < 4) left = 4;
+        tip.style.left = left + 'px';
+        tip.style.top  = top  + 'px';
+    }
+    function hideHBadgeTip_() {
+        const tip = document.getElementById('_hBadgeTip_');
+        if (tip) tip.style.display = 'none';
+    }
+    // ─────────────────────────────────────────────────────────────────
+
     function getStatusTagClass(status) {
         switch (status) {
             case '상품': return 'stu-tag stu-tag-product';
@@ -1182,7 +1250,7 @@
                 cell.className = 'item-col-court text-left';
                 cell = row.insertCell(5);
                 const statusClass = getStatusTagClass(item.stu_member);
-                cell.innerHTML = `<span class="${statusClass}">${item.stu_member}</span>`;
+                cell.innerHTML = getHBadgeHtml_(item) + `<span class="${statusClass}">${item.stu_member}</span>`;
                 cell.className = 'item-col-status text-center';
                 cell = row.insertCell(6);
                 {
@@ -2002,7 +2070,7 @@
                         const mNameValue = bid.m_name || '';
                         const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
-                        const hBadgeHtml = (bid.class_d1_id && bid.stu_member !== '미정') ? `<span style="font-size:9px;background:#fef08a;color:#dc2626;font-weight:bold;padding:0 3px;border-radius:3px;margin-right:2px;vertical-align:middle">H</span>` : '';
+                        const hBadgeHtml = getHBadgeHtml_(bid);
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
 
@@ -2709,7 +2777,7 @@
                         const mNameValue = bid.m_name || '';
                         const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
-                        const hBadgeHtml = (bid.class_d1_id && bid.stu_member !== '미정') ? `<span style="font-size:9px;background:#fef08a;color:#dc2626;font-weight:bold;padding:0 3px;border-radius:3px;margin-right:2px;vertical-align:middle">H</span>` : '';
+                        const hBadgeHtml = getHBadgeHtml_(bid);
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
 
@@ -11072,6 +11140,7 @@ MJ 이정우 팀장
     let d1BatchIdx = 0;       // 현재 배치 인덱스
     let allClassD1SummaryData = null; // 전체 회차 출석 요약 데이터
     let allD1DatetimeMap = {};        // class_d1_id → { bid_datetime_1, bid_datetime_2 }
+    let allD1InfoMap_   = {};        // class_d1_id → { class_type, class_name, class_date, class_loop, bid_datetime_2 }
 
     // --- 회원관리 (신규) 함수들 ---
 
@@ -12098,8 +12167,16 @@ ${token}
                 // bid_datetime_1/2 맵 업데이트
                 allClassD1Data.forEach(d => {
                     if (d.class_d1_id) {
-                        allD1DatetimeMap[String(d.class_d1_id)] = {
+                        const key = String(d.class_d1_id);
+                        allD1DatetimeMap[key] = {
                             bid_datetime_1: d.bid_datetime_1 || '',
+                            bid_datetime_2: d.bid_datetime_2 || ''
+                        };
+                        allD1InfoMap_[key] = {
+                            class_type:     d.class_type     || '',
+                            class_name:     d.class_name     || '',
+                            class_date:     d.class_date     || '',
+                            class_loop:     d.class_loop     || '',
                             bid_datetime_2: d.bid_datetime_2 || ''
                         };
                     }
@@ -14593,62 +14670,102 @@ ${token}
             .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate, classLoop);
     }
 
+    let d1ItemSummaryFilter_ = null; // 요약바 클릭 필터
+
     function loadD1Items(classD1Id) {
         const el = document.getElementById('d1-item-list');
         if (!el) return;
-        el.innerHTML = `<div class="text-gray-400 py-2 text-xs text-center">조회 중... (${classD1Id || '미선택'})</div>`;
-        console.log('[loadD1Items] 요청 ID:', classD1Id);
-
+        el.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
+        console.log('[loadD1Items]', classD1Id);
         google.script.run
             .withSuccessHandler(data => {
-                const cnt = Array.isArray(data) ? data.length : '배열아님';
-                console.log('[loadD1Items] 응답 건수:', cnt, '/ ID:', classD1Id);
                 d1ItemsData = Array.isArray(data) ? data : [];
-                if (d1ItemsData.length === 0 && classD1Id) {
-                    el.innerHTML = `<div class="text-amber-500 py-2 text-xs text-center">조회키: ${classD1Id} | 결과: 0건</div>`;
-                } else {
-                    renderD1Items();
-                }
+                d1ItemSummaryFilter_ = null;
+                renderD1ItemSummary_();
+                renderD1Items();
             })
             .withFailureHandler(e => {
-                console.error('[loadD1Items] 오류:', e);
-                el.innerHTML = `<div class="text-red-400 py-2 text-xs text-center">로드 실패: ${e.message||e}</div>`;
+                el.innerHTML = `<div class="text-red-400 py-2 text-xs text-center">로드 실패</div>`;
             })
             .getItemsByClassD1Id(classD1Id);
+    }
+
+    function renderD1ItemSummary_() {
+        const bar = document.getElementById('d1ItemSummaryBar');
+        if (!bar) return;
+        if (d1ItemsData.length === 0) { bar.classList.add('content-hidden'); return; }
+        const statusOrder = ['상품','검증','미정','추천','입찰','취소'];
+        const statusColors = {'상품':'text-yellow-700','검증':'text-purple-700','미정':'text-green-700','추천':'text-purple-700','입찰':'text-blue-700','취소':'text-orange-700'};
+        const cnt = {};
+        d1ItemsData.forEach(it => { const s = it.stu_member||'미정'; cnt[s]=(cnt[s]||0)+1; });
+        const isActive = k => d1ItemSummaryFilter_===k ? 'font-bold underline' : '';
+        let html = `<span class="cursor-pointer hover:opacity-70 text-gray-600 ${isActive('__all__')}" onclick="d1ItemSetSummaryFilter_('__all__')">전체 ${d1ItemsData.length}건</span>`;
+        statusOrder.forEach(s => {
+            const c = cnt[s]||0; if (!c) return;
+            const col = statusColors[s]||'text-gray-600';
+            html += `<span class="text-gray-400">|</span><span class="cursor-pointer hover:opacity-70 ${col} ${isActive(s)}" onclick="d1ItemSetSummaryFilter_('${s}')">${s} ${c}건</span>`;
+        });
+        bar.innerHTML = html;
+        bar.classList.remove('content-hidden');
+    }
+
+    function d1ItemSetSummaryFilter_(key) {
+        d1ItemSummaryFilter_ = (d1ItemSummaryFilter_===key) ? null : key;
+        renderD1ItemSummary_();
+        renderD1Items();
+    }
+
+    function d1ItemApplyFilter_() {
+        d1ItemSummaryFilter_ = null;
+        renderD1ItemSummary_();
+        renderD1Items();
     }
 
     function renderD1Items() {
         const el = document.getElementById('d1-item-list');
         if (!el) return;
-        const arrow = k => d1ItemsSortKey_ === k ? (d1ItemsSortAsc_ ? ' ↑' : ' ↓') : '';
+        const arrow = k => d1ItemsSortKey_===k ? (d1ItemsSortAsc_?' ↑':' ↓'):'';
+
+        // 필터 적용
+        const fSakun  = (document.getElementById('d1ItemSearchSakun')?.value||'').trim().toLowerCase();
+        const fCourt  = (document.getElementById('d1ItemSearchCourt')?.value||'').trim().toLowerCase();
+        const fStatus = (document.getElementById('d1ItemStatusFilter')?.value||'');
+        const fMember = (document.getElementById('d1ItemSearchMember')?.value||'').trim().toLowerCase();
+
+        let filtered = d1ItemsData.filter(it => {
+            if (d1ItemSummaryFilter_ && d1ItemSummaryFilter_ !== '__all__' && (it.stu_member||'미정') !== d1ItemSummaryFilter_) return false;
+            if (fSakun  && !String(it.sakun_no||'').toLowerCase().includes(fSakun)) return false;
+            if (fCourt  && !String(it.court||'').toLowerCase().includes(fCourt))    return false;
+            if (fStatus && (it.stu_member||'') !== fStatus)                         return false;
+            if (fMember && !String(it.m_name||'').toLowerCase().includes(fMember))  return false;
+            return true;
+        });
+
+        const sorted = filtered.slice().sort((a,b) => {
+            const va = String(a[d1ItemsSortKey_]||''), vb = String(b[d1ItemsSortKey_]||'');
+            return d1ItemsSortAsc_ ? va.localeCompare(vb) : vb.localeCompare(va);
+        });
+
         let tbodyHtml;
-        if (d1ItemsData.length === 0) {
-            tbodyHtml = '<tr><td colspan="9" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
+        if (sorted.length === 0) {
+            const msg = d1ItemsData.length > 0 ? '필터 조건에 맞는 물건이 없습니다.' : '등록된 물건이 없습니다.';
+            tbodyHtml = `<tr><td colspan="9" class="text-gray-400 py-4 text-xs text-center">${msg}</td></tr>`;
         } else {
-            const sorted = d1ItemsData.slice().sort((a, b) => {
-                const va = String(a[d1ItemsSortKey_] || '');
-                const vb = String(b[d1ItemsSortKey_] || '');
-                return d1ItemsSortAsc_ ? va.localeCompare(vb) : vb.localeCompare(va);
-            });
             tbodyHtml = sorted.map(item => {
                 const sc = getStatusTagClass(item.stu_member);
-                // 날짜: Date객체면 yyMMdd 변환, 아니면 raw
                 let inDate = item['in-date'];
                 if (inDate instanceof Date) {
-                    inDate = String(inDate.getFullYear()).substring(2) + String(inDate.getMonth()+1).padStart(2,'0') + String(inDate.getDate()).padStart(2,'0');
+                    inDate = String(inDate.getFullYear()).substring(2)+String(inDate.getMonth()+1).padStart(2,'0')+String(inDate.getDate()).padStart(2,'0');
                 } else {
-                    inDate = String(inDate||'').replace(/[TZ\-]/g,'').substring(0,6) || '';
+                    inDate = String(inDate||'').replace(/[TZ\-]/g,'').substring(0,6)||'';
                 }
-                // IMG dot
-                const hasImg = !!(item.image_id || item.has_images);
-                const hasAuc = !!(item.auction_id);
+                const hasImg = !!(item.image_id||item.has_images), hasAuc = !!(item.auction_id);
                 let imgHtml = '';
-                if (hasImg && hasAuc) imgHtml = '<span class="list-has-image-dot status-complete"></span>';
-                else if (hasImg)      imgHtml = '<span class="list-has-image-dot status-image-only"></span>';
-                else if (hasAuc)      imgHtml = '<span class="list-has-image-dot status-auction-only"></span>';
-                // T badge
-                const tEnabled = typeof getMemberTelegramEnabled_ === 'function' ? getMemberTelegramEnabled_(item.member_id) : '';
-                const tHtml = tEnabled === 'Y' ? '<span class="telegram-badge">T</span>' : '';
+                if (hasImg && hasAuc)  imgHtml = '<span class="list-has-image-dot status-complete"></span>';
+                else if (hasImg)       imgHtml = '<span class="list-has-image-dot status-image-only"></span>';
+                else if (hasAuc)       imgHtml = '<span class="list-has-image-dot status-auction-only"></span>';
+                const tEnabled = typeof getMemberTelegramEnabled_==='function' ? getMemberTelegramEnabled_(item.member_id):'';
+                const tHtml = tEnabled==='Y' ? '<span class="telegram-badge">T</span>':'';
                 return `<tr class="cursor-pointer hover:bg-gray-100 transition duration-150" onclick="openDetailModalById('${item.id}')">
                     <td class="item-col-date text-center">${escapeHtml(inDate)}</td>
                     <td class="item-col-img list-img-cell text-center">${imgHtml}</td>
@@ -14682,8 +14799,8 @@ ${token}
     }
 
     function d1ItemsSort_(key) {
-        if (d1ItemsSortKey_ === key) d1ItemsSortAsc_ = !d1ItemsSortAsc_;
-        else { d1ItemsSortKey_ = key; d1ItemsSortAsc_ = true; }
+        if (d1ItemsSortKey_===key) d1ItemsSortAsc_=!d1ItemsSortAsc_;
+        else { d1ItemsSortKey_=key; d1ItemsSortAsc_=true; }
         renderD1Items();
     }
 
