@@ -2416,16 +2416,7 @@
                             <div id="d1ItemCard" class="flex-1 bg-white border border-gray-200 rounded-lg overflow-hidden flex min-h-[150px]">
                                 <!-- 좌: 필터 + 리스트 (60%) -->
                                 <div id="d1ItemListPanel" class="flex flex-col overflow-hidden border-r border-gray-200" style="width:60%;min-width:180px">
-                                    <!-- 미니 툴바 -->
-                                    <div class="flex items-center gap-1.5 px-2 py-1 border-b border-gray-100 bg-gray-50 flex-none">
-                                        <input type="checkbox" id="d1-items-select-all" onchange="d1ItemsSelectAll_(this)" class="rounded cursor-pointer" title="전체 선택">
-                                        <button type="button" id="d1-items-delete-btn" onclick="deleteSelectedD1Items_()"
-                                            class="hidden text-[10px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 text-red-600 font-semibold border border-red-200">삭제</button>
-                                        <span class="flex-1"></span>
-                                        <button type="button" onclick="showD1ItemPickerModal()"
-                                            class="text-[10px] px-2 py-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded border border-indigo-200 font-semibold">기존물건 추가</button>
-                                    </div>
-                                    <!-- 필터 -->
+                                    <!-- 필터 + 버튼 -->
                                     <div class="flex flex-wrap gap-1 px-2 py-1.5 bg-gray-50 border-b border-gray-100 flex-none">
                                         <input type="text" id="d1items-f-date" placeholder="일자" oninput="applyD1ItemsFilters_()" onfocus="this.select()"
                                             class="w-14 px-1.5 py-1 border border-gray-300 rounded text-xs text-center placeholder-gray-400">
@@ -2444,6 +2435,11 @@
                                             class="w-14 px-1.5 py-1 border border-gray-300 rounded text-xs text-center placeholder-gray-400">
                                         <input type="text" id="d1items-f-manager" placeholder="담당" oninput="applyD1ItemsFilters_()" onfocus="this.select()"
                                             class="w-12 px-1.5 py-1 border border-gray-300 rounded text-xs text-center placeholder-gray-400">
+                                        <span class="flex-1"></span>
+                                        <button type="button" id="d1-items-delete-btn" onclick="deleteSelectedD1Items_()"
+                                            class="hidden text-xs px-2.5 py-0.5 rounded bg-red-100 hover:bg-red-200 text-red-700 font-bold border border-red-300">삭제</button>
+                                        <button type="button" onclick="showD1ItemPickerModal()"
+                                            class="text-xs px-3 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold shadow-sm">물건등록</button>
                                     </div>
                                     <!-- 요약 바 -->
                                     <div id="d1ItemsSummaryBar" class="content-hidden px-2 py-1 bg-blue-50 border-b border-blue-100 text-xs flex flex-wrap gap-x-2 gap-y-0.5 items-center flex-none"></div>
@@ -2458,7 +2454,7 @@
                                 <div id="d1ItemFormPanel" class="flex flex-col bg-gray-50 flex-1 min-w-[200px]">
                                     <!-- 헤더 + 등록 버튼 -->
                                     <div class="px-3 py-2 border-b border-gray-200 bg-white flex items-center justify-between flex-none">
-                                        <span class="text-sm font-bold text-gray-700">신규물건 등록</span>
+                                        <span class="text-sm font-bold text-gray-700">신규물건 추가 + 물건등록</span>
                                         <button type="button" onclick="submitD1NewItem_()"
                                             class="px-3 py-1 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded">등록</button>
                                     </div>
@@ -2478,36 +2474,29 @@
                                                         class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm shadow-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
                                                 </div>
                                             </div>
-                                            <!-- 2행: 법원명 + 입찰가담당 -->
+                                            <!-- 2행: 법원명 + 물건상태(고정) -->
                                             <div class="grid grid-cols-2 gap-2">
                                                 <div class="relative">
                                                     <label class="block text-xs font-medium text-gray-600 mb-1">법원명</label>
                                                     <input type="text" id="d1new-court" placeholder="예: 서울중앙" onfocus="this.select()" autocomplete="off" spellcheck="false"
-                                                        oninput="d1NewCourtInput_(this)" onblur="d1NewCourtBlur_(this)"
+                                                        oninput="d1NewCourtOninput_(this)" onblur="d1NewCourtBlur_(this)"
                                                         class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm shadow-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
-                                                    <div id="d1new-court-dropdown" class="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-0.5 max-h-40 overflow-y-auto hidden text-sm" style="top:100%"></div>
+                                                    <div id="d1new-court-dropdown" class="absolute z-50 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg mt-0.5 max-h-48 overflow-y-auto hidden" style="top:100%"></div>
                                                 </div>
                                                 <div>
-                                                    <label class="block text-xs font-medium text-gray-600 mb-1">입찰가담당</label>
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1">물건상태</label>
+                                                    <div class="w-full px-2 py-2 border border-blue-200 rounded-lg text-sm bg-blue-50 text-blue-700 font-semibold">상품 (고정)</div>
+                                                </div>
+                                            </div>
+                                            <!-- 3행: 담당 (반 너비) -->
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-600 mb-1">담당</label>
                                                     <select id="d1new-m-name-id" onkeydown="d1NewSelectKeydown_(event)"
                                                         class="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white shadow-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
                                                         <option value="대표님">대표님</option>
                                                         <option value="전제혁">전제혁</option>
                                                         <option value="박대원">박대원</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <!-- 3행: 물건상태 + 회원명 -->
-                                            <div class="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label class="block text-xs font-medium text-gray-600 mb-1">물건상태</label>
-                                                    <div class="w-full px-2 py-2 border border-purple-200 rounded-lg text-sm bg-purple-50 text-purple-700 font-semibold">추천 (고정)</div>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-xs font-medium text-gray-600 mb-1">회원명</label>
-                                                    <select id="d1new-m-name-sel"
-                                                        class="w-full px-2 py-2 border border-gray-200 rounded-lg text-sm bg-gray-100 text-gray-700 shadow-sm cursor-default" disabled>
-                                                        <option value="">회차 선택 후 자동</option>
                                                     </select>
                                                 </div>
                                             </div>
