@@ -2495,7 +2495,7 @@ function createItemAndRegisterToD1(classD1Id, itemData, className, classDate, cl
     inDate,
     String(itemData.sakunNo || '').trim(),
     String(itemData.court || '').trim(),
-    '상품',
+    '검증',
     String(itemData.mNameId || '대표님').trim(),
     String(itemData.mName || '').trim(),
     parseInt(String(itemData.bidPrice || '0').replace(/[^0-9]/g, '')) || '',

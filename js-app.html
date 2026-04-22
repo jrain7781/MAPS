@@ -152,7 +152,7 @@
     var courtListCache = null;
     function fillCourtDatalist(list) {
         // 모든 court-datalist 요소에 채우기
-        var datalists = ['court-datalist', 'cal-court-datalist', 'search-court-datalist', 'modal-court-datalist'];
+        var datalists = ['court-datalist', 'cal-court-datalist', 'search-court-datalist', 'modal-court-datalist', 'd1items-court-datalist'];
         datalists.forEach(function (datalistId) {
             var dl = document.getElementById(datalistId);
             if (!dl) return;
@@ -6657,6 +6657,84 @@ MJ 이정우 팀장
         }
     }
 
+    // ── 물건탭 상태 드롭다운 ──────────────────────────────────────────────
+    function toggleD1StatusDropdown_(ev) {
+        ev.stopPropagation();
+        const dd = document.getElementById('d1items-status-dropdown');
+        const btn = document.getElementById('d1items-status-btn');
+        if (!dd || !btn) return;
+        const isHidden = dd.classList.contains('content-hidden');
+        dd.classList.toggle('content-hidden', !isHidden);
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (isHidden) document.addEventListener('click', closeD1StatusDropdownOnce_);
+    }
+    function closeD1StatusDropdownOnce_() {
+        const dd = document.getElementById('d1items-status-dropdown');
+        if (dd) dd.classList.add('content-hidden');
+        const btn = document.getElementById('d1items-status-btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', closeD1StatusDropdownOnce_);
+        updateD1StatusLabel_();
+    }
+    function updateD1StatusLabel_() {
+        const allCb = document.getElementById('d1items-status-all');
+        const isAll = (allCb && allCb.checked);
+        const selected = Array.from(document.querySelectorAll('input[name="d1items-status-cb"]:checked')).map(el => el.value);
+        const label = document.getElementById('d1items-status-label');
+        if (label) {
+            if (isAll) label.textContent = '상태';
+            else if (selected.length === 0) label.textContent = '미선택';
+            else label.textContent = selected.join(',');
+        }
+    }
+    function d1ItemsStatusAll_(cb) {
+        if (cb.checked) document.querySelectorAll('input[name="d1items-status-cb"]').forEach(c => c.checked = false);
+        updateD1StatusLabel_();
+    }
+    function d1ItemsStatusOther_(cb) {
+        if (cb.checked) { const a = document.getElementById('d1items-status-all'); if (a) a.checked = false; }
+        updateD1StatusLabel_();
+    }
+
+    // ── 물건탭 담당 드롭다운 ──────────────────────────────────────────────
+    function toggleD1ManagerDropdown_(ev) {
+        ev.stopPropagation();
+        const dd = document.getElementById('d1items-manager-dropdown');
+        const btn = document.getElementById('d1items-manager-btn');
+        if (!dd || !btn) return;
+        const isHidden = dd.classList.contains('content-hidden');
+        dd.classList.toggle('content-hidden', !isHidden);
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (isHidden) document.addEventListener('click', closeD1ManagerDropdownOnce_);
+    }
+    function closeD1ManagerDropdownOnce_() {
+        const dd = document.getElementById('d1items-manager-dropdown');
+        if (dd) dd.classList.add('content-hidden');
+        const btn = document.getElementById('d1items-manager-btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', closeD1ManagerDropdownOnce_);
+        updateD1ManagerLabel_();
+    }
+    function updateD1ManagerLabel_() {
+        const allCb = document.getElementById('d1items-manager-all');
+        const isAll = (allCb && allCb.checked);
+        const selected = Array.from(document.querySelectorAll('input[name="d1items-manager-cb"]:checked')).map(el => el.value);
+        const label = document.getElementById('d1items-manager-label');
+        if (label) {
+            if (isAll) label.textContent = '담당';
+            else if (selected.length === 0) label.textContent = '미선택';
+            else label.textContent = selected.join(',');
+        }
+    }
+    function d1ItemsManagerAll_(cb) {
+        if (cb.checked) document.querySelectorAll('input[name="d1items-manager-cb"]').forEach(c => c.checked = false);
+        updateD1ManagerLabel_();
+    }
+    function d1ItemsManagerOther_(cb) {
+        if (cb.checked) { const a = document.getElementById('d1items-manager-all'); if (a) a.checked = false; }
+        updateD1ManagerLabel_();
+    }
+
     // 드래그 리사이즈 초기화
     document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); });
 
@@ -12228,7 +12306,26 @@ ${token}
             }
         });
         if (tabName === 'member') loadD1SummaryGrid();
-        else if (tabName === 'item') loadD1Items(selectedClassD1Id);
+        else if (tabName === 'item') {
+            // 선택된 회차가 없으면 현재 배치의 nearestD1Id 자동 선택
+            if (!selectedClassD1Id && d1Batches && d1Batches.length > 0) {
+                const batch = d1Batches[d1BatchIdx];
+                if (batch && batch.items && batch.items.length > 0) {
+                    const todayStr = (() => { const t = new Date(); return String(t.getFullYear()) + String(t.getMonth()+1).padStart(2,'0') + String(t.getDate()).padStart(2,'0'); })();
+                    const todayNum = parseInt(todayStr, 10);
+                    let nearestId = null, nearestDiff = Infinity;
+                    batch.items.forEach(d => {
+                        const dateNum = parseInt(String(d.class_date||'').replace(/-/g,''), 10);
+                        if (!isNaN(dateNum) && dateNum >= todayNum) {
+                            const diff = dateNum - todayNum;
+                            if (diff < nearestDiff) { nearestDiff = diff; nearestId = d.class_d1_id; }
+                        }
+                    });
+                    if (nearestId) { selectClassD1(nearestId); return; }
+                }
+            }
+            loadD1Items(selectedClassD1Id);
+        }
     }
 
     function renderClassD1Grid() {
@@ -14853,24 +14950,47 @@ ${token}
     }
 
     function applyD1ItemsFilters_() {
-        const fDate   = (document.getElementById('d1items-f-date')?.value   || '').replace(/-/g,'').trim();
-        const fSakun  = (document.getElementById('d1items-f-sakun')?.value  || '').toLowerCase().trim();
-        const fCourt  = (document.getElementById('d1items-f-court')?.value  || '').toLowerCase().trim();
-        const fStatus = (document.getElementById('d1items-f-status')?.value || '').trim();
-        const fMember = (document.getElementById('d1items-f-member')?.value || '').toLowerCase().trim();
-        const fMgr    = (document.getElementById('d1items-f-manager')?.value|| '').toLowerCase().trim();
-        const hasFilter = fDate || fSakun || fCourt || fStatus || fMember || fMgr;
+        const fDateEl   = document.getElementById('d1items-f-date');
+        const fSakunEl  = document.getElementById('d1items-f-sakun');
+        const fCourtEl  = document.getElementById('d1items-f-court');
+        const fMemberEl = document.getElementById('d1items-f-member');
+        const fDate   = (fDateEl?.value   || '').replace(/-/g,'').trim();
+        const fSakun  = (fSakunEl?.value  || '').toLowerCase().trim();
+        const fCourt  = (fCourtEl?.value  || '').toLowerCase().trim();
+        const fMember = (fMemberEl?.value || '').toLowerCase().trim();
+
+        // 상태 체크박스 드롭다운
+        const statusAllCb = document.getElementById('d1items-status-all');
+        const isAllStatus = (statusAllCb && statusAllCb.checked);
+        const selectedStatuses = Array.from(document.querySelectorAll('input[name="d1items-status-cb"]:checked')).map(el => el.value);
+
+        // 담당 체크박스 드롭다운
+        const managerAllCb = document.getElementById('d1items-manager-all');
+        const isAllManager = (managerAllCb && managerAllCb.checked);
+        const selectedManagers = Array.from(document.querySelectorAll('input[name="d1items-manager-cb"]:checked')).map(el => el.value);
+
+        // filter-active-input 강조
+        if (fDateEl)   fDateEl.classList.toggle('filter-active-input', !!fDate);
+        if (fSakunEl)  fSakunEl.classList.toggle('filter-active-input', !!fSakun);
+        if (fCourtEl)  fCourtEl.classList.toggle('filter-active-input', !!fCourt);
+        if (fMemberEl) fMemberEl.classList.toggle('filter-active-input', !!fMember);
+        const sBtn = document.getElementById('d1items-status-btn');
+        if (sBtn) sBtn.classList.toggle('filter-active-input', !isAllStatus);
+        const mBtn = document.getElementById('d1items-manager-btn');
+        if (mBtn) mBtn.classList.toggle('filter-active-input', !isAllManager);
+
+        const hasFilter = fDate || fSakun || fCourt || fMember || !isAllStatus || !isAllManager;
         if (!hasFilter) {
             d1ItemsFilteredData_ = null;
         } else {
             d1ItemsFilteredData_ = d1ItemsData.filter(item => {
                 const rawDate = String(item['in-date']||'').replace(/[TZ\-]/g,'').substring(0,6);
-                if (fDate   && !rawDate.includes(fDate))                                        return false;
-                if (fSakun  && !String(item.sakun_no||'').toLowerCase().includes(fSakun))       return false;
-                if (fCourt  && !String(item.court||'').toLowerCase().includes(fCourt))          return false;
-                if (fStatus && String(item.stu_member||'').trim() !== fStatus)                  return false;
-                if (fMember && !String(item.m_name||'').toLowerCase().includes(fMember))        return false;
-                if (fMgr    && !String(item.m_name_id||'').toLowerCase().includes(fMgr))        return false;
+                if (fDate   && !rawDate.includes(fDate))                                              return false;
+                if (fSakun  && !String(item.sakun_no||'').toLowerCase().includes(fSakun))             return false;
+                if (fCourt  && !String(item.court||'').toLowerCase().includes(fCourt))                return false;
+                if (!isAllStatus && selectedStatuses.length > 0 && !selectedStatuses.includes(String(item.stu_member||'').trim())) return false;
+                if (fMember && !String(item.m_name||'').toLowerCase().includes(fMember))              return false;
+                if (!isAllManager && selectedManagers.length > 0 && !selectedManagers.includes(String(item.m_name_id||'').trim())) return false;
                 return true;
             });
         }
@@ -14901,10 +15021,7 @@ ${token}
     }
 
     function d1ItemsUpdateDeleteBtn_() {
-        const btn = document.getElementById('d1-items-delete-btn');
-        if (!btn) return;
-        if (d1ItemsSelectedIds_.size > 0) btn.classList.remove('hidden');
-        else btn.classList.add('hidden');
+        // 삭제 버튼은 항상 표시 (선택 여부와 무관)
     }
 
     function deleteSelectedD1Items_() {
@@ -14943,10 +15060,46 @@ ${token}
         const matches = list.filter(c => c.toLowerCase().includes(val)).slice(0, 15);
         if (matches.length === 0) { dd.classList.add('hidden'); return; }
         dd.innerHTML = matches.map(c =>
-            `<div class="px-3 py-1.5 text-sm cursor-pointer hover:bg-indigo-50 text-gray-800"
-                onmousedown="document.getElementById('d1new-court').value='${c}';document.getElementById('d1new-court-dropdown').classList.add('hidden');">${escapeHtml(c)}</div>`
+            `<div class="px-3 py-1.5 text-sm cursor-pointer hover:bg-indigo-50 text-gray-800" tabindex="-1"
+                onmousedown="document.getElementById('d1new-court').value='${c}';document.getElementById('d1new-court-dropdown').classList.add('hidden');"
+                onkeydown="d1CourtItemKeydown_(this,event);">${escapeHtml(c)}</div>`
         ).join('');
         dd.classList.remove('hidden');
+    }
+    function d1NewCourtKeydown_(input, e) {
+        const dd = document.getElementById('d1new-court-dropdown');
+        if (!dd || dd.classList.contains('hidden')) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const first = dd.querySelector('div');
+            if (first) first.focus();
+        } else if (e.key === 'Tab' || e.key === 'Enter') {
+            const first = dd.querySelector('div');
+            if (first) { e.preventDefault(); input.value = first.textContent; dd.classList.add('hidden'); }
+        } else if (e.key === 'Escape') {
+            dd.classList.add('hidden');
+        }
+    }
+    function d1CourtItemKeydown_(item, e) {
+        const dd = document.getElementById('d1new-court-dropdown');
+        const input = document.getElementById('d1new-court');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = item.nextElementSibling;
+            if (next) next.focus(); else item.focus();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prev = item.previousElementSibling;
+            if (prev) prev.focus(); else if (input) input.focus();
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            if (input) input.value = item.textContent;
+            if (dd) dd.classList.add('hidden');
+            if (input) input.focus();
+        } else if (e.key === 'Escape') {
+            if (dd) dd.classList.add('hidden');
+            if (input) input.focus();
+        }
     }
     function d1NewCourtBlur_(input) {
         setTimeout(function() {
