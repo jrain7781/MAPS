@@ -13920,8 +13920,20 @@ ${token}
         if (sel) sel.value = d.teacher_id ? String(d.teacher_id) : '';
         setDropdownTime_('editD1-timeFrom', d.class_time_from ? String(d.class_time_from) : '');
         setDropdownTime_('editD1-timeTo', d.class_time_to ? String(d.class_time_to) : '');
-        ['editD1-bidStarttime-day','editD1-bidDatetime1-day','editD1-bidDatetime2-day'].forEach(eid => {
-            const el = document.getElementById(eid); if (el) el.value = '';
+        const rawDate = String(d.class_date||'').replace(/-/g,'');
+        [
+            { key: 'bid_starttime',  dayId: 'editD1-bidStarttime-day',  tPfx: 'editD1-bidStarttime'  },
+            { key: 'bid_datetime_1', dayId: 'editD1-bidDatetime1-day',   tPfx: 'editD1-bidDatetime1'  },
+            { key: 'bid_datetime_2', dayId: 'editD1-bidDatetime2-day',   tPfx: 'editD1-bidDatetime2'  },
+        ].forEach(({ key, dayId, tPfx }) => {
+            const off = _calcBidOffset_(rawDate, d[key]);
+            const dayEl = document.getElementById(dayId);
+            if (dayEl) dayEl.value = off.day !== '' ? off.day : '';
+            if (off.time) {
+                setDropdownTime_(tPfx, off.time);
+            } else {
+                ['ampm','h','m'].forEach(s => { const el = document.getElementById(tPfx+'-'+s); if (el) el.value = ''; });
+            }
         });
         const bid1El = document.getElementById('editD1-bid1Count');
         if (bid1El) bid1El.value = d['1cha_bid'] || '';
