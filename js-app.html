@@ -12273,12 +12273,19 @@ ${token}
             const lastDate = fmtYYMMDD(items[items.length - 1].class_date);
             const periodHtml = firstDate === lastDate
                 ? firstDate
-                : `${firstDate}~<br>${lastDate}`;
+                : `${firstDate}~${lastDate}`;
             const teacherId = items[0].teacher_id || '';
             const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
             const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '-');
-            const batchMember = (i === d1BatchIdx && summaryMemberData_.length > 0)
-                ? escapeHtml(summaryMemberData_[0].member_name || '-') : '-';
+            let batchMember;
+            if (i === d1BatchIdx && summaryMemberData_.length > 0) {
+                const first = escapeHtml(summaryMemberData_[0].member_name || '-');
+                const total = summaryMemberData_.length;
+                batchMember = total > 1 ? `${first} 외 ${total - 1}명` : first;
+            } else {
+                const mc = items[0]?.member_count;
+                batchMember = mc > 0 ? `${mc}명` : '-';
+            }
             const batchKey = items[0].class_d1_id
                 ? String(items[0].class_d1_id).replace(/_\d+$/, '') : '-';
             html += `<tr class="${rowCls} cursor-pointer" onclick="selectD1Batch(${i})">
@@ -12291,7 +12298,7 @@ ${token}
             </tr>`;
         }
         tbody.innerHTML = html;
-        setTimeout(function() { initTableColResize_(document.querySelector('#d1BatchListGrid table')); }, 0);
+        setTimeout(function() { initTableColResize_(document.querySelector('#d1BatchListGrid table'), 'd1batch_col_widths'); }, 0);
     }
 
     function switchD1DetailTab(tabName) {
@@ -12299,11 +12306,11 @@ ${token}
             const btn = document.getElementById('d1-tab-' + t);
             const panel = document.getElementById('d1TabPanel-' + t);
             if (t === tabName) {
-                btn?.classList.add('bg-indigo-600', 'text-white');
+                btn?.classList.add('bg-green-600', 'text-white');
                 btn?.classList.remove('bg-white', 'text-gray-600');
                 panel?.classList.remove('hidden');
             } else {
-                btn?.classList.remove('bg-indigo-600', 'text-white');
+                btn?.classList.remove('bg-green-600', 'text-white');
                 btn?.classList.add('bg-white', 'text-gray-600');
                 panel?.classList.add('hidden');
             }
@@ -12417,8 +12424,8 @@ ${token}
 
                 let cls, titleCls, textCls, badge;
                 if (isSelected) {
-                    cls = 'border-blue-500 bg-blue-100 shadow-lg';
-                    titleCls = 'text-blue-900'; textCls = 'text-blue-700';
+                    cls = 'border-green-500 bg-green-100 shadow-lg';
+                    titleCls = 'text-green-900'; textCls = 'text-green-700';
                     badge = '';
                 } else if (isNearest) {
                     cls = 'border-red-400 bg-white shadow-md';
