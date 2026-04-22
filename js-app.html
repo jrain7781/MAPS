@@ -12394,7 +12394,7 @@ ${token}
             const tooltip = tooltipHtml
                 ? `<div class="absolute z-50 top-full left-0 mt-1 w-48 bg-gray-800 text-white text-[10px] rounded-lg p-2 shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" style="white-space:pre-line;z-index:9999">${tooltipHtml}</div>`
                 : '';
-            return `<div class="relative flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 ${cls} transition-all group" style="width:88px" onclick="${clickHandler}">
+            return `<div class="relative flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 ${cls} transition-all group" style="width:120px" onclick="${clickHandler}">
                 ${badgeHtml}
                 <div class="text-center text-sm font-bold ${titleCls} mb-1">${titleHtml}</div>
                 <ul class="text-xs ${textCls} space-y-0.5">${bodyHtml}</ul>
@@ -12404,7 +12404,7 @@ ${token}
 
         // 전체요약 카드 제거 (탭 시스템으로 이관됨)
 
-        const addCardHtml = `<div class="flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 border-dashed border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50 transition-all flex flex-col items-center justify-center" style="width:88px" onclick="showGenerateD1Modal('add')" title="회차 추가">
+        const addCardHtml = `<div class="flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 border-dashed border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50 transition-all flex flex-col items-center justify-center" style="width:120px" onclick="showGenerateD1Modal('add')" title="회차 추가">
             <div class="text-2xl text-gray-400 leading-none">+</div>
             <div class="text-[10px] text-gray-400 mt-1">회차 추가</div>
         </div>`;
@@ -12481,11 +12481,11 @@ ${token}
                     return Math.round((cd - td) / 86400000);
                 })() : null;
                 const ddayHtml = (isNearest && daysUntil_ !== null && daysUntil_ >= 0)
-                    ? `<span class="text-red-500 font-bold" style="font-size:9px">(${daysUntil_ === 0 ? '오늘' : daysUntil_ + '일전'})</span>`
+                    ? `<span class="text-red-500 font-bold" style="font-size:11px">(${daysUntil_ === 0 ? '오늘' : daysUntil_ + '일전'})</span>`
                     : '';
 
                 const body = `<li>• <span class="font-bold">${dateStr}${weekDisplayStr ? '(' + weekDisplayStr + ')' : ''}</span></li>` +
-                    (timeStr ? `<li class="text-[10px] leading-tight pl-1">${timeStr}</li>` : '') +
+                    (timeStr ? `<li class="text-[10px] leading-tight text-center">${timeStr}</li>` : '') +
                     `<li>• ${itemCount}건 / ${escapeHtml(teacherNameCard)}</li>`;
 
                 function fmtBidDt_(v) {
@@ -13657,7 +13657,8 @@ ${token}
 
         document.getElementById('genD1-startLoop').value = '';
         document.getElementById('genD1-endLoop').value = '';
-        document.getElementById('genD1-addCount').value = '';
+        // add 모드: 기본값 1 자동 설정
+        document.getElementById('genD1-addCount').value = mode === 'add' ? '1' : '';
         // 시간 드롭다운 리셋 (오전 1시 00분 기본)
         ['genD1-timeFrom-ampm', 'genD1-timeTo-ampm'].forEach(id => { const el = document.getElementById(id); if (el) el.value = 'AM'; });
         ['genD1-timeFrom-h', 'genD1-timeTo-h'].forEach(id => { const el = document.getElementById(id); if (el) el.value = '1'; });
@@ -13749,6 +13750,8 @@ ${token}
     let editD1SelectedIds_ = new Set();
     let editD1FocusedId_ = null;
     let editD1ActiveTab_ = 'single'; // 'single' | 'bulk'
+    let editD1NewRowMode_ = false;
+    let editD1NewLoop_ = 1;
 
     const _D1_DAY = ['일','월','화','수','목','금','토'];
     function _fmtD1Date(v) {
@@ -13780,11 +13783,26 @@ ${token}
         editD1SelectedIds_ = new Set();
         editD1FocusedId_ = null;
         editD1ActiveTab_ = 'single';
+        editD1NewRowMode_ = false;
         populateTeacherDropdown_('editD1-teacherId');
         renderEditD1List_();
         document.getElementById('editD1-noSelect').classList.remove('hidden');
         document.getElementById('editD1-formWrap').classList.add('hidden');
         document.getElementById('editD1BatchModal').classList.remove('content-hidden');
+        // 도래하는 회차에 자동 포커스
+        const todayNum = parseInt(new Date().toISOString().slice(0,10).replace(/-/g,''), 10);
+        let nearestId = null, nearestDiff = Infinity;
+        (batch.items || []).forEach(d => {
+            const raw = String(d.class_date || '').replace(/-/g, '');
+            if (raw.length >= 8) {
+                const dn = parseInt(raw, 10);
+                if (dn >= todayNum && (dn - todayNum) < nearestDiff) {
+                    nearestDiff = dn - todayNum;
+                    nearestId = String(d.class_d1_id);
+                }
+            }
+        });
+        if (nearestId) editD1FocusRow_(nearestId);
     }
 
     function renderEditD1List_() {
@@ -13793,6 +13811,18 @@ ${token}
         const tbody = document.getElementById('editD1-d1ListBody');
         if (!tbody) return;
         let html = '';
+        // 신규 추가 중이면 맨 위에 신규 행 표시
+        if (editD1NewRowMode_) {
+            const isFocusedNew = editD1FocusedId_ === '_new_';
+            const newRowCls = isFocusedNew ? 'bg-green-50 border-l-2 border-green-500' : 'bg-green-50 hover:bg-green-100 border-l-2 border-green-300';
+            html += `<tr class="${newRowCls} cursor-pointer" data-d1id="_new_" onclick="editD1FocusRow_('_new_')">
+                <td class="px-1.5 py-1.5 text-center"><input type="checkbox" class="rounded" disabled></td>
+                <td class="px-1.5 py-1.5 text-center text-xs font-semibold text-green-700">${editD1NewLoop_}회</td>
+                <td class="px-1.5 py-1.5 text-center text-xs text-green-600">신규</td>
+                <td class="px-1.5 py-1.5 text-center text-xs text-green-500">-</td>
+                <td class="px-1.5 py-1.5 text-center text-xs text-green-500">-</td>
+            </tr>`;
+        }
         items.forEach(d => {
             const id = String(d.class_d1_id);
             const isChecked = editD1SelectedIds_.has(id);
@@ -13801,7 +13831,7 @@ ${token}
             const tFrom = _fmtD1Time(d.class_time_from);
             const tTo = _fmtD1Time(d.class_time_to);
             const timeDisp = (tFrom !== '-' || tTo !== '-') ? `${tFrom}~${tTo}` : '-';
-            html += `<tr class="${rowCls} cursor-pointer" onclick="editD1FocusRow_('${id}')">
+            html += `<tr class="${rowCls} cursor-pointer" data-d1id="${id}" onclick="editD1FocusRow_('${id}')">
                 <td class="px-1.5 py-1.5 text-center" onclick="event.stopPropagation()">
                     <input type="checkbox" class="rounded" ${isChecked?'checked':''} onchange="editD1ToggleCheck_(this,'${id}')">
                 </td>
@@ -13816,6 +13846,11 @@ ${token}
         const allCb = document.getElementById('editD1-selectAll');
         if (allCb) allCb.checked = items.length > 0 && editD1SelectedIds_.size === items.length;
         updateEditD1SelectCount_();
+        // 포커스된 행 스크롤
+        if (editD1FocusedId_) {
+            const focusedRow = tbody.querySelector(`[data-d1id="${editD1FocusedId_}"]`);
+            if (focusedRow) focusedRow.scrollIntoView({ block: 'nearest' });
+        }
     }
 
     function editD1ToggleCheck_(cb, id) {
@@ -13842,6 +13877,25 @@ ${token}
 
     function editD1FocusRow_(id) {
         editD1FocusedId_ = id;
+        // 신규 행 처리
+        if (id === '_new_') {
+            renderEditD1List_();
+            document.getElementById('editD1-noSelect').classList.add('hidden');
+            document.getElementById('editD1-formWrap').classList.remove('hidden');
+            const labelEl = document.getElementById('editD1-tab-single-label');
+            if (labelEl) labelEl.textContent = `${editD1NewLoop_}회 (신규)`;
+            const dateEl = document.getElementById('editD1-classDate');
+            if (dateEl) { dateEl.value = ''; dateEl.disabled = false; dateEl.classList.remove('bg-gray-100','text-gray-400'); }
+            document.getElementById('editD1-teacherId').value = '';
+            ['editD1-timeFrom-ampm','editD1-timeTo-ampm'].forEach(eid=>{const el=document.getElementById(eid);if(el)el.value='';});
+            ['editD1-timeFrom-h','editD1-timeTo-h'].forEach(eid=>{const el=document.getElementById(eid);if(el)el.value='';});
+            ['editD1-timeFrom-m','editD1-timeTo-m'].forEach(eid=>{const el=document.getElementById(eid);if(el)el.value='';});
+            ['editD1-bidStarttime-day','editD1-bidDatetime1-day','editD1-bidDatetime2-day'].forEach(eid=>{const el=document.getElementById(eid);if(el)el.value='';});
+            const bid1El = document.getElementById('editD1-bid1Count'); if(bid1El) bid1El.value='';
+            const bid2El = document.getElementById('editD1-bid2Count'); if(bid2El) bid2El.value='';
+            switchEditD1Tab_('single');
+            return;
+        }
         // allClassD1Data에서 최신 값 로드
         const d = (allClassD1Data||[]).find(x => String(x.class_d1_id) === id);
         if (!d) return;
@@ -13900,6 +13954,11 @@ ${token}
 
     function closeEditD1BatchModal(event) {
         if (event && event.target !== event.currentTarget) return;
+        if (editD1NewRowMode_ && editD1FocusedId_ === '_new_') {
+            const classDate = document.getElementById('editD1-classDate')?.value || '';
+            if (classDate) { saveEditD1NewRow_(); return; }
+        }
+        editD1NewRowMode_ = false;
         document.getElementById('editD1BatchModal').classList.add('content-hidden');
     }
 
@@ -13928,6 +13987,7 @@ ${token}
 
     function handleEditD1Batch() {
         if (!editD1FocusedId_) { showStatus('저장할 회차를 선택하세요.', 'error'); return; }
+        if (editD1FocusedId_ === '_new_') { saveEditD1NewRow_(); return; }
         const updateData = buildEditD1UpdateData_(false);
         if (!updateData) return;
         google.script.run
@@ -13937,6 +13997,40 @@ ${token}
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
             .updateClassD1Batch([editD1FocusedId_], updateData);
+    }
+
+    function editD1AddRow_() {
+        const batch = d1Batches[d1BatchIdx];
+        if (!batch) return;
+        const maxLoop = Math.max(0, ...(batch.items||[]).map(d => parseInt(d.class_loop)||0));
+        editD1NewLoop_ = maxLoop + 1;
+        editD1NewRowMode_ = true;
+        editD1FocusRow_('_new_');
+    }
+
+    function saveEditD1NewRow_() {
+        const classDate = document.getElementById('editD1-classDate')?.value || '';
+        if (!classDate) { showStatus('수업일자를 입력하세요.', 'error'); return; }
+        const teacherId = document.getElementById('editD1-teacherId')?.value || '';
+        if (!teacherId) { showStatus('강사를 선택하세요.', 'error'); return; }
+        const timeFrom = getDropdownTime_('editD1-timeFrom') || '';
+        const timeTo = getDropdownTime_('editD1-timeTo') || '';
+        const batch = d1Batches[d1BatchIdx];
+        const batchTimestamp = batch ? (batch.batchKey || '') : '';
+        const startDate = classDate.replace(/-/g, '');
+        const options = { addCount: 1, timeFrom, timeTo, batchTimestamp, memberIds: [], memberData: [], totalSessions: 1, teacherId };
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r.success) {
+                    showStatus(r.message, 'success');
+                    editD1NewRowMode_ = false;
+                    editD1FocusedId_ = null;
+                    document.getElementById('editD1BatchModal').classList.add('content-hidden');
+                    loadClassD1Grid(selectedClassId);
+                } else showStatus(r.message, 'error');
+            })
+            .withFailureHandler(e => showStatus(e.message, 'error'))
+            .generateClassD1(selectedClassId, startDate, 1, options);
     }
 
     function applyEditD1Bulk_() {
