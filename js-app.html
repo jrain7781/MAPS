@@ -13789,6 +13789,7 @@ ${token}
         document.getElementById('editD1-noSelect').classList.remove('hidden');
         document.getElementById('editD1-formWrap').classList.add('hidden');
         document.getElementById('editD1BatchModal').classList.remove('content-hidden');
+        initEditD1Splitter_();
         // 도래하는 회차에 자동 포커스
         const todayNum = parseInt(new Date().toISOString().slice(0,10).replace(/-/g,''), 10);
         let nearestId = null, nearestDiff = Infinity;
@@ -13831,6 +13832,8 @@ ${token}
             const tFrom = _fmtD1Time(d.class_time_from);
             const tTo = _fmtD1Time(d.class_time_to);
             const timeDisp = (tFrom !== '-' || tTo !== '-') ? `${tFrom}~${tTo}` : '-';
+            const tMember = (allMembersNewData || []).find(m => String(m.member_id) === String(d.teacher_id));
+            const tName = tMember ? tMember.member_name : (d.teacher_id ? String(d.teacher_id) : '-');
             html += `<tr class="${rowCls} cursor-pointer" data-d1id="${id}" onclick="editD1FocusRow_('${id}')">
                 <td class="px-1.5 py-1.5 text-center" onclick="event.stopPropagation()">
                     <input type="checkbox" class="rounded" ${isChecked?'checked':''} onchange="editD1ToggleCheck_(this,'${id}')">
@@ -13838,7 +13841,7 @@ ${token}
                 <td class="px-1.5 py-1.5 text-center text-xs font-semibold text-gray-700">${d.class_loop}회</td>
                 <td class="px-1.5 py-1.5 text-center text-xs text-gray-700">${_fmtD1Date(d.class_date)}</td>
                 <td class="px-1.5 py-1.5 text-center text-xs text-gray-500 leading-tight">${timeDisp}</td>
-                <td class="px-1.5 py-1.5 text-center text-xs text-gray-500">${d.item_count||0}건</td>
+                <td class="px-1.5 py-1.5 text-center text-xs text-gray-500 truncate max-w-0" style="max-width:60px">${escapeHtml(tName)}</td>
             </tr>`;
         });
         tbody.innerHTML = html || '<tr><td colspan="5" class="p-4 text-center text-gray-400 text-xs">회차 없음</td></tr>';
@@ -13933,6 +13936,7 @@ ${token}
         const singleBtn = document.getElementById('editD1-tab-single');
         const bulkBtn = document.getElementById('editD1-tab-bulk');
         const dateEl = document.getElementById('editD1-classDate');
+        const dateRow = document.getElementById('editD1-dateRow');
         if (tab === 'single') {
             singleBtn?.classList.replace('bg-white','bg-indigo-600');
             singleBtn?.classList.replace('text-gray-500','text-white');
@@ -13941,6 +13945,7 @@ ${token}
             bulkBtn?.classList.replace('text-white','text-gray-500');
             bulkBtn?.classList.replace('border-indigo-400','border-gray-300');
             if (dateEl) { dateEl.disabled = false; dateEl.classList.remove('bg-gray-100','text-gray-400'); }
+            if (dateRow) dateRow.classList.remove('hidden');
         } else {
             bulkBtn?.classList.replace('bg-white','bg-indigo-600');
             bulkBtn?.classList.replace('text-gray-500','text-white');
@@ -13949,6 +13954,7 @@ ${token}
             singleBtn?.classList.replace('text-white','text-gray-500');
             singleBtn?.classList.replace('border-indigo-400','border-gray-300');
             if (dateEl) { dateEl.disabled = true; dateEl.classList.add('bg-gray-100','text-gray-400'); }
+            if (dateRow) dateRow.classList.add('hidden');
         }
     }
 
@@ -14018,19 +14024,88 @@ ${token}
         const batch = d1Batches[d1BatchIdx];
         const batchTimestamp = batch ? (batch.batchKey || '') : '';
         const startDate = classDate.replace(/-/g, '');
+
+        // 중간 삽입 감지: 새 날짜보다 늦은 기존 회차 목록
+        const existingItems = (batch ? batch.items : []) || [];
+        const laterItems = existingItems.filter(d => {
+            const raw = String(d.class_date || '').replace(/-/g, '');
+            return raw.length >= 8 && raw > startDate;
+        }).sort((a, b) => parseInt(a.class_loop) - parseInt(b.class_loop));
+
+        if (laterItems.length > 0) {
+            if (!confirm(`${classDate}는 기존 회차 사이에 추가됩니다.\n이후 ${laterItems.length}개 회차 번호가 1씩 증가합니다.\n계속하시겠습니까?`)) return;
+        }
+
         const options = { addCount: 1, timeFrom, timeTo, batchTimestamp, memberIds: [], memberData: [], totalSessions: 1, teacherId };
         google.script.run
             .withSuccessHandler(r => {
                 if (r.success) {
-                    showStatus(r.message, 'success');
-                    editD1NewRowMode_ = false;
-                    editD1FocusedId_ = null;
-                    document.getElementById('editD1BatchModal').classList.add('content-hidden');
-                    loadClassD1Grid(selectedClassId);
+                    if (laterItems.length > 0) {
+                        // 이후 회차 번호 +1 재조정 (뒤에서부터)
+                        const sorted = laterItems.slice().reverse();
+                        let pending = sorted.length;
+                        sorted.forEach(d => {
+                            const newLoop = (parseInt(d.class_loop) || 0) + 1;
+                            google.script.run
+                                .withSuccessHandler(() => {
+                                    pending--;
+                                    if (pending === 0) {
+                                        showStatus('새 회차 추가 및 번호 재조정 완료', 'success');
+                                        editD1NewRowMode_ = false; editD1FocusedId_ = null;
+                                        document.getElementById('editD1BatchModal').classList.add('content-hidden');
+                                        loadClassD1Grid(selectedClassId);
+                                    }
+                                })
+                                .withFailureHandler(e => showStatus(e.message, 'error'))
+                                .updateClassD1Batch([d.class_d1_id], { class_loop: newLoop });
+                        });
+                    } else {
+                        showStatus(r.message, 'success');
+                        editD1NewRowMode_ = false; editD1FocusedId_ = null;
+                        document.getElementById('editD1BatchModal').classList.add('content-hidden');
+                        loadClassD1Grid(selectedClassId);
+                    }
                 } else showStatus(r.message, 'error');
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
             .generateClassD1(selectedClassId, startDate, 1, options);
+    }
+
+    // ─── editD1 모달 분할선 드래그 (1회 초기화) ──────────────────────
+    let _editD1SplitterInited = false;
+    function initEditD1Splitter_() {
+        if (_editD1SplitterInited) {
+            // 저장된 너비 복원만
+            const saved = localStorage.getItem('editD1_list_pane_w');
+            const leftEl = document.getElementById('editD1-leftPanel');
+            if (saved && leftEl) leftEl.style.width = saved;
+            return;
+        }
+        _editD1SplitterInited = true;
+        const divider = document.getElementById('editD1-splitter');
+        const leftEl = document.getElementById('editD1-leftPanel');
+        if (!divider || !leftEl) return;
+        const saved = localStorage.getItem('editD1_list_pane_w');
+        if (saved) leftEl.style.width = saved;
+        let dragging = false, startX = 0, startW = 0;
+        divider.addEventListener('mousedown', e => {
+            dragging = true; startX = e.clientX; startW = leftEl.getBoundingClientRect().width;
+            document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', e => {
+            if (!dragging) return;
+            const parent = leftEl.parentElement;
+            if (!parent) return;
+            const cw = parent.getBoundingClientRect().width;
+            const nw = Math.min(Math.max(startW + (e.clientX - startX), 160), cw - 280);
+            leftEl.style.width = nw + 'px';
+        });
+        document.addEventListener('mouseup', () => {
+            if (!dragging) return;
+            dragging = false; document.body.style.cursor = ''; document.body.style.userSelect = '';
+            localStorage.setItem('editD1_list_pane_w', leftEl.style.width);
+        });
     }
 
     function applyEditD1Bulk_() {

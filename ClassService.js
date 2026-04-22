@@ -515,7 +515,7 @@ function updateClassD1Batch(classD1Ids, updateData) {
     if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
 
     const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat().map(String);
-    const directFields = ['teacher_id', 'class_time_from', 'class_time_to', '1cha_bid', '2cha_bid'];
+    const directFields = ['teacher_id', 'class_time_from', 'class_time_to', '1cha_bid', '2cha_bid', 'class_loop', 'class_date'];
     const dateColIdx = CLASS_D1_HEADERS.indexOf('class_date');
     let count = 0;
 
