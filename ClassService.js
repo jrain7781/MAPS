@@ -569,17 +569,41 @@ function deleteClassD1Batch(classD1Ids) {
     if (!Array.isArray(classD1Ids) || classD1Ids.length === 0) {
         return { success: false, message: '삭제할 회차가 없습니다.' };
     }
+
+    // ITEMS 시트 연결 물건 정리 (class_d1_id 일치하는 물건 → 미정 처리)
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (itemSheet && itemSheet.getLastRow() > 1) {
+        const idSet = new Set(classD1Ids.map(String));
+        const d1IdCol       = ITEM_HEADERS.indexOf('class_d1_id') + 1;
+        const stuMemberCol  = ITEM_HEADERS.indexOf('stu_member') + 1;
+        const bd2Col        = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
+        const chuchenDateCol  = ITEM_HEADERS.indexOf('chuchen_date') + 1;
+        const chuchenStateCol = ITEM_HEADERS.indexOf('chuchen_state') + 1;
+        const lastItemRow = itemSheet.getLastRow();
+        const d1Vals = itemSheet.getRange(2, d1IdCol, lastItemRow - 1, 1).getValues().flat().map(String);
+        d1Vals.forEach(function(val, i) {
+            if (idSet.has(val)) {
+                const r = i + 2;
+                itemSheet.getRange(r, stuMemberCol).setValue('미정');
+                itemSheet.getRange(r, d1IdCol).setValue('');
+                if (bd2Col > 0)        itemSheet.getRange(r, bd2Col).setValue('');
+                if (chuchenDateCol > 0)  itemSheet.getRange(r, chuchenDateCol).setValue('');
+                if (chuchenStateCol > 0) itemSheet.getRange(r, chuchenStateCol).setValue('');
+            }
+        });
+        SpreadsheetApp.flush();
+    }
+
+    // CLASS_D1 행 삭제
     const sheet = ensureClassD1Sheet_();
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
 
-    const idSet = new Set(classD1Ids.map(String));
+    const idSet2 = new Set(classD1Ids.map(String));
     const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-    // 뒤에서부터 삭제해야 행 번호 어긋나지 않음
     for (let i = ids.length - 1; i >= 0; i--) {
-        if (idSet.has(String(ids[i]))) {
-            sheet.deleteRow(i + 2);
-        }
+        if (idSet2.has(String(ids[i]))) sheet.deleteRow(i + 2);
     }
     return { success: true, message: classD1Ids.length + '개 회차가 삭제되었습니다.' };
 }

@@ -2610,11 +2610,12 @@ function removeItemFromClassD1(itemId) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터 없음' };
 
-  var idCol          = ITEM_HEADERS.indexOf('id') + 1;
-  var d1IdCol        = ITEM_HEADERS.indexOf('class_d1_id') + 1;
-  var bd2Col         = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
-  var stuMemberCol   = ITEM_HEADERS.indexOf('stu_member') + 1;
-  var chuchenDateCol = ITEM_HEADERS.indexOf('chuchen_date') + 1;
+  var idCol            = ITEM_HEADERS.indexOf('id') + 1;
+  var d1IdCol          = ITEM_HEADERS.indexOf('class_d1_id') + 1;
+  var bd2Col           = ITEM_HEADERS.indexOf('bid_datetime_2') + 1;
+  var stuMemberCol     = ITEM_HEADERS.indexOf('stu_member') + 1;
+  var chuchenDateCol   = ITEM_HEADERS.indexOf('chuchen_date') + 1;
+  var chuchenStateCol  = ITEM_HEADERS.indexOf('chuchen_state') + 1;
 
   var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues().flat().map(String);
   var idx = ids.indexOf(String(itemId));
@@ -2625,6 +2626,7 @@ function removeItemFromClassD1(itemId) {
   sheet.getRange(row, stuMemberCol).setValue('미정');
   if (bd2Col > 0) sheet.getRange(row, bd2Col).setValue('');
   if (chuchenDateCol > 0) sheet.getRange(row, chuchenDateCol).setValue('');
+  if (chuchenStateCol > 0) sheet.getRange(row, chuchenStateCol).setValue('');
   SpreadsheetApp.flush();
   return { success: true, message: '물건 취소 완료' };
 }
