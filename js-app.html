@@ -12474,10 +12474,19 @@ ${token}
                 const teacherMemberCard = d.teacher_id ? (allMembersNewData || []).find(m => String(m.member_id) === String(d.teacher_id)) : null;
                 const teacherNameCard = teacherMemberCard ? teacherMemberCard.member_name : (d.teacher_id ? String(d.teacher_id) : '-');
 
+                // D-day 계산 (isNearest 카드에만 표시)
+                const daysUntil_ = rawDate.length >= 8 ? (() => {
+                    const cd = new Date(parseInt(rawDate.substring(0,4)), parseInt(rawDate.substring(4,6))-1, parseInt(rawDate.substring(6,8)));
+                    const td = new Date(parseInt(todayStr.substring(0,4)), parseInt(todayStr.substring(4,6))-1, parseInt(todayStr.substring(6,8)));
+                    return Math.round((cd - td) / 86400000);
+                })() : null;
+                const ddayHtml = (isNearest && daysUntil_ !== null && daysUntil_ >= 0)
+                    ? `<span class="text-red-500 font-bold" style="font-size:9px">(${daysUntil_ === 0 ? '오늘' : daysUntil_ + '일전'})</span>`
+                    : '';
+
                 const body = `<li>• <span class="font-bold">${dateStr}${weekDisplayStr ? '(' + weekDisplayStr + ')' : ''}</span></li>` +
                     (timeStr ? `<li class="text-[10px] leading-tight pl-1">${timeStr}</li>` : '') +
-                    `<li>• 물건: ${itemCount}건</li>` +
-                    `<li>• 회원: ${memberCount}/${escapeHtml(teacherNameCard)}</li>`;
+                    `<li>• ${itemCount}건 / ${escapeHtml(teacherNameCard)}</li>`;
 
                 function fmtBidDt_(v) {
                     if (!v) return '-';
@@ -12493,7 +12502,7 @@ ${token}
                 const tooltipHtml = `등록: ${fmtBidDt_(d.bid_starttime)}&#10;1차: ${fmtBidDt_(d.bid_datetime_1)}&#10;2차: ${fmtBidDt_(d.bid_datetime_2)}`;
 
                 return d1Card_(cls, titleCls, textCls, badge,
-                    `${d.class_loop}회${completedMark}`, body,
+                    `${d.class_loop}회${completedMark}${ddayHtml ? ' ' + ddayHtml : ''}`, body,
                     `selectClassD1('${d.class_d1_id}')`, tooltipHtml);
             }).join('') + addCardHtml + `</div>`;
     }
@@ -13737,8 +13746,31 @@ ${token}
     }
 
     // ─── 수업리스트 수정/삭제 ─────────────────────────────────────────
-    let editD1SelectedIds_ = new Set(); // 선택된 class_d1_id 목록
-    let editD1FocusedId_ = null;        // 현재 상세 표시 중인 class_d1_id
+    let editD1SelectedIds_ = new Set();
+    let editD1FocusedId_ = null;
+    let editD1ActiveTab_ = 'single'; // 'single' | 'bulk'
+
+    const _D1_DAY = ['일','월','화','수','목','금','토'];
+    function _fmtD1Date(v) {
+        const s = String(v||'').replace(/-/g,'');
+        if (s.length < 8) return v || '-';
+        const dt = new Date(parseInt(s.substring(0,4)), parseInt(s.substring(4,6))-1, parseInt(s.substring(6,8)));
+        return s.substring(4,6)+'/'+s.substring(6,8)+'('+_D1_DAY[dt.getDay()]+')';
+    }
+    function _fmtD1Time(v) {
+        if (!v) return '-';
+        const parts = String(v).split(':');
+        const h = parseInt(parts[0]);
+        const m = parts[1] ? parseInt(parts[1]) : 0;
+        return isNaN(h) ? '-' : (m > 0 ? h+'시'+String(m).padStart(2,'0')+'분' : h+'시');
+    }
+    // class_date를 YYYY-MM-DD 형식으로 변환 (date input용)
+    function _toDateInput(v) {
+        if (!v) return '';
+        const s = String(v).replace(/-/g,'');
+        if (s.length >= 8) return s.substring(0,4)+'-'+s.substring(4,6)+'-'+s.substring(6,8);
+        return String(v).substring(0,10);
+    }
 
     function showEditD1BatchModal() {
         const batch = d1Batches[d1BatchIdx];
@@ -13747,9 +13779,9 @@ ${token}
         }
         editD1SelectedIds_ = new Set();
         editD1FocusedId_ = null;
+        editD1ActiveTab_ = 'single';
         populateTeacherDropdown_('editD1-teacherId');
         renderEditD1List_();
-        // 상세 폼 숨김
         document.getElementById('editD1-noSelect').classList.remove('hidden');
         document.getElementById('editD1-formWrap').classList.add('hidden');
         document.getElementById('editD1BatchModal').classList.remove('content-hidden');
@@ -13760,40 +13792,29 @@ ${token}
         const items = batch ? (batch.items || []) : [];
         const tbody = document.getElementById('editD1-d1ListBody');
         if (!tbody) return;
-        const DAY_NAMES = ['일','월','화','수','목','금','토'];
-        function fmtDate_(v) {
-            const s = String(v||'').replace(/-/g,'');
-            if (s.length < 8) return v || '-';
-            const dt = new Date(parseInt(s.substring(0,4)), parseInt(s.substring(4,6))-1, parseInt(s.substring(6,8)));
-            return s.substring(4,6)+'/'+s.substring(6,8)+'('+DAY_NAMES[dt.getDay()]+')';
-        }
-        function fmtTime_(v) {
-            if (!v) return '-';
-            const parts = String(v).split(':');
-            const h = parseInt(parts[0]);
-            const m = parts[1] ? parseInt(parts[1]) : 0;
-            return isNaN(h) ? '-' : (m > 0 ? h+'시'+String(m).padStart(2,'0')+'분' : h+'시');
-        }
         let html = '';
         items.forEach(d => {
             const id = String(d.class_d1_id);
             const isChecked = editD1SelectedIds_.has(id);
             const isFocused = editD1FocusedId_ === id;
-            const rowCls = isFocused ? 'bg-indigo-50' : 'hover:bg-gray-50';
-            const timeFrom = fmtTime_(d.class_time_from);
-            const timeTo = fmtTime_(d.class_time_to);
-            const timeDisp = (timeFrom !== '-' || timeTo !== '-') ? `${timeFrom}~${timeTo}` : '-';
+            const rowCls = isFocused ? 'bg-indigo-50 border-l-2 border-indigo-400' : 'hover:bg-gray-50 border-l-2 border-transparent';
+            const tFrom = _fmtD1Time(d.class_time_from);
+            const tTo = _fmtD1Time(d.class_time_to);
+            const timeDisp = (tFrom !== '-' || tTo !== '-') ? `${tFrom}~${tTo}` : '-';
             html += `<tr class="${rowCls} cursor-pointer" onclick="editD1FocusRow_('${id}')">
-                <td class="px-2 py-1.5 text-center" onclick="event.stopPropagation()">
+                <td class="px-1.5 py-1.5 text-center" onclick="event.stopPropagation()">
                     <input type="checkbox" class="rounded" ${isChecked?'checked':''} onchange="editD1ToggleCheck_(this,'${id}')">
                 </td>
-                <td class="px-2 py-1.5 text-center text-xs font-semibold text-gray-700">${d.class_loop}회</td>
-                <td class="px-2 py-1.5 text-center text-xs text-gray-700">${fmtDate_(d.class_date)}</td>
-                <td class="px-2 py-1.5 text-center text-xs text-gray-600">${timeDisp}</td>
-                <td class="px-2 py-1.5 text-center text-xs text-gray-600">${d.item_count||0}건</td>
+                <td class="px-1.5 py-1.5 text-center text-xs font-semibold text-gray-700">${d.class_loop}회</td>
+                <td class="px-1.5 py-1.5 text-center text-xs text-gray-700">${_fmtD1Date(d.class_date)}</td>
+                <td class="px-1.5 py-1.5 text-center text-xs text-gray-500 leading-tight">${timeDisp}</td>
+                <td class="px-1.5 py-1.5 text-center text-xs text-gray-500">${d.item_count||0}건</td>
             </tr>`;
         });
         tbody.innerHTML = html || '<tr><td colspan="5" class="p-4 text-center text-gray-400 text-xs">회차 없음</td></tr>';
+        // 전체선택 체크박스 동기화
+        const allCb = document.getElementById('editD1-selectAll');
+        if (allCb) allCb.checked = items.length > 0 && editD1SelectedIds_.size === items.length;
         updateEditD1SelectCount_();
     }
 
@@ -13801,9 +13822,9 @@ ${token}
         if (cb.checked) editD1SelectedIds_.add(id);
         else editD1SelectedIds_.delete(id);
         updateEditD1SelectCount_();
-        const allCb = document.getElementById('editD1-selectAll');
         const batch = d1Batches[d1BatchIdx];
         const total = batch ? (batch.items||[]).length : 0;
+        const allCb = document.getElementById('editD1-selectAll');
         if (allCb) allCb.checked = editD1SelectedIds_.size === total && total > 0;
     }
 
@@ -13821,37 +13842,60 @@ ${token}
 
     function editD1FocusRow_(id) {
         editD1FocusedId_ = id;
-        const batch = d1Batches[d1BatchIdx];
-        const d = (batch?.items||[]).find(x => String(x.class_d1_id) === id);
+        // allClassD1Data에서 최신 값 로드
+        const d = (allClassD1Data||[]).find(x => String(x.class_d1_id) === id);
         if (!d) return;
-        renderEditD1List_(); // 하이라이트 갱신
-        // 상세 폼 표시
+        renderEditD1List_();
         document.getElementById('editD1-noSelect').classList.add('hidden');
         document.getElementById('editD1-formWrap').classList.remove('hidden');
-        const DAY_NAMES = ['일','월','화','수','목','금','토'];
-        function fmtDateTitle_(v) {
-            const s = String(v||'').replace(/-/g,'');
-            if (s.length < 8) return v||'-';
-            const dt = new Date(parseInt(s.substring(0,4)), parseInt(s.substring(4,6))-1, parseInt(s.substring(6,8)));
-            return `${d.class_loop}회 | ${s.substring(4,6)}/${s.substring(6,8)}(${DAY_NAMES[dt.getDay()]})`;
+        // 탭 라벨 업데이트
+        const labelEl = document.getElementById('editD1-tab-single-label');
+        if (labelEl) {
+            const s = String(d.class_date||'').replace(/-/g,'');
+            const dt = s.length >= 8 ? new Date(parseInt(s.substring(0,4)), parseInt(s.substring(4,6))-1, parseInt(s.substring(6,8))) : null;
+            const dateLabel = dt ? `${s.substring(4,6)}/${s.substring(6,8)}(${_D1_DAY[dt.getDay()]})` : '';
+            labelEl.textContent = `${d.class_loop}회 ${dateLabel}`;
         }
-        const titleEl = document.getElementById('editD1-formTitle');
-        if (titleEl) titleEl.textContent = fmtDateTitle_(d.class_date);
-        // 강사
+        // 폼에 DB 실제 값 세팅
+        const dateEl = document.getElementById('editD1-classDate');
+        if (dateEl) dateEl.value = _toDateInput(d.class_date);
         const sel = document.getElementById('editD1-teacherId');
-        if (sel && d.teacher_id) sel.value = String(d.teacher_id);
-        else if (sel) sel.value = '';
-        // 수업시간
-        if (d.class_time_from) setDropdownTime_('editD1-timeFrom', String(d.class_time_from));
-        if (d.class_time_to) setDropdownTime_('editD1-timeTo', String(d.class_time_to));
-        // 입찰시간 (절대값이므로 day 세팅 불가)
-        ['editD1-bidStarttime-day','editD1-bidDatetime1-day','editD1-bidDatetime2-day'].forEach(id => {
-            const el = document.getElementById(id); if (el) el.value = '';
+        if (sel) sel.value = d.teacher_id ? String(d.teacher_id) : '';
+        setDropdownTime_('editD1-timeFrom', d.class_time_from ? String(d.class_time_from) : '');
+        setDropdownTime_('editD1-timeTo', d.class_time_to ? String(d.class_time_to) : '');
+        ['editD1-bidStarttime-day','editD1-bidDatetime1-day','editD1-bidDatetime2-day'].forEach(eid => {
+            const el = document.getElementById(eid); if (el) el.value = '';
         });
         const bid1El = document.getElementById('editD1-bid1Count');
-        if (bid1El) bid1El.value = d['1cha_bid']||'';
+        if (bid1El) bid1El.value = d['1cha_bid'] || '';
         const bid2El = document.getElementById('editD1-bid2Count');
-        if (bid2El) bid2El.value = d['2cha_bid']||'';
+        if (bid2El) bid2El.value = d['2cha_bid'] || '';
+        // 탭 상태 유지
+        switchEditD1Tab_(editD1ActiveTab_);
+    }
+
+    function switchEditD1Tab_(tab) {
+        editD1ActiveTab_ = tab;
+        const singleBtn = document.getElementById('editD1-tab-single');
+        const bulkBtn = document.getElementById('editD1-tab-bulk');
+        const dateEl = document.getElementById('editD1-classDate');
+        if (tab === 'single') {
+            singleBtn?.classList.replace('bg-white','bg-indigo-600');
+            singleBtn?.classList.replace('text-gray-500','text-white');
+            singleBtn?.classList.replace('border-gray-300','border-indigo-400');
+            bulkBtn?.classList.replace('bg-indigo-600','bg-white');
+            bulkBtn?.classList.replace('text-white','text-gray-500');
+            bulkBtn?.classList.replace('border-indigo-400','border-gray-300');
+            if (dateEl) { dateEl.disabled = false; dateEl.classList.remove('bg-gray-100','text-gray-400'); }
+        } else {
+            bulkBtn?.classList.replace('bg-white','bg-indigo-600');
+            bulkBtn?.classList.replace('text-gray-500','text-white');
+            bulkBtn?.classList.replace('border-gray-300','border-indigo-400');
+            singleBtn?.classList.replace('bg-indigo-600','bg-white');
+            singleBtn?.classList.replace('text-white','text-gray-500');
+            singleBtn?.classList.replace('border-indigo-400','border-gray-300');
+            if (dateEl) { dateEl.disabled = true; dateEl.classList.add('bg-gray-100','text-gray-400'); }
+        }
     }
 
     function closeEditD1BatchModal(event) {
@@ -13859,9 +13903,9 @@ ${token}
         document.getElementById('editD1BatchModal').classList.add('content-hidden');
     }
 
-    function buildEditD1UpdateData_() {
+    function buildEditD1UpdateData_(isBulk) {
         const teacherId = document.getElementById('editD1-teacherId')?.value || '';
-        if (!teacherId) { showStatus('강사를 선택하세요.', 'error'); document.getElementById('editD1-teacherId').focus(); return null; }
+        if (!teacherId) { showStatus('강사를 선택하세요.', 'error'); document.getElementById('editD1-teacherId')?.focus(); return null; }
         const timeFrom = getDropdownTime_('editD1-timeFrom');
         const timeTo = getDropdownTime_('editD1-timeTo');
         const bidStarttimeDay = document.getElementById('editD1-bidStarttime-day')?.value ?? '';
@@ -13869,38 +13913,40 @@ ${token}
         const bidDatetime2Day = document.getElementById('editD1-bidDatetime2-day')?.value ?? '';
         const bid1Count = document.getElementById('editD1-bid1Count')?.value || '';
         const bid2Count = document.getElementById('editD1-bid2Count')?.value || '';
+        const classDate = document.getElementById('editD1-classDate')?.value || '';
         const updateData = { teacher_id: teacherId };
+        if (!isBulk && classDate) updateData.class_date = classDate;
         if (timeFrom && timeFrom !== '00:00') updateData.class_time_from = timeFrom;
         if (timeTo && timeTo !== '00:00') updateData.class_time_to = timeTo;
         if (bid1Count) updateData['1cha_bid'] = parseInt(bid1Count);
         if (bid2Count) updateData['2cha_bid'] = parseInt(bid2Count);
-        if (bidStarttimeDay !== '') {
-            updateData.bidStarttimeDay = bidStarttimeDay;
-            updateData.bidStarttimeTime = getDropdownTime_('editD1-bidStarttime') || '00:00';
-        }
-        if (bidDatetime1Day !== '') {
-            updateData.bidDatetime1Day = bidDatetime1Day;
-            updateData.bidDatetime1Time = getDropdownTime_('editD1-bidDatetime1') || '00:00';
-        }
-        if (bidDatetime2Day !== '') {
-            updateData.bidDatetime2Day = bidDatetime2Day;
-            updateData.bidDatetime2Time = getDropdownTime_('editD1-bidDatetime2') || '00:00';
-        }
+        if (bidStarttimeDay !== '') { updateData.bidStarttimeDay = bidStarttimeDay; updateData.bidStarttimeTime = getDropdownTime_('editD1-bidStarttime') || '00:00'; }
+        if (bidDatetime1Day !== '') { updateData.bidDatetime1Day = bidDatetime1Day; updateData.bidDatetime1Time = getDropdownTime_('editD1-bidDatetime1') || '00:00'; }
+        if (bidDatetime2Day !== '') { updateData.bidDatetime2Day = bidDatetime2Day; updateData.bidDatetime2Time = getDropdownTime_('editD1-bidDatetime2') || '00:00'; }
         return updateData;
     }
 
     function handleEditD1Batch() {
-        // 선택된 회차가 있으면 선택 회차만, 없으면 현재 포커스 회차
-        let ids = [];
-        if (editD1SelectedIds_.size > 0) {
-            ids = [...editD1SelectedIds_];
-        } else if (editD1FocusedId_) {
-            ids = [editD1FocusedId_];
-        } else {
-            showStatus('저장할 회차를 선택하세요.', 'error'); return;
-        }
-        const updateData = buildEditD1UpdateData_();
+        if (!editD1FocusedId_) { showStatus('저장할 회차를 선택하세요.', 'error'); return; }
+        const updateData = buildEditD1UpdateData_(false);
         if (!updateData) return;
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); renderEditD1List_(); }
+                else showStatus(r.message, 'error');
+            })
+            .withFailureHandler(e => showStatus(e.message, 'error'))
+            .updateClassD1Batch([editD1FocusedId_], updateData);
+    }
+
+    function applyEditD1Bulk_() {
+        const batch = d1Batches[d1BatchIdx];
+        const items = batch ? (batch.items||[]) : [];
+        if (items.length === 0) { showStatus('배치를 선택하세요.', 'error'); return; }
+        const updateData = buildEditD1UpdateData_(true);
+        if (!updateData) return;
+        if (!confirm(`이 배치의 전체 ${items.length}개 회차에 일괄 적용하시겠습니까?`)) return;
+        const ids = items.map(d => d.class_d1_id);
         google.script.run
             .withSuccessHandler(r => {
                 if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); renderEditD1List_(); }
@@ -13910,19 +13956,23 @@ ${token}
             .updateClassD1Batch(ids, updateData);
     }
 
-    function applyEditD1Bulk_() {
-        if (editD1SelectedIds_.size === 0) { showStatus('일괄 변경할 회차를 선택하세요.', 'error'); return; }
-        const updateData = buildEditD1UpdateData_();
-        if (!updateData) return;
-        if (!confirm(`선택한 ${editD1SelectedIds_.size}개 회차를 일괄 변경하시겠습니까?`)) return;
+    function editD1DeleteSelected_() {
+        if (editD1SelectedIds_.size === 0) { showStatus('삭제할 회차를 선택하세요.', 'error'); return; }
+        if (!confirm(`선택한 ${editD1SelectedIds_.size}개 회차를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
         const ids = [...editD1SelectedIds_];
         google.script.run
             .withSuccessHandler(r => {
-                if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); renderEditD1List_(); }
-                else showStatus(r.message, 'error');
+                if (r.success) {
+                    showStatus(r.message, 'success');
+                    editD1SelectedIds_ = new Set();
+                    editD1FocusedId_ = null;
+                    loadClassD1Grid(selectedClassId);
+                    // 모달 리스트 갱신 (loadClassD1Grid 후 allClassD1Data가 갱신되면 재렌더)
+                    setTimeout(() => renderEditD1List_(), 1200);
+                } else showStatus(r.message, 'error');
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
-            .updateClassD1Batch(ids, updateData);
+            .deleteClassD1Batch(ids);
     }
 
     function deleteCurrentD1Batch() {
