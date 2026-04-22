@@ -13960,10 +13960,6 @@ ${token}
 
     function closeEditD1BatchModal(event) {
         if (event && event.target !== event.currentTarget) return;
-        if (editD1NewRowMode_ && editD1FocusedId_ === '_new_') {
-            const classDate = document.getElementById('editD1-classDate')?.value || '';
-            if (classDate) { saveEditD1NewRow_(); return; }
-        }
         editD1NewRowMode_ = false;
         document.getElementById('editD1BatchModal').classList.add('content-hidden');
     }
@@ -14005,13 +14001,50 @@ ${token}
             .updateClassD1Batch([editD1FocusedId_], updateData);
     }
 
+    function _calcBidOffset_(classDateRaw, bidDatetimeStr) {
+        if (!bidDatetimeStr || !classDateRaw || classDateRaw.length < 8) return { day: '', time: '' };
+        const base = new Date(classDateRaw.substring(0,4)+'-'+classDateRaw.substring(4,6)+'-'+classDateRaw.substring(6,8));
+        const bid  = new Date(String(bidDatetimeStr).replace('T',' '));
+        if (isNaN(base.getTime()) || isNaN(bid.getTime())) return { day: '', time: '' };
+        return {
+            day:  String(Math.round((bid - base) / 86400000)),
+            time: String(bid.getHours()).padStart(2,'0') + ':' + String(bid.getMinutes()).padStart(2,'0')
+        };
+    }
+
     function editD1AddRow_() {
         const batch = d1Batches[d1BatchIdx];
         if (!batch) return;
-        const maxLoop = Math.max(0, ...(batch.items||[]).map(d => parseInt(d.class_loop)||0));
+        const items = batch.items || [];
+        const maxLoop = Math.max(0, ...items.map(d => parseInt(d.class_loop)||0));
         editD1NewLoop_ = maxLoop + 1;
         editD1NewRowMode_ = true;
         editD1FocusRow_('_new_');
+
+        // 마지막 회차 정보 전체 연동
+        if (items.length > 0) {
+            const lastItem = items.slice().sort((a,b)=>(parseInt(a.class_loop)||0)-(parseInt(b.class_loop)||0)).at(-1);
+            const lastD = (allClassD1Data||[]).find(x => String(x.class_d1_id) === String(lastItem.class_d1_id));
+            if (lastD) {
+                setDropdownTime_('editD1-timeFrom', lastD.class_time_from ? String(lastD.class_time_from) : '');
+                setDropdownTime_('editD1-timeTo',   lastD.class_time_to   ? String(lastD.class_time_to)   : '');
+                const sel = document.getElementById('editD1-teacherId');
+                if (sel && lastD.teacher_id) sel.value = String(lastD.teacher_id);
+                const bid1El = document.getElementById('editD1-bid1Count'); if (bid1El) bid1El.value = lastD['1cha_bid'] || '';
+                const bid2El = document.getElementById('editD1-bid2Count'); if (bid2El) bid2El.value = lastD['2cha_bid'] || '';
+                const raw = String(lastD.class_date||'').replace(/-/g,'');
+                [
+                    { key:'bid_starttime',  dayId:'editD1-bidStarttime-day',  tPfx:'editD1-bidStarttime'  },
+                    { key:'bid_datetime_1', dayId:'editD1-bidDatetime1-day',   tPfx:'editD1-bidDatetime1'   },
+                    { key:'bid_datetime_2', dayId:'editD1-bidDatetime2-day',   tPfx:'editD1-bidDatetime2'   },
+                ].forEach(({ key, dayId, tPfx }) => {
+                    const off = _calcBidOffset_(raw, lastD[key]);
+                    const dayEl = document.getElementById(dayId);
+                    if (dayEl && off.day !== '') dayEl.value = off.day;
+                    if (off.time) setDropdownTime_(tPfx, off.time);
+                });
+            }
+        }
     }
 
     function saveEditD1NewRow_() {
@@ -14020,55 +14053,67 @@ ${token}
         const teacherId = document.getElementById('editD1-teacherId')?.value || '';
         if (!teacherId) { showStatus('강사를 선택하세요.', 'error'); return; }
         const timeFrom = getDropdownTime_('editD1-timeFrom') || '';
-        const timeTo = getDropdownTime_('editD1-timeTo') || '';
+        const timeTo   = getDropdownTime_('editD1-timeTo')   || '';
         const batch = d1Batches[d1BatchIdx];
         const batchTimestamp = batch ? (batch.batchKey || '') : '';
         const startDate = classDate.replace(/-/g, '');
-
-        // 중간 삽입 감지: 새 날짜보다 늦은 기존 회차 목록
         const existingItems = (batch ? batch.items : []) || [];
-        const laterItems = existingItems.filter(d => {
-            const raw = String(d.class_date || '').replace(/-/g, '');
-            return raw.length >= 8 && raw > startDate;
-        }).sort((a, b) => parseInt(a.class_loop) - parseInt(b.class_loop));
+
+        // 새 날짜보다 이후 회차 (높은 loop 번호부터 처리해야 충돌 없음)
+        const laterItems = existingItems
+            .filter(d => String(d.class_date||'').replace(/-/g,'') > startDate)
+            .sort((a,b) => (parseInt(b.class_loop)||0) - (parseInt(a.class_loop)||0));
+
+        // 삽입 위치 = 새 날짜보다 이전 회차 수 + 1
+        const insertPos = existingItems.filter(d => String(d.class_date||'').replace(/-/g,'') < startDate).length + 1;
 
         if (laterItems.length > 0) {
             if (!confirm(`${classDate}는 기존 회차 사이에 추가됩니다.\n이후 ${laterItems.length}개 회차 번호가 1씩 증가합니다.\n계속하시겠습니까?`)) return;
         }
 
-        const options = { addCount: 1, timeFrom, timeTo, batchTimestamp, memberIds: [], memberData: [], totalSessions: 1, teacherId };
-        google.script.run
-            .withSuccessHandler(r => {
-                if (r.success) {
-                    if (laterItems.length > 0) {
-                        // 이후 회차 번호 +1 재조정 (뒤에서부터)
-                        const sorted = laterItems.slice().reverse();
-                        let pending = sorted.length;
-                        sorted.forEach(d => {
-                            const newLoop = (parseInt(d.class_loop) || 0) + 1;
-                            google.script.run
-                                .withSuccessHandler(() => {
-                                    pending--;
-                                    if (pending === 0) {
-                                        showStatus('새 회차 추가 및 번호 재조정 완료', 'success');
-                                        editD1NewRowMode_ = false; editD1FocusedId_ = null;
-                                        document.getElementById('editD1BatchModal').classList.add('content-hidden');
-                                        loadClassD1Grid(selectedClassId);
-                                    }
-                                })
-                                .withFailureHandler(e => showStatus(e.message, 'error'))
-                                .updateClassD1Batch([d.class_d1_id], { class_loop: newLoop });
-                        });
-                    } else {
-                        showStatus(r.message, 'success');
+        const bidStarttimeDay  = document.getElementById('editD1-bidStarttime-day')?.value  ?? '';
+        const bidDatetime1Day  = document.getElementById('editD1-bidDatetime1-day')?.value  ?? '';
+        const bidDatetime2Day  = document.getElementById('editD1-bidDatetime2-day')?.value  ?? '';
+        const bid1Count = document.getElementById('editD1-bid1Count')?.value || '';
+        const bid2Count = document.getElementById('editD1-bid2Count')?.value || '';
+        const bidOpts = {
+            bidStarttimeDay,  bidStarttimeTime:  getDropdownTime_('editD1-bidStarttime')  || '00:00',
+            bidDatetime1Day,  bidDatetime1Time:  getDropdownTime_('editD1-bidDatetime1')  || '00:00',
+            bidDatetime2Day,  bidDatetime2Time:  getDropdownTime_('editD1-bidDatetime2')  || '00:00',
+            bid1Count: bid1Count ? parseInt(bid1Count) : null,
+            bid2Count: bid2Count ? parseInt(bid2Count) : null,
+        };
+
+        const doCreate = () => {
+            // startLoop으로 정확한 회차 번호 지정
+            const options = { addCount: 1, startLoop: insertPos, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds: [], memberData: [], totalSessions: 1, teacherId };
+            google.script.run
+                .withSuccessHandler(r => {
+                    if (r.success) {
+                        showStatus(laterItems.length > 0 ? '회차 추가 및 번호 재조정 완료' : r.message, 'success');
                         editD1NewRowMode_ = false; editD1FocusedId_ = null;
                         document.getElementById('editD1BatchModal').classList.add('content-hidden');
                         loadClassD1Grid(selectedClassId);
-                    }
-                } else showStatus(r.message, 'error');
-            })
-            .withFailureHandler(e => showStatus(e.message, 'error'))
-            .generateClassD1(selectedClassId, startDate, 1, options);
+                    } else showStatus(r.message, 'error');
+                })
+                .withFailureHandler(e => showStatus(e.message, 'error'))
+                .generateClassD1(selectedClassId, startDate, 1, options);
+        };
+
+        if (laterItems.length === 0) {
+            doCreate();
+        } else {
+            // 순차 처리: 높은 번호부터 +1 → 충돌 없이 공간 확보 후 생성
+            function doRenumber(idx) {
+                if (idx >= laterItems.length) { doCreate(); return; }
+                const d = laterItems[idx];
+                google.script.run
+                    .withSuccessHandler(() => doRenumber(idx + 1))
+                    .withFailureHandler(e => showStatus(e.message, 'error'))
+                    .updateClassD1Batch([d.class_d1_id], { class_loop: (parseInt(d.class_loop)||0) + 1 });
+            }
+            doRenumber(0);
+        }
     }
 
     // ─── editD1 모달 분할선 드래그 (1회 초기화) ──────────────────────
