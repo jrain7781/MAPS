@@ -13992,19 +13992,39 @@ ${token}
         }
     }
 
-    // TO(수업 종료시간) → 최종마감 +48H 동기화 (PT/돈클 전용)
+    // TO(수업 종료시간) → 최종마감 +48H 동기화 (PT/돈클 전용), 주말/공휴일이면 다음 평일 14:00
     function syncBidFinalFromTimeTo_(prefix) {
         if (_currentGenD1Type !== 'PT' && _currentGenD1Type !== '돈클') return;
         const ampm = document.getElementById(prefix + '-timeTo-ampm')?.value || '';
         const h = document.getElementById(prefix + '-timeTo-h')?.value || '';
+        const mStr = document.getElementById(prefix + '-timeTo-m')?.value || '00';
         if (!ampm || !h) return;
         const bid2Prefix = prefix + '-bidDatetime2';
         const dayEl = document.getElementById(bid2Prefix + '-day');
         const ampmEl = document.getElementById(bid2Prefix + '-ampm');
         const hEl = document.getElementById(bid2Prefix + '-h');
-        if (dayEl) dayEl.value = '2';       // +2일 (= +48H)
-        if (ampmEl) ampmEl.value = ampm;
-        if (hEl) hEl.value = h;
+        const mEl = document.getElementById(bid2Prefix + '-m');
+        // class_date 기준 +2일 가상 Date 계산 → 주말/공휴일 판정
+        const classDateStr = document.getElementById(prefix + '-classDate')?.value || '';
+        let dayOff = 2;
+        let finalAmpm = ampm;
+        let finalH = h;
+        let finalM = mStr;
+        if (classDateStr) {
+            const base = new Date(classDateStr);
+            if (!isNaN(base.getTime())) {
+                base.setDate(base.getDate() + 2);
+                const adj = adjustFinalDeadline_(base);
+                dayOff = 2 + Math.round((adj.getTime() - base.getTime()) / 86400000);
+                if (adj.getTime() !== base.getTime()) {
+                    finalAmpm = 'PM'; finalH = '2'; finalM = '00';
+                }
+            }
+        }
+        if (dayEl) dayEl.value = String(dayOff);
+        if (ampmEl) ampmEl.value = finalAmpm;
+        if (hEl) hEl.value = finalH;
+        if (mEl) mEl.value = finalM;
     }
 
     // TO 드롭다운 change 리스너 1회 등록 (PT/돈클일 때만 동작)
@@ -14142,6 +14162,46 @@ ${token}
     let editD1NewLoop_ = 1;
 
     const _D1_DAY = ['일','월','화','수','목','금','토'];
+
+    // 한국 공휴일 (YYYY-MM-DD) — 필요 시 추가. 주말과 동일하게 다음 평일 14:00으로 밀림.
+    const _KR_HOLIDAYS = new Set([
+        '2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-03-01','2026-03-02',
+        '2026-05-05','2026-05-24','2026-05-25','2026-06-03','2026-06-06','2026-08-15','2026-08-17',
+        '2026-09-24','2026-09-25','2026-09-26','2026-10-03','2026-10-05','2026-10-09','2026-12-25'
+    ]);
+    function _isKRHolidayOrWeekend(dt) {
+        if (!dt || isNaN(dt.getTime())) return false;
+        const w = dt.getDay();
+        if (w === 0 || w === 6) return true;
+        const ymd = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+        return _KR_HOLIDAYS.has(ymd);
+    }
+    // 주말·공휴일이면 다음 평일 오후 2시로 이동 (최대 7일 전진)
+    function adjustFinalDeadline_(dt) {
+        if (!dt || isNaN(dt.getTime())) return dt;
+        const out = new Date(dt.getTime());
+        let shifted = false;
+        for (let i = 0; i < 7 && _isKRHolidayOrWeekend(out); i++) {
+            out.setDate(out.getDate() + 1);
+            shifted = true;
+        }
+        if (shifted) out.setHours(14, 0, 0, 0);
+        return out;
+    }
+    // 저장된 bid_datetime_2 파싱 → Date (yyMMddHHmm, ISO, "YYYY-MM-DD HH:MM" 등 혼재 대응)
+    function _parseBidDt_(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+        let s = String(v).trim();
+        // yyMMddHHmm (10자리 숫자) → 20yy-MM-dd HH:mm
+        if (/^\d{10}$/.test(s)) {
+            const yy = s.substring(0,2);
+            const yyyy = (parseInt(yy) > 70 ? '19' : '20') + yy;
+            s = yyyy + '-' + s.substring(2,4) + '-' + s.substring(4,6) + 'T' + s.substring(6,8) + ':' + s.substring(8,10) + ':00';
+        }
+        const dt = new Date(s.replace(' ', 'T'));
+        return isNaN(dt.getTime()) ? null : dt;
+    }
     function _fmtD1Date(v) {
         const s = String(v||'').replace(/-/g,'');
         if (s.length < 8) return v || '-';
@@ -14196,13 +14256,33 @@ ${token}
         if (_currentEditD1Type !== 'PT' && _currentEditD1Type !== '돈클') return;
         const ampm = document.getElementById('editD1-timeTo-ampm')?.value || '';
         const h = document.getElementById('editD1-timeTo-h')?.value || '';
+        const mStr = document.getElementById('editD1-timeTo-m')?.value || '00';
         if (!ampm || !h) return;
         const dayEl = document.getElementById('editD1-bidDatetime2-day');
         const ampmEl = document.getElementById('editD1-bidDatetime2-ampm');
         const hEl = document.getElementById('editD1-bidDatetime2-h');
-        if (dayEl) dayEl.value = '2';
-        if (ampmEl) ampmEl.value = ampm;
-        if (hEl) hEl.value = h;
+        const mEl = document.getElementById('editD1-bidDatetime2-m');
+        // class_date 기준 +2일 가상 Date 계산 → 주말/공휴일 판정
+        const classDateStr = document.getElementById('editD1-classDate')?.value || '';
+        let dayOff = 2;
+        let finalAmpm = ampm;
+        let finalH = h;
+        let finalM = mStr;
+        if (classDateStr) {
+            const base = new Date(classDateStr);
+            if (!isNaN(base.getTime())) {
+                base.setDate(base.getDate() + 2);
+                const adj = adjustFinalDeadline_(base);
+                dayOff = 2 + Math.round((adj.getTime() - base.getTime()) / 86400000);
+                if (adj.getTime() !== base.getTime()) {
+                    finalAmpm = 'PM'; finalH = '2'; finalM = '00';
+                }
+            }
+        }
+        if (dayEl) dayEl.value = String(dayOff);
+        if (ampmEl) ampmEl.value = finalAmpm;
+        if (hEl) hEl.value = finalH;
+        if (mEl) mEl.value = finalM;
     }
     function initEditD1TypeListeners_() {
         ['-timeTo-ampm', '-timeTo-h', '-timeTo-m'].forEach(suffix => {
@@ -15737,6 +15817,104 @@ ${token}
             .getItemsByClassD1Id(classD1Id);
     }
 
+    // items 리스트 행의 최종마감 진행률 바 셀 HTML 생성
+    function _buildDeadlineProgressCell_(item) {
+        const raw = item && item.bid_datetime_2;
+        const deadlineRaw = _parseBidDt_(raw);
+        if (!deadlineRaw) return '<span class="text-gray-300 text-[10px]">-</span>';
+        const deadline = adjustFinalDeadline_(deadlineRaw);
+        // 시작 기준: chuchen_date(등록일) > in-date(입찰일) fallback
+        let start = null;
+        const cd = item.chuchen_date;
+        if (cd) {
+            const s = String(cd);
+            if (/^\d{8}$/.test(s)) {
+                start = new Date(parseInt(s.substring(0,4)), parseInt(s.substring(4,6))-1, parseInt(s.substring(6,8)));
+            } else {
+                const dt = new Date(s.replace(' ', 'T'));
+                if (!isNaN(dt.getTime())) start = dt;
+            }
+        }
+        if (!start) {
+            // fallback: deadline - 7d
+            start = new Date(deadline.getTime() - 7 * 86400000);
+        }
+        const now = Date.now();
+        const total = deadline.getTime() - start.getTime();
+        const elapsed = now - start.getTime();
+        let pct;
+        let cls;
+        let label;
+        if (total <= 0) {
+            pct = 100; cls = 'done'; label = '마감';
+        } else if (elapsed >= total) {
+            pct = 100; cls = 'done'; label = '마감';
+        } else {
+            pct = Math.max(0, Math.min(100, (elapsed / total) * 100));
+            // 남은 시간 레이블
+            const remainMs = deadline.getTime() - now;
+            const remainH = Math.floor(remainMs / 3600000);
+            if (remainH >= 48) {
+                const d = Math.floor(remainH / 24);
+                label = 'D-' + d;
+            } else if (remainH >= 1) {
+                label = remainH + '시간';
+            } else {
+                const remainMin = Math.max(0, Math.floor(remainMs / 60000));
+                label = remainMin + '분';
+            }
+            cls = pct < 60 ? 'ok' : (pct < 85 ? 'warn' : 'late');
+        }
+        const deadlineIso = deadline.toISOString();
+        const startIso = start.toISOString();
+        const mm = String(deadline.getMonth()+1).padStart(2,'0');
+        const dd = String(deadline.getDate()).padStart(2,'0');
+        const hh = String(deadline.getHours()).padStart(2,'0');
+        const mi = String(deadline.getMinutes()).padStart(2,'0');
+        const tooltip = `최종마감: ${mm}/${dd} ${hh}:${mi}`;
+        return `<div class="deadline-bar-wrap" data-deadline="${deadlineIso}" data-start="${startIso}" title="${tooltip}">
+            <div class="deadline-bar-fill ${cls}" style="width:${pct.toFixed(1)}%"></div>
+            <div class="deadline-bar-label">${label}</div>
+        </div>`;
+    }
+
+    // 모든 deadline-bar를 현재 시각 기준으로 재계산 (1분마다 틱)
+    function _tickDeadlineBars_() {
+        const wraps = document.querySelectorAll('.deadline-bar-wrap');
+        if (wraps.length === 0) return;
+        const now = Date.now();
+        wraps.forEach(w => {
+            const dIso = w.getAttribute('data-deadline');
+            const sIso = w.getAttribute('data-start');
+            if (!dIso || !sIso) return;
+            const dt = new Date(dIso);
+            const st = new Date(sIso);
+            const total = dt.getTime() - st.getTime();
+            const elapsed = now - st.getTime();
+            const fill = w.querySelector('.deadline-bar-fill');
+            const lbl = w.querySelector('.deadline-bar-label');
+            if (!fill || !lbl) return;
+            let pct, cls, label;
+            if (total <= 0 || elapsed >= total) {
+                pct = 100; cls = 'done'; label = '마감';
+            } else {
+                pct = Math.max(0, Math.min(100, (elapsed / total) * 100));
+                const remainMs = dt.getTime() - now;
+                const remainH = Math.floor(remainMs / 3600000);
+                if (remainH >= 48) { label = 'D-' + Math.floor(remainH / 24); }
+                else if (remainH >= 1) { label = remainH + '시간'; }
+                else { label = Math.max(0, Math.floor(remainMs / 60000)) + '분'; }
+                cls = pct < 60 ? 'ok' : (pct < 85 ? 'warn' : 'late');
+            }
+            fill.style.width = pct.toFixed(1) + '%';
+            fill.className = 'deadline-bar-fill ' + cls;
+            lbl.textContent = label;
+        });
+    }
+    if (typeof _deadlineTickIntv_ === 'undefined') {
+        var _deadlineTickIntv_ = setInterval(_tickDeadlineBars_, 60000);
+    }
+
     function renderD1Items() {
         const el = document.getElementById('d1-item-list');
         if (!el) return;
@@ -15769,6 +15947,8 @@ ${token}
                 const tEnabled = typeof getMemberTelegramEnabled_ === 'function' ? getMemberTelegramEnabled_(item.member_id) : '';
                 const tHtml = tEnabled === 'Y' ? '<span class="telegram-badge">T</span>' : '';
                 const isChecked = d1ItemsSelectedIds_.has(String(item.id));
+                // 최종마감 카운트다운 바: chuchen_date(등록일) → bid_datetime_2(주말조정 적용) 진행률
+                const deadlineCell = _buildDeadlineProgressCell_(item);
                 return `<tr class="hover:bg-gray-100 transition duration-150">
                     <td class="item-col-check text-center" onclick="event.stopPropagation()">
                         <input type="checkbox" class="rounded" ${isChecked ? 'checked' : ''}
@@ -15779,6 +15959,7 @@ ${token}
                     <td class="item-col-sakun text-left font-medium cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.sakun_no||'')}</td>
                     <td class="item-col-court text-left cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.court||'')}</td>
                     <td class="item-col-status text-center cursor-pointer" onclick="openDetailModalById('${item.id}')"><span class="${sc}">${escapeHtml(item.stu_member||'-')}</span></td>
+                    <td class="item-col-deadline text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${deadlineCell}</td>
                     <td class="item-col-telegram text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${tHtml}</td>
                     <td class="item-col-member text-center cursor-pointer" style="max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.m_name||'')}</td>
                     <td class="item-col-manager text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.m_name_id||'')}</td>
@@ -15795,6 +15976,7 @@ ${token}
                     <th class="item-col-sakun text-left font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
                     <th class="item-col-court text-left font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('court')">법원${arrow('court')}</th>
                     <th class="item-col-status text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('stu_member')">상태${arrow('stu_member')}</th>
+                    <th class="item-col-deadline text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('bid_datetime_2')" title="최종마감까지 진행률 (chuchen_date ~ bid_datetime_2)">마감${arrow('bid_datetime_2')}</th>
                     <th class="item-col-telegram text-center font-bold text-gray-700 py-2.5">T</th>
                     <th class="item-col-member text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name')">회원${arrow('m_name')}</th>
                     <th class="item-col-manager text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('m_name_id')">담당${arrow('m_name_id')}</th>
@@ -16031,8 +16213,28 @@ ${token}
             : { memberId: '', memberName: nameTrim };
     }
 
+    // 최종마감 안내 텍스트 갱신 (현재 선택된 수업의 class_type 기준)
+    function updateD1NewDeadlineInfo_() {
+        const el = document.getElementById('d1new-deadline-info');
+        if (!el) return;
+        const cls = (allClassesData || []).find(c => String(c.class_id) === String(selectedClassId));
+        const t = cls ? String(cls.class_type || '').trim() : '';
+        let rule = '';
+        if (t === 'PT' || t === '프리미엄 PT') {
+            rule = '📌 <span class="font-semibold">PT 최종마감</span>: 수업 종료시각 +48시간';
+        } else if (t === '돈클') {
+            rule = '📌 <span class="font-semibold">돈클 최종마감</span>: 수업 종료시각 +48시간';
+        } else if (t === 'CLASS') {
+            rule = '📌 <span class="font-semibold">CLASS 최종마감</span>: 수업 생성 시 설정한 시각 기준';
+        } else {
+            rule = '📌 최종마감: 수업 유형별 설정 시각 기준';
+        }
+        el.innerHTML = rule + ' <span class="text-gray-400">·</span> 주말·공휴일이면 <span class="font-semibold text-amber-700">다음 평일 오후 2시</span>로 자동 조정';
+    }
+
     // 신규물건 등록 폼 - 종목별 UI 갱신 및 대표 회원 자동 연동
     function applyD1NewItemClassTypeUI_() {
+        updateD1NewDeadlineInfo_();
         const isPTDK = isD1NewClassPTDK_();
         const autoEl   = document.getElementById('d1new-member-auto');
         const linkedEl = document.getElementById('d1new-member-linked');
