@@ -12058,6 +12058,11 @@ ${token}
             filterClassScheduleList();
             return;
         }
+        // 로딩 표시 (수업리스트 tbody)
+        const tbodyLoading_ = document.getElementById('classScheduleListTableBody');
+        if (tbodyLoading_) {
+            tbodyLoading_.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-xs"><span class="inline-block animate-pulse">⏳ 수업 목록 로드 중...</span></td></tr>';
+        }
         google.script.run
             .withSuccessHandler(result => {
                 const opts = result.opts || {};
@@ -12082,7 +12087,10 @@ ${token}
                 updateBidCalClassTypeDropdowns();
                 filterClassScheduleList();
             })
-            .withFailureHandler(err => showStatus('수업 목록 로드 실패: ' + err.message, 'error'))
+            .withFailureHandler(err => {
+                if (tbodyLoading_) tbodyLoading_.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-red-400 text-xs">로드 실패: ' + (err && err.message ? err.message : err) + '</td></tr>';
+                showStatus('수업 목록 로드 실패: ' + err.message, 'error');
+            })
             .getClassScheduleInitData();
     }
 

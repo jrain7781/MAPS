@@ -2453,11 +2453,15 @@ function updateClassD1Date(classD1Id, newDate) {
   const sheet = ensureClassD1Sheet_();
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터 없음' };
-  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  const idx = ids.findIndex(id => String(id) === String(classD1Id));
+  const rawData = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  const idx = rawData.findIndex(r => String(r[0]) === String(classD1Id));
   if (idx < 0) return { success: false, message: '회차를 찾을 수 없습니다.' };
+  const classId = String(rawData[idx][1] || '');
   const dateCol = CLASS_D1_HEADERS.indexOf('class_date') + 1;
   sheet.getRange(idx + 2, dateCol).setValue(newDate);
+  const cache = CacheService.getScriptCache();
+  if (classId) cache.remove('sessions_' + classId);
+  cache.remove('all_class_d1_sessions');
   return { success: true, message: '날짜 수정 완료' };
 }
 
@@ -2469,11 +2473,15 @@ function deleteClassD1(classD1Id) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '회차 데이터가 없습니다.' };
 
-  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  const idx = ids.findIndex(id => String(id) === String(classD1Id));
+  const rawData = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  const idx = rawData.findIndex(r => String(r[0]) === String(classD1Id));
   if (idx < 0) return { success: false, message: '해당 회차를 찾을 수 없습니다.' };
+  const classId = String(rawData[idx][1] || '');
 
   sheet.deleteRow(idx + 2);
+  const cache = CacheService.getScriptCache();
+  if (classId) cache.remove('sessions_' + classId);
+  cache.remove('all_class_d1_sessions');
   return { success: true, message: '회차 삭제 완료' };
 }
 

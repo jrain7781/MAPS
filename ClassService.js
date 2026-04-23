@@ -284,7 +284,9 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
         sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, CLASS_D1_HEADERS.length).setValues(newRows);
     }
 
-    CacheService.getScriptCache().remove('sessions_' + String(classId));
+    const cache_ = CacheService.getScriptCache();
+    cache_.remove('sessions_' + String(classId));
+    cache_.remove('all_class_d1_sessions');
     return { success: true, message: `${newRows.length}개의 회차가 생성되었습니다.` };
 }
 
@@ -435,6 +437,15 @@ function readClassD1WithSummary(classId) {
  */
 function getClassScheduleInitData() {
     const opts = getClassDropdownOptions(); // CacheService 캐시 활용
+    const cache = CacheService.getScriptCache();
+
+    // 서버 캐시 히트 시 시트 읽기 생략 (재방문 가속)
+    const d1Cached = cache.get('all_class_d1_sessions');
+    if (d1Cached) {
+        try {
+            return { opts: opts, d1Sessions: JSON.parse(d1Cached) };
+        } catch (e) {}
+    }
 
     ensureClassD1Sheet();
     const d1Sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_D1_SHEET_NAME_DB);
@@ -455,6 +466,7 @@ function getClassScheduleInitData() {
             d1Sessions.push(sess);
         });
     }
+    try { cache.put('all_class_d1_sessions', JSON.stringify(d1Sessions), 300); } catch (e) {}
     return { opts: opts, d1Sessions: d1Sessions };
 }
 
@@ -635,6 +647,7 @@ function updateClassD1Batch(classD1Ids, updateData) {
     });
     const scriptCache = CacheService.getScriptCache();
     affectedClassIds.forEach(function(cId) { if (cId) scriptCache.remove('sessions_' + cId); });
+    scriptCache.remove('all_class_d1_sessions');
     return { success: true, message: count + '개 회차가 수정되었습니다.' };
 }
 
@@ -687,6 +700,7 @@ function deleteClassD1Batch(classD1Ids) {
     }
     const scriptCache2 = CacheService.getScriptCache();
     affectedClassIds2.forEach(function(cId) { if (cId) scriptCache2.remove('sessions_' + cId); });
+    scriptCache2.remove('all_class_d1_sessions');
     return { success: true, message: classD1Ids.length + '개 회차가 삭제되었습니다.' };
 }
 
