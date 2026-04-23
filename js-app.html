@@ -12111,6 +12111,19 @@ ${token}
                 .withFailureHandler(() => { /* 백그라운드 실패는 조용히 */ })
                 .getAllClassD1Sessions();
         }
+        // ③ 전체 배치 회원 정보 (백그라운드) — 수업리스트 회원명 즉시 표시용 선로드
+        if (Object.keys(_batchMembersCache).length === 0) {
+            google.script.run
+                .withSuccessHandler(allMembersInfo => {
+                    Object.assign(_batchMembersCache, allMembersInfo || {});
+                    // 현재 수업리스트가 렌더된 상태면 회원명 즉시 반영
+                    if (selectedClassId && d1Batches && d1Batches.length > 0) {
+                        renderD1BatchListGrid_();
+                    }
+                })
+                .withFailureHandler(() => {})
+                .getAllBatchMembersInfo();
+        }
     }
 
     function updateClassScheduleDropdowns() {
