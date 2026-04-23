@@ -12,6 +12,10 @@
  * @return {Array} Class Objects
  */
 function getClasses() {
+    const cache = CacheService.getScriptCache();
+    const cached = cache.get('all_classes');
+    if (cached) return JSON.parse(cached);
+
     ensureClassSheet();
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_SHEET_NAME_DB);
     if (!sheet) return [];
@@ -21,7 +25,7 @@ function getClasses() {
     // 헤더: CLASS_HEADERS 참조 (Code.js)
     const data = sheet.getRange(2, 1, lastRow - 1, CLASS_HEADERS.length).getValues();
 
-    return data.map(row => {
+    const result = data.map(row => {
         let cls = {};
         CLASS_HEADERS.forEach((h, i) => {
             let val = (i < row.length) ? row[i] : '';
@@ -34,6 +38,8 @@ function getClasses() {
         });
         return cls;
     });
+    cache.put('all_classes', JSON.stringify(result), 300);
+    return result;
 }
 /**
  * 수업 등록
@@ -68,7 +74,7 @@ function createClass(data) {
     });
 
     sheet.appendRow(row);
-
+    CacheService.getScriptCache().remove('all_classes');
     // 자동 회차 생성 옵션이 있다면 여기서 호출 가능 (지금은 별도 버튼으로 권장)
     return { success: true, message: '수업이 등록되었습니다.', class_id: newId };
 }
@@ -100,6 +106,7 @@ function updateClass(data) {
     });
 
     sheet.getRange(rowNum, 1, 1, newRowVals.length).setValues([newRowVals]);
+    CacheService.getScriptCache().remove('all_classes');
     return { success: true, message: '수업이 수정되었습니다.' };
 }
 
@@ -116,6 +123,7 @@ function deleteClass(classId) {
     if (idx === -1) return { success: false, message: '수업을 찾을 수 없습니다.' };
 
     sheet.deleteRow(idx + 2);
+    CacheService.getScriptCache().remove('all_classes');
     return { success: true, message: '수업이 삭제되었습니다.' };
 }
 
@@ -128,6 +136,11 @@ function deleteClass(classId) {
  * 특정 수업의 회차 목록 조회
  */
 function getClassSessions(classId) {
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'sessions_' + String(classId);
+    const cached = cache.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
     ensureClassD1Sheet();
     const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_D1_SHEET_NAME_DB);
     const lastRow = sheet.getLastRow();
@@ -152,6 +165,7 @@ function getClassSessions(classId) {
         }
     });
 
+    cache.put(cacheKey, JSON.stringify(sessions), 180);
     return sessions;
 }
 
@@ -270,6 +284,7 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
         sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, CLASS_D1_HEADERS.length).setValues(newRows);
     }
 
+    CacheService.getScriptCache().remove('sessions_' + String(classId));
     return { success: true, message: `${newRows.length}개의 회차가 생성되었습니다.` };
 }
 
@@ -514,7 +529,9 @@ function updateClassD1Batch(classD1Ids, updateData) {
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
 
-    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat().map(String);
+    const rawData = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    const ids = rawData.map(function(r) { return String(r[0]); });
+    const classIdByIdx = rawData.map(function(r) { return String(r[1]); });
     const directFields = ['teacher_id', 'class_time_from', 'class_time_to', '1cha_bid', '2cha_bid', 'class_loop', 'class_date'];
     const dateColIdx = CLASS_D1_HEADERS.indexOf('class_date');
     let count = 0;
@@ -558,6 +575,13 @@ function updateClassD1Batch(classD1Ids, updateData) {
         count++;
     });
 
+    const affectedClassIds = new Set();
+    classD1Ids.forEach(function(d1Id) {
+        const idx = ids.indexOf(String(d1Id));
+        if (idx >= 0) affectedClassIds.add(classIdByIdx[idx]);
+    });
+    const scriptCache = CacheService.getScriptCache();
+    affectedClassIds.forEach(function(cId) { if (cId) scriptCache.remove('sessions_' + cId); });
     return { success: true, message: count + '개 회차가 수정되었습니다.' };
 }
 
@@ -601,10 +625,15 @@ function deleteClassD1Batch(classD1Ids) {
     if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
 
     const idSet2 = new Set(classD1Ids.map(String));
-    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    const rawD1Data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    const ids = rawD1Data.map(function(r) { return r[0]; });
+    const affectedClassIds2 = new Set();
+    rawD1Data.forEach(function(r) { if (idSet2.has(String(r[0]))) affectedClassIds2.add(String(r[1])); });
     for (let i = ids.length - 1; i >= 0; i--) {
         if (idSet2.has(String(ids[i]))) sheet.deleteRow(i + 2);
     }
+    const scriptCache2 = CacheService.getScriptCache();
+    affectedClassIds2.forEach(function(cId) { if (cId) scriptCache2.remove('sessions_' + cId); });
     return { success: true, message: classD1Ids.length + '개 회차가 삭제되었습니다.' };
 }
 
