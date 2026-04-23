@@ -12302,26 +12302,35 @@ ${token}
     function loadClassD1Grid(classId) {
         const grid = document.getElementById('classD1Grid');
         if (!grid) return;
-        if (_d1CacheMap[classId]) {
-            _applyD1Data_(_d1CacheMap[classId]);
-            return;
-        }
-        // 회차리스트 / 수업리스트 동시 로딩 표시
-        grid.innerHTML = '<div class="text-gray-400 py-4 text-xs text-center"><span class="inline-block animate-pulse">⏳ 조회 중입니다...</span></div>';
         const batchTbody_ = document.getElementById('classD1BatchListTableBody');
+        const batchKeyHeader_ = document.getElementById('d1BatchKeyHeader');
+        // 종목 전환 시 항상 로딩 표시 (캐시 hit에도 시각적 전환 보장)
+        grid.innerHTML = '<div class="text-gray-400 py-4 text-xs text-center"><span class="inline-block animate-pulse">⏳ 조회 중입니다...</span></div>';
         if (batchTbody_) {
-            batchTbody_.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-gray-400 text-xs"><span class="inline-block animate-pulse">⏳ 조회 중입니다...</span></td></tr>';
+            batchTbody_.innerHTML = '<tr><td colspan="5" class="p-3 text-center text-gray-400 text-xs"><span class="inline-block animate-pulse">⏳ 조회 중입니다...</span></td></tr>';
+        }
+        if (batchKeyHeader_) batchKeyHeader_.classList.add('hidden');
+        // 수업내용(배치) 초기화
+        const batchInfoEl_ = document.getElementById('d1SelectedBatchInfo');
+        if (batchInfoEl_) { batchInfoEl_.textContent = ''; batchInfoEl_.classList.add('hidden'); }
+
+        if (_d1CacheMap[classId]) {
+            // 캐시 hit: 로딩 전환 플래시 후 렌더 (최소 120ms)
+            setTimeout(function() {
+                if (String(selectedClassId) !== String(classId)) return; // 중복 클릭 방지
+                _applyD1Data_(_d1CacheMap[classId]);
+            }, 120);
+            return;
         }
         google.script.run
             .withSuccessHandler(data => {
                 _d1CacheMap[classId] = Array.isArray(data) ? data : [];
                 _applyD1Data_(_d1CacheMap[classId]);
-                // 수업수 갱신 반영 → 종목리스트 재렌더 (셀렉션 유지)
                 filterClassScheduleList();
             })
             .withFailureHandler(err => {
                 grid.innerHTML = '<div class="text-red-400 py-2 text-xs text-center">로드 실패</div>';
-                if (batchTbody_) batchTbody_.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-red-400 text-xs">로드 실패</td></tr>';
+                if (batchTbody_) batchTbody_.innerHTML = '<tr><td colspan="5" class="p-3 text-center text-red-400 text-xs">로드 실패</td></tr>';
             })
             .readClassD1ByClassId(classId);
     }
@@ -12363,11 +12372,15 @@ ${token}
 
     function renderD1BatchListGrid_() {
         const tbody = document.getElementById('classD1BatchListTableBody');
+        const batchKeyHeader = document.getElementById('d1BatchKeyHeader');
         if (!tbody) return;
         if (d1Batches.length === 0) {
+            if (batchKeyHeader) batchKeyHeader.classList.add('hidden');
             tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500 text-xs">수업이 없습니다.</td></tr>';
+            updateD1SelectedBatchInfo_();
             return;
         }
+        if (batchKeyHeader) batchKeyHeader.classList.remove('hidden');
         let html = '';
         for (let i = 0; i < d1Batches.length; i++) {
             const b = d1Batches[i];
@@ -12409,6 +12422,34 @@ ${token}
         }
         tbody.innerHTML = html;
         setTimeout(function() { initTableColResize_(document.querySelector('#d1BatchListGrid table'), 'd1batch_col_widths'); }, 0);
+        updateD1SelectedBatchInfo_();
+    }
+
+    // 회차리스트 헤더의 수업내용(현재 선택된 배치) 업데이트
+    function updateD1SelectedBatchInfo_() {
+        const el = document.getElementById('d1SelectedBatchInfo');
+        if (!el) return;
+        if (!d1Batches || d1Batches.length === 0) {
+            el.textContent = ''; el.classList.add('hidden'); return;
+        }
+        const b = d1Batches[d1BatchIdx];
+        if (!b || !b.items || b.items.length === 0) {
+            el.textContent = ''; el.classList.add('hidden'); return;
+        }
+        const items = b.items;
+        const fmtYYMMDD = function(d) {
+            const s = String(d || '').replace(/-/g, '');
+            return s.length >= 8 ? s.substring(2,4)+'/'+s.substring(4,6)+'/'+s.substring(6,8) : (d || '-');
+        };
+        const firstDate = fmtYYMMDD(items[0].class_date);
+        const lastDate = fmtYYMMDD(items[items.length - 1].class_date);
+        const period = firstDate === lastDate ? firstDate : `${firstDate}~${lastDate}`;
+        const teacherId = items[0].teacher_id || '';
+        const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
+        const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '');
+        const parts = [`${items.length}회`, period, teacherName].filter(Boolean);
+        el.textContent = '· ' + parts.join(' · ');
+        el.classList.remove('hidden');
     }
 
     function switchD1DetailTab(tabName) {
