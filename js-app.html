@@ -13927,7 +13927,12 @@ ${token}
     }
     function setDropdownTime_(prefix, timeStr) {
         if (!timeStr) return;
-        const parts = String(timeStr).split(':');
+        let s = String(timeStr);
+        if (s.includes('T')) {
+            const tp = s.split('T')[1] || '';
+            s = tp.split('.')[0].split('Z')[0];
+        }
+        const parts = s.split(':');
         const hour24 = parseInt(parts[0]) || 0;
         const min = parts[1] ? parts[1].substring(0, 2) : '00';
         const minNum = parseInt(min) || 0;
@@ -14145,7 +14150,12 @@ ${token}
     }
     function _fmtD1Time(v) {
         if (!v) return '-';
-        const parts = String(v).split(':');
+        let s = String(v);
+        if (s.includes('T')) {
+            const tp = s.split('T')[1] || '';
+            s = tp.split('.')[0].split('Z')[0];
+        }
+        const parts = s.split(':');
         const h = parseInt(parts[0]);
         const m = parts[1] ? parseInt(parts[1]) : 0;
         return isNaN(h) ? '-' : (m > 0 ? h+'시'+String(m).padStart(2,'0')+'분' : h+'시');
@@ -14364,6 +14374,10 @@ ${token}
         if (bid1El) bid1El.value = d['1cha_bid'] || '';
         const bid2El = document.getElementById('editD1-bid2Count');
         if (bid2El) bid2El.value = d['2cha_bid'] || '';
+        // PT/돈클: TO 세팅 직후 최종마감 자동 +48H 동기화 (저장된 값이 없는 경우 포함)
+        if (_currentEditD1Type === 'PT' || _currentEditD1Type === '돈클') {
+            syncEditD1BidFinalFromTimeTo_();
+        }
         // 탭 상태 유지
         switchEditD1Tab_(editD1ActiveTab_);
     }

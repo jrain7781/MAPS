@@ -2537,21 +2537,25 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
   var chuchenDateCol  = ITEM_HEADERS.indexOf('chuchen_date') + 1;
   var bd2Col          = ITEM_HEADERS.indexOf('bid_datetime_2') + 1; // T열 = 20
 
-  // m_name 결정:
+  // m_name 결정 + PT/돈클 대표 회원 ID 준비:
   //   1) mNameOverride (명시적 전달 — 신규물건 폼)
-  //   2) PT/돈클이면 → 해당 배치 대표 회원명 자동 조회 (일괄 등록 포함)
+  //   2) PT/돈클이면 → 해당 배치 대표 회원 자동 조회 (일괄 등록 포함, member_id도 함께 주입)
   //   3) 그 외(CLASS) → 자동 생성 (종목_yymmdd_N회차)
   var dateStr = String(classDate || '');
   if (dateStr.length === 8) dateStr = dateStr.slice(2);
   var autoMName = (className || '') + '_' + dateStr + '_' + (classLoop || '') + '회차';
   var hasOverride = !!(mNameOverride && String(mNameOverride).trim());
   var mNameVal;
+  var repMemberIdForBulk = '';
+  var repInfo = _getBatchRepMemberInfo_(classD1Id);
   if (hasOverride) {
     mNameVal = String(mNameOverride).trim();
+  } else if (repInfo && repInfo.name) {
+    mNameVal = repInfo.name;
   } else {
-    var repName = _getBatchRepMemberName_(classD1Id);
-    mNameVal = repName ? repName : autoMName;
+    mNameVal = autoMName;
   }
+  if (repInfo && repInfo.memberId) repMemberIdForBulk = repInfo.memberId;
 
   // 회차 정보에서 bid_datetime_2 조회
   var d1Sheet = ensureClassD1Sheet_();
@@ -2597,8 +2601,14 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
     sheet.getRange(row, chuchenStateCol).setValue('신규');
     sheet.getRange(row, chuchenDateCol).setValue(today);
     sheet.getRange(row, bd2Col).setValue(bidDatetime2Val);
-    var mid = String(scanData[idx][midColRel] || '').trim();
-    if (mid) affectedMemberIds[mid] = true;
+    var existingMid = String(scanData[idx][midColRel] || '').trim();
+    // PT/돈클 일괄등록: items.member_id가 비어있으면 대표회원 ID로 채움 (텔레그램 심볼 등 회원연계용)
+    if (!existingMid && repMemberIdForBulk) {
+      sheet.getRange(row, memberIdCol).setValue(repMemberIdForBulk);
+      affectedMemberIds[repMemberIdForBulk] = true;
+    } else if (existingMid) {
+      affectedMemberIds[existingMid] = true;
+    }
     updated++;
   });
 
