@@ -520,7 +520,7 @@ function getAllBatchMembersInfo() {
  */
 function getBatchMembersForClass(classId) {
     const cache = CacheService.getScriptCache();
-    const cacheKey = 'cbm_' + String(classId);
+    const cacheKey = 'cbm2_' + String(classId);
     const cached = cache.get(cacheKey);
     if (cached) { try { return JSON.parse(cached); } catch (e) {} }
 
@@ -546,10 +546,13 @@ function getBatchMembersForClass(classId) {
         if (!bk) return;
         const mid = String(r[memberIdIdx] || '');
         const name = nameMap[mid] || '';
-        if (!result[bk]) result[bk] = { firstName: name, count: 1 };
+        if (!result[bk]) result[bk] = { firstName: name, firstMemberId: mid, count: 1 };
         else {
             result[bk].count++;
-            if (!result[bk].firstName && name) result[bk].firstName = name;
+            if (!result[bk].firstName && name) {
+                result[bk].firstName = name;
+                result[bk].firstMemberId = mid;
+            }
         }
     });
 

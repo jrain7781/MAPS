@@ -12671,10 +12671,10 @@ ${token}
             const tooltip = tooltipHtml
                 ? `<div class="absolute z-50 top-full left-0 mt-1 w-48 bg-gray-800 text-white text-[10px] rounded-lg p-2 shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" style="white-space:pre-line;z-index:9999">${tooltipHtml}</div>`
                 : '';
-            return `<div class="relative flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 ${cls} transition-all group" style="width:120px" onclick="${clickHandler}">
+            return `<div class="relative flex-none rounded-xl px-2.5 py-2 cursor-pointer border-2 ${cls} transition-all group" style="width:180px" onclick="${clickHandler}">
                 ${badgeHtml}
-                <div class="text-center text-sm font-bold ${titleCls} mb-1">${titleHtml}</div>
-                <ul class="text-xs ${textCls} space-y-0.5">${bodyHtml}</ul>
+                <div class="text-center text-sm font-bold ${titleCls} mb-1 whitespace-nowrap">${titleHtml}</div>
+                <ul class="text-xs ${textCls} space-y-0.5 whitespace-nowrap">${bodyHtml}</ul>
                 ${tooltip}
             </div>`;
         }
@@ -12755,7 +12755,7 @@ ${token}
                 const teacherMemberCard = d.teacher_id ? (allMembersNewData || []).find(m => String(m.member_id) === String(d.teacher_id)) : null;
                 const teacherNameCard = teacherMemberCard ? teacherMemberCard.member_name : (d.teacher_id ? String(d.teacher_id) : '-');
 
-                // 2차마감시간 포맷 (MM/DD HH시)
+                // 2차마감시간 포맷 (MM/DD(요일) HH시)
                 function fmtBidShort_(v) {
                     if (!v) return '-';
                     const dt = new Date(String(v).replace('T', ' '));
@@ -12763,7 +12763,8 @@ ${token}
                     const mm = String(dt.getMonth() + 1).padStart(2, '0');
                     const dd = String(dt.getDate()).padStart(2, '0');
                     const hh = String(dt.getHours()).padStart(2, '0');
-                    return `${mm}/${dd} ${hh}시`;
+                    const dow = DAY_NAMES_[dt.getDay()];
+                    return `${mm}/${dd}(${dow}) ${hh}시`;
                 }
 
                 // 오늘 여부 → 날짜 붉게
@@ -12773,9 +12774,9 @@ ${token}
                 const titleHtml_ = `${d.class_loop}회${completedMark} ${dateSpan}`;
 
                 const body =
-                    `<li>수업시간: ${timeStr}</li>` +
-                    `<li>추천만료: ${fmtBidShort_(d.bid_datetime_2)}</li>` +
-                    `<li>${itemCount}건 / ${escapeHtml(teacherNameCard)}</li>`;
+                    `<li>• 수업시간: ${timeStr}</li>` +
+                    `<li>• 추천만료: ${fmtBidShort_(d.bid_datetime_2)}</li>` +
+                    `<li>• ${itemCount}건 / ${escapeHtml(teacherNameCard)}</li>`;
 
                 function fmtBidDt_(v) {
                     if (!v) return '-';
@@ -15998,14 +15999,22 @@ ${token}
         const bmcByClass = _batchMembersCache[String(selectedClassId)] || {};
         const bmc = bmcByClass[batchKey];
         if (!bmc || !bmc.firstName) return null;
-        // allMembersNewData에서 name+class_id 일치로 member_id 조회
+        // 서버가 내려준 firstMemberId 우선 사용 (member_class_details 기준)
+        if (bmc.firstMemberId) {
+            return {
+                memberId: String(bmc.firstMemberId),
+                memberName: String(bmc.firstName).trim()
+            };
+        }
+        // Fallback: allMembersNewData에서 이름(+class_id)로 조회 (구버전 캐시 대비)
+        const nameTrim = String(bmc.firstName).trim();
         const found = (allMembersNewData || []).find(m =>
-            String(m.class_id) === String(selectedClassId) &&
-            String(m.member_name || '').trim() === String(bmc.firstName).trim()
+            String(m.member_name || '').trim() === nameTrim &&
+            (!m.class_id || String(m.class_id) === String(selectedClassId))
         );
         return found
-            ? { memberId: String(found.member_id), memberName: String(found.member_name).trim() }
-            : { memberId: '', memberName: String(bmc.firstName).trim() };
+            ? { memberId: String(found.member_id), memberName: nameTrim }
+            : { memberId: '', memberName: nameTrim };
     }
 
     // 신규물건 등록 폼 - 종목별 UI 갱신 및 대표 회원 자동 연동
