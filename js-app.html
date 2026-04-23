@@ -11180,6 +11180,7 @@ MJ 이정우 팀장
     let _d1CacheMap = {};             // classId → allClassD1Data 클라이언트 캐시
     let _summaryCache = {};           // batchKey → summaryMemberData_ 클라이언트 캐시
     let _currentD1DetailTab = 'member'; // 현재 선택된 상세 탭(회원/물건) — 수업 전환 시 유지
+    let _currentGenD1Type = 'CLASS';    // 수업생성 모달의 현재 종목 구분 탭 (CLASS/PT/돈클)
 
     // --- 회원관리 (신규) 함수들 ---
 
@@ -13806,6 +13807,75 @@ ${token}
     }
 
     // 수업 생성 모달 (mode: 'create'=수업생성, 'add'=회차 추가)
+    // ── 수업생성 모달: 종목구분 탭(CLASS/PT/돈클) ─────────────────────────────
+    function selectGenD1Type(type) {
+        _currentGenD1Type = type;
+        ['CLASS', 'PT', '돈클'].forEach(t => {
+            const btn = document.getElementById('genD1-tab-' + t);
+            if (!btn) return;
+            if (t === type) {
+                btn.classList.add('bg-indigo-600', 'text-white');
+                btn.classList.remove('bg-white', 'text-gray-600');
+            } else {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-white', 'text-gray-600');
+            }
+        });
+        applyGenD1TypeUI_();
+    }
+
+    function applyGenD1TypeUI_() {
+        const isPTDK = _currentGenD1Type === 'PT' || _currentGenD1Type === '돈클';
+        // PT/돈클: 등록시작 + 1차마감 숨김, 최종마감만 표시
+        ['genD1-bidStarttime-row', 'genD1-bidDatetime1-row',
+         'prev-genD1-bidStarttime-row', 'prev-genD1-bidDatetime1-row'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('hidden', isPTDK);
+        });
+        // 루프단위 '없음(날짜 미정)' 옵션 노출/숨김
+        document.querySelectorAll('.genD1-opt-ptdk').forEach(opt => {
+            opt.hidden = !isPTDK;
+            opt.style.display = isPTDK ? '' : 'none';
+            // 숨길 때 현재 선택값이 0이면 초기화
+            if (!isPTDK && opt.parentElement && opt.parentElement.value === '0') {
+                opt.parentElement.value = '1';
+            }
+        });
+        // PT/돈클 → TO 변경 시 최종마감 +48H 자동 반영 (즉시 1회)
+        if (isPTDK) {
+            syncBidFinalFromTimeTo_('genD1');
+            syncBidFinalFromTimeTo_('prev-genD1');
+        }
+    }
+
+    // TO(수업 종료시간) → 최종마감 +48H 동기화 (PT/돈클 전용)
+    function syncBidFinalFromTimeTo_(prefix) {
+        if (_currentGenD1Type !== 'PT' && _currentGenD1Type !== '돈클') return;
+        const ampm = document.getElementById(prefix + '-timeTo-ampm')?.value || '';
+        const h = document.getElementById(prefix + '-timeTo-h')?.value || '';
+        if (!ampm || !h) return;
+        const bid2Prefix = prefix + '-bidDatetime2';
+        const dayEl = document.getElementById(bid2Prefix + '-day');
+        const ampmEl = document.getElementById(bid2Prefix + '-ampm');
+        const hEl = document.getElementById(bid2Prefix + '-h');
+        if (dayEl) dayEl.value = '2';       // +2일 (= +48H)
+        if (ampmEl) ampmEl.value = ampm;
+        if (hEl) hEl.value = h;
+    }
+
+    // TO 드롭다운 change 리스너 1회 등록 (PT/돈클일 때만 동작)
+    function initGenD1TypeListeners_() {
+        ['genD1', 'prev-genD1'].forEach(prefix => {
+            ['-timeTo-ampm', '-timeTo-h', '-timeTo-m'].forEach(suffix => {
+                const el = document.getElementById(prefix + suffix);
+                if (el && !el.dataset.syncBid) {
+                    el.dataset.syncBid = '1';
+                    el.addEventListener('change', function() { syncBidFinalFromTimeTo_(prefix); });
+                }
+            });
+        });
+    }
+
     function showGenerateD1Modal(mode) {
         if (!selectedClassId) { showStatus('먼저 수업을 선택하세요.', 'error'); return; }
         mode = mode || 'create';
@@ -13885,6 +13955,17 @@ ${token}
         if (teacherEl) teacherEl.value = '';
         const prevTeacherEl = document.getElementById('prev-genD1-teacherId');
         if (prevTeacherEl) prevTeacherEl.value = '';
+
+        // 종목 구분 탭: 선택된 수업의 class_type에 따라 기본 탭 설정
+        const cls_ = (allClassesData || []).find(c => String(c.class_id) === String(selectedClassId));
+        let defaultType_ = 'CLASS';
+        if (cls_) {
+            const t_ = String(cls_.class_type || '');
+            if (t_ === 'PT' || t_ === '프리미엄 PT') defaultType_ = 'PT';
+            else if (t_ === '돈클') defaultType_ = '돈클';
+        }
+        initGenD1TypeListeners_();
+        selectGenD1Type(defaultType_);
     }
 
     // 강사(gubun='강사') 드롭다운 채우기 헬퍼
@@ -14935,16 +15016,21 @@ ${token}
     }
 
     function handleGenerateD1() {
-        const startDate = document.getElementById('genD1-startDate')?.value?.replace(/-/g, '') || '';
+        let startDate = document.getElementById('genD1-startDate')?.value?.replace(/-/g, '') || '';
         const loopUnit = document.getElementById('genD1-loopUnit')?.value || '1';
         const startLoop = parseInt(document.getElementById('genD1-startLoop')?.value) || 1;
         const endLoop = parseInt(document.getElementById('genD1-endLoop')?.value) || 10;
         const addCount = parseInt(document.getElementById('genD1-addCount')?.value) || 1;
         const timeFrom = getDropdownTime_('genD1-timeFrom');
         const timeTo = getDropdownTime_('genD1-timeTo');
-        const bidStarttimeDay = document.getElementById('genD1-bidStarttime-day')?.value ?? '';
+        const isPTDK_ = _currentGenD1Type === 'PT' || _currentGenD1Type === '돈클';
+        const isNoDateMode_ = isPTDK_ && loopUnit === '0';
+        // PT/돈클 → 최종마감 자동 +48H (TO 기준) - 최종 제출 직전 한 번 더 동기화
+        if (isPTDK_) syncBidFinalFromTimeTo_('genD1');
+        // PT/돈클은 등록시작/1차마감 무시
+        const bidStarttimeDay = isPTDK_ ? '' : (document.getElementById('genD1-bidStarttime-day')?.value ?? '');
         const bidStarttimeTime = bidStarttimeDay !== '' ? getDropdownTime_('genD1-bidStarttime') : '00:00';
-        const bidDatetime1Day = document.getElementById('genD1-bidDatetime1-day')?.value ?? '';
+        const bidDatetime1Day = isPTDK_ ? '' : (document.getElementById('genD1-bidDatetime1-day')?.value ?? '');
         const bidDatetime1Time = bidDatetime1Day !== '' ? getDropdownTime_('genD1-bidDatetime1') : '00:00';
         const bidDatetime2Day = document.getElementById('genD1-bidDatetime2-day')?.value ?? '';
         const bidDatetime2Time = bidDatetime2Day !== '' ? getDropdownTime_('genD1-bidDatetime2') : '00:00';
@@ -14958,7 +15044,13 @@ ${token}
         } else {
             if (!document.getElementById('genD1-addCount')?.value) { showStatus('추가 생성 회차 수를 입력하세요.', 'error'); document.getElementById('genD1-addCount').focus(); return; }
         }
+        // PT/돈클 + 루프단위 '없음': 시작일 비워도 OK, 배치 ID용으로 오늘 날짜 자동 설정
+        if (!startDate && isNoDateMode_) {
+            const t_ = new Date();
+            startDate = String(t_.getFullYear()) + String(t_.getMonth()+1).padStart(2,'0') + String(t_.getDate()).padStart(2,'0');
+        }
         if (!startDate) { showStatus('시작일을 입력하세요.', 'error'); document.getElementById('genD1-startDate').focus(); return; }
+        if (!loopUnit) { showStatus('루프 단위를 선택하세요.', 'error'); document.getElementById('genD1-loopUnit').focus(); return; }
         const teacherId = document.getElementById('genD1-teacherId')?.value || '';
         if (!teacherId) { showStatus('강사를 선택하세요.', 'error'); document.getElementById('genD1-teacherId').focus(); return; }
         if (!getDropdownTime_('genD1-timeFrom') || getDropdownTime_('genD1-timeFrom') === '00:00') { showStatus('수업 시작 시간을 선택하세요.', 'error'); return; }

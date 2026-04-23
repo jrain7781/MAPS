@@ -179,9 +179,11 @@ function getClassSessions(classId) {
  * - 입력: class_id, 시작일(startDate), 반복 단위(loopUnit), 반복 횟수(loopCount)
  */
 function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts) {
-    loopUnit = loopUnit || 1;
     loopCount = loopCount || 8;
     opts = opts || {};
+    // PT/돈클 루프단위 '없음' 모드: 수업날짜 없이 회차만 생성
+    const isNoDateMode = (String(loopUnit) === '0');
+    if (!loopUnit && !isNoDateMode) loopUnit = 1;
     // 1. 수업 정보 가져오기
     const classes = getClasses();
     const cls = classes.find(c => String(c.class_id) === String(classId));
@@ -197,7 +199,7 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
 
     if (isNaN(startDateObj.getTime())) return { success: false, message: '올바른 시작 날짜가 아닙니다.' };
 
-    const unit = parseInt(loopUnit, 10) || 1;
+    const unit = isNoDateMode ? 1 : (parseInt(loopUnit, 10) || 1);
     const total = parseInt(loopCount, 10) || parseInt(cls.class_loop, 10) || 8;
 
     ensureClassD1Sheet();
@@ -240,10 +242,10 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
     }
 
     for (var i = 0; i < total; i++) {
-        // 날짜 계산 (unit 주 단위)
+        // 날짜 계산 (unit 주 단위) — 날짜 미정 모드는 빈 문자열
         var d = new Date(startDateObj);
         d.setDate(d.getDate() + (i * 7 * unit));
-        var dStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        var dStr = isNoDateMode ? '' : Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
         var sessId = sessIdBase + '_' + (startLoopNo + i);
 
@@ -262,14 +264,14 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
         sessRow['completed'] = 'N';
         sessRow['reg_date'] = regDate;
 
-        // 입찰시간 (opts에 있으면 적용)
-        if (opts.bidStarttimeDay !== '' && opts.bidStarttimeDay !== undefined) {
+        // 입찰시간 (opts에 있으면 적용) — 날짜 미정 모드는 계산 불가
+        if (!isNoDateMode && opts.bidStarttimeDay !== '' && opts.bidStarttimeDay !== undefined) {
             sessRow['bid_starttime'] = calcBidDatetime(dStr, opts.bidStarttimeDay, opts.bidStarttimeTime);
         }
-        if (opts.bidDatetime1Day !== '' && opts.bidDatetime1Day !== undefined) {
+        if (!isNoDateMode && opts.bidDatetime1Day !== '' && opts.bidDatetime1Day !== undefined) {
             sessRow['bid_datetime_1'] = calcBidDatetime(dStr, opts.bidDatetime1Day, opts.bidDatetime1Time);
         }
-        if (opts.bidDatetime2Day !== '' && opts.bidDatetime2Day !== undefined) {
+        if (!isNoDateMode && opts.bidDatetime2Day !== '' && opts.bidDatetime2Day !== undefined) {
             sessRow['bid_datetime_2'] = calcBidDatetime(dStr, opts.bidDatetime2Day, opts.bidDatetime2Time);
         }
         if (opts.bid1Count) sessRow['1cha_bid'] = opts.bid1Count;

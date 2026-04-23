@@ -2673,8 +2673,19 @@
             <div id="generateD1Modal" class="modal content-hidden" onclick="closeGenerateD1Modal(event)">
                 <div class="modal-content" onclick="event.stopPropagation()"
                     style="max-width:1200px;max-height:92vh;overflow-y:auto">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 id="generateD1ModalTitle" class="text-base font-bold text-gray-800">수업 생성</h3>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-3">
+                            <h3 id="generateD1ModalTitle" class="text-base font-bold text-gray-800">수업 생성</h3>
+                            <!-- 종목 구분 탭 -->
+                            <div class="flex" id="genD1TypeTabs">
+                                <button type="button" onclick="selectGenD1Type('CLASS')" id="genD1-tab-CLASS"
+                                    class="px-4 py-1 text-xs font-semibold rounded-l-md border border-gray-300 bg-indigo-600 text-white">CLASS</button>
+                                <button type="button" onclick="selectGenD1Type('PT')" id="genD1-tab-PT"
+                                    class="px-4 py-1 text-xs font-semibold border-t border-b border-gray-300 bg-white text-gray-600 hover:bg-gray-50">PT</button>
+                                <button type="button" onclick="selectGenD1Type('돈클')" id="genD1-tab-돈클"
+                                    class="px-4 py-1 text-xs font-semibold rounded-r-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50">돈클</button>
+                            </div>
+                        </div>
                         <button type="button" onclick="closeGenerateD1Modal()"
                             class="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none px-1">&times;</button>
                     </div>
@@ -2732,6 +2743,7 @@
                                         <select id="prev-genD1-loopUnit"
                                             class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
                                             <option value="">선택</option>
+                                            <option value="0" class="genD1-opt-ptdk">없음(날짜 미정)</option>
                                             <option value="1">매주(1주)</option>
                                             <option value="2">격주(2주)</option>
                                             <option value="3">3주</option>
@@ -2784,7 +2796,7 @@
                                 <div class="border-t border-indigo-200 pt-2">
                                     <label class="block text-xs font-medium text-gray-600 mb-1">입찰 시간 설정 <span class="text-gray-400 font-normal">(수업일 기준)</span> <span class="text-red-400 font-normal text-[10px]">* 공휴일·주말 제외 영업일 기준</span></label>
                                     <!-- 등록시작 -->
-                                    <div class="flex items-center gap-1 mb-1.5">
+                                    <div id="prev-genD1-bidStarttime-row" class="flex items-center gap-1 mb-1.5">
                                         <span class="text-xs text-gray-500 w-14 flex-none">등록시작</span>
                                         <select id="prev-genD1-bidStarttime-day" class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
                                             <option value="">미설정</option>
@@ -2807,7 +2819,7 @@
                                             class="w-12 px-1 py-1 border border-gray-300 rounded-lg text-xs">
                                     </div>
                                     <!-- 1차마감 -->
-                                    <div class="flex items-center gap-1 mb-1.5">
+                                    <div id="prev-genD1-bidDatetime1-row" class="flex items-center gap-1 mb-1.5">
                                         <span class="text-xs text-gray-500 w-14 flex-none">1차마감</span>
                                         <select id="prev-genD1-bidDatetime1-day" class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
                                             <option value="">미설정</option>
@@ -2829,9 +2841,9 @@
                                             oninput="const r2=document.getElementById('genD1-bid2Count');if(r2)r2.value=this.value"
                                             class="w-12 px-1 py-1 border border-gray-300 rounded-lg text-xs">
                                     </div>
-                                    <!-- 2차마감 -->
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-xs text-gray-500 w-14 flex-none">2차마감</span>
+                                    <!-- 최종마감 -->
+                                    <div id="prev-genD1-bidDatetime2-row" class="flex items-center gap-1">
+                                        <span class="text-xs text-gray-500 w-14 flex-none">최종마감</span>
                                         <select id="prev-genD1-bidDatetime2-day" class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
                                             <option value="">미설정</option>
                                             <option value="0">당일</option><option value="1">+1일</option><option value="2">+2일</option>
@@ -2917,6 +2929,7 @@
                                     <select id="genD1-loopUnit"
                                         class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white">
                                         <option value="">선택</option>
+                                        <option value="0" class="genD1-opt-ptdk">없음(날짜 미정)</option>
                                         <option value="1">매주(1주)</option>
                                         <option value="2">격주(2주)</option>
                                         <option value="3">3주</option>
@@ -3006,7 +3019,7 @@
                             <!-- 입찰 시간 설정 -->
                             <div class="border-t border-indigo-200 pt-2">
                                 <label class="block text-xs font-medium text-gray-600 mb-1">입찰 시간 설정 <span class="text-gray-400 font-normal">(수업일 기준)</span> <span class="text-red-400 font-normal text-[10px]">* 공휴일·주말 제외 영업일 기준</span></label>
-                                <div class="flex items-center gap-1 mb-1.5">
+                                <div id="genD1-bidStarttime-row" class="flex items-center gap-1 mb-1.5">
                                     <span class="text-xs text-gray-500 w-14 flex-none">등록시작</span>
                                     <select id="genD1-bidStarttime-day"
                                         class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
@@ -3046,7 +3059,7 @@
                                     <input type="number" id="genD1-bid1Count" min="1" placeholder="-"
                                         class="w-12 px-1 py-1 border border-gray-300 rounded-lg text-xs">
                                 </div>
-                                <div class="flex items-center gap-1 mb-1.5">
+                                <div id="genD1-bidDatetime1-row" class="flex items-center gap-1 mb-1.5">
                                     <span class="text-xs text-gray-500 w-14 flex-none">1차마감</span>
                                     <select id="genD1-bidDatetime1-day"
                                         class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
@@ -3086,8 +3099,8 @@
                                     <input type="number" id="genD1-bid2Count" min="1" placeholder="-"
                                         class="w-12 px-1 py-1 border border-gray-300 rounded-lg text-xs">
                                 </div>
-                                <div class="flex items-center gap-1">
-                                    <span class="text-xs text-gray-500 w-14 flex-none">2차마감</span>
+                                <div id="genD1-bidDatetime2-row" class="flex items-center gap-1">
+                                    <span class="text-xs text-gray-500 w-14 flex-none">최종마감</span>
                                     <select id="genD1-bidDatetime2-day"
                                         class="w-16 px-1 py-1 border border-gray-300 rounded-lg text-xs bg-white flex-none">
                                         <option value="">미설정</option>
