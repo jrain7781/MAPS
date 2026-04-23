@@ -12166,6 +12166,11 @@ ${token}
         summaryMemberData_ = [];
         d1Batches = [];
         d1BatchIdx = 0;
+        // 물건 관련 state 초기화
+        d1ItemsData = [];
+        d1PendingItems = [];
+        if (typeof d1ItemsSelectedIds_ !== 'undefined' && d1ItemsSelectedIds_ && d1ItemsSelectedIds_.clear) d1ItemsSelectedIds_.clear();
+        d1ItemsFilteredData_ = null;
         buildD1Batches_();
         filterClassScheduleList();
         renderClassD1Grid();
@@ -12179,6 +12184,9 @@ ${token}
         if (batchTbody_) batchTbody_.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">수업을 선택하세요.</td></tr>';
         const batchKeyHeader_ = document.getElementById('d1BatchKeyHeader');
         if (batchKeyHeader_) batchKeyHeader_.classList.add('hidden');
+        // 물건 리스트 DOM 클리어
+        const itemListEl_ = document.getElementById('d1-item-list');
+        if (itemListEl_) itemListEl_.innerHTML = '<div class="text-gray-400 py-4 text-xs text-center">수업과 회차를 선택하세요.</div>';
     }
 
     function sortClassScheduleList(key) {
@@ -12380,6 +12388,13 @@ ${token}
         d1BatchIdx = 0;
         summaryMemberData_ = [];
         selectedClassD1Id = null;
+        // 물건 관련 state 초기화
+        d1ItemsData = [];
+        d1PendingItems = [];
+        if (typeof d1ItemsSelectedIds_ !== 'undefined' && d1ItemsSelectedIds_ && d1ItemsSelectedIds_.clear) d1ItemsSelectedIds_.clear();
+        d1ItemsFilteredData_ = null;
+        const itemListEl2_ = document.getElementById('d1-item-list');
+        if (itemListEl2_) itemListEl2_.innerHTML = '<div class="text-gray-400 py-4 text-xs text-center">⏳ 조회 중입니다...</div>';
         // 종목 전환 시 항상 로딩 표시 (캐시 hit에도 시각적 전환 보장)
         grid.innerHTML = '<div class="text-gray-400 py-4 text-xs text-center"><span class="inline-block animate-pulse">⏳ 조회 중입니다...</span></div>';
         if (batchTbody_) {
@@ -12584,6 +12599,10 @@ ${token}
                         }
                     });
                     if (nearestId) { selectClassD1(nearestId); return; }
+                    // 도래 회차 없음(날짜 미정/전부 과거) → 첫 회차 fallback 선택
+                    if (batch.items[0] && batch.items[0].class_d1_id) {
+                        selectClassD1(batch.items[0].class_d1_id); return;
+                    }
                 }
             }
             loadD1Items(selectedClassD1Id);
