@@ -430,6 +430,35 @@ function readClassD1WithSummary(classId) {
 }
 
 /**
+ * 수업관리 초기화: 수업 목록 + 전체 회차 데이터를 1회 GAS 호출로 반환
+ * → 클라이언트가 _d1CacheMap 선제 채움 → 종목 클릭 시 즉시 표시
+ */
+function getClassScheduleInitData() {
+    const opts = getClassDropdownOptions(); // CacheService 캐시 활용
+
+    ensureClassD1Sheet();
+    const d1Sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_D1_SHEET_NAME_DB);
+    const lastRow = d1Sheet ? d1Sheet.getLastRow() : 0;
+    const d1Sessions = [];
+    if (d1Sheet && lastRow >= 2) {
+        const data = d1Sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+        data.forEach(function(row) {
+            var sess = {};
+            CLASS_D1_HEADERS.forEach(function(h, i) {
+                var val = (i < row.length) ? row[i] : '';
+                if ((h.includes('date') || h === 'reg_date') && val instanceof Date) {
+                    sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                } else {
+                    sess[h] = val;
+                }
+            });
+            d1Sessions.push(sess);
+        });
+    }
+    return { opts: opts, d1Sessions: d1Sessions };
+}
+
+/**
  * 프론트엔드용 래퍼: 회차 생성 + 회원 등록
  * @param {string} classId
  * @param {string} startDateStr (YYYYMMDD)
