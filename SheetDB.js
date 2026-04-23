@@ -2477,6 +2477,15 @@ function createItemAndRegisterToD1(classD1Id, itemData, className, classDate, cl
   if (!classD1Id) return { success: false, message: '회차 ID 없음' };
   var inDate = String(itemData.inDate || '').trim();
   var mNameOverride = String(itemData.mName || '').trim(); // PT/돈클: 실제 회원명
+  var memberIdIn = String(itemData.memberId || '').trim();
+  // PT/돈클: 클라이언트가 memberId 못 보낸 경우 서버에서 배치 대표회원으로 자동 해소
+  if (!memberIdIn) {
+    var repInfo = _getBatchRepMemberInfo_(classD1Id);
+    if (repInfo) {
+      if (!mNameOverride && repInfo.name) mNameOverride = repInfo.name;
+      if (repInfo.memberId) memberIdIn = repInfo.memberId;
+    }
+  }
   var result = createData(
     inDate,
     String(itemData.sakunNo || '').trim(),
@@ -2485,7 +2494,7 @@ function createItemAndRegisterToD1(classD1Id, itemData, className, classDate, cl
     String(itemData.mNameId || '대표님').trim(),
     mNameOverride,
     parseInt(String(itemData.bidPrice || '0').replace(/[^0-9]/g, '')) || '',
-    String(itemData.memberId || '').trim(),
+    memberIdIn,
     '',    // bidState
     '',    // imageId
     '',    // note
@@ -3127,32 +3136,31 @@ function buildInitialAttendance_(mData, totalSessions, sessionDates) {
 }
 
 /**
- * classD1Id의 종목이 PT/돈클이면 해당 배치의 대표 회원명을 반환, 아니면 ''
- * — addItemsToClassD1의 PT/돈클 m_name 자동 연동용
+ * classD1Id의 종목이 PT/돈클이면 해당 배치의 대표 회원 {name, memberId} 반환, 아니면 null
  */
-function _getBatchRepMemberName_(classD1Id) {
+function _getBatchRepMemberInfo_(classD1Id) {
   try {
     var batchKey = extractD1BatchKey_(classD1Id);
     var firstU = batchKey.indexOf('_');
     var classId = firstU > 0 ? batchKey.substring(0, firstU) : batchKey;
-    if (!classId) return '';
+    if (!classId) return null;
     // 종목 타입 확인
     var classSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_SHEET_NAME_DB);
-    if (!classSheet) return '';
+    if (!classSheet) return null;
     var cLast = classSheet.getLastRow();
-    if (cLast < 2) return '';
+    if (cLast < 2) return null;
     var cidIdx   = CLASS_HEADERS.indexOf('class_id');
     var ctypeIdx = CLASS_HEADERS.indexOf('class_type');
     var cData = classSheet.getRange(2, 1, cLast - 1, CLASS_HEADERS.length).getValues();
     var cRow = cData.find(function(r) { return String(r[cidIdx]) === String(classId); });
-    if (!cRow) return '';
+    if (!cRow) return null;
     var ctype = String(cRow[ctypeIdx] || '').trim();
-    if (ctype !== 'PT' && ctype !== '프리미엄 PT' && ctype !== '돈클') return '';
+    if (ctype !== 'PT' && ctype !== '프리미엄 PT' && ctype !== '돈클') return null;
     // MCD에서 배치 첫 회원 ID 조회
     var mcdSheet = ensureMemberClassDetailsSheet_();
-    if (!mcdSheet) return '';
+    if (!mcdSheet) return null;
     var mLast = mcdSheet.getLastRow();
-    if (mLast < 2) return '';
+    if (mLast < 2) return null;
     var d1IdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
     var midIdx  = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
     var mData = mcdSheet.getRange(2, 1, mLast - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
@@ -3163,13 +3171,22 @@ function _getBatchRepMemberName_(classD1Id) {
         if (memberIdStr) break;
       }
     }
-    if (!memberIdStr) return '';
+    if (!memberIdStr) return null;
     var members = readAllMembersNew();
     var found = members.find(function(m) { return String(m.member_id) === memberIdStr; });
-    return found ? String(found.member_name || '').trim() : '';
+    var name = found ? String(found.member_name || '').trim() : '';
+    return { memberId: memberIdStr, name: name };
   } catch (e) {
-    return '';
+    return null;
   }
+}
+
+/**
+ * 이름만 필요할 때 — addItemsToClassD1에서 사용
+ */
+function _getBatchRepMemberName_(classD1Id) {
+  var info = _getBatchRepMemberInfo_(classD1Id);
+  return info ? info.name : '';
 }
 
 /**
