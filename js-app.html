@@ -11179,6 +11179,7 @@ MJ 이정우 팀장
     let allD1DatetimeMap = {};        // class_d1_id → { bid_datetime_1, bid_datetime_2 }
     let _d1CacheMap = {};             // classId → allClassD1Data 클라이언트 캐시
     let _summaryCache = {};           // batchKey → summaryMemberData_ 클라이언트 캐시
+    let _batchMembersCache = {};      // classId → { fullBatchKey: {firstName, count} } — 수업리스트 회원명 표시용
     let _currentD1DetailTab = 'member'; // 현재 선택된 상세 탭(회원/물건) — 수업 전환 시 유지
     let _currentGenD1Type = 'CLASS';    // 수업생성 모달의 현재 종목 구분 탭 (CLASS/PT/돈클)
 
@@ -12279,6 +12280,22 @@ ${token}
         }
     }
 
+    // 배치별 회원 정보 백그라운드 로드 (수업리스트의 '회원' 컬럼에 모든 배치 이름 표시용)
+    function _loadBatchMembersForClass_(classId) {
+        if (!classId) return;
+        if (_batchMembersCache[String(classId)]) { renderD1BatchListGrid_(); return; }
+        google.script.run
+            .withSuccessHandler(function(data) {
+                _batchMembersCache[String(classId)] = data || {};
+                renderD1BatchListGrid_();
+            })
+            .withFailureHandler(function() {})
+            .getBatchMembersForClass(classId);
+    }
+    function _invalidateBatchMembers_(classId) {
+        if (classId) delete _batchMembersCache[String(classId)];
+    }
+
     function _applyD1Data_(data) {
         allClassD1Data = Array.isArray(data) ? data : [];
         allClassD1Data.forEach(d => {
@@ -12291,6 +12308,8 @@ ${token}
         });
         buildD1Batches_();
         renderClassD1Grid();
+        // 배치별 회원 정보 백그라운드 로드 → 수업리스트 회원 컬럼 채움
+        if (selectedClassId) _loadBatchMembersForClass_(selectedClassId);
         // 로딩 스피너 제거 (종목+수업 정보만 표시)
         const infoEl_ = document.getElementById('d1SelectedClassInfo');
         if (infoEl_ && selectedClassId) {
@@ -12403,24 +12422,35 @@ ${token}
             const txtCls = isSelected ? 'font-semibold text-indigo-900' : 'text-gray-700';
             function fmtYYMMDD(d) {
                 const s = String(d || '').replace(/-/g, '');
-                return s.length >= 8 ? s.substring(2,4)+'/'+s.substring(4,6)+'/'+s.substring(6,8) : (d || '-');
+                if (s.length >= 8) return s.substring(2,4)+'/'+s.substring(4,6)+'/'+s.substring(6,8);
+                return '오늘'; // 날짜 미정
             }
             const firstDate = fmtYYMMDD(items[0].class_date);
             const lastDate = fmtYYMMDD(items[items.length - 1].class_date);
-            const periodHtml = firstDate === lastDate
-                ? firstDate
-                : `${firstDate}~${lastDate}`;
+            const periodHtml = (firstDate === '오늘' && lastDate === '오늘')
+                ? '오늘 ~ 오늘'
+                : (firstDate === lastDate ? firstDate : `${firstDate}~${lastDate}`);
             const teacherId = items[0].teacher_id || '';
             const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
             const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '-');
             let batchMember;
             if (i === d1BatchIdx && summaryMemberData_.length > 0) {
+                // 현재 선택된 배치는 live 데이터 (최신 반영)
                 const first = escapeHtml(summaryMemberData_[0].member_name || '-');
                 const total = summaryMemberData_.length;
                 batchMember = total > 1 ? `${first} 외 ${total - 1}명` : first;
             } else {
-                const mc = items[0]?.member_count;
-                batchMember = mc > 0 ? `${mc}명` : '-';
+                // 그 외 배치: _batchMembersCache에서 이름 조회
+                const fullBatchKey = getD1BatchKey_(items[0].class_d1_id);
+                const bmcByClass = _batchMembersCache[String(selectedClassId)] || {};
+                const bmc = bmcByClass[fullBatchKey];
+                if (bmc && bmc.count > 0) {
+                    const first = escapeHtml(bmc.firstName || '-');
+                    batchMember = bmc.count > 1 ? `${first} 외 ${bmc.count - 1}명` : first;
+                } else {
+                    const mc = items[0]?.member_count;
+                    batchMember = mc > 0 ? `${mc}명` : '-';
+                }
             }
             const batchKey = items[0].class_d1_id
                 ? String(items[0].class_d1_id).replace(/_\d+$/, '') : '-';
@@ -12452,11 +12482,14 @@ ${token}
         const items = b.items;
         const fmtYYMMDD = function(d) {
             const s = String(d || '').replace(/-/g, '');
-            return s.length >= 8 ? s.substring(2,4)+'/'+s.substring(4,6)+'/'+s.substring(6,8) : (d || '-');
+            if (s.length >= 8) return s.substring(2,4)+'/'+s.substring(4,6)+'/'+s.substring(6,8);
+            return '오늘';
         };
         const firstDate = fmtYYMMDD(items[0].class_date);
         const lastDate = fmtYYMMDD(items[items.length - 1].class_date);
-        const period = firstDate === lastDate ? firstDate : `${firstDate}~${lastDate}`;
+        const period = (firstDate === '오늘' && lastDate === '오늘')
+            ? '오늘 ~ 오늘'
+            : (firstDate === lastDate ? firstDate : `${firstDate}~${lastDate}`);
         const teacherId = items[0].teacher_id || '';
         const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
         const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '');

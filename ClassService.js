@@ -430,6 +430,50 @@ function readClassD1WithSummary(classId) {
  * → 클라이언트가 _d1CacheMap 선제 채움 → 종목 클릭 시 즉시 표시
  */
 /**
+ * 특정 수업(classId)의 배치별 회원 집계: { batchKey: { firstName, count } }
+ * - batchKey = member_class_details.class_d1_id (full: {classId}_{timestamp})
+ * - firstName = MEMBERS 시트에서 조회한 첫 회원명
+ */
+function getBatchMembersForClass(classId) {
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'cbm_' + String(classId);
+    const cached = cache.get(cacheKey);
+    if (cached) { try { return JSON.parse(cached); } catch (e) {} }
+
+    const mcdSheet = ensureMemberClassDetailsSheet_();
+    const lastRow = mcdSheet ? mcdSheet.getLastRow() : 0;
+    const result = {};
+    if (!mcdSheet || lastRow < 2) return result;
+
+    const headers = MEMBER_CLASS_DETAILS_HEADERS;
+    const d1IdIdx = headers.indexOf('class_d1_id');
+    const classIdIdx = headers.indexOf('class_id');
+    const memberIdIdx = headers.indexOf('member_id');
+
+    const data = mcdSheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+
+    const allMembers = readAllMembersNew();
+    const nameMap = {};
+    allMembers.forEach(function(m) { nameMap[String(m.member_id)] = m.member_name || ''; });
+
+    data.forEach(function(r) {
+        if (String(r[classIdIdx]) !== String(classId)) return;
+        const bk = String(r[d1IdIdx] || '');
+        if (!bk) return;
+        const mid = String(r[memberIdIdx] || '');
+        const name = nameMap[mid] || '';
+        if (!result[bk]) result[bk] = { firstName: name, count: 1 };
+        else {
+            result[bk].count++;
+            if (!result[bk].firstName && name) result[bk].firstName = name;
+        }
+    });
+
+    try { cache.put(cacheKey, JSON.stringify(result), 180); } catch (e) {}
+    return result;
+}
+
+/**
  * 전체 CLASS_D1 시트의 회차 데이터만 반환 (수업 목록은 별도 호출)
  * → 프론트에서 수업 목록과 병렬 호출로 속도 개선
  */
