@@ -281,6 +281,8 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
     const cache_ = CacheService.getScriptCache();
     cache_.remove('sessions_' + String(classId));
     cache_.remove('all_class_d1_sessions');
+    cache_.remove('class_batch_counts');
+    cache_.remove('all_batch_members');
     return { success: true, message: `${newRows.length}개의 회차가 생성되었습니다.` };
 }
 
@@ -429,6 +431,45 @@ function readClassD1WithSummary(classId) {
  * 수업관리 초기화: 수업 목록 + 전체 회차 데이터를 1회 GAS 호출로 반환
  * → 클라이언트가 _d1CacheMap 선제 채움 → 종목 클릭 시 즉시 표시
  */
+/**
+ * 수업별 배치 개수(수업수) 집계: { classId: count }
+ * - CLASS_D1의 class_id / class_d1_id 2개 컬럼만 읽어 payload 최소화
+ * - 수업수 컬럼 표시용 — getAllClassD1Sessions보다 훨씬 빠름
+ */
+function getClassBatchCounts() {
+    const cache = CacheService.getScriptCache();
+    const cached = cache.get('class_batch_counts');
+    if (cached) { try { return JSON.parse(cached); } catch (e) {} }
+
+    ensureClassD1Sheet();
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_D1_SHEET_NAME_DB);
+    const lastRow = sheet ? sheet.getLastRow() : 0;
+    const result = {};
+    if (!sheet || lastRow < 2) return result;
+
+    const classIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
+    const d1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
+    const readCols = Math.max(classIdIdx, d1IdIdx) + 1;
+    const data = sheet.getRange(2, 1, lastRow - 1, readCols).getValues();
+
+    const seen = {}; // classId -> { batchKey: true }
+    data.forEach(function(row) {
+        const cid = String(row[classIdIdx] || '');
+        const d1Id = String(row[d1IdIdx] || '');
+        if (!cid || !d1Id) return;
+        const parts = d1Id.split('_');
+        const batchKey = parts.length >= 2 ? parts[1] : 'default';
+        if (!seen[cid]) seen[cid] = {};
+        seen[cid][batchKey] = true;
+    });
+    Object.keys(seen).forEach(function(cid) {
+        result[cid] = Object.keys(seen[cid]).length;
+    });
+
+    try { cache.put('class_batch_counts', JSON.stringify(result), 300); } catch (e) {}
+    return result;
+}
+
 /**
  * 전체 수업의 배치별 회원 집계: { classId: { batchKey: { firstName, count } } }
  * - 수업관리 초기 진입 시 병렬로 호출하여 _batchMembersCache 선로드
@@ -762,6 +803,8 @@ function updateClassD1Batch(classD1Ids, updateData) {
     const scriptCache = CacheService.getScriptCache();
     affectedClassIds.forEach(function(cId) { if (cId) scriptCache.remove('sessions_' + cId); });
     scriptCache.remove('all_class_d1_sessions');
+    scriptCache.remove('class_batch_counts');
+    scriptCache.remove('all_batch_members');
     return { success: true, message: count + '개 회차가 수정되었습니다.' };
 }
 
@@ -815,6 +858,8 @@ function deleteClassD1Batch(classD1Ids) {
     const scriptCache2 = CacheService.getScriptCache();
     affectedClassIds2.forEach(function(cId) { if (cId) scriptCache2.remove('sessions_' + cId); });
     scriptCache2.remove('all_class_d1_sessions');
+    scriptCache2.remove('class_batch_counts');
+    scriptCache2.remove('all_batch_members');
     return { success: true, message: classD1Ids.length + '개 회차가 삭제되었습니다.' };
 }
 

@@ -11180,6 +11180,7 @@ MJ 이정우 팀장
     let _d1CacheMap = {};             // classId → allClassD1Data 클라이언트 캐시
     let _summaryCache = {};           // batchKey → summaryMemberData_ 클라이언트 캐시
     let _batchMembersCache = {};      // classId → { fullBatchKey: {firstName, count} } — 수업리스트 회원명 표시용
+    let _classBatchCounts = {};       // classId → 배치 수 (수업수 컬럼 빠른 표시용)
     let _currentD1DetailTab = 'member'; // 현재 선택된 상세 탭(회원/물건) — 수업 전환 시 유지
     let _currentGenD1Type = 'CLASS';    // 수업생성 모달의 현재 종목 구분 탭 (CLASS/PT/돈클)
 
@@ -12124,6 +12125,16 @@ ${token}
                 .withFailureHandler(() => {})
                 .getAllBatchMembersInfo();
         }
+        // ④ 수업수(배치 개수) 경량 조회 (가장 빠름) — 종목리스트 수업수 컬럼 우선 채움
+        if (Object.keys(_classBatchCounts).length === 0) {
+            google.script.run
+                .withSuccessHandler(counts => {
+                    _classBatchCounts = counts || {};
+                    filterClassScheduleList(); // 수업수 즉시 반영 재렌더
+                })
+                .withFailureHandler(() => {})
+                .getClassBatchCounts();
+        }
     }
 
     function updateClassScheduleDropdowns() {
@@ -12145,14 +12156,28 @@ ${token}
                 btn.classList.add('bg-white', 'text-gray-600');
             }
         });
-        // 탭 이동 시 체크 초기화
+        // 탭 이동 시 체크 + D1 관련 state 전면 초기화 (잔상 방지)
         checkedClassIds = new Set();
         checkedBatchIndices = new Set();
         selectedClassId = null;
+        selectedClassD1Id = null;
         allClassD1Data = [];
+        summaryMemberData_ = [];
+        d1Batches = [];
+        d1BatchIdx = 0;
         buildD1Batches_();
         filterClassScheduleList();
         renderClassD1Grid();
+        // 회차리스트 헤더 info 클리어
+        const classInfoEl_ = document.getElementById('d1SelectedClassInfo');
+        if (classInfoEl_) { classInfoEl_.textContent = ''; classInfoEl_.classList.add('hidden'); }
+        const batchInfoEl_ = document.getElementById('d1SelectedBatchInfo');
+        if (batchInfoEl_) { batchInfoEl_.textContent = ''; batchInfoEl_.classList.add('hidden'); }
+        // 수업리스트 tbody 명시적 클리어
+        const batchTbody_ = document.getElementById('classD1BatchListTableBody');
+        if (batchTbody_) batchTbody_.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">수업을 선택하세요.</td></tr>';
+        const batchKeyHeader_ = document.getElementById('d1BatchKeyHeader');
+        if (batchKeyHeader_) batchKeyHeader_.classList.add('hidden');
     }
 
     function sortClassScheduleList(key) {
@@ -12171,9 +12196,11 @@ ${token}
         filterClassScheduleList();
     }
 
-    // classId의 수업리스트(배치) 개수를 _d1CacheMap 기반으로 계산
+    // classId의 수업리스트(배치) 개수 — 경량 캐시 우선, fallback은 _d1CacheMap
     function getBatchCountForClass_(classId) {
-        const sessions = _d1CacheMap[String(classId)];
+        const cid = String(classId);
+        if (_classBatchCounts[cid] !== undefined) return _classBatchCounts[cid];
+        const sessions = _d1CacheMap[cid];
         if (!sessions || !sessions.length) return 0;
         const batchKeys = new Set();
         sessions.forEach(s => {
@@ -12346,6 +12373,12 @@ ${token}
         if (!grid) return;
         const batchTbody_ = document.getElementById('classD1BatchListTableBody');
         const batchKeyHeader_ = document.getElementById('d1BatchKeyHeader');
+        // 잔상 방지: 이전 클래스의 렌더 상태 전면 초기화
+        allClassD1Data = [];
+        d1Batches = [];
+        d1BatchIdx = 0;
+        summaryMemberData_ = [];
+        selectedClassD1Id = null;
         // 종목 전환 시 항상 로딩 표시 (캐시 hit에도 시각적 전환 보장)
         grid.innerHTML = '<div class="text-gray-400 py-4 text-xs text-center"><span class="inline-block animate-pulse">⏳ 조회 중입니다...</span></div>';
         if (batchTbody_) {
@@ -12442,7 +12475,10 @@ ${token}
             // 최종일: 마지막 회차 날짜 없으면 시작일(firstDate)로 fallback
             const lastRaw = items[items.length - 1].class_date;
             const lastDate = fmtYYMMDD(lastRaw) || firstDate;
-            const periodHtml = firstDate === lastDate ? (firstDate || '-') : `${firstDate}~${lastDate}`;
+            // 항상 'firstDate~lastDate' 형식 (1회만 있어도 동일 날짜 반복)
+            const periodHtml = (firstDate || lastDate)
+                ? `${firstDate || lastDate}~${lastDate || firstDate}`
+                : '-';
             const teacherId = items[0].teacher_id || '';
             const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
             const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '-');
@@ -12501,7 +12537,9 @@ ${token}
         const firstDate = fmtYYMMDD(items[0].class_date);
         const lastRaw = items[items.length - 1].class_date;
         const lastDate = fmtYYMMDD(lastRaw) || firstDate;
-        const period = firstDate === lastDate ? (firstDate || '-') : `${firstDate}~${lastDate}`;
+        const period = (firstDate || lastDate)
+            ? `${firstDate || lastDate}~${lastDate || firstDate}`
+            : '-';
         const teacherId = items[0].teacher_id || '';
         const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
         const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '');
