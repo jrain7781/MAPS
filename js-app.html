@@ -11183,6 +11183,7 @@ MJ 이정우 팀장
     let _classBatchCounts = {};       // classId → 배치 수 (수업수 컬럼 빠른 표시용)
     let _currentD1DetailTab = 'member'; // 현재 선택된 상세 탭(회원/물건) — 수업 전환 시 유지
     let _currentGenD1Type = 'CLASS';    // 수업생성 모달의 현재 종목 구분 탭 (CLASS/PT/돈클)
+    let _currentEditD1Type = 'CLASS';   // 수정 모달의 현재 종목 구분 탭 (CLASS/PT/돈클)
 
     // --- 회원관리 (신규) 함수들 ---
 
@@ -14116,6 +14117,52 @@ ${token}
         return String(v).substring(0,10);
     }
 
+    // ── 수정 모달: 종목구분 탭(CLASS/PT/돈클) — 현재 타입만 활성, 나머지 비활성 ──
+    function selectEditD1Type(type) {
+        _currentEditD1Type = type;
+        ['CLASS', 'PT', '돈클'].forEach(t => {
+            const btn = document.getElementById('editD1Type-tab-' + t);
+            if (!btn) return;
+            if (t === type) {
+                btn.classList.add('bg-indigo-600', 'text-white');
+                btn.classList.remove('bg-white', 'text-gray-400', 'cursor-not-allowed');
+            } else {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-white', 'text-gray-400', 'cursor-not-allowed');
+            }
+        });
+        applyEditD1TypeUI_();
+    }
+    function applyEditD1TypeUI_() {
+        const isPTDK = _currentEditD1Type === 'PT' || _currentEditD1Type === '돈클';
+        ['editD1-bidStarttime-row', 'editD1-bidDatetime1-row'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('hidden', isPTDK);
+        });
+        if (isPTDK) syncEditD1BidFinalFromTimeTo_();
+    }
+    function syncEditD1BidFinalFromTimeTo_() {
+        if (_currentEditD1Type !== 'PT' && _currentEditD1Type !== '돈클') return;
+        const ampm = document.getElementById('editD1-timeTo-ampm')?.value || '';
+        const h = document.getElementById('editD1-timeTo-h')?.value || '';
+        if (!ampm || !h) return;
+        const dayEl = document.getElementById('editD1-bidDatetime2-day');
+        const ampmEl = document.getElementById('editD1-bidDatetime2-ampm');
+        const hEl = document.getElementById('editD1-bidDatetime2-h');
+        if (dayEl) dayEl.value = '2';
+        if (ampmEl) ampmEl.value = ampm;
+        if (hEl) hEl.value = h;
+    }
+    function initEditD1TypeListeners_() {
+        ['-timeTo-ampm', '-timeTo-h', '-timeTo-m'].forEach(suffix => {
+            const el = document.getElementById('editD1' + suffix);
+            if (el && !el.dataset.syncEditBid) {
+                el.dataset.syncEditBid = '1';
+                el.addEventListener('change', function() { syncEditD1BidFinalFromTimeTo_(); });
+            }
+        });
+    }
+
     function showEditD1BatchModal() {
         const batch = d1Batches[d1BatchIdx];
         if (!batch || !batch.items || batch.items.length === 0) {
@@ -14131,6 +14178,16 @@ ${token}
         document.getElementById('editD1-formWrap').classList.add('hidden');
         document.getElementById('editD1BatchModal').classList.remove('content-hidden');
         initEditD1Splitter_();
+        // 종목 구분 탭 초기화 — 현재 선택된 수업의 class_type 기준
+        const cls_ = (allClassesData || []).find(c => String(c.class_id) === String(selectedClassId));
+        let defaultType_ = 'CLASS';
+        if (cls_) {
+            const t_ = String(cls_.class_type || '');
+            if (t_ === 'PT' || t_ === '프리미엄 PT') defaultType_ = 'PT';
+            else if (t_ === '돈클') defaultType_ = '돈클';
+        }
+        initEditD1TypeListeners_();
+        selectEditD1Type(defaultType_);
         // 도래하는 회차에 자동 포커스
         const todayNum = parseInt(new Date().toISOString().slice(0,10).replace(/-/g,''), 10);
         let nearestId = null, nearestDiff = Infinity;
