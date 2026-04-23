@@ -11179,6 +11179,7 @@ MJ 이정우 팀장
     let allD1DatetimeMap = {};        // class_d1_id → { bid_datetime_1, bid_datetime_2 }
     let _d1CacheMap = {};             // classId → allClassD1Data 클라이언트 캐시
     let _summaryCache = {};           // batchKey → summaryMemberData_ 클라이언트 캐시
+    let _currentD1DetailTab = 'member'; // 현재 선택된 상세 탭(회원/물건) — 수업 전환 시 유지
 
     // --- 회원관리 (신규) 함수들 ---
 
@@ -12054,21 +12055,28 @@ ${token}
     // --- 수업회차 함수들 ---
 
     function loadClassScheduleList() {
-        if (allClassesData && allClassesData.length > 0) {
+        const hasD1Cache_ = Object.keys(_d1CacheMap).length > 0;
+        // allClassesData + _d1CacheMap 둘다 있어야 수업수 즉시 표시 가능
+        if (allClassesData && allClassesData.length > 0 && hasD1Cache_) {
             filterClassScheduleList();
             return;
         }
-        // 로딩 표시 (수업리스트 tbody)
+        // 로딩 표시 (종목리스트 tbody)
         const tbodyLoading_ = document.getElementById('classScheduleListTableBody');
         if (tbodyLoading_) {
-            tbodyLoading_.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-xs"><span class="inline-block animate-pulse">⏳ 수업 목록 로드 중...</span></td></tr>';
+            tbodyLoading_.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400 text-xs"><span class="inline-block animate-pulse">⏳ 수업 목록 로드 중...</span></td></tr>';
         }
         google.script.run
             .withSuccessHandler(result => {
                 const opts = result.opts || {};
-                classDropdownOptions = opts;
-                allClassesData = opts.all_classes || [];
-                // 전체 회차 데이터를 _d1CacheMap에 선제 채움 → 종목 클릭 시 즉시 표시
+                // 다른 탭이 먼저 채운 allClassesData는 덮어쓰지 않음 (참조 유지)
+                if (!allClassesData || allClassesData.length === 0) {
+                    classDropdownOptions = opts;
+                    allClassesData = opts.all_classes || [];
+                } else if (!classDropdownOptions || !classDropdownOptions.class_types) {
+                    classDropdownOptions = opts;
+                }
+                // 전체 회차 데이터를 _d1CacheMap에 선제 채움 → 수업수 즉시 표시
                 const d1Sessions = result.d1Sessions || [];
                 if (d1Sessions.length > 0) {
                     const byClass = {};
@@ -12088,7 +12096,7 @@ ${token}
                 filterClassScheduleList();
             })
             .withFailureHandler(err => {
-                if (tbodyLoading_) tbodyLoading_.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-red-400 text-xs">로드 실패: ' + (err && err.message ? err.message : err) + '</td></tr>';
+                if (tbodyLoading_) tbodyLoading_.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-red-400 text-xs">로드 실패: ' + (err && err.message ? err.message : err) + '</td></tr>';
                 showStatus('수업 목록 로드 실패: ' + err.message, 'error');
             })
             .getClassScheduleInitData();
@@ -12269,7 +12277,8 @@ ${token}
         });
         buildD1Batches_();
         renderClassD1Grid();
-        switchD1DetailTab('member');
+        // 수업 전환 시 현재 상세 탭 유지 (member/item)
+        switchD1DetailTab(_currentD1DetailTab || 'member');
     }
 
     function loadClassD1Grid(classId) {
@@ -12385,6 +12394,7 @@ ${token}
     }
 
     function switchD1DetailTab(tabName) {
+        _currentD1DetailTab = tabName;
         ['member', 'item'].forEach(t => {
             const btn = document.getElementById('d1-tab-' + t);
             const panel = document.getElementById('d1TabPanel-' + t);
