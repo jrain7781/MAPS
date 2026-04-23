@@ -2350,34 +2350,10 @@ function generateClassD1(classId, startDate, loopUnit, options) {
     return dateStr + 'T' + (timeStr || '00:00');
   }
 
-  // 기존 회차 날짜 중복 체크
-  var lastRow = sheet.getLastRow();
-  var existingDatesForClass = [];
-  if (lastRow >= 2) {
-    var d1DataAll = sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
-    var d1ClassIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
-    var d1DateIdx    = CLASS_D1_HEADERS.indexOf('class_date');
-    var tz_ = Session.getScriptTimeZone();
-  existingDatesForClass = d1DataAll
-      .filter(function(r) { return String(r[d1ClassIdIdx]) === String(classId); })
-      .map(function(r) {
-        var v = r[d1DateIdx];
-        if (v instanceof Date) return Utilities.formatDate(v, tz_, 'yyyyMMdd');
-        return String(v).replace(/-/g, '');
-      });
-  }
+  // 기존 회차 날짜 중복 체크 제거 (사용자 요청 — CLASS/PT/돈클 모두 동일 기간 재생성 허용)
 
   var newRows = [];
   var newD1Ids = [];
-  var checkDate = new Date(currentDate.getTime());
-
-  for (var loopNo = startLoop; loopNo <= endLoop; loopNo++) {
-    var dateStr = Utilities.formatDate(checkDate, Session.getScriptTimeZone(), 'yyyyMMdd');
-    if (existingDatesForClass.indexOf(dateStr) >= 0) {
-      return { success: false, message: dateStr + ' 날짜에 이미 회차가 존재합니다.' };
-    }
-    checkDate.setDate(checkDate.getDate() + dayInterval);
-  }
 
   for (var loopNo = startLoop; loopNo <= endLoop; loopNo++) {
     var dateStr = Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyyMMdd');
