@@ -2830,9 +2830,15 @@ function readMemberClassDetailsByClassId(classId) {
  * member_class_details에서 class_d1_id === batchKey 인 행만 조회합니다.
  */
 function readMemberClassDetailsByBatchKey(batchKey) {
+  if (!batchKey) return [];
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'mcd_' + String(batchKey);
+  var cached = cache.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
   var sheet = ensureMemberClassDetailsSheet_();
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2 || !batchKey) return [];
+  if (lastRow < 2) return [];
 
   var data = sheet.getRange(2, 1, lastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
   var tz = Session.getScriptTimeZone();
@@ -2851,7 +2857,7 @@ function readMemberClassDetailsByBatchKey(batchKey) {
     });
 
   var allMembers = readAllMembersNew();
-  return filtered.map(function(d) {
+  var result = filtered.map(function(d) {
     var member = allMembers.find(function(m) { return String(m.member_id) === String(d.member_id); }) || {};
     return Object.assign({}, d, {
       member_name: member.member_name || '',
@@ -2862,6 +2868,8 @@ function readMemberClassDetailsByBatchKey(batchKey) {
       name3: member.name3 || '', name3_gubun: member.name3_gubun || ''
     });
   });
+  try { cache.put(cacheKey, JSON.stringify(result), 120); } catch(e) {}
+  return result;
 }
 
 /**
@@ -3205,6 +3213,7 @@ function addMemberToClassD1(classD1IdOrBatchKey, memberId, classId, mData, total
   });
 
   sheet.appendRow(row);
+  CacheService.getScriptCache().remove('mcd_' + batchKey);
   return { success: true, message: '회원 추가 완료' };
 }
 
@@ -3243,11 +3252,15 @@ function removeMemberFromClassD1(detailId) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, message: '데이터가 없습니다.' };
 
-  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-  const idx = ids.findIndex(id => String(id) === String(detailId));
+  const d1IdColIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+  const colCount = Math.max(2, d1IdColIdx + 1);
+  const rows = sheet.getRange(2, 1, lastRow - 1, colCount).getValues();
+  const idx = rows.findIndex(r => String(r[0]) === String(detailId));
   if (idx < 0) return { success: false, message: '해당 데이터를 찾을 수 없습니다.' };
 
+  const batchKey = d1IdColIdx >= 0 ? String(rows[idx][d1IdColIdx] || '') : '';
   sheet.deleteRow(idx + 2);
+  if (batchKey) CacheService.getScriptCache().remove('mcd_' + batchKey);
   return { success: true, message: '회원 삭제 완료' };
 }
 

@@ -406,6 +406,27 @@ function readClassD1ByClassId(classId) {
 }
 
 /**
+ * 세션 목록 + 기본 배치 회원 요약을 1회 GAS 호출로 반환 (속도 개선용)
+ */
+function readClassD1WithSummary(classId) {
+    var sessions = getClassSessions(classId);
+    // 최신 batchKey 추출 (class_d1_id 마지막 '_N' 제거)
+    var keyCount = {};
+    sessions.forEach(function(s) {
+        var id = String(s.class_d1_id || '');
+        var last = id.lastIndexOf('_');
+        if (last > 0 && /^\d{1,4}$/.test(id.substring(last + 1))) {
+            var k = id.substring(0, last);
+            keyCount[k] = (keyCount[k] || 0) + 1;
+        }
+    });
+    var sortedKeys = Object.keys(keyCount).sort(function(a, b) { return b.localeCompare(a); });
+    var defaultBatchKey = sortedKeys.length > 0 ? sortedKeys[0] : null;
+    var summary = defaultBatchKey ? readMemberClassDetailsByBatchKey(defaultBatchKey) : [];
+    return { sessions: sessions, summary: summary, defaultBatchKey: defaultBatchKey };
+}
+
+/**
  * 프론트엔드용 래퍼: 회차 생성 + 회원 등록
  * @param {string} classId
  * @param {string} startDateStr (YYYYMMDD)

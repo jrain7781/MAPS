@@ -11178,6 +11178,7 @@ MJ 이정우 팀장
     let allClassD1SummaryData = null; // 전체 회차 출석 요약 데이터
     let allD1DatetimeMap = {};        // class_d1_id → { bid_datetime_1, bid_datetime_2 }
     let _d1CacheMap = {};             // classId → allClassD1Data 클라이언트 캐시
+    let _summaryCache = {};           // batchKey → summaryMemberData_ 클라이언트 캐시
 
     // --- 회원관리 (신규) 함수들 ---
 
@@ -12228,14 +12229,18 @@ ${token}
         }
         grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
         google.script.run
-            .withSuccessHandler(data => {
-                _d1CacheMap[classId] = Array.isArray(data) ? data : [];
-                _applyD1Data_(_d1CacheMap[classId]);
+            .withSuccessHandler(result => {
+                const sessions = result.sessions || [];
+                const summary  = result.summary  || [];
+                const bk       = result.defaultBatchKey || null;
+                _d1CacheMap[classId] = sessions;
+                if (bk) _summaryCache[bk] = summary;
+                _applyD1Data_(sessions);
             })
             .withFailureHandler(err => {
                 grid.innerHTML = '<div class="text-red-400 py-2 text-xs text-center">로드 실패</div>';
             })
-            .readClassD1ByClassId(classId);
+            .readClassD1WithSummary(classId);
     }
 
     function reloadClassD1Grid(classId) {
@@ -12611,18 +12616,23 @@ ${token}
         const tbody = document.getElementById('d1SummaryTbody');
         const detail = document.getElementById('d1SummaryDetail');
         if (thead) thead.innerHTML = '';
-        if (tbody) {
-            if (!batchKey) {
-                tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">배치를 선택하세요</td></tr>';
-                return;
-            }
-            tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">불러오는 중...</td></tr>';
+        if (!batchKey) {
+            if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">배치를 선택하세요</td></tr>';
+            return;
         }
         if (detail) detail.innerHTML = '<div class="text-gray-400 text-xs text-center py-4">회원을 선택하세요</div>';
         selectedSummaryMemberId_ = null;
+        if (_summaryCache[batchKey]) {
+            summaryMemberData_ = _summaryCache[batchKey];
+            renderD1SummaryGrid(summaryMemberData_);
+            renderD1BatchListGrid_();
+            return;
+        }
+        if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">불러오는 중...</td></tr>';
         google.script.run
             .withSuccessHandler(function (data) {
                 summaryMemberData_ = data || [];
+                _summaryCache[batchKey] = summaryMemberData_;
                 renderD1SummaryGrid(summaryMemberData_);
                 renderD1BatchListGrid_();
             })
@@ -12630,6 +12640,12 @@ ${token}
                 if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-red-500 text-xs">로드 실패</td></tr>';
             })
             .readMemberClassDetailsByBatchKey(batchKey);
+    }
+
+    function reloadD1SummaryGrid() {
+        const batchKey = getCurrentBatchKey_();
+        if (batchKey) delete _summaryCache[batchKey];
+        loadD1SummaryGrid();
     }
 
     function renderD1SummaryGrid(members) {
@@ -13117,7 +13133,7 @@ ${token}
                     done++;
                     if (done === detailIds.length) {
                         showStatus('삭제 완료', 'success');
-                        loadD1SummaryGrid(selectedClassId);
+                        reloadD1SummaryGrid();
                     }
                 })
                 .withFailureHandler(function(e) { showStatus(e.message || '삭제 실패', 'error'); })
@@ -14739,7 +14755,7 @@ ${token}
             google.script.run
                 .withSuccessHandler(function(r) {
                     showStatus(r.message || '추가 완료', r.success ? 'success' : 'error');
-                    if (r.success) loadD1SummaryGrid();
+                    if (r.success) reloadD1SummaryGrid();
                 })
                 .withFailureHandler(function(e) { showStatus(e.message || '오류', 'error'); })
                 .addMemberToClassD1Batch(batchKey, memberIds, selectedClassId, memberData, totalSessions);
