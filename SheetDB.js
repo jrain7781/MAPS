@@ -2476,13 +2476,14 @@ function deleteClassD1(classD1Id) {
 function createItemAndRegisterToD1(classD1Id, itemData, className, classDate, classLoop) {
   if (!classD1Id) return { success: false, message: '회차 ID 없음' };
   var inDate = String(itemData.inDate || '').trim();
+  var mNameOverride = String(itemData.mName || '').trim(); // PT/돈클: 실제 회원명
   var result = createData(
     inDate,
     String(itemData.sakunNo || '').trim(),
     String(itemData.court || '').trim(),
     '검증',
     String(itemData.mNameId || '대표님').trim(),
-    String(itemData.mName || '').trim(),
+    mNameOverride,
     parseInt(String(itemData.bidPrice || '0').replace(/[^0-9]/g, '')) || '',
     String(itemData.memberId || '').trim(),
     '',    // bidState
@@ -2496,12 +2497,13 @@ function createItemAndRegisterToD1(classD1Id, itemData, className, classDate, cl
   if (!result || !result.success) return result || { success: false, message: '물건 생성 실패' };
   var newId = result.data && result.data.id;
   if (!newId) return { success: false, message: '생성된 물건 ID를 찾을 수 없습니다.' };
-  var regResult = addItemsToClassD1(classD1Id, [newId], className, classDate, classLoop);
+  // PT/돈클: mNameOverride 전달 → m_name 덮어쓰기 스킵하고 실제 회원명 유지
+  var regResult = addItemsToClassD1(classD1Id, [newId], className, classDate, classLoop, mNameOverride);
   if (!regResult.success) return { success: false, message: '물건 생성 완료, 회차 등록 실패: ' + regResult.message };
   return { success: true, message: '신규 물건 생성 및 회차 등록 완료' };
 }
 
-function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) {
+function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, mNameOverride) {
   if (!classD1Id || !Array.isArray(itemIds) || itemIds.length === 0) {
     return { success: false, message: '파라미터 오류' };
   }
@@ -2526,11 +2528,12 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop) 
   var chuchenDateCol  = ITEM_HEADERS.indexOf('chuchen_date') + 1;
   var bd2Col          = ITEM_HEADERS.indexOf('bid_datetime_2') + 1; // T열 = 20
 
-  // m_name: 종목_수업일(yymmdd)_N회차
+  // m_name: PT/돈클은 실제 회원명(mNameOverride), 그 외(CLASS)는 종목_수업일(yymmdd)_N회차
   var dateStr = String(classDate || '');
-  // yyyymmdd → yymmdd, 이미 yymmdd면 그대로
   if (dateStr.length === 8) dateStr = dateStr.slice(2);
-  var mNameVal = (className || '') + '_' + dateStr + '_' + (classLoop || '') + '회차';
+  var autoMName = (className || '') + '_' + dateStr + '_' + (classLoop || '') + '회차';
+  var hasOverride = !!(mNameOverride && String(mNameOverride).trim());
+  var mNameVal = hasOverride ? String(mNameOverride).trim() : autoMName;
 
   // 회차 정보에서 bid_datetime_2 조회
   var d1Sheet = ensureClassD1Sheet_();

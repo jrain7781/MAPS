@@ -12305,6 +12305,8 @@ ${token}
         selectedClassD1Id = null;
         filterClassScheduleList();
         loadClassD1Grid(classId);
+        // 신규물건 폼 - 종목별 UI 갱신 (회원 필수/자동 표시)
+        if (typeof applyD1NewItemClassTypeUI_ === 'function') applyD1NewItemClassTypeUI_();
         // 우측 헤더에 선택된 수업 정보 표시 (캐시 miss 시 로딩 스피너 접미)
         const infoEl = document.getElementById('d1SelectedClassInfo');
         if (infoEl) {
@@ -12332,11 +12334,17 @@ ${token}
     // 배치별 회원 정보 백그라운드 로드 (수업리스트의 '회원' 컬럼에 모든 배치 이름 표시용)
     function _loadBatchMembersForClass_(classId) {
         if (!classId) return;
-        if (_batchMembersCache[String(classId)]) { renderD1BatchListGrid_(); return; }
+        if (_batchMembersCache[String(classId)]) {
+            renderD1BatchListGrid_();
+            if (typeof applyD1NewItemClassTypeUI_ === 'function') applyD1NewItemClassTypeUI_();
+            return;
+        }
         google.script.run
             .withSuccessHandler(function(data) {
                 _batchMembersCache[String(classId)] = data || {};
                 renderD1BatchListGrid_();
+                // 배치 회원 캐시 로드 완료 → PT/돈클 대표 회원 재연동
+                if (typeof applyD1NewItemClassTypeUI_ === 'function') applyD1NewItemClassTypeUI_();
             })
             .withFailureHandler(function() {})
             .getBatchMembersForClass(classId);
@@ -12445,7 +12453,7 @@ ${token}
         });
         // 최신 배치가 앞에 오도록 내림차순 정렬
         d1Batches = Object.keys(map).sort((a, b) => b.localeCompare(a)).map(k => ({ batchKey: k, items: map[k] }));
-        d1BatchIdx = 0; // 최신 배치 먼저 표시
+        d1BatchIdx = -1; // 사용자 클릭 전까지 배치 미선택
         updateD1BatchLabel_();
     }
 
@@ -12455,7 +12463,24 @@ ${token}
 
     function selectD1Batch(idx) {
         d1BatchIdx = idx;
+        // 배치 변경 시 회차 선택 해제 + 물건리스트 전면 초기화
+        selectedClassD1Id = null;
+        // 이전 배치의 회원 요약 데이터 제거 (잔상 방지: 수업리스트 회원 컬럼이 이전 배치 이름 보이는 버그)
+        summaryMemberData_ = [];
+        d1ItemsData = [];
+        d1PendingItems = [];
+        if (typeof d1ItemsSelectedIds_ !== 'undefined' && d1ItemsSelectedIds_ && d1ItemsSelectedIds_.clear) d1ItemsSelectedIds_.clear();
+        d1ItemsFilteredData_ = null;
+        const itemListEl_ = document.getElementById('d1-item-list');
+        if (itemListEl_) itemListEl_.innerHTML = '<div class="text-gray-400 py-4 text-xs text-center">회차를 선택하세요.</div>';
+        // 회차 정보 텍스트 클리어
+        const itemInfo_ = document.getElementById('d1SelectedD1Info');
+        if (itemInfo_) itemInfo_.textContent = '';
+        // 등록 패널 닫기
+        document.getElementById('d1ItemRegisterPanel')?.classList.add('content-hidden');
         renderClassD1Grid();
+        // 배치 변경 시 PT/돈클 대표 회원 재연동
+        if (typeof applyD1NewItemClassTypeUI_ === 'function') applyD1NewItemClassTypeUI_();
         // 회원 탭이 현재 열려 있으면 해당 배치 회원으로 갱신
         const memberPanel = document.getElementById('d1TabPanel-member');
         if (memberPanel && !memberPanel.classList.contains('hidden')) {
@@ -12524,7 +12549,7 @@ ${token}
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${items.length}회</td>
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls} leading-tight">${periodHtml}</td>
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${escapeHtml(teacherName)}</td>
-                <td class="px-2 py-1.5 text-center text-sm ${txtCls} text-indigo-600" id="batchMemberCell_${i}">${batchMember}</td>
+                <td class="px-2 py-1.5 text-center text-sm ${txtCls}" id="batchMemberCell_${i}">${batchMember}</td>
                 <td class="px-2 py-1.5 text-center text-xs text-gray-400 font-mono border-l-2 border-gray-200 whitespace-nowrap">${escapeHtml(batchKey)}</td>
             </tr>`;
         }
@@ -12584,28 +12609,12 @@ ${token}
             if (infoEl) infoEl.textContent = '';
             loadD1SummaryGrid();
         } else if (tabName === 'item') {
-            // 선택된 회차가 없으면 현재 배치의 nearestD1Id 자동 선택
-            if (!selectedClassD1Id && d1Batches && d1Batches.length > 0) {
-                const batch = d1Batches[d1BatchIdx];
-                if (batch && batch.items && batch.items.length > 0) {
-                    const todayStr = (() => { const t = new Date(); return String(t.getFullYear()) + String(t.getMonth()+1).padStart(2,'0') + String(t.getDate()).padStart(2,'0'); })();
-                    const todayNum = parseInt(todayStr, 10);
-                    let nearestId = null, nearestDiff = Infinity;
-                    batch.items.forEach(d => {
-                        const dateNum = parseInt(String(d.class_date||'').replace(/-/g,''), 10);
-                        if (!isNaN(dateNum) && dateNum >= todayNum) {
-                            const diff = dateNum - todayNum;
-                            if (diff < nearestDiff) { nearestDiff = diff; nearestId = d.class_d1_id; }
-                        }
-                    });
-                    if (nearestId) { selectClassD1(nearestId); return; }
-                    // 도래 회차 없음(날짜 미정/전부 과거) → 첫 회차 fallback 선택
-                    if (batch.items[0] && batch.items[0].class_d1_id) {
-                        selectClassD1(batch.items[0].class_d1_id); return;
-                    }
-                }
+            if (selectedClassD1Id && selectedClassD1Id !== '__summary__') {
+                loadD1Items(selectedClassD1Id);
+            } else {
+                const el = document.getElementById('d1-item-list');
+                if (el) el.innerHTML = '<div class="text-gray-400 py-4 text-xs text-center">회차를 선택하세요.</div>';
             }
-            loadD1Items(selectedClassD1Id);
         }
     }
 
@@ -12619,9 +12628,9 @@ ${token}
             return;
         }
 
-        const batch = d1Batches[d1BatchIdx];
+        const batch = (d1BatchIdx >= 0) ? d1Batches[d1BatchIdx] : null;
         if (!batch) {
-            grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">배치를 선택해 주세요.</div>';
+            grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">수업리스트에서 수업을 선택해 주세요.</div>';
             return;
         }
         const items = batch.items;
@@ -12724,10 +12733,14 @@ ${token}
                     weekDisplayStr = DAY_NAMES_[dtForDay.getDay()];
                 }
 
-                // 수업 시간 포맷
+                // 수업 시간 포맷 (ISO datetime "1899-12-30T02:32:00Z" / "HH:MM" 모두 대응)
                 function fmtClassTime_(v) {
                     if (!v) return null;
-                    const s = String(v);
+                    let s = String(v);
+                    if (s.includes('T')) {
+                        const tp = s.split('T')[1] || '';
+                        s = tp.split('.')[0].split('Z')[0];
+                    }
                     const parts = s.split(':');
                     const h = parseInt(parts[0]);
                     const m = parts[1] ? parseInt(parts[1]) : 0;
@@ -12736,25 +12749,33 @@ ${token}
                 }
                 const tfrom = fmtClassTime_(d.class_time_from);
                 const tto = fmtClassTime_(d.class_time_to);
-                const timeStr = (tfrom || tto) ? `${tfrom||'?'}~${tto||'?'}` : null;
+                const timeStr = (tfrom || tto) ? `${tfrom||'?'}~${tto||'?'}` : '-';
 
                 // 강사명
                 const teacherMemberCard = d.teacher_id ? (allMembersNewData || []).find(m => String(m.member_id) === String(d.teacher_id)) : null;
                 const teacherNameCard = teacherMemberCard ? teacherMemberCard.member_name : (d.teacher_id ? String(d.teacher_id) : '-');
 
-                // D-day 계산 (isNearest 카드에만 표시)
-                const daysUntil_ = rawDate.length >= 8 ? (() => {
-                    const cd = new Date(parseInt(rawDate.substring(0,4)), parseInt(rawDate.substring(4,6))-1, parseInt(rawDate.substring(6,8)));
-                    const td = new Date(parseInt(todayStr.substring(0,4)), parseInt(todayStr.substring(4,6))-1, parseInt(todayStr.substring(6,8)));
-                    return Math.round((cd - td) / 86400000);
-                })() : null;
-                const ddayHtml = (isNearest && daysUntil_ !== null && daysUntil_ >= 0)
-                    ? `<span class="text-red-500 font-bold" style="font-size:11px">(${daysUntil_ === 0 ? '오늘' : daysUntil_ + '일전'})</span>`
-                    : '';
+                // 2차마감시간 포맷 (MM/DD HH시)
+                function fmtBidShort_(v) {
+                    if (!v) return '-';
+                    const dt = new Date(String(v).replace('T', ' '));
+                    if (isNaN(dt.getTime())) return '-';
+                    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+                    const dd = String(dt.getDate()).padStart(2, '0');
+                    const hh = String(dt.getHours()).padStart(2, '0');
+                    return `${mm}/${dd} ${hh}시`;
+                }
 
-                const body = `<li>• <span class="font-bold">${dateStr}${weekDisplayStr ? '(' + weekDisplayStr + ')' : ''}</span></li>` +
-                    (timeStr ? `<li class="text-[10px] leading-tight text-center">${timeStr}</li>` : '') +
-                    `<li>• ${itemCount}건 / ${escapeHtml(teacherNameCard)}</li>`;
+                // 오늘 여부 → 날짜 붉게
+                const isToday = rawDate && rawDate === todayStr;
+                const dateLabel = `${dateStr}${weekDisplayStr ? '(' + weekDisplayStr + ')' : ''}`;
+                const dateSpan = isToday ? `<span class="text-red-500">${dateLabel}</span>` : dateLabel;
+                const titleHtml_ = `${d.class_loop}회${completedMark} ${dateSpan}`;
+
+                const body =
+                    `<li>수업시간: ${timeStr}</li>` +
+                    `<li>추천만료: ${fmtBidShort_(d.bid_datetime_2)}</li>` +
+                    `<li>${itemCount}건 / ${escapeHtml(teacherNameCard)}</li>`;
 
                 function fmtBidDt_(v) {
                     if (!v) return '-';
@@ -12770,7 +12791,7 @@ ${token}
                 const tooltipHtml = `등록: ${fmtBidDt_(d.bid_starttime)}&#10;1차: ${fmtBidDt_(d.bid_datetime_1)}&#10;2차: ${fmtBidDt_(d.bid_datetime_2)}`;
 
                 return d1Card_(cls, titleCls, textCls, badge,
-                    `${d.class_loop}회${completedMark}${ddayHtml ? ' ' + ddayHtml : ''}`, body,
+                    titleHtml_, body,
                     `selectClassD1('${d.class_d1_id}')`, tooltipHtml);
             }).join('') + addCardHtml + `</div>`;
     }
@@ -14207,20 +14228,6 @@ ${token}
         }
         initEditD1TypeListeners_();
         selectEditD1Type(defaultType_);
-        // 도래하는 회차에 자동 포커스
-        const todayNum = parseInt(new Date().toISOString().slice(0,10).replace(/-/g,''), 10);
-        let nearestId = null, nearestDiff = Infinity;
-        (batch.items || []).forEach(d => {
-            const raw = String(d.class_date || '').replace(/-/g, '');
-            if (raw.length >= 8) {
-                const dn = parseInt(raw, 10);
-                if (dn >= todayNum && (dn - todayNum) < nearestDiff) {
-                    nearestDiff = dn - todayNum;
-                    nearestId = String(d.class_d1_id);
-                }
-            }
-        });
-        if (nearestId) editD1FocusRow_(nearestId);
     }
 
     function renderEditD1List_() {
@@ -15974,6 +15981,130 @@ ${token}
         sel.disabled = false;
     }
 
+    // 현재 선택된 종목이 PT/돈클인지 판단
+    function isD1NewClassPTDK_() {
+        const cls = (allClassesData || []).find(c => String(c.class_id) === String(selectedClassId));
+        if (!cls) return false;
+        const t = String(cls.class_type || '').trim();
+        return (t === 'PT' || t === '프리미엄 PT' || t === '돈클');
+    }
+
+    // 현재 배치의 대표 회원 조회 (이름, member_id)
+    function getCurrentBatchRepMember_() {
+        if (!selectedClassId) return null;
+        const batch = (d1BatchIdx >= 0) ? d1Batches[d1BatchIdx] : null;
+        if (!batch || !batch.items || batch.items.length === 0) return null;
+        const batchKey = getD1BatchKey_(String(batch.items[0].class_d1_id));
+        const bmcByClass = _batchMembersCache[String(selectedClassId)] || {};
+        const bmc = bmcByClass[batchKey];
+        if (!bmc || !bmc.firstName) return null;
+        // allMembersNewData에서 name+class_id 일치로 member_id 조회
+        const found = (allMembersNewData || []).find(m =>
+            String(m.class_id) === String(selectedClassId) &&
+            String(m.member_name || '').trim() === String(bmc.firstName).trim()
+        );
+        return found
+            ? { memberId: String(found.member_id), memberName: String(found.member_name).trim() }
+            : { memberId: '', memberName: String(bmc.firstName).trim() };
+    }
+
+    // 신규물건 등록 폼 - 종목별 UI 갱신 및 대표 회원 자동 연동
+    function applyD1NewItemClassTypeUI_() {
+        const isPTDK = isD1NewClassPTDK_();
+        const autoEl   = document.getElementById('d1new-member-auto');
+        const linkedEl = document.getElementById('d1new-member-linked');
+        const nameEl   = document.getElementById('d1new-member-name');
+        const hid      = document.getElementById('d1new-member-id');
+        if (!nameEl) return;
+        // 읽기 전용 (사용자 입력 불가 — 자동 부여/연동)
+        nameEl.readOnly = true;
+        if (isPTDK) {
+            if (autoEl)   autoEl.classList.add('hidden');
+            if (linkedEl) linkedEl.classList.remove('hidden');
+            // 대표 회원 자동 연동
+            const rep = getCurrentBatchRepMember_();
+            if (rep && rep.memberName) {
+                nameEl.value = rep.memberName;
+                if (hid) hid.value = rep.memberId;
+                nameEl.placeholder = '';
+            } else {
+                nameEl.value = '';
+                if (hid) hid.value = '';
+                nameEl.placeholder = '대표 회원 없음';
+            }
+        } else {
+            if (autoEl)   autoEl.classList.remove('hidden');
+            if (linkedEl) linkedEl.classList.add('hidden');
+            nameEl.value = '';
+            if (hid) hid.value = '';
+            nameEl.placeholder = '자동 부여';
+        }
+    }
+
+    // 회원명 커스텀 드롭다운
+    function d1NewMemberOninput_(input) {
+        const dd = document.getElementById('d1new-member-dropdown');
+        if (!dd) return;
+        // 입력 변경 시 hidden member_id 리셋
+        const hid = document.getElementById('d1new-member-id');
+        if (hid) hid.value = '';
+        const val = input.value.trim().toLowerCase();
+        if (!val) { dd.classList.add('hidden'); return; }
+        const members = (allMembersNewData || []).filter(m => {
+            const name = String(m.member_name || '').toLowerCase();
+            return name.includes(val);
+        }).slice(0, 20);
+        if (members.length === 0) { dd.classList.add('hidden'); return; }
+        dd.innerHTML = members.map(m => {
+            const mid = String(m.member_id || '');
+            const name = String(m.member_name || '');
+            const phone = String(m.phone || '');
+            const classId = String(m.class_id || '');
+            const cls = classId ? (allClassesData || []).find(c => String(c.class_id) === classId) : null;
+            const clsText = cls ? (cls.class_type ? '['+cls.class_type+'] ' : '') + (cls.class_name || '') : '';
+            const sub = [phone, clsText].filter(Boolean).join(' | ');
+            return `<div class="px-3 py-1.5 text-sm cursor-pointer hover:bg-indigo-50 text-gray-800"
+                data-mid="${escapeHtml(mid)}" data-mname="${escapeHtml(name)}"
+                onmousedown="d1NewMemberPick_(this)">
+                <span class="font-medium">${escapeHtml(name)}</span>
+                ${sub ? `<span class="ml-2 text-[11px] text-gray-400">${escapeHtml(sub)}</span>` : ''}
+            </div>`;
+        }).join('');
+        dd.classList.remove('hidden');
+    }
+    function d1NewMemberPick_(el) {
+        if (!el) return;
+        const memberId   = el.getAttribute('data-mid') || '';
+        const memberName = el.getAttribute('data-mname') || '';
+        const input = document.getElementById('d1new-member-name');
+        const hid   = document.getElementById('d1new-member-id');
+        const dd    = document.getElementById('d1new-member-dropdown');
+        if (input) input.value = memberName;
+        if (hid)   hid.value   = memberId;
+        if (dd)    dd.classList.add('hidden');
+    }
+    function d1NewMemberKeydown_(input, e) {
+        const dd = document.getElementById('d1new-member-dropdown');
+        if (e.key === 'Escape') { if (dd) dd.classList.add('hidden'); return; }
+        if (!dd || dd.classList.contains('hidden')) {
+            if (e.key === 'Enter') { e.preventDefault(); submitD1NewItem_(); }
+            return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            const first = dd.querySelector('div');
+            if (first) {
+                e.preventDefault();
+                d1NewMemberPick_(first);
+            }
+        }
+    }
+    function d1NewMemberBlur_(input) {
+        setTimeout(function() {
+            const dd = document.getElementById('d1new-member-dropdown');
+            if (dd) dd.classList.add('hidden');
+        }, 200);
+    }
+
     // 신규물건 등록 제출
     function submitD1NewItem_() {
         if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
@@ -15984,8 +16115,21 @@ ${token}
         const sakunNo = (document.getElementById('d1new-sakun-no')?.value || '').trim();
         const court   = (document.getElementById('d1new-court')?.value    || '').trim();
         const mNameId = (document.getElementById('d1new-m-name-id')?.value|| '대표님');
-        const mName   = '';
-        const memberId = '';
+
+        // 종목 타입별 회원 처리 (PT/돈클은 대표 회원 자동 연동 — 폼 값 그대로 사용)
+        const isPTDK = isD1NewClassPTDK_();
+        let mName = '';
+        let memberId = '';
+        if (isPTDK) {
+            // 최신 상태로 한번 더 자동 연동 (배치/회차가 바뀌었을 수 있음)
+            applyD1NewItemClassTypeUI_();
+            mName    = (document.getElementById('d1new-member-name')?.value || '').trim();
+            memberId = (document.getElementById('d1new-member-id')?.value   || '').trim();
+            if (!mName || !memberId) {
+                showStatus('등록된 대표 회원이 없습니다. 수업에 회원을 먼저 등록하세요.', 'error');
+                return;
+            }
+        }
 
         // 필수값 검증
         if (!inDate)  { showStatus('입찰일자를 입력하세요.', 'error'); document.getElementById('d1new-in-date')?.focus(); return; }
@@ -16005,8 +16149,8 @@ ${token}
             document.getElementById('d1new-in-date')?.focus(); return;
         }
 
-        // 법원명 유효성 (datalist 방식: validateCourt 결과 확인)
-        if (typeof courtListCache !== 'undefined' && courtListCache.length > 0 && !courtListCache.includes(court)) {
+        // 법원명 유효성 (courtListCache가 null이면 검증 스킵)
+        if (Array.isArray(courtListCache) && courtListCache.length > 0 && !courtListCache.includes(court)) {
             showStatus('등록된 법원만 선택할 수 있습니다.', 'error');
             document.getElementById('d1new-court')?.focus(); return;
         }
@@ -16023,7 +16167,8 @@ ${token}
         const classDate = d1Info ? String(d1Info.class_date||'').replace(/-/g,'') : '';
         const classLoop = d1Info ? (d1Info.class_loop||'') : '';
         const label = [className, classDate.substring(2,8), classLoop+'회차'].filter(Boolean).join('_');
-        if (!confirm(`신규물건 추가 및 [${label}]에 물건을 등록 하시겠습니까?\n\n입찰일: ${inDate} | 사건번호: ${sakunNo} | 법원: ${court} | 담당: ${mNameId}`)) return;
+        const memberInfo = isPTDK ? ` | 회원: ${mName}` : '';
+        if (!confirm(`신규물건 추가 및 [${label}]에 물건을 등록 하시겠습니까?\n\n입찰일: ${inDate} | 사건번호: ${sakunNo} | 법원: ${court} | 담당: ${mNameId}${memberInfo}`)) return;
 
         showStatus('등록 중...', 'info');
         google.script.run
@@ -16032,6 +16177,8 @@ ${token}
                 if (r.success) {
                     loadD1Items(selectedClassD1Id);
                     document.getElementById('d1new-in-date')?.focus();
+                    // PT/돈클은 대표 회원 재동기화 (자동 연동 유지)
+                    applyD1NewItemClassTypeUI_();
                 }
             })
             .withFailureHandler(e => showStatus(e.message||'등록 실패', 'error'))
