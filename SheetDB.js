@@ -2358,8 +2358,11 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   var newD1Ids = [];
 
   for (var loopNo = startLoop; loopNo <= endLoop; loopNo++) {
-    var dateStr = isNoDateMode ? '' : Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyyMMdd');
-    var weekDay = isNoDateMode ? '' : weekNames[currentDate.getDay()];
+    // 루프 미정 모드: 첫 회차만 시작일 설정, 나머지는 날짜 빈 값 (나중에 수정)
+    var isFirst = (loopNo === startLoop);
+    var hasDate = !isNoDateMode || isFirst;
+    var dateStr = hasDate ? Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyyMMdd') : '';
+    var weekDay = hasDate ? weekNames[currentDate.getDay()] : '';
     var d1Id    = classId + '_' + timestamp + '_' + loopNo;
 
     var row = CLASS_D1_HEADERS.map(function(h) {
@@ -2377,9 +2380,9 @@ function generateClassD1(classId, startDate, loopUnit, options) {
         case 'class_loop':     return loopNo;
         case 'completed':      return 'N';
         case 'reg_date':       return regDate;
-        case 'bid_starttime':  return isNoDateMode ? '' : calcBidDatetime_(currentDate, bidStarttimeDay, bidStarttimeTime);
-        case 'bid_datetime_1': return isNoDateMode ? '' : calcBidDatetime_(currentDate, bidDatetime1Day, bidDatetime1Time);
-        case 'bid_datetime_2': return isNoDateMode ? '' : calcBidDatetime_(currentDate, bidDatetime2Day, bidDatetime2Time);
+        case 'bid_starttime':  return hasDate ? calcBidDatetime_(currentDate, bidStarttimeDay, bidStarttimeTime) : '';
+        case 'bid_datetime_1': return hasDate ? calcBidDatetime_(currentDate, bidDatetime1Day, bidDatetime1Time) : '';
+        case 'bid_datetime_2': return hasDate ? calcBidDatetime_(currentDate, bidDatetime2Day, bidDatetime2Time) : '';
         case '1cha_bid':       return (opts.bid1Count != null && opts.bid1Count !== '') ? Number(opts.bid1Count) : '';
         case '2cha_bid':       return (opts.bid2Count != null && opts.bid2Count !== '') ? Number(opts.bid2Count) : '';
         case 'teacher_id':     return opts.teacherId || '';

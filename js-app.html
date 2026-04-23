@@ -12436,13 +12436,13 @@ ${token}
             function fmtYYMMDD(d) {
                 const s = String(d || '').replace(/-/g, '');
                 if (s.length >= 8) return s.substring(2,4)+'/'+s.substring(4,6)+'/'+s.substring(6,8);
-                return '오늘'; // 날짜 미정
+                return '';
             }
             const firstDate = fmtYYMMDD(items[0].class_date);
-            const lastDate = fmtYYMMDD(items[items.length - 1].class_date);
-            const periodHtml = (firstDate === '오늘' && lastDate === '오늘')
-                ? '오늘 ~ 오늘'
-                : (firstDate === lastDate ? firstDate : `${firstDate}~${lastDate}`);
+            // 최종일: 마지막 회차 날짜 없으면 시작일(firstDate)로 fallback
+            const lastRaw = items[items.length - 1].class_date;
+            const lastDate = fmtYYMMDD(lastRaw) || firstDate;
+            const periodHtml = firstDate === lastDate ? (firstDate || '-') : `${firstDate}~${lastDate}`;
             const teacherId = items[0].teacher_id || '';
             const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
             const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '-');
@@ -12496,13 +12496,12 @@ ${token}
         const fmtYYMMDD = function(d) {
             const s = String(d || '').replace(/-/g, '');
             if (s.length >= 8) return s.substring(2,4)+'/'+s.substring(4,6)+'/'+s.substring(6,8);
-            return '오늘';
+            return '';
         };
         const firstDate = fmtYYMMDD(items[0].class_date);
-        const lastDate = fmtYYMMDD(items[items.length - 1].class_date);
-        const period = (firstDate === '오늘' && lastDate === '오늘')
-            ? '오늘 ~ 오늘'
-            : (firstDate === lastDate ? firstDate : `${firstDate}~${lastDate}`);
+        const lastRaw = items[items.length - 1].class_date;
+        const lastDate = fmtYYMMDD(lastRaw) || firstDate;
+        const period = firstDate === lastDate ? (firstDate || '-') : `${firstDate}~${lastDate}`;
         const teacherId = items[0].teacher_id || '';
         const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
         const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '');
