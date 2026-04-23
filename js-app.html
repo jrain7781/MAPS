@@ -12245,7 +12245,7 @@ ${token}
         selectedClassD1Id = null;
         filterClassScheduleList();
         loadClassD1Grid(classId);
-        // 우측 헤더에 선택된 수업 정보 표시
+        // 우측 헤더에 선택된 수업 정보 표시 (캐시 miss 시 로딩 스피너 접미)
         const infoEl = document.getElementById('d1SelectedClassInfo');
         if (infoEl) {
             const cls = allClassesData.find(c => String(c.class_id) === String(classId));
@@ -12256,7 +12256,11 @@ ${token}
                     cls.class_grade ? `[${cls.class_grade}]` : '',
                     cls.class_loc ? `(${cls.class_loc})` : ''
                 ].filter(Boolean);
-                infoEl.textContent = parts.join(' ');
+                const text = parts.join(' ');
+                const loading = !_d1CacheMap[classId]
+                    ? ' <span class="text-xs text-gray-300 animate-pulse">⏳ 조회 중...</span>'
+                    : '';
+                infoEl.innerHTML = escapeHtml(text) + loading;
                 infoEl.classList.remove('hidden');
             } else {
                 infoEl.textContent = '';
@@ -12277,6 +12281,20 @@ ${token}
         });
         buildD1Batches_();
         renderClassD1Grid();
+        // 로딩 스피너 제거 (종목+수업 정보만 표시)
+        const infoEl_ = document.getElementById('d1SelectedClassInfo');
+        if (infoEl_ && selectedClassId) {
+            const cls_ = (allClassesData || []).find(c => String(c.class_id) === String(selectedClassId));
+            if (cls_) {
+                const parts_ = [
+                    cls_.class_type, cls_.class_name,
+                    cls_.class_grade ? `[${cls_.class_grade}]` : '',
+                    cls_.class_loc ? `(${cls_.class_loc})` : ''
+                ].filter(Boolean);
+                infoEl_.innerHTML = escapeHtml(parts_.join(' '));
+                infoEl_.classList.remove('hidden');
+            }
+        }
         // 수업 전환 시 현재 상세 탭 유지 (member/item)
         switchD1DetailTab(_currentD1DetailTab || 'member');
     }
