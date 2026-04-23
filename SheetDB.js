@@ -2528,12 +2528,21 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
   var chuchenDateCol  = ITEM_HEADERS.indexOf('chuchen_date') + 1;
   var bd2Col          = ITEM_HEADERS.indexOf('bid_datetime_2') + 1; // T열 = 20
 
-  // m_name: PT/돈클은 실제 회원명(mNameOverride), 그 외(CLASS)는 종목_수업일(yymmdd)_N회차
+  // m_name 결정:
+  //   1) mNameOverride (명시적 전달 — 신규물건 폼)
+  //   2) PT/돈클이면 → 해당 배치 대표 회원명 자동 조회 (일괄 등록 포함)
+  //   3) 그 외(CLASS) → 자동 생성 (종목_yymmdd_N회차)
   var dateStr = String(classDate || '');
   if (dateStr.length === 8) dateStr = dateStr.slice(2);
   var autoMName = (className || '') + '_' + dateStr + '_' + (classLoop || '') + '회차';
   var hasOverride = !!(mNameOverride && String(mNameOverride).trim());
-  var mNameVal = hasOverride ? String(mNameOverride).trim() : autoMName;
+  var mNameVal;
+  if (hasOverride) {
+    mNameVal = String(mNameOverride).trim();
+  } else {
+    var repName = _getBatchRepMemberName_(classD1Id);
+    mNameVal = repName ? repName : autoMName;
+  }
 
   // 회차 정보에서 bid_datetime_2 조회
   var d1Sheet = ensureClassD1Sheet_();
@@ -3115,6 +3124,52 @@ function buildInitialAttendance_(mData, totalSessions, sessionDates) {
     }
   }
   return result;
+}
+
+/**
+ * classD1Id의 종목이 PT/돈클이면 해당 배치의 대표 회원명을 반환, 아니면 ''
+ * — addItemsToClassD1의 PT/돈클 m_name 자동 연동용
+ */
+function _getBatchRepMemberName_(classD1Id) {
+  try {
+    var batchKey = extractD1BatchKey_(classD1Id);
+    var firstU = batchKey.indexOf('_');
+    var classId = firstU > 0 ? batchKey.substring(0, firstU) : batchKey;
+    if (!classId) return '';
+    // 종목 타입 확인
+    var classSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_SHEET_NAME_DB);
+    if (!classSheet) return '';
+    var cLast = classSheet.getLastRow();
+    if (cLast < 2) return '';
+    var cidIdx   = CLASS_HEADERS.indexOf('class_id');
+    var ctypeIdx = CLASS_HEADERS.indexOf('class_type');
+    var cData = classSheet.getRange(2, 1, cLast - 1, CLASS_HEADERS.length).getValues();
+    var cRow = cData.find(function(r) { return String(r[cidIdx]) === String(classId); });
+    if (!cRow) return '';
+    var ctype = String(cRow[ctypeIdx] || '').trim();
+    if (ctype !== 'PT' && ctype !== '프리미엄 PT' && ctype !== '돈클') return '';
+    // MCD에서 배치 첫 회원 ID 조회
+    var mcdSheet = ensureMemberClassDetailsSheet_();
+    if (!mcdSheet) return '';
+    var mLast = mcdSheet.getLastRow();
+    if (mLast < 2) return '';
+    var d1IdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+    var midIdx  = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
+    var mData = mcdSheet.getRange(2, 1, mLast - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+    var memberIdStr = '';
+    for (var i = 0; i < mData.length; i++) {
+      if (String(mData[i][d1IdIdx]) === batchKey) {
+        memberIdStr = String(mData[i][midIdx] || '');
+        if (memberIdStr) break;
+      }
+    }
+    if (!memberIdStr) return '';
+    var members = readAllMembersNew();
+    var found = members.find(function(m) { return String(m.member_id) === memberIdStr; });
+    return found ? String(found.member_name || '').trim() : '';
+  } catch (e) {
+    return '';
+  }
 }
 
 /**
