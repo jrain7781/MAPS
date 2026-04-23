@@ -217,19 +217,11 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
     endDateObj.setDate(endDateObj.getDate() + ((total - 1) * 7 * unit));
     var startFmt = Utilities.formatDate(startDateObj, Session.getScriptTimeZone(), 'yyyyMMdd');
     var endFmt   = Utilities.formatDate(endDateObj,   Session.getScriptTimeZone(), 'yyyyMMdd');
-    var sessIdBase = String(classId) + '_' + startFmt + '_' + endFmt;
+    // 배치키(parts[1])에 HHmmss 추가 — 동일 기간 중복 생성 허용 + class_d1_id 충돌 방지
+    var batchStamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss');
+    var sessIdBase = String(classId) + '_' + startFmt + batchStamp + '_' + endFmt;
 
-    // 중복 체크: 같은 sessIdBase로 시작하는 ID가 이미 있으면 오류
-    var existingData = sheet.getLastRow() > 1 ? sheet.getDataRange().getValues() : [];
-    var existingHeaders = existingData.length > 0 ? existingData[0] : [];
-    var d1IdColIdx = existingHeaders.indexOf('class_d1_id');
-    if (d1IdColIdx >= 0 && existingData.length > 1) {
-        var existingIds = existingData.slice(1).map(function(r){ return String(r[d1IdColIdx] || ''); });
-        var hasDup = existingIds.some(function(id){ return id.indexOf(sessIdBase + '_') === 0; });
-        if (hasDup) {
-            return { success: false, message: '이미 동일한 기간의 회차가 존재합니다. (' + sessIdBase + ')' };
-        }
-    }
+    // 기간 중복 체크 제거 (사용자 요청 — 동일 기간 재생성 허용)
 
     // 입찰시간 계산 헬퍼
     function calcBidDatetime(classDateStr, dayOffset, timeStr) {

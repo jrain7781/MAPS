@@ -12102,6 +12102,10 @@ ${token}
                         if (!_d1CacheMap[cid]) _d1CacheMap[cid] = byClass[cid];
                     });
                     filterClassScheduleList(); // 수업수 반영 재렌더 (선택 상태 유지)
+                    // 현재 선택된 종목이 있고 D1 그리드가 로딩 상태면 즉시 반영
+                    if (selectedClassId && _d1CacheMap[String(selectedClassId)] && (!allClassD1Data || allClassD1Data.length === 0)) {
+                        _applyD1Data_(_d1CacheMap[String(selectedClassId)]);
+                    }
                 })
                 .withFailureHandler(() => { /* 백그라운드 실패는 조용히 */ })
                 .getAllClassD1Sessions();
@@ -12331,10 +12335,13 @@ ${token}
         google.script.run
             .withSuccessHandler(data => {
                 _d1CacheMap[classId] = Array.isArray(data) ? data : [];
+                // Stale 가드: 응답 도착 시점에 다른 종목이 선택되어 있으면 UI 적용 스킵 (캐시는 저장)
+                if (String(selectedClassId) !== String(classId)) return;
                 _applyD1Data_(_d1CacheMap[classId]);
                 filterClassScheduleList();
             })
             .withFailureHandler(err => {
+                if (String(selectedClassId) !== String(classId)) return;
                 grid.innerHTML = '<div class="text-red-400 py-2 text-xs text-center">로드 실패</div>';
                 if (batchTbody_) batchTbody_.innerHTML = '<tr><td colspan="5" class="p-3 text-center text-red-400 text-xs">로드 실패</td></tr>';
             })
