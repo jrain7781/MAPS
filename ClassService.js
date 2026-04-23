@@ -410,20 +410,23 @@ function readClassD1ByClassId(classId) {
  */
 function readClassD1WithSummary(classId) {
     var sessions = getClassSessions(classId);
-    // 최신 batchKey 추출 (class_d1_id 마지막 '_N' 제거)
-    var keyCount = {};
-    sessions.forEach(function(s) {
-        var id = String(s.class_d1_id || '');
-        var last = id.lastIndexOf('_');
-        if (last > 0 && /^\d{1,4}$/.test(id.substring(last + 1))) {
-            var k = id.substring(0, last);
-            keyCount[k] = (keyCount[k] || 0) + 1;
-        }
-    });
-    var sortedKeys = Object.keys(keyCount).sort(function(a, b) { return b.localeCompare(a); });
-    var defaultBatchKey = sortedKeys.length > 0 ? sortedKeys[0] : null;
-    var summary = defaultBatchKey ? readMemberClassDetailsByBatchKey(defaultBatchKey) : [];
-    return { sessions: sessions, summary: summary, defaultBatchKey: defaultBatchKey };
+    try {
+        var keyCount = {};
+        sessions.forEach(function(s) {
+            var id = String(s.class_d1_id || '');
+            var last = id.lastIndexOf('_');
+            if (last > 0 && /^\d{1,4}$/.test(id.substring(last + 1))) {
+                var k = id.substring(0, last);
+                keyCount[k] = (keyCount[k] || 0) + 1;
+            }
+        });
+        var sortedKeys = Object.keys(keyCount).sort(function(a, b) { return b.localeCompare(a); });
+        var defaultBatchKey = sortedKeys.length > 0 ? sortedKeys[0] : null;
+        var summary = defaultBatchKey ? readMemberClassDetailsByBatchKey(defaultBatchKey) : [];
+        return { sessions: sessions, summary: summary, defaultBatchKey: defaultBatchKey };
+    } catch(e) {
+        return { sessions: sessions, summary: [], defaultBatchKey: null };
+    }
 }
 
 /**

@@ -12230,9 +12230,14 @@ ${token}
         grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
         google.script.run
             .withSuccessHandler(result => {
-                const sessions = result.sessions || [];
-                const summary  = result.summary  || [];
-                const bk       = result.defaultBatchKey || null;
+                let sessions, summary, bk;
+                if (Array.isArray(result)) {
+                    sessions = result; summary = []; bk = null;
+                } else {
+                    sessions = (result && result.sessions) ? result.sessions : (result || []);
+                    summary  = (result && result.summary)  ? result.summary  : [];
+                    bk       = (result && result.defaultBatchKey) ? result.defaultBatchKey : null;
+                }
                 _d1CacheMap[classId] = sessions;
                 if (bk) _summaryCache[bk] = summary;
                 _applyD1Data_(sessions);
