@@ -437,6 +437,39 @@ function readClassD1WithSummary(classId) {
  * 수업관리 초기화: 수업 목록 + 전체 회차 데이터를 1회 GAS 호출로 반환
  * → 클라이언트가 _d1CacheMap 선제 채움 → 종목 클릭 시 즉시 표시
  */
+/**
+ * 전체 CLASS_D1 시트의 회차 데이터만 반환 (수업 목록은 별도 호출)
+ * → 프론트에서 수업 목록과 병렬 호출로 속도 개선
+ */
+function getAllClassD1Sessions() {
+    const cache = CacheService.getScriptCache();
+    const cached = cache.get('all_class_d1_sessions');
+    if (cached) {
+        try { return JSON.parse(cached); } catch (e) {}
+    }
+    ensureClassD1Sheet();
+    const d1Sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_D1_SHEET_NAME_DB);
+    const lastRow = d1Sheet ? d1Sheet.getLastRow() : 0;
+    const d1Sessions = [];
+    if (d1Sheet && lastRow >= 2) {
+        const data = d1Sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+        data.forEach(function(row) {
+            var sess = {};
+            CLASS_D1_HEADERS.forEach(function(h, i) {
+                var val = (i < row.length) ? row[i] : '';
+                if ((h.includes('date') || h === 'reg_date') && val instanceof Date) {
+                    sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                } else {
+                    sess[h] = val;
+                }
+            });
+            d1Sessions.push(sess);
+        });
+    }
+    try { cache.put('all_class_d1_sessions', JSON.stringify(d1Sessions), 300); } catch (e) {}
+    return d1Sessions;
+}
+
 function getClassScheduleInitData() {
     const opts = getClassDropdownOptions(); // CacheService 캐시 활용
     const cache = CacheService.getScriptCache();
