@@ -11177,6 +11177,7 @@ MJ 이정우 팀장
     let d1BatchIdx = 0;       // 현재 배치 인덱스
     let allClassD1SummaryData = null; // 전체 회차 출석 요약 데이터
     let allD1DatetimeMap = {};        // class_d1_id → { bid_datetime_1, bid_datetime_2 }
+    let _d1CacheMap = {};             // classId → allClassD1Data 클라이언트 캐시
 
     // --- 회원관리 (신규) 함수들 ---
 
@@ -11551,18 +11552,21 @@ MJ 이정우 팀장
     }
 
     function loadClassSelectForMember() {
+        const fillClassSelect_ = () => {
+            const sel = document.getElementById('mem-class_id_select');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">수업 선택</option>';
+            (allClassesData || []).forEach(c => {
+                const grade = c.class_grade ? ` [${escapeHtml(c.class_grade)}]` : '';
+                sel.innerHTML += `<option value="${c.class_id}">${escapeHtml(c.class_type)} - ${escapeHtml(c.class_name)}${grade} (${escapeHtml(c.class_loc)})</option>`;
+            });
+        };
+        if (allClassesData && allClassesData.length > 0) {
+            fillClassSelect_();
+            return;
+        }
         google.script.run
-            .withSuccessHandler(data => {
-                allClassesData = Array.isArray(data) ? data : [];
-                const sel = document.getElementById('mem-class_id_select');
-                if (sel) {
-                    sel.innerHTML = '<option value="">수업 선택</option>';
-                    allClassesData.forEach(c => {
-                        const grade = c.class_grade ? ` [${escapeHtml(c.class_grade)}]` : '';
-                        sel.innerHTML += `<option value="${c.class_id}">${escapeHtml(c.class_type)} - ${escapeHtml(c.class_name)}${grade} (${escapeHtml(c.class_loc)})</option>`;
-                    });
-                }
-            })
+            .withSuccessHandler(data => { allClassesData = Array.isArray(data) ? data : []; fillClassSelect_(); })
             .withFailureHandler(err => console.error('수업 목록 로드 실패:', err))
             .readAllClasses();
     }
@@ -12049,14 +12053,22 @@ ${token}
     // --- 수업회차 함수들 ---
 
     function loadClassScheduleList() {
+        if (allClassesData && allClassesData.length > 0) {
+            filterClassScheduleList();
+            return;
+        }
         google.script.run
-            .withSuccessHandler(data => {
-                allClassesData = Array.isArray(data) ? data : [];
-                loadClassDropdownOptions();
+            .withSuccessHandler(opts => {
+                classDropdownOptions = opts || { class_types: [], class_names: [], class_grades: [], class_locs: [] };
+                allClassesData = opts.all_classes || [];
+                updateMemberSearchDropdowns();
+                updateClassSearchDropdowns();
+                updateClassScheduleDropdowns();
+                updateBidCalClassTypeDropdowns();
                 filterClassScheduleList();
             })
             .withFailureHandler(err => showStatus('수업 목록 로드 실패: ' + err.message, 'error'))
-            .readAllClasses();
+            .getClassDropdownOptions();
     }
 
     function updateClassScheduleDropdowns() {
@@ -12192,33 +12204,43 @@ ${token}
         }
     }
 
+    function _applyD1Data_(data) {
+        allClassD1Data = Array.isArray(data) ? data : [];
+        allClassD1Data.forEach(d => {
+            if (d.class_d1_id) {
+                allD1DatetimeMap[String(d.class_d1_id)] = {
+                    bid_datetime_1: d.bid_datetime_1 || '',
+                    bid_datetime_2: d.bid_datetime_2 || ''
+                };
+            }
+        });
+        buildD1Batches_();
+        renderClassD1Grid();
+        switchD1DetailTab('member');
+    }
+
     function loadClassD1Grid(classId) {
         const grid = document.getElementById('classD1Grid');
         if (!grid) return;
+        if (_d1CacheMap[classId]) {
+            _applyD1Data_(_d1CacheMap[classId]);
+            return;
+        }
         grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
-
         google.script.run
             .withSuccessHandler(data => {
-                allClassD1Data = Array.isArray(data) ? data : [];
-                // bid_datetime_1/2 맵 업데이트
-                allClassD1Data.forEach(d => {
-                    if (d.class_d1_id) {
-                        allD1DatetimeMap[String(d.class_d1_id)] = {
-                            bid_datetime_1: d.bid_datetime_1 || '',
-                            bid_datetime_2: d.bid_datetime_2 || ''
-                        };
-                    }
-                });
-                buildD1Batches_();
-                renderClassD1Grid();
-
-                // 데이터 로드 완료 시 회원 탭 표시
-                switchD1DetailTab('member');
+                _d1CacheMap[classId] = Array.isArray(data) ? data : [];
+                _applyD1Data_(_d1CacheMap[classId]);
             })
             .withFailureHandler(err => {
                 grid.innerHTML = '<div class="text-red-400 py-2 text-xs text-center">로드 실패</div>';
             })
             .readClassD1ByClassId(classId);
+    }
+
+    function reloadClassD1Grid(classId) {
+        delete _d1CacheMap[classId];
+        loadClassD1Grid(classId);
     }
 
     // 배치 그룹핑: class_d1_id 에서 타임스탬프(중간 파트) 기준으로 묶기
@@ -13508,7 +13530,7 @@ ${token}
         if (!/^\d{8}$/.test(newDate)) { showStatus('날짜 형식 오류 (YYYYMMDD)', 'error'); return; }
         google.script.run
             .withSuccessHandler(r => {
-                if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); }
+                if (r.success) { showStatus(r.message, 'success'); reloadClassD1Grid(selectedClassId); }
                 else showStatus(r.message, 'error');
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
@@ -13519,7 +13541,7 @@ ${token}
         if (!confirm(loopNo + '회차를 삭제하시겠습니까?')) return;
         google.script.run
             .withSuccessHandler(r => {
-                if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); }
+                if (r.success) { showStatus(r.message, 'success'); reloadClassD1Grid(selectedClassId); }
                 else showStatus(r.message, 'error');
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
@@ -14006,7 +14028,7 @@ ${token}
         if (!updateData) return;
         google.script.run
             .withSuccessHandler(r => {
-                if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); renderEditD1List_(); }
+                if (r.success) { showStatus(r.message, 'success'); reloadClassD1Grid(selectedClassId); renderEditD1List_(); }
                 else showStatus(r.message, 'error');
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
@@ -14105,7 +14127,7 @@ ${token}
                         showStatus(laterItems.length > 0 ? '회차 추가 및 번호 재조정 완료' : r.message, 'success');
                         editD1NewRowMode_ = false; editD1FocusedId_ = null;
                         document.getElementById('editD1BatchModal').classList.add('content-hidden');
-                        loadClassD1Grid(selectedClassId);
+                        reloadClassD1Grid(selectedClassId);
                     } else showStatus(r.message, 'error');
                 })
                 .withFailureHandler(e => showStatus(e.message, 'error'))
@@ -14175,7 +14197,7 @@ ${token}
         const ids = items.map(d => d.class_d1_id);
         google.script.run
             .withSuccessHandler(r => {
-                if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); renderEditD1List_(); }
+                if (r.success) { showStatus(r.message, 'success'); reloadClassD1Grid(selectedClassId); renderEditD1List_(); }
                 else showStatus(r.message, 'error');
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
@@ -14192,7 +14214,7 @@ ${token}
                     showStatus(r.message, 'success');
                     editD1SelectedIds_ = new Set();
                     editD1FocusedId_ = null;
-                    loadClassD1Grid(selectedClassId);
+                    reloadClassD1Grid(selectedClassId);
                     // 모달 리스트 갱신 (loadClassD1Grid 후 allClassD1Data가 갱신되면 재렌더)
                     setTimeout(() => renderEditD1List_(), 1200);
                 } else showStatus(r.message, 'error');
@@ -14210,7 +14232,7 @@ ${token}
         const classD1Ids = batch.items.map(d => d.class_d1_id);
         google.script.run
             .withSuccessHandler(r => {
-                if (r.success) { showStatus(r.message, 'success'); loadClassD1Grid(selectedClassId); }
+                if (r.success) { showStatus(r.message, 'success'); reloadClassD1Grid(selectedClassId); }
                 else showStatus(r.message, 'error');
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
@@ -14830,7 +14852,7 @@ ${token}
                 if (loadingModal) loadingModal.classList.add('content-hidden');
                 if (result.success) {
                     showStatus(result.message, 'success');
-                    loadClassD1Grid(selectedClassId);
+                    reloadClassD1Grid(selectedClassId);
                 } else {
                     showStatus(result.message, 'error');
                 }
