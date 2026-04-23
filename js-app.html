@@ -12139,6 +12139,19 @@ ${token}
         filterClassScheduleList();
     }
 
+    // classId의 수업리스트(배치) 개수를 _d1CacheMap 기반으로 계산
+    function getBatchCountForClass_(classId) {
+        const sessions = _d1CacheMap[String(classId)];
+        if (!sessions || !sessions.length) return 0;
+        const batchKeys = new Set();
+        sessions.forEach(s => {
+            const parts = String(s.class_d1_id).split('_');
+            const bk = parts.length >= 2 ? parts[1] : 'default';
+            batchKeys.add(bk);
+        });
+        return batchKeys.size;
+    }
+
     function filterClassScheduleList() {
         const gradeKw = document.getElementById('csd-search-grade')?.value || '';
         const locKw = document.getElementById('csd-search-loc')?.value || '';
@@ -12166,11 +12179,18 @@ ${token}
             return true;
         });
 
-        filtered.sort((a, b) => {
-            const va = String(a[csdSortKey] || '');
-            const vb = String(b[csdSortKey] || '');
-            return csdSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
-        });
+        // 수업수(배치 수) 선계산 → 렌더/정렬 공용
+        filtered.forEach(c => { c._batchCount = getBatchCountForClass_(c.class_id); });
+
+        if (csdSortKey === 'batch_count') {
+            filtered.sort((a, b) => csdSortAsc ? (a._batchCount - b._batchCount) : (b._batchCount - a._batchCount));
+        } else {
+            filtered.sort((a, b) => {
+                const va = String(a[csdSortKey] || '');
+                const vb = String(b[csdSortKey] || '');
+                return csdSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+        }
 
         renderClassScheduleList(filtered);
     }
@@ -12179,7 +12199,7 @@ ${token}
         const tbody = document.getElementById('classScheduleListTableBody');
         if (!tbody) return;
         if (classes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500 text-xs">수업이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500 text-xs">수업이 없습니다.</td></tr>';
             return;
         }
 
@@ -12191,8 +12211,13 @@ ${token}
                 ? 'bg-green-100 border-l-4 border-green-500'
                 : 'hover:bg-green-50 border-l-4 border-transparent';
             const txtCls = isSelected ? 'font-semibold text-green-900' : 'text-gray-700';
+            const bc = (typeof c._batchCount === 'number') ? c._batchCount : getBatchCountForClass_(c.class_id);
+            const bcTxt = bc > 0
+                ? `<span class="inline-block min-w-[22px] px-1 rounded bg-indigo-100 text-indigo-700 font-semibold">${bc}</span>`
+                : `<span class="text-gray-300">0</span>`;
 
             html += `<tr class="cursor-pointer ${rowCls} transition-colors" onclick="selectClassForSchedule('${c.class_id}')">
+                <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${bcTxt}</td>
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${escapeHtml(c.class_type)}</td>
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${escapeHtml(c.class_name)}</td>
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${escapeHtml(c.class_grade)}</td>
@@ -12200,6 +12225,11 @@ ${token}
             </tr>`;
         }
         tbody.innerHTML = html;
+        // 컬럼 너비 드래그 조절(저장 포함) — 종목리스트 테이블
+        setTimeout(function() {
+            const tableEl = tbody.closest('table');
+            if (tableEl) initTableColResize_(tableEl, 'csd_class_list_col_widths');
+        }, 0);
     }
 
     function selectClassForSchedule(classId) {
@@ -12249,14 +12279,22 @@ ${token}
             _applyD1Data_(_d1CacheMap[classId]);
             return;
         }
-        grid.innerHTML = '<div class="text-gray-400 py-2 text-xs text-center">불러오는 중...</div>';
+        // 회차리스트 / 수업리스트 동시 로딩 표시
+        grid.innerHTML = '<div class="text-gray-400 py-4 text-xs text-center"><span class="inline-block animate-pulse">⏳ 조회 중입니다...</span></div>';
+        const batchTbody_ = document.getElementById('classD1BatchListTableBody');
+        if (batchTbody_) {
+            batchTbody_.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-gray-400 text-xs"><span class="inline-block animate-pulse">⏳ 조회 중입니다...</span></td></tr>';
+        }
         google.script.run
             .withSuccessHandler(data => {
                 _d1CacheMap[classId] = Array.isArray(data) ? data : [];
                 _applyD1Data_(_d1CacheMap[classId]);
+                // 수업수 갱신 반영 → 종목리스트 재렌더 (셀렉션 유지)
+                filterClassScheduleList();
             })
             .withFailureHandler(err => {
                 grid.innerHTML = '<div class="text-red-400 py-2 text-xs text-center">로드 실패</div>';
+                if (batchTbody_) batchTbody_.innerHTML = '<tr><td colspan="6" class="p-3 text-center text-red-400 text-xs">로드 실패</td></tr>';
             })
             .readClassD1ByClassId(classId);
     }
