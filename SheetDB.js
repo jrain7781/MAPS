@@ -449,17 +449,16 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
   const actualSavedChuchenState = shouldResetChuchen ? '' : newChuchenState;
 
   if (shouldResetChuchen) {
-    newRowValues[16] = ''; // Q: chuchen_state 클리어
-    newRowValues[17] = ''; // R: chuchen_date 클리어
-    // T(bid_datetime_2)는 일반 케이스만 클리어. 수업회차(class_d1_id 존재)는 회차 데이터 유지
-    if (!oldClassD1IdVal) {
-      newRowValues[19] = ''; // T: bid_datetime_2 클리어
-    }
+    // 4키 모두 클리어 (수업회차 케이스 포함) — 다른 회원 추천 시 새로 등록되도록
+    newRowValues[16] = ''; // Q: chuchen_state
+    newRowValues[17] = ''; // R: chuchen_date
+    newRowValues[18] = ''; // S: class_d1_id
+    newRowValues[19] = ''; // T: bid_datetime_2
   } else if (newChuchenState) {
     newRowValues[16] = newChuchenState;
     if (newChuchenState === '신규') {
       newRowValues[17] = ''; // 신규로 변경 시 chuchen_date 클리어
-      if (!oldClassD1IdVal) newRowValues[19] = ''; // bid_datetime_2도 클리어 (일반)
+      if (!oldClassD1IdVal) newRowValues[19] = ''; // bid_datetime_2 클리어 (일반만, 수업회차는 회차 데이터 유지)
     } else if (newChuchenState === '전달완료' && oldValues.chuchen_state !== '전달완료') {
       // 신규/null → 전달완료: chuchen_date 갱신 + bid_datetime_2 자동 계산 (일반 케이스만)
       const nowIso = new Date().toISOString();
@@ -597,19 +596,18 @@ function updateBulkStatus(ids, newStatus) {
     const idx = allIds.findIndex(v => String(v) === String(id));
     if (idx >= 0) {
       const rowNum = idx + 2;
-      // [캐스케이드 클리어] stu_member 변경 시 4키 룰 깨뜨림 → 3키 클리어
-      // 일반 케이스(class_d1_id 비어있음)만 bid_datetime_2 클리어. 수업회차는 회차 데이터 유지
       const curStu = String(sheet.getRange(rowNum, 5).getValue() || '').trim();
-      const curClassD1 = String(sheet.getRange(rowNum, 19).getValue() || '').trim(); // S열
       const stuChanged = (curStu === '추천' && newStatusVal !== '추천') ||
                          (curStu !== '추천' && newStatusVal === '추천');
 
       sheet.getRange(rowNum, 5).setValue(newStatusVal); // E: stu_member
 
       if (stuChanged) {
+        // 4키 모두 클리어 (수업회차 포함) — 다른 회원 추천 시 새로 등록되도록
         sheet.getRange(rowNum, 17).setValue(''); // Q: chuchen_state
         sheet.getRange(rowNum, 18).setValue(''); // R: chuchen_date
-        if (!curClassD1) sheet.getRange(rowNum, 20).setValue(''); // T: bid_datetime_2 (일반만)
+        sheet.getRange(rowNum, 19).setValue(''); // S: class_d1_id
+        sheet.getRange(rowNum, 20).setValue(''); // T: bid_datetime_2
       }
       updatedCount++;
     }
@@ -4907,7 +4905,7 @@ function autoExpireRecommended() {
 
       if (stuMember !== '추천') return;
 
-      // [신규 룰] bid_datetime_2 우선. 만료 시 3키(chuchen_state/chuchen_date/bid_datetime_2) 클리어
+      // [신규 룰] bid_datetime_2 우선. 만료 시 4키 모두 클리어
       // (일반/수업 통합 처리. 일반은 updateChuchenState에서 bid_datetime_2가 자동 채워짐)
       if (bd2Str) {
         const expTs = parseBd2Str_(bd2Str);
@@ -4916,8 +4914,8 @@ function autoExpireRecommended() {
             sheet.getRange(realRow, 5).setValue('미정');     // E: stu_member
             sheet.getRange(realRow, 17).setValue('');         // Q: chuchen_state
             sheet.getRange(realRow, 18).setValue('');         // R: chuchen_date
-            // bid_datetime_2는 일반만 클리어, 수업회차는 회차 데이터 유지
-            if (!classD1Id) sheet.getRange(realRow, 20).setValue(''); // T
+            sheet.getRange(realRow, 19).setValue('');         // S: class_d1_id
+            sheet.getRange(realRow, 20).setValue('');         // T: bid_datetime_2
             writeItemHistory_({
               action: 'AUTO_EXPIRE',
               item_id: itemId,
@@ -4953,11 +4951,13 @@ function autoExpireRecommended() {
       const elapsed = (now - dateObj) / (1000 * 3600); // 시간 단위
 
       if (elapsed >= 48) {
-        // 미정 전환 (만료): AUTO_EXPIRE_ENABLED 설정이 true일 때만 실행
+        // 미정 전환 (만료): 4키 모두 클리어
         if (getSetting_('AUTO_EXPIRE_ENABLED', 'true') === 'true') {
           sheet.getRange(realRow, 5).setValue('미정');
           sheet.getRange(realRow, 17).setValue(''); // Q
           sheet.getRange(realRow, 18).setValue(''); // R
+          sheet.getRange(realRow, 19).setValue(''); // S: class_d1_id
+          sheet.getRange(realRow, 20).setValue(''); // T: bid_datetime_2
           writeItemHistory_({
             action: 'AUTO_EXPIRE',
             item_id: itemId,
