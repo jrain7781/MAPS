@@ -983,6 +983,16 @@
         return d ? d.getTime() : NaN;
     }
 
+    // [4키 룰] 로딩바 표시 조건: stu_member=추천 + chuchen_state=전달완료 + chuchen_date + bid_datetime_2
+    function _shouldShowChuchenBar_(item) {
+        if (!item) return false;
+        const stu = String(item.stu_member || '').trim();
+        const cs = String(item.chuchen_state || '').trim();
+        const cd = String(item.chuchen_date || '').trim();
+        const bd2 = String(item.bid_datetime_2 || '').trim();
+        return stu === '추천' && cs === '전달완료' && cd && bd2;
+    }
+
     // [추천 전달] 타이머 바: 왼쪽=빨강(경과), 오른쪽=초록(남음)
     function createChuchenTimerBar(chuchenDate, item) {
         if (!chuchenDate) return '';
@@ -998,9 +1008,9 @@
                 return String(d).padStart(2,'0') + 'd ' + String(h).padStart(2,'0') + 'h';
             }
 
-            // 수업회차 물건: items T열 bid_datetime_2 직접 사용
+            // [신규 룰] bid_datetime_2 우선 사용 (일반/수업 통합)
             const bd2Str = item && String(item.bid_datetime_2 || '').trim();
-            if (item && item.class_d1_id && bd2Str) {
+            if (bd2Str) {
                 const endAt = parseYymmddHHmm_(bd2Str);
                 if (!isNaN(endAt) && endAt > startAt) {
                     const totalMs = endAt - startAt;
@@ -1014,10 +1024,10 @@
                     const bg = `linear-gradient(to right, #ef4444 ${elapsedPct}%, #22c55e ${elapsedPct}%)`;
                     return `<div class="chuchen-timer-bar" style="background:${bg};position:relative"><div class="chuchen-timer-badge" style="left:${badgePct}%">${remainLabel}</div></div>`;
                 }
-                return ''; // bid_datetime_2 파싱 실패 or 미래 시작점 → 바 숨김
+                return '';
             }
 
-            // 일반 추천 물건: chuchen_date 기준 48h
+            // [Fallback - 옛 데이터] bid_datetime_2 없음 → chuchen_date + 48h
             const elapsedHours = (now - startAt) / (1000 * 3600);
             const MAX_HOURS = 48;
             if (elapsedHours >= MAX_HOURS) return `<div class="chuchen-timer-bar" style="background:#ef4444"><div class="chuchen-timer-badge" style="left:94%">만료</div></div>`;
@@ -1615,7 +1625,7 @@
             `;
         }
 
-        const timerBarHtml = (rawStatus === '추천' && item.chuchen_date) ? createChuchenTimerBar(item.chuchen_date, item) : '';
+        const timerBarHtml = _shouldShowChuchenBar_(item) ? createChuchenTimerBar(item.chuchen_date, item) : '';
 
         return `
             <div class="member-item-card" onmouseenter="preloadItemImage('${item.image_id}')" onclick="handleMemberCardClick('${itemId}')">
@@ -2059,10 +2069,11 @@
 
                         const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${(hasImages || hasAucId) ? `<span class="inline-block w-3.5 h-3.5 rounded-full ${dotClass} cursor-pointer" onmouseenter="preloadItemImage('${bid.image_id}')" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="${dotTitle}"></span>` : ''}</span>`;
 
-                        // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
-                        const chuchenDateStr = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date, bid.bid_datetime_2) : '';
+                        // [추천 전달] 사건번호 아래 전달 일시 + 타이머 바 (4키 룰)
+                        const showBar1 = _shouldShowChuchenBar_(bid);
+                        const chuchenDateStr = showBar1 ? formatChuchenDate(bid.chuchen_date, bid.bid_datetime_2) : '';
                         const chuchenDateHtml = chuchenDateStr ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr}</div>` : '';
-                        const timerBarHtml = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
+                        const timerBarHtml = showBar1 ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
 
                         const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
@@ -2752,10 +2763,11 @@
                         const hasImages = !!bid.has_images;
                         const imgButtonHtml = `<span class="inline-block w-5 text-center flex-shrink-0">${hasImages ? `<span class="inline-block w-3.5 h-3.5 rounded-full bg-green-500 cursor-pointer" onclick="event.stopPropagation(); openDetailModalWithTab('${bid.id}', true)" title="이미지 있음"></span>` : ''}</span>`;
 
-                        // [추천 전달] 사건번호 아래 전달 일시 + 48시간 타이머 바
-                        const chuchenDateStr2 = (bid.stu_member === '추천' && bid.chuchen_date) ? formatChuchenDate(bid.chuchen_date, bid.bid_datetime_2) : '';
+                        // [추천 전달] 사건번호 아래 전달 일시 + 타이머 바 (4키 룰)
+                        const showBar2 = _shouldShowChuchenBar_(bid);
+                        const chuchenDateStr2 = showBar2 ? formatChuchenDate(bid.chuchen_date, bid.bid_datetime_2) : '';
                         const chuchenDateHtml2 = chuchenDateStr2 ? `<div class="text-[9px] text-indigo-400 mt-0.5 leading-tight">${chuchenDateStr2}</div>` : '';
-                        const timerBarHtml2 = (bid.stu_member === '추천' && bid.chuchen_date) ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
+                        const timerBarHtml2 = showBar2 ? createChuchenTimerBar(bid.chuchen_date, bid) : '';
 
                         const mobileHtml = `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
@@ -15827,13 +15839,24 @@ ${token}
             .getItemsByClassD1Id(classD1Id);
     }
 
-    // items 리스트 행의 최종마감 진행률 바 셀 HTML 생성
+    // 남은 시간 → "1일 13시" 포맷
+    function _fmtRemainDH_(ms) {
+        if (ms <= 0) return '마감';
+        const totalH = Math.floor(ms / 3600000);
+        const d = Math.floor(totalH / 24);
+        const h = totalH % 24;
+        return d + '일 ' + h + '시';
+    }
+
+    // items 리스트 행의 최종마감 진행률 바 셀 HTML 생성 (4키 룰 체크)
     function _buildDeadlineProgressCell_(item) {
-        const raw = item && item.bid_datetime_2;
-        const deadlineRaw = _parseBidDt_(raw);
+        // 4키 룰: stu_member=추천 + chuchen_state=전달완료 + chuchen_date + bid_datetime_2
+        if (!_shouldShowChuchenBar_(item)) return '<span class="text-gray-300 text-[10px]">-</span>';
+
+        const deadlineRaw = _parseBidDt_(item.bid_datetime_2);
         if (!deadlineRaw) return '<span class="text-gray-300 text-[10px]">-</span>';
         const deadline = adjustFinalDeadline_(deadlineRaw);
-        // 시작 기준: chuchen_date(등록일) > in-date(입찰일) fallback
+
         let start = null;
         const cd = item.chuchen_date;
         if (cd) {
@@ -15845,36 +15868,19 @@ ${token}
                 if (!isNaN(dt.getTime())) start = dt;
             }
         }
-        if (!start) {
-            // fallback: deadline - 7d
-            start = new Date(deadline.getTime() - 7 * 86400000);
-        }
+        if (!start) start = new Date(deadline.getTime() - 7 * 86400000);
+
         const now = Date.now();
         const total = deadline.getTime() - start.getTime();
         const elapsed = now - start.getTime();
-        let pct;
-        let cls;
-        let label;
-        if (total <= 0) {
-            pct = 100; cls = 'done'; label = '마감';
-        } else if (elapsed >= total) {
-            pct = 100; cls = 'done'; label = '마감';
+        let pct, cls;
+        if (total <= 0 || elapsed >= total) {
+            pct = 100; cls = 'done';
         } else {
             pct = Math.max(0, Math.min(100, (elapsed / total) * 100));
-            // 남은 시간 레이블
-            const remainMs = deadline.getTime() - now;
-            const remainH = Math.floor(remainMs / 3600000);
-            if (remainH >= 48) {
-                const d = Math.floor(remainH / 24);
-                label = 'D-' + d;
-            } else if (remainH >= 1) {
-                label = remainH + '시간';
-            } else {
-                const remainMin = Math.max(0, Math.floor(remainMs / 60000));
-                label = remainMin + '분';
-            }
             cls = pct < 60 ? 'ok' : (pct < 85 ? 'warn' : 'late');
         }
+        const remainText = _fmtRemainDH_(deadline.getTime() - now);
         const deadlineIso = deadline.toISOString();
         const startIso = start.toISOString();
         const mm = String(deadline.getMonth()+1).padStart(2,'0');
@@ -15882,9 +15888,11 @@ ${token}
         const hh = String(deadline.getHours()).padStart(2,'0');
         const mi = String(deadline.getMinutes()).padStart(2,'0');
         const tooltip = `최종마감: ${mm}/${dd} ${hh}:${mi}`;
-        return `<div class="deadline-bar-wrap" data-deadline="${deadlineIso}" data-start="${startIso}" title="${tooltip}">
-            <div class="deadline-bar-fill ${cls}" style="width:${pct.toFixed(1)}%"></div>
-            <div class="deadline-bar-label">${label}</div>
+        return `<div class="deadline-bar-cell" title="${tooltip}">
+            <div class="deadline-bar-remain text-[10px] text-gray-700 leading-tight mb-0.5">${remainText}</div>
+            <div class="deadline-bar-wrap" data-deadline="${deadlineIso}" data-start="${startIso}">
+                <div class="deadline-bar-fill ${cls}" style="width:${pct.toFixed(1)}%"></div>
+            </div>
         </div>`;
     }
 
@@ -15902,23 +15910,22 @@ ${token}
             const total = dt.getTime() - st.getTime();
             const elapsed = now - st.getTime();
             const fill = w.querySelector('.deadline-bar-fill');
-            const lbl = w.querySelector('.deadline-bar-label');
-            if (!fill || !lbl) return;
-            let pct, cls, label;
+            if (!fill) return;
+            let pct, cls;
             if (total <= 0 || elapsed >= total) {
-                pct = 100; cls = 'done'; label = '마감';
+                pct = 100; cls = 'done';
             } else {
                 pct = Math.max(0, Math.min(100, (elapsed / total) * 100));
-                const remainMs = dt.getTime() - now;
-                const remainH = Math.floor(remainMs / 3600000);
-                if (remainH >= 48) { label = 'D-' + Math.floor(remainH / 24); }
-                else if (remainH >= 1) { label = remainH + '시간'; }
-                else { label = Math.max(0, Math.floor(remainMs / 60000)) + '분'; }
                 cls = pct < 60 ? 'ok' : (pct < 85 ? 'warn' : 'late');
             }
             fill.style.width = pct.toFixed(1) + '%';
             fill.className = 'deadline-bar-fill ' + cls;
-            lbl.textContent = label;
+            // 남은시간 텍스트 갱신 (cell 컨테이너 안의 형제 노드)
+            const cell = w.parentElement;
+            if (cell && cell.classList.contains('deadline-bar-cell')) {
+                const remainEl = cell.querySelector('.deadline-bar-remain');
+                if (remainEl) remainEl.textContent = _fmtRemainDH_(dt.getTime() - now);
+            }
         });
     }
     if (typeof _deadlineTickIntv_ === 'undefined') {
@@ -18473,7 +18480,7 @@ MJ 이정우 팀장
         var dtLabel = dt.substring(2, 4) + '월 ' + dt.substring(4, 6) + '일';
         var txtCol = (s === '추천') ? '#000' : '#fff';
         var clickLabel = (s === '추천') ? '<div class="ic-click-label bid-confirm">입찰확정 클릭!</div>' : '';
-        var timerBar = (s === '추천' && i.chuchen_date) ? createChuchenTimerBar(i.chuchen_date, i) : '';
+        var timerBar = _shouldShowChuchenBar_(i) ? createChuchenTimerBar(i.chuchen_date, i) : '';
         var skSafe = sk.replace(/'/g, '');
         var viewIcoSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
 

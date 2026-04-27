@@ -18,7 +18,49 @@ const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_nam
 // chuchen_state:  Q열(idx 16) - '신규'|'전달완료'
 // chuchen_date:   R열(idx 17) - 최근 전달 일시 (ISO string)
 // class_d1_id:    S열(idx 18) - 수업 회차 ID (수업 물건 연결용)
-// bid_datetime_2: T열(idx 19) - 수업 최종 마감 일시 (수업회차 등록 시 복사)
+// bid_datetime_2: T열(idx 19) - 최종 마감 일시 (yyMMddHHmm). 일반=chuchen_date+48h+주말보정, 수업=회차값
+
+// ============================================================================
+// 마감일 보정 헬퍼 (서버) — js-app.html의 adjustFinalDeadline_ 와 동일 로직
+// 토/일/공휴일이면 다음 평일로 이동(최대 7일), 보정 시 14:00로 설정
+// ============================================================================
+const _KR_HOLIDAYS_GLOBAL_ = (function() {
+  return new Set([
+    '2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-03-01','2026-03-02',
+    '2026-05-05','2026-05-24','2026-05-25','2026-06-03','2026-06-06','2026-08-15','2026-08-17',
+    '2026-09-24','2026-09-25','2026-09-26','2026-10-03','2026-10-05','2026-10-09','2026-12-25'
+  ]);
+})();
+function _isKRHolidayOrWeekend_(dt) {
+  if (!dt || isNaN(dt.getTime())) return false;
+  var w = dt.getDay();
+  if (w === 0 || w === 6) return true;
+  var ymd = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+  return _KR_HOLIDAYS_GLOBAL_.has(ymd);
+}
+function adjustFinalDeadline_(dt) {
+  if (!dt || isNaN(dt.getTime())) return dt;
+  var out = new Date(dt.getTime());
+  var shifted = false;
+  for (var i = 0; i < 7 && _isKRHolidayOrWeekend_(out); i++) {
+    out.setDate(out.getDate() + 1);
+    shifted = true;
+  }
+  if (shifted) out.setHours(14, 0, 0, 0);
+  return out;
+}
+function _formatBd2_(dt) {
+  if (!dt || isNaN(dt.getTime())) return '';
+  return Utilities.formatDate(dt, Session.getScriptTimeZone(), 'yyMMddHHmm');
+}
+// chuchen_date(ISO) + 48h + 주말/공휴일 보정 → bid_datetime_2 문자열 반환
+function calcBidDatetime2FromChuchen_(chuchenDateIso) {
+  if (!chuchenDateIso) return '';
+  var d = new Date(chuchenDateIso);
+  if (isNaN(d.getTime())) return '';
+  d.setTime(d.getTime() + 48 * 3600 * 1000);
+  return _formatBd2_(adjustFinalDeadline_(d));
+}
 
 
 // members 시트 헤더 정의 (2026-02 개편)
@@ -332,8 +374,8 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
 
   const realRowIndex = match.getRow();
 
-  // [PHASE 1-3] 저장 전: 기존 값 읽기 (변경 감지용) - 17열(chuchen_state)까지 읽기
-  const range = sheet.getRange(realRowIndex, 1, 1, 18); // R열(18)까지 한 번에 처리
+  // [PHASE 1-3] 저장 전: 기존 값 읽기 (변경 감지용) - T열(20)까지 읽기 (class_d1_id, bid_datetime_2 포함)
+  const range = sheet.getRange(realRowIndex, 1, 1, ITEM_HEADERS.length); // A~T 한 번에 처리
   const rowValues = range.getValues()[0];
   const oldValues = {
     inDate: String(rowValues[1] || '').trim(), // B
@@ -352,6 +394,8 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
     auction_id: String(rowValues[15] || '').trim(), // P
     chuchen_state: String(rowValues[16] || '').trim(), // Q
     chuchen_date: String(rowValues[17] || '').trim(), // R
+    class_d1_id: String(rowValues[18] || '').trim(), // S
+    bid_datetime_2: String(rowValues[19] || '').trim(), // T
   };
 
   // 신규 값 배열 생성 (메모리상 업데이트)
@@ -389,25 +433,41 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
 
   const newChuchenState = String(chuchenState || '').trim();
   const newStuMemberVal = String(stuMember || '').trim();
+  const newMNameVal = String(mName || '').trim();
+  const oldMNameVal = String(oldValues.m_name || '').trim();
+  const oldClassD1IdVal = String(oldValues.class_d1_id || '').trim();
 
-  // 초기화 조건: 추천 진입/이탈 + 입찰→미정/상품
-  const shouldResetChuchen =
+  // 초기화 조건: stu_member(=물건상태) 변경 OR m_name(회원명) 변경
+  // → 4키 룰(stu_member=추천 + chuchen_state=전달완료 + chuchen_date + bid_datetime_2) 깨뜨림
+  const stuMemberChanged =
     (oldValues.stu_member === '추천' && newStuMemberVal !== '추천') ||
     (oldValues.stu_member !== '추천' && newStuMemberVal === '추천') ||
     (oldValues.stu_member === '입찰' && (newStuMemberVal === '미정' || newStuMemberVal === '상품'));
+  const mNameChanged = (oldMNameVal !== newMNameVal);
+  const shouldResetChuchen = stuMemberChanged || mNameChanged;
 
   const actualSavedChuchenState = shouldResetChuchen ? '' : newChuchenState;
 
   if (shouldResetChuchen) {
-    newRowValues[16] = ''; // Q열: chuchen_state 초기화
-    newRowValues[17] = ''; // R열: chuchen_date 초기화
+    newRowValues[16] = ''; // Q: chuchen_state 클리어
+    newRowValues[17] = ''; // R: chuchen_date 클리어
+    // T(bid_datetime_2)는 일반 케이스만 클리어. 수업회차(class_d1_id 존재)는 회차 데이터 유지
+    if (!oldClassD1IdVal) {
+      newRowValues[19] = ''; // T: bid_datetime_2 클리어
+    }
   } else if (newChuchenState) {
     newRowValues[16] = newChuchenState;
     if (newChuchenState === '신규') {
-      newRowValues[17] = ''; // 신규로 변경 시 chuchen_date 초기화
+      newRowValues[17] = ''; // 신규로 변경 시 chuchen_date 클리어
+      if (!oldClassD1IdVal) newRowValues[19] = ''; // bid_datetime_2도 클리어 (일반)
     } else if (newChuchenState === '전달완료' && oldValues.chuchen_state !== '전달완료') {
-      // 신규/null → 전달완료 변경 시에만 기산점 갱신 (이미 전달완료면 타이머 유지)
-      newRowValues[17] = new Date().toISOString(); // R열: chuchen_date
+      // 신규/null → 전달완료: chuchen_date 갱신 + bid_datetime_2 자동 계산 (일반 케이스만)
+      const nowIso = new Date().toISOString();
+      newRowValues[17] = nowIso; // R: chuchen_date
+      if (!oldClassD1IdVal) {
+        const bd2 = calcBidDatetime2FromChuchen_(nowIso);
+        if (bd2) newRowValues[19] = bd2; // T: bid_datetime_2
+      }
     }
   }
 
@@ -532,18 +592,24 @@ function updateBulkStatus(ids, newStatus) {
   const allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
   let updatedCount = 0;
 
+  const newStatusVal = String(newStatus || '').trim();
   ids.forEach(id => {
     const idx = allIds.findIndex(v => String(v) === String(id));
     if (idx >= 0) {
       const rowNum = idx + 2;
-      // 5번째 열(E열)이 stu_member
-      sheet.getRange(rowNum, 5).setValue(String(newStatus || '').trim());
-      // stu_member가 '추천'으로 변경될 때 chuchen_state가 비어있으면 '신규'로 설정
-      if (newStatus === '추천') {
-        const curChuchenState = String(sheet.getRange(rowNum, 17).getValue()).trim();
-        if (!curChuchenState) {
-          sheet.getRange(rowNum, 17).setValue('신규'); // Q열: chuchen_state
-        }
+      // [캐스케이드 클리어] stu_member 변경 시 4키 룰 깨뜨림 → 3키 클리어
+      // 일반 케이스(class_d1_id 비어있음)만 bid_datetime_2 클리어. 수업회차는 회차 데이터 유지
+      const curStu = String(sheet.getRange(rowNum, 5).getValue() || '').trim();
+      const curClassD1 = String(sheet.getRange(rowNum, 19).getValue() || '').trim(); // S열
+      const stuChanged = (curStu === '추천' && newStatusVal !== '추천') ||
+                         (curStu !== '추천' && newStatusVal === '추천');
+
+      sheet.getRange(rowNum, 5).setValue(newStatusVal); // E: stu_member
+
+      if (stuChanged) {
+        sheet.getRange(rowNum, 17).setValue(''); // Q: chuchen_state
+        sheet.getRange(rowNum, 18).setValue(''); // R: chuchen_date
+        if (!curClassD1) sheet.getRange(rowNum, 20).setValue(''); // T: bid_datetime_2 (일반만)
       }
       updatedCount++;
     }
@@ -4375,8 +4441,8 @@ function updateChuchenState(itemIds, state, dateStr, triggerType) {
     if (!sheet) return { success: false, updated: 0 };
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, updated: 0 };
-    // 17열까지 읽어 chuchen_state(Q), m_name(G), member_id(I) 확보
-    var allData = sheet.getRange(2, 1, lastRow - 1, 17).getValues();
+    // ITEM_HEADERS 전체 길이만큼 읽어 class_d1_id(S), bid_datetime_2(T)까지 확보
+    var allData = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
     var updated = 0;
     var idsStr = itemIds.map(String);
     var affectedMemberIds = [];
@@ -4384,10 +4450,31 @@ function updateChuchenState(itemIds, state, dateStr, triggerType) {
       var rowId = String(row[0] || '').trim();
       if (idsStr.indexOf(rowId) === -1) return;
       var oldState = String(row[16] || '').trim(); // Q열(idx 16): chuchen_state
-      sheet.getRange(i + 2, 17).setValue(state);
-      if (state === '전달완료' && dateStr) {
-        sheet.getRange(i + 2, 18).setValue(dateStr); // R열: chuchen_date
+      var oldClassD1Id = String(row[18] || '').trim(); // S열: class_d1_id
+      var oldBd2 = String(row[19] || '').trim(); // T열: bid_datetime_2
+
+      sheet.getRange(i + 2, 17).setValue(state); // Q: chuchen_state
+
+      if (state === '전달완료') {
+        // chuchen_date 저장 (dateStr 우선, 없으면 now)
+        var savedChuchenDate = dateStr || new Date().toISOString();
+        sheet.getRange(i + 2, 18).setValue(savedChuchenDate); // R: chuchen_date
+
+        // bid_datetime_2 자동 계산: 일반 케이스(class_d1_id 비어있음)만
+        // 수업회차 케이스는 회차 등록 시 이미 채워진 bid_datetime_2 유지
+        if (!oldClassD1Id) {
+          var bd2 = calcBidDatetime2FromChuchen_(savedChuchenDate);
+          if (bd2) sheet.getRange(i + 2, 20).setValue(bd2); // T: bid_datetime_2
+        }
+      } else {
+        // 전달완료 해제(신규 등) → 4키 룰 깨짐, chuchen_date / bid_datetime_2 클리어
+        sheet.getRange(i + 2, 18).setValue(''); // R: chuchen_date
+        // bid_datetime_2는 일반 케이스만 클리어 (수업은 회차 데이터 유지)
+        if (!oldClassD1Id) {
+          sheet.getRange(i + 2, 20).setValue(''); // T: bid_datetime_2
+        }
       }
+
       // FIELD_CHANGE 로깅 (변경이 실제 발생한 경우만)
       if (oldState !== state) {
         // [중요] 텔레그램 발송에 의한 자동 업데이트인 경우 별도 로그 안 남김 (발송 로그에 포함됨)
@@ -4764,12 +4851,17 @@ function autoExpireRecommended() {
 
       if (stuMember !== '추천') return;
 
-      // 수업회차 물건: bid_datetime_2 기준 만료 (chuchen_state 무관)
-      if (classD1Id && bd2Str) {
+      // [신규 룰] bid_datetime_2 우선. 만료 시 3키(chuchen_state/chuchen_date/bid_datetime_2) 클리어
+      // (일반/수업 통합 처리. 일반은 updateChuchenState에서 bid_datetime_2가 자동 채워짐)
+      if (bd2Str) {
         const expTs = parseBd2Str_(bd2Str);
         if (!isNaN(expTs) && now.getTime() >= expTs) {
           if (getSetting_('AUTO_EXPIRE_ENABLED', 'true') === 'true') {
-            sheet.getRange(realRow, 5).setValue('미정');
+            sheet.getRange(realRow, 5).setValue('미정');     // E: stu_member
+            sheet.getRange(realRow, 17).setValue('');         // Q: chuchen_state
+            sheet.getRange(realRow, 18).setValue('');         // R: chuchen_date
+            // bid_datetime_2는 일반만 클리어, 수업회차는 회차 데이터 유지
+            if (!classD1Id) sheet.getRange(realRow, 20).setValue(''); // T
             writeItemHistory_({
               action: 'AUTO_EXPIRE',
               item_id: itemId,
@@ -4779,17 +4871,17 @@ function autoExpireRecommended() {
               from_value: '추천',
               to_value: '미정',
               trigger_type: 'system',
-              note: 'class_d1_expire'
+              note: classD1Id ? 'class_d1_expire' : 'bd2_expire'
             });
             if (getSetting_('EXPIRY_NOTIFY_DONE', 'true') === 'true') {
               sendExpiryNotification_(memberId, itemId, 'done');
             }
           }
         }
-        return; // class_d1 물건은 48h 로직 건너뜀
+        return; // bid_datetime_2가 있으면 그것만 기준
       }
 
-      // 일반 추천 물건: chuchen_state='전달완료' + 48h 기준
+      // [Fallback - 기존 데이터 호환] bid_datetime_2가 없는 옛 데이터: chuchen_date+48h
       if (chuchenState !== '전달완료') return;
       if (!chuchenDate) return;
 
@@ -4808,6 +4900,8 @@ function autoExpireRecommended() {
         // 미정 전환 (만료): AUTO_EXPIRE_ENABLED 설정이 true일 때만 실행
         if (getSetting_('AUTO_EXPIRE_ENABLED', 'true') === 'true') {
           sheet.getRange(realRow, 5).setValue('미정');
+          sheet.getRange(realRow, 17).setValue(''); // Q
+          sheet.getRange(realRow, 18).setValue(''); // R
           writeItemHistory_({
             action: 'AUTO_EXPIRE',
             item_id: itemId,
