@@ -283,6 +283,7 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
     cache_.remove('all_class_d1_sessions');
     cache_.remove('class_batch_counts');
     cache_.remove('all_batch_members');
+    cache_.remove('class_member_index');
     return { success: true, message: `${newRows.length}개의 회차가 생성되었습니다.` };
 }
 
@@ -561,6 +562,51 @@ function getBatchMembersForClass(classId) {
 }
 
 /**
+ * 종목별 회원명 인덱스: { classId: "이름1|이름2|..." (lowercased) }
+ * - MEMBER_CLASS_DETAILS(class_id, member_id) + members(member_name) 조인
+ * - 회원명 검색 시 클라이언트가 includes()로 1-pass 매칭 → classId 추출
+ */
+function getClassMemberIndex() {
+    const cache = CacheService.getScriptCache();
+    const cached = cache.get('class_member_index');
+    if (cached) { try { return JSON.parse(cached); } catch (e) {} }
+
+    const mcdSheet = ensureMemberClassDetailsSheet_();
+    const lastRow = mcdSheet ? mcdSheet.getLastRow() : 0;
+    const result = {};
+    if (!mcdSheet || lastRow < 2) return result;
+
+    const headers = MEMBER_CLASS_DETAILS_HEADERS;
+    const classIdIdx = headers.indexOf('class_id');
+    const memberIdIdx = headers.indexOf('member_id');
+    const readCols = Math.max(classIdIdx, memberIdIdx) + 1;
+    const data = mcdSheet.getRange(2, 1, lastRow - 1, readCols).getValues();
+
+    const allMembers = readAllMembersNew();
+    const nameMap = {};
+    allMembers.forEach(function(m) {
+        nameMap[String(m.member_id)] = String(m.member_name || '');
+    });
+
+    const seen = {};
+    data.forEach(function(r) {
+        const cid = String(r[classIdIdx] || '');
+        const mid = String(r[memberIdIdx] || '');
+        if (!cid || !mid) return;
+        const name = nameMap[mid];
+        if (!name) return;
+        if (!seen[cid]) seen[cid] = {};
+        seen[cid][name] = true;
+    });
+    Object.keys(seen).forEach(function(cid) {
+        result[cid] = Object.keys(seen[cid]).join('|').toLowerCase();
+    });
+
+    try { cache.put('class_member_index', JSON.stringify(result), 300); } catch (e) {}
+    return result;
+}
+
+/**
  * 전체 CLASS_D1 시트의 회차 데이터만 반환 (수업 목록은 별도 호출)
  * → 프론트에서 수업 목록과 병렬 호출로 속도 개선
  */
@@ -808,6 +854,7 @@ function updateClassD1Batch(classD1Ids, updateData) {
     scriptCache.remove('all_class_d1_sessions');
     scriptCache.remove('class_batch_counts');
     scriptCache.remove('all_batch_members');
+    scriptCache.remove('class_member_index');
     return { success: true, message: count + '개 회차가 수정되었습니다.' };
 }
 
@@ -863,6 +910,7 @@ function deleteClassD1Batch(classD1Ids) {
     scriptCache2.remove('all_class_d1_sessions');
     scriptCache2.remove('class_batch_counts');
     scriptCache2.remove('all_batch_members');
+    scriptCache2.remove('class_member_index');
     return { success: true, message: classD1Ids.length + '개 회차가 삭제되었습니다.' };
 }
 

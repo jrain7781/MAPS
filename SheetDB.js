@@ -3287,7 +3287,10 @@ function addMemberToClassD1(classD1IdOrBatchKey, memberId, classId, mData, total
   });
 
   sheet.appendRow(row);
-  CacheService.getScriptCache().remove('mcd_' + batchKey);
+  const _cache = CacheService.getScriptCache();
+  _cache.remove('mcd_' + batchKey);
+  _cache.remove('class_member_index');
+  _cache.remove('all_batch_members');
   return { success: true, message: '회원 추가 완료' };
 }
 
@@ -3334,7 +3337,10 @@ function removeMemberFromClassD1(detailId) {
 
   const batchKey = d1IdColIdx >= 0 ? String(rows[idx][d1IdColIdx] || '') : '';
   sheet.deleteRow(idx + 2);
-  if (batchKey) CacheService.getScriptCache().remove('mcd_' + batchKey);
+  const _cache = CacheService.getScriptCache();
+  if (batchKey) _cache.remove('mcd_' + batchKey);
+  _cache.remove('class_member_index');
+  _cache.remove('all_batch_members');
   return { success: true, message: '회원 삭제 완료' };
 }
 
