@@ -952,16 +952,25 @@
             + ' ' + String(d.getHours()).padStart(2,'0')
             + ':' + String(d.getMinutes()).padStart(2,'0');
     }
+    // Date → "yy-mm-dd hh:mm" (가독성 형식)
+    function fmtDReadable_(d) {
+        if (!d) return '';
+        return String(d.getFullYear()).slice(2)
+            + '-' + String(d.getMonth()+1).padStart(2,'0')
+            + '-' + String(d.getDate()).padStart(2,'0')
+            + ' ' + String(d.getHours()).padStart(2,'0')
+            + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
     // 시작 ~ 만료 표시: "yymmdd hh:mm ~ yymmdd hh:mm"
     function formatChuchenDate(chuchenDate, bd2Str) {
         if (!chuchenDate) return '';
         try {
             const start = parseChuchen_(chuchenDate);
             if (!start) return '';
-            const startStr = fmtD_(start);
+            const startStr = fmtDReadable_(start);
             if (bd2Str) {
                 const endTs = parseYymmddHHmm_(bd2Str);
-                if (!isNaN(endTs)) return startStr + ' ~ ' + fmtD_(new Date(endTs));
+                if (!isNaN(endTs)) return startStr + ' ~ ' + fmtDReadable_(new Date(endTs));
             }
             return startStr;
         } catch (e) { return ''; }
@@ -983,6 +992,64 @@
         return d ? d.getTime() : NaN;
     }
 
+    // class_d1_id에서 class_id 파싱 → allClassesData에서 class_type 조회
+    function _getClassTypeForBid_(bid) {
+        if (!bid || !bid.class_d1_id) return '';
+        const cid = String(bid.class_d1_id).split('_')[0];
+        if (!cid) return '';
+        if (typeof allClassesData === 'undefined' || !Array.isArray(allClassesData)) return '';
+        const cls = allClassesData.find(c => String(c.class_id) === cid);
+        return cls ? String(cls.class_type || '').trim() : '';
+    }
+    // 회원명 HTML: class_type별 색상 + 수업건이면 클릭 가능
+    function _buildBidMNameHtml_(bid) {
+        const name = bid.m_name || '';
+        if (!name) return '';
+        const ctype = _getClassTypeForBid_(bid);
+        let bg = '', clickAttr = '', cursor = '';
+        if (ctype === 'CLASS') bg = 'background:#fef08a;';                       // 노랑
+        else if (ctype === 'PT' || ctype === '프리미엄 PT') bg = 'background:#fdba74;';  // 주황
+        else if (ctype === '돈클') bg = 'background:#fda4af;';                    // 분홍 (수업이라 구분)
+        if (ctype && bid.class_d1_id) {
+            const cid = String(bid.class_d1_id).split('_')[0];
+            clickAttr = ` onclick="event.stopPropagation(); navigateToClassItemTab_('${cid}', '${ctype}')"`;
+            cursor = 'cursor:pointer;text-decoration:underline;';
+        }
+        const style = bg ? `${bg}padding:0 3px;border-radius:2px;font-weight:bold;${cursor}` : `font-weight:bold;${cursor}`;
+        return `<span style="${style}"${clickAttr}>${escapeHtml(name)}</span>`;
+    }
+    // 회원명 뒤 인라인 정보: (ID: xxxx | phone | class_type - class_name [grade] (loc))
+    function _buildBidMemberInlineInfo_(bid) {
+        if (!bid || !bid.member_id) return '';
+        const mem = (typeof getMemberById_ === 'function') ? getMemberById_(bid.member_id) : null;
+        if (!mem) return '';
+        const parts = [];
+        if (mem.member_id) parts.push('ID:' + mem.member_id);
+        if (mem.phone) parts.push(mem.phone);
+        const classId = String(mem.class_id || '').trim();
+        if (classId && typeof allClassesData !== 'undefined' && Array.isArray(allClassesData)) {
+            const cls = allClassesData.find(c => String(c.class_id) === classId);
+            if (cls && (cls.class_type || cls.class_name)) {
+                const grade = cls.class_grade ? ' [' + cls.class_grade + ']' : '';
+                const loc = cls.class_loc ? ' (' + cls.class_loc + ')' : '';
+                parts.push((cls.class_type || '') + ' - ' + (cls.class_name || '') + grade + loc);
+            }
+        }
+        if (!parts.length) return '';
+        return ` <span class="text-[9px] text-gray-500">(${escapeHtml(parts.join(' | '))})</span>`;
+    }
+    // 회원명 클릭 → ClassSchedule 탭 + 종목 탭 전환 + 종목 선택 + 물건 서브탭
+    function navigateToClassItemTab_(classId, classType) {
+        if (typeof navigateTo === 'function') navigateTo('ClassSchedule');
+        const tabKey = (classType === 'PT' || classType === '프리미엄 PT') ? 'PT'
+                     : (classType === '돈클') ? '돈클' : 'CLASS';
+        setTimeout(function() {
+            if (typeof switchClassScheduleTab === 'function') switchClassScheduleTab(tabKey);
+            if (typeof selectClassForSchedule === 'function') selectClassForSchedule(classId);
+            if (typeof switchD1DetailTab === 'function') switchD1DetailTab('item');
+        }, 200);
+    }
+
     // [4키 룰] 로딩바 표시 조건: stu_member=추천 + chuchen_state=전달완료 + chuchen_date + bid_datetime_2
     function _shouldShowChuchenBar_(item) {
         if (!item) return false;
@@ -1001,11 +1068,11 @@
             const startAt = parseChuchenDate_(chuchenDate);
             if (isNaN(startAt)) return '';
 
-            // 남은 시간 → "N일 Nh" 형식
+            // 남은 시간 → "0일 0시" 형식 (수업관리와 통일)
             function fmtRemain_(ms) {
                 const totalH = Math.max(0, Math.floor(ms / (1000*3600)));
                 const d = Math.floor(totalH / 24), h = totalH % 24;
-                return String(d).padStart(2,'0') + 'd ' + String(h).padStart(2,'0') + 'h';
+                return d + '일 ' + h + '시';
             }
 
             // [신규 룰] bid_datetime_2 우선 사용 (일반/수업 통합)
@@ -2036,7 +2103,8 @@
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                         const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                         const mNameValue = bid.m_name || '';
-                        const mNameHtml = bid.class_d1_id ? `<span style="background:#fef08a;padding:0 3px;border-radius:2px;font-weight:bold;">${mNameValue}</span>` : `<span style="font-weight:bold;">${mNameValue}</span>`;
+                        const mNameHtml = _buildBidMNameHtml_(bid);
+                        const mNameInfoHtml = _buildBidMemberInlineInfo_(bid);
                         const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
@@ -2079,7 +2147,7 @@
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}</span>
+                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div>
@@ -2095,7 +2163,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}</span></div>
+                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div>
@@ -2278,7 +2346,8 @@
                     const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                     const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                     const mNameValue = bid.m_name || '';
-                    const mNameHtml = bid.class_d1_id ? `<span style="background:#fef08a;padding:0 3px;border-radius:2px;font-weight:bold;">${mNameValue}</span>` : `<span style="font-weight:bold;">${mNameValue}</span>`;
+                    const mNameHtml = _buildBidMNameHtml_(bid);
+                    const mNameInfoHtml = _buildBidMemberInlineInfo_(bid);
                     const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? '<span class="telegram-badge">T</span>' : '';
                     const statusClass = getStatusTagClass(bid.stu_member);
                     const courtButtonClass = 'button-like-content';
@@ -2314,7 +2383,7 @@
                       <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm" onmouseenter="preloadItemImage('${bid.image_id}')">
                         <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                           <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                          <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}</span>
+                          <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                         </div>
                         <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                           <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1">${dupSakunHtml(bid)}</div></div>
@@ -2329,7 +2398,7 @@
                         <div class="bid-row-top">
                           <div class="bid-top-left">${imgButtonHtml}</div>
                           <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                          <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}</span></div>
+                          <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                         </div>
                         <div class="bid-card-bottom">
                           <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div></div>
@@ -2745,7 +2814,8 @@
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
                         const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
                         const mNameValue = bid.m_name || '';
-                        const mNameHtml = bid.class_d1_id ? `<span style="background:#fef08a;padding:0 3px;border-radius:2px;font-weight:bold;">${mNameValue}</span>` : `<span style="font-weight:bold;">${mNameValue}</span>`;
+                        const mNameHtml = _buildBidMNameHtml_(bid);
+                        const mNameInfoHtml = _buildBidMemberInlineInfo_(bid);
                         const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
@@ -2773,7 +2843,7 @@
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
-                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}</span>
+                              <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div>
@@ -2792,7 +2862,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}</span></div>
+                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div>
