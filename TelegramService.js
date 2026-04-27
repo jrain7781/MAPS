@@ -969,8 +969,17 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
           if (styleKey === 'bid_price') {
             itemsSheet.getRange(rowNum, 12).setValue('전달완료'); // L열: bid_state
           } else if (styleKey === 'card') {
+            const _nowIso = new Date().toISOString();
             itemsSheet.getRange(rowNum, 17).setValue('전달완료'); // Q열: chuchen_state
-            itemsSheet.getRange(rowNum, 18).setValue(new Date().toISOString()); // R열: chuchen_date
+            itemsSheet.getRange(rowNum, 18).setValue(_nowIso); // R열: chuchen_date
+            // [4키 룰] 일반 케이스(class_d1_id 비어있음)만 bid_datetime_2 자동 계산
+            // 수업회차는 회차 등록 시 이미 채워진 bid_datetime_2 유지
+            const _classD1IdCell = itemsSheet.getRange(rowNum, 19).getValue(); // S열: class_d1_id
+            if (!String(_classD1IdCell || '').trim()) {
+              const _bd2 = (typeof calcBidDatetime2FromChuchen_ === 'function')
+                ? calcBidDatetime2FromChuchen_(_nowIso) : '';
+              if (_bd2) itemsSheet.getRange(rowNum, 20).setValue(_bd2); // T열: bid_datetime_2
+            }
           }
           SpreadsheetApp.flush();
         }
