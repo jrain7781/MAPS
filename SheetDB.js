@@ -4434,6 +4434,60 @@ function saveItemData(data, silent = false) {
  * @param {string} dateStr - ISO date string (선택, state='전달완료'일 때 기록)
  * @returns {{ success: boolean, updated: number }}
  */
+/**
+ * [만기연장] 선택 물건들의 bid_datetime_2(T열)를 새 값으로 갱신
+ * @param {Array<string>} itemIds 물건 ID 배열
+ * @param {string} newBd2 새 마감 yyMMddHHmm (10자리)
+ * @return {{success: boolean, updated: number, message?: string}}
+ */
+function extendItemDeadline(itemIds, newBd2) {
+  try {
+    if (!itemIds || !itemIds.length) return { success: false, updated: 0, message: '대상 물건이 없습니다.' };
+    const bd2 = String(newBd2 || '').trim();
+    if (!/^\d{10}$/.test(bd2)) return { success: false, updated: 0, message: '잘못된 마감 형식 (yyMMddHHmm 10자리 필요)' };
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, updated: 0, message: '시트를 찾을 수 없습니다.' };
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, updated: 0, message: '데이터가 없습니다.' };
+    const idStrs = itemIds.map(String);
+    const allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat().map(String);
+    const affectedMembers = [];
+    let updated = 0;
+    idStrs.forEach(function(id) {
+      const idx = allIds.indexOf(id);
+      if (idx < 0) return;
+      const rowNum = idx + 2;
+      const oldBd2 = String(sheet.getRange(rowNum, 20).getValue() || '').trim();
+      sheet.getRange(rowNum, 20).setValue(bd2); // T: bid_datetime_2
+      const mid = String(sheet.getRange(rowNum, 9).getValue() || '').trim();
+      const mName = String(sheet.getRange(rowNum, 7).getValue() || '').trim();
+      if (mid && affectedMembers.indexOf(mid) === -1) affectedMembers.push(mid);
+      try {
+        writeItemHistory_({
+          action: 'FIELD_CHANGE',
+          item_id: id,
+          member_id: mid,
+          member_name: mName,
+          field_name: 'bid_datetime_2',
+          from_value: oldBd2,
+          to_value: bd2,
+          trigger_type: 'web',
+          note: '만기연장'
+        });
+      } catch(e) { /* 이력 실패는 무시 */ }
+      updated++;
+    });
+    if (updated > 0) {
+      SpreadsheetApp.flush();
+      try { invalidateMemberItemsCache_(affectedMembers); } catch(e) {}
+    }
+    return { success: true, updated: updated };
+  } catch(e) {
+    return { success: false, updated: 0, message: e.message };
+  }
+}
+
 function updateChuchenState(itemIds, state, dateStr, triggerType) {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);

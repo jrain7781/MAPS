@@ -1038,6 +1038,166 @@
         if (!parts.length) return '';
         return ` <span class="text-[9px] text-gray-500">(${escapeHtml(parts.join(' | '))})</span>`;
     }
+    // ── 만기연장 모달 ──────────────────────────────────────────
+    let _extendDeadlineCtx_ = { itemIds: [], currentBd2: '' };
+
+    // 외부에서 호출: itemIds 배열 + 현재 bd2(yyMMddHHmm) 옵션
+    function openExtendDeadlineModal_(itemIds, currentBd2) {
+        _extendDeadlineCtx_.itemIds = Array.isArray(itemIds) ? itemIds : [itemIds].filter(Boolean);
+        _extendDeadlineCtx_.currentBd2 = String(currentBd2 || '').trim();
+        if (!_extendDeadlineCtx_.itemIds.length) { showStatus('대상 물건이 없습니다.', 'error'); return; }
+
+        const countEl = document.getElementById('extend-deadline-count');
+        if (countEl) countEl.textContent = _extendDeadlineCtx_.itemIds.length;
+
+        // 현재 마감 표시 + datetime-local 초기값
+        let curDate = null;
+        if (_extendDeadlineCtx_.currentBd2 && /^\d{10}$/.test(_extendDeadlineCtx_.currentBd2)) {
+            const ts = parseYymmddHHmm_(_extendDeadlineCtx_.currentBd2);
+            if (!isNaN(ts)) curDate = new Date(ts);
+        }
+        const curEl = document.getElementById('extend-deadline-current');
+        if (curEl) curEl.textContent = curDate ? fmtDReadable_(curDate) : '(미설정)';
+        const inputEl = document.getElementById('extend-deadline-input');
+        if (inputEl) {
+            const init = curDate || new Date();
+            inputEl.value = _toDatetimeLocalString_(init);
+        }
+        const presetEl = document.getElementById('extend-deadline-preset');
+        if (presetEl) presetEl.value = '';
+
+        const modal = document.getElementById('extendDeadlineModal');
+        if (modal) modal.classList.remove('content-hidden');
+    }
+    function closeExtendDeadlineModal_() {
+        const modal = document.getElementById('extendDeadlineModal');
+        if (modal) modal.classList.add('content-hidden');
+    }
+    function extendDeadlineApplyPreset_(hoursStr) {
+        const hours = parseInt(hoursStr, 10);
+        if (!hours || isNaN(hours)) return;
+        let baseDate;
+        if (_extendDeadlineCtx_.currentBd2 && /^\d{10}$/.test(_extendDeadlineCtx_.currentBd2)) {
+            const ts = parseYymmddHHmm_(_extendDeadlineCtx_.currentBd2);
+            baseDate = isNaN(ts) ? new Date() : new Date(ts);
+        } else baseDate = new Date();
+        baseDate.setTime(baseDate.getTime() + hours * 3600 * 1000);
+        const inputEl = document.getElementById('extend-deadline-input');
+        if (inputEl) inputEl.value = _toDatetimeLocalString_(baseDate);
+    }
+    function _toDatetimeLocalString_(d) {
+        if (!d || isNaN(d.getTime())) return '';
+        return d.getFullYear() + '-'
+            + String(d.getMonth()+1).padStart(2,'0') + '-'
+            + String(d.getDate()).padStart(2,'0') + 'T'
+            + String(d.getHours()).padStart(2,'0') + ':'
+            + String(d.getMinutes()).padStart(2,'0');
+    }
+    function _toYymmddHHmm_(d) {
+        if (!d || isNaN(d.getTime())) return '';
+        return String(d.getFullYear()).slice(2)
+            + String(d.getMonth()+1).padStart(2,'0')
+            + String(d.getDate()).padStart(2,'0')
+            + String(d.getHours()).padStart(2,'0')
+            + String(d.getMinutes()).padStart(2,'0');
+    }
+    function extendDeadlineApply_() {
+        const inputEl = document.getElementById('extend-deadline-input');
+        if (!inputEl || !inputEl.value) { showStatus('마감 일시를 지정하세요.', 'error'); return; }
+        const newDate = new Date(inputEl.value);
+        if (isNaN(newDate.getTime())) { showStatus('잘못된 일시입니다.', 'error'); return; }
+        if (newDate.getTime() <= Date.now()) { showStatus('과거 시간으로는 연장할 수 없습니다.', 'error'); return; }
+        const newBd2 = _toYymmddHHmm_(newDate);
+        if (!newBd2) { showStatus('변환 실패', 'error'); return; }
+
+        const ids = _extendDeadlineCtx_.itemIds;
+        showStatus('만기연장 처리 중...', 'warning');
+        google.script.run
+            .withSuccessHandler(res => {
+                if (res && res.success) {
+                    showStatus(`${res.updated}건 만기연장 완료`, 'success');
+                    closeExtendDeadlineModal_();
+                    // 화면 갱신: 현재 컨텍스트에 따라 재로드
+                    if (typeof selectedClassD1Id !== 'undefined' && selectedClassD1Id && typeof loadD1Items === 'function') {
+                        loadD1Items(selectedClassD1Id);
+                    }
+                    if (typeof loadAllBids === 'function') loadAllBids();
+                } else {
+                    showStatus((res && res.message) || '연장 실패', 'error');
+                }
+            })
+            .withFailureHandler(err => showStatus('연장 오류: ' + err.message, 'error'))
+            .extendItemDeadline(ids, newBd2);
+    }
+
+    // ── 만기연장 버튼: detail 패널/모달용 클릭 핸들러 + 가시성 토글 ──
+    function _findItemById_(itemId) {
+        if (!itemId) return null;
+        if (typeof allBiddingData !== 'undefined' && Array.isArray(allBiddingData)) {
+            return allBiddingData.find(x => String(x.id) === String(itemId)) || null;
+        }
+        return null;
+    }
+    function onClickExtendDeadlineSidebar_() {
+        const idEl = document.getElementById('form-id');
+        const id = idEl ? String(idEl.value || '').trim() : '';
+        if (!id) { showStatus('저장된 물건만 연장 가능합니다.', 'error'); return; }
+        const it = _findItemById_(id);
+        const cur = it ? String(it.bid_datetime_2 || '').trim() : '';
+        openExtendDeadlineModal_([id], cur);
+    }
+    function onClickExtendDeadlineModal_() {
+        const idEl = document.getElementById('modalFormId');
+        const id = idEl ? String(idEl.value || '').trim() : '';
+        if (!id) { showStatus('저장된 물건만 연장 가능합니다.', 'error'); return; }
+        const it = _findItemById_(id);
+        const cur = it ? String(it.bid_datetime_2 || '').trim() : '';
+        openExtendDeadlineModal_([id], cur);
+    }
+    function extendSelectedD1Items_() {
+        const ids = (typeof d1ItemsSelectedIds_ !== 'undefined' && d1ItemsSelectedIds_)
+            ? Array.from(d1ItemsSelectedIds_) : [];
+        if (!ids.length) { showStatus('연장할 물건을 선택하세요.', 'error'); return; }
+        // 다건 선택 시 첫 물건의 bd2를 표시값으로 사용 (일괄 동일 적용)
+        let cur = '';
+        if (typeof d1ItemsData !== 'undefined' && Array.isArray(d1ItemsData)) {
+            const first = d1ItemsData.find(x => String(x.id) === String(ids[0]));
+            if (first) cur = String(first.bid_datetime_2 || '').trim();
+        }
+        openExtendDeadlineModal_(ids, cur);
+    }
+    // 물건상태(stu_member) 변경 시 만기연장 버튼/마감표시 토글
+    function _refreshExtendBtn_(scope) {
+        const isModal = (scope === 'modal');
+        const stuId = isModal ? 'modal-form-stu-member' : 'form-stu-member';
+        const btnId = isModal ? 'modal-btn-extend-deadline' : 'btn-extend-deadline';
+        const infoId = isModal ? 'modal-btn-extend-deadline-info' : 'btn-extend-deadline-info';
+        const formIdEl = document.getElementById(isModal ? 'modalFormId' : 'form-id');
+        const stuEl = document.getElementById(stuId);
+        const btn = document.getElementById(btnId);
+        const info = document.getElementById(infoId);
+        if (!stuEl || !btn) return;
+        const isRecommend = String(stuEl.value || '').trim() === '추천';
+        const id = formIdEl ? String(formIdEl.value || '').trim() : '';
+        const it = id ? _findItemById_(id) : null;
+        const cur = it ? String(it.bid_datetime_2 || '').trim() : '';
+        const cs = it ? String(it.chuchen_state || '').trim() : '';
+        // 4키 충족 시에만 만기연장 의미가 있으므로 추천+전달완료+bd2 있음 조건
+        const showBtn = isRecommend && cs === '전달완료' && cur;
+        if (showBtn) btn.classList.remove('hidden'); else btn.classList.add('hidden');
+        if (info) {
+            if (showBtn && /^\d{10}$/.test(cur)) {
+                const ts = parseYymmddHHmm_(cur);
+                if (!isNaN(ts)) {
+                    info.textContent = '마감 ' + fmtDReadable_(new Date(ts));
+                    info.classList.remove('hidden');
+                } else { info.classList.add('hidden'); }
+            } else { info.classList.add('hidden'); }
+        }
+    }
+    function refreshExtendBtnSidebar_() { _refreshExtendBtn_('sidebar'); }
+    function refreshExtendBtnModal_() { _refreshExtendBtn_('modal'); }
+
     // 회원명 클릭 → ClassSchedule 탭 + 종목 탭 전환 + 종목 선택 + 물건 서브탭
     function navigateToClassItemTab_(classId, classType) {
         if (typeof navigateTo === 'function') navigateTo('ClassSchedule');
@@ -1068,11 +1228,11 @@
             const startAt = parseChuchenDate_(chuchenDate);
             if (isNaN(startAt)) return '';
 
-            // 남은 시간 → "0일 0시" 형식 (수업관리와 통일)
+            // 남은 시간 → "1일 13시" / "13시" (0일은 생략, 수업관리와 통일)
             function fmtRemain_(ms) {
                 const totalH = Math.max(0, Math.floor(ms / (1000*3600)));
                 const d = Math.floor(totalH / 24), h = totalH % 24;
-                return d + '일 ' + h + '시';
+                return d > 0 ? (d + '일 ' + h + '시') : (h + '시');
             }
 
             // [신규 룰] bid_datetime_2 우선 사용 (일반/수업 통합)
@@ -4419,6 +4579,7 @@
             }
         }
         if (updateHidden && hiddenInput) hiddenInput.value = state;
+        if (typeof refreshExtendBtnSidebar_ === 'function') refreshExtendBtnSidebar_();
     }
 
     function setModalChuchenState(state) {
@@ -4446,6 +4607,7 @@
             }
         }
         if (hiddenInput) hiddenInput.value = state;
+        if (typeof refreshExtendBtnModal_ === 'function') refreshExtendBtnModal_();
     }
 
     function goToMemberManagement() {
@@ -15909,13 +16071,13 @@ ${token}
             .getItemsByClassD1Id(classD1Id);
     }
 
-    // 남은 시간 → "1일 13시" 포맷
+    // 남은 시간 → "1일 13시" / "13시" (0일은 생략)
     function _fmtRemainDH_(ms) {
         if (ms <= 0) return '마감';
         const totalH = Math.floor(ms / 3600000);
         const d = Math.floor(totalH / 24);
         const h = totalH % 24;
-        return d + '일 ' + h + '시';
+        return d > 0 ? (d + '일 ' + h + '시') : (h + '시');
     }
 
     // items 리스트 행의 최종마감 진행률 바 셀 HTML 생성 (4키 룰 체크)

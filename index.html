@@ -1197,16 +1197,20 @@
                                             <div class="flex justify-between items-center mb-1">
                                                 <label for="form-stu-member"
                                                     class="block text-sm font-medium text-gray-700">물건상태</label>
-                                                <div class="space-x-1" id="chuchen-state-buttons">
+                                                <div class="space-x-1 flex items-center gap-1" id="chuchen-state-buttons">
+                                                    <span id="btn-extend-deadline-info" class="text-[10px] text-gray-500 mr-1 hidden font-mono"></span>
                                                     <button type="button" onclick="setChuchenState('신규')"
                                                         id="btn-chuchen-new"
                                                         class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
                                                     <button type="button" onclick="setChuchenState('전달완료')"
                                                         id="btn-chuchen-done"
                                                         class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
+                                                    <button type="button" onclick="onClickExtendDeadlineSidebar_()"
+                                                        id="btn-extend-deadline"
+                                                        class="text-xs px-2 py-0.5 rounded border bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300 hidden">만기연장</button>
                                                 </div>
                                             </div>
-                                            <select id="form-stu-member" name="stu_member" required
+                                            <select id="form-stu-member" name="stu_member" required onchange="if(typeof refreshExtendBtnSidebar_==='function')refreshExtendBtnSidebar_()"
                                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                                 <option value="상품">상품</option>
                                                 <option value="검증">검증</option>
@@ -2477,6 +2481,8 @@
                                         <span class="flex-1"></span>
                                         <button type="button" id="d1-items-delete-btn" onclick="deleteSelectedD1Items_()"
                                             class="text-sm px-2.5 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-semibold border border-red-200 shadow-sm">삭제</button>
+                                        <button type="button" id="d1-items-extend-btn" onclick="extendSelectedD1Items_()"
+                                            class="text-sm px-2.5 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold border border-amber-200 shadow-sm">만기연장</button>
                                         <button type="button" onclick="showD1ItemPickerModal()"
                                             class="text-sm px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-sm">물건등록</button>
                                     </div>
@@ -4140,15 +4146,19 @@
                             <div class="flex justify-between items-center mb-1">
                                 <label class="block text-sm font-medium text-gray-700">물건상태</label>
                                 <div class="flex items-center gap-1" id="modal-chuchen-state-buttons">
+                                    <span id="modal-btn-extend-deadline-info" class="text-[10px] text-gray-500 mr-1 hidden font-mono"></span>
                                     <button type="button" onclick="setModalChuchenState('신규')"
                                         id="modal-btn-chuchen-new"
                                         class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
                                     <button type="button" onclick="setModalChuchenState('전달완료')"
                                         id="modal-btn-chuchen-done"
                                         class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
+                                    <button type="button" onclick="onClickExtendDeadlineModal_()"
+                                        id="modal-btn-extend-deadline"
+                                        class="text-xs px-2 py-0.5 rounded border bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300 hidden">만기연장</button>
                                 </div>
                             </div>
-                            <select id="modal-form-stu-member"
+                            <select id="modal-form-stu-member" onchange="if(typeof refreshExtendBtnModal_==='function')refreshExtendBtnModal_()"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
                                 <option value="상품">상품</option>
                                 <option value="검증">검증</option>
@@ -4416,6 +4426,50 @@
                         class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:w-auto sm:text-sm">저장하기</button>
                     <button type="button" onclick="closeFillImageIdModal()"
                         class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm">취소</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 만기연장 모달 -->
+    <div id="extendDeadlineModal" class="fixed inset-0 z-[70] content-hidden overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeExtendDeadlineModal_()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6">
+                    <h3 class="text-lg leading-6 font-bold text-gray-900 mb-3">만기연장</h3>
+                    <p class="text-xs text-gray-500 mb-3">
+                        대상: <span id="extend-deadline-count" class="font-bold text-indigo-600">0</span>건<br>
+                        현재 마감: <span id="extend-deadline-current" class="font-mono text-gray-700"></span>
+                    </p>
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">현재 마감 + 시간 (빠른 선택)</label>
+                        <select id="extend-deadline-preset" onchange="extendDeadlineApplyPreset_(this.value)"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                            <option value="">선택...</option>
+                            <option value="1">+ 1시간</option>
+                            <option value="2">+ 2시간</option>
+                            <option value="3">+ 3시간</option>
+                            <option value="6">+ 6시간</option>
+                            <option value="12">+ 12시간</option>
+                            <option value="24">+ 24시간 (1일)</option>
+                            <option value="48">+ 48시간 (2일)</option>
+                            <option value="72">+ 72시간 (3일)</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">또는 직접 지정</label>
+                        <input type="datetime-local" id="extend-deadline-input"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                    </div>
+                    <p class="text-[11px] text-amber-600 mt-2">⚠ 텔레그램 재발송은 안 됩니다. 회원이 다시 조회해야 새 마감 확인 가능.</p>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
+                    <button type="button" onclick="extendDeadlineApply_()"
+                        class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:w-auto sm:text-sm">적용</button>
+                    <button type="button" onclick="closeExtendDeadlineModal_()"
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">취소</button>
                 </div>
             </div>
         </div>
