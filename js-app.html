@@ -13172,6 +13172,17 @@ ${token}
         setD1GroupCollapsed_(name, !cur[name]);
         renderD1SummaryGrid(summaryMemberData_);
     }
+    // 그룹 헤더의 전체선택 체크박스 → 같은 그룹의 회원 행 체크박스 일괄 토글
+    function toggleD1GroupSelectAll_(checkbox) {
+        const tr = checkbox.closest('tr');
+        if (!tr) return;
+        let next = tr.nextElementSibling;
+        while (next && !next.classList.contains('d1-group-header')) {
+            const cb = next.querySelector('input.d1-summary-check');
+            if (cb) cb.checked = checkbox.checked;
+            next = next.nextElementSibling;
+        }
+    }
 
     // 기존 호환: 이름 배열만 반환
     function getD1StatusList_() {
@@ -13486,10 +13497,17 @@ ${token}
 
             // 회차 셀
             // [신규 룰]
-            //   - 과거 X: ✕ (빨강)
-            //   - 과거 O: ● (초록)
-            //   - 미래 O: ● (회색)
-            //   - 미래 빈값/X: 빈 셀 (클릭 가능, 점선 placeholder)
+            //   - 과거 X: ✕ (빨강) / O: ● (초록)
+            //   - 미래 O: ● (회색), 단 마지막(가장 늦은) 미래 O는 ● 검정 (계약 마지막 회차)
+            //   - 미래 빈값/X: 빈 셀 (클릭 가능)
+            // 마지막 미래 O loopNo 계산
+            let _lastFutureOLoop_ = -1;
+            for (let i = 0; i < d1List.length; i++) {
+                const v = String(m['no_'+d1List[i].class_loop] || '').trim().toUpperCase();
+                const r = String(d1List[i].class_date || '').replace(/-/g,'');
+                const isP = r !== '' && r <= todayStr;
+                if (!isP && v === 'O') _lastFutureOLoop_ = Number(d1List[i].class_loop);
+            }
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
@@ -13511,9 +13529,12 @@ ${token}
                         display = '·'; colorClass = 'text-gray-300 text-[10px]'; cellBg = '';
                     }
                 } else {
-                    // 미래: O면 ●, 그외(X포함, 빈값) 빈 셀로 처리
+                    // 미래
                     if (val === 'O') {
-                        display = '●'; colorClass = 'text-gray-300 text-[15px]'; cellBg = '';
+                        const isLastO_ = (Number(loopNo) === _lastFutureOLoop_);
+                        display = '●';
+                        colorClass = isLastO_ ? 'text-gray-900 text-[15px]' : 'text-gray-300 text-[15px]';
+                        cellBg = '';
                     } else {
                         display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
                     }
@@ -13567,13 +13588,16 @@ ${token}
             const isCollapsed = !!collapsedMap[g.name];
             const arrow = isCollapsed ? '▶' : '▼';
             const fg = _contrastTextColor_(g.color);
-            // 약간 밝은 색을 보조색으로 (gradient 효과)
             const bgGradient = `linear-gradient(90deg, ${g.color} 0%, ${g.color} 70%, ${g.color}dd 100%)`;
-            // 그룹 헤더 행 (sticky top - 스크롤 시 상단에 붙음)
-            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell" style="background:${bgGradient};color:${fg};cursor:pointer" onclick="toggleD1Group_('${escapeHtml(g.name)}')">
-                <span style="display:inline-block;width:14px;text-align:center">${arrow}</span>
-                <span style="font-size:13px;letter-spacing:0.3px">${escapeHtml(g.name)}</span>
-                <span style="opacity:0.85;font-weight:normal;margin-left:6px;font-size:11px">${g.members.length}명</span>
+            // 그룹 헤더 행 (sticky top + 그룹별 전체선택 체크박스)
+            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell" style="background:${bgGradient};color:${fg}">
+                <input type="checkbox" class="d1-group-checkall mr-2 cursor-pointer align-middle" title="${escapeHtml(g.name)} 전체 선택"
+                    onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this)">
+                <span style="cursor:pointer" onclick="toggleD1Group_('${escapeHtml(g.name)}')">
+                    <span style="display:inline-block;width:14px;text-align:center">${arrow}</span>
+                    <span style="font-size:13px;letter-spacing:0.3px">${escapeHtml(g.name)}</span>
+                    <span style="opacity:0.85;font-weight:normal;margin-left:6px;font-size:11px">${g.members.length}명</span>
+                </span>
             </td></tr>`;
             if (isCollapsed) continue;
             for (let j = 0; j < g.members.length; j++) {
@@ -13618,12 +13642,36 @@ ${token}
     function editRemaining_(memberId) {
         const m = (summaryMemberData_ || []).find(x => String(x.member_id) === String(memberId));
         if (!m) return;
-        const cur = (typeof m.contract_loop !== 'undefined' && m.contract_loop !== '' && m.contract_loop !== null)
-            ? parseInt(m.contract_loop, 10)
-            : null;
+        const todayStr_ = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
+        const dList = (allClassD1Data || []).filter(d => String(d.class_id) === String(selectedClassId)).sort((a,b)=>Number(a.class_loop)-Number(b.class_loop));
+        // 미래 회차 목록 + 현재 남은회차(미래 O 개수)
+        const futureLoops = [];
+        let curRem = 0;
+        for (const d of dList) {
+            const raw = String(d.class_date || '').replace(/-/g,'');
+            if (raw === '' || raw < todayStr_) continue;
+            futureLoops.push(Number(d.class_loop));
+            const v = String(m['no_'+d.class_loop] || '').trim().toUpperCase();
+            if (v === 'O') curRem++;
+        }
+        if (futureLoops.length === 0) { showStatus('미래 회차가 없습니다.', 'error'); return; }
+        const input = prompt(`${m.member_name || '회원'}의 남은회차 입력 (현재: ${curRem}, 최대: ${futureLoops.length})`, String(curRem));
+        if (input === null) return;
+        const newRem = parseInt(input, 10);
+        if (isNaN(newRem) || newRem < 0) { showStatus('숫자 0 이상 입력하세요.', 'error'); return; }
+        if (newRem > futureLoops.length) { showStatus(`남은 미래 회차(${futureLoops.length})보다 클 수 없습니다.`, 'error'); return; }
+        // 미래 회차 first newRem개 → 'O', 나머지 → ''
+        const updates = {};
+        const oldVals = {};
+        futureLoops.forEach((loopNo, idx) => {
+            const fk = 'no_' + loopNo;
+            const newVal = (idx < newRem) ? 'O' : '';
+            oldVals[fk] = m[fk];
+            updates[fk] = newVal;
+            m[fk] = newVal;
+        });
+        // contract_loop도 같이 갱신 (참고용)
         const usedNow = (function(){
-            const todayStr_ = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
-            const dList = (allClassD1Data || []).filter(d => String(d.class_id) === String(selectedClassId)).sort((a,b)=>Number(a.class_loop)-Number(b.class_loop));
             let u = 0;
             for (const d of dList) {
                 const v = String(m['no_'+d.class_loop] || '').trim().toUpperCase();
@@ -13632,38 +13680,33 @@ ${token}
             }
             return u;
         })();
-        const cls = (allClassesData || []).find(c => String(c.class_id) === String(selectedClassId)) || {};
-        const totalDefault = parseInt(cls.class_loop, 10) || 0;
-        const curRem = (cur !== null) ? Math.max(0, cur - usedNow) : Math.max(0, totalDefault - usedNow);
-        const input = prompt(`${m.member_name || '회원'}의 남은회차를 입력하세요 (현재: ${curRem})`, String(curRem));
-        if (input === null) return; // 취소
-        const newRem = parseInt(input, 10);
-        if (isNaN(newRem) || newRem < 0) { showStatus('숫자 0 이상을 입력하세요.', 'error'); return; }
-        // 새 contract_loop = 새남은회차 + 사용한 회차
-        const newContract = newRem + usedNow;
+        const oldContract = m.contract_loop;
+        const newContract = usedNow + newRem;
+        m.contract_loop = newContract;
+        updates.contract_loop = newContract;
+        // [OPTIMISTIC] 즉시 화면 반영 + 백그라운드 저장
+        renderD1SummaryGrid(summaryMemberData_);
         const batchKey = String(m.class_d1_id || '');
         if (!batchKey) { showStatus('배치 키 누락', 'error'); return; }
-        // [OPTIMISTIC] 즉시 화면 반영 + 백그라운드 저장
-        const oldContract = m.contract_loop;
-        m.contract_loop = newContract;
-        renderD1SummaryGrid(summaryMemberData_);
         google.script.run
             .withSuccessHandler(r => {
                 if (r && r.success) {
                     showStatus('남은회차 저장 완료', 'success');
                 } else {
                     // 롤백
+                    Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
                     m.contract_loop = oldContract;
                     renderD1SummaryGrid(summaryMemberData_);
                     showStatus((r && r.message) || '저장 실패', 'error');
                 }
             })
             .withFailureHandler(e => {
+                Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
                 m.contract_loop = oldContract;
                 renderD1SummaryGrid(summaryMemberData_);
                 showStatus('저장 오류: ' + e.message, 'error');
             })
-            .saveMemberClassDetail(batchKey, memberId, { contract_loop: newContract });
+            .saveMemberClassDetail(batchKey, memberId, updates);
     }
     // 첫 회차 컬럼 헤더 우측 핸들 드래그 → 모든 회차 폭 동시 변경 + localStorage 저장
     function d1SessColResizeStart_(ev) {
