@@ -13133,6 +13133,26 @@ ${token}
         const found = v2.find(s => s.name === statusName);
         return found ? found.color : '#6b7280';
     }
+    // hex 색상 → 글자색(흰/검) 자동 대비 계산
+    function _contrastTextColor_(hex) {
+        const h = String(hex || '').replace('#','').trim();
+        if (h.length !== 6 && h.length !== 3) return '#111827';
+        const ex = h.length === 3
+            ? h.split('').map(c => c + c).join('')
+            : h;
+        const r = parseInt(ex.slice(0,2), 16);
+        const g = parseInt(ex.slice(2,4), 16);
+        const b = parseInt(ex.slice(4,6), 16);
+        // YIQ 공식
+        const yiq = (r*299 + g*587 + b*114) / 1000;
+        return yiq >= 150 ? '#111827' : '#ffffff';
+    }
+    // 상태 배지 inline style (배경 = 사용자 정의 색상, 글자 = 자동 대비)
+    function _getStatusBadgeStyle_(statusName) {
+        const bg = getD1StatusColor_(statusName);
+        const fg = _contrastTextColor_(bg);
+        return `background:${bg};color:${fg};border-color:${bg}`;
+    }
 
     // 그룹 펼침/접힘 (PC별 localStorage)
     function getD1GroupCollapsed_() {
@@ -13329,8 +13349,8 @@ ${token}
                 <th class="px-1 py-2 text-center" style="min-width:24px">
                     <input type="checkbox" id="d1SummaryCheckAll" onchange="toggleAllSummaryCheck(this.checked)" class="cursor-pointer">
                 </th>
-                <th class="px-2 py-2 text-left text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="min-width:70px" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
-                <th class="px-2 py-2 text-left text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="min-width:90px" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="min-width:70px" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="min-width:90px" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
                 <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="min-width:68px" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
                 <th class="px-1 py-2 text-center text-[11px] font-bold text-emerald-700 cursor-pointer hover:text-emerald-900 select-none leading-tight" style="min-width:36px;width:36px" onclick="sortSummaryByField_('used')" title="과거 O의 개수(받은 회차)"><div>수업</div><div>회차${sortArrow('used')}</div></th>
                 <th class="px-1 py-2 text-center text-[11px] font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none leading-tight" style="min-width:36px;width:36px" onclick="sortSummaryByField_('remaining')" title="총 회차(${classTotalLoop_}) − 수업회차"><div>남은</div><div>회차${sortArrow('remaining')}</div></th>
@@ -13451,14 +13471,15 @@ ${token}
                 memberTitle = `⚠ 회원DB 미등록 (ID:${m.member_id})`;
             }
 
-            // 상태 드롭다운
+            // 상태 드롭다운 (배경 = 사용자 정의 색상, 글자 = 자동 대비)
             const statusOpts = statusList.map(function(s) {
                 return `<option value="${escapeHtml(s)}" ${m.member_status === s ? 'selected' : ''}>${escapeHtml(s)}</option>`;
             }).join('');
-            const statusSel = `<select class="text-xs border border-gray-200 rounded px-1 py-0.5 ${statusColor_(m.member_status)} cursor-pointer focus:outline-none bg-white"
+            const _badgeStyle = m.member_status ? _getStatusBadgeStyle_(m.member_status) : 'background:#fff;color:#374151;border-color:#e5e7eb';
+            const statusSel = `<select class="text-xs border rounded px-1 py-0.5 cursor-pointer focus:outline-none font-semibold" style="${_badgeStyle}"
                 onclick="event.stopPropagation()"
                 onchange="saveSummaryStatus_('${escapeHtml(String(m.member_id))}','${escapeHtml(String(m.class_d1_id||''))}',this.value)">
-                <option value="">-</option>
+                <option value="" style="background:#fff;color:#374151">-</option>
                 ${statusOpts}
             </select>`;
 
@@ -13523,10 +13544,10 @@ ${token}
                 <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls} ${lastTdCls}" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
-                <td class="px-2 py-2 font-semibold text-sm group-hover:bg-indigo-100 ${lastTdCls}">
+                <td class="px-2 py-2 text-center font-semibold text-sm group-hover:bg-indigo-100 ${lastTdCls}">
                     <span class="text-gray-800 hover:text-indigo-600 hover:underline" title="${memberTitle}" onclick="event.stopPropagation(); navigateToMemberFromD1_('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</span>${tgIcon}
                 </td>
-                <td class="px-2 py-2 text-gray-500 text-sm group-hover:bg-indigo-100 ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-2 py-2 text-center text-gray-500 text-sm group-hover:bg-indigo-100 ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
                 <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation()">${statusSel}</td>
                 <td class="px-1 py-2 text-center text-sm font-semibold text-emerald-700 group-hover:bg-indigo-100 ${lastTdCls}">${used}</td>
                 <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation(); editRemaining_('${memIdEsc}')" title="클릭하여 수정">${remaining}</td>
@@ -13542,10 +13563,14 @@ ${token}
             const g = groups[gi];
             const isCollapsed = !!collapsedMap[g.name];
             const arrow = isCollapsed ? '▶' : '▼';
+            const fg = _contrastTextColor_(g.color);
+            // 약간 밝은 색을 보조색으로 (gradient 효과)
+            const bgGradient = `linear-gradient(90deg, ${g.color} 0%, ${g.color} 70%, ${g.color}dd 100%)`;
             // 그룹 헤더 행 (sticky top - 스크롤 시 상단에 붙음)
-            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell" style="background:${g.color};color:#fff;cursor:pointer" onclick="toggleD1Group_('${escapeHtml(g.name)}')">
-                <span style="display:inline-block;width:14px">${arrow}</span>
-                ${escapeHtml(g.name)} <span style="opacity:0.85;font-weight:normal">(${g.members.length}명)</span>
+            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell" style="background:${bgGradient};color:${fg};cursor:pointer" onclick="toggleD1Group_('${escapeHtml(g.name)}')">
+                <span style="display:inline-block;width:14px;text-align:center">${arrow}</span>
+                <span style="font-size:13px;letter-spacing:0.3px">${escapeHtml(g.name)}</span>
+                <span style="opacity:0.85;font-weight:normal;margin-left:6px;font-size:11px">${g.members.length}명</span>
             </td></tr>`;
             if (isCollapsed) continue;
             for (let j = 0; j < g.members.length; j++) {
