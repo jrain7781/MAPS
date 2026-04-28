@@ -13259,6 +13259,24 @@ ${token}
         const totalCols = 6 + N;
 
         const sortArrow = function(key) { return summarySortKey_ === key ? (summarySortAsc_ ? ' ↑' : ' ↓') : ' ↕'; };
+
+        // colgroup 생성 — table-layout:fixed에서 컬럼 폭을 강제 (헤더/본문 width 일치)
+        const colgroup = document.getElementById('d1SummaryColgroup');
+        if (colgroup) {
+            let cgHtml = `
+                <col style="width:24px">
+                <col style="width:70px">
+                <col style="width:90px">
+                <col style="width:68px">
+                <col style="width:50px">
+                <col style="width:50px">
+            `;
+            for (let i = 0; i < d1List.length; i++) {
+                cgHtml += `<col class="d1-sess-col" style="width:${sessionColWidth_}px">`;
+            }
+            colgroup.innerHTML = cgHtml;
+        }
+
         // 연도 행: 6개 sticky 빈 셀 (남은회차까지 고정 = 항상)
         const blankYearCells = `
             <th class="d1-col-check d1-stk-check d1-stk-year"></th>
@@ -13478,13 +13496,14 @@ ${token}
         setTimeout(function() { initTableColResize_(document.getElementById('d1SummaryTable')); }, 0);
     }
 
-    // 회차 컬럼 폭을 모든 .d1-sess-th + .d1-sess-td에 일괄 적용
+    // 회차 컬럼 폭 일괄 적용: colgroup의 col + th/td inline 둘 다 갱신
     function d1SessColApplyWidth_(w) {
         const px = Math.max(28, Math.min(120, parseInt(w, 10) || 48));
+        document.querySelectorAll('#d1SummaryColgroup .d1-sess-col').forEach(function(col) {
+            col.style.width = px + 'px';
+        });
         document.querySelectorAll('.d1-sess-th, .d1-sess-td').forEach(function(el) {
-            el.style.minWidth = px + 'px';
             el.style.width = px + 'px';
-            el.style.maxWidth = px + 'px';
         });
     }
 
