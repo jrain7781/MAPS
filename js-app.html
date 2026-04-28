@@ -13260,46 +13260,24 @@ ${token}
 
         const sortArrow = function(key) { return summarySortKey_ === key ? (summarySortAsc_ ? ' ↑' : ' ↓') : ' ↕'; };
 
-        // colgroup 생성 — table-layout:fixed에서 컬럼 폭을 강제 (헤더/본문 width 일치)
+        // colgroup 비움 (sticky 제거 - 일반 table 동작)
         const colgroup = document.getElementById('d1SummaryColgroup');
-        if (colgroup) {
-            let cgHtml = `
-                <col style="width:24px">
-                <col style="width:70px">
-                <col style="width:90px">
-                <col style="width:68px">
-                <col style="width:50px">
-                <col style="width:50px">
-            `;
-            for (let i = 0; i < d1List.length; i++) {
-                cgHtml += `<col class="d1-sess-col" style="width:${sessionColWidth_}px">`;
-            }
-            colgroup.innerHTML = cgHtml;
-        }
+        if (colgroup) colgroup.innerHTML = '';
 
-        // 연도 행: 6개 sticky 빈 셀 (남은회차까지 고정 = 항상)
-        const blankYearCells = `
-            <th class="d1-col-check d1-stk-check d1-stk-year"></th>
-            <th class="d1-col-name d1-stk-name d1-stk-year"></th>
-            <th class="d1-col-phone d1-stk-phone d1-stk-year"></th>
-            <th class="d1-col-status d1-stk-status d1-stk-year"></th>
-            <th class="d1-col-used d1-stk-used d1-stk-year"></th>
-            <th class="d1-col-rem d1-stk-rem d1-stk-year"></th>
-        `;
         thead.innerHTML = `
             <tr>
-                ${blankYearCells}
+                <th colspan="6" class="bg-white"></th>
                 ${yearColHeaders}
             </tr>
             <tr class="bg-blue-50">
-                <th class="d1-col-check d1-stk-check px-1 py-2 text-center">
+                <th class="px-1 py-2 text-center" style="min-width:24px">
                     <input type="checkbox" id="d1SummaryCheckAll" onchange="toggleAllSummaryCheck(this.checked)" class="cursor-pointer">
                 </th>
-                <th class="d1-col-name d1-stk-name px-2 py-2 text-left text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
-                <th class="d1-col-phone d1-stk-phone px-2 py-2 text-left text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
-                <th class="d1-col-status d1-stk-status px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
-                <th class="d1-col-used d1-stk-used px-2 py-2 text-center text-xs font-bold text-emerald-700 cursor-pointer hover:text-emerald-900 select-none" onclick="sortSummaryByField_('used')" title="과거 O의 개수(받은 회차)">수업회차${sortArrow('used')}</th>
-                <th class="d1-col-rem d1-stk-rem px-2 py-2 text-center text-xs font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none" onclick="sortSummaryByField_('remaining')" title="총 회차(${classTotalLoop_}) − 수업회차">남은회차${sortArrow('remaining')}</th>
+                <th class="px-2 py-2 text-left text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="min-width:70px" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
+                <th class="px-2 py-2 text-left text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="min-width:90px" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="min-width:68px" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-emerald-700 cursor-pointer hover:text-emerald-900 select-none" style="min-width:50px" onclick="sortSummaryByField_('used')" title="과거 O의 개수(받은 회차)">수업회차${sortArrow('used')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none" style="min-width:50px" onclick="sortSummaryByField_('remaining')" title="총 회차(${classTotalLoop_}) − 수업회차">남은회차${sortArrow('remaining')}</th>
                 ${sessionColHeaders}
             </tr>`;
 
@@ -13473,18 +13451,17 @@ ${token}
             const selCls  = isSelected ? 'bg-indigo-100' : '';
             const lastTdCls = isLastRow ? 'border-b-2 border-gray-300' : '';
             const selBorderCls = isSelected ? 'border-l-4 border-indigo-500' : '';
-            const rowSelCls = isSelected ? 'row-selected' : '';
-            bodyHtml += `<tr class="group ${selCls} ${rowSelCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
-                <td class="d1-col-check d1-stk-check px-1 py-2 text-center ${selBorderCls} ${lastTdCls}" onclick="event.stopPropagation()">
+            bodyHtml += `<tr class="group ${selCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
+                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls} ${lastTdCls}" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
-                <td class="d1-col-name d1-stk-name px-2 py-2 font-semibold text-sm ${lastTdCls}">
+                <td class="px-2 py-2 font-semibold text-sm group-hover:bg-indigo-100 ${lastTdCls}">
                     <span class="text-gray-800 hover:text-indigo-600 hover:underline" title="${memberTitle}" onclick="event.stopPropagation(); navigateToMemberFromD1_('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</span>${tgIcon}
                 </td>
-                <td class="d1-col-phone d1-stk-phone px-2 py-2 text-gray-500 text-sm ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
-                <td class="d1-col-status d1-stk-status px-1 py-2 text-center ${lastTdCls}" onclick="event.stopPropagation()">${statusSel}</td>
-                <td class="d1-col-used d1-stk-used px-1 py-2 text-center text-sm font-semibold text-emerald-700 ${lastTdCls}">${used}</td>
-                <td class="d1-col-rem d1-stk-rem px-1 py-2 text-center text-sm font-bold ${remColor} ${lastTdCls}" onclick="event.stopPropagation(); editRemaining_('${memIdEsc}')" title="클릭하여 수정">${remaining}</td>
+                <td class="px-2 py-2 text-gray-500 text-sm group-hover:bg-indigo-100 ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation()">${statusSel}</td>
+                <td class="px-1 py-2 text-center text-sm font-semibold text-emerald-700 group-hover:bg-indigo-100 ${lastTdCls}">${used}</td>
+                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation(); editRemaining_('${memIdEsc}')" title="클릭하여 수정">${remaining}</td>
                 ${sessionCells}
             </tr>`;
         }
