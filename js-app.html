@@ -13238,42 +13238,57 @@ ${token}
             const upcomingThClass = isUpcoming
                 ? 'border-l-2 border-r-2 border-t-2 border-red-400'
                 : (isActive ? 'border-l border-gray-200 bg-blue-200' : 'border-l border-gray-200 hover:bg-blue-100');
-            sessionColHeaders += `<th class="px-1 py-1 text-center cursor-pointer ${upcomingThClass}" style="min-width:48px" onclick="sortSummaryBySession_(${d.class_loop})">
+            const isFirstSessionTh = i === 0;
+            const resizeHandleHtml = isFirstSessionTh
+                ? `<div class="d1sess-resize-handle" onmousedown="d1SessColResizeStart_(event)" title="드래그하여 모든 회차 폭 조정"></div>`
+                : '';
+            sessionColHeaders += `<th class="d1-sess-th px-1 py-1 text-center cursor-pointer ${upcomingThClass}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;position:relative" onclick="sortSummaryBySession_(${d.class_loop})">
                 <div class="text-[11px] font-bold ${isUpcoming ? 'text-red-600' : 'text-blue-600'}">${d.class_loop}회</div>
                 <div class="text-[9px] font-semibold ${isUpcoming ? 'text-red-400' : 'text-blue-500'} whitespace-nowrap">${dateDisp} ${dayDisp}</div>
+                ${resizeHandleHtml}
             </th>`;
         }
 
-        // 총 컬럼 수 (checkbox + 이름 + 전화 + 상태 + 잔여 + 회차들)
-        const totalCols = 5 + N;
+        // 총 컬럼 수 (checkbox + 이름 + 전화 + 상태 + 수업회차 + 남은회차 + 회차들)
+        const totalCols = 6 + N;
+        // 회차 컬럼 폭(저장된 값 사용, 없으면 기본 48px)
+        const sessionColWidth_ = parseInt(localStorage.getItem('d1_summary_session_col_width') || '48', 10) || 48;
 
         const sortArrow = function(key) { return summarySortKey_ === key ? (summarySortAsc_ ? ' ↑' : ' ↓') : ' ↕'; };
+        // sticky 좌측 컬럼 누적 offset (24+70+90+68+50+50)
+        const STK = { check: 0, name: 24, phone: 94, status: 184, used: 252, rem: 302 };
+        const stickyTh = function(left) { return `position:sticky;left:${left}px;z-index:6;background:#dbeafe;`; };
+        const stickyTh1 = function(left) { return `position:sticky;left:${left}px;z-index:6;background:#fff;`; };
         thead.innerHTML = `
             <tr>
-                <th colspan="5" class="bg-white"></th>
+                <th colspan="6" class="bg-white" style="position:sticky;left:0;z-index:7;background:#fff"></th>
                 ${yearColHeaders}
             </tr>
             <tr class="bg-blue-50">
-                <th class="px-1 py-2 text-center relative" style="min-width:24px">
+                <th class="px-1 py-2 text-center" style="${stickyTh(STK.check)};min-width:24px;width:24px">
                     <input type="checkbox" id="d1SummaryCheckAll" onchange="toggleAllSummaryCheck(this.checked)" class="cursor-pointer">
                 </th>
-                <th class="px-2 py-2 text-left text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none relative" style="min-width:70px" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
-                <th class="px-2 py-2 text-left text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none relative" style="min-width:90px" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
-                <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none relative" style="min-width:68px" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
-                <th class="px-2 py-2 text-center text-xs font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none relative" style="min-width:36px" onclick="sortSummaryByField_('remaining')">잔여${sortArrow('remaining')}</th>
+                <th class="px-2 py-2 text-left text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="${stickyTh(STK.name)};min-width:70px;width:70px" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
+                <th class="px-2 py-2 text-left text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="${stickyTh(STK.phone)};min-width:90px;width:90px" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="${stickyTh(STK.status)};min-width:68px;width:68px" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-emerald-700 cursor-pointer hover:text-emerald-900 select-none" style="${stickyTh(STK.used)};min-width:50px;width:50px" onclick="sortSummaryByField_('used')" title="O의 개수">수업회차${sortArrow('used')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none" style="${stickyTh(STK.rem)};min-width:50px;width:50px" onclick="sortSummaryByField_('remaining')" title="총 회차(${classTotalLoop_}) − 수업회차">남은회차${sortArrow('remaining')}</th>
                 ${sessionColHeaders}
             </tr>`;
 
-        // 잔여 차수 사전 계산 (정렬 및 행 표시에 공용)
-        const memberRemainingMap_ = {};
+        // 수업회차(used = 'O'의 개수) + 남은회차(class_loop - 수업회차) 사전 계산
+        const clsForLoop_ = (allClassesData || []).find(function(c) { return String(c.class_id) === String(selectedClassId); }) || {};
+        const classTotalLoop_ = parseInt(clsForLoop_.class_loop, 10) || N || 0;
+        const memberUsedMap_ = {};       // 수업회차 = O의 개수
+        const memberRemainingMap_ = {};  // 남은회차 = class_loop - 수업회차
         filtered.forEach(function(m) {
-            let rem = 0;
+            let used = 0;
             for (let i = 0; i < d1List.length; i++) {
                 const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
-                const raw = String(d1List[i].class_date || '').replace(/-/g, '');
-                if (raw >= todayStr && val !== 'X') rem++;
+                if (val === 'O') used++;
             }
-            memberRemainingMap_[String(m.member_id)] = rem;
+            memberUsedMap_[String(m.member_id)] = used;
+            memberRemainingMap_[String(m.member_id)] = Math.max(0, classTotalLoop_ - used);
         });
 
         // 수업 정보 툴팁 (수업구분 - 수업명 [등급] (지역))
@@ -13282,6 +13297,15 @@ ${token}
         const clsGrade_ = clsInfo_.class_grade ? ` [${clsInfo_.class_grade}]` : '';
         const classTooltip_ = `${clsInfo_.class_type || ''}${clsInfo_.class_type && clsInfo_.class_name ? ' - ' : ''}${clsInfo_.class_name || ''}${clsGrade_}${clsLoc_}`;
 
+        // status별 우선순위 (진행중 > 홀딩 > 종료 > 그 외 > 빈값)
+        const statusRank_ = function(s) {
+            const k = String(s || '').trim();
+            if (k === '진행중') return 0;
+            if (k === '홀딩') return 1;
+            if (k === '종료') return 2;
+            if (k === '') return 4;
+            return 3;
+        };
         let sorted = filtered.slice();
         if (summarySortKey_ === 'name') {
             sorted.sort(function (a, b) { return (a.member_name || '').localeCompare(b.member_name || ''); });
@@ -13299,11 +13323,26 @@ ${token}
             sorted.sort(function(a, b) { const r = (a.phone||'').localeCompare(b.phone||''); return summarySortAsc_ ? r : -r; });
         } else if (summarySortKey_ === 'status') {
             sorted.sort(function(a, b) { const r = (a.member_status||'').localeCompare(b.member_status||''); return summarySortAsc_ ? r : -r; });
+        } else if (summarySortKey_ === 'used') {
+            sorted.sort(function(a, b) {
+                const aU = memberUsedMap_[String(a.member_id)] || 0;
+                const bU = memberUsedMap_[String(b.member_id)] || 0;
+                return summarySortAsc_ ? aU - bU : bU - aU;
+            });
         } else if (summarySortKey_ === 'remaining') {
             sorted.sort(function(a, b) {
                 const aR = memberRemainingMap_[String(a.member_id)] || 0;
                 const bR = memberRemainingMap_[String(b.member_id)] || 0;
                 return summarySortAsc_ ? aR - bR : bR - aR;
+            });
+        }
+        // [기본 그룹] 사용자가 명시적 정렬을 안 했거나 status 정렬일 때 status 우선순위 적용
+        // → 진행중 회원이 항상 가장 위
+        if (!summarySortKey_ || summarySortKey_ === 'status') {
+            sorted.sort(function(a, b) {
+                const r = statusRank_(a.member_status) - statusRank_(b.member_status);
+                if (r !== 0) return r;
+                return (a.member_name || '').localeCompare(b.member_name || '');
             });
         }
 
@@ -13319,6 +13358,7 @@ ${token}
             const isLastRow  = j === sorted.length - 1;
 
             const remaining = memberRemainingMap_[String(m.member_id)] || 0;
+            const used = memberUsedMap_[String(m.member_id)] || 0;
             const remColor = remaining <= 2 ? 'text-red-600 font-bold' : remaining <= 5 ? 'text-amber-600 font-semibold' : 'text-gray-700';
 
             // 텔레그램 아이콘 (telegram-badge 스타일 - 동그라미 T)
@@ -13394,21 +13434,56 @@ ${token}
             const selCls  = isSelected ? 'bg-indigo-100' : '';
             const lastTdCls = isLastRow ? 'border-b-2 border-gray-300' : '';
             const selBorderCls = isSelected ? 'border-l-4 border-indigo-500' : '';
+            // sticky 좌측 셀 배경(선택 강조 우선)
+            const stkBg_ = isSelected ? '#e0e7ff' : '#fff';
+            const stkTd = function(left) { return `position:sticky;left:${left}px;z-index:5;background:${stkBg_};`; };
             bodyHtml += `<tr class="group ${selCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
-                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls} ${lastTdCls}" onclick="event.stopPropagation()">
+                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls} ${lastTdCls}" style="${stkTd(STK.check)}" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
-                <td class="px-2 py-2 font-semibold text-sm group-hover:bg-indigo-100 ${lastTdCls}">
+                <td class="px-2 py-2 font-semibold text-sm group-hover:bg-indigo-100 ${lastTdCls}" style="${stkTd(STK.name)}">
                     <span class="text-gray-800 hover:text-indigo-600 hover:underline" title="${memberTitle}" onclick="event.stopPropagation(); navigateToMemberFromD1_('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</span>${tgIcon}
                 </td>
-                <td class="px-2 py-2 text-gray-500 text-sm group-hover:bg-indigo-100 ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
-                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation()">${statusSel}</td>
-                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}">${remaining}</td>
+                <td class="px-2 py-2 text-gray-500 text-sm group-hover:bg-indigo-100 ${lastTdCls}" style="${stkTd(STK.phone)}">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${lastTdCls}" style="${stkTd(STK.status)}" onclick="event.stopPropagation()">${statusSel}</td>
+                <td class="px-1 py-2 text-center text-sm font-semibold text-emerald-700 group-hover:bg-indigo-100 ${lastTdCls}" style="${stkTd(STK.used)}">${used}</td>
+                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}" style="${stkTd(STK.rem)}">${remaining}</td>
                 ${sessionCells}
             </tr>`;
         }
         tbody.innerHTML = bodyHtml;
+        // 회차 컬럼 폭 강제 적용 (리사이즈 후 즉시 반영용)
+        d1SessColApplyWidth_(sessionColWidth_);
         setTimeout(function() { initTableColResize_(document.getElementById('d1SummaryTable')); }, 0);
+    }
+
+    // 회차 컬럼 폭을 모든 .d1-sess-th에 일괄 적용
+    function d1SessColApplyWidth_(w) {
+        const px = Math.max(28, Math.min(120, parseInt(w, 10) || 48));
+        document.querySelectorAll('.d1-sess-th').forEach(function(th) {
+            th.style.minWidth = px + 'px';
+            th.style.width = px + 'px';
+            th.style.maxWidth = px + 'px';
+        });
+    }
+    // 첫 회차 컬럼 헤더 우측 핸들 드래그 → 모든 회차 폭 동시 변경 + localStorage 저장
+    function d1SessColResizeStart_(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const startX = ev.clientX;
+        const initW = parseInt(localStorage.getItem('d1_summary_session_col_width') || '48', 10) || 48;
+        function onMove(e) {
+            const dx = e.clientX - startX;
+            const newW = Math.max(28, Math.min(120, initW + dx));
+            d1SessColApplyWidth_(newW);
+            localStorage.setItem('d1_summary_session_col_width', String(newW));
+        }
+        function onUp() {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
     }
 
     function renderD1MemberSummaryBar_(members, statusList) {

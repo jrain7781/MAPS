@@ -3346,7 +3346,9 @@ function addMemberToClassD1(classD1IdOrBatchKey, memberId, classId, mData, total
       case 'class_d1_id': return batchKey;
       case 'class_id':    return classId || '';
       case 'member_id':     return memberId;
-      case 'member_status': return mData ? (mData.status || '') : '';
+      // 신규 등록(mData 없거나 status 비어있음) → '진행중'
+      // 배치 이월(mData.status 있음) → 이전 배치 상태 그대로 유지
+      case 'member_status': return (mData && mData.status) ? mData.status : '진행중';
       case 'reg_date':      return regDate;
       default:              return attendance[h] !== undefined ? attendance[h] : '';
     }
