@@ -13357,38 +13357,25 @@ ${token}
                 ${sessionColHeaders}
             </tr>`;
 
-        // 수업회차(received = 과거 'O'만 카운트) + 남은회차 계산
-        // 남은회차 = 표시되는 ● 개수 (= contract_loop − used − 미래 X)
-        // 미래 X도 contract_loop 슬롯을 1개 차지하지만 ●로는 카운트 안 함
+        // 수업회차(received = 과거 'O'만 카운트) + 남은회차 = 미래 'O' 개수
+        // [신규 룰] 미래 셀은 'O'(●) 또는 빈값만 존재. X 표시 안 함
         const memberUsedMap_ = {};
         const memberRemainingMap_ = {};
-        const memberContractTotalMap_ = {}; // 행 렌더에서 재사용
         filtered.forEach(function(m) {
             let used = 0;
+            let bullets = 0;
             for (let i = 0; i < d1List.length; i++) {
                 const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
                 const isPast = raw !== '' && raw < todayStr;
-                if (val === 'O' && isPast) used++;
-            }
-            const contract = (m.contract_loop !== undefined && m.contract_loop !== '' && m.contract_loop !== null)
-                ? parseInt(m.contract_loop, 10)
-                : NaN;
-            const total = !isNaN(contract) ? contract : classTotalLoop_;
-            // 미래 슬롯 = contract - used. ● 와 미래 X 모두 슬롯 소비
-            let futureSlots = Math.max(0, total - used);
-            let bullets = 0;
-            for (let i = 0; i < d1List.length && futureSlots > 0; i++) {
-                const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
-                const raw = String(d1List[i].class_date || '').replace(/-/g, '');
-                const isPast = raw !== '' && raw < todayStr;
-                if (isPast) continue;
-                if (val === 'X') { futureSlots--; }
-                else { bullets++; futureSlots--; }
+                if (isPast) {
+                    if (val === 'O') used++;
+                } else {
+                    if (val === 'O') bullets++;
+                }
             }
             memberUsedMap_[String(m.member_id)] = used;
             memberRemainingMap_[String(m.member_id)] = bullets;
-            memberContractTotalMap_[String(m.member_id)] = total;
         });
 
         // 수업 정보 툴팁 (수업구분 - 수업명 [등급] (지역))
@@ -13498,12 +13485,11 @@ ${token}
             </select>`;
 
             // 회차 셀
-            // [contract 슬롯 시각화] 미래 회차 중 (contract_loop - used) 만큼만 표시
-            //   - 미래 ●: 슬롯 소비 + 표시
-            //   - 미래 X: 슬롯 소비 + ✕ 표시 (취소된 contract 슬롯)
-            //   - 슬롯 다 쓰면: ─ 표시 (계약 외)
-            const _total_ = memberContractTotalMap_[String(m.member_id)] || 0;
-            let futureRemainingShown_ = Math.max(0, _total_ - used);
+            // [신규 룰]
+            //   - 과거 X: ✕ (빨강)
+            //   - 과거 O: ● (초록)
+            //   - 미래 O: ● (회색)
+            //   - 미래 빈값/X: 빈 셀 (클릭 가능, 점선 placeholder)
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
@@ -13512,29 +13498,25 @@ ${token}
                 const rawVal = String(m['no_' + loopNo] || '').trim().toUpperCase();
                 const val = hasPending ? String(d1AttendPending_[pendingKey]).toUpperCase() : rawVal;
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
-                // 오늘 포함 이전은 과거 취급 (버그 수정: < → <=)
                 const isPast = raw !== '' && raw <= todayStr;
                 const isUpcoming = i === upcomingIdx;
-                const isFutureNonX = !d1AttendEditMode_ && !isPast && val !== 'X';
 
                 let display, colorClass, cellBg;
-                if (val === 'X' && isPast) {
-                    display = '✕'; colorClass = 'text-red-500 font-semibold'; cellBg = 'bg-red-50';
-                } else if (val === 'X') {
-                    // 미래 X: 슬롯 있으면 ✕ 표시, 슬롯 다 쓰면 ─
-                    if (futureRemainingShown_ > 0) {
-                        display = '✕'; colorClass = 'text-gray-400 font-semibold'; cellBg = '';
-                        futureRemainingShown_--;
+                if (isPast) {
+                    if (val === 'X') {
+                        display = '✕'; colorClass = 'text-red-500 font-semibold'; cellBg = 'bg-red-50';
+                    } else if (val === 'O') {
+                        display = '●'; colorClass = 'text-green-500 text-[15px]'; cellBg = '';
                     } else {
-                        display = '─'; colorClass = 'text-gray-300 text-[10px]'; cellBg = 'bg-gray-50';
+                        display = '·'; colorClass = 'text-gray-300 text-[10px]'; cellBg = '';
                     }
-                } else if (isPast) {
-                    display = '●'; colorClass = 'text-green-500 text-[15px]'; cellBg = '';
-                } else if (futureRemainingShown_ > 0) {
-                    display = '●'; colorClass = 'text-gray-300 text-[15px]'; cellBg = '';
-                    futureRemainingShown_--;
                 } else {
-                    display = '─'; colorClass = 'text-gray-300 text-[10px]'; cellBg = 'bg-gray-50';
+                    // 미래: O면 ●, 그외(X포함, 빈값) 빈 셀로 처리
+                    if (val === 'O') {
+                        display = '●'; colorClass = 'text-gray-300 text-[15px]'; cellBg = '';
+                    } else {
+                        display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
+                    }
                 }
 
                 // 마지막 행: 하단 테두리 (upcoming=붉은색, 일반=회색)
@@ -14022,7 +14004,15 @@ ${token}
         const m = summaryMemberData_.find(function(x){ return String(x.member_id) === String(memberId); });
         if (!m) return;
         const curVal = String(m[fieldKey] || '').trim().toUpperCase();
-        const newVal = curVal === 'X' ? 'O' : 'X';
+        // 과거/미래 판정: class_d1 시트의 class_date 비교
+        const todayStr_ = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
+        const d1Item = (allClassD1Data || []).find(d => String(d.class_id) === String(selectedClassId) && Number(d.class_loop) === Number(loopNo));
+        const dateRaw = d1Item ? String(d1Item.class_date || '').replace(/-/g,'') : '';
+        const isPast = dateRaw !== '' && dateRaw <= todayStr_;
+        // 토글 규칙: 과거 = X↔O, 미래 = ''↔O
+        let newVal;
+        if (isPast) newVal = (curVal === 'X' ? 'O' : 'X');
+        else        newVal = (curVal === 'O' ? '' : 'O');
         // [OPTIMISTIC] 로컬 데이터 즉시 업데이트 + 화면 즉시 갱신 (남은회차/수업회차 동시 반영)
         m[fieldKey] = newVal;
         renderD1SummaryGrid(summaryMemberData_);
