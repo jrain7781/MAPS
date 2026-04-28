@@ -15301,6 +15301,23 @@ ${token}
             if (dateEl) { dateEl.disabled = true; dateEl.classList.add('bg-gray-100','text-gray-400'); }
             if (dateRow) dateRow.classList.remove('hidden');
             if (dateCell) dateCell.classList.add('hidden');
+            // [중요] 일괄 탭 진입 시 form 클리어 — 이전에 선택한 행의 값이 잘못 일괄 적용되는 것 방지
+            // 사용자가 명시적으로 입력한 값만 저장되도록 강제
+            ['editD1-bidStarttime', 'editD1-bidDatetime1', 'editD1-bidDatetime2'].forEach(prefix => {
+                ['day', 'ampm', 'h', 'm'].forEach(s => {
+                    const el = document.getElementById(prefix + '-' + s);
+                    if (el) el.value = '';
+                });
+            });
+            const bid1El = document.getElementById('editD1-bid1Count'); if (bid1El) bid1El.value = '';
+            const bid2El = document.getElementById('editD1-bid2Count'); if (bid2El) bid2El.value = '';
+            const teacherEl = document.getElementById('editD1-teacherId'); if (teacherEl) teacherEl.value = '';
+            ['editD1-timeFrom', 'editD1-timeTo'].forEach(prefix => {
+                ['ampm', 'h', 'm'].forEach(s => {
+                    const el = document.getElementById(prefix + '-' + s);
+                    if (el) el.value = '';
+                });
+            });
         }
     }
 
@@ -15311,25 +15328,50 @@ ${token}
     }
 
     function buildEditD1UpdateData_(isBulk) {
+        // 일괄 = 입력한 필드만 업데이트 (빈값은 무시, 다른 필드 안 건드림)
+        // 건별 = 강사 필수, 나머지는 입력한 것만
         const teacherId = document.getElementById('editD1-teacherId')?.value || '';
-        if (!teacherId) { showStatus('강사를 선택하세요.', 'error'); document.getElementById('editD1-teacherId')?.focus(); return null; }
+        if (!isBulk && !teacherId) { showStatus('강사를 선택하세요.', 'error'); document.getElementById('editD1-teacherId')?.focus(); return null; }
         const timeFrom = getDropdownTime_('editD1-timeFrom');
         const timeTo = getDropdownTime_('editD1-timeTo');
         const bidStarttimeDay = document.getElementById('editD1-bidStarttime-day')?.value ?? '';
         const bidDatetime1Day = document.getElementById('editD1-bidDatetime1-day')?.value ?? '';
         const bidDatetime2Day = document.getElementById('editD1-bidDatetime2-day')?.value ?? '';
+        const bidStarttimeTime = getDropdownTime_('editD1-bidStarttime');
+        const bidDatetime1Time = getDropdownTime_('editD1-bidDatetime1');
+        const bidDatetime2Time = getDropdownTime_('editD1-bidDatetime2');
         const bid1Count = document.getElementById('editD1-bid1Count')?.value || '';
         const bid2Count = document.getElementById('editD1-bid2Count')?.value || '';
         const classDate = document.getElementById('editD1-classDate')?.value || '';
-        const updateData = { teacher_id: teacherId };
+        const updateData = {};
+        // 강사: 입력 시에만 포함
+        if (teacherId) updateData.teacher_id = teacherId;
+        // 수업일자(건별만)
         if (!isBulk && classDate) updateData.class_date = classDate;
+        // 수업 시작/종료 시간 (양쪽 다 입력해야 적용)
         if (timeFrom && timeFrom !== '00:00') updateData.class_time_from = timeFrom;
         if (timeTo && timeTo !== '00:00') updateData.class_time_to = timeTo;
-        if (bid1Count) updateData['1cha_bid'] = parseInt(bid1Count);
-        if (bid2Count) updateData['2cha_bid'] = parseInt(bid2Count);
-        if (bidStarttimeDay !== '') { updateData.bidStarttimeDay = bidStarttimeDay; updateData.bidStarttimeTime = getDropdownTime_('editD1-bidStarttime') || '00:00'; }
-        if (bidDatetime1Day !== '') { updateData.bidDatetime1Day = bidDatetime1Day; updateData.bidDatetime1Time = getDropdownTime_('editD1-bidDatetime1') || '00:00'; }
-        if (bidDatetime2Day !== '') { updateData.bidDatetime2Day = bidDatetime2Day; updateData.bidDatetime2Time = getDropdownTime_('editD1-bidDatetime2') || '00:00'; }
+        // 선택 개수
+        if (bid1Count !== '') updateData['1cha_bid'] = parseInt(bid1Count) || 0;
+        if (bid2Count !== '') updateData['2cha_bid'] = parseInt(bid2Count) || 0;
+        // 입찰 시간: day + time 모두 명시적 입력 시에만 포함 (둘 중 하나라도 빈값이면 스킵)
+        if (bidStarttimeDay !== '' && bidStarttimeTime && bidStarttimeTime !== '00:00') {
+            updateData.bidStarttimeDay = bidStarttimeDay;
+            updateData.bidStarttimeTime = bidStarttimeTime;
+        }
+        if (bidDatetime1Day !== '' && bidDatetime1Time && bidDatetime1Time !== '00:00') {
+            updateData.bidDatetime1Day = bidDatetime1Day;
+            updateData.bidDatetime1Time = bidDatetime1Time;
+        }
+        if (bidDatetime2Day !== '' && bidDatetime2Time && bidDatetime2Time !== '00:00') {
+            updateData.bidDatetime2Day = bidDatetime2Day;
+            updateData.bidDatetime2Time = bidDatetime2Time;
+        }
+        // 일괄 모드에서 아무것도 입력 안 했으면 에러
+        if (isBulk && Object.keys(updateData).length === 0) {
+            showStatus('일괄 적용할 값을 1개 이상 입력하세요.', 'error');
+            return null;
+        }
         return updateData;
     }
 
