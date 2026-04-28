@@ -13386,15 +13386,24 @@ ${token}
                 yearGroups[yearGroups.length - 1].count++;
             }
         }
-        const yearColors = ['text-blue-600', 'text-purple-600', 'text-teal-600', 'text-rose-600'];
-        let yearColHeaders = '';
-        for (let i = 0; i < yearGroups.length; i++) {
-            const g = yearGroups[i];
-            yearColHeaders += `<th colspan="${g.count}" class="px-1 py-0.5 text-center text-[9px] font-bold bg-gray-100 ${yearColors[i % yearColors.length]} border-l border-gray-200">${g.year}년</th>`;
-        }
-
         // [선언 우선] 회차 컬럼 폭(저장된 값 사용, 없으면 48px) — 회차 헤더 생성 전에 필요
         const sessionColWidth_ = parseInt(localStorage.getItem('d1_summary_session_col_width') || '48', 10) || 48;
+        // 연도 행: 개별 셀 (colspan 사용 X) → upcoming 컬럼에 빨간 border-t 적용 가능
+        const yearColors = ['text-blue-600', 'text-purple-600', 'text-teal-600', 'text-rose-600'];
+        let yearColHeaders = '';
+        let _yearIdx_ = -1; let _prevYear_ = '';
+        for (let i = 0; i < d1List.length; i++) {
+            const raw = String(d1List[i].class_date || '').replace(/-/g, '');
+            const yr = raw.length >= 4 ? raw.substring(0, 4) : '?';
+            const isFirstOfYear = (yr !== _prevYear_);
+            if (isFirstOfYear) _yearIdx_++;
+            const yrColor = yearColors[Math.max(0, _yearIdx_) % yearColors.length];
+            const yearText = isFirstOfYear ? (yr + '년') : '';
+            const isUp = i === upcomingIdx;
+            const upCls = isUp ? 'border-l-2 border-r-2 border-t-2 border-red-400' : 'border-l border-gray-200';
+            yearColHeaders += `<th class="d1-sess-th px-1 py-0.5 text-center text-[9px] font-bold bg-gray-100 ${yrColor} ${upCls}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px">${yearText}</th>`;
+            _prevYear_ = yr;
+        }
         // [선언 우선] 수업 총 회차 (class.class_loop) — thead 템플릿에서 사용
         const clsForLoop_ = (allClassesData || []).find(function(c) { return String(c.class_id) === String(selectedClassId); }) || {};
         const classTotalLoop_ = parseInt(clsForLoop_.class_loop, 10) || N || 0;
@@ -13413,7 +13422,7 @@ ${token}
             const isActive = summarySortKey_ === 'no_' + d.class_loop;
             const isUpcoming = i === upcomingIdx;
             const upcomingThClass = isUpcoming
-                ? 'border-l-2 border-r-2 border-t-2 border-red-400'
+                ? 'border-l-2 border-r-2 border-red-400'  // border-t는 연도 행이 담당
                 : (isActive ? 'border-l border-gray-200 bg-blue-200' : 'border-l border-gray-200 hover:bg-blue-100');
             const isFirstSessionTh = i === 0;
             const resizeHandleHtml = isFirstSessionTh
