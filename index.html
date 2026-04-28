@@ -2271,7 +2271,7 @@
                     <!-- 수업 상세 조회 항목 -->
                     <div class="px-3 py-1.5 bg-green-50 border-b border-green-200 flex-none">
                         <div class="flex flex-wrap gap-2">
-                            <input type="text" id="csd-search-member" oninput="filterClassScheduleList()" onfocus="this.select()" onmouseup="event.preventDefault()" placeholder="회원명"
+                            <input type="text" id="csd-search-member" oninput="filterClassScheduleList(); _syncMemberNameFilterToD1Tab_(this.value)" onfocus="this.select()" onmouseup="event.preventDefault()" placeholder="회원명"
                                 class="flex-1 min-w-[70px] px-2 py-1 border border-gray-300 rounded-lg text-[11px] bg-white">
                             <select id="csd-search-grade" onchange="filterClassScheduleList()"
                                 class="flex-1 min-w-[70px] px-2 py-1 border border-gray-300 rounded-lg text-[11px] bg-white">
@@ -2377,26 +2377,12 @@
                             <div id="d1SummaryGrid" class="flex-1 flex gap-2 min-h-0">
                                 <!-- 왼쪽: 회원 목록 -->
                                 <div id="d1SummaryLeft" class="flex-none flex flex-col overflow-hidden" style="width:70%">
-                                    <div class="flex items-center justify-between mb-1.5 px-2 py-1.5 bg-purple-50 border border-purple-200 rounded-lg">
-                                        <!-- 왼쪽: 상태관리 + 새로고침 -->
-                                        <div class="flex items-center gap-1.5">
-                                            <span class="text-sm text-purple-700 font-semibold">전체 회원 현황</span>
-                                            <button type="button" onclick="openD1StatusMgmtModal()"
-                                                class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-1 px-2 rounded text-xs border border-gray-300">⚙ 상태관리</button>
-                                            <button type="button" onclick="reloadD1SummaryGrid()" title="회원 리스트 새로고침"
-                                                class="bg-white hover:bg-purple-100 text-purple-700 font-semibold py-1 px-2 rounded text-xs border border-purple-200">🔄 새로고침</button>
-                                        </div>
-                                        <!-- 오른쪽: 수정/삭제/추가 -->
-                                        <div class="flex items-center gap-1.5">
-                                            <button type="button" onclick="editCheckedSummaryMember()"
-                                                class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-1 px-2.5 rounded text-xs border border-blue-300">수정</button>
-                                            <button type="button" onclick="deleteCheckedSummaryMembers()"
-                                                class="bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-1 px-2.5 rounded text-xs border border-red-300">삭제</button>
-                                            <button type="button" onclick="reEnrollSelectedMember_()" title="선택한 1명 재등록 (수업회차만큼 남은회차 추가)"
-                                                class="bg-orange-100 hover:bg-orange-200 text-orange-700 font-semibold py-1 px-2.5 rounded text-xs border border-orange-300">재등록</button>
-                                            <button type="button" id="d1AddMemberBtn" onclick="showAddMemberToD1Modal()"
-                                                class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1 px-3 rounded text-xs">+ 회원추가</button>
-                                        </div>
+                                    <!-- 전체회원현황 제목 + 회원이름 조회 (중간 행) -->
+                                    <div class="flex items-center justify-between mb-1.5 px-2 py-1.5 bg-purple-50 border border-purple-200 rounded-lg gap-2">
+                                        <span class="text-sm text-purple-700 font-semibold flex-none">전체 회원 현황</span>
+                                        <input type="text" id="d1MemberNameFilter" placeholder="회원이름 조회 (클릭=전체선택)"
+                                            oninput="filterD1MembersByName_(this.value)" onfocus="this.select()"
+                                            class="flex-1 max-w-xs px-2 py-1 border border-purple-200 rounded text-xs focus:outline-none focus:border-purple-400">
                                     </div>
                                     <div class="flex-1 overflow-auto border rounded-lg">
                                         <table id="d1SummaryTable" class="text-xs border-collapse whitespace-nowrap" style="width:auto">

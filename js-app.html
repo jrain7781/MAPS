@@ -13256,6 +13256,36 @@ ${token}
             .saveMemberClassDetail(batchKey, memberId, updates);
     }
 
+    // 종목리스트 회원명 검색 → 회원탭 회원이름 조회 input과 동기화
+    function _syncMemberNameFilterToD1Tab_(val) {
+        const input = document.getElementById('d1MemberNameFilter');
+        if (input && input.value !== val) {
+            input.value = val || '';
+            filterD1MembersByName_(val);
+        } else if (input) {
+            filterD1MembersByName_(val);
+        }
+    }
+
+    // 회원이름 조회 필터 (회원탭 상단 input)
+    let d1MemberNameFilter_ = '';
+    function filterD1MembersByName_(val) {
+        d1MemberNameFilter_ = String(val || '').trim().toLowerCase();
+        if (!summaryMemberData_ || summaryMemberData_.length === 0) return;
+        // 행 단위 hide/show (재렌더 안 하고 빠르게)
+        const rows = document.querySelectorAll('#d1SummaryTbody tr[data-summary-row]');
+        rows.forEach(tr => {
+            const memId = tr.getAttribute('data-summary-row');
+            const m = summaryMemberData_.find(x => String(x.member_id) === String(memId));
+            const name = m ? String(m.member_name || '').toLowerCase() : '';
+            if (!d1MemberNameFilter_ || name.includes(d1MemberNameFilter_)) {
+                tr.classList.remove('hidden');
+            } else {
+                tr.classList.add('hidden');
+            }
+        });
+    }
+
     // 그룹 헤더의 전체선택 체크박스 → 같은 그룹의 회원 행 체크박스 일괄 토글
     function toggleD1GroupSelectAll_(checkbox) {
         const tr = checkbox.closest('tr');
@@ -13878,35 +13908,30 @@ ${token}
         const isAct = function(k) { return d1SummaryStatusFilter_ === k ? 'font-bold underline' : ''; };
         const btn = 'cursor-pointer hover:opacity-70 transition';
 
-        let html = `<span class="${btn} text-gray-600 ${isAct(null)}" onclick="setD1SummaryFilter_(null)">전체 ${members.length}명</span>`;
+        // 좌측: 전체/상태별 카운트 + dropdowns + 모드 버튼들 + 상태관리/새로고침
+        let leftHtml = `<span class="${btn} text-gray-600 ${isAct(null)}" onclick="setD1SummaryFilter_(null)">전체 ${members.length}명</span>`;
         statusList.forEach(function(s) {
             const cnt = counts[s] || 0;
             if (!cnt) return;
             const col = statusColor_(s).split(' ')[1] || 'text-gray-600';
-            html += `<span class="text-gray-300">|</span><span class="${btn} ${col} ${isAct(s)}" onclick="setD1SummaryFilter_('${escapeHtml(s)}')">${escapeHtml(s)} ${cnt}명</span>`;
+            leftHtml += `<span class="text-gray-300">|</span><span class="${btn} ${col} ${isAct(s)}" onclick="setD1SummaryFilter_('${escapeHtml(s)}')">${escapeHtml(s)} ${cnt}명</span>`;
         });
-        // 기타 상태
         Object.keys(counts).forEach(function(s) {
             if (statusList.indexOf(s) === -1 && counts[s]) {
-                html += `<span class="text-gray-300">|</span><span class="${btn} text-gray-500 ${isAct(s)}" onclick="setD1SummaryFilter_('${escapeHtml(s)}')">${escapeHtml(s)} ${counts[s]}명</span>`;
+                leftHtml += `<span class="text-gray-300">|</span><span class="${btn} text-gray-500 ${isAct(s)}" onclick="setD1SummaryFilter_('${escapeHtml(s)}')">${escapeHtml(s)} ${counts[s]}명</span>`;
             }
         });
-
-        // 일괄 상태변경 컨트롤
         const bulkStatusOpts = ['', ...getD1StatusList_()].map(s =>
             `<option value="${escapeHtml(s)}">${s || '-- 상태 선택 --'}</option>`
         ).join('');
-        // 상태값 일괄변경
-        html += `<span class="text-gray-200 mx-1">|</span>
+        leftHtml += `<span class="text-gray-200 mx-1">|</span>
             <select id="d1BulkStatusSel" class="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none bg-white">
                 <option value="">상태값</option>${bulkStatusOpts}
             </select>
             <button onclick="bulkUpdateSummaryStatus_()" class="px-2.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">일괄변경</button>`;
-
-        // 출석 변경 모드 버튼 그룹
         const editActive = d1AttendEditMode_;
         const pendingCount = Object.keys(d1AttendPending_).length;
-        html += `<span class="text-gray-200 mx-1">|</span>
+        leftHtml += `<span class="text-gray-200 mx-1">|</span>
             <span class="inline-flex items-center gap-1 border ${editActive ? 'border-orange-400 bg-orange-50' : 'border-gray-300 bg-white'} rounded px-1.5 py-0.5">
                 <button onclick="toggleD1AttendEditMode_()" class="text-xs font-semibold ${editActive ? 'text-orange-600' : 'text-gray-600 hover:text-orange-500'} whitespace-nowrap">
                     ${editActive ? '✎ 편집 중' : '✎ 출석 변경 모드'}
@@ -13915,10 +13940,24 @@ ${token}
                 <button onclick="applyD1AttendChanges_()" class="text-xs font-semibold text-green-700 hover:text-green-900 whitespace-nowrap">
                     적용${pendingCount > 0 ? ` (${pendingCount})` : ''}
                 </button>` : ''}
-            </span>`;
+            </span>
+            <button type="button" onclick="openD1StatusMgmtModal()" class="ml-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-0.5 px-2 rounded text-xs border border-gray-300">⚙ 상태관리</button>
+            <button type="button" onclick="reloadD1SummaryGrid()" title="회원 리스트 새로고침" class="bg-white hover:bg-purple-100 text-purple-700 font-semibold py-0.5 px-2 rounded text-xs border border-purple-200">🔄 새로고침</button>`;
 
-        bar.innerHTML = html;
+        // 우측: 수정/삭제/재등록/회원추가
+        const rightHtml = `
+            <button type="button" onclick="editCheckedSummaryMember()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-0.5 px-2 rounded text-xs border border-blue-300">수정</button>
+            <button type="button" onclick="deleteCheckedSummaryMembers()" class="bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-0.5 px-2 rounded text-xs border border-red-300">삭제</button>
+            <button type="button" onclick="reEnrollSelectedMember_()" title="선택한 1명 재등록" class="bg-orange-100 hover:bg-orange-200 text-orange-700 font-semibold py-0.5 px-2 rounded text-xs border border-orange-300">재등록</button>
+            <button type="button" id="d1AddMemberBtn" onclick="showAddMemberToD1Modal()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-0.5 px-2 rounded text-xs">+ 회원추가</button>`;
+
+        // flex justify-between 컨테이너로 좌우 분리
+        bar.innerHTML = `
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">${leftHtml}</div>
+            <div class="flex items-center gap-1.5 flex-none">${rightHtml}</div>`;
         bar.classList.remove('content-hidden');
+        bar.classList.remove('flex-wrap');
+        bar.classList.add('flex','justify-between');
     }
 
     function bulkUpdateSummaryStatus_() {
