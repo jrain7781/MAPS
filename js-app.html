@@ -13611,18 +13611,25 @@ ${token}
             //   - 과거 X: ✕ (빨강) / O: ● (초록)
             //   - 미래 O: ● (회색), 단 마지막(가장 늦은) 미래 O는 ● 검정 (계약 마지막 회차)
             //   - 미래 빈값/X: 빈 셀 (클릭 가능)
-            // 마지막 미래 O loopNo 계산
+            // 마지막 미래 O loopNo + 미래 O 개수
             let _lastFutureOLoop_ = -1;
+            let _futureOCount_ = 0;
             // 마지막 과거 O loopNo (종료 상태일 때 빨강 표시)
             let _lastPastOLoop_ = -1;
             for (let i = 0; i < d1List.length; i++) {
                 const v = String(m['no_'+d1List[i].class_loop] || '').trim().toUpperCase();
                 const r = String(d1List[i].class_date || '').replace(/-/g,'');
                 const isP = r !== '' && r <= todayStr;
-                if (!isP && v === 'O') _lastFutureOLoop_ = Number(d1List[i].class_loop);
+                if (!isP && (v === 'O' || v === 'R')) {
+                    _lastFutureOLoop_ = Number(d1List[i].class_loop);
+                    _futureOCount_++;
+                }
                 if (isP && v === 'O') _lastPastOLoop_ = Number(d1List[i].class_loop);
             }
             const _isEnded_ = String(m.member_status || '').trim() === '종료';
+            // 마지막 미래 O가 검정이려면: 이번 배치 안에서 남은회차가 정확히 끝남 (contract = 미래 O 개수)
+            // 남은회차 > 미래 O 개수면 다음 배치로 이어지므로 검정 안 함
+            const _futureLastIsBlack_ = (remaining === _futureOCount_);
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
@@ -13661,7 +13668,10 @@ ${token}
                     } else if (val === 'O') {
                         const isLastFutureO_ = (Number(loopNo) === _lastFutureOLoop_);
                         display = '●';
-                        colorClass = isLastFutureO_ ? 'text-gray-900 text-[15px]' : 'text-gray-300 text-[15px]';
+                        // 검정 = 이번 배치에서 남은회차가 정확히 끝나는 마지막 회차일 때만
+                        colorClass = (isLastFutureO_ && _futureLastIsBlack_)
+                            ? 'text-gray-900 text-[15px]'
+                            : 'text-gray-300 text-[15px]';
                         cellBg = '';
                     } else {
                         display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
