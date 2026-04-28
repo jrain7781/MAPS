@@ -13644,14 +13644,44 @@ ${token}
         google.script.run
             .withSuccessHandler(r => {
                 if (r && r.success) {
-                    // [중요] 재렌더 안 함 → 행 순서 보존. 해당 cell만 갱신
+                    // [중요] 재렌더 안 함 → 행 순서 보존. 해당 row의 cell들만 in-place 갱신
                     m.contract_loop = newContract;
                     const tr = document.querySelector(`tr[data-summary-row="${memberId}"]`);
                     if (tr) {
+                        // 1) 남은회차 셀 갱신
                         const remCell = tr.querySelector('td.d1-col-rem');
                         if (remCell) remCell.textContent = String(newRem);
+                        // 2) 미래 회차 ● / ─ 표시 갱신
+                        const todayStr2 = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
+                        const dList2 = (allClassD1Data || [])
+                            .filter(d => String(d.class_id) === String(selectedClassId))
+                            .sort((a,b)=>Number(a.class_loop)-Number(b.class_loop));
+                        const sessionCells = tr.querySelectorAll('td[data-attend-cell]');
+                        let futureRemainingShown_ = newRem;
+                        for (let i = 0; i < sessionCells.length && i < dList2.length; i++) {
+                            const cell = sessionCells[i];
+                            const d = dList2[i];
+                            const loopNo = Number(d.class_loop);
+                            const val = String(m['no_'+loopNo] || '').trim().toUpperCase();
+                            const raw = String(d.class_date || '').replace(/-/g,'');
+                            const isPast = raw !== '' && raw <= todayStr2;
+                            // X 또는 과거는 그대로 두고 미래만 갱신
+                            if (val === 'X' || isPast) continue;
+                            const span = cell.querySelector('span');
+                            if (!span) continue;
+                            if (futureRemainingShown_ > 0) {
+                                span.textContent = '●';
+                                span.className = 'text-gray-300 text-[15px]';
+                                cell.style.background = '';
+                                futureRemainingShown_--;
+                            } else {
+                                span.textContent = '─';
+                                span.className = 'text-gray-300 text-[10px]';
+                                cell.style.background = '#f9fafb';
+                            }
+                        }
                     }
-                    showStatus('남은회차 저장 완료 (미래 회차 표시는 새로고침/재진입 시 갱신)', 'success');
+                    showStatus('남은회차 저장 완료', 'success');
                 } else {
                     showStatus((r && r.message) || '저장 실패', 'error');
                 }
