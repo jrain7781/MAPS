@@ -626,8 +626,15 @@ function getAllClassD1Sessions() {
             var sess = {};
             CLASS_D1_HEADERS.forEach(function(h, i) {
                 var val = (i < row.length) ? row[i] : '';
-                if ((h.includes('date') || h === 'reg_date') && val instanceof Date) {
-                    sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                if (val instanceof Date) {
+                    // datetime/starttime 필드는 시각 포함 (offset 계산용), 그 외 date 필드는 날짜만
+                    if (h.includes('datetime') || h === 'bid_starttime') {
+                        sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm");
+                    } else if (h.includes('date') || h === 'reg_date') {
+                        sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                    } else {
+                        sess[h] = val;
+                    }
                 } else {
                     sess[h] = val;
                 }
@@ -661,8 +668,15 @@ function getClassScheduleInitData() {
             var sess = {};
             CLASS_D1_HEADERS.forEach(function(h, i) {
                 var val = (i < row.length) ? row[i] : '';
-                if ((h.includes('date') || h === 'reg_date') && val instanceof Date) {
-                    sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                if (val instanceof Date) {
+                    // datetime/starttime 필드는 시각 포함 (offset 계산용), 그 외 date 필드는 날짜만
+                    if (h.includes('datetime') || h === 'bid_starttime') {
+                        sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm");
+                    } else if (h.includes('date') || h === 'reg_date') {
+                        sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                    } else {
+                        sess[h] = val;
+                    }
                 } else {
                     sess[h] = val;
                 }

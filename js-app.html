@@ -14855,8 +14855,16 @@ ${token}
         document.getElementById('genD1-addCount-section').classList.toggle('hidden', mode !== 'add');
         document.getElementById('generateD1Modal').dataset.mode = mode;
 
-        document.getElementById('genD1-startLoop').value = '';
-        document.getElementById('genD1-endLoop').value = '';
+        // 신규생성: 시작회차=1, 최종회차=class.class_loop 자동
+        if (mode === 'create') {
+            const _cls_ = (allClassesData || []).find(c => String(c.class_id) === String(selectedClassId)) || {};
+            const _classLoop_ = parseInt(_cls_.class_loop, 10) || 0;
+            document.getElementById('genD1-startLoop').value = '1';
+            document.getElementById('genD1-endLoop').value = _classLoop_ > 0 ? String(_classLoop_) : '';
+        } else {
+            document.getElementById('genD1-startLoop').value = '';
+            document.getElementById('genD1-endLoop').value = '';
+        }
         // add 모드: 기본값 1 자동 설정
         document.getElementById('genD1-addCount').value = mode === 'add' ? '1' : '';
         // 시간 드롭다운 리셋 (오전 1시 00분 기본)
@@ -15271,6 +15279,7 @@ ${token}
         const bulkBtn = document.getElementById('editD1-tab-bulk');
         const dateEl = document.getElementById('editD1-classDate');
         const dateRow = document.getElementById('editD1-dateRow');
+        const dateCell = document.getElementById('editD1-dateCell');
         if (tab === 'single') {
             singleBtn?.classList.replace('bg-white','bg-indigo-600');
             singleBtn?.classList.replace('text-gray-500','text-white');
@@ -15280,7 +15289,9 @@ ${token}
             bulkBtn?.classList.replace('border-indigo-400','border-gray-300');
             if (dateEl) { dateEl.disabled = false; dateEl.classList.remove('bg-gray-100','text-gray-400'); }
             if (dateRow) dateRow.classList.remove('hidden');
+            if (dateCell) dateCell.classList.remove('hidden');
         } else {
+            // 일괄: 수업일자 셀만 숨김. 강사 셀은 보이게 → 일괄 적용 가능
             bulkBtn?.classList.replace('bg-white','bg-indigo-600');
             bulkBtn?.classList.replace('text-gray-500','text-white');
             bulkBtn?.classList.replace('border-gray-300','border-indigo-400');
@@ -15288,7 +15299,8 @@ ${token}
             singleBtn?.classList.replace('text-white','text-gray-500');
             singleBtn?.classList.replace('border-indigo-400','border-gray-300');
             if (dateEl) { dateEl.disabled = true; dateEl.classList.add('bg-gray-100','text-gray-400'); }
-            if (dateRow) dateRow.classList.add('hidden');
+            if (dateRow) dateRow.classList.remove('hidden');
+            if (dateCell) dateCell.classList.add('hidden');
         }
     }
 
@@ -15328,8 +15340,14 @@ ${token}
         if (!updateData) return;
         google.script.run
             .withSuccessHandler(r => {
-                if (r.success) { showStatus(r.message, 'success'); reloadClassD1Grid(selectedClassId); renderEditD1List_(); }
-                else showStatus(r.message, 'error');
+                if (r.success) {
+                    showStatus(r.message, 'success');
+                    reloadClassD1Grid(selectedClassId);
+                    setTimeout(() => {
+                        if (typeof buildD1Batches_ === 'function') buildD1Batches_();
+                        renderEditD1List_();
+                    }, 1500);
+                } else showStatus(r.message, 'error');
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
             .updateClassD1Batch([editD1FocusedId_], updateData);
@@ -15491,14 +15509,23 @@ ${token}
         const batch = d1Batches[d1BatchIdx];
         const items = batch ? (batch.items||[]) : [];
         if (items.length === 0) { showStatus('배치를 선택하세요.', 'error'); return; }
+        // 체크박스 선택된 회차만 일괄 적용
+        if (editD1SelectedIds_.size === 0) { showStatus('일괄 적용할 회차를 좌측 체크박스로 선택하세요.', 'error'); return; }
         const updateData = buildEditD1UpdateData_(true);
         if (!updateData) return;
-        if (!confirm(`이 배치의 전체 ${items.length}개 회차에 일괄 적용하시겠습니까?`)) return;
-        const ids = items.map(d => d.class_d1_id);
+        const ids = [...editD1SelectedIds_];
+        if (!confirm(`선택한 ${ids.length}개 회차에 일괄 적용하시겠습니까?`)) return;
         google.script.run
             .withSuccessHandler(r => {
-                if (r.success) { showStatus(r.message, 'success'); reloadClassD1Grid(selectedClassId); renderEditD1List_(); }
-                else showStatus(r.message, 'error');
+                if (r.success) {
+                    showStatus(r.message, 'success');
+                    reloadClassD1Grid(selectedClassId);
+                    // 데이터 갱신 후 d1Batches 재구성 + 리스트 재렌더
+                    setTimeout(() => {
+                        if (typeof buildD1Batches_ === 'function') buildD1Batches_();
+                        renderEditD1List_();
+                    }, 1500);
+                } else showStatus(r.message, 'error');
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
             .updateClassD1Batch(ids, updateData);
