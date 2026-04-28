@@ -13199,7 +13199,7 @@ ${token}
         if (isNaN(startLoop) || futureLoops.indexOf(startLoop) < 0) {
             showStatus('유효한 미래 회차를 선택하세요.', 'error'); return;
         }
-        // 재등록 cell 'R' + 이후 셀 'O' (수업회차만큼)
+        // 재등록 cell 'R' + 이후 셀 'O' (수업회차만큼, 단 미래 회차 부족하면 가능한 만큼만)
         const updates = {};
         const oldVals = {};
         let count = 0;
@@ -13213,6 +13213,25 @@ ${token}
             count++;
             if (count >= classLoop) break;
         }
+        // [핵심] contract_loop 갱신: 현재 used + 기존 미래O 개수 + classLoop
+        // → 미래 회차가 부족해도 stored 남은회차는 (used + 기존 미래O + classLoop)로 보존
+        //    다음 배치로 이월 시 잔여가 정확히 carry over됨
+        let usedNow = 0;
+        let oldFutureO = 0;
+        for (const d of dList) {
+            const v = String(oldVals['no_'+d.class_loop] !== undefined ? oldVals['no_'+d.class_loop] : m['no_'+d.class_loop]).trim().toUpperCase();
+            const raw = String(d.class_date || '').replace(/-/g,'');
+            const isPast = raw !== '' && raw < todayStr_;
+            if (isPast && (v === 'O' || v === 'R')) usedNow++;
+            else if (!isPast && (v === 'O' || v === 'R')) {
+                // 재등록 영향 받는 셀(startLoop 이후)은 카운트 안 함 - 새 contract에 포함됨
+                if (Number(d.class_loop) < startLoop) oldFutureO++;
+            }
+        }
+        const oldContract = m.contract_loop;
+        const newContract = usedNow + oldFutureO + classLoop;
+        m.contract_loop = newContract;
+        updates.contract_loop = newContract;
         // OPTIMISTIC
         renderD1SummaryGrid(summaryMemberData_);
         const batchKey = String(m.class_d1_id || '');
@@ -13220,15 +13239,17 @@ ${token}
         google.script.run
             .withSuccessHandler(r => {
                 if (r && r.success) {
-                    showStatus(`재등록 완료 (${count}회 추가)`, 'success');
+                    showStatus(`재등록 완료 (${count}회 추가, 잔여 ${newContract - usedNow}회 보존)`, 'success');
                 } else {
                     Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
+                    m.contract_loop = oldContract;
                     renderD1SummaryGrid(summaryMemberData_);
                     showStatus((r && r.message) || '재등록 실패', 'error');
                 }
             })
             .withFailureHandler(e => {
                 Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
+                m.contract_loop = oldContract;
                 renderD1SummaryGrid(summaryMemberData_);
                 showStatus('재등록 오류: ' + e.message, 'error');
             })
@@ -13431,7 +13452,8 @@ ${token}
                 ${sessionColHeaders}
             </tr>`;
 
-        // 수업회차 = 과거 O+R 개수, 남은회차 = 미래 O+R 개수 (R = 재등록 마커)
+        // 수업회차 = 과거 O+R 개수
+        // 남은회차 = contract_loop - used (저장된 값, 다음 배치 이월용) || 미래 O+R 개수
         const memberUsedMap_ = {};
         const memberRemainingMap_ = {};
         filtered.forEach(function(m) {
@@ -13448,7 +13470,10 @@ ${token}
                 }
             }
             memberUsedMap_[String(m.member_id)] = used;
-            memberRemainingMap_[String(m.member_id)] = bullets;
+            const contract = (m.contract_loop !== undefined && m.contract_loop !== '' && m.contract_loop !== null)
+                ? parseInt(m.contract_loop, 10) : NaN;
+            // contract_loop 우선 (재등록/editRemaining 으로 저장된 값) - 보이는 셀이 부족해도 stored 잔여 표시
+            memberRemainingMap_[String(m.member_id)] = !isNaN(contract) ? Math.max(0, contract - used) : bullets;
         });
 
         // 수업 정보 툴팁 (수업구분 - 수업명 [등급] (지역))
@@ -13603,13 +13628,9 @@ ${token}
                 } else {
                     // 미래
                     if (val === 'R') {
-                        // 재등록 시작 마커: 빨강 ●
                         display = '●'; colorClass = 'text-red-600 text-[15px]'; cellBg = '';
                     } else if (val === 'O') {
-                        const isLastO_ = (Number(loopNo) === _lastFutureOLoop_);
-                        display = '●';
-                        colorClass = isLastO_ ? 'text-gray-900 text-[15px]' : 'text-gray-300 text-[15px]';
-                        cellBg = '';
+                        display = '●'; colorClass = 'text-gray-300 text-[15px]'; cellBg = '';
                     } else {
                         display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
                     }
@@ -13663,16 +13684,17 @@ ${token}
             const isCollapsed = !!collapsedMap[g.name];
             const arrow = isCollapsed ? '▶' : '▼';
             const fg = _contrastTextColor_(g.color);
-            const bgGradient = `linear-gradient(90deg, ${g.color} 0%, ${g.color} 70%, ${g.color}dd 100%)`;
-            // 그룹 헤더 행 (sticky top + 그룹별 전체선택 체크박스)
-            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell" style="background:${bgGradient};color:${fg}">
-                <input type="checkbox" class="d1-group-checkall mr-2 cursor-pointer align-middle" title="${escapeHtml(g.name)} 전체 선택"
-                    onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this)">
-                <span style="cursor:pointer" onclick="toggleD1Group_('${escapeHtml(g.name)}')">
-                    <span style="display:inline-block;width:14px;text-align:center">${arrow}</span>
-                    <span style="font-size:13px;letter-spacing:0.3px">${escapeHtml(g.name)}</span>
-                    <span style="opacity:0.85;font-weight:normal;margin-left:6px;font-size:11px">${g.members.length}명</span>
-                </span>
+            // 탭 pill 스타일: 짧은 너비 + 상단 라운드 + 그룹 색상
+            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell">
+                <div class="d1-group-tab" style="background:${g.color};color:${fg}">
+                    <input type="checkbox" class="d1-group-checkall cursor-pointer align-middle" title="${escapeHtml(g.name)} 전체 선택"
+                        onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this)">
+                    <span style="cursor:pointer" onclick="toggleD1Group_('${escapeHtml(g.name)}')">
+                        <span style="display:inline-block;width:14px;text-align:center">${arrow}</span>
+                        <span style="font-size:13px;letter-spacing:0.3px">${escapeHtml(g.name)}</span>
+                        <span style="opacity:0.85;font-weight:normal;margin-left:6px;font-size:11px">${g.members.length}명</span>
+                    </span>
+                </div>
             </td></tr>`;
             if (isCollapsed) continue;
             for (let j = 0; j < g.members.length; j++) {
