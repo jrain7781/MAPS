@@ -154,7 +154,8 @@ const MEMBER_CLASS_DETAILS_HEADERS = [
   'remark1',       // 비고1
   'remark2',       // 비고2
   'reg_date',      // 등록일
-  'reg_id'         // 등록자
+  'reg_id',        // 등록자
+  'contract_loop'  // AD열: 회원별 계약 회차 (남은회차 = contract_loop − 수업회차)
 ];
 
 // --- 구분(gubun) 드롭다운 옵션 ---
