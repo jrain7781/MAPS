@@ -13263,32 +13263,49 @@ ${token}
         const STK = { check: 0, name: 24, phone: 94, status: 184, used: 252, rem: 302 };
         const stickyTh = function(left) { return `position:sticky;left:${left}px;z-index:6;background:#dbeafe;`; };
         const stickyTh1 = function(left) { return `position:sticky;left:${left}px;z-index:6;background:#fff;`; };
+        // 6개 sticky 컬럼 폭 (헤더/body 일관성 + table-layout 안정성)
+        const COLW = { check: 24, name: 70, phone: 90, status: 68, used: 50, rem: 50 };
+        // 연도 행: 6개 sticky 빈 셀 + year groups (colspan으로 묶지 않음 - layout 안정)
+        let blankYearCells = '';
+        const blankList = [
+            { left: STK.check,  w: COLW.check },
+            { left: STK.name,   w: COLW.name },
+            { left: STK.phone,  w: COLW.phone },
+            { left: STK.status, w: COLW.status },
+            { left: STK.used,   w: COLW.used },
+            { left: STK.rem,    w: COLW.rem }
+        ];
+        for (let i = 0; i < blankList.length; i++) {
+            blankYearCells += `<th class="bg-white" style="position:sticky;left:${blankList[i].left}px;z-index:7;background:#fff;min-width:${blankList[i].w}px;width:${blankList[i].w}px;max-width:${blankList[i].w}px"></th>`;
+        }
         thead.innerHTML = `
             <tr>
-                <th colspan="6" class="bg-white" style="position:sticky;left:0;z-index:7;background:#fff"></th>
+                ${blankYearCells}
                 ${yearColHeaders}
             </tr>
             <tr class="bg-blue-50">
-                <th class="px-1 py-2 text-center" style="${stickyTh(STK.check)};min-width:24px;width:24px">
+                <th class="px-1 py-2 text-center" style="${stickyTh(STK.check)};min-width:${COLW.check}px;width:${COLW.check}px;max-width:${COLW.check}px">
                     <input type="checkbox" id="d1SummaryCheckAll" onchange="toggleAllSummaryCheck(this.checked)" class="cursor-pointer">
                 </th>
-                <th class="px-2 py-2 text-left text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="${stickyTh(STK.name)};min-width:70px;width:70px" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
-                <th class="px-2 py-2 text-left text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="${stickyTh(STK.phone)};min-width:90px;width:90px" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
-                <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="${stickyTh(STK.status)};min-width:68px;width:68px" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
-                <th class="px-2 py-2 text-center text-xs font-bold text-emerald-700 cursor-pointer hover:text-emerald-900 select-none" style="${stickyTh(STK.used)};min-width:50px;width:50px" onclick="sortSummaryByField_('used')" title="O의 개수">수업회차${sortArrow('used')}</th>
-                <th class="px-2 py-2 text-center text-xs font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none" style="${stickyTh(STK.rem)};min-width:50px;width:50px" onclick="sortSummaryByField_('remaining')" title="총 회차(${classTotalLoop_}) − 수업회차">남은회차${sortArrow('remaining')}</th>
+                <th class="px-2 py-2 text-left text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="${stickyTh(STK.name)};min-width:${COLW.name}px;width:${COLW.name}px;max-width:${COLW.name}px" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
+                <th class="px-2 py-2 text-left text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="${stickyTh(STK.phone)};min-width:${COLW.phone}px;width:${COLW.phone}px;max-width:${COLW.phone}px" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="${stickyTh(STK.status)};min-width:${COLW.status}px;width:${COLW.status}px;max-width:${COLW.status}px" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-emerald-700 cursor-pointer hover:text-emerald-900 select-none" style="${stickyTh(STK.used)};min-width:${COLW.used}px;width:${COLW.used}px;max-width:${COLW.used}px" onclick="sortSummaryByField_('used')" title="과거 O의 개수(받은 회차)">수업회차${sortArrow('used')}</th>
+                <th class="px-2 py-2 text-center text-xs font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none" style="${stickyTh(STK.rem)};min-width:${COLW.rem}px;width:${COLW.rem}px;max-width:${COLW.rem}px" onclick="sortSummaryByField_('remaining')" title="총 회차(${classTotalLoop_}) − 수업회차">남은회차${sortArrow('remaining')}</th>
                 ${sessionColHeaders}
             </tr>`;
 
-        // 수업회차(used = 'O'의 개수) + 남은회차(class_loop - 수업회차) 사전 계산
-        // (clsForLoop_, classTotalLoop_는 thead 생성 전에 이미 선언됨)
-        const memberUsedMap_ = {};       // 수업회차 = O의 개수
+        // 수업회차(received = 과거 'O'만 카운트) + 남은회차(class_loop - 수업회차) 사전 계산
+        // 미래 회차의 'O'는 "예정"이지 "받은" 회차가 아니므로 제외
+        const memberUsedMap_ = {};       // 수업회차 = 과거 + 'O'
         const memberRemainingMap_ = {};  // 남은회차 = class_loop - 수업회차
         filtered.forEach(function(m) {
             let used = 0;
             for (let i = 0; i < d1List.length; i++) {
                 const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
-                if (val === 'O') used++;
+                const raw = String(d1List[i].class_date || '').replace(/-/g, '');
+                const isPast = raw !== '' && raw < todayStr;
+                if (val === 'O' && isPast) used++;
             }
             memberUsedMap_[String(m.member_id)] = used;
             memberRemainingMap_[String(m.member_id)] = Math.max(0, classTotalLoop_ - used);
@@ -13388,6 +13405,8 @@ ${token}
             </select>`;
 
             // 회차 셀
+            // [남은회차 가시화] 미래 회차 중 '남은회차'만큼만 ● 회색으로 표시, 그 이후는 종료 표시
+            let futureRemainingShown_ = remaining;
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
@@ -13402,6 +13421,7 @@ ${token}
                 const isFutureNonX = !d1AttendEditMode_ && !isPast && val !== 'X';
 
                 // 표시: X=취소, 과거=● 녹색(출석), 미래=● 회색(예정)
+                // 단 미래 회차는 '남은회차' 카운트 다 쓰면 '종료' 표시(─)로 차감 시각화
                 let display, colorClass, cellBg;
                 if (val === 'X' && isPast) {
                     display = '✕'; colorClass = 'text-red-500 font-semibold'; cellBg = 'bg-red-50';
@@ -13409,8 +13429,12 @@ ${token}
                     display = '✕'; colorClass = 'text-gray-400 font-semibold'; cellBg = '';
                 } else if (isPast) {
                     display = '●'; colorClass = 'text-green-500 text-[15px]'; cellBg = '';
-                } else {
+                } else if (futureRemainingShown_ > 0) {
                     display = '●'; colorClass = 'text-gray-300 text-[15px]'; cellBg = '';
+                    futureRemainingShown_--;
+                } else {
+                    // 남은회차 초과 → 계약 외 (종료된 회차)
+                    display = '─'; colorClass = 'text-gray-300 text-[10px]'; cellBg = 'bg-gray-50';
                 }
 
                 // 마지막 행: 하단 테두리 (upcoming=붉은색, 일반=회색)
