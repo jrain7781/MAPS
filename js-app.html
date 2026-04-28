@@ -13425,9 +13425,22 @@ ${token}
                 ${resizeHandleHtml}
             </th>`;
         }
+        // [패딩] class.class_loop만큼 회차 컬럼 채움 (실제 회차가 부족할 때 빈칸 표시)
+        const _padCount_ = Math.max(0, classTotalLoop_ - N);
+        for (let i = 0; i < _padCount_; i++) {
+            const loopLabel = N + i + 1;
+            sessionColHeaders += `<th class="d1-sess-th px-1 py-1 text-center bg-gray-50 border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px">
+                <div class="text-[11px] text-gray-400">${loopLabel}회</div>
+                <div class="text-[9px] text-gray-300">-</div>
+            </th>`;
+        }
+        // 연도 행에 패딩용 빈 colspan 추가
+        if (_padCount_ > 0) {
+            yearColHeaders += `<th colspan="${_padCount_}" class="bg-gray-50 border-l border-gray-200"></th>`;
+        }
 
-        // 총 컬럼 수 (checkbox + 이름 + 전화 + 상태 + 수업회차 + 남은회차 + 회차들)
-        const totalCols = 6 + N;
+        // 총 컬럼 수 (checkbox + 이름 + 전화 + 상태 + 수업회차 + 남은회차 + 실제회차 + 패딩)
+        const totalCols = 6 + N + _padCount_;
 
         const sortArrow = function(key) { return ''; }; // 정렬 표시 제거 (정렬 기능은 유지)
 
@@ -13675,6 +13688,11 @@ ${token}
                     tdOnclick = `onclick="event.stopPropagation(); toggleAndSaveAttend_('${escapeHtml(String(m.member_id))}',${loopNo},'${batchKeyEsc}')"`;
                 }
                 sessionCells += `<td data-attend-cell="${escapeHtml(String(m.member_id))}|${loopNo}" class="d1-sess-td px-1 py-2 text-center text-xs ${upcomingTdClass} ${tdBg} ${tdInteract} group-hover:bg-indigo-100 select-none" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;box-sizing:border-box" ${tdOnclick}><span class="${colorClass}">${display}</span></td>`;
+            }
+            // [패딩] 빈 회차 셀 (class.class_loop 채우기)
+            for (let i = 0; i < _padCount_; i++) {
+                const padBorderCls = isLastRow ? 'border-b-2 border-gray-300' : '';
+                sessionCells += `<td class="d1-sess-td px-1 py-2 text-center text-xs border-l border-gray-200 bg-gray-50 ${padBorderCls}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;box-sizing:border-box"></td>`;
             }
 
             const memIdEsc = escapeHtml(String(m.member_id));
