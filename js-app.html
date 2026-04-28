@@ -13172,6 +13172,69 @@ ${token}
         setD1GroupCollapsed_(name, !cur[name]);
         renderD1SummaryGrid(summaryMemberData_);
     }
+    // 선택된 회원 1명 재등록 (수업회차만큼 미래 셀 'R'+'O' 마킹)
+    function reEnrollSelectedMember_() {
+        const checked = Array.from(document.querySelectorAll('.d1-summary-check:checked'));
+        if (checked.length !== 1) { showStatus('재등록할 회원을 1명만 선택하세요.', 'error'); return; }
+        const memberId = String(checked[0].dataset.memberId || '');
+        const m = (summaryMemberData_ || []).find(x => String(x.member_id) === String(memberId));
+        if (!m) { showStatus('회원 데이터를 찾을 수 없습니다.', 'error'); return; }
+        const todayStr_ = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
+        const dList = (allClassD1Data || []).filter(d => String(d.class_id) === String(selectedClassId)).sort((a,b)=>Number(a.class_loop)-Number(b.class_loop));
+        const futureLoops = [];
+        for (const d of dList) {
+            const raw = String(d.class_date || '').replace(/-/g,'');
+            if (raw !== '' && raw >= todayStr_) futureLoops.push(Number(d.class_loop));
+        }
+        if (futureLoops.length === 0) { showStatus('재등록 가능한 미래 회차가 없습니다.', 'error'); return; }
+        const cls = (allClassesData || []).find(c => String(c.class_id) === String(selectedClassId)) || {};
+        const classLoop = parseInt(cls.class_loop, 10) || 0;
+        if (classLoop <= 0) { showStatus('수업 총 회차(class_loop) 정보가 없습니다.', 'error'); return; }
+        const promptMsg = `${m.member_name || '회원'} 재등록\n\n` +
+            `재등록 시작 회차 입력 (가능한 미래 회차: ${futureLoops.join(', ')})\n` +
+            `수업 총회차 = ${classLoop}, 새 남은회차 = 현재 + ${classLoop}`;
+        const input = prompt(promptMsg, String(futureLoops[0]));
+        if (input === null) return;
+        const startLoop = parseInt(input, 10);
+        if (isNaN(startLoop) || futureLoops.indexOf(startLoop) < 0) {
+            showStatus('유효한 미래 회차를 선택하세요.', 'error'); return;
+        }
+        // 재등록 cell 'R' + 이후 셀 'O' (수업회차만큼)
+        const updates = {};
+        const oldVals = {};
+        let count = 0;
+        for (const loop of futureLoops) {
+            if (loop < startLoop) continue;
+            const fk = 'no_' + loop;
+            const newVal = (loop === startLoop) ? 'R' : 'O';
+            oldVals[fk] = m[fk];
+            updates[fk] = newVal;
+            m[fk] = newVal;
+            count++;
+            if (count >= classLoop) break;
+        }
+        // OPTIMISTIC
+        renderD1SummaryGrid(summaryMemberData_);
+        const batchKey = String(m.class_d1_id || '');
+        if (!batchKey) { showStatus('배치 키 누락', 'error'); return; }
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r && r.success) {
+                    showStatus(`재등록 완료 (${count}회 추가)`, 'success');
+                } else {
+                    Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
+                    renderD1SummaryGrid(summaryMemberData_);
+                    showStatus((r && r.message) || '재등록 실패', 'error');
+                }
+            })
+            .withFailureHandler(e => {
+                Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
+                renderD1SummaryGrid(summaryMemberData_);
+                showStatus('재등록 오류: ' + e.message, 'error');
+            })
+            .saveMemberClassDetail(batchKey, memberId, updates);
+    }
+
     // 그룹 헤더의 전체선택 체크박스 → 같은 그룹의 회원 행 체크박스 일괄 토글
     function toggleD1GroupSelectAll_(checkbox) {
         const tr = checkbox.closest('tr');
@@ -13368,8 +13431,7 @@ ${token}
                 ${sessionColHeaders}
             </tr>`;
 
-        // 수업회차(received = 과거 'O'만 카운트) + 남은회차 = 미래 'O' 개수
-        // [신규 룰] 미래 셀은 'O'(●) 또는 빈값만 존재. X 표시 안 함
+        // 수업회차 = 과거 O+R 개수, 남은회차 = 미래 O+R 개수 (R = 재등록 마커)
         const memberUsedMap_ = {};
         const memberRemainingMap_ = {};
         filtered.forEach(function(m) {
@@ -13380,9 +13442,9 @@ ${token}
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
                 const isPast = raw !== '' && raw < todayStr;
                 if (isPast) {
-                    if (val === 'O') used++;
+                    if (val === 'O' || val === 'R') used++;
                 } else {
-                    if (val === 'O') bullets++;
+                    if (val === 'O' || val === 'R') bullets++;
                 }
             }
             memberUsedMap_[String(m.member_id)] = used;
@@ -13502,12 +13564,16 @@ ${token}
             //   - 미래 빈값/X: 빈 셀 (클릭 가능)
             // 마지막 미래 O loopNo 계산
             let _lastFutureOLoop_ = -1;
+            // 마지막 과거 O loopNo (종료 상태일 때 빨강 표시)
+            let _lastPastOLoop_ = -1;
             for (let i = 0; i < d1List.length; i++) {
                 const v = String(m['no_'+d1List[i].class_loop] || '').trim().toUpperCase();
                 const r = String(d1List[i].class_date || '').replace(/-/g,'');
                 const isP = r !== '' && r <= todayStr;
                 if (!isP && v === 'O') _lastFutureOLoop_ = Number(d1List[i].class_loop);
+                if (isP && v === 'O') _lastPastOLoop_ = Number(d1List[i].class_loop);
             }
+            const _isEnded_ = String(m.member_status || '').trim() === '종료';
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
@@ -13523,14 +13589,23 @@ ${token}
                 if (isPast) {
                     if (val === 'X') {
                         display = '✕'; colorClass = 'text-red-500 font-semibold'; cellBg = 'bg-red-50';
+                    } else if (val === 'R') {
+                        // 과거 재등록 마커: 빨강 ●
+                        display = '●'; colorClass = 'text-red-600 text-[15px]'; cellBg = '';
                     } else if (val === 'O') {
-                        display = '●'; colorClass = 'text-green-500 text-[15px]'; cellBg = '';
+                        const isLastPastO_ = _isEnded_ && (Number(loopNo) === _lastPastOLoop_);
+                        display = '●';
+                        colorClass = isLastPastO_ ? 'text-red-600 text-[15px]' : 'text-green-500 text-[15px]';
+                        cellBg = '';
                     } else {
                         display = '·'; colorClass = 'text-gray-300 text-[10px]'; cellBg = '';
                     }
                 } else {
                     // 미래
-                    if (val === 'O') {
+                    if (val === 'R') {
+                        // 재등록 시작 마커: 빨강 ●
+                        display = '●'; colorClass = 'text-red-600 text-[15px]'; cellBg = '';
+                    } else if (val === 'O') {
                         const isLastO_ = (Number(loopNo) === _lastFutureOLoop_);
                         display = '●';
                         colorClass = isLastO_ ? 'text-gray-900 text-[15px]' : 'text-gray-300 text-[15px]';
@@ -13859,8 +13934,6 @@ ${token}
     function applyD1AttendChanges_() {
         const entries = Object.entries(d1AttendPending_);
         if (entries.length === 0) { showStatus('변경된 출석이 없습니다.', 'info'); return; }
-        const batchKey = getCurrentBatchKey_();
-        if (!batchKey) { showStatus('배치를 선택하세요.', 'error'); return; }
         // 회원별 필드 묶기
         const byMember = {};
         entries.forEach(function([key, val]) {
@@ -13869,9 +13942,15 @@ ${token}
             if (!byMember[memberId]) byMember[memberId] = {};
             byMember[memberId]['no_' + loopNo] = val;
         });
-        const changes = Object.entries(byMember).map(function([memberId, fields]) {
-            return { batchKey: batchKey, memberId: memberId, fields: fields };
+        // 각 회원의 class_d1_id에서 batchKey 도출 (d1Batches 의존성 제거)
+        const changes = [];
+        Object.entries(byMember).forEach(function([memberId, fields]) {
+            const m = summaryMemberData_.find(x => String(x.member_id) === String(memberId));
+            const memberBatchKey = m ? String(m.class_d1_id || '') : '';
+            if (!memberBatchKey) return;
+            changes.push({ batchKey: memberBatchKey, memberId: memberId, fields: fields });
         });
+        if (changes.length === 0) { showStatus('저장할 회원의 배치 정보를 찾을 수 없습니다.', 'error'); return; }
         showStatus('출석 저장 중...', 'info');
         google.script.run
             .withSuccessHandler(function(r) {
@@ -13991,20 +14070,54 @@ ${token}
 
     // ─── 상태 저장 ────────────────────────────────────────────────────────────
     function saveSummaryStatus_(memberId, batchKey, newStatus) {
-        google.script.run
-            .withSuccessHandler(function(r) {
-                if (r && r.success) {
-                    // 로컬 데이터 업데이트
-                    const m = summaryMemberData_.find(function(x){ return String(x.member_id) === String(memberId); });
-                    if (m) m.member_status = newStatus;
-                    renderD1MemberSummaryBar_(summaryMemberData_, getD1StatusList_());
-                    showStatus('상태 저장 완료', 'success');
-                } else {
-                    showStatus((r && r.message) || '저장 실패', 'error');
+        const m = summaryMemberData_.find(function(x){ return String(x.member_id) === String(memberId); });
+        // 종료로 변경 시: 남은회차 0으로 만들기 안내
+        let updates = { member_status: newStatus };
+        if (newStatus === '종료' && m) {
+            // 미래 O 개수
+            const todayStr_ = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
+            const dList = (allClassD1Data || []).filter(d => String(d.class_id) === String(selectedClassId));
+            let futureO = 0;
+            const futureOLoops = [];
+            dList.forEach(d => {
+                const raw = String(d.class_date || '').replace(/-/g,'');
+                if (raw === '' || raw < todayStr_) return;
+                const v = String(m['no_'+d.class_loop] || '').trim().toUpperCase();
+                if (v === 'O') { futureO++; futureOLoops.push(Number(d.class_loop)); }
+            });
+            if (futureO > 0) {
+                if (confirm(`${m.member_name || '회원'}을(를) 종료 처리합니다.\n남은회차 ${futureO}개를 0으로 비우시겠습니까?`)) {
+                    futureOLoops.forEach(loopNo => {
+                        const fk = 'no_' + loopNo;
+                        updates[fk] = '';
+                        m[fk] = '';
+                    });
                 }
-            })
-            .withFailureHandler(function(e) { showStatus(e.message || '저장 실패', 'error'); })
-            .saveMemberClassDetail(batchKey, memberId, { member_status: newStatus });
+            }
+        }
+        // [OPTIMISTIC] 로컬 즉시 갱신
+        if (m) {
+            const oldStatus = m.member_status;
+            m.member_status = newStatus;
+            renderD1SummaryGrid(summaryMemberData_);
+            google.script.run
+                .withSuccessHandler(function(r) {
+                    if (r && r.success) {
+                        renderD1MemberSummaryBar_(summaryMemberData_, getD1StatusList_());
+                        showStatus('상태 저장 완료', 'success');
+                    } else {
+                        m.member_status = oldStatus;
+                        renderD1SummaryGrid(summaryMemberData_);
+                        showStatus((r && r.message) || '저장 실패', 'error');
+                    }
+                })
+                .withFailureHandler(function(e) {
+                    m.member_status = oldStatus;
+                    renderD1SummaryGrid(summaryMemberData_);
+                    showStatus(e.message || '저장 실패', 'error');
+                })
+                .saveMemberClassDetail(batchKey, memberId, updates);
+        }
     }
 
     // ─── 출석 드롭다운 ────────────────────────────────────────────────────────
@@ -14052,10 +14165,10 @@ ${token}
         const d1Item = (allClassD1Data || []).find(d => String(d.class_id) === String(selectedClassId) && Number(d.class_loop) === Number(loopNo));
         const dateRaw = d1Item ? String(d1Item.class_date || '').replace(/-/g,'') : '';
         const isPast = dateRaw !== '' && dateRaw <= todayStr_;
-        // 토글 규칙: 과거 = X↔O, 미래 = ''↔O
+        // 토글 규칙: 과거 = X↔O (R도 빈값으로), 미래 = ''↔O (R도 빈값으로)
         let newVal;
         if (isPast) newVal = (curVal === 'X' ? 'O' : 'X');
-        else        newVal = (curVal === 'O' ? '' : 'O');
+        else        newVal = (curVal === 'O' || curVal === 'R' ? '' : 'O');
         // [OPTIMISTIC] 로컬 데이터 즉시 업데이트 + 화면 즉시 갱신 (남은회차/수업회차 동시 반영)
         m[fieldKey] = newVal;
         renderD1SummaryGrid(summaryMemberData_);
