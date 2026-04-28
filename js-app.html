@@ -14016,24 +14016,22 @@ ${token}
         if (!m) return;
         const curVal = String(m[fieldKey] || '').trim().toUpperCase();
         const newVal = curVal === 'X' ? 'O' : 'X';
-        // 해당 셀에 로딩 스피너 표시
-        const cellEl = document.querySelector('[data-attend-cell="' + memberId + '|' + loopNo + '"]');
-        if (cellEl) {
-            cellEl.innerHTML = '<svg class="animate-spin h-3 w-3 text-indigo-400 inline-block" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>';
-            cellEl.style.pointerEvents = 'none';
-        }
+        // [OPTIMISTIC] 로컬 데이터 즉시 업데이트 + 화면 즉시 갱신 (남은회차/수업회차 동시 반영)
+        m[fieldKey] = newVal;
+        renderD1SummaryGrid(summaryMemberData_);
+        // 서버 저장 (백그라운드). 실패 시 롤백
         google.script.run
             .withSuccessHandler(function(r) {
                 if (r && r.success) {
-                    m[fieldKey] = newVal;
-                    renderD1SummaryGrid(summaryMemberData_);
                     showStatus('출석 저장 완료', 'success');
                 } else {
+                    m[fieldKey] = curVal;
                     renderD1SummaryGrid(summaryMemberData_);
                     showStatus((r && r.message) || '저장 실패', 'error');
                 }
             })
             .withFailureHandler(function(e) {
+                m[fieldKey] = curVal;
                 renderD1SummaryGrid(summaryMemberData_);
                 showStatus(e.message || '저장 실패', 'error');
             })
