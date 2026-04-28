@@ -15924,6 +15924,18 @@ ${token}
     function showMemberRegisterModal() {
         const modal = document.getElementById('memberRegisterModal');
         modal.classList.remove('content-hidden');
+        // classDropdownOptions가 비어있으면 먼저 로드
+        const opts_ = classDropdownOptions || {};
+        if (!opts_.class_types || opts_.class_types.length === 0) {
+            if (typeof loadClassDropdownOptions === 'function') {
+                google.script.run
+                    .withSuccessHandler(o => {
+                        classDropdownOptions = o || { class_types: [], class_names: [], class_grades: [], class_locs: [] };
+                        _populateMemregDropdowns();
+                    })
+                    .getClassDropdownOptions();
+            }
+        }
         _populateMemregDropdowns();
         if (allMembersNewData && allMembersNewData.length > 0) {
             filterMembersRegister();
@@ -15956,9 +15968,9 @@ ${token}
             });
             if (cur) sel.value = cur;
         };
-        populate('memreg-search-class-type', opts.class_types, '수업구분');
-        populate('memreg-search-class-name', opts.class_names, '수업이름');
-        populate('memreg-search-class-grade', opts.class_grades, '수업등급');
+        populate('memreg-search-class-type', opts.class_types, '종목구분');
+        populate('memreg-search-class-name', opts.class_names, '종목이름');
+        populate('memreg-search-class-grade', opts.class_grades, '종목등급');
         populate('memreg-search-class-loc', opts.class_locs, '지역');
     }
 
