@@ -13358,9 +13358,11 @@ ${token}
             </tr>`;
 
         // 수업회차(received = 과거 'O'만 카운트) + 남은회차 계산
-        // 우선순위: contract_loop(회원별 계약) - used → 없으면 class_loop - used
+        // 남은회차 = 표시되는 ● 개수 (= contract_loop − used − 미래 X)
+        // 미래 X도 contract_loop 슬롯을 1개 차지하지만 ●로는 카운트 안 함
         const memberUsedMap_ = {};
         const memberRemainingMap_ = {};
+        const memberContractTotalMap_ = {}; // 행 렌더에서 재사용
         filtered.forEach(function(m) {
             let used = 0;
             for (let i = 0; i < d1List.length; i++) {
@@ -13369,12 +13371,24 @@ ${token}
                 const isPast = raw !== '' && raw < todayStr;
                 if (val === 'O' && isPast) used++;
             }
-            memberUsedMap_[String(m.member_id)] = used;
             const contract = (m.contract_loop !== undefined && m.contract_loop !== '' && m.contract_loop !== null)
                 ? parseInt(m.contract_loop, 10)
                 : NaN;
             const total = !isNaN(contract) ? contract : classTotalLoop_;
-            memberRemainingMap_[String(m.member_id)] = Math.max(0, total - used);
+            // 미래 슬롯 = contract - used. ● 와 미래 X 모두 슬롯 소비
+            let futureSlots = Math.max(0, total - used);
+            let bullets = 0;
+            for (let i = 0; i < d1List.length && futureSlots > 0; i++) {
+                const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
+                const raw = String(d1List[i].class_date || '').replace(/-/g, '');
+                const isPast = raw !== '' && raw < todayStr;
+                if (isPast) continue;
+                if (val === 'X') { futureSlots--; }
+                else { bullets++; futureSlots--; }
+            }
+            memberUsedMap_[String(m.member_id)] = used;
+            memberRemainingMap_[String(m.member_id)] = bullets;
+            memberContractTotalMap_[String(m.member_id)] = total;
         });
 
         // 수업 정보 툴팁 (수업구분 - 수업명 [등급] (지역))
@@ -13484,8 +13498,12 @@ ${token}
             </select>`;
 
             // 회차 셀
-            // [남은회차 가시화] 미래 회차 중 '남은회차'만큼만 ● 회색으로 표시, 그 이후는 종료 표시
-            let futureRemainingShown_ = remaining;
+            // [contract 슬롯 시각화] 미래 회차 중 (contract_loop - used) 만큼만 표시
+            //   - 미래 ●: 슬롯 소비 + 표시
+            //   - 미래 X: 슬롯 소비 + ✕ 표시 (취소된 contract 슬롯)
+            //   - 슬롯 다 쓰면: ─ 표시 (계약 외)
+            const _total_ = memberContractTotalMap_[String(m.member_id)] || 0;
+            let futureRemainingShown_ = Math.max(0, _total_ - used);
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
@@ -13499,20 +13517,23 @@ ${token}
                 const isUpcoming = i === upcomingIdx;
                 const isFutureNonX = !d1AttendEditMode_ && !isPast && val !== 'X';
 
-                // 표시: X=취소, 과거=● 녹색(출석), 미래=● 회색(예정)
-                // 단 미래 회차는 '남은회차' 카운트 다 쓰면 '종료' 표시(─)로 차감 시각화
                 let display, colorClass, cellBg;
                 if (val === 'X' && isPast) {
                     display = '✕'; colorClass = 'text-red-500 font-semibold'; cellBg = 'bg-red-50';
                 } else if (val === 'X') {
-                    display = '✕'; colorClass = 'text-gray-400 font-semibold'; cellBg = '';
+                    // 미래 X: 슬롯 있으면 ✕ 표시, 슬롯 다 쓰면 ─
+                    if (futureRemainingShown_ > 0) {
+                        display = '✕'; colorClass = 'text-gray-400 font-semibold'; cellBg = '';
+                        futureRemainingShown_--;
+                    } else {
+                        display = '─'; colorClass = 'text-gray-300 text-[10px]'; cellBg = 'bg-gray-50';
+                    }
                 } else if (isPast) {
                     display = '●'; colorClass = 'text-green-500 text-[15px]'; cellBg = '';
                 } else if (futureRemainingShown_ > 0) {
                     display = '●'; colorClass = 'text-gray-300 text-[15px]'; cellBg = '';
                     futureRemainingShown_--;
                 } else {
-                    // 남은회차 초과 → 계약 외 (종료된 회차)
                     display = '─'; colorClass = 'text-gray-300 text-[10px]'; cellBg = 'bg-gray-50';
                 }
 
@@ -13644,43 +13665,9 @@ ${token}
         google.script.run
             .withSuccessHandler(r => {
                 if (r && r.success) {
-                    // [중요] 재렌더 안 함 → 행 순서 보존. 해당 row의 cell들만 in-place 갱신
                     m.contract_loop = newContract;
-                    const tr = document.querySelector(`tr[data-summary-row="${memberId}"]`);
-                    if (tr) {
-                        // 1) 남은회차 셀 갱신
-                        const remCell = tr.querySelector('td.d1-col-rem');
-                        if (remCell) remCell.textContent = String(newRem);
-                        // 2) 미래 회차 ● / ─ 표시 갱신
-                        const todayStr2 = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
-                        const dList2 = (allClassD1Data || [])
-                            .filter(d => String(d.class_id) === String(selectedClassId))
-                            .sort((a,b)=>Number(a.class_loop)-Number(b.class_loop));
-                        const sessionCells = tr.querySelectorAll('td[data-attend-cell]');
-                        let futureRemainingShown_ = newRem;
-                        for (let i = 0; i < sessionCells.length && i < dList2.length; i++) {
-                            const cell = sessionCells[i];
-                            const d = dList2[i];
-                            const loopNo = Number(d.class_loop);
-                            const val = String(m['no_'+loopNo] || '').trim().toUpperCase();
-                            const raw = String(d.class_date || '').replace(/-/g,'');
-                            const isPast = raw !== '' && raw <= todayStr2;
-                            // X 또는 과거는 그대로 두고 미래만 갱신
-                            if (val === 'X' || isPast) continue;
-                            const span = cell.querySelector('span');
-                            if (!span) continue;
-                            if (futureRemainingShown_ > 0) {
-                                span.textContent = '●';
-                                span.className = 'text-gray-300 text-[15px]';
-                                cell.style.background = '';
-                                futureRemainingShown_--;
-                            } else {
-                                span.textContent = '─';
-                                span.className = 'text-gray-300 text-[10px]';
-                                cell.style.background = '#f9fafb';
-                            }
-                        }
-                    }
+                    // 전체 재렌더 (그룹/이름순 정렬은 변하지 않음)
+                    renderD1SummaryGrid(summaryMemberData_);
                     showStatus('남은회차 저장 완료', 'success');
                 } else {
                     showStatus((r && r.message) || '저장 실패', 'error');
