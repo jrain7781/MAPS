@@ -13661,19 +13661,26 @@ ${token}
         const newContract = newRem + usedNow;
         const batchKey = String(m.class_d1_id || '');
         if (!batchKey) { showStatus('배치 키 누락', 'error'); return; }
-        showStatus('남은회차 저장 중...', 'warning');
+        // [OPTIMISTIC] 즉시 화면 반영 + 백그라운드 저장
+        const oldContract = m.contract_loop;
+        m.contract_loop = newContract;
+        renderD1SummaryGrid(summaryMemberData_);
         google.script.run
             .withSuccessHandler(r => {
                 if (r && r.success) {
-                    m.contract_loop = newContract;
-                    // 전체 재렌더 (그룹/이름순 정렬은 변하지 않음)
-                    renderD1SummaryGrid(summaryMemberData_);
                     showStatus('남은회차 저장 완료', 'success');
                 } else {
+                    // 롤백
+                    m.contract_loop = oldContract;
+                    renderD1SummaryGrid(summaryMemberData_);
                     showStatus((r && r.message) || '저장 실패', 'error');
                 }
             })
-            .withFailureHandler(e => showStatus('저장 오류: ' + e.message, 'error'))
+            .withFailureHandler(e => {
+                m.contract_loop = oldContract;
+                renderD1SummaryGrid(summaryMemberData_);
+                showStatus('저장 오류: ' + e.message, 'error');
+            })
             .saveMemberClassDetail(batchKey, memberId, { contract_loop: newContract });
     }
     // 첫 회차 컬럼 헤더 우측 핸들 드래그 → 모든 회차 폭 동시 변경 + localStorage 저장
