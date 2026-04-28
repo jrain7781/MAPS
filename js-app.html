@@ -13092,14 +13092,70 @@ ${token}
     let d1SummaryStatusFilter_ = null;
 
     // 상태값 목록 (localStorage 저장)
-    const D1_STATUS_LS_KEY = 'd1StatusList_v1';
+    const D1_STATUS_LS_KEY = 'd1StatusList_v1';        // legacy: 이름 배열
+    const D1_STATUS_LS_KEY_V2 = 'd1StatusList_v2';     // 신규: [{name, color, separated}]
+    const D1_GROUP_COLLAPSED_LS_KEY = 'd1GroupCollapsed_v1'; // 그룹별 펼침/접힘 상태
     const D1_STATUS_DEFAULTS = ['진행중', '종료', '홀딩'];
-    function getD1StatusList_() {
+    const D1_STATUS_DEFAULT_COLORS = { '진행중': '#16a34a', '홀딩': '#737373', '종료': '#171717' };
+    const D1_STATUS_DEFAULTS_V2 = [
+        { name: '진행중', color: '#16a34a', separated: true },
+        { name: '홀딩',   color: '#737373', separated: true },
+        { name: '종료',   color: '#171717', separated: true }
+    ];
+
+    // v2 (full config) - 색상/분리여부/순서 포함
+    function getD1StatusListV2_() {
         try {
-            const raw = localStorage.getItem(D1_STATUS_LS_KEY);
+            const raw = localStorage.getItem(D1_STATUS_LS_KEY_V2);
             if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr) && arr.length) return arr; }
         } catch(e) {}
-        return D1_STATUS_DEFAULTS.slice();
+        // 마이그레이션: v1 → v2
+        try {
+            const v1 = localStorage.getItem(D1_STATUS_LS_KEY);
+            if (v1) {
+                const v1arr = JSON.parse(v1);
+                if (Array.isArray(v1arr) && v1arr.length) {
+                    return v1arr.map(name => ({
+                        name: String(name),
+                        color: D1_STATUS_DEFAULT_COLORS[name] || '#6b7280',
+                        separated: true
+                    }));
+                }
+            }
+        } catch(e) {}
+        return D1_STATUS_DEFAULTS_V2.map(s => ({ ...s }));
+    }
+    function saveD1StatusListV2_(list) {
+        try { localStorage.setItem(D1_STATUS_LS_KEY_V2, JSON.stringify(list)); } catch(e) {}
+    }
+    function getD1StatusColor_(statusName) {
+        const v2 = getD1StatusListV2_();
+        const found = v2.find(s => s.name === statusName);
+        return found ? found.color : '#6b7280';
+    }
+
+    // 그룹 펼침/접힘 (PC별 localStorage)
+    function getD1GroupCollapsed_() {
+        try {
+            const raw = localStorage.getItem(D1_GROUP_COLLAPSED_LS_KEY);
+            if (raw) { const obj = JSON.parse(raw); if (obj && typeof obj === 'object') return obj; }
+        } catch(e) {}
+        return {};
+    }
+    function setD1GroupCollapsed_(name, collapsed) {
+        const cur = getD1GroupCollapsed_();
+        cur[name] = !!collapsed;
+        try { localStorage.setItem(D1_GROUP_COLLAPSED_LS_KEY, JSON.stringify(cur)); } catch(e) {}
+    }
+    function toggleD1Group_(name) {
+        const cur = getD1GroupCollapsed_();
+        setD1GroupCollapsed_(name, !cur[name]);
+        renderD1SummaryGrid(summaryMemberData_);
+    }
+
+    // 기존 호환: 이름 배열만 반환
+    function getD1StatusList_() {
+        return getD1StatusListV2_().map(s => s.name);
     }
     function saveD1StatusList_(list) {
         try { localStorage.setItem(D1_STATUS_LS_KEY, JSON.stringify(list)); } catch(e) {}
@@ -13307,65 +13363,77 @@ ${token}
         const clsGrade_ = clsInfo_.class_grade ? ` [${clsInfo_.class_grade}]` : '';
         const classTooltip_ = `${clsInfo_.class_type || ''}${clsInfo_.class_type && clsInfo_.class_name ? ' - ' : ''}${clsInfo_.class_name || ''}${clsGrade_}${clsLoc_}`;
 
-        // status별 우선순위 (진행중 > 홀딩 > 종료 > 그 외 > 빈값)
-        const statusRank_ = function(s) {
-            const k = String(s || '').trim();
-            if (k === '진행중') return 0;
-            if (k === '홀딩') return 1;
-            if (k === '종료') return 2;
-            if (k === '') return 4;
-            return 3;
+        // 그룹 내 정렬 함수 (각 그룹별로 동일하게 적용)
+        const sortMembersInGroup_ = function(members) {
+            const arr = members.slice();
+            if (summarySortKey_ === 'name') {
+                arr.sort((a, b) => (a.member_name || '').localeCompare(b.member_name || ''));
+                if (!summarySortAsc_) arr.reverse();
+            } else if (summarySortKey_ && summarySortKey_.startsWith('no_')) {
+                arr.sort((a, b) => {
+                    const aV = String(a[summarySortKey_] || '').trim().toUpperCase();
+                    const bV = String(b[summarySortKey_] || '').trim().toUpperCase();
+                    const aRank = aV === 'O' ? 0 : aV === 'X' ? 2 : 1;
+                    const bRank = bV === 'O' ? 0 : bV === 'X' ? 2 : 1;
+                    if (aRank !== bRank) return summarySortAsc_ ? aRank - bRank : bRank - aRank;
+                    return (a.member_name || '').localeCompare(b.member_name || '');
+                });
+            } else if (summarySortKey_ === 'phone') {
+                arr.sort((a, b) => { const r = (a.phone||'').localeCompare(b.phone||''); return summarySortAsc_ ? r : -r; });
+            } else if (summarySortKey_ === 'status') {
+                arr.sort((a, b) => { const r = (a.member_status||'').localeCompare(b.member_status||''); return summarySortAsc_ ? r : -r; });
+            } else if (summarySortKey_ === 'used') {
+                arr.sort((a, b) => {
+                    const aU = memberUsedMap_[String(a.member_id)] || 0;
+                    const bU = memberUsedMap_[String(b.member_id)] || 0;
+                    return summarySortAsc_ ? aU - bU : bU - aU;
+                });
+            } else if (summarySortKey_ === 'remaining') {
+                arr.sort((a, b) => {
+                    const aR = memberRemainingMap_[String(a.member_id)] || 0;
+                    const bR = memberRemainingMap_[String(b.member_id)] || 0;
+                    return summarySortAsc_ ? aR - bR : bR - aR;
+                });
+            }
+            return arr;
         };
-        let sorted = filtered.slice();
-        if (summarySortKey_ === 'name') {
-            sorted.sort(function (a, b) { return (a.member_name || '').localeCompare(b.member_name || ''); });
-            if (!summarySortAsc_) sorted.reverse();
-        } else if (summarySortKey_.startsWith('no_')) {
-            sorted.sort(function (a, b) {
-                const aV = String(a[summarySortKey_] || '').trim().toUpperCase();
-                const bV = String(b[summarySortKey_] || '').trim().toUpperCase();
-                const aRank = aV === 'O' ? 0 : aV === 'X' ? 2 : 1;
-                const bRank = bV === 'O' ? 0 : bV === 'X' ? 2 : 1;
-                if (aRank !== bRank) return summarySortAsc_ ? aRank - bRank : bRank - aRank;
-                return (a.member_name || '').localeCompare(b.member_name || '');
-            });
-        } else if (summarySortKey_ === 'phone') {
-            sorted.sort(function(a, b) { const r = (a.phone||'').localeCompare(b.phone||''); return summarySortAsc_ ? r : -r; });
-        } else if (summarySortKey_ === 'status') {
-            sorted.sort(function(a, b) { const r = (a.member_status||'').localeCompare(b.member_status||''); return summarySortAsc_ ? r : -r; });
-        } else if (summarySortKey_ === 'used') {
-            sorted.sort(function(a, b) {
-                const aU = memberUsedMap_[String(a.member_id)] || 0;
-                const bU = memberUsedMap_[String(b.member_id)] || 0;
-                return summarySortAsc_ ? aU - bU : bU - aU;
-            });
-        } else if (summarySortKey_ === 'remaining') {
-            sorted.sort(function(a, b) {
-                const aR = memberRemainingMap_[String(a.member_id)] || 0;
-                const bR = memberRemainingMap_[String(b.member_id)] || 0;
-                return summarySortAsc_ ? aR - bR : bR - aR;
-            });
-        }
-        // [기본 그룹] 사용자가 명시적 정렬을 안 했거나 status 정렬일 때 status 우선순위 적용
-        // → 진행중 회원이 항상 가장 위
-        if (!summarySortKey_ || summarySortKey_ === 'status') {
-            sorted.sort(function(a, b) {
-                const r = statusRank_(a.member_status) - statusRank_(b.member_status);
-                if (r !== 0) return r;
-                return (a.member_name || '').localeCompare(b.member_name || '');
-            });
-        }
 
-        if (sorted.length === 0) {
+        // 상태별 그룹화: 분리=O인 상태들은 자기 그룹, 나머지(분리=X)는 진행중 그룹에 통합
+        const v2List = getD1StatusListV2_();
+        const separatedNames = v2List.filter(s => s.separated && s.name !== '진행중').map(s => s.name);
+        const groups = [];
+        // 1) 진행중 = 통합리스트 (진행중 + 분리 X 모든 상태 + 빈값)
+        const inProgressMembers = filtered.filter(m => {
+            const st = String(m.member_status || '').trim();
+            if (st === '진행중') return true;
+            if (st === '') return true;  // 빈값도 진행중에 포함
+            // 분리=O인 상태가 아니라면 진행중에 포함
+            return separatedNames.indexOf(st) < 0;
+        });
+        const ipColor = getD1StatusColor_('진행중');
+        groups.push({ name: '진행중', color: ipColor, members: sortMembersInGroup_(inProgressMembers) });
+        // 2) 분리=O인 다른 상태들 (v2 순서대로)
+        v2List.forEach(s => {
+            if (!s.separated || s.name === '진행중') return;
+            const grpMembers = filtered.filter(m => String(m.member_status || '').trim() === s.name);
+            groups.push({ name: s.name, color: s.color, members: sortMembersInGroup_(grpMembers) });
+        });
+
+        const totalRows = groups.reduce((sum, g) => sum + g.members.length, 0);
+        if (totalRows === 0) {
             tbody.innerHTML = `<tr><td colspan="${totalCols}" class="p-4 text-center text-gray-500 text-xs">등록된 회원이 없습니다.</td></tr>`;
             return;
         }
 
-        let bodyHtml = '';
-        for (let j = 0; j < sorted.length; j++) {
-            const m = sorted[j];
+        // 정렬된 전체 리스트 (lastTdCls 계산용)
+        const flatSorted = [];
+        groups.forEach(g => g.members.forEach(m => flatSorted.push(m)));
+        const lastIdx_ = flatSorted.length - 1;
+
+        // 단일 행 렌더 (closure - 외부 scope 변수 접근)
+        const renderRow_ = function(m, globalIdx) {
             const isSelected = String(m.member_id) === String(selectedSummaryMemberId_);
-            const isLastRow  = j === sorted.length - 1;
+            const isLastRow  = globalIdx === lastIdx_;
 
             const remaining = memberRemainingMap_[String(m.member_id)] || 0;
             const used = memberUsedMap_[String(m.member_id)] || 0;
@@ -13451,7 +13519,7 @@ ${token}
             const selCls  = isSelected ? 'bg-indigo-100' : '';
             const lastTdCls = isLastRow ? 'border-b-2 border-gray-300' : '';
             const selBorderCls = isSelected ? 'border-l-4 border-indigo-500' : '';
-            bodyHtml += `<tr class="group ${selCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
+            return `<tr class="group ${selCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
                 <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls} ${lastTdCls}" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
@@ -13464,12 +13532,30 @@ ${token}
                 <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation(); editRemaining_('${memIdEsc}')" title="클릭하여 수정">${remaining}</td>
                 ${sessionCells}
             </tr>`;
+        }; // end renderRow_
+
+        // 그룹 헤더 + 회원 행 조립
+        const collapsedMap = getD1GroupCollapsed_();
+        let bodyHtml = '';
+        let globalIdx = 0;
+        for (let gi = 0; gi < groups.length; gi++) {
+            const g = groups[gi];
+            const isCollapsed = !!collapsedMap[g.name];
+            const arrow = isCollapsed ? '▶' : '▼';
+            // 그룹 헤더 행 (sticky top - 스크롤 시 상단에 붙음)
+            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell" style="background:${g.color};color:#fff;cursor:pointer" onclick="toggleD1Group_('${escapeHtml(g.name)}')">
+                <span style="display:inline-block;width:14px">${arrow}</span>
+                ${escapeHtml(g.name)} <span style="opacity:0.85;font-weight:normal">(${g.members.length}명)</span>
+            </td></tr>`;
+            if (isCollapsed) continue;
+            for (let j = 0; j < g.members.length; j++) {
+                bodyHtml += renderRow_(g.members[j], globalIdx);
+                globalIdx++;
+            }
         }
         tbody.innerHTML = bodyHtml;
         // 회차 컬럼 폭 강제 적용 (리사이즈 후 즉시 반영용)
         d1SessColApplyWidth_(sessionColWidth_);
-        // 틀고정 select 초기값 동기화
-        syncD1FreezeUntilSel_();
         setTimeout(function() { initTableColResize_(document.getElementById('d1SummaryTable')); }, 0);
     }
 
@@ -13958,18 +14044,56 @@ ${token}
     function renderD1StatusMgmtList_() {
         const list = document.getElementById('d1StatusMgmtList');
         if (!list) return;
-        const statusList = getD1StatusList_();
-        if (statusList.length === 0) {
+        const v2 = getD1StatusListV2_();
+        if (v2.length === 0) {
             list.innerHTML = '<div class="text-gray-400 text-xs text-center py-2">등록된 상태값이 없습니다.</div>';
             return;
         }
-        list.innerHTML = statusList.map(function(s, idx) {
-            return `<div class="flex items-center gap-2 px-2 py-1 bg-gray-50 rounded border border-gray-100">
-                <input type="text" value="${escapeHtml(s)}" class="flex-1 text-xs border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400"
+        // 컬럼 헤더
+        const header = `<div class="grid grid-cols-[20px_1fr_44px_50px_24px] gap-1.5 items-center px-2 py-1 text-[10px] font-semibold text-gray-500 border-b">
+            <span></span><span>이름</span><span class="text-center">색상</span><span class="text-center">분리</span><span></span>
+        </div>`;
+        const rows = v2.map(function(s, idx) {
+            const sepBg = s.separated ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-gray-100 text-gray-500 border-gray-200';
+            const sepLbl = s.separated ? 'O' : 'X';
+            return `<div class="d1-status-row grid grid-cols-[20px_1fr_44px_50px_24px] gap-1.5 items-center px-2 py-1 bg-gray-50 rounded border border-gray-100"
+                draggable="true" data-idx="${idx}"
+                ondragstart="d1StatusDragStart_(event, ${idx})" ondragover="d1StatusDragOver_(event)" ondrop="d1StatusDrop_(event, ${idx})" ondragend="d1StatusDragEnd_(event)">
+                <span class="text-gray-300 cursor-move select-none text-center" title="드래그하여 순서 변경">⋮⋮</span>
+                <input type="text" value="${escapeHtml(s.name)}" class="text-xs border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:border-indigo-400"
                     onblur="updateD1Status_(${idx}, this.value)" onkeydown="if(event.key==='Enter') this.blur()">
+                <input type="color" value="${escapeHtml(s.color || '#6b7280')}" class="w-full h-6 cursor-pointer border border-gray-200 rounded"
+                    onchange="updateD1StatusColor_(${idx}, this.value)" title="색상 선택">
+                <button type="button" onclick="toggleD1StatusSeparated_(${idx})"
+                    class="text-xs font-bold border rounded px-1 py-0.5 ${sepBg}" title="분리해서 표시 여부">${sepLbl}</button>
                 <button onclick="deleteD1Status_(${idx})" class="text-red-400 hover:text-red-600 text-sm font-bold leading-none" title="삭제">&times;</button>
             </div>`;
         }).join('');
+        list.innerHTML = header + rows;
+    }
+
+    // 드래그 앤 드롭 (순서 변경)
+    let _d1StatusDragIdx_ = -1;
+    function d1StatusDragStart_(ev, idx) {
+        _d1StatusDragIdx_ = idx;
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.currentTarget.classList.add('opacity-40');
+    }
+    function d1StatusDragOver_(ev) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; }
+    function d1StatusDrop_(ev, targetIdx) {
+        ev.preventDefault();
+        const fromIdx = _d1StatusDragIdx_;
+        if (fromIdx < 0 || fromIdx === targetIdx) return;
+        const v2 = getD1StatusListV2_();
+        const item = v2.splice(fromIdx, 1)[0];
+        v2.splice(targetIdx, 0, item);
+        saveD1StatusListV2_(v2);
+        renderD1StatusMgmtList_();
+        renderD1SummaryGrid(summaryMemberData_);
+    }
+    function d1StatusDragEnd_(ev) {
+        _d1StatusDragIdx_ = -1;
+        document.querySelectorAll('.d1-status-row').forEach(el => el.classList.remove('opacity-40'));
     }
 
     function addD1Status_() {
@@ -13977,10 +14101,10 @@ ${token}
         if (!inp) return;
         const val = inp.value.trim();
         if (!val) return;
-        const list = getD1StatusList_();
-        if (list.indexOf(val) >= 0) { showStatus('이미 존재하는 상태값입니다.', 'error'); return; }
-        list.push(val);
-        saveD1StatusList_(list);
+        const v2 = getD1StatusListV2_();
+        if (v2.find(s => s.name === val)) { showStatus('이미 존재하는 상태값입니다.', 'error'); return; }
+        v2.push({ name: val, color: '#6b7280', separated: true });
+        saveD1StatusListV2_(v2);
         inp.value = '';
         renderD1StatusMgmtList_();
         renderD1SummaryGrid(summaryMemberData_);
@@ -13988,21 +14112,36 @@ ${token}
 
     function updateD1Status_(idx, newVal) {
         const val = (newVal || '').trim();
+        const v2 = getD1StatusListV2_();
+        if (idx < 0 || idx >= v2.length) return;
         if (!val) { renderD1StatusMgmtList_(); return; }
-        const list = getD1StatusList_();
-        if (idx < 0 || idx >= list.length) return;
-        list[idx] = val;
-        saveD1StatusList_(list);
+        v2[idx].name = val;
+        saveD1StatusListV2_(v2);
+        renderD1StatusMgmtList_();
+        renderD1SummaryGrid(summaryMemberData_);
+    }
+    function updateD1StatusColor_(idx, color) {
+        const v2 = getD1StatusListV2_();
+        if (idx < 0 || idx >= v2.length) return;
+        v2[idx].color = color;
+        saveD1StatusListV2_(v2);
+        renderD1SummaryGrid(summaryMemberData_);
+    }
+    function toggleD1StatusSeparated_(idx) {
+        const v2 = getD1StatusListV2_();
+        if (idx < 0 || idx >= v2.length) return;
+        v2[idx].separated = !v2[idx].separated;
+        saveD1StatusListV2_(v2);
         renderD1StatusMgmtList_();
         renderD1SummaryGrid(summaryMemberData_);
     }
 
     function deleteD1Status_(idx) {
-        const list = getD1StatusList_();
-        if (idx < 0 || idx >= list.length) return;
-        if (!confirm('"' + list[idx] + '" 상태값을 삭제하시겠습니까?')) return;
-        list.splice(idx, 1);
-        saveD1StatusList_(list);
+        const v2 = getD1StatusListV2_();
+        if (idx < 0 || idx >= v2.length) return;
+        if (!confirm('"' + v2[idx].name + '" 상태값을 삭제하시겠습니까?')) return;
+        v2.splice(idx, 1);
+        saveD1StatusListV2_(v2);
         renderD1StatusMgmtList_();
         renderD1SummaryGrid(summaryMemberData_);
     }
