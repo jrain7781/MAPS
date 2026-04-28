@@ -1316,15 +1316,59 @@
     font-weight: 600;
     mix-blend-mode: luminosity;
   }
-  /* 수업관리 회원 요약 테이블: auto 레이아웃 + min-width로 폭 제어 */
+  /* 수업관리 회원 요약 테이블 — sticky 좌측 6열 + 회차 폭 동기화 */
   #d1SummaryTable {
     width: auto;
+    border-collapse: separate;
+    border-spacing: 0;
   }
-  /* 회차 컬럼 폭 강제 (auto 레이아웃에서도 min/max로 동기화) */
-  #d1SummaryTable th.d1-sess-th,
-  #d1SummaryTable td.d1-sess-td {
+  #d1SummaryTable th, #d1SummaryTable td {
     box-sizing: border-box;
   }
+  /* 좌측 6열 sticky — 컬럼별 left/width 고정, row 간 일관성 보장 */
+  .d1-col-check { min-width: 24px;  width: 24px;  max-width: 24px; }
+  .d1-col-name  { min-width: 70px;  width: 70px;  max-width: 70px; }
+  .d1-col-phone { min-width: 90px;  width: 90px;  max-width: 90px; }
+  .d1-col-status{ min-width: 68px;  width: 68px;  max-width: 68px; }
+  .d1-col-used  { min-width: 50px;  width: 50px;  max-width: 50px; }
+  .d1-col-rem   { min-width: 50px;  width: 50px;  max-width: 50px; }
+
+  /* sticky 위치 (각 셀의 left offset) */
+  #d1SummaryTable .d1-stk-check  { position: sticky; left: 0;     z-index: 5; }
+  #d1SummaryTable .d1-stk-name   { position: sticky; left: 24px;  z-index: 5; }
+  #d1SummaryTable .d1-stk-phone  { position: sticky; left: 94px;  z-index: 5; }
+  #d1SummaryTable .d1-stk-status { position: sticky; left: 184px; z-index: 5; }
+  #d1SummaryTable .d1-stk-used   { position: sticky; left: 252px; z-index: 5; }
+  #d1SummaryTable .d1-stk-rem    { position: sticky; left: 302px; z-index: 5; }
+  /* thead sticky 셀은 z-index 더 높게 (top:0 sticky 와 결합) */
+  #d1SummaryTable thead .d1-stk-check,
+  #d1SummaryTable thead .d1-stk-name,
+  #d1SummaryTable thead .d1-stk-phone,
+  #d1SummaryTable thead .d1-stk-status,
+  #d1SummaryTable thead .d1-stk-used,
+  #d1SummaryTable thead .d1-stk-rem { z-index: 11; }
+
+  /* sticky cell 배경 (자연 background 위에 덮어씀) */
+  #d1SummaryTable thead .d1-stk-check,
+  #d1SummaryTable thead .d1-stk-name,
+  #d1SummaryTable thead .d1-stk-phone,
+  #d1SummaryTable thead .d1-stk-status,
+  #d1SummaryTable thead .d1-stk-used,
+  #d1SummaryTable thead .d1-stk-rem { background: #dbeafe; }
+  #d1SummaryTable tbody tr td.d1-stk-check,
+  #d1SummaryTable tbody tr td.d1-stk-name,
+  #d1SummaryTable tbody tr td.d1-stk-phone,
+  #d1SummaryTable tbody tr td.d1-stk-status,
+  #d1SummaryTable tbody tr td.d1-stk-used,
+  #d1SummaryTable tbody tr td.d1-stk-rem { background: #fff; }
+  #d1SummaryTable tbody tr.row-selected td.d1-stk-check,
+  #d1SummaryTable tbody tr.row-selected td.d1-stk-name,
+  #d1SummaryTable tbody tr.row-selected td.d1-stk-phone,
+  #d1SummaryTable tbody tr.row-selected td.d1-stk-status,
+  #d1SummaryTable tbody tr.row-selected td.d1-stk-used,
+  #d1SummaryTable tbody tr.row-selected td.d1-stk-rem { background: #e0e7ff; }
+  /* 연도행 빈 sticky 셀: 흰 배경 + 더 높은 z (sticky thead 위로) */
+  #d1SummaryTable .d1-stk-year { background: #fff !important; z-index: 12 !important; }
   /* 수업관리 회원 요약 - 회차 컬럼 리사이즈 핸들 */
   .d1sess-resize-handle {
     position: absolute;
