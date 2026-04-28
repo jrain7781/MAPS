@@ -13615,12 +13615,17 @@ ${token}
                     if (val === 'X') {
                         display = '✕'; colorClass = 'text-red-500 font-semibold'; cellBg = 'bg-red-50';
                     } else if (val === 'R') {
-                        // 과거 재등록 마커: 빨강 ●
                         display = '●'; colorClass = 'text-red-600 text-[15px]'; cellBg = '';
                     } else if (val === 'O') {
-                        const isLastPastO_ = _isEnded_ && (Number(loopNo) === _lastPastOLoop_);
+                        // 우선순위: 종료 상태 = 빨강 / 남은회차 0 (소진) = 검정 / 일반 = 초록
+                        const isLastPastO_ = (Number(loopNo) === _lastPastOLoop_);
+                        let color_ = 'text-green-500';
+                        if (isLastPastO_) {
+                            if (_isEnded_) color_ = 'text-red-600';
+                            else if (remaining === 0) color_ = 'text-gray-900';
+                        }
                         display = '●';
-                        colorClass = isLastPastO_ ? 'text-red-600 text-[15px]' : 'text-green-500 text-[15px]';
+                        colorClass = color_ + ' text-[15px]';
                         cellBg = '';
                     } else {
                         display = '·'; colorClass = 'text-gray-300 text-[10px]'; cellBg = '';
@@ -13630,7 +13635,10 @@ ${token}
                     if (val === 'R') {
                         display = '●'; colorClass = 'text-red-600 text-[15px]'; cellBg = '';
                     } else if (val === 'O') {
-                        display = '●'; colorClass = 'text-gray-300 text-[15px]'; cellBg = '';
+                        const isLastFutureO_ = (Number(loopNo) === _lastFutureOLoop_);
+                        display = '●';
+                        colorClass = isLastFutureO_ ? 'text-gray-900 text-[15px]' : 'text-gray-300 text-[15px]';
+                        cellBg = '';
                     } else {
                         display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
                     }
