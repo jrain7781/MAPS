@@ -13388,22 +13388,37 @@ ${token}
         }
         // [선언 우선] 회차 컬럼 폭(저장된 값 사용, 없으면 48px) — 회차 헤더 생성 전에 필요
         const sessionColWidth_ = parseInt(localStorage.getItem('d1_summary_session_col_width') || '48', 10) || 48;
-        // 연도 행: 개별 셀 (colspan 사용 X) → upcoming 컬럼에 빨간 border-t 적용 가능
+        // 연도 행: 기본 colspan으로 "2026년" 합치되, upcoming 컬럼이 그룹 내에 있으면
+        // (이전 colspan + upcoming 개별셀 + 이후 colspan) 3분할로 분리 → 빨간 테두리 연결
         const yearColors = ['text-blue-600', 'text-purple-600', 'text-teal-600', 'text-rose-600'];
         let yearColHeaders = '';
-        let _yearIdx_ = -1; let _prevYear_ = '';
-        for (let i = 0; i < d1List.length; i++) {
-            const raw = String(d1List[i].class_date || '').replace(/-/g, '');
-            const yr = raw.length >= 4 ? raw.substring(0, 4) : '?';
-            const isFirstOfYear = (yr !== _prevYear_);
-            if (isFirstOfYear) _yearIdx_++;
-            const yrColor = yearColors[Math.max(0, _yearIdx_) % yearColors.length];
-            const yearText = isFirstOfYear ? (yr + '년') : '';
-            const isUp = i === upcomingIdx;
-            const upCls = isUp ? 'border-l-2 border-r-2 border-t-2 border-red-400' : 'border-l border-gray-200';
-            yearColHeaders += `<th class="d1-sess-th px-1 py-0.5 text-center text-[9px] font-bold bg-gray-100 ${yrColor} ${upCls}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px">${yearText}</th>`;
-            _prevYear_ = yr;
-        }
+        let _cumIdx_ = 0;
+        yearGroups.forEach((g, gi) => {
+            const yrColor = yearColors[gi % yearColors.length];
+            const yrText = g.year + '년';
+            const groupStart = _cumIdx_;
+            const groupEnd = _cumIdx_ + g.count - 1;
+            const upInGroup = (upcomingIdx >= groupStart && upcomingIdx <= groupEnd);
+            const baseCls = `px-1 py-0.5 text-center text-[9px] font-bold bg-gray-100 ${yrColor}`;
+            if (!upInGroup) {
+                yearColHeaders += `<th colspan="${g.count}" class="${baseCls} border-l border-gray-200">${yrText}</th>`;
+            } else {
+                const before = upcomingIdx - groupStart;
+                const after = groupEnd - upcomingIdx;
+                // 이전 부분 (있으면 colspan)
+                if (before > 0) {
+                    yearColHeaders += `<th colspan="${before}" class="${baseCls} border-l border-gray-200">${yrText}</th>`;
+                }
+                // upcoming 셀 (단독, 빨간 border)
+                const yrTextHere = before > 0 ? '' : yrText;
+                yearColHeaders += `<th class="${baseCls} border-l-2 border-r-2 border-t-2 border-red-400" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px">${yrTextHere}</th>`;
+                // 이후 부분
+                if (after > 0) {
+                    yearColHeaders += `<th colspan="${after}" class="${baseCls}"></th>`;
+                }
+            }
+            _cumIdx_ += g.count;
+        });
         // [선언 우선] 수업 총 회차 (class.class_loop) — thead 템플릿에서 사용
         const clsForLoop_ = (allClassesData || []).find(function(c) { return String(c.class_id) === String(selectedClassId); }) || {};
         const classTotalLoop_ = parseInt(clsForLoop_.class_loop, 10) || N || 0;
