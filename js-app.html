@@ -13222,6 +13222,12 @@ ${token}
             yearColHeaders += `<th colspan="${g.count}" class="px-1 py-0.5 text-center text-[9px] font-bold bg-gray-100 ${yearColors[i % yearColors.length]} border-l border-gray-200">${g.year}년</th>`;
         }
 
+        // [선언 우선] 회차 컬럼 폭(저장된 값 사용, 없으면 48px) — 회차 헤더 생성 전에 필요
+        const sessionColWidth_ = parseInt(localStorage.getItem('d1_summary_session_col_width') || '48', 10) || 48;
+        // [선언 우선] 수업 총 회차 (class.class_loop) — thead 템플릿에서 사용
+        const clsForLoop_ = (allClassesData || []).find(function(c) { return String(c.class_id) === String(selectedClassId); }) || {};
+        const classTotalLoop_ = parseInt(clsForLoop_.class_loop, 10) || N || 0;
+
         // 회차 컬럼 헤더
         let sessionColHeaders = '';
         for (let i = 0; i < d1List.length; i++) {
@@ -13251,8 +13257,6 @@ ${token}
 
         // 총 컬럼 수 (checkbox + 이름 + 전화 + 상태 + 수업회차 + 남은회차 + 회차들)
         const totalCols = 6 + N;
-        // 회차 컬럼 폭(저장된 값 사용, 없으면 기본 48px)
-        const sessionColWidth_ = parseInt(localStorage.getItem('d1_summary_session_col_width') || '48', 10) || 48;
 
         const sortArrow = function(key) { return summarySortKey_ === key ? (summarySortAsc_ ? ' ↑' : ' ↓') : ' ↕'; };
         // sticky 좌측 컬럼 누적 offset (24+70+90+68+50+50)
@@ -13277,8 +13281,7 @@ ${token}
             </tr>`;
 
         // 수업회차(used = 'O'의 개수) + 남은회차(class_loop - 수업회차) 사전 계산
-        const clsForLoop_ = (allClassesData || []).find(function(c) { return String(c.class_id) === String(selectedClassId); }) || {};
-        const classTotalLoop_ = parseInt(clsForLoop_.class_loop, 10) || N || 0;
+        // (clsForLoop_, classTotalLoop_는 thead 생성 전에 이미 선언됨)
         const memberUsedMap_ = {};       // 수업회차 = O의 개수
         const memberRemainingMap_ = {};  // 남은회차 = class_loop - 수업회차
         filtered.forEach(function(m) {
