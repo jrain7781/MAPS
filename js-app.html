@@ -15380,6 +15380,8 @@ ${token}
         if (editD1FocusedId_ === '_new_') { saveEditD1NewRow_(); return; }
         const updateData = buildEditD1UpdateData_(false);
         if (!updateData) return;
+        const savedBatchKey = d1Batches[d1BatchIdx]?.batchKey;
+        const savedFocusId = editD1FocusedId_;
         google.script.run
             .withSuccessHandler(r => {
                 if (r.success) {
@@ -15387,6 +15389,11 @@ ${token}
                     reloadClassD1Grid(selectedClassId);
                     setTimeout(() => {
                         if (typeof buildD1Batches_ === 'function') buildD1Batches_();
+                        if (savedBatchKey) {
+                            const newIdx = d1Batches.findIndex(b => b.batchKey === savedBatchKey);
+                            if (newIdx >= 0) d1BatchIdx = newIdx;
+                        }
+                        editD1FocusedId_ = savedFocusId;
                         renderEditD1List_();
                     }, 1500);
                 } else showStatus(r.message, 'error');
@@ -15557,14 +15564,19 @@ ${token}
         if (!updateData) return;
         const ids = [...editD1SelectedIds_];
         if (!confirm(`선택한 ${ids.length}개 회차에 일괄 적용하시겠습니까?`)) return;
+        const savedBatchKey = batch.batchKey;
         google.script.run
             .withSuccessHandler(r => {
                 if (r.success) {
                     showStatus(r.message, 'success');
                     reloadClassD1Grid(selectedClassId);
-                    // 데이터 갱신 후 d1Batches 재구성 + 리스트 재렌더
                     setTimeout(() => {
                         if (typeof buildD1Batches_ === 'function') buildD1Batches_();
+                        // 같은 batchKey 인덱스 복원 (안 하면 -1이라 리스트 사라짐)
+                        if (savedBatchKey) {
+                            const newIdx = d1Batches.findIndex(b => b.batchKey === savedBatchKey);
+                            if (newIdx >= 0) d1BatchIdx = newIdx;
+                        }
                         renderEditD1List_();
                     }, 1500);
                 } else showStatus(r.message, 'error');
