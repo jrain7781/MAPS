@@ -13466,8 +13466,8 @@ ${token}
             yearColHeaders += `<th colspan="${_padCount_}" class="bg-gray-50 border-l border-gray-200"></th>`;
         }
 
-        // 총 컬럼 수 (checkbox + 이름 + 전화 + 상태 + 수업회차 + 남은회차 + 실제회차 + 패딩)
-        const totalCols = 6 + N + _padCount_;
+        // 총 컬럼 수 (checkbox + 이름 + 전화 + 상태 + 계약회차 + 수업회차 + 남은회차 + 이월회차 + 실제회차 + 패딩)
+        const totalCols = 8 + N + _padCount_;
 
         const sortArrow = function(key) { return ''; }; // 정렬 표시 제거 (정렬 기능은 유지)
 
@@ -13475,12 +13475,12 @@ ${token}
         const colgroup = document.getElementById('d1SummaryColgroup');
         if (colgroup) colgroup.innerHTML = '';
 
-        // 좌측 6열 폭 (고정)
-        const COLW_ = { check: 28, name: 90, phone: 130, status: 80, used: 44, rem: 44 };
+        // 좌측 8열 폭 (고정)
+        const COLW_ = { check: 28, name: 90, phone: 130, status: 80, contract: 44, used: 44, rem: 44, carry: 44 };
         const wStyle = (px) => `min-width:${px}px;width:${px}px;max-width:${px}px`;
         thead.innerHTML = `
             <tr>
-                <th colspan="6" class="bg-white"></th>
+                <th colspan="8" class="bg-white"></th>
                 ${yearColHeaders}
             </tr>
             <tr class="bg-blue-50">
@@ -13490,18 +13490,23 @@ ${token}
                 <th class="px-2 py-2 text-center text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none" style="${wStyle(COLW_.name)}" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
                 <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="${wStyle(COLW_.phone)}" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
                 <th class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none" style="${wStyle(COLW_.status)}" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
+                <th class="px-1 py-2 text-center text-[11px] font-bold text-indigo-700 cursor-pointer hover:text-indigo-900 select-none leading-tight" style="${wStyle(COLW_.contract)}" onclick="sortSummaryByField_('contract')" title="계약 회차 (클릭하여 수정)"><div>계약</div><div>회차${sortArrow('contract')}</div></th>
                 <th class="px-1 py-2 text-center text-[11px] font-bold text-emerald-700 cursor-pointer hover:text-emerald-900 select-none leading-tight" style="${wStyle(COLW_.used)}" onclick="sortSummaryByField_('used')" title="과거 O의 개수(받은 회차)"><div>수업</div><div>회차${sortArrow('used')}</div></th>
-                <th class="px-1 py-2 text-center text-[11px] font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none leading-tight" style="${wStyle(COLW_.rem)}" onclick="sortSummaryByField_('remaining')" title="총 회차(${classTotalLoop_}) − 수업회차"><div>남은</div><div>회차${sortArrow('remaining')}</div></th>
+                <th class="px-1 py-2 text-center text-[11px] font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none leading-tight" style="${wStyle(COLW_.rem)}" onclick="sortSummaryByField_('remaining')" title="계약회차 − 수업회차"><div>남은</div><div>회차${sortArrow('remaining')}</div></th>
+                <th class="px-1 py-2 text-center text-[11px] font-bold text-orange-600 cursor-pointer hover:text-orange-800 select-none leading-tight" style="${wStyle(COLW_.carry)}" onclick="sortSummaryByField_('carry')" title="이번 배치에서 못 채운 잔여 (다음 배치 이월)"><div>이월</div><div>회차${sortArrow('carry')}</div></th>
                 ${sessionColHeaders}
             </tr>`;
 
         // 수업회차 = 과거 O+R 개수
-        // 남은회차 = contract_loop - used (저장된 값, 다음 배치 이월용) || 미래 O+R 개수
+        // 남은회차 = 계약회차 − 수업회차 (단일 정의, fallback은 class.class_loop)
+        // 이월회차 = 남은회차 − 이번 배치 미래 O+R 개수
         const memberUsedMap_ = {};
         const memberRemainingMap_ = {};
+        const memberContractMap_ = {};
+        const memberCarryMap_ = {};
         filtered.forEach(function(m) {
             let used = 0;
-            let bullets = 0;
+            let futureO = 0;
             for (let i = 0; i < d1List.length; i++) {
                 const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
@@ -13509,14 +13514,18 @@ ${token}
                 if (isPast) {
                     if (val === 'O' || val === 'R') used++;
                 } else {
-                    if (val === 'O' || val === 'R') bullets++;
+                    if (val === 'O' || val === 'R') futureO++;
                 }
             }
             memberUsedMap_[String(m.member_id)] = used;
-            const contract = (m.contract_loop !== undefined && m.contract_loop !== '' && m.contract_loop !== null)
+            // contract_loop 비어있으면 class.class_loop fallback
+            const rawContract = (m.contract_loop !== undefined && m.contract_loop !== '' && m.contract_loop !== null)
                 ? parseInt(m.contract_loop, 10) : NaN;
-            // contract_loop 우선 (재등록/editRemaining 으로 저장된 값) - 보이는 셀이 부족해도 stored 잔여 표시
-            memberRemainingMap_[String(m.member_id)] = !isNaN(contract) ? Math.max(0, contract - used) : bullets;
+            const contract = !isNaN(rawContract) ? rawContract : (classTotalLoop_ || 0);
+            const rem = Math.max(0, contract - used);
+            memberContractMap_[String(m.member_id)] = contract;
+            memberRemainingMap_[String(m.member_id)] = rem;
+            memberCarryMap_[String(m.member_id)] = Math.max(0, rem - futureO);
         });
 
         // 수업 정보 툴팁 (수업구분 - 수업명 [등급] (지역))
@@ -13544,6 +13553,12 @@ ${token}
                 arr.sort((a, b) => { const r = (a.phone||'').localeCompare(b.phone||''); return summarySortAsc_ ? r : -r; });
             } else if (summarySortKey_ === 'status') {
                 arr.sort((a, b) => { const r = (a.member_status||'').localeCompare(b.member_status||''); return summarySortAsc_ ? r : -r; });
+            } else if (summarySortKey_ === 'contract') {
+                arr.sort((a, b) => {
+                    const aC = memberContractMap_[String(a.member_id)] || 0;
+                    const bC = memberContractMap_[String(b.member_id)] || 0;
+                    return summarySortAsc_ ? aC - bC : bC - aC;
+                });
             } else if (summarySortKey_ === 'used') {
                 arr.sort((a, b) => {
                     const aU = memberUsedMap_[String(a.member_id)] || 0;
@@ -13555,6 +13570,12 @@ ${token}
                     const aR = memberRemainingMap_[String(a.member_id)] || 0;
                     const bR = memberRemainingMap_[String(b.member_id)] || 0;
                     return summarySortAsc_ ? aR - bR : bR - aR;
+                });
+            } else if (summarySortKey_ === 'carry') {
+                arr.sort((a, b) => {
+                    const aC = memberCarryMap_[String(a.member_id)] || 0;
+                    const bC = memberCarryMap_[String(b.member_id)] || 0;
+                    return summarySortAsc_ ? aC - bC : bC - aC;
                 });
             }
             return arr;
@@ -13599,7 +13620,10 @@ ${token}
 
             const remaining = memberRemainingMap_[String(m.member_id)] || 0;
             const used = memberUsedMap_[String(m.member_id)] || 0;
+            const contract = memberContractMap_[String(m.member_id)] || 0;
             const remColor = remaining <= 2 ? 'text-red-600 font-bold' : remaining <= 5 ? 'text-amber-600 font-semibold' : 'text-gray-700';
+            const contractFilled = (m.contract_loop !== undefined && m.contract_loop !== '' && m.contract_loop !== null);
+            const contractColor = contractFilled ? 'text-indigo-700' : 'text-gray-400 italic';
 
             // 텔레그램 아이콘 (telegram-badge 스타일 - 동그라미 T)
             const mInfo = allMembersNewData ? allMembersNewData.find(x => String(x.member_id) === String(m.member_id)) : null;
@@ -13629,9 +13653,11 @@ ${token}
             // [신규 룰]
             //   - 과거 X: ✕ (빨강) / O: ● (초록)
             //   - 미래 O: ● (회색), 단 마지막(가장 늦은) 미래 O는 ● 검정 (계약 마지막 회차)
-            //   - 미래 빈값/X: 빈 셀 (클릭 가능)
-            // 마지막 미래 O loopNo + 미래 O 개수
+            //   - 미래 X: 회색 ✕ (단, 첫 ● ~ 마지막 ● 사이의 회차에서만)
+            //   - 마지막 ● 이후 회차: 빈 셀
+            // 마지막/처음 미래 O loopNo + 미래 O 개수
             let _lastFutureOLoop_ = -1;
+            let _firstFutureOLoop_ = -1;
             let _futureOCount_ = 0;
             // 마지막 과거 O loopNo (종료 상태일 때 빨강 표시)
             let _lastPastOLoop_ = -1;
@@ -13640,6 +13666,7 @@ ${token}
                 const r = String(d1List[i].class_date || '').replace(/-/g,'');
                 const isP = r !== '' && r <= todayStr;
                 if (!isP && (v === 'O' || v === 'R')) {
+                    if (_firstFutureOLoop_ === -1) _firstFutureOLoop_ = Number(d1List[i].class_loop);
                     _lastFutureOLoop_ = Number(d1List[i].class_loop);
                     _futureOCount_++;
                 }
@@ -13649,6 +13676,8 @@ ${token}
             // 마지막 미래 O가 검정이려면: 이번 배치 안에서 남은회차가 정확히 끝남 (contract = 미래 O 개수)
             // 남은회차 > 미래 O 개수면 다음 배치로 이어지므로 검정 안 함
             const _futureLastIsBlack_ = (remaining === _futureOCount_);
+            // 이월회차: 남은회차 중 이번 배치에서 못 채운 잔여 (다음 배치 이월)
+            const _carryOver_ = Math.max(0, remaining - _futureOCount_);
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
@@ -13692,6 +13721,17 @@ ${token}
                             ? 'text-gray-900 text-[15px]'
                             : 'text-gray-300 text-[15px]';
                         cellBg = '';
+                    } else if (val === 'X') {
+                        // 미래 X: 첫 ● ~ 마지막 ● 사이일 때만 회색 ✕ 표시 (가독성)
+                        // 마지막 ● 이후의 X는 빈셀로
+                        const inRange = _firstFutureOLoop_ !== -1
+                            && Number(loopNo) >= _firstFutureOLoop_
+                            && Number(loopNo) <= _lastFutureOLoop_;
+                        if (inRange) {
+                            display = '✕'; colorClass = 'text-gray-400 text-[12px]'; cellBg = '';
+                        } else {
+                            display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
+                        }
                     } else {
                         display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
                     }
@@ -13735,8 +13775,10 @@ ${token}
                 </td>
                 <td class="px-2 py-2 text-center text-gray-500 text-sm group-hover:bg-indigo-100 ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
                 <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation()">${statusSel}</td>
+                <td class="px-1 py-2 text-center text-sm font-semibold ${contractColor} group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation(); editContractLoop_('${memIdEsc}')" title="계약회차 클릭하여 수정">${contract || '-'}</td>
                 <td class="px-1 py-2 text-center text-sm font-semibold text-emerald-700 group-hover:bg-indigo-100 ${lastTdCls}">${used}</td>
-                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation(); editRemaining_('${memIdEsc}')" title="클릭하여 수정">${remaining}</td>
+                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}" title="계약회차 − 수업회차">${remaining}</td>
+                <td class="px-1 py-2 text-center text-sm font-bold ${_carryOver_ > 0 ? 'text-orange-600' : 'text-gray-300'} group-hover:bg-indigo-100 ${lastTdCls}" title="이번 배치에서 못 채운 잔여 (다음 배치로 이월)">${_carryOver_ > 0 ? _carryOver_ : '-'}</td>
                 ${sessionCells}
             </tr>`;
         }; // end renderRow_
@@ -13803,71 +13845,100 @@ ${token}
         sel.value = String(Math.max(0, Math.min(5, cur)));
     }
 
-    // 남은회차 셀 클릭 → input으로 수정 (contract_loop 저장)
-    function editRemaining_(memberId) {
+    // 계약회차 셀 클릭 → input으로 수정
+    // 규칙: 과거는 손대지 않음. 새 계약 = used + newRemain → 미래 셀만 재배치
+    //  - 증가: 미래 빈셀(X 제외) 가장 빠른 순으로 'O' 추가
+    //  - 감소: 미래 'O'(R 제외) 가장 늦은 순으로 빈값 처리
+    function editContractLoop_(memberId) {
         const m = (summaryMemberData_ || []).find(x => String(x.member_id) === String(memberId));
         if (!m) return;
         const todayStr_ = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
-        const dList = (allClassD1Data || []).filter(d => String(d.class_id) === String(selectedClassId)).sort((a,b)=>Number(a.class_loop)-Number(b.class_loop));
-        // 미래 회차 목록 + 현재 남은회차(미래 O 개수)
-        const futureLoops = [];
-        let curRem = 0;
+        // 현재 배치의 모든 d1 (과거 포함, padding 제외)
+        const currentBatchKey = getCurrentBatchKey_();
+        const dList = (allClassD1Data || [])
+            .filter(d => currentBatchKey ? getD1BatchKey_(String(d.class_d1_id)) === currentBatchKey : String(d.class_id) === String(selectedClassId))
+            .sort((a,b) => Number(a.class_loop) - Number(b.class_loop));
+
+        // used = 과거 O+R 개수
+        let used = 0;
+        const futureCells = []; // [{ loopNo, val }]
         for (const d of dList) {
-            const raw = String(d.class_date || '').replace(/-/g,'');
-            if (raw === '' || raw < todayStr_) continue;
-            futureLoops.push(Number(d.class_loop));
             const v = String(m['no_'+d.class_loop] || '').trim().toUpperCase();
-            if (v === 'O') curRem++;
-        }
-        if (futureLoops.length === 0) { showStatus('미래 회차가 없습니다.', 'error'); return; }
-        const input = prompt(`${m.member_name || '회원'}의 남은회차 입력 (현재: ${curRem}, 최대: ${futureLoops.length})`, String(curRem));
-        if (input === null) return;
-        const newRem = parseInt(input, 10);
-        if (isNaN(newRem) || newRem < 0) { showStatus('숫자 0 이상 입력하세요.', 'error'); return; }
-        if (newRem > futureLoops.length) { showStatus(`남은 미래 회차(${futureLoops.length})보다 클 수 없습니다.`, 'error'); return; }
-        // 미래 회차 first newRem개 → 'O', 나머지 → ''
-        const updates = {};
-        const oldVals = {};
-        futureLoops.forEach((loopNo, idx) => {
-            const fk = 'no_' + loopNo;
-            const newVal = (idx < newRem) ? 'O' : '';
-            oldVals[fk] = m[fk];
-            updates[fk] = newVal;
-            m[fk] = newVal;
-        });
-        // contract_loop도 같이 갱신 (참고용)
-        const usedNow = (function(){
-            let u = 0;
-            for (const d of dList) {
-                const v = String(m['no_'+d.class_loop] || '').trim().toUpperCase();
-                const raw = String(d.class_date || '').replace(/-/g,'');
-                if (v === 'O' && raw < todayStr_) u++;
+            const raw = String(d.class_date || '').replace(/-/g,'');
+            const isPast = raw !== '' && raw < todayStr_;
+            if (isPast) {
+                if (v === 'O' || v === 'R') used++;
+            } else {
+                futureCells.push({ loopNo: Number(d.class_loop), val: v });
             }
-            return u;
-        })();
-        const oldContract = m.contract_loop;
-        const newContract = usedNow + newRem;
+        }
+
+        const oldContract = parseInt(m.contract_loop, 10);
+        const oldContractDisplay = !isNaN(oldContract) ? oldContract : (parseInt(((allClassesData||[]).find(c=>String(c.class_id)===String(selectedClassId))||{}).class_loop, 10) || 0);
+        const input = prompt(`${m.member_name || '회원'}의 계약회차 입력\n(현재 계약: ${oldContractDisplay}, 수업회차: ${used})\n\n새 계약회차를 입력하세요 (수업회차 ${used} 이상)`, String(oldContractDisplay));
+        if (input === null) return;
+        const newContract = parseInt(input, 10);
+        if (isNaN(newContract) || newContract < 0) { showStatus('숫자 0 이상 입력하세요.', 'error'); return; }
+        if (newContract < used) { showStatus(`이미 받은 수업회차(${used})보다 작을 수 없습니다.`, 'error'); return; }
+
+        const newRemain = newContract - used;
+        // 현재 미래 O+R 개수
+        const curFutureO = futureCells.filter(c => c.val === 'O' || c.val === 'R').length;
+        const delta = newRemain - curFutureO;
+        const updates = { contract_loop: newContract };
+        const oldVals = {};
+
+        if (delta > 0) {
+            // 증가: 빈셀(X·R·O 제외) 가장 빠른 순으로 delta개에 'O'
+            let added = 0;
+            for (const c of futureCells) {
+                if (added >= delta) break;
+                if (c.val === '' || c.val === undefined) {
+                    const fk = 'no_' + c.loopNo;
+                    oldVals[fk] = m[fk];
+                    updates[fk] = 'O';
+                    m[fk] = 'O';
+                    added++;
+                }
+            }
+            if (added < delta) {
+                showStatus(`미래 빈 회차 부족: ${delta - added}회는 다음 배치로 이월됩니다.`, 'info');
+            }
+        } else if (delta < 0) {
+            // 감소: 미래 'O' (R 제외) 가장 늦은 순으로 |delta|개를 빈값
+            let toRemove = -delta;
+            for (let i = futureCells.length - 1; i >= 0 && toRemove > 0; i--) {
+                if (futureCells[i].val === 'O') {
+                    const fk = 'no_' + futureCells[i].loopNo;
+                    oldVals[fk] = m[fk];
+                    updates[fk] = '';
+                    m[fk] = '';
+                    toRemove--;
+                }
+            }
+        }
+
+        const oldContractRaw = m.contract_loop;
         m.contract_loop = newContract;
-        updates.contract_loop = newContract;
+
         // [OPTIMISTIC] 즉시 화면 반영 + 백그라운드 저장
         renderD1SummaryGrid(summaryMemberData_);
-        const batchKey = String(m.class_d1_id || '');
+        const batchKey = String(m.class_d1_id || currentBatchKey || '');
         if (!batchKey) { showStatus('배치 키 누락', 'error'); return; }
         google.script.run
             .withSuccessHandler(r => {
                 if (r && r.success) {
-                    showStatus('남은회차 저장 완료', 'success');
+                    showStatus('계약회차 저장 완료', 'success');
                 } else {
-                    // 롤백
                     Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
-                    m.contract_loop = oldContract;
+                    m.contract_loop = oldContractRaw;
                     renderD1SummaryGrid(summaryMemberData_);
                     showStatus((r && r.message) || '저장 실패', 'error');
                 }
             })
             .withFailureHandler(e => {
                 Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
-                m.contract_loop = oldContract;
+                m.contract_loop = oldContractRaw;
                 renderD1SummaryGrid(summaryMemberData_);
                 showStatus('저장 오류: ' + e.message, 'error');
             })
@@ -14264,35 +14335,121 @@ ${token}
         const m = summaryMemberData_.find(function(x){ return String(x.member_id) === String(memberId); });
         if (!m) return;
         const curVal = String(m[fieldKey] || '').trim().toUpperCase();
-        // 과거/미래 판정: class_d1 시트의 class_date 비교
         const todayStr_ = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
-        const d1Item = (allClassD1Data || []).find(d => String(d.class_id) === String(selectedClassId) && Number(d.class_loop) === Number(loopNo));
+
+        // 현재 배치의 모든 회차 (loop 정렬)
+        const currentBatchKey = batchKey || getCurrentBatchKey_();
+        const dList = (allClassD1Data || [])
+            .filter(d => currentBatchKey ? getD1BatchKey_(String(d.class_d1_id)) === currentBatchKey : String(d.class_id) === String(selectedClassId))
+            .sort((a,b) => Number(a.class_loop) - Number(b.class_loop));
+        const d1Item = dList.find(d => Number(d.class_loop) === Number(loopNo));
         const dateRaw = d1Item ? String(d1Item.class_date || '').replace(/-/g,'') : '';
         const isPast = dateRaw !== '' && dateRaw <= todayStr_;
-        // 토글 규칙: 과거 = X↔O (R도 빈값으로), 미래 = ''↔O (R도 빈값으로)
-        let newVal;
-        if (isPast) newVal = (curVal === 'X' ? 'O' : 'X');
-        else        newVal = (curVal === 'O' || curVal === 'R' ? '' : 'O');
-        // [OPTIMISTIC] 로컬 데이터 즉시 업데이트 + 화면 즉시 갱신 (남은회차/수업회차 동시 반영)
-        m[fieldKey] = newVal;
+
+        // 미래 셀 보조 함수
+        const findFirstFutureBlank_ = (afterLoop) => {
+            for (const d of dList) {
+                const ln = Number(d.class_loop);
+                if (afterLoop !== undefined && ln <= afterLoop) continue;
+                const r = String(d.class_date || '').replace(/-/g,'');
+                if (r === '' || r > todayStr_) {
+                    const v = String(m['no_' + ln] || '').trim().toUpperCase();
+                    // X 제외 (의식적 결석), O/R 제외 (이미 채움)
+                    if (v === '') return ln;
+                }
+            }
+            return null;
+        };
+        const findLastFutureO_ = () => {
+            for (let i = dList.length - 1; i >= 0; i--) {
+                const ln = Number(dList[i].class_loop);
+                const r = String(dList[i].class_date || '').replace(/-/g,'');
+                if (r === '' || r > todayStr_) {
+                    const v = String(m['no_' + ln] || '').trim().toUpperCase();
+                    if (v === 'O') return ln;
+                }
+            }
+            return null;
+        };
+
+        const updates = {};
+        const oldVals = {};
+
+        if (!isPast) {
+            // 미래 셀
+            if (curVal === 'O' || curVal === 'R') {
+                // ● → X (회색) + 다음 빈 셀에 ● 자동 추가 (시프트)
+                oldVals[fieldKey] = m[fieldKey];
+                updates[fieldKey] = 'X';
+                m[fieldKey] = 'X';
+                const next = findFirstFutureBlank_(Number(loopNo));
+                if (next !== null) {
+                    const nk = 'no_' + next;
+                    oldVals[nk] = m[nk];
+                    updates[nk] = 'O';
+                    m[nk] = 'O';
+                }
+                // next === null → 시프트할 빈 셀 없음 (다음 배치로 자동 이월)
+            } else if (curVal === 'X') {
+                // X → 빈값 (단순 해제)
+                oldVals[fieldKey] = m[fieldKey];
+                updates[fieldKey] = '';
+                m[fieldKey] = '';
+            } else {
+                // 빈값 → 직접 추가 불가
+                showStatus('계약회차를 먼저 수정하세요.', 'info');
+                return;
+            }
+        } else {
+            // 과거 셀
+            if (curVal === 'O') {
+                // O → X: used -1, remaining +1 → 미래 가장 빠른 빈 셀에 ● 자동 추가
+                oldVals[fieldKey] = m[fieldKey];
+                updates[fieldKey] = 'X';
+                m[fieldKey] = 'X';
+                const next = findFirstFutureBlank_();
+                if (next !== null) {
+                    const nk = 'no_' + next;
+                    oldVals[nk] = m[nk];
+                    updates[nk] = 'O';
+                    m[nk] = 'O';
+                }
+            } else if (curVal === 'X' || curVal === '') {
+                // X → O (or 빈값 → O): used +1, remaining -1 → 미래 가장 늦은 ● 자동 제거
+                oldVals[fieldKey] = m[fieldKey];
+                updates[fieldKey] = 'O';
+                m[fieldKey] = 'O';
+                const last = findLastFutureO_();
+                if (last !== null) {
+                    const lk = 'no_' + last;
+                    oldVals[lk] = m[lk];
+                    updates[lk] = '';
+                    m[lk] = '';
+                }
+            } else {
+                // R 등 기타 — 토글 안 함
+                return;
+            }
+        }
+
+        // [OPTIMISTIC] 즉시 화면 반영 + 백그라운드 저장
         renderD1SummaryGrid(summaryMemberData_);
-        // 서버 저장 (백그라운드). 실패 시 롤백
         google.script.run
             .withSuccessHandler(function(r) {
                 if (r && r.success) {
                     showStatus('출석 저장 완료', 'success');
                 } else {
-                    m[fieldKey] = curVal;
+                    Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
                     renderD1SummaryGrid(summaryMemberData_);
                     showStatus((r && r.message) || '저장 실패', 'error');
                 }
             })
             .withFailureHandler(function(e) {
-                m[fieldKey] = curVal;
+                Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
                 renderD1SummaryGrid(summaryMemberData_);
                 showStatus(e.message || '저장 실패', 'error');
             })
-            .saveMemberClassDetail(batchKey, memberId, { [fieldKey]: newVal });
+            .saveMemberClassDetail(currentBatchKey, memberId, updates);
     }
 
     function setAttendValue_(val) {
@@ -15922,24 +16079,24 @@ ${token}
 
         listEl.innerHTML = members.map(m => {
             const status = m.member_status || '';
-            let remaining;
+            // 새 배치 contract_loop 초기값 = 이전 배치 잔여 = contract_loop - used
+            // (계약회차 - 이번 배치에서 받은 수업 회차)
+            let remaining = 0;
             if (totalLoop > 0) {
-                // 이월 잔여 = 배치 총 회차 - 이번 배치에서 참석한/예정인 회차(X 아닌 것)
-                // 예) 8회차 합류(1~7=X, 8~10=O): 10 - 3 = 7 → 다음 배치에 7회 이월
-                let nonX = 0;
+                let used = 0;
                 for (let i = 0; i < batchSessions.length; i++) {
                     const val = String(m['no_' + batchSessions[i].class_loop] || '').trim().toUpperCase();
-                    if (val !== 'X') nonX++;
+                    if (val === 'O' || val === 'R') used++;
                 }
-                remaining = Math.max(0, totalLoop - nonX);
-            } else {
-                // 날짜 정보 없을 때 fallback
-                remaining = 0;
+                const rawC = (m.contract_loop !== undefined && m.contract_loop !== '' && m.contract_loop !== null)
+                    ? parseInt(m.contract_loop, 10) : NaN;
+                const contract = !isNaN(rawC) ? rawC : totalLoop;
+                remaining = Math.max(0, contract - used);
             }
             const statusDisp = status || '-';
             return `<label class="grid items-center gap-1 px-2 py-1 text-[10px] cursor-pointer hover:bg-indigo-50 ${rowClass}" style="grid-template-columns:20px 1fr 1fr 1fr 1fr">
                 <input type="checkbox" class="${cbClass} rounded" value="${m.member_id}"
-                    data-status="${escapeHtml(status)}" data-remaining="${remaining}" checked>
+                    data-status="${escapeHtml(status)}" data-remaining="${remaining}" data-contract="${remaining}" checked>
                 <span class="font-medium truncate">${escapeHtml(m.member_name || '-')}</span>
                 <span class="text-gray-500 truncate">${m.phone || '-'}</span>
                 <span class="text-indigo-600 text-[10px]">${escapeHtml(statusDisp)}</span>
@@ -16322,10 +16479,12 @@ ${token}
         const memberData = [];
         document.querySelectorAll('.genD1-member-cb:checked').forEach(cb => {
             memberIds.push(cb.value);
+            const remVal = parseInt(cb.dataset.remaining);
             memberData.push({
                 id: String(cb.value),
                 status: cb.dataset.status || '',      // '' = 직접등록(신규) → 전체 O
-                remaining: parseInt(cb.dataset.remaining) ?? -1  // -1 = 신규
+                remaining: isNaN(remVal) ? -1 : remVal,  // -1 = 신규
+                contractLoop: cb.dataset.contract !== undefined ? parseInt(cb.dataset.contract) : undefined
             });
         });
         const totalSessions = mode === 'add' ? addCount : (endLoop - startLoop + 1);

@@ -2387,33 +2387,33 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   var regDate   = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   var weekNames = ['일', '월', '화', '수', '목', '금', '토'];
 
-  // 한국 공휴일 (월/일 기준, 연도 무관 고정 공휴일)
-  var KOREAN_FIXED_HOLIDAYS_ = [
-    '01-01','03-01','05-05','06-06','08-15','10-03','10-09','12-25'
-  ];
-  function isHoliday_(d) {
-    var dow = d.getDay(); // 0=일, 6=토
-    if (dow === 0 || dow === 6) return true;
-    var md = Utilities.formatDate(d, tz, 'MM-dd');
-    return KOREAN_FIXED_HOLIDAYS_.indexOf(md) >= 0;
-  }
-  function addWorkingDays_(baseDate, days) {
-    var d = new Date(baseDate.getTime());
-    var remaining = Math.abs(days);
-    var step = days >= 0 ? 1 : -1;
-    while (remaining > 0) {
-      d.setDate(d.getDate() + step);
-      if (!isHoliday_(d)) remaining--;
-    }
-    return d;
-  }
-
-  // 수업일 기준 bid 일시 계산 헬퍼 (워킹데이 기준)
+  // 수업일 기준 bid 일시 계산 (단순 캘린더 +N일, 보정 없음) — 등록시작/1차마감용
   function calcBidDatetime_(baseDate, dayOffset, timeStr) {
     if (dayOffset === null) return '';
-    var d = dayOffset === 0 ? new Date(baseDate.getTime()) : addWorkingDays_(baseDate, dayOffset);
+    var d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + dayOffset);
     var dateStr = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
     return dateStr + 'T' + (timeStr || '00:00');
+  }
+  // 최종마감 전용: 단순 캘린더 +N일 → 결과가 토/일이면 익일(=다음 평일) 14:00으로 보정
+  function calcBidDatetime2_(baseDate, dayOffset, timeStr) {
+    if (dayOffset === null) return '';
+    var d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + dayOffset);
+    var time = String(timeStr || '00:00');
+    var dow = d.getDay(); // 0=일, 6=토
+    if (dow === 6) {       // 토 → 월(+2)
+      d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 2);
+      time = '14:00';
+    } else if (dow === 0) { // 일 → 월(+1)
+      d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+      time = '14:00';
+    }
+    var dateStr = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+    return dateStr + 'T' + time;
+  }
+  // U열 origin 포맷: "{dayOffset}|{HH:MM}" — 사용자 입력 그대로 보존
+  function buildBd2Origin_(dayOffset, timeStr) {
+    if (dayOffset === null || dayOffset === '' || dayOffset === undefined) return '';
+    return String(dayOffset) + '|' + (timeStr || '00:00');
   }
 
   // 기존 회차 날짜 중복 체크 제거 (사용자 요청 — CLASS/PT/돈클 모두 동일 기간 재생성 허용)
@@ -2446,7 +2446,8 @@ function generateClassD1(classId, startDate, loopUnit, options) {
         case 'reg_date':       return regDate;
         case 'bid_starttime':  return hasDate ? calcBidDatetime_(currentDate, bidStarttimeDay, bidStarttimeTime) : '';
         case 'bid_datetime_1': return hasDate ? calcBidDatetime_(currentDate, bidDatetime1Day, bidDatetime1Time) : '';
-        case 'bid_datetime_2': return hasDate ? calcBidDatetime_(currentDate, bidDatetime2Day, bidDatetime2Time) : '';
+        case 'bid_datetime_2': return hasDate ? calcBidDatetime2_(currentDate, bidDatetime2Day, bidDatetime2Time) : '';
+        case 'bid_datetime_2_origin': return hasDate ? buildBd2Origin_(bidDatetime2Day, bidDatetime2Time) : '';
         case '1cha_bid':       return (opts.bid1Count != null && opts.bid1Count !== '') ? Number(opts.bid1Count) : '';
         case '2cha_bid':       return (opts.bid2Count != null && opts.bid2Count !== '') ? Number(opts.bid2Count) : '';
         case 'teacher_id':     return opts.teacherId || '';
@@ -2943,8 +2944,33 @@ function readMemberClassDetailsByBatchKey(batchKey) {
     });
 
   var allMembers = readAllMembersNew();
+
+  // class.class_loop lookup (contract_loop fallback용) - 배치 내 row들은 동일 class_id
+  var classLoopFallback = 0;
+  try {
+    var firstRow = filtered.find(function(r) { return r.class_id; });
+    if (firstRow) {
+      var classSh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_SHEET_NAME_DB);
+      if (classSh) {
+        var cLast = classSh.getLastRow();
+        if (cLast >= 2) {
+          var cidIdx = CLASS_HEADERS.indexOf('class_id');
+          var clpIdx = CLASS_HEADERS.indexOf('class_loop');
+          var cData = classSh.getRange(2, 1, cLast - 1, CLASS_HEADERS.length).getValues();
+          var cRow = cData.find(function(r) { return String(r[cidIdx]) === String(firstRow.class_id); });
+          if (cRow) classLoopFallback = parseInt(cRow[clpIdx], 10) || 0;
+        }
+      }
+    }
+  } catch(e) { /* ignore */ }
+
   var result = filtered.map(function(d) {
     var member = allMembers.find(function(m) { return String(m.member_id) === String(d.member_id); }) || {};
+    // contract_loop 비어있으면 class.class_loop로 fallback (응답에만 반영, 시트 영속화는 첫 편집/저장 시)
+    var cl = d.contract_loop;
+    if (cl === '' || cl === null || cl === undefined) {
+      d.contract_loop = classLoopFallback || '';
+    }
     return Object.assign({}, d, {
       member_name: member.member_name || '',
       phone:       member.phone       || '',
@@ -3025,6 +3051,12 @@ function saveMemberClassDetail(classD1Id, memberId, updates) {
     });
     sheet.appendRow(newRow);
   }
+  // 캐시 무효화 (다음 readMemberClassDetailsByBatchKey 호출 시 최신 데이터 반환)
+  try {
+    var batchKey_ = extractD1BatchKey_(classD1Id);
+    var _cache = CacheService.getScriptCache();
+    _cache.remove('mcd_' + batchKey_);
+  } catch(e) {}
   return { success: true };
 }
 
@@ -3340,6 +3372,18 @@ function addMemberToClassD1(classD1IdOrBatchKey, memberId, classId, mData, total
   // 출석 초기값 계산 (신규=지나간X/미래O, 가져오기=잔여만큼O)
   const attendance = buildInitialAttendance_(mData || null, totalSessions || 0, sessionDates);
 
+  // contract_loop 초기값:
+  //   - 신규 등록 → totalSessions (수업 총회차)
+  //   - 배치 이월 (mData.contractLoop 또는 remaining) → 그 값 그대로 (잔여 이월)
+  var initContractLoop = totalSessions || 0;
+  if (mData) {
+    if (mData.contractLoop !== undefined && mData.contractLoop !== null && mData.contractLoop !== '') {
+      initContractLoop = parseInt(mData.contractLoop, 10) || initContractLoop;
+    } else if (mData.remaining !== undefined && mData.remaining !== null && Number(mData.remaining) >= 0) {
+      initContractLoop = parseInt(mData.remaining, 10);
+    }
+  }
+
   const row = MEMBER_CLASS_DETAILS_HEADERS.map(function(h) {
     switch (h) {
       case 'detail_id':   return newId;
@@ -3350,6 +3394,7 @@ function addMemberToClassD1(classD1IdOrBatchKey, memberId, classId, mData, total
       // 배치 이월(mData.status 있음) → 이전 배치 상태 그대로 유지
       case 'member_status': return (mData && mData.status) ? mData.status : '진행중';
       case 'reg_date':      return regDate;
+      case 'contract_loop': return initContractLoop;
       default:              return attendance[h] !== undefined ? attendance[h] : '';
     }
   });
