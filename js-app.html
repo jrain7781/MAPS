@@ -13659,10 +13659,13 @@ ${token}
             //   - 미래 X: 회색 ✕ (단, 첫 ● ~ 마지막 ● 사이의 회차에서만)
             //   - 마지막 ● 이후 회차: 빈 셀
             // 마지막/처음 미래 O loopNo + 미래 O 개수
-            //  - 미래 카운트는 strict '>' (오늘 제외, 외부 carry/used 계산과 일치)
-            //  - 과거 마지막 O는 '<=' (오늘 ● 녹색/검정/빨강 처리 보존)
+            //  - O 카운트: strict '>' (오늘 제외, carry/검정 ● 판정용)
+            //  - 마크 범위(O+X): 미래 X 회색 ✕ 표시 범위 판정용
+            //  - 과거 마지막 O: '<=' (오늘 ● 녹색/검정/빨강 처리 보존)
             let _lastFutureOLoop_ = -1;
             let _firstFutureOLoop_ = -1;
+            let _lastFutureMarkLoop_ = -1;   // O + X 모두
+            let _firstFutureMarkLoop_ = -1;  // O + X 모두
             let _futureOCount_ = 0;
             let _lastPastOLoop_ = -1;
             for (let i = 0; i < d1List.length; i++) {
@@ -13674,6 +13677,10 @@ ${token}
                     if (_firstFutureOLoop_ === -1) _firstFutureOLoop_ = Number(d1List[i].class_loop);
                     _lastFutureOLoop_ = Number(d1List[i].class_loop);
                     _futureOCount_++;
+                }
+                if (isStrictFuture && (v === 'O' || v === 'R' || v === 'X')) {
+                    if (_firstFutureMarkLoop_ === -1) _firstFutureMarkLoop_ = Number(d1List[i].class_loop);
+                    _lastFutureMarkLoop_ = Number(d1List[i].class_loop);
                 }
                 if (isPastIncludingToday && v === 'O') _lastPastOLoop_ = Number(d1List[i].class_loop);
             }
@@ -13727,11 +13734,11 @@ ${token}
                             : 'text-gray-300 text-[15px]';
                         cellBg = '';
                     } else if (val === 'X') {
-                        // 미래 X: 첫 ● ~ 마지막 ● 사이일 때만 회색 ✕ 표시 (가독성)
-                        // 마지막 ● 이후의 X는 빈셀로
-                        const inRange = _firstFutureOLoop_ !== -1
-                            && Number(loopNo) >= _firstFutureOLoop_
-                            && Number(loopNo) <= _lastFutureOLoop_;
+                        // 미래 X: 첫 마크 ~ 마지막 마크 사이 (O+X 모두 포함)일 때 회색 ✕ 표시
+                        // → 마지막 ● 클릭(시프트할 빈셀 없음) 또는 첫 ● 클릭 후에도 X가 보임
+                        const inRange = _firstFutureMarkLoop_ !== -1
+                            && Number(loopNo) >= _firstFutureMarkLoop_
+                            && Number(loopNo) <= _lastFutureMarkLoop_;
                         if (inRange) {
                             display = '✕'; colorClass = 'text-gray-400 text-[12px]'; cellBg = '';
                         } else {
