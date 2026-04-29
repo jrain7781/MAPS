@@ -13897,7 +13897,7 @@ ${token}
     function renderD1MemberSummaryBar_(members, statusList) {
         const bar = document.getElementById('d1MemberSummaryBar');
         if (!bar) return;
-        if (!members || members.length === 0) { bar.classList.add('content-hidden'); return; }
+        members = members || [];
 
         const counts = {};
         members.forEach(function(m) {
@@ -15070,6 +15070,32 @@ ${token}
         const m = parts[1] ? parseInt(parts[1]) : 0;
         return isNaN(h) ? '-' : (m > 0 ? h+'시'+String(m).padStart(2,'0')+'분' : h+'시');
     }
+    // 실제 저장된 datetime을 모달의 각 행 아래에 보조 표시
+    function _renderEditD1ActualDates_(d) {
+        if (!d) return;
+        const fmt = (v) => {
+            if (!v) return '';
+            let s = String(v).replace('T',' ');
+            // ISO date 부분만 남기고 보기 좋게
+            const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/);
+            if (!m) return s;
+            const day = ['일','월','화','수','목','금','토'][new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3])).getDay()];
+            const dateLabel = m[2]+'/'+m[3]+'('+day+')';
+            if (m[4] != null) {
+                const h = parseInt(m[4]);
+                return dateLabel + ' ' + h + '시' + (parseInt(m[5]) > 0 ? String(m[5]).padStart(2,'0')+'분' : '');
+            }
+            return dateLabel;
+        };
+        const setText = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text ? '→ ' + text : '';
+        };
+        setText('editD1-bidStarttime-actual', fmt(d.bid_starttime));
+        setText('editD1-bidDatetime1-actual', fmt(d.bid_datetime_1));
+        setText('editD1-bidDatetime2-actual', fmt(d.bid_datetime_2));
+    }
+
     // class_date를 YYYY-MM-DD 형식으로 변환 (date input용)
     function _toDateInput(v) {
         if (!v) return '';
@@ -15287,11 +15313,13 @@ ${token}
         setDropdownTime_('editD1-timeTo', d.class_time_to ? String(d.class_time_to) : '');
         const rawDate = String(d.class_date||'').replace(/-/g,'');
         [
-            { key: 'bid_starttime',  dayId: 'editD1-bidStarttime-day',  tPfx: 'editD1-bidStarttime'  },
-            { key: 'bid_datetime_1', dayId: 'editD1-bidDatetime1-day',   tPfx: 'editD1-bidDatetime1'  },
-            { key: 'bid_datetime_2', dayId: 'editD1-bidDatetime2-day',   tPfx: 'editD1-bidDatetime2'  },
-        ].forEach(({ key, dayId, tPfx }) => {
-            const off = _calcBidOffset_(rawDate, d[key]);
+            { key: 'bid_starttime',  dayId: 'editD1-bidStarttime-day',  tPfx: 'editD1-bidStarttime',  isFinal: false },
+            { key: 'bid_datetime_1', dayId: 'editD1-bidDatetime1-day',   tPfx: 'editD1-bidDatetime1',  isFinal: false },
+            { key: 'bid_datetime_2', dayId: 'editD1-bidDatetime2-day',   tPfx: 'editD1-bidDatetime2',  isFinal: true  },
+        ].forEach(({ key, dayId, tPfx, isFinal }) => {
+            const off = isFinal
+                ? _calcBidOffset2_(rawDate, d[key], d.bid_datetime_2_origin)
+                : _calcBidOffset_(rawDate, d[key]);
             const dayEl = document.getElementById(dayId);
             if (dayEl) dayEl.value = off.day !== '' ? off.day : '';
             if (off.time) {
@@ -15300,6 +15328,7 @@ ${token}
                 ['ampm','h','m'].forEach(s => { const el = document.getElementById(tPfx+'-'+s); if (el) el.value = ''; });
             }
         });
+        _renderEditD1ActualDates_(d);
         const bid1El = document.getElementById('editD1-bid1Count');
         if (bid1El) bid1El.value = d['1cha_bid'] || '';
         const bid2El = document.getElementById('editD1-bid2Count');
@@ -15441,15 +15470,31 @@ ${token}
             .updateClassD1Batch([editD1FocusedId_], updateData);
     }
 
+    // 단순 캘린더 일수 차이 + 시각 — 등록시작/1차마감용 (보정 없음)
     function _calcBidOffset_(classDateRaw, bidDatetimeStr) {
         if (!bidDatetimeStr || !classDateRaw || classDateRaw.length < 8) return { day: '', time: '' };
-        const base = new Date(classDateRaw.substring(0,4)+'-'+classDateRaw.substring(4,6)+'-'+classDateRaw.substring(6,8));
-        const bid  = new Date(String(bidDatetimeStr).replace('T',' '));
+        const by = parseInt(classDateRaw.substring(0,4));
+        const bm = parseInt(classDateRaw.substring(4,6)) - 1;
+        const bd = parseInt(classDateRaw.substring(6,8));
+        const base = new Date(by, bm, bd);
+        const bidStr = String(bidDatetimeStr).replace('T',' ');
+        const bid = new Date(bidStr);
         if (isNaN(base.getTime()) || isNaN(bid.getTime())) return { day: '', time: '' };
+        const bidMid = new Date(bid.getFullYear(), bid.getMonth(), bid.getDate());
         return {
-            day:  String(Math.round((bid - base) / 86400000)),
+            day:  String(Math.round((bidMid - base) / 86400000)),
             time: String(bid.getHours()).padStart(2,'0') + ':' + String(bid.getMinutes()).padStart(2,'0')
         };
+    }
+    // 최종마감 전용: U열 origin 우선, 없으면 캘린더 역산 (토/일 보정값을 그대로 표시)
+    function _calcBidOffset2_(classDateRaw, bidDatetimeStr, origin) {
+        if (origin) {
+            const parts = String(origin).split('|');
+            if (parts.length >= 1 && parts[0] !== '') {
+                return { day: String(parts[0]), time: parts[1] || '00:00' };
+            }
+        }
+        return _calcBidOffset_(classDateRaw, bidDatetimeStr);
     }
 
     function editD1AddRow_() {
@@ -15474,11 +15519,13 @@ ${token}
                 const bid2El = document.getElementById('editD1-bid2Count'); if (bid2El) bid2El.value = lastD['2cha_bid'] || '';
                 const raw = String(lastD.class_date||'').replace(/-/g,'');
                 [
-                    { key:'bid_starttime',  dayId:'editD1-bidStarttime-day',  tPfx:'editD1-bidStarttime'  },
-                    { key:'bid_datetime_1', dayId:'editD1-bidDatetime1-day',   tPfx:'editD1-bidDatetime1'   },
-                    { key:'bid_datetime_2', dayId:'editD1-bidDatetime2-day',   tPfx:'editD1-bidDatetime2'   },
-                ].forEach(({ key, dayId, tPfx }) => {
-                    const off = _calcBidOffset_(raw, lastD[key]);
+                    { key:'bid_starttime',  dayId:'editD1-bidStarttime-day',  tPfx:'editD1-bidStarttime',  isFinal: false },
+                    { key:'bid_datetime_1', dayId:'editD1-bidDatetime1-day',   tPfx:'editD1-bidDatetime1',  isFinal: false },
+                    { key:'bid_datetime_2', dayId:'editD1-bidDatetime2-day',   tPfx:'editD1-bidDatetime2',  isFinal: true  },
+                ].forEach(({ key, dayId, tPfx, isFinal }) => {
+                    const off = isFinal
+                        ? _calcBidOffset2_(raw, lastD[key], lastD.bid_datetime_2_origin)
+                        : _calcBidOffset_(raw, lastD[key]);
                     const dayEl = document.getElementById(dayId);
                     if (dayEl && off.day !== '') dayEl.value = off.day;
                     if (off.time) setDropdownTime_(tPfx, off.time);
@@ -16017,19 +16064,19 @@ ${token}
     function showMemberRegisterModal() {
         const modal = document.getElementById('memberRegisterModal');
         modal.classList.remove('content-hidden');
-        // classDropdownOptions가 비어있으면 먼저 로드
+        // 항상 한 번 즉시 채움 (classDropdownOptions에 값이 있으면 그대로 보임)
+        _populateMemregDropdowns();
+        // 비어있으면 서버에서 강제로 다시 로드 → 도착하면 재채움
         const opts_ = classDropdownOptions || {};
         if (!opts_.class_types || opts_.class_types.length === 0) {
-            if (typeof loadClassDropdownOptions === 'function') {
-                google.script.run
-                    .withSuccessHandler(o => {
-                        classDropdownOptions = o || { class_types: [], class_names: [], class_grades: [], class_locs: [] };
-                        _populateMemregDropdowns();
-                    })
-                    .getClassDropdownOptions();
-            }
+            google.script.run
+                .withSuccessHandler(o => {
+                    classDropdownOptions = o || { class_types: [], class_names: [], class_grades: [], class_locs: [] };
+                    _populateMemregDropdowns();
+                })
+                .withFailureHandler(e => { showStatus('종목 옵션 로드 실패: ' + (e && e.message ? e.message : e), 'error'); })
+                .getClassDropdownOptions();
         }
-        _populateMemregDropdowns();
         if (allMembersNewData && allMembersNewData.length > 0) {
             filterMembersRegister();
         } else {
