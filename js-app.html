@@ -993,13 +993,27 @@
     }
 
     // class_d1_id에서 class_id 파싱 → allClassesData에서 class_type 조회
+    //   - 옛날 포맷: 5004_<ts>_<loop> → parts[0] = class_id
+    //   - 새 포맷: CLS_<ts>_<rand>_<ts>_<loop> → 앞 3 part가 class_id
+    //   - 안전한 방법: bid.class_id가 있으면 그걸 우선 사용, 없으면 d1_id의 마지막 두 segment(timestamp+loop) 제거
     function _getClassTypeForBid_(bid) {
         if (!bid || !bid.class_d1_id) return '';
-        const cid = String(bid.class_d1_id).split('_')[0];
+        let cid = bid.class_id ? String(bid.class_id) : _classIdFromD1Id_(String(bid.class_d1_id));
         if (!cid) return '';
         if (typeof allClassesData === 'undefined' || !Array.isArray(allClassesData)) return '';
         const cls = allClassesData.find(c => String(c.class_id) === cid);
         return cls ? String(cls.class_type || '').trim() : '';
+    }
+    // class_d1_id에서 classId 추출: 끝에서 _<loop>_<timestamp> 제거 → 시작 부분이 class_id
+    function _classIdFromD1Id_(d1Id) {
+        const s = String(d1Id || '');
+        // 끝 _<loop>(1~4자리) 제거
+        let m = s.match(/^(.+)_\d{1,4}$/);
+        if (!m) return s;
+        const noLoop = m[1];
+        // 끝 _<batchTimestamp>(8~14자리) 제거 → class_id
+        m = noLoop.match(/^(.+)_\d{8,14}$/);
+        return m ? m[1] : noLoop;
     }
     // 회원명 HTML: class_type별 색상 + 수업건이면 클릭 가능
     function _buildBidMNameHtml_(bid) {
@@ -1011,7 +1025,7 @@
         else if (ctype === 'PT' || ctype === '프리미엄 PT') bg = 'background:#fdba74;';  // 주황
         else if (ctype === '돈클') bg = 'background:#fda4af;';                    // 분홍 (수업이라 구분)
         if (ctype && bid.class_d1_id) {
-            const cid = String(bid.class_d1_id).split('_')[0];
+            const cid = bid.class_id ? String(bid.class_id) : _classIdFromD1Id_(String(bid.class_d1_id));
             clickAttr = ` onclick="event.stopPropagation(); navigateToClassItemTab_('${cid}', '${ctype}')"`;
             cursor = 'cursor:pointer;text-decoration:underline;';
         }
@@ -12470,9 +12484,8 @@ ${token}
         if (!sessions || !sessions.length) return 0;
         const batchKeys = new Set();
         sessions.forEach(s => {
-            const parts = String(s.class_d1_id).split('_');
-            const bk = parts.length >= 2 ? parts[1] : 'default';
-            batchKeys.add(bk);
+            // getD1BatchKey_ 사용: 새 class_id 포맷 (CLS_xxx_yyy_...) 안전 처리
+            batchKeys.add(getD1BatchKey_(String(s.class_d1_id)));
         });
         return batchKeys.size;
     }
@@ -12696,16 +12709,17 @@ ${token}
         loadClassD1Grid(classId);
     }
 
-    // 배치 그룹핑: class_d1_id 에서 타임스탬프(중간 파트) 기준으로 묶기
+    // 배치 그룹핑: getD1BatchKey_ 사용 (회차 suffix만 제거 → 새 class_id 포맷도 안전)
+    //   - 옛날: 5004_1777365076290_1 → batchKey = 5004_1777365076290
+    //   - 새 포맷: CLS_1773718630306_557_1777436803043_1 → batchKey = CLS_1773718630306_557_1777436803043
     function buildD1Batches_() {
         const map = {};
         allClassD1Data.forEach(d => {
-            const parts = String(d.class_d1_id).split('_');
-            const batchKey = parts.length >= 2 ? parts[1] : 'default';
+            const batchKey = getD1BatchKey_(String(d.class_d1_id));
             if (!map[batchKey]) map[batchKey] = [];
             map[batchKey].push(d);
         });
-        // 최신 배치가 앞에 오도록 내림차순 정렬
+        // 최신 배치가 앞에 오도록 내림차순 정렬 (배치키 끝자락의 timestamp 비교)
         d1Batches = Object.keys(map).sort((a, b) => b.localeCompare(a)).map(k => ({ batchKey: k, items: map[k] }));
         d1BatchIdx = -1; // 사용자 클릭 전까지 배치 미선택
         updateD1BatchLabel_();
