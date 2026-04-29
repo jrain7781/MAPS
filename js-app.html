@@ -13103,6 +13103,9 @@ ${token}
     let selectedSummaryMemberId_ = null;
     let summarySortKey_ = 'name';
     let summarySortAsc_ = true;
+    // 한 번 정렬된 순서를 고정 (편집/재등록 후 자동 재정렬 방지)
+    // 사용자가 컬럼 헤더 클릭 시에만 재정렬됨
+    let _summaryOrderSnapshot_ = null;  // { memberId: orderIdx } or null
     let d1SummaryStatusFilter_ = null;
 
     // 상태값 목록 (localStorage 저장)
@@ -13350,6 +13353,7 @@ ${token}
     }
 
     function loadD1SummaryGrid() {
+        _summaryOrderSnapshot_ = null;  // 배치/그리드 새로 로드 시 순번 초기화
         const batchKey = getCurrentBatchKey_();
         const thead = document.getElementById('d1SummaryThead');
         const tbody = document.getElementById('d1SummaryTbody');
@@ -13562,6 +13566,18 @@ ${token}
 
         // 그룹 내 정렬 함수 (각 그룹별로 동일하게 적용)
         const sortMembersInGroup_ = function(members) {
+            // [순번 고정] snapshot이 있으면 그 순서 사용 (편집/재등록 후 자동 재정렬 방지)
+            if (_summaryOrderSnapshot_) {
+                return members.slice().sort((a, b) => {
+                    const ai = _summaryOrderSnapshot_[String(a.member_id)];
+                    const bi = _summaryOrderSnapshot_[String(b.member_id)];
+                    const aOk = ai !== undefined, bOk = bi !== undefined;
+                    if (aOk && bOk) return ai - bi;
+                    if (aOk) return -1;   // 새 회원은 뒤로
+                    if (bOk) return 1;
+                    return 0;
+                });
+            }
             const arr = members.slice();
             if (summarySortKey_ === 'name') {
                 arr.sort((a, b) => (a.member_name || '').localeCompare(b.member_name || ''));
@@ -13818,40 +13834,45 @@ ${token}
             </tr>`;
         }; // end renderRow_
 
-        // 그룹 탭 → 컬럼 헤더 위로 (별도 컨테이너), tbody에는 회원 행만
-        const collapsedMap = getD1GroupCollapsed_();
-        const tabsHostId = 'd1GroupTabsHost';
-        let tabsHost = document.getElementById(tabsHostId);
-        if (!tabsHost) {
-            tabsHost = document.createElement('div');
-            tabsHost.id = tabsHostId;
-            tabsHost.className = 'd1-group-tabs-host';
-            const tableEl = document.getElementById('d1SummaryTable');
-            if (tableEl && tableEl.parentNode) tableEl.parentNode.insertBefore(tabsHost, tableEl);
-        }
-        let tabsHtml = '';
-        groups.forEach(g => {
-            const isCollapsed = !!collapsedMap[g.name];
-            const arrow = isCollapsed ? '▶' : '▼';
-            const fg = _contrastTextColor_(g.color);
-            const gNameEsc = escapeHtml(g.name);
-            tabsHtml += `<div class="d1-group-tab" style="background:${g.color};color:${fg}">
-                <input type="checkbox" class="d1-group-checkall cursor-pointer align-middle" title="${gNameEsc} 전체 선택"
-                    onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this, '${gNameEsc}')">
-                <span style="cursor:pointer" onclick="toggleD1Group_('${gNameEsc}')">
-                    <span style="display:inline-block;width:12px;text-align:center">${arrow}</span>
-                    <span>${gNameEsc}</span>
-                    <span style="opacity:0.85;font-weight:normal;margin-left:4px;font-size:11px">${g.members.length}명</span>
-                </span>
-            </div>`;
-        });
-        tabsHost.innerHTML = tabsHtml;
+        // 그룹 탭은 표 안에 (컬럼헤더 바로 아래) — 외부 host 제거
+        const tabsHostOld = document.getElementById('d1GroupTabsHost');
+        if (tabsHostOld) tabsHostOld.remove();
 
+        // [순번 고정] 이번 렌더의 그룹별 정렬 결과를 snapshot으로 저장
+        // → 다음 렌더(편집/재등록)는 이 순서를 유지
+        if (!_summaryOrderSnapshot_) _summaryOrderSnapshot_ = {};
+        let _orderIdx_ = 0;
+        groups.forEach(g => {
+            g.members.forEach(mm => {
+                if (_summaryOrderSnapshot_[String(mm.member_id)] === undefined) {
+                    _summaryOrderSnapshot_[String(mm.member_id)] = _orderIdx_++;
+                } else {
+                    _orderIdx_++;
+                }
+            });
+        });
+
+        // 그룹 헤더 + 회원 행 조립
+        const collapsedMap = getD1GroupCollapsed_();
         let bodyHtml = '';
         let globalIdx = 0;
         for (let gi = 0; gi < groups.length; gi++) {
             const g = groups[gi];
             const isCollapsed = !!collapsedMap[g.name];
+            const arrow = isCollapsed ? '▶' : '▼';
+            const fg = _contrastTextColor_(g.color);
+            const gNameEsc = escapeHtml(g.name);
+            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell">
+                <div class="d1-group-tab" style="background:${g.color};color:${fg}">
+                    <input type="checkbox" class="d1-group-checkall cursor-pointer align-middle" title="${gNameEsc} 전체 선택"
+                        onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this, '${gNameEsc}')">
+                    <span style="cursor:pointer" onclick="toggleD1Group_('${gNameEsc}')">
+                        <span style="display:inline-block;width:12px;text-align:center">${arrow}</span>
+                        <span>${gNameEsc}</span>
+                        <span style="opacity:0.85;font-weight:normal;margin-left:4px;font-size:11px">${g.members.length}명</span>
+                    </span>
+                </div>
+            </td></tr>`;
             if (isCollapsed) continue;
             for (let j = 0; j < g.members.length; j++) {
                 bodyHtml += renderRow_(g.members[j], globalIdx, g.name);
@@ -14123,6 +14144,7 @@ ${token}
     function sortSummaryByName_() {
         if (summarySortKey_ === 'name') summarySortAsc_ = !summarySortAsc_;
         else { summarySortKey_ = 'name'; summarySortAsc_ = true; }
+        _summaryOrderSnapshot_ = null;  // 사용자 명시 정렬 → snapshot 무효화
         renderD1SummaryGrid(summaryMemberData_);
     }
 
@@ -14130,12 +14152,14 @@ ${token}
         const key = 'no_' + loopNo;
         if (summarySortKey_ === key) summarySortAsc_ = !summarySortAsc_;
         else { summarySortKey_ = key; summarySortAsc_ = true; }
+        _summaryOrderSnapshot_ = null;
         renderD1SummaryGrid(summaryMemberData_);
     }
 
     function sortSummaryByField_(field) {
         if (summarySortKey_ === field) summarySortAsc_ = !summarySortAsc_;
         else { summarySortKey_ = field; summarySortAsc_ = true; }
+        _summaryOrderSnapshot_ = null;
         renderD1SummaryGrid(summaryMemberData_);
     }
 
@@ -16071,7 +16095,13 @@ ${token}
         document.getElementById('prev-genD1-bidDatetime1-day').value = b1.day;
         if (b1.time) setDropdownTime_('prev-genD1-bidDatetime1', b1.time);
 
-        const b2 = extractBidOffset(classDateRaw, firstItem.bid_datetime_2);
+        // 최종마감(bid_datetime_2): origin (사용자 입력 원본) 우선 → 토/일 보정값 그대로 가져옴
+        let b2 = { day: '', time: '' };
+        if (firstItem.bid_datetime_2_origin) {
+            const parts = String(firstItem.bid_datetime_2_origin).split('|');
+            if (parts.length >= 1 && parts[0] !== '') b2 = { day: String(parts[0]), time: parts[1] || '00:00' };
+        }
+        if (b2.day === '') b2 = extractBidOffset(classDateRaw, firstItem.bid_datetime_2);
         document.getElementById('prev-genD1-bidDatetime2-day').value = b2.day;
         if (b2.time) setDropdownTime_('prev-genD1-bidDatetime2', b2.time);
 
