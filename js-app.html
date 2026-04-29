@@ -13259,12 +13259,9 @@ ${token}
     // 종목리스트 회원명 검색 → 회원탭 회원이름 조회 input과 동기화
     function _syncMemberNameFilterToD1Tab_(val) {
         const input = document.getElementById('d1MemberNameFilter');
-        if (input && input.value !== val) {
-            input.value = val || '';
-            filterD1MembersByName_(val);
-        } else if (input) {
-            filterD1MembersByName_(val);
-        }
+        if (input && input.value !== val) input.value = val || '';
+        // input이 아직 렌더되지 않았어도 변수에 보관 → 회원탭 진입 시 자동 적용
+        filterD1MembersByName_(val);
     }
 
     // 회원이름 조회 필터 (회원탭 상단 input)
@@ -13775,6 +13772,8 @@ ${token}
         // 회차 컬럼 폭 강제 적용 (리사이즈 후 즉시 반영용)
         d1SessColApplyWidth_(sessionColWidth_);
         setTimeout(function() { initTableColResize_(document.getElementById('d1SummaryTable')); }, 0);
+        // 회원명 조회 필터 자동 재적용 (종목리스트에서 검색 후 진입 시 자동 조회)
+        if (d1MemberNameFilter_) filterD1MembersByName_(d1MemberNameFilter_);
     }
 
     // 회차 컬럼 폭 일괄 적용: colgroup의 col + th/td inline 둘 다 갱신
@@ -13908,8 +13907,9 @@ ${token}
         const isAct = function(k) { return d1SummaryStatusFilter_ === k ? 'font-bold underline' : ''; };
         const btn = 'cursor-pointer hover:opacity-70 transition';
 
-        // 좌측: 전체/상태별 카운트 + dropdowns + 모드 버튼들 + 상태관리/새로고침
-        let leftHtml = `<span class="${btn} text-gray-600 ${isAct(null)}" onclick="setD1SummaryFilter_(null)">전체 ${members.length}명</span>`;
+        // 좌측: 제목 + 전체/상태별 카운트 + dropdowns + 모드 버튼들 + 상태관리/새로고침/회원명조회
+        let leftHtml = `<span class="text-sm text-purple-700 font-semibold flex-none mr-1">전체 회원 현황</span>`;
+        leftHtml += `<span class="${btn} text-gray-600 ${isAct(null)}" onclick="setD1SummaryFilter_(null)">전체 ${members.length}명</span>`;
         statusList.forEach(function(s) {
             const cnt = counts[s] || 0;
             if (!cnt) return;
@@ -13942,7 +13942,11 @@ ${token}
                 </button>` : ''}
             </span>
             <button type="button" onclick="openD1StatusMgmtModal()" class="ml-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-0.5 px-2 rounded text-xs border border-gray-300">⚙ 상태관리</button>
-            <button type="button" onclick="reloadD1SummaryGrid()" title="회원 리스트 새로고침" class="bg-white hover:bg-purple-100 text-purple-700 font-semibold py-0.5 px-2 rounded text-xs border border-purple-200">🔄 새로고침</button>`;
+            <button type="button" onclick="reloadD1SummaryGrid()" title="회원 리스트 새로고침" class="bg-white hover:bg-purple-100 text-purple-700 font-semibold py-0.5 px-2 rounded text-xs border border-purple-200">🔄 새로고침</button>
+            <input type="text" id="d1MemberNameFilter" placeholder="회원명 조회"
+                value="${escapeHtml(d1MemberNameFilter_ || '')}"
+                oninput="filterD1MembersByName_(this.value)" onfocus="this.select()"
+                class="min-w-[100px] max-w-[160px] px-2 py-1 border border-gray-300 rounded-lg text-[11px] bg-white">`;
 
         // 우측: 수정/삭제/재등록/회원추가
         const rightHtml = `
