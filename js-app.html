@@ -12650,11 +12650,20 @@ ${token}
         }
         // 수업 전환 시 현재 상세 탭 유지 (member/item)
         switchD1DetailTab(_currentD1DetailTab || 'member');
+        // [reload 콜백] 데이터 적용 완료 후 호출 (예: 모달 갱신)
+        if (typeof _d1LoadCallback_ === 'function') {
+            const cb = _d1LoadCallback_;
+            _d1LoadCallback_ = null;
+            try { cb(); } catch(e) { console.error('d1 load callback error', e); }
+        }
     }
+    let _d1LoadCallback_ = null;
 
-    function loadClassD1Grid(classId) {
+    function loadClassD1Grid(classId, onComplete) {
         const grid = document.getElementById('classD1Grid');
         if (!grid) return;
+        // 데이터 적용 후 콜백 트리거 — reload 완료 시점 동기화용
+        _d1LoadCallback_ = onComplete || null;
         const batchTbody_ = document.getElementById('classD1BatchListTableBody');
         const batchKeyHeader_ = document.getElementById('d1BatchKeyHeader');
         // 잔상 방지: 이전 클래스의 렌더 상태 전면 초기화
@@ -12704,9 +12713,9 @@ ${token}
             .readClassD1ByClassId(classId);
     }
 
-    function reloadClassD1Grid(classId) {
+    function reloadClassD1Grid(classId, onComplete) {
         delete _d1CacheMap[classId];
-        loadClassD1Grid(classId);
+        loadClassD1Grid(classId, onComplete);
     }
 
     // 배치 그룹핑: getD1BatchKey_ 사용 (회차 suffix만 제거 → 새 class_id 포맷도 안전)
@@ -15801,16 +15810,15 @@ ${token}
             .withSuccessHandler(r => {
                 if (r.success) {
                     showStatus(r.message || '수정 완료', 'success');
-                    reloadClassD1Grid(selectedClassId);
-                    setTimeout(() => {
-                        if (typeof buildD1Batches_ === 'function') buildD1Batches_();
+                    // reload 완료 콜백으로 모달 리스트 갱신 (race 방지)
+                    reloadClassD1Grid(selectedClassId, function() {
                         if (savedBatchKey) {
                             const newIdx = d1Batches.findIndex(b => b.batchKey === savedBatchKey);
                             if (newIdx >= 0) d1BatchIdx = newIdx;
                         }
                         editD1FocusedId_ = savedFocusId;
                         renderEditD1List_();
-                    }, 800);
+                    });
                 } else showStatus(r.message || '저장 실패', 'error');
             })
             .withFailureHandler(e => showStatus(e.message || '저장 오류', 'error'))
