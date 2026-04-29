@@ -15750,18 +15750,35 @@ ${token}
         // 선택 개수
         if (bid1Count !== '') updateData['1cha_bid'] = parseInt(bid1Count) || 0;
         if (bid2Count !== '') updateData['2cha_bid'] = parseInt(bid2Count) || 0;
-        // 입찰 시간: day + time 모두 명시적 입력 시에만 포함 (둘 중 하나라도 빈값이면 스킵)
-        if (bidStarttimeDay !== '' && bidStarttimeTime && bidStarttimeTime !== '00:00') {
-            updateData.bidStarttimeDay = bidStarttimeDay;
-            updateData.bidStarttimeTime = bidStarttimeTime;
-        }
-        if (bidDatetime1Day !== '' && bidDatetime1Time && bidDatetime1Time !== '00:00') {
-            updateData.bidDatetime1Day = bidDatetime1Day;
-            updateData.bidDatetime1Time = bidDatetime1Time;
-        }
-        if (bidDatetime2Day !== '' && bidDatetime2Time && bidDatetime2Time !== '00:00') {
-            updateData.bidDatetime2Day = bidDatetime2Day;
-            updateData.bidDatetime2Time = bidDatetime2Time;
+        // 입찰 시간 처리
+        //  - 건별(!isBulk): day가 입력되면 그대로 적용 (time은 빈값이면 00:00로 보정)
+        //  - 일괄(isBulk): day + time 둘 다 명시적 입력일 때만 적용 (의도치 않은 일괄 변경 방지)
+        if (!isBulk) {
+            if (bidStarttimeDay !== '') {
+                updateData.bidStarttimeDay = bidStarttimeDay;
+                updateData.bidStarttimeTime = bidStarttimeTime || '00:00';
+            }
+            if (bidDatetime1Day !== '') {
+                updateData.bidDatetime1Day = bidDatetime1Day;
+                updateData.bidDatetime1Time = bidDatetime1Time || '00:00';
+            }
+            if (bidDatetime2Day !== '') {
+                updateData.bidDatetime2Day = bidDatetime2Day;
+                updateData.bidDatetime2Time = bidDatetime2Time || '00:00';
+            }
+        } else {
+            if (bidStarttimeDay !== '' && bidStarttimeTime && bidStarttimeTime !== '00:00') {
+                updateData.bidStarttimeDay = bidStarttimeDay;
+                updateData.bidStarttimeTime = bidStarttimeTime;
+            }
+            if (bidDatetime1Day !== '' && bidDatetime1Time && bidDatetime1Time !== '00:00') {
+                updateData.bidDatetime1Day = bidDatetime1Day;
+                updateData.bidDatetime1Time = bidDatetime1Time;
+            }
+            if (bidDatetime2Day !== '' && bidDatetime2Time && bidDatetime2Time !== '00:00') {
+                updateData.bidDatetime2Day = bidDatetime2Day;
+                updateData.bidDatetime2Time = bidDatetime2Time;
+            }
         }
         // 일괄 모드에서 아무것도 입력 안 했으면 에러
         if (isBulk && Object.keys(updateData).length === 0) {
@@ -15776,12 +15793,16 @@ ${token}
         if (editD1FocusedId_ === '_new_') { saveEditD1NewRow_(); return; }
         const updateData = buildEditD1UpdateData_(false);
         if (!updateData) return;
+        // [즉시] 진행 알림 + 회차리스트 새로고침 (낙관적 갱신)
+        showStatus('수정 중입니다...', 'info');
+        reloadClassD1Grid(selectedClassId);
         const savedBatchKey = d1Batches[d1BatchIdx]?.batchKey;
         const savedFocusId = editD1FocusedId_;
         google.script.run
             .withSuccessHandler(r => {
                 if (r.success) {
-                    showStatus(r.message, 'success');
+                    showStatus(r.message || '수정 완료', 'success');
+                    // 서버 저장 후 다시 한 번 새로고침 (확정 데이터 반영)
                     reloadClassD1Grid(selectedClassId);
                     setTimeout(() => {
                         if (typeof buildD1Batches_ === 'function') buildD1Batches_();
@@ -15791,10 +15812,10 @@ ${token}
                         }
                         editD1FocusedId_ = savedFocusId;
                         renderEditD1List_();
-                    }, 1500);
-                } else showStatus(r.message, 'error');
+                    }, 800);
+                } else showStatus(r.message || '저장 실패', 'error');
             })
-            .withFailureHandler(e => showStatus(e.message, 'error'))
+            .withFailureHandler(e => showStatus(e.message || '저장 오류', 'error'))
             .updateClassD1Batch([editD1FocusedId_], updateData);
     }
 
