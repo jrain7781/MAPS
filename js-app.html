@@ -13497,9 +13497,10 @@ ${token}
                 ${sessionColHeaders}
             </tr>`;
 
-        // 수업회차 = 과거 O+R 개수
+        // 수업회차 = 오늘 포함 과거 O+R 개수 (오늘 ●=녹색이면 받은 회차로 카운트)
+        // 미래 O 개수 = strict 미래 O+R (carry 계산용, 오늘 제외)
         // 남은회차 = 계약회차 − 수업회차 (단일 정의, fallback은 class.class_loop)
-        // 이월회차 = 남은회차 − 이번 배치 미래 O+R 개수
+        // 이월회차 = 남은회차 − 미래 O+R 개수
         const memberUsedMap_ = {};
         const memberRemainingMap_ = {};
         const memberContractMap_ = {};
@@ -13510,10 +13511,12 @@ ${token}
             for (let i = 0; i < d1List.length; i++) {
                 const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
-                const isPast = raw !== '' && raw < todayStr;
-                if (isPast) {
+                const isPastIncludingToday = raw !== '' && raw <= todayStr;
+                const isStrictFuture = raw !== '' && raw > todayStr;
+                if (isPastIncludingToday) {
                     if (val === 'O' || val === 'R') used++;
-                } else {
+                }
+                if (isStrictFuture) {
                     if (val === 'O' || val === 'R') futureO++;
                 }
             }
@@ -13656,21 +13659,23 @@ ${token}
             //   - 미래 X: 회색 ✕ (단, 첫 ● ~ 마지막 ● 사이의 회차에서만)
             //   - 마지막 ● 이후 회차: 빈 셀
             // 마지막/처음 미래 O loopNo + 미래 O 개수
+            //  - 미래 카운트는 strict '>' (오늘 제외, 외부 carry/used 계산과 일치)
+            //  - 과거 마지막 O는 '<=' (오늘 ● 녹색/검정/빨강 처리 보존)
             let _lastFutureOLoop_ = -1;
             let _firstFutureOLoop_ = -1;
             let _futureOCount_ = 0;
-            // 마지막 과거 O loopNo (종료 상태일 때 빨강 표시)
             let _lastPastOLoop_ = -1;
             for (let i = 0; i < d1List.length; i++) {
                 const v = String(m['no_'+d1List[i].class_loop] || '').trim().toUpperCase();
                 const r = String(d1List[i].class_date || '').replace(/-/g,'');
-                const isP = r !== '' && r <= todayStr;
-                if (!isP && (v === 'O' || v === 'R')) {
+                const isStrictFuture = r !== '' && r > todayStr;
+                const isPastIncludingToday = r !== '' && r <= todayStr;
+                if (isStrictFuture && (v === 'O' || v === 'R')) {
                     if (_firstFutureOLoop_ === -1) _firstFutureOLoop_ = Number(d1List[i].class_loop);
                     _lastFutureOLoop_ = Number(d1List[i].class_loop);
                     _futureOCount_++;
                 }
-                if (isP && v === 'O') _lastPastOLoop_ = Number(d1List[i].class_loop);
+                if (isPastIncludingToday && v === 'O') _lastPastOLoop_ = Number(d1List[i].class_loop);
             }
             const _isEnded_ = String(m.member_status || '').trim() === '종료';
             // 마지막 미래 O가 검정이려면: 이번 배치 안에서 남은회차가 정확히 끝남 (contract = 미래 O 개수)
@@ -13859,16 +13864,19 @@ ${token}
             .filter(d => currentBatchKey ? getD1BatchKey_(String(d.class_d1_id)) === currentBatchKey : String(d.class_id) === String(selectedClassId))
             .sort((a,b) => Number(a.class_loop) - Number(b.class_loop));
 
-        // used = 과거 O+R 개수
+        // used = 오늘 포함 과거 O+R 개수 (오늘 ●=수업회차에 포함)
+        // futureCells = strict 미래 셀만 (오늘 제외, 계약 증감 시 오늘은 손대지 않음)
         let used = 0;
         const futureCells = []; // [{ loopNo, val }]
         for (const d of dList) {
             const v = String(m['no_'+d.class_loop] || '').trim().toUpperCase();
             const raw = String(d.class_date || '').replace(/-/g,'');
-            const isPast = raw !== '' && raw < todayStr_;
-            if (isPast) {
+            const isPastIncludingToday = raw !== '' && raw <= todayStr_;
+            const isStrictFuture = raw !== '' && raw > todayStr_;
+            if (isPastIncludingToday) {
                 if (v === 'O' || v === 'R') used++;
-            } else {
+            }
+            if (isStrictFuture) {
                 futureCells.push({ loopNo: Number(d.class_loop), val: v });
             }
         }
