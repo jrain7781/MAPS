@@ -14391,10 +14391,26 @@ ${token}
                 }
                 // next === null → 시프트할 빈 셀 없음 (다음 배치로 자동 이월)
             } else if (curVal === 'X') {
-                // X → 빈값 (단순 해제)
+                // X → ● 복귀 + 가장 늦은 미래 ● 자동 제거 (시프트 역동작)
                 oldVals[fieldKey] = m[fieldKey];
-                updates[fieldKey] = '';
-                m[fieldKey] = '';
+                updates[fieldKey] = 'O';
+                m[fieldKey] = 'O';
+                // 본 셀보다 늦은 미래 ● 중 가장 늦은 것 1개 제거 → 미래 ● 총개수 유지
+                for (let i = dList.length - 1; i >= 0; i--) {
+                    const ln = Number(dList[i].class_loop);
+                    if (ln <= Number(loopNo)) break;
+                    const r = String(dList[i].class_date || '').replace(/-/g,'');
+                    if (r === '' || r > todayStr_) {
+                        const v = String(m['no_' + ln] || '').trim().toUpperCase();
+                        if (v === 'O') {
+                            const lk = 'no_' + ln;
+                            oldVals[lk] = m[lk];
+                            updates[lk] = '';
+                            m[lk] = '';
+                            break;
+                        }
+                    }
+                }
             } else {
                 // 빈값 → 직접 추가 불가
                 showStatus('계약회차를 먼저 수정하세요.', 'info');
