@@ -837,26 +837,35 @@ function updateClassD1Batch(classD1Ids, updateData) {
     const dateColIdx = CLASS_D1_HEADERS.indexOf('class_date');
     let count = 0;
 
+    // classDate가 Date 객체면 yyyyMMdd 문자열로 변환 (sheet에서 읽으면 Date 객체일 수 있음)
+    function _normClassDate_(classDateInput) {
+        if (classDateInput instanceof Date) {
+            return Utilities.formatDate(classDateInput, Session.getScriptTimeZone(), 'yyyyMMdd');
+        }
+        return String(classDateInput || '').replace(/-/g, '');
+    }
     // 단순 캘린더 +N일 (등록시작/1차마감 — 보정 없음)
-    function calcBidDt(classDateStr, dayOffset, timeStr) {
+    function calcBidDt(classDateInput, dayOffset, timeStr) {
         if (dayOffset === '' || dayOffset === null || dayOffset === undefined) return '';
-        var s = String(classDateStr).replace(/-/g, '');
+        var s = _normClassDate_(classDateInput);
         if (s.length < 8) return '';
         var y = parseInt(s.substring(0,4));
         var m = parseInt(s.substring(4,6)) - 1;
         var dd = parseInt(s.substring(6,8));
+        if (isNaN(y) || isNaN(m) || isNaN(dd)) return '';
         var d = new Date(y, m, dd + parseInt(dayOffset));
         var dateStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
         return dateStr + 'T' + (timeStr || '00:00');
     }
     // 최종마감: 단순 +N일 → 토/일이면 익일 14:00 보정 (공휴일 보정 없음)
-    function calcBidDt2(classDateStr, dayOffset, timeStr) {
+    function calcBidDt2(classDateInput, dayOffset, timeStr) {
         if (dayOffset === '' || dayOffset === null || dayOffset === undefined) return '';
-        var s = String(classDateStr).replace(/-/g, '');
+        var s = _normClassDate_(classDateInput);
         if (s.length < 8) return '';
         var y = parseInt(s.substring(0,4));
         var m = parseInt(s.substring(4,6)) - 1;
         var dd = parseInt(s.substring(6,8));
+        if (isNaN(y) || isNaN(m) || isNaN(dd)) return '';
         var d = new Date(y, m, dd + parseInt(dayOffset));
         var time = String(timeStr || '00:00');
         var dow = d.getDay();

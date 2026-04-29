@@ -15793,16 +15793,14 @@ ${token}
         if (editD1FocusedId_ === '_new_') { saveEditD1NewRow_(); return; }
         const updateData = buildEditD1UpdateData_(false);
         if (!updateData) return;
-        // [즉시] 진행 알림 + 회차리스트 새로고침 (낙관적 갱신)
+        // [즉시] 진행 알림만 (reload는 save 응답 후 — 사전 reload는 d1BatchIdx 초기화로 모달 비우는 회귀)
         showStatus('수정 중입니다...', 'info');
-        reloadClassD1Grid(selectedClassId);
         const savedBatchKey = d1Batches[d1BatchIdx]?.batchKey;
         const savedFocusId = editD1FocusedId_;
         google.script.run
             .withSuccessHandler(r => {
                 if (r.success) {
                     showStatus(r.message || '수정 완료', 'success');
-                    // 서버 저장 후 다시 한 번 새로고침 (확정 데이터 반영)
                     reloadClassD1Grid(selectedClassId);
                     setTimeout(() => {
                         if (typeof buildD1Batches_ === 'function') buildD1Batches_();
