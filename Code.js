@@ -137,7 +137,8 @@ const CLASS_D1_HEADERS = [
   'bid_starttime',    // 물건선택 시작시간 (Q열)
   '1cha_bid',         // 1차 선택 가능 개수 (R열)
   '2cha_bid',         // 2차 선택 가능 개수 (S열)
-  'teacher_id'        // 강사 회원 ID (T열)
+  'teacher_id',       // 강사 회원 ID (T열)
+  'bid_datetime_2_origin' // 최종마감 사용자 원본 입력 "{day}|{HH:MM}" (U열)
 ];
 
 // --- 회원 수업 상세(member_class_details) 시트 헤더 ---

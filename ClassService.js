@@ -223,14 +223,31 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
 
     // 기간 중복 체크 제거 (사용자 요청 — 동일 기간 재생성 허용)
 
-    // 입찰시간 계산 헬퍼
+    // 입찰시간 계산 헬퍼 — 등록시작/1차마감 (단순 캘린더 +N, 보정 없음)
     function calcBidDatetime(classDateStr, dayOffset, timeStr) {
         if (dayOffset === '' || dayOffset === null || dayOffset === undefined) return '';
-        var base = new Date(classDateStr);
-        base.setDate(base.getDate() + parseInt(dayOffset));
-        var parts = String(timeStr || '00:00').split(':');
-        base.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0, 0);
-        return Utilities.formatDate(base, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+        var s = String(classDateStr).replace(/-/g, '');
+        if (s.length < 8) return '';
+        var y = parseInt(s.substring(0,4));
+        var m = parseInt(s.substring(4,6)) - 1;
+        var dd = parseInt(s.substring(6,8));
+        var d = new Date(y, m, dd + parseInt(dayOffset));
+        return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd') + 'T' + (timeStr || '00:00');
+    }
+    // 최종마감 — 토/일이면 익일(=다음 평일) 14:00 보정
+    function calcBidDatetime2(classDateStr, dayOffset, timeStr) {
+        if (dayOffset === '' || dayOffset === null || dayOffset === undefined) return '';
+        var s = String(classDateStr).replace(/-/g, '');
+        if (s.length < 8) return '';
+        var y = parseInt(s.substring(0,4));
+        var m = parseInt(s.substring(4,6)) - 1;
+        var dd = parseInt(s.substring(6,8));
+        var d = new Date(y, m, dd + parseInt(dayOffset));
+        var time = String(timeStr || '00:00');
+        var dow = d.getDay();
+        if (dow === 6) { d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 2); time = '14:00'; }
+        else if (dow === 0) { d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); time = '14:00'; }
+        return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd') + 'T' + time;
     }
 
     for (var i = 0; i < total; i++) {
@@ -264,7 +281,8 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
             sessRow['bid_datetime_1'] = calcBidDatetime(dStr, opts.bidDatetime1Day, opts.bidDatetime1Time);
         }
         if (!isNoDateMode && opts.bidDatetime2Day !== '' && opts.bidDatetime2Day !== undefined) {
-            sessRow['bid_datetime_2'] = calcBidDatetime(dStr, opts.bidDatetime2Day, opts.bidDatetime2Time);
+            sessRow['bid_datetime_2'] = calcBidDatetime2(dStr, opts.bidDatetime2Day, opts.bidDatetime2Time);
+            sessRow['bid_datetime_2_origin'] = String(opts.bidDatetime2Day) + '|' + (opts.bidDatetime2Time || '00:00');
         }
         if (opts.bid1Count) sessRow['1cha_bid'] = opts.bid1Count;
         if (opts.bid2Count) sessRow['2cha_bid'] = opts.bid2Count;
@@ -819,13 +837,37 @@ function updateClassD1Batch(classD1Ids, updateData) {
     const dateColIdx = CLASS_D1_HEADERS.indexOf('class_date');
     let count = 0;
 
+    // 단순 캘린더 +N일 (등록시작/1차마감 — 보정 없음)
     function calcBidDt(classDateStr, dayOffset, timeStr) {
         if (dayOffset === '' || dayOffset === null || dayOffset === undefined) return '';
-        var base = new Date(String(classDateStr));
-        base.setDate(base.getDate() + parseInt(dayOffset));
-        var parts = String(timeStr || '00:00').split(':');
-        base.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0, 0);
-        return Utilities.formatDate(base, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+        var s = String(classDateStr).replace(/-/g, '');
+        if (s.length < 8) return '';
+        var y = parseInt(s.substring(0,4));
+        var m = parseInt(s.substring(4,6)) - 1;
+        var dd = parseInt(s.substring(6,8));
+        var d = new Date(y, m, dd + parseInt(dayOffset));
+        var dateStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        return dateStr + 'T' + (timeStr || '00:00');
+    }
+    // 최종마감: 단순 +N일 → 토/일이면 익일 14:00 보정 (공휴일 보정 없음)
+    function calcBidDt2(classDateStr, dayOffset, timeStr) {
+        if (dayOffset === '' || dayOffset === null || dayOffset === undefined) return '';
+        var s = String(classDateStr).replace(/-/g, '');
+        if (s.length < 8) return '';
+        var y = parseInt(s.substring(0,4));
+        var m = parseInt(s.substring(4,6)) - 1;
+        var dd = parseInt(s.substring(6,8));
+        var d = new Date(y, m, dd + parseInt(dayOffset));
+        var time = String(timeStr || '00:00');
+        var dow = d.getDay();
+        if (dow === 6) { d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 2); time = '14:00'; }
+        else if (dow === 0) { d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); time = '14:00'; }
+        var dateStr = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        return dateStr + 'T' + time;
+    }
+    function buildBd2Origin(dayOffset, timeStr) {
+        if (dayOffset === '' || dayOffset === null || dayOffset === undefined) return '';
+        return String(dayOffset) + '|' + (timeStr || '00:00');
     }
 
     classD1Ids.forEach(function(d1Id) {
@@ -839,7 +881,7 @@ function updateClassD1Batch(classD1Ids, updateData) {
                 if (colIdx >= 0) sheet.getRange(rowNum, colIdx + 1).setValue(updateData[field]);
             }
         });
-        // 입찰시간: day 기준으로 해당 회차 날짜에서 계산
+        // 등록시작 / 1차마감: 단순 캘린더 +N
         if (updateData.hasOwnProperty('bidStarttimeDay')) {
             const classDate = sheet.getRange(rowNum, dateColIdx + 1).getValue();
             const col = CLASS_D1_HEADERS.indexOf('bid_starttime') + 1;
@@ -850,10 +892,15 @@ function updateClassD1Batch(classD1Ids, updateData) {
             const col = CLASS_D1_HEADERS.indexOf('bid_datetime_1') + 1;
             sheet.getRange(rowNum, col).setValue(calcBidDt(classDate, updateData.bidDatetime1Day, updateData.bidDatetime1Time));
         }
+        // 최종마감: 토/일 보정 + U열 origin 동시 저장
         if (updateData.hasOwnProperty('bidDatetime2Day')) {
             const classDate = sheet.getRange(rowNum, dateColIdx + 1).getValue();
             const col = CLASS_D1_HEADERS.indexOf('bid_datetime_2') + 1;
-            sheet.getRange(rowNum, col).setValue(calcBidDt(classDate, updateData.bidDatetime2Day, updateData.bidDatetime2Time));
+            sheet.getRange(rowNum, col).setValue(calcBidDt2(classDate, updateData.bidDatetime2Day, updateData.bidDatetime2Time));
+            const originColIdx = CLASS_D1_HEADERS.indexOf('bid_datetime_2_origin');
+            if (originColIdx >= 0) {
+                sheet.getRange(rowNum, originColIdx + 1).setValue(buildBd2Origin(updateData.bidDatetime2Day, updateData.bidDatetime2Time));
+            }
         }
         count++;
     });
