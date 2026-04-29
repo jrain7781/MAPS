@@ -13791,18 +13791,18 @@ ${token}
             const lastTdCls = isLastRow ? 'border-b-2 border-gray-300' : '';
             const selBorderCls = isSelected ? 'border-l-4 border-indigo-500' : '';
             return `<tr class="group ${selCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
-                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${selBorderCls} ${lastTdCls}" onclick="event.stopPropagation()">
+                <td class="px-1 py-1 text-center group-hover:bg-indigo-100 ${selBorderCls} ${lastTdCls}" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
-                <td class="px-2 py-2 text-center font-semibold text-sm group-hover:bg-indigo-100 ${lastTdCls}">
+                <td class="px-2 py-1 text-center font-semibold text-xs group-hover:bg-indigo-100 ${lastTdCls}">
                     <span class="text-gray-800 hover:text-indigo-600 hover:underline" title="${memberTitle}" onclick="event.stopPropagation(); navigateToMemberFromD1_('${memIdEsc}')">${escapeHtml(m.member_name || '-')}</span>${tgIcon}
                 </td>
-                <td class="px-2 py-2 text-center text-gray-500 text-sm group-hover:bg-indigo-100 ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
-                <td class="px-1 py-2 text-center group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation()">${statusSel}</td>
-                <td class="px-1 py-2 text-center text-sm font-semibold ${contractColor} group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation(); editContractLoop_('${memIdEsc}')" title="계약회차 클릭하여 수정">${contract || '-'}</td>
-                <td class="px-1 py-2 text-center text-sm font-semibold text-emerald-700 group-hover:bg-indigo-100 ${lastTdCls}">${used}</td>
-                <td class="px-1 py-2 text-center text-sm font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}" title="계약회차 − 수업회차">${remaining}</td>
-                <td class="px-1 py-2 text-center text-sm font-bold ${_carryOver_ > 0 ? 'text-orange-600' : 'text-gray-300'} group-hover:bg-indigo-100 ${lastTdCls}" title="이번 배치에서 못 채운 잔여 (다음 배치로 이월)">${_carryOver_ > 0 ? _carryOver_ : '-'}</td>
+                <td class="px-2 py-1 text-center text-gray-500 text-xs group-hover:bg-indigo-100 ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
+                <td class="px-1 py-1 text-center group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation()">${statusSel}</td>
+                <td class="px-1 py-1 text-center text-xs font-semibold ${contractColor} group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation(); editContractLoop_('${memIdEsc}')" title="계약회차 클릭하여 수정">${contract || '-'}</td>
+                <td class="px-1 py-1 text-center text-xs font-semibold text-emerald-700 group-hover:bg-indigo-100 ${lastTdCls}">${used}</td>
+                <td class="px-1 py-1 text-center text-xs font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}" title="계약회차 − 수업회차">${remaining}</td>
+                <td class="px-1 py-1 text-center text-xs font-bold ${_carryOver_ > 0 ? 'text-orange-600' : 'text-gray-300'} group-hover:bg-indigo-100 ${lastTdCls}" title="이번 배치에서 못 채운 잔여 (다음 배치로 이월)">${_carryOver_ > 0 ? _carryOver_ : '-'}</td>
                 ${sessionCells}
             </tr>`;
         }; // end renderRow_
@@ -13837,7 +13837,11 @@ ${token}
         tbody.innerHTML = bodyHtml;
         // 회차 컬럼 폭 강제 적용 (리사이즈 후 즉시 반영용)
         d1SessColApplyWidth_(sessionColWidth_);
-        setTimeout(function() { initTableColResize_(document.getElementById('d1SummaryTable')); }, 0);
+        setTimeout(function() {
+            const tbl = document.getElementById('d1SummaryTable');
+            initTableColResize_(tbl);
+            initD1SummaryLeftColResize_(tbl);
+        }, 0);
         // 회원명 조회 필터 자동 재적용 (종목리스트에서 검색 후 진입 시 자동 조회)
         if (d1MemberNameFilter_) filterD1MembersByName_(d1MemberNameFilter_);
     }
@@ -14176,6 +14180,58 @@ ${token}
     }
 
     // 컬럼 너비 드래그 조절
+    // 회원탭 좌측 컬럼(이름~이월회차) 리사이즈 + localStorage 저장
+    function initD1SummaryLeftColResize_(tableEl) {
+        if (!tableEl) return;
+        const lsKey = 'd1_summary_left_col_widths_v1';
+        // rowspan=2 좌측 컬럼만 (체크박스 + 이름~이월회차 = 8개)
+        const ths = Array.from(tableEl.querySelectorAll('thead tr:first-child th[rowspan="2"]'));
+        if (ths.length === 0) return;
+        // 저장된 폭 복원
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(lsKey) || '{}'); } catch(e) {}
+        ths.forEach(function(th, i) {
+            if (saved[i]) {
+                th.style.width = saved[i];
+                th.style.minWidth = saved[i];
+                th.style.maxWidth = saved[i];
+            }
+        });
+        // 리사이즈 핸들 부착
+        ths.forEach(function(th, i) {
+            const existing = th.querySelector('.d1-left-col-resize-handle');
+            if (existing) existing.remove();
+            th.style.position = 'relative';
+            const handle = document.createElement('div');
+            handle.className = 'd1-left-col-resize-handle';
+            handle.style.cssText = 'position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:5;background:transparent;';
+            handle.title = '드래그로 열 너비 조절';
+            handle.addEventListener('mousedown', function(e) {
+                e.preventDefault(); e.stopPropagation();
+                const startX = e.pageX;
+                const startW = th.getBoundingClientRect().width;
+                const onMove = function(ev) {
+                    const w = Math.max(20, startW + ev.pageX - startX);
+                    th.style.width = w + 'px';
+                    th.style.minWidth = w + 'px';
+                    th.style.maxWidth = w + 'px';
+                };
+                const onUp = function() {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    try {
+                        const widths = {};
+                        ths.forEach(function(t, idx) { if (t.style.width) widths[idx] = t.style.width; });
+                        localStorage.setItem(lsKey, JSON.stringify(widths));
+                    } catch(e) {}
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+            th.appendChild(handle);
+        });
+    }
+
     function initTableColResize_(tableEl, storageKey) {
         if (!tableEl) return;
         const ths = Array.from(tableEl.querySelectorAll('thead tr:last-child th'));
