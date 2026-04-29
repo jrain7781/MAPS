@@ -13685,9 +13685,9 @@ ${token}
                 if (isPastIncludingToday && v === 'O') _lastPastOLoop_ = Number(d1List[i].class_loop);
             }
             const _isEnded_ = String(m.member_status || '').trim() === '종료';
-            // 마지막 미래 O가 검정이려면: 이번 배치 안에서 남은회차가 정확히 끝남 (contract = 미래 O 개수)
-            // 남은회차 > 미래 O 개수면 다음 배치로 이어지므로 검정 안 함
-            const _futureLastIsBlack_ = (remaining === _futureOCount_);
+            // 마지막 미래 ● 검정 처리: 이번 배치에 미래 ●이 1개 이상이면 항상 마지막 ●을 검정
+            // (이월 여부와 무관 — 가독성 우선, carry는 별도 컬럼에서 표시)
+            const _futureLastIsBlack_ = _futureOCount_ > 0;
             // 이월회차: 남은회차 중 이번 배치에서 못 채운 잔여 (다음 배치 이월)
             const _carryOver_ = Math.max(0, remaining - _futureOCount_);
             let sessionCells = '';
