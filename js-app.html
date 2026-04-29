@@ -13298,7 +13298,17 @@ ${token}
     }
 
     // 그룹 헤더의 전체선택 체크박스 → 같은 그룹의 회원 행 체크박스 일괄 토글
-    function toggleD1GroupSelectAll_(checkbox) {
+    function toggleD1GroupSelectAll_(checkbox, groupName) {
+        // 그룹 탭이 thead로 이동했으므로 data-group 속성으로 해당 그룹 회원 행 찾기
+        if (groupName) {
+            const rows = document.querySelectorAll(`#d1SummaryTbody tr[data-group="${CSS.escape(groupName)}"]`);
+            rows.forEach(tr => {
+                const cb = tr.querySelector('input.d1-summary-check');
+                if (cb) cb.checked = checkbox.checked;
+            });
+            return;
+        }
+        // 폴백 (구버전 호환)
         const tr = checkbox.closest('tr');
         if (!tr) return;
         let next = tr.nextElementSibling;
@@ -13630,9 +13640,10 @@ ${token}
         const lastIdx_ = flatSorted.length - 1;
 
         // 단일 행 렌더 (closure - 외부 scope 변수 접근)
-        const renderRow_ = function(m, globalIdx) {
+        const renderRow_ = function(m, globalIdx, groupName) {
             const isSelected = String(m.member_id) === String(selectedSummaryMemberId_);
             const isLastRow  = globalIdx === lastIdx_;
+            const groupAttr = groupName ? ` data-group="${escapeHtml(String(groupName))}"` : '';
 
             const remaining = memberRemainingMap_[String(m.member_id)] || 0;
             const used = memberUsedMap_[String(m.member_id)] || 0;
@@ -13790,7 +13801,7 @@ ${token}
             const selCls  = isSelected ? 'bg-indigo-100' : '';
             const lastTdCls = isLastRow ? 'border-b-2 border-gray-300' : '';
             const selBorderCls = isSelected ? 'border-l-4 border-indigo-500' : '';
-            return `<tr class="group ${selCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}" onclick="selectSummaryMember('${memIdEsc}')">
+            return `<tr class="group ${selCls} transition-colors cursor-pointer" data-summary-row="${memIdEsc}"${groupAttr} onclick="selectSummaryMember('${memIdEsc}')">
                 <td class="px-1 py-1 text-center group-hover:bg-indigo-100 ${selBorderCls} ${lastTdCls}" onclick="event.stopPropagation()">
                     <input type="checkbox" class="d1-summary-check cursor-pointer" data-member-id="${memIdEsc}" data-detail-id="${escapeHtml(String(m.detail_id||''))}">
                 </td>
@@ -13807,30 +13818,43 @@ ${token}
             </tr>`;
         }; // end renderRow_
 
-        // 그룹 헤더 + 회원 행 조립
+        // 그룹 탭 → 컬럼 헤더 위로 (별도 컨테이너), tbody에는 회원 행만
         const collapsedMap = getD1GroupCollapsed_();
+        const tabsHostId = 'd1GroupTabsHost';
+        let tabsHost = document.getElementById(tabsHostId);
+        if (!tabsHost) {
+            tabsHost = document.createElement('div');
+            tabsHost.id = tabsHostId;
+            tabsHost.className = 'd1-group-tabs-host';
+            const tableEl = document.getElementById('d1SummaryTable');
+            if (tableEl && tableEl.parentNode) tableEl.parentNode.insertBefore(tabsHost, tableEl);
+        }
+        let tabsHtml = '';
+        groups.forEach(g => {
+            const isCollapsed = !!collapsedMap[g.name];
+            const arrow = isCollapsed ? '▶' : '▼';
+            const fg = _contrastTextColor_(g.color);
+            const gNameEsc = escapeHtml(g.name);
+            tabsHtml += `<div class="d1-group-tab" style="background:${g.color};color:${fg}">
+                <input type="checkbox" class="d1-group-checkall cursor-pointer align-middle" title="${gNameEsc} 전체 선택"
+                    onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this, '${gNameEsc}')">
+                <span style="cursor:pointer" onclick="toggleD1Group_('${gNameEsc}')">
+                    <span style="display:inline-block;width:12px;text-align:center">${arrow}</span>
+                    <span>${gNameEsc}</span>
+                    <span style="opacity:0.85;font-weight:normal;margin-left:4px;font-size:11px">${g.members.length}명</span>
+                </span>
+            </div>`;
+        });
+        tabsHost.innerHTML = tabsHtml;
+
         let bodyHtml = '';
         let globalIdx = 0;
         for (let gi = 0; gi < groups.length; gi++) {
             const g = groups[gi];
             const isCollapsed = !!collapsedMap[g.name];
-            const arrow = isCollapsed ? '▶' : '▼';
-            const fg = _contrastTextColor_(g.color);
-            // 탭 pill 스타일: 짧은 너비 + 상단 라운드 + 그룹 색상
-            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell">
-                <div class="d1-group-tab" style="background:${g.color};color:${fg}">
-                    <input type="checkbox" class="d1-group-checkall cursor-pointer align-middle" title="${escapeHtml(g.name)} 전체 선택"
-                        onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this)">
-                    <span style="cursor:pointer" onclick="toggleD1Group_('${escapeHtml(g.name)}')">
-                        <span style="display:inline-block;width:14px;text-align:center">${arrow}</span>
-                        <span style="font-size:13px;letter-spacing:0.3px">${escapeHtml(g.name)}</span>
-                        <span style="opacity:0.85;font-weight:normal;margin-left:6px;font-size:11px">${g.members.length}명</span>
-                    </span>
-                </div>
-            </td></tr>`;
             if (isCollapsed) continue;
             for (let j = 0; j < g.members.length; j++) {
-                bodyHtml += renderRow_(g.members[j], globalIdx);
+                bodyHtml += renderRow_(g.members[j], globalIdx, g.name);
                 globalIdx++;
             }
         }

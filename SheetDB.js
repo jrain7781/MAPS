@@ -3235,9 +3235,11 @@ function buildInitialAttendance_(mData, totalSessions, sessionDates) {
       result['no_' + n] = (ds !== '' && ds < today) ? 'X' : 'O';
     }
   } else {
+    // 배치 이월 (가져오기): remaining 만큼만 'O', 나머지는 빈값 ('')
+    //   → 마지막 검정 ● 이후 셀은 X가 아닌 빈값 (다음 배치 추가 이월/계약 변경 여지)
     var remaining = isNew ? totalSessions : Math.max(0, parseInt(mData.remaining) || 0);
     for (var n = 1; n <= totalSessions && n <= 20; n++) {
-      result['no_' + n] = (n <= remaining) ? 'O' : 'X';
+      result['no_' + n] = (n <= remaining) ? 'O' : '';
     }
   }
   return result;
