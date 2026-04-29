@@ -13685,9 +13685,8 @@ ${token}
                 if (isPastIncludingToday && v === 'O') _lastPastOLoop_ = Number(d1List[i].class_loop);
             }
             const _isEnded_ = String(m.member_status || '').trim() === '종료';
-            // 마지막 미래 ● 검정 처리: 이번 배치에 미래 ●이 1개 이상이면 항상 마지막 ●을 검정
-            // (이월 여부와 무관 — 가독성 우선, carry는 별도 컬럼에서 표시)
-            const _futureLastIsBlack_ = _futureOCount_ > 0;
+            // 검정 = 계약이 이번 배치에서 정확히 끝남 (carry=0). 이월 시 마지막 ●도 회색.
+            const _futureLastIsBlack_ = (remaining === _futureOCount_) && _futureOCount_ > 0;
             // 이월회차: 남은회차 중 이번 배치에서 못 채운 잔여 (다음 배치 이월)
             const _carryOver_ = Math.max(0, remaining - _futureOCount_);
             let sessionCells = '';
@@ -14406,26 +14405,44 @@ ${token}
                 }
                 // next === null → 시프트할 빈 셀 없음 (다음 배치로 자동 이월)
             } else if (curVal === 'X') {
-                // X → ● 복귀 + 가장 늦은 미래 ● 자동 제거 (시프트 역동작)
+                // X → ● 복귀
+                //  - 이월(carry > 0) 상태: 그냥 추가 → carry가 1 감소 (제거 X)
+                //  - 정상 상태(carry=0, futureO+1 > remaining): 가장 늦은 미래 ● 제거 (시프트 역동작)
+                // 현재 used / curFutureO 계산 (변경 전 상태)
+                let used_ = 0;
+                let curFutureO_ = 0;
+                for (const d of dList) {
+                    const r = String(d.class_date || '').replace(/-/g,'');
+                    const v = String(m['no_' + d.class_loop] || '').trim().toUpperCase();
+                    if (r !== '' && r <= todayStr_ && (v === 'O' || v === 'R')) used_++;
+                    if (r !== '' && r > todayStr_ && (v === 'O' || v === 'R')) curFutureO_++;
+                }
+                const contract_ = parseInt(m.contract_loop, 10) || 0;
+                const remaining_ = Math.max(0, contract_ - used_);
+
                 oldVals[fieldKey] = m[fieldKey];
                 updates[fieldKey] = 'O';
                 m[fieldKey] = 'O';
-                // 본 셀보다 늦은 미래 ● 중 가장 늦은 것 1개 제거 → 미래 ● 총개수 유지
-                for (let i = dList.length - 1; i >= 0; i--) {
-                    const ln = Number(dList[i].class_loop);
-                    if (ln <= Number(loopNo)) break;
-                    const r = String(dList[i].class_date || '').replace(/-/g,'');
-                    if (r === '' || r > todayStr_) {
-                        const v = String(m['no_' + ln] || '').trim().toUpperCase();
-                        if (v === 'O') {
-                            const lk = 'no_' + ln;
-                            oldVals[lk] = m[lk];
-                            updates[lk] = '';
-                            m[lk] = '';
-                            break;
+
+                // 변경 후 futureO = curFutureO_ + 1. 이게 remaining_을 초과해야만 제거.
+                if ((curFutureO_ + 1) > remaining_) {
+                    for (let i = dList.length - 1; i >= 0; i--) {
+                        const ln = Number(dList[i].class_loop);
+                        if (ln <= Number(loopNo)) break;
+                        const r = String(dList[i].class_date || '').replace(/-/g,'');
+                        if (r === '' || r > todayStr_) {
+                            const v = String(m['no_' + ln] || '').trim().toUpperCase();
+                            if (v === 'O') {
+                                const lk = 'no_' + ln;
+                                oldVals[lk] = m[lk];
+                                updates[lk] = '';
+                                m[lk] = '';
+                                break;
+                            }
                         }
                     }
                 }
+                // else: carry > 0이었음 → 제거 없이 carry만 1 감소 (자연스럽게 재계산됨)
             } else {
                 // 빈값 → 직접 추가 불가
                 showStatus('계약회차를 먼저 수정하세요.', 'info');
