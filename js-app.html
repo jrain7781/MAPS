@@ -11719,7 +11719,8 @@ MJ 이정우 팀장
 
             if (nameKw && !name.includes(nameKw) && !name1.includes(nameKw) && !name2.includes(nameKw) && !name3.includes(nameKw)) return false;
             if (phoneKw && !phone.includes(phoneKw)) return false;
-            if (gubunKw && gubun !== gubunKw) return false;
+            // 콤마 멀티값 호환: '직원,강사' 회원도 '강사' 필터에 매칭
+            if (gubunKw && !gubun.split(',').map(s => s.trim()).includes(gubunKw)) return false;
             if (telegramFilter === 'Y' && String(m.telegram_enabled || '').toUpperCase() !== 'Y') return false;
             if (telegramFilter === 'C' && !String(m.telegram_chat_id || '').trim()) return false;
             return true;
@@ -16523,7 +16524,8 @@ ${token}
             if (classLocKw && (cls.class_loc || '') !== classLocKw) return false;
             if (nameKw && !name.includes(nameKw)) return false;
             if (phoneKw && !phone.includes(phoneKw)) return false;
-            if (gubunKw && (m.gubun || '') !== gubunKw) return false;
+            // 콤마 멀티값 호환: '직원,강사' 회원도 '강사' 필터에 매칭
+            if (gubunKw && !String(m.gubun || '').split(',').map(s => s.trim()).includes(gubunKw)) return false;
             return true;
         });
 
