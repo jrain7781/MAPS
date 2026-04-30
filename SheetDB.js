@@ -5879,15 +5879,56 @@ function getDisplayNameMap() {
 }
 
 /**
+ * members 시트에서 강사 표시명 매핑 build (서버측 룩업)
+ * 닉네임/본명 둘 다 키로 사용 → 닉네임 표시값 반환
+ * @returns {Object} { '대표님': '대표님', '전제혁': '전부쌤', ... }
+ */
+function buildTeacherDisplayMap_() {
+  try {
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_MEMBERS_SHEET_NAME);
+    if (!sheet) return {};
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return {};
+    const colsToRead = Math.min(sheet.getMaxColumns(), ITEM_MEMBER_HEADERS.length);
+    const data = sheet.getRange(2, 1, lastRow - 1, colsToRead).getValues();
+    const gubunCol = ITEM_MEMBER_HEADERS.indexOf('gubun');
+    const nameCol = ITEM_MEMBER_HEADERS.indexOf('member_name');
+    const nickCol = ITEM_MEMBER_HEADERS.indexOf('teacher_nickname');
+    const map = {};
+    data.forEach(row => {
+      const gubun = String(row[gubunCol] || '');
+      const isTeacher = gubun.split(',').map(s => s.trim()).includes('강사');
+      if (!isTeacher) return;
+      const name = String(row[nameCol] || '').trim();
+      const nick = (nickCol >= 0 && nickCol < row.length) ? String(row[nickCol] || '').trim() : '';
+      const display = nick || name;
+      if (!display) return;
+      if (nick) map[nick] = display;
+      if (name && !(name in map)) map[name] = display;
+    });
+    return map;
+  } catch (e) {
+    Logger.log('[buildTeacherDisplayMap_] 오류: ' + e.message);
+    return {};
+  }
+}
+
+/**
  * 이름 하나를 표시명으로 변환 (TelegramService 내부 호출용)
+ * 우선순위: (1) members 강사 닉네임 매핑 → (2) settings 옛 매핑 폴백 → (3) 원본
  * @param {string} name
  * @returns {string}
  */
 function getDisplayName_(name) {
   try {
     if (!name) return name;
+    const trimmed = String(name).trim();
+    // (1) members 강사 닉네임 우선
+    const teacherMap = buildTeacherDisplayMap_();
+    if (teacherMap[trimmed]) return teacherMap[trimmed];
+    // (2) 옛 settings 매핑 폴백 (하위 호환)
     const map = getDisplayNameMap();
-    return (map && map[name]) ? map[name] : name;
+    return (map && map[trimmed]) ? map[trimmed] : name;
   } catch (e) {
     return name;
   }
