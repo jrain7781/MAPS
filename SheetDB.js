@@ -2652,6 +2652,7 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
   var ids = scanData.map(function(r){ return String(r[idColRel]); });
 
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
+  var nowIso = new Date().toISOString();
   var updated = 0;
   var notFound = [];
   var affectedMemberIds = {};
@@ -2663,10 +2664,8 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
     sheet.getRange(row, stuMemberCol).setValue('추천');
     sheet.getRange(row, mNameCol).setValue(mNameVal);
     sheet.getRange(row, classD1IdCol).setValue(classD1Id);
-    // [4키 룰] 회차 등록 시점에는 chuchen_state/chuchen_date 비워둠
-    // → 관리자가 텔레그램 발송 또는 수동 '전달완료' 업데이트 시 채워짐
-    sheet.getRange(row, chuchenStateCol).setValue('');
-    sheet.getRange(row, chuchenDateCol).setValue('');
+    sheet.getRange(row, chuchenStateCol).setValue('전달완료');
+    sheet.getRange(row, chuchenDateCol).setValue(nowIso);
     sheet.getRange(row, bd2Col).setValue(bidDatetime2Val);
     var existingMid = String(scanData[idx][midColRel] || '').trim();
     // PT/돈클 일괄등록: items.member_id가 비어있으면 대표회원 ID로 채움 (텔레그램 심볼 등 회원연계용)
