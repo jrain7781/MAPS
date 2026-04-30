@@ -3079,58 +3079,78 @@
     // --- [4] 대시보드 렌더링 ---
 
     function updateDashboardFilterOptions() {
-        const filters = ['missingBidFilterMember', 'statusFilterMember'];
-        const members = new Set();
-        allBiddingData.forEach(item => {
-            if (item.m_name_id && item.m_name_id.trim() !== '') {
-                members.add(item.m_name_id);
+        // 강사 라벨 + 색상 매핑 (닉네임 우선; members → items raw 폴백 순으로 누적)
+        const teachers = (allMembersNewData || []).filter(m =>
+            String(m.gubun || '').split(',').map(s => s.trim()).includes('강사')
+        );
+        const colorByLabel = {};
+        teachers.forEach(m => {
+            const nick = String(m.teacher_nickname || '').trim();
+            const name = String(m.member_name || '').trim();
+            const label = nick || name;
+            if (label) colorByLabel[label] = String(m.teacher_color || '').trim();
+        });
+        // items raw 중 매핑 안 되는 값은 그대로 옵션 추가 (옛 데이터 호환)
+        (allBiddingData || []).forEach(item => {
+            const v = String(item.m_name_id || '').trim();
+            if (!v || v === '개인') return;
+            const r = resolveTeacherDisplay_(v);
+            if (r.display && !(r.display in colorByLabel)) {
+                colorByLabel[r.display] = r.color || '';
             }
         });
-        members.delete('개인'); // '개인'은 드롭다운에서 제외
-        let optionsHtml = `<option value="">전체</option>`;
-        if (members.has('대표님')) members.delete('대표님');
-        optionsHtml += `<option value="대표님">대표님</option>`;
-        [...members].sort().forEach(member => {
-            optionsHtml += `<option value="${member}">${member}</option>`;
+        const sortedLabels = Object.keys(colorByLabel).sort();
+        const styAttr = c => c ? ` style="color:${escapeHtml(c)};font-weight:600"` : '';
+
+        // 대쉬보드 select 2개 (입찰가 미입력, 물건상태 관리)
+        let optsHtml = `<option value="">전체</option>`;
+        sortedLabels.forEach(l => {
+            optsHtml += `<option value="${escapeHtml(l)}"${styAttr(colorByLabel[l])}>${escapeHtml(l)}</option>`;
         });
-        filters.forEach(id => {
-            const select = document.getElementById(id);
-            if (select) {
-                const currentVal = select.value;
-                select.innerHTML = optionsHtml;
-                select.value = currentVal;
-                if (select.value !== currentVal) select.value = '';
+        ['missingBidFilterMember', 'statusFilterMember'].forEach(id => {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            const cur = sel.value;
+            sel.innerHTML = optsHtml;
+            sel.value = cur;
+            if (sel.value !== cur) sel.value = '';
+            // 첫 적용 시 '대표님' 디폴트 (옵션에 존재할 때만)
+            if (!sel.dataset.defaultApplied) {
+                sel.dataset.defaultApplied = '1';
+                if (!cur && Array.from(sel.options).some(o => o.value === '대표님')) {
+                    sel.value = '대표님';
+                    sel.dispatchEvent(new Event('change'));
+                }
             }
         });
 
-        // 입찰일정 메뉴의 입찰가 담당 → 체크박스 드롭다운으로 채우기
-        const calManagerDropdown = document.getElementById('cal-search-manager-dropdown');
-        if (calManagerDropdown) {
-            const calCurSel = getSelectedCalManagerValues();
-            const calAllChecked = calCurSel.length === 0;
-            let calCbHtml = `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="cal-search-manager-all" value="All" ${calAllChecked ? 'checked' : ''} onchange="handleCalManagerAll(this); renderCalendar()" class="rounded"> 전체</label>`;
-            calCbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="cal-search-manager-cb" value="대표님" ${calCurSel.includes('대표님') ? 'checked' : ''} onchange="handleCalManagerOther(this); updateCalManagerLabel(); renderCalendar()" class="rounded"> 대표님</label>`;
-            [...members].sort().filter(m => m !== '대표님').forEach(function (member) {
-                calCbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="cal-search-manager-cb" value="${member}" ${calCurSel.includes(member) ? 'checked' : ''} onchange="handleCalManagerOther(this); updateCalManagerLabel(); renderCalendar()" class="rounded"> ${member}</label>`;
+        // 체크박스 드롭다운 빌더 (입찰일정/입찰물건관리)
+        function buildCbDropdown(elId, allId, cbName, getCurFn, allOnchange, cbOnchange, labelUpdater) {
+            const drop = document.getElementById(elId);
+            if (!drop) return;
+            const cur = getCurFn();
+            const allChecked = cur.length === 0;
+            let html = `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="${allId}" value="All" ${allChecked ? 'checked' : ''} onchange="${allOnchange}" class="rounded"> 전체</label>`;
+            sortedLabels.forEach(l => {
+                html += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"${styAttr(colorByLabel[l])}><input type="checkbox" name="${cbName}" value="${escapeHtml(l)}" ${cur.includes(l) ? 'checked' : ''} onchange="${cbOnchange}" class="rounded"> ${escapeHtml(l)}</label>`;
             });
-            calManagerDropdown.innerHTML = calCbHtml;
-            updateCalManagerLabel();
+            drop.innerHTML = html;
+            if (typeof labelUpdater === 'function') labelUpdater();
         }
-        // 입찰물건관리 메뉴의 입찰가 담당 → 체크박스 드롭다운으로 채우기
-        const searchManagerDropdown = document.getElementById('search-manager-dropdown');
-        if (searchManagerDropdown) {
-            const currentSelected = getSelectedManagerValues();
-            const allChecked = currentSelected.length === 0;
-            let cbHtml = `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" id="search-manager-all" value="All" ${allChecked ? 'checked' : ''} onchange="handleManagerAll(this); applyFilters()" class="rounded"> 전체</label>`;
-            const memberArr = [...members].sort();
-            // 대표님 항상 맨 위 (데이터 유무 관계없이)
-            cbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="search-manager-cb" value="대표님" ${currentSelected.includes('대표님') ? 'checked' : ''} onchange="handleManagerOther(this); updateManagerLabel(); applyFilters()" class="rounded"> 대표님</label>`;
-            memberArr.filter(m => m !== '대표님').forEach(function (member) {
-                cbHtml += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input type="checkbox" name="search-manager-cb" value="${member}" ${currentSelected.includes(member) ? 'checked' : ''} onchange="handleManagerOther(this); updateManagerLabel(); applyFilters()" class="rounded"> ${member}</label>`;
-            });
-            searchManagerDropdown.innerHTML = cbHtml;
-            updateManagerLabel();
-        }
+        buildCbDropdown(
+            'cal-search-manager-dropdown', 'cal-search-manager-all', 'cal-search-manager-cb',
+            (typeof getSelectedCalManagerValues === 'function') ? getSelectedCalManagerValues : () => [],
+            'handleCalManagerAll(this); renderCalendar()',
+            'handleCalManagerOther(this); updateCalManagerLabel(); renderCalendar()',
+            (typeof updateCalManagerLabel === 'function') ? updateCalManagerLabel : null
+        );
+        buildCbDropdown(
+            'search-manager-dropdown', 'search-manager-all', 'search-manager-cb',
+            (typeof getSelectedManagerValues === 'function') ? getSelectedManagerValues : () => [],
+            'handleManagerAll(this); applyFilters()',
+            'handleManagerOther(this); updateManagerLabel(); applyFilters()',
+            (typeof updateManagerLabel === 'function') ? updateManagerLabel : null
+        );
     }
 
     function toggleAllMissingBidChecks(checked) {
@@ -11437,6 +11457,22 @@ MJ 이정우 팀장
         return { display, color };
     }
 
+    // member_id로 강사 룩업 (수업관리 teacher_id 기반 표시용)
+    // 반환: { display: 닉네임 우선, color: hex }
+    function resolveTeacherById_(memberId) {
+        const id = String(memberId || '').trim();
+        if (!id) return { display: '', color: '' };
+        const members = Array.isArray(allMembersNewData) ? allMembersNewData : [];
+        const m = members.find(x => String(x.member_id || '').trim() === id);
+        if (!m) return { display: id, color: '' };
+        const nick = String(m.teacher_nickname || '').trim();
+        const name = String(m.member_name || '').trim();
+        return {
+            display: nick || name || id,
+            color: String(m.teacher_color || '').trim()
+        };
+    }
+
     // 입찰담당 select 옵션을 members 강사로 동적 채움 (form-m-name-id, modal-form-m-name-id 둘 다)
     function populateMNameIdDropdowns_() {
         const members = Array.isArray(allMembersNewData) ? allMembersNewData : [];
@@ -12852,8 +12888,9 @@ ${token}
                 ? `${firstDate || lastDate}~${lastDate || firstDate}`
                 : '-';
             const teacherId = items[0].teacher_id || '';
-            const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
-            const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '-');
+            const _tInfo = resolveTeacherById_(teacherId);
+            const teacherName = _tInfo.display || (teacherId || '-');
+            const teacherColorStyle = _tInfo.color ? ` style="color:${_tInfo.color};font-weight:600"` : '';
             let batchMember;
             if (i === d1BatchIdx && summaryMemberData_.length > 0) {
                 // 현재 선택된 배치는 live 데이터 (최신 반영)
@@ -12879,7 +12916,7 @@ ${token}
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${i + 1}</td>
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${items.length}회</td>
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls} leading-tight">${periodHtml}</td>
-                <td class="px-2 py-1.5 text-center text-sm ${txtCls}">${escapeHtml(teacherName)}</td>
+                <td class="px-2 py-1.5 text-center text-sm ${txtCls}"><span${teacherColorStyle}>${escapeHtml(teacherName)}</span></td>
                 <td class="px-2 py-1.5 text-center text-sm ${txtCls}" id="batchMemberCell_${i}">${batchMember}</td>
                 <td class="px-2 py-1.5 text-center text-xs text-gray-400 font-mono border-l-2 border-gray-200 whitespace-nowrap">${escapeHtml(batchKey)}</td>
             </tr>`;
@@ -12913,8 +12950,7 @@ ${token}
             ? `${firstDate || lastDate}~${lastDate || firstDate}`
             : '-';
         const teacherId = items[0].teacher_id || '';
-        const teacherMember = teacherId ? (allMembersNewData || []).find(m => String(m.member_id) === String(teacherId)) : null;
-        const teacherName = teacherMember ? teacherMember.member_name : (teacherId || '');
+        const teacherName = resolveTeacherById_(teacherId).display || teacherId || '';
         const parts = [`${items.length}회`, period, teacherName].filter(Boolean);
         el.textContent = '· ' + parts.join(' · ');
         el.classList.remove('hidden');
@@ -13082,9 +13118,10 @@ ${token}
                 const tto = fmtClassTime_(d.class_time_to);
                 const timeStr = (tfrom || tto) ? `${tfrom||'?'}~${tto||'?'}` : '-';
 
-                // 강사명
-                const teacherMemberCard = d.teacher_id ? (allMembersNewData || []).find(m => String(m.member_id) === String(d.teacher_id)) : null;
-                const teacherNameCard = teacherMemberCard ? teacherMemberCard.member_name : (d.teacher_id ? String(d.teacher_id) : '-');
+                // 강사명 + 색상 (닉네임 우선)
+                const _tInfoCard = resolveTeacherById_(d.teacher_id);
+                const teacherNameCard = _tInfoCard.display || (d.teacher_id ? String(d.teacher_id) : '-');
+                const teacherColorStyleCard = _tInfoCard.color ? ` style="color:${_tInfoCard.color};font-weight:600"` : '';
 
                 // 2차마감시간 포맷 (MM/DD(요일) HH시)
                 function fmtBidShort_(v) {
@@ -13107,7 +13144,7 @@ ${token}
                 const body =
                     `<li>• 수업시간: ${timeStr}</li>` +
                     `<li>• 추천만료: ${fmtBidShort_(d.bid_datetime_2)}</li>` +
-                    `<li>• ${itemCount}건 / ${escapeHtml(teacherNameCard)}</li>`;
+                    `<li>• ${itemCount}건 / <span${teacherColorStyleCard}>${escapeHtml(teacherNameCard)}</span></li>`;
 
                 function fmtBidDt_(v) {
                     if (!v) return '-';
