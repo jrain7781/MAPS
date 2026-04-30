@@ -18,7 +18,7 @@ from selenium.webdriver.support import expected_conditions as EC
 # [설정] 계정 및 경로
 # ==============================================================================
 ACCOUNTS = [
-    {"id": "mjgold",   "pw": "28471296",    "manager": "대표님"},
+   # {"id": "mjgold",   "pw": "28471298",    "manager": "대표님"},
     {"id": "mjjang1",  "pw": "28471298",    "manager": "대표님"},
     {"id": "jjhsm81",  "pw": "marlboro81!", "manager": "전제혁"}
 ]

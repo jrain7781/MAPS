@@ -27,7 +27,7 @@ LIST_FOLDER_NAME = "건별 캡쳐 리스트"
 LIST_FOLDER = os.path.join(SCRIPT_DIR, LIST_FOLDER_NAME)
 
 ACCOUNTS = [
-    {"id": "mjgold",   "pw": "28471296",   "manager": "대표님"},
+    {"id": "mjgold",   "pw": "28471298",   "manager": "대표님"},
     {"id": "mjjang1",  "pw": "28471298",   "manager": "대표님"},
     #{"id": "jjhsm81",  "pw": "marlboro81!", "manager": "전제혁"}
 ]
