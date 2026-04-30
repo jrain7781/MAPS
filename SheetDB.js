@@ -89,7 +89,9 @@ const ITEM_MEMBER_HEADERS = [
   'kaib_date',
   'reg_date',
   'reg_id',
-  'kakao_name'
+  'kakao_name',
+  'teacher_nickname',  // AB열
+  'teacher_color'      // AC열
 ];
 
 const KAKAO_TEMPLATES_SHEET_NAME = 'kakao_templates';

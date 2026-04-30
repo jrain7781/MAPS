@@ -11991,10 +11991,16 @@ MJ 이정우 팀장
             btnBack.classList.remove('content-hidden');
 
             // 폼 필드 채우기
-            ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'member_token', 'telegram_chat_id', 'telegram_username', 'telegram_enabled', 'kaib_date', 'kakao_name'].forEach(key => {
+            ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'member_token', 'telegram_chat_id', 'telegram_username', 'telegram_enabled', 'kaib_date', 'kakao_name', 'teacher_nickname'].forEach(key => {
                 const el = document.getElementById('mem-' + key);
                 if (el) el.value = member[key] || '';
             });
+            // 강사 글자색: 저장값 있으면 적용, 없으면 기본색(#dc2626) 유지
+            const colorEl = document.getElementById('mem-teacher_color');
+            if (colorEl) {
+                const savedColor = String(member.teacher_color || '').trim();
+                colorEl.value = /^#[0-9a-fA-F]{6}$/.test(savedColor) ? savedColor : '#dc2626';
+            }
 
             // 구분 체크박스 복원
             if (typeof setGubunCheckboxes === 'function') setGubunCheckboxes(member.gubun || '');
@@ -12020,9 +12026,14 @@ MJ 이정우 팀장
         const isEdit = !!memberId;
 
         const data = {};
-        ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'telegram_enabled', 'kaib_date', 'kakao_name'].forEach(key => {
+        ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'telegram_enabled', 'kaib_date', 'kakao_name', 'teacher_nickname', 'teacher_color'].forEach(key => {
             data[key] = document.getElementById('mem-' + key)?.value || '';
         });
+        // 강사 아닌 회원은 닉네임/색상 저장 안 함 (실수 방지)
+        if (!String(data.gubun || '').includes('강사')) {
+            data.teacher_nickname = '';
+            data.teacher_color = '';
+        }
 
         // telegram_enabled 기본값: 값이 없으면 'N'으로 설정
         if (!data.telegram_enabled || data.telegram_enabled === '') {
