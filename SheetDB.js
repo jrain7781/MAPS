@@ -439,10 +439,13 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
   const oldMNameVal = String(oldValues.m_name || '').trim();
   const oldClassD1IdVal = String(oldValues.class_d1_id || '').trim();
 
-  // 초기화 조건: stu_member(=물건상태) 변경 OR m_name(회원명) 변경
-  // → 4키 룰(stu_member=추천 + chuchen_state=전달완료 + chuchen_date + bid_datetime_2) 깨뜨림
+  // 초기화 조건: stu_member(=물건상태) 변경 OR m_name(회원명) 변경 → 4키 룰 깨뜨림
+  // 정책: 추천 → 다른 상태(상품/미정/입찰/취소/검증) 전환은 chuchen만 정리, 회차/마감은 보존
+  //   - 타이머 바는 4키 룰의 stu==='추천' 깨져서 자동 사라짐
+  //   - class_d1_id/bid_datetime_2 보존 → 수업관리 회차/물건리스트 + 입찰일정에 그대로 표시
+  //   - 회원명(m_name)이 바뀌면 회차 자체를 끊어야 하므로 그땐 4키 모두 클리어
+  const isFromRecommendToOther = (oldValues.stu_member === '추천' && newStuMemberVal !== '추천');
   const stuMemberChanged =
-    (oldValues.stu_member === '추천' && newStuMemberVal !== '추천') ||
     (oldValues.stu_member !== '추천' && newStuMemberVal === '추천') ||
     (oldValues.stu_member === '입찰' && (newStuMemberVal === '미정' || newStuMemberVal === '상품'));
   const mNameChanged = (oldMNameVal !== newMNameVal);
@@ -456,6 +459,14 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
     newRowValues[17] = ''; // R: chuchen_date
     newRowValues[18] = ''; // S: class_d1_id
     newRowValues[19] = ''; // T: bid_datetime_2
+  } else if (isFromRecommendToOther) {
+    // 추천 → 상품/미정/입찰/취소/검증: chuchen_state/date + bid_datetime_2 클리어, class_d1_id만 보존
+    //   - 타이머 바·마감 카운트다운 안 보임 (4키 깨짐)
+    //   - 수업관리 물건리스트엔 그대로 (class_d1_id 살아있음)
+    //   - 다시 추천 상태로 돌릴 때 새 bid_datetime_2 입력 강제 → 옛 마감 시점과 혼동 방지
+    newRowValues[16] = ''; // chuchen_state
+    newRowValues[17] = ''; // chuchen_date
+    newRowValues[19] = ''; // bid_datetime_2
   } else if (newChuchenState) {
     newRowValues[16] = newChuchenState;
     if (newChuchenState === '신규') {
