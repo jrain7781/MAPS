@@ -16729,6 +16729,34 @@ ${token}
     let d1ItemsSelectedIds_ = new Set();
     let d1ItemsFilteredData_ = null;
 
+    // [물건 선택 모달] DB에서 allBiddingData 재조회 후 피커 리스트 다시 그리기
+    // 사용 시점: 회차에 등록된 물건을 삭제 후 다시 등록 시도할 때, 또는 다른 화면에서 변경된 데이터 반영 필요 시
+    function refreshD1ItemPickerData_() {
+        const btn = document.getElementById('d1picker-refresh-btn');
+        if (btn) { btn.disabled = true; btn.textContent = '갱신중...'; }
+        google.script.run
+            .withSuccessHandler(data => {
+                allBiddingData = Array.isArray(data) ? data.sort(dataComparator) : [];
+                dataCache = { data: allBiddingData, timestamp: Date.now() };
+                // 담당자 드롭다운 재구성
+                const mgSel = document.getElementById('d1picker-manager');
+                if (mgSel) {
+                    const cur = mgSel.value;
+                    const mgrs = [...new Set((allBiddingData||[]).map(it=>it.m_name_id||'').filter(Boolean))].sort();
+                    mgSel.innerHTML = '<option value="">담당자</option>' + mgrs.map(m=>`<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+                    mgSel.value = cur;
+                }
+                renderD1ItemPickerList();
+                if (btn) { btn.disabled = false; btn.textContent = '🔄 새로고침'; }
+                showStatus('물건 목록 갱신 완료', 'success');
+            })
+            .withFailureHandler(e => {
+                if (btn) { btn.disabled = false; btn.textContent = '🔄 새로고침'; }
+                showStatus('갱신 실패: ' + (e.message || e), 'error');
+            })
+            .readAllDataWithImageIds();
+    }
+
     function showD1ItemPickerModal() {
         if (!selectedClassD1Id || selectedClassD1Id === '__summary__') {
             showStatus('먼저 회차를 선택하세요.', 'error');
@@ -17202,16 +17230,17 @@ ${token}
             pct = Math.max(0, Math.min(100, (elapsed / total) * 100));
             cls = pct < 60 ? 'ok' : (pct < 85 ? 'warn' : 'late');
         }
-        const remainText = _fmtRemainDH_(deadline.getTime() - now);
         const deadlineIso = deadline.toISOString();
         const startIso = start.toISOString();
         const mm = String(deadline.getMonth()+1).padStart(2,'0');
         const dd = String(deadline.getDate()).padStart(2,'0');
         const hh = String(deadline.getHours()).padStart(2,'0');
         const mi = String(deadline.getMinutes()).padStart(2,'0');
-        const tooltip = `최종마감: ${mm}/${dd} ${hh}:${mi}`;
+        const deadlineText = `${mm}/${dd} ${hh}:${mi}`;
+        const remainText = _fmtRemainDH_(deadline.getTime() - now);
+        const tooltip = `최종마감: ${deadlineText} (남은 ${remainText})`;
         return `<div class="deadline-bar-cell" title="${tooltip}">
-            <div class="deadline-bar-remain text-[10px] text-gray-700 leading-tight mb-0.5">${remainText}</div>
+            <div class="deadline-bar-remain text-[10px] text-gray-700 leading-tight mb-0.5">${deadlineText}</div>
             <div class="deadline-bar-wrap" data-deadline="${deadlineIso}" data-start="${startIso}">
                 <div class="deadline-bar-fill ${cls}" style="width:${pct.toFixed(1)}%"></div>
             </div>
