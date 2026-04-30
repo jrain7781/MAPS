@@ -17018,17 +17018,23 @@ ${token}
         tbody.innerHTML = filtered.map(it => {
             const inCart    = d1PickerCart.some(c => String(c.id) === String(it.id));
             const alreadyIn = String(it.class_d1_id||'') === String(selectedClassD1Id||'');
+            // 입찰/추천/취소 상태는 다른 회차/회원에서 이미 사용 중 → 신규 회차 등록 금지
+            const lockedStatus = ['입찰','추천','취소'].includes(String(it.stu_member || '').trim());
+            const disabled = alreadyIn || lockedStatus;
             const imgDot = (it.image_ids || it.image_id)
                 ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>' : '';
             const statusCls = getStatusTagClass ? getStatusTagClass(it.stu_member) : '';
             const rowBg = inCart ? 'bg-indigo-50 border-l-4 border-indigo-400'
-                        : alreadyIn ? 'bg-gray-50 opacity-50' : '';
-            const cursor = alreadyIn ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-indigo-50 focus:outline-none focus:bg-indigo-100';
-            const tabIdx = alreadyIn ? '' : 'tabindex="0"';
-            const kd = alreadyIn ? '' : `onkeydown="d1PickerRowKeydown_(event,'${it.id}')"`;
+                        : disabled ? 'bg-gray-50 opacity-50' : '';
+            const cursor = disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-indigo-50 focus:outline-none focus:bg-indigo-100';
+            const tabIdx = disabled ? '' : 'tabindex="0"';
+            const kd = disabled ? '' : `onkeydown="d1PickerRowKeydown_(event,'${it.id}')"`;
+            const titleText = alreadyIn ? '이미 이 회차에 등록된 물건'
+                            : lockedStatus ? `'${it.stu_member}' 상태의 물건은 등록할 수 없습니다`
+                            : '클릭하면 우측에 추가됩니다';
             return `<tr class="${cursor} transition-colors ${rowBg}" ${tabIdx} ${kd}
-                onclick="${alreadyIn ? '' : `d1PickerClickRow('${it.id}')`}"
-                title="${alreadyIn ? '이미 이 회차에 등록된 물건' : '클릭하면 우측에 추가됩니다'}">
+                onclick="${disabled ? '' : `d1PickerClickRow('${it.id}')`}"
+                title="${escapeHtml(titleText)}">
                 <td class="item-col-date text-center text-gray-600 whitespace-nowrap">${escapeHtml(it['in-date']||'')}</td>
                 <td class="item-col-img text-center">${imgDot}</td>
                 <td class="item-col-sakun text-left font-medium ${inCart?'text-indigo-700':'text-gray-800'}">${escapeHtml(it.sakun_no||'')}</td>
@@ -17203,8 +17209,12 @@ ${token}
         dropdown.innerHTML = results.map(it => {
             const alreadyPending = d1PendingItems.some(p => String(p.id) === String(it.id));
             const alreadyIn = String(it.class_d1_id || '') === String(selectedClassD1Id || '');
-            const disabled = alreadyPending || alreadyIn;
-            const label = alreadyIn ? ' (등록됨)' : alreadyPending ? ' (추가됨)' : '';
+            const lockedStatus = ['입찰','추천','취소'].includes(String(it.stu_member || '').trim());
+            const disabled = alreadyPending || alreadyIn || lockedStatus;
+            const label = alreadyIn ? ' (등록됨)'
+                        : alreadyPending ? ' (추가됨)'
+                        : lockedStatus ? ` (${it.stu_member})`
+                        : '';
             return `<div class="px-3 py-1.5 text-sm cursor-pointer hover:bg-indigo-50 ${disabled ? 'text-gray-400' : 'text-gray-800'}"
                 onclick="${disabled ? '' : `addD1PendingItem('${it.id}')`}">
                 ${escapeHtml(it.sakun_no || '')} <span class="text-xs text-gray-400">${escapeHtml(it.court || '')}</span>${label}
