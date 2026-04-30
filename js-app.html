@@ -1053,16 +1053,30 @@
         return ` <span class="text-[9px] text-gray-500">(${escapeHtml(parts.join(' | '))})</span>`;
     }
     // ── 만기연장 모달 ──────────────────────────────────────────
-    let _extendDeadlineCtx_ = { itemIds: [], currentBd2: '' };
+    let _extendDeadlineCtx_ = { itemIds: [], currentBd2: '', currentStu: '' };
 
-    // 외부에서 호출: itemIds 배열 + 현재 bd2(yyMMddHHmm) 옵션
-    function openExtendDeadlineModal_(itemIds, currentBd2) {
+    // 외부에서 호출: itemIds 배열 + 현재 bd2(yyMMddHHmm) 옵션 + 현재 stu_member 상태(옵션)
+    function openExtendDeadlineModal_(itemIds, currentBd2, currentStu) {
         _extendDeadlineCtx_.itemIds = Array.isArray(itemIds) ? itemIds : [itemIds].filter(Boolean);
         _extendDeadlineCtx_.currentBd2 = String(currentBd2 || '').trim();
+        _extendDeadlineCtx_.currentStu = String(currentStu || '').trim();
         if (!_extendDeadlineCtx_.itemIds.length) { showStatus('대상 물건이 없습니다.', 'error'); return; }
 
         const countEl = document.getElementById('extend-deadline-count');
         if (countEl) countEl.textContent = _extendDeadlineCtx_.itemIds.length;
+
+        // 비추천 상태 → reactivate 안내 박스 표시
+        const noticeBox = document.getElementById('extend-deadline-reactivate-notice');
+        const noticeText = document.getElementById('extend-deadline-reactivate-notice-text');
+        const isReactivate = _extendDeadlineCtx_.currentStu && _extendDeadlineCtx_.currentStu !== '추천';
+        if (noticeBox && noticeText) {
+            if (isReactivate) {
+                noticeText.textContent = ` 현재 '${_extendDeadlineCtx_.currentStu}' 상태입니다. 만기연장하면 '추천' 상태로 자동 전환됩니다 (텔레그램 자동 발송 없음).`;
+                noticeBox.classList.remove('content-hidden');
+            } else {
+                noticeBox.classList.add('content-hidden');
+            }
+        }
 
         // 현재 마감 표시 + datetime-local 초기값
         let curDate = null;
@@ -1125,11 +1139,19 @@
         if (!newBd2) { showStatus('변환 실패', 'error'); return; }
 
         const ids = _extendDeadlineCtx_.itemIds;
+        const isReactivate = _extendDeadlineCtx_.currentStu && _extendDeadlineCtx_.currentStu !== '추천';
+        if (isReactivate) {
+            const ok = confirm(`현재 '${_extendDeadlineCtx_.currentStu}' 상태입니다.\n만기연장하면 '추천' 상태로 자동 전환됩니다.\n(텔레그램 자동 발송은 안 됩니다)\n\n계속 진행할까요?`);
+            if (!ok) return;
+        }
         showStatus('만기연장 처리 중...', 'warning');
         google.script.run
             .withSuccessHandler(res => {
                 if (res && res.success) {
-                    showStatus(`${res.updated}건 만기연장 완료`, 'success');
+                    const msg = res.reactivated
+                        ? `${res.updated}건 만기연장 완료 (추천 재활성화)`
+                        : `${res.updated}건 만기연장 완료`;
+                    showStatus(msg, 'success');
                     closeExtendDeadlineModal_();
                     // 화면 갱신: 현재 컨텍스트에 따라 재로드
                     if (typeof selectedClassD1Id !== 'undefined' && selectedClassD1Id && typeof loadD1Items === 'function') {
@@ -1141,7 +1163,7 @@
                 }
             })
             .withFailureHandler(err => showStatus('연장 오류: ' + err.message, 'error'))
-            .extendItemDeadline(ids, newBd2);
+            .extendItemDeadline(ids, newBd2, isReactivate);
     }
 
     // ── 만기연장 버튼: detail 패널/모달용 클릭 핸들러 + 가시성 토글 ──
@@ -1158,7 +1180,8 @@
         if (!id) { showStatus('저장된 물건만 연장 가능합니다.', 'error'); return; }
         const it = _findItemById_(id);
         const cur = it ? String(it.bid_datetime_2 || '').trim() : '';
-        openExtendDeadlineModal_([id], cur);
+        const stu = it ? String(it.stu_member || '').trim() : '';
+        openExtendDeadlineModal_([id], cur, stu);
     }
     function onClickExtendDeadlineModal_() {
         const idEl = document.getElementById('modalFormId');
@@ -1166,19 +1189,20 @@
         if (!id) { showStatus('저장된 물건만 연장 가능합니다.', 'error'); return; }
         const it = _findItemById_(id);
         const cur = it ? String(it.bid_datetime_2 || '').trim() : '';
-        openExtendDeadlineModal_([id], cur);
+        const stu = it ? String(it.stu_member || '').trim() : '';
+        openExtendDeadlineModal_([id], cur, stu);
     }
     function extendSelectedD1Items_() {
         const ids = (typeof d1ItemsSelectedIds_ !== 'undefined' && d1ItemsSelectedIds_)
             ? Array.from(d1ItemsSelectedIds_) : [];
         if (!ids.length) { showStatus('연장할 물건을 선택하세요.', 'error'); return; }
-        // 다건 선택 시 첫 물건의 bd2를 표시값으로 사용 (일괄 동일 적용)
-        let cur = '';
+        // 다건 선택 시 첫 물건의 bd2/stu를 대표값으로 사용 (일괄 동일 적용)
+        let cur = '', stu = '';
         if (typeof d1ItemsData !== 'undefined' && Array.isArray(d1ItemsData)) {
             const first = d1ItemsData.find(x => String(x.id) === String(ids[0]));
-            if (first) cur = String(first.bid_datetime_2 || '').trim();
+            if (first) { cur = String(first.bid_datetime_2 || '').trim(); stu = String(first.stu_member || '').trim(); }
         }
-        openExtendDeadlineModal_(ids, cur);
+        openExtendDeadlineModal_(ids, cur, stu);
     }
     // 물건상태(stu_member) 변경 시 만기연장 버튼/마감표시 토글
     function _refreshExtendBtn_(scope) {
@@ -1196,8 +1220,11 @@
         const it = id ? _findItemById_(id) : null;
         const cur = it ? String(it.bid_datetime_2 || '').trim() : '';
         const cs = it ? String(it.chuchen_state || '').trim() : '';
-        // 4키 충족 시에만 만기연장 의미가 있으므로 추천+전달완료+bd2 있음 조건
-        const showBtn = isRecommend && cs === '전달완료' && cur;
+        const classD1Id = it ? String(it.class_d1_id || '').trim() : '';
+        // 만기연장 노출 조건:
+        //   (A) 추천 + 전달완료 + bd2 있음  (단순 마감 연장)
+        //   (B) 비추천 + class_d1_id 있음   (수업 회차 등록 물건 → 추천 재활성화)
+        const showBtn = (isRecommend && cs === '전달완료' && cur) || (!isRecommend && classD1Id);
         if (showBtn) btn.classList.remove('hidden'); else btn.classList.add('hidden');
         if (info) {
             if (showBtn && /^\d{10}$/.test(cur)) {

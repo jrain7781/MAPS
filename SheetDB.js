@@ -4501,11 +4501,13 @@ function saveItemData(data, silent = false) {
  * @param {string} newBd2 새 마감 yyMMddHHmm (10자리)
  * @return {{success: boolean, updated: number, message?: string}}
  */
-function extendItemDeadline(itemIds, newBd2) {
+function extendItemDeadline(itemIds, newBd2, reactivate) {
   try {
     if (!itemIds || !itemIds.length) return { success: false, updated: 0, message: '대상 물건이 없습니다.' };
     const bd2 = String(newBd2 || '').trim();
     if (!/^\d{10}$/.test(bd2)) return { success: false, updated: 0, message: '잘못된 마감 형식 (yyMMddHHmm 10자리 필요)' };
+    const isReactivate = !!reactivate;
+    const nowIso = new Date().toISOString();
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(DB_SHEET_NAME);
     if (!sheet) return { success: false, updated: 0, message: '시트를 찾을 수 없습니다.' };
@@ -4515,6 +4517,7 @@ function extendItemDeadline(itemIds, newBd2) {
     const allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat().map(String);
     const affectedMembers = [];
     let updated = 0;
+    const noteText = isReactivate ? '만기연장 (추천 재활성화)' : '만기연장';
     idStrs.forEach(function(id) {
       const idx = allIds.indexOf(id);
       if (idx < 0) return;
@@ -4523,19 +4526,42 @@ function extendItemDeadline(itemIds, newBd2) {
       sheet.getRange(rowNum, 20).setValue(bd2); // T: bid_datetime_2
       const mid = String(sheet.getRange(rowNum, 9).getValue() || '').trim();
       const mName = String(sheet.getRange(rowNum, 7).getValue() || '').trim();
+
+      // reactivate: stu='추천', chuchen_state='전달완료', chuchen_date=now 도 같이 갱신
+      let oldStu = '', oldCs = '', oldCd = '';
+      if (isReactivate) {
+        oldStu = String(sheet.getRange(rowNum, 5).getValue() || '').trim();   // E: stu_member
+        oldCs  = String(sheet.getRange(rowNum, 17).getValue() || '').trim();  // Q: chuchen_state
+        oldCd  = String(sheet.getRange(rowNum, 18).getValue() || '').trim();  // R: chuchen_date
+        if (oldStu !== '추천')      sheet.getRange(rowNum, 5).setValue('추천');
+        if (oldCs !== '전달완료')   sheet.getRange(rowNum, 17).setValue('전달완료');
+                                     sheet.getRange(rowNum, 18).setValue(nowIso);
+      }
+
       if (mid && affectedMembers.indexOf(mid) === -1) affectedMembers.push(mid);
       try {
         writeItemHistory_({
-          action: 'FIELD_CHANGE',
-          item_id: id,
-          member_id: mid,
-          member_name: mName,
-          field_name: 'bid_datetime_2',
-          from_value: oldBd2,
-          to_value: bd2,
-          trigger_type: 'web',
-          note: '만기연장'
+          action: 'FIELD_CHANGE', item_id: id, member_id: mid, member_name: mName,
+          field_name: 'bid_datetime_2', from_value: oldBd2, to_value: bd2,
+          trigger_type: 'web', note: noteText
         });
+        if (isReactivate) {
+          if (oldStu !== '추천') writeItemHistory_({
+            action: 'FIELD_CHANGE', item_id: id, member_id: mid, member_name: mName,
+            field_name: 'stu_member', from_value: oldStu, to_value: '추천',
+            trigger_type: 'web', note: noteText
+          });
+          if (oldCs !== '전달완료') writeItemHistory_({
+            action: 'FIELD_CHANGE', item_id: id, member_id: mid, member_name: mName,
+            field_name: 'chuchen_state', from_value: oldCs, to_value: '전달완료',
+            trigger_type: 'web', note: noteText
+          });
+          writeItemHistory_({
+            action: 'FIELD_CHANGE', item_id: id, member_id: mid, member_name: mName,
+            field_name: 'chuchen_date', from_value: oldCd, to_value: nowIso,
+            trigger_type: 'web', note: noteText
+          });
+        }
       } catch(e) { /* 이력 실패는 무시 */ }
       updated++;
     });
@@ -4543,7 +4569,7 @@ function extendItemDeadline(itemIds, newBd2) {
       SpreadsheetApp.flush();
       try { invalidateMemberItemsCache_(affectedMembers); } catch(e) {}
     }
-    return { success: true, updated: updated };
+    return { success: true, updated: updated, reactivated: isReactivate };
   } catch(e) {
     return { success: false, updated: 0, message: e.message };
   }
