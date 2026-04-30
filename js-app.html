@@ -13142,8 +13142,10 @@ ${token}
                 // 2차마감시간 포맷 (MM/DD(요일) HH시)
                 function fmtBidShort_(v) {
                     if (!v) return '-';
-                    const dt = new Date(String(v).replace('T', ' '));
+                    let dt = new Date(String(v).replace('T', ' '));
                     if (isNaN(dt.getTime())) return '-';
+                    // 추천만료(bid_datetime_2)는 토/일 14시 보정 적용
+                    if (typeof adjustFinalDeadline_ === 'function') dt = adjustFinalDeadline_(dt);
                     const mm = String(dt.getMonth() + 1).padStart(2, '0');
                     const dd = String(dt.getDate()).padStart(2, '0');
                     const hh = String(dt.getHours()).padStart(2, '0');
@@ -13162,10 +13164,11 @@ ${token}
                     `<li>• 추천만료: ${fmtBidShort_(d.bid_datetime_2)}</li>` +
                     `<li>• ${itemCount}건 / <span${teacherColorStyleCard}>${escapeHtml(teacherNameCard)}</span></li>`;
 
-                function fmtBidDt_(v) {
+                function fmtBidDt_(v, adjustWeekend) {
                     if (!v) return '-';
-                    const dt = new Date(String(v));
+                    let dt = new Date(String(v));
                     if (isNaN(dt.getTime())) return '-';
+                    if (adjustWeekend && typeof adjustFinalDeadline_ === 'function') dt = adjustFinalDeadline_(dt);
                     const yy = String(dt.getFullYear()).substring(2);
                     const mm = String(dt.getMonth() + 1).padStart(2, '0');
                     const dd = String(dt.getDate()).padStart(2, '0');
@@ -13173,7 +13176,7 @@ ${token}
                     const dow = DAY_NAMES_[dt.getDay()];
                     return `${yy}/${mm}/${dd} (${dow}) ${hh}시`;
                 }
-                const tooltipHtml = `등록: ${fmtBidDt_(d.bid_starttime)}&#10;1차: ${fmtBidDt_(d.bid_datetime_1)}&#10;2차: ${fmtBidDt_(d.bid_datetime_2)}`;
+                const tooltipHtml = `등록: ${fmtBidDt_(d.bid_starttime)}&#10;1차: ${fmtBidDt_(d.bid_datetime_1)}&#10;2차: ${fmtBidDt_(d.bid_datetime_2, true)}`;
 
                 return d1Card_(cls, titleCls, textCls, badge,
                     titleHtml_, body,
