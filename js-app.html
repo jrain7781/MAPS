@@ -17338,7 +17338,9 @@ ${token}
             <table id="d1ItemsTable" class="min-w-full text-xs">
             <thead class="bg-gray-50 border-b-2 border-gray-300">
                 <tr class="text-sm">
-                    <th class="item-col-check text-center font-bold text-gray-700 py-2.5"></th>
+                    <th class="item-col-check text-center font-bold text-gray-700 py-2.5" onclick="event.stopPropagation()">
+                        <input type="checkbox" id="d1ItemsHeaderCheck" class="rounded" onchange="d1ItemsToggleAll_(this.checked)" title="전체 선택/해제">
+                    </th>
                     <th class="item-col-date text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('in-date')">일자${arrow('in-date')}</th>
                     <th class="item-col-img text-center font-bold text-gray-700 py-2.5">IMG</th>
                     <th class="item-col-sakun text-left font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
@@ -17353,6 +17355,7 @@ ${token}
             <tbody class="divide-y divide-gray-100 bg-white">${tbodyHtml}</tbody>
             </table></div>`;
         setTimeout(function() { initTableColResize_(document.getElementById('d1ItemsTable'), 'd1items_col_widths'); }, 50);
+        d1ItemsSyncHeaderCheck_();
     }
 
     function d1ItemsSort_(key) {
@@ -17430,6 +17433,37 @@ ${token}
         if (checked) d1ItemsSelectedIds_.add(String(id));
         else d1ItemsSelectedIds_.delete(String(id));
         d1ItemsUpdateDeleteBtn_();
+        d1ItemsSyncHeaderCheck_();
+    }
+
+    // 전체 선택/해제: 현재 표시된(필터 적용된) 모든 행 토글
+    function d1ItemsToggleAll_(checked) {
+        const data = d1ItemsFilteredData_ !== null ? d1ItemsFilteredData_ : d1ItemsData;
+        if (checked) {
+            data.forEach(item => d1ItemsSelectedIds_.add(String(item.id)));
+        } else {
+            data.forEach(item => d1ItemsSelectedIds_.delete(String(item.id)));
+        }
+        renderD1Items();
+    }
+
+    // 헤더 체크박스 상태 동기화 (전체/일부/없음 → checked/indeterminate/unchecked)
+    function d1ItemsSyncHeaderCheck_() {
+        const headEl = document.getElementById('d1ItemsHeaderCheck');
+        if (!headEl) return;
+        const data = d1ItemsFilteredData_ !== null ? d1ItemsFilteredData_ : d1ItemsData;
+        if (!data || data.length === 0) {
+            headEl.checked = false;
+            headEl.indeterminate = false;
+            headEl.disabled = true;
+            return;
+        }
+        headEl.disabled = false;
+        const total = data.length;
+        let selected = 0;
+        data.forEach(item => { if (d1ItemsSelectedIds_.has(String(item.id))) selected++; });
+        headEl.checked = selected === total;
+        headEl.indeterminate = selected > 0 && selected < total;
     }
 
     function d1ItemsUpdateDeleteBtn_() {
