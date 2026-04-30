@@ -5879,6 +5879,94 @@ function getDisplayNameMap() {
 }
 
 /**
+ * [관리자용 일회성 데이터 정리]
+ * items.m_name_id에 본명("전제혁")으로 저장된 옛 데이터를 닉네임("전부쌤")으로 일괄 변환
+ *
+ * 사용:
+ *   migrateItemsMNameIdToNickname(true)   // dry-run: 변경 카운트만 보고
+ *   migrateItemsMNameIdToNickname(false)  // 실제 적용
+ *
+ * 매칭 규칙:
+ *   - members 강사 중 teacher_nickname이 비어있지 않은 회원만 대상
+ *   - items.m_name_id === member_name 매칭 시 → teacher_nickname으로 갱신
+ *   - 이미 닉네임으로 저장된 행은 건드리지 않음
+ *   - 강사가 아니거나 닉네임 없는 회원의 본명은 그대로 유지
+ *
+ * 트리거 우회: setValues 직접 호출 (이력 시트 트리거 안 거침)
+ *
+ * @param {boolean} dryRun
+ * @returns {{success, dryRun, totalRows, changed, samples, message?}}
+ */
+function migrateItemsMNameIdToNickname(dryRun) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'items 시트 없음' };
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, dryRun: !!dryRun, totalRows: 0, changed: 0, samples: [] };
+
+    const mNameIdCol = ITEM_HEADERS.indexOf('m_name_id') + 1; // F=6
+    const range = sheet.getRange(2, mNameIdCol, lastRow - 1, 1);
+    const values = range.getValues();
+
+    // members 시트에서 강사 본명→닉네임 매핑 build
+    const mSheet = ss.getSheetByName(DB_MEMBERS_SHEET_NAME);
+    if (!mSheet) return { success: false, message: 'members 시트 없음' };
+    const mLastRow = mSheet.getLastRow();
+    if (mLastRow < 2) return { success: true, dryRun: !!dryRun, totalRows: values.length, changed: 0, samples: [] };
+    const colsToRead = Math.min(mSheet.getMaxColumns(), ITEM_MEMBER_HEADERS.length);
+    const mData = mSheet.getRange(2, 1, mLastRow - 1, colsToRead).getValues();
+    const gubunIdx = ITEM_MEMBER_HEADERS.indexOf('gubun');
+    const nameIdx = ITEM_MEMBER_HEADERS.indexOf('member_name');
+    const nickIdx = ITEM_MEMBER_HEADERS.indexOf('teacher_nickname');
+
+    const nameToNickname = {};
+    mData.forEach(row => {
+      const gubun = String(row[gubunIdx] || '');
+      if (!gubun.split(',').map(s => s.trim()).includes('강사')) return;
+      const name = String(row[nameIdx] || '').trim();
+      const nick = (nickIdx >= 0 && nickIdx < row.length) ? String(row[nickIdx] || '').trim() : '';
+      if (!name || !nick) return; // 닉네임 없는 강사는 변환 대상 아님
+      if (name === nick) return; // 본명 == 닉네임이면 변환 의미 없음
+      if (!(name in nameToNickname)) nameToNickname[name] = nick;
+    });
+
+    let changed = 0;
+    const samples = [];
+    const newValues = values.map(([v]) => {
+      const t = String(v || '').trim();
+      if (!t) return [v];
+      const newVal = nameToNickname[t];
+      if (newVal && newVal !== t) {
+        if (samples.length < 10) samples.push({ from: t, to: newVal });
+        changed++;
+        return [newVal];
+      }
+      return [v];
+    });
+
+    if (!dryRun && changed > 0) {
+      range.setValues(newValues);
+      SpreadsheetApp.flush();
+    }
+
+    Logger.log('[migrateItemsMNameIdToNickname] dryRun=' + !!dryRun + ' totalRows=' + values.length + ' changed=' + changed);
+    return {
+      success: true,
+      dryRun: !!dryRun,
+      totalRows: values.length,
+      changed,
+      mappingCount: Object.keys(nameToNickname).length,
+      mapping: nameToNickname,
+      samples
+    };
+  } catch (e) {
+    Logger.log('[migrateItemsMNameIdToNickname] 오류: ' + e.message);
+    return { success: false, message: e.message };
+  }
+}
+
+/**
  * members 시트에서 강사 표시명 매핑 build (서버측 룩업)
  * 닉네임/본명 둘 다 키로 사용 → 닉네임 표시값 반환
  * @returns {Object} { '대표님': '대표님', '전제혁': '전부쌤', ... }
