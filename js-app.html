@@ -1476,7 +1476,17 @@
                 }
                 cell.className = 'item-col-member text-center';
                 cell = row.insertCell(8);
-                cell.textContent = String(item.m_name_id || '').trim();
+                {
+                    const _r = resolveTeacherDisplay_(item.m_name_id);
+                    cell.textContent = _r.display;
+                    if (_r.color) {
+                        cell.style.color = _r.color;
+                        cell.style.fontWeight = '600';
+                    } else {
+                        cell.style.color = '';
+                        cell.style.fontWeight = '';
+                    }
+                }
                 cell.className = 'item-col-manager text-center';
                 cell = row.insertCell(9);
                 {
@@ -2275,7 +2285,9 @@
                     bids.forEach(bid => {
                         const bidprice = bid.bidprice || 0;
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
-                        const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
+                        const _bidT = resolveTeacherDisplay_(bid.m_name_id);
+                        const mNameDisplay = _bidT.display || '대표님';
+                        const mNameStyle = _bidT.color ? `style="color:${_bidT.color};font-weight:600"` : (mNameDisplay !== '대표님' ? `style="color:#dc2626;font-weight:600"` : '');
                         const mNameValue = bid.m_name || '';
                         const mNameHtml = _buildBidMNameHtml_(bid);
                         const mNameInfoHtml = _buildBidMemberInlineInfo_(bid);
@@ -2326,7 +2338,7 @@
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div></div>
                               <div class="border-l border-gray-200 flex flex-col" style="min-width:42%">
-                                <div class="px-2 py-1 text-[10px] text-gray-700 border-b border-gray-200 whitespace-nowrap"><span class="${courtButtonClass}">${bid.court || '미상'}</span><span class="mx-1 text-gray-400">/</span><span class="font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                                <div class="px-2 py-1 text-[10px] text-gray-700 border-b border-gray-200 whitespace-nowrap"><span class="${courtButtonClass}">${bid.court || '미상'}</span><span class="mx-1 text-gray-400">/</span><span class="font-bold" ${mNameStyle}>${escapeHtml(mNameDisplay)}</span></div>
                                 <div class="px-2 py-1 text-xs font-bold ${bidPriceMobileClass} whitespace-nowrap">${bidpriceFormatted}</div>
                               </div>
                             </div>
@@ -2342,7 +2354,7 @@
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="bot" onclick="event.stopPropagation()"></div>
-                              <div class="bid-court-cell"><span class="${courtButtonClass}">${bid.court || '미상'}</span> / <span class="${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                              <div class="bid-court-cell"><span class="${courtButtonClass}">${bid.court || '미상'}</span> / <span ${mNameStyle}>${escapeHtml(mNameDisplay)}</span></div>
                               <div class="bid-price-cell ${bidPricePcClass}">${bidpriceFormatted}</div>
                             </div>
                             ${timerBarHtml ? `<div style="padding:0">${timerBarHtml}</div>` : ''}
@@ -2518,7 +2530,9 @@
                 bids.forEach(bid => {
                     const bidprice = bid.bidprice || 0;
                     const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
-                    const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
+                    const _bidT = resolveTeacherDisplay_(bid.m_name_id);
+                    const mNameDisplay = _bidT.display || '대표님';
+                    const mNameStyle = _bidT.color ? `style="color:${_bidT.color};font-weight:600"` : (mNameDisplay !== '대표님' ? `style="color:#dc2626;font-weight:600"` : '');
                     const mNameValue = bid.m_name || '';
                     const mNameHtml = _buildBidMNameHtml_(bid);
                     const mNameInfoHtml = _buildBidMemberInlineInfo_(bid);
@@ -2562,7 +2576,7 @@
                         <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                           <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1">${dupSakunHtml(bid)}</div></div>
                           <div class="border-l border-gray-200 flex flex-col" style="min-width:42%">
-                            <div class="px-2 py-1 text-[10px] text-gray-700 border-b border-gray-200 whitespace-nowrap"><span class="${courtButtonClass}">${bid.court || '미상'}</span><span class="mx-1 text-gray-400">/</span><span class="font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                            <div class="px-2 py-1 text-[10px] text-gray-700 border-b border-gray-200 whitespace-nowrap"><span class="${courtButtonClass}">${bid.court || '미상'}</span><span class="mx-1 text-gray-400">/</span><span class="font-bold" ${mNameStyle}>${escapeHtml(mNameDisplay)}</span></div>
                             <div class="px-2 py-1 text-xs font-bold ${bidPriceMobileClass} whitespace-nowrap">${bidpriceFormatted}</div>
                           </div>
                         </div>
@@ -2577,7 +2591,7 @@
                         <div class="bid-card-bottom">
                           <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div></div>
                           <div class="bid-bid-col-resizer" data-bid-section="bot" onclick="event.stopPropagation()"></div>
-                          <div class="bid-court-cell"><span class="${courtButtonClass}">${bid.court || '미상'}</span> / <span class="${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                          <div class="bid-court-cell"><span class="${courtButtonClass}">${bid.court || '미상'}</span> / <span ${mNameStyle}>${escapeHtml(mNameDisplay)}</span></div>
                           <div class="bid-price-cell ${bidPricePcClass}">${bidpriceFormatted}</div>
                         </div>
                       </div>
@@ -2986,7 +3000,9 @@
                     bids.forEach(bid => {
                         const bidprice = bid.bidprice || 0;
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
-                        const mNameIdClass = (bid.m_name_id !== '대표님' && bid.m_name_id !== null && bid.m_name_id !== undefined && bid.m_name_id !== '') ? 'm-name-id-red' : '';
+                        const _bidT = resolveTeacherDisplay_(bid.m_name_id);
+                        const mNameDisplay = _bidT.display || '대표님';
+                        const mNameStyle = _bidT.color ? `style="color:${_bidT.color};font-weight:600"` : (mNameDisplay !== '대표님' ? `style="color:#dc2626;font-weight:600"` : '');
                         const mNameValue = bid.m_name || '';
                         const mNameHtml = _buildBidMNameHtml_(bid);
                         const mNameInfoHtml = _buildBidMemberInlineInfo_(bid);
@@ -3022,7 +3038,7 @@
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
                               <div class="text-indigo-600 font-bold text-xs flex-1 min-w-0 break-all py-2 px-3 flex items-start">${imgButtonHtml}<div class="min-w-0 flex-1"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div></div>
                               <div class="border-l border-gray-200 flex flex-col" style="min-width:42%">
-                                <div class="px-2 py-1 text-[10px] text-gray-700 border-b border-gray-200 whitespace-nowrap"><span class="${courtButtonClass}">${bid.court || '미상'}</span><span class="mx-1 text-gray-400">/</span><span class="font-bold ${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                                <div class="px-2 py-1 text-[10px] text-gray-700 border-b border-gray-200 whitespace-nowrap"><span class="${courtButtonClass}">${bid.court || '미상'}</span><span class="mx-1 text-gray-400">/</span><span class="font-bold" ${mNameStyle}>${escapeHtml(mNameDisplay)}</span></div>
                                 <div class="px-2 py-1 text-xs font-bold ${bidPriceMobileClass} whitespace-nowrap">${bidpriceFormatted}</div>
                               </div>
                             </div>
@@ -3041,7 +3057,7 @@
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="bot" onclick="event.stopPropagation()"></div>
-                              <div class="bid-court-cell"><span class="${courtButtonClass}">${bid.court || '미상'}</span> / <span class="${mNameIdClass}">${bid.m_name_id || '대표님'}</span></div>
+                              <div class="bid-court-cell"><span class="${courtButtonClass}">${bid.court || '미상'}</span> / <span ${mNameStyle}>${escapeHtml(mNameDisplay)}</span></div>
                               <div class="bid-price-cell ${bidPricePcClass}">${bidpriceFormatted}</div>
                             </div>
                             ${timerBarHtml2 ? `<div style="padding:0">${timerBarHtml2}</div>` : ''}
