@@ -6735,8 +6735,13 @@ MJ 이정우 팀장
         }
     }
 
-    // --- [Calendar] 자동 갱신 폴링 (15초, BiddingSchedule 탭 활성 시) ---
+    // --- [Calendar] 자동 갱신 폴링 (60초, BiddingSchedule 탭 활성 시) ---
+    // 방법1: 서버 데이터와 현재 allBiddingData를 JSON 문자열 비교 → 변경 없으면 렌더 스킵 (덜커덕 방지)
     let calendarPoller_ = null;
+
+    function _biddingDataSignature_(arr) {
+        try { return JSON.stringify(arr); } catch (e) { return null; }
+    }
 
     function startCalendarPolling_() {
         if (IS_MEMBER_VIEW) return;
@@ -6744,8 +6749,37 @@ MJ 이정우 팀장
         calendarPoller_ = setInterval(() => {
             const cal = document.getElementById('BiddingSchedule');
             if (!cal || cal.classList.contains('content-hidden')) return;
-            try { loadDataAndRenderCalendar(true, true); } catch (e) { } // 서버에서 최신 데이터 조용히 갱신 (스크롤 위치 유지)
-        }, 15000); // 15초마다 자동 갱신
+            if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+            try {
+                google.script.run
+                    .withSuccessHandler(data => {
+                        if (!Array.isArray(data)) return;
+                        const sorted = data.sort(dataComparator);
+                        const newSig = _biddingDataSignature_(sorted);
+                        const curSig = _biddingDataSignature_(allBiddingData);
+                        // 변경 없음 → 렌더 스킵 (화면 흔들림 없음)
+                        if (newSig !== null && newSig === curSig) {
+                            dataCache = { data: allBiddingData, timestamp: Date.now() };
+                            return;
+                        }
+                        // 변경 감지 → 데이터 갱신 + 스크롤 보존 렌더
+                        allBiddingData = sorted;
+                        dataCache = { data: allBiddingData, timestamp: Date.now() };
+                        const _calWV = document.getElementById('calendar-week-view');
+                        const _savedScroll = _calWV ? _calWV.scrollTop : null;
+                        if (typeof updateDashboardFilterOptions === 'function') updateDashboardFilterOptions();
+                        renderCalendar();
+                        if (_savedScroll !== null) {
+                            setTimeout(() => {
+                                const v = document.getElementById('calendar-week-view');
+                                if (v) v.scrollTop = _savedScroll;
+                            }, 150);
+                        }
+                    })
+                    .withFailureHandler(() => { /* silent */ })
+                    .readAllDataWithImageIds();
+            } catch (e) { }
+        }, 60000); // 60초마다 자동 갱신
     }
 
     function stopCalendarPolling_() {
@@ -7793,9 +7827,8 @@ MJ 이정우 팀장
 
         // 마우스 휠 이벤트 핸들러
         const wheelHandler = (e) => {
-            // 위로 스크롤 시도 (deltaY < 0)이고 맨 위에 있을 때
+            // 위로 스크롤 시도 (deltaY < 0)이고 맨 위에 있을 때 → 이전 주 추가 로드
             if (e.deltaY < 0 && calendarWeekView.scrollTop <= 5) { // 5px 여유를 둠
-                // 아직 이전 주를 모두 로드하지 않았을 때
                 if (numWeeksBefore < 12 && !isLoadingPreviousWeeks) {
                     e.preventDefault(); // 기본 스크롤 방지
                     loadPreviousWeeks(4); // 4주씩 추가
@@ -15308,7 +15341,7 @@ ${token}
         }
     }
 
-    // TO(수업 종료시간) → 최종마감 +48H 동기화 (PT/돈클 전용), 주말/공휴일이면 다음 평일 14:00
+    // TO(수업 종료시간) → 최종마감 +48H 동기화 (PT/돈클 전용), 토/일이면 다음 평일 14:00
     function syncBidFinalFromTimeTo_(prefix) {
         if (_currentGenD1Type !== 'PT' && _currentGenD1Type !== '돈클') return;
         const ampm = document.getElementById(prefix + '-timeTo-ampm')?.value || '';
@@ -15320,7 +15353,7 @@ ${token}
         const ampmEl = document.getElementById(bid2Prefix + '-ampm');
         const hEl = document.getElementById(bid2Prefix + '-h');
         const mEl = document.getElementById(bid2Prefix + '-m');
-        // class_date 기준 +2일 가상 Date 계산 → 주말/공휴일 판정
+        // class_date 기준 +2일 가상 Date 계산 → 토/일 판정
         const classDateStr = document.getElementById(prefix + '-classDate')?.value || '';
         let dayOff = 2;
         let finalAmpm = ampm;
@@ -15468,7 +15501,8 @@ ${token}
         teachers.forEach(m => {
             const opt = document.createElement('option');
             opt.value = m.member_id;
-            opt.textContent = m.member_name;
+            const nick = String(m.teacher_nickname || '').trim();
+            opt.textContent = nick || m.member_name;
             sel.appendChild(opt);
         });
     }
@@ -15487,25 +15521,17 @@ ${token}
 
     const _D1_DAY = ['일','월','화','수','목','금','토'];
 
-    // 한국 공휴일 (YYYY-MM-DD) — 필요 시 추가. 주말과 동일하게 다음 평일 14:00으로 밀림.
-    const _KR_HOLIDAYS = new Set([
-        '2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-03-01','2026-03-02',
-        '2026-05-05','2026-05-24','2026-05-25','2026-06-03','2026-06-06','2026-08-15','2026-08-17',
-        '2026-09-24','2026-09-25','2026-09-26','2026-10-03','2026-10-05','2026-10-09','2026-12-25'
-    ]);
-    function _isKRHolidayOrWeekend(dt) {
+    function _isWeekend_(dt) {
         if (!dt || isNaN(dt.getTime())) return false;
         const w = dt.getDay();
-        if (w === 0 || w === 6) return true;
-        const ymd = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
-        return _KR_HOLIDAYS.has(ymd);
+        return w === 0 || w === 6;
     }
-    // 주말·공휴일이면 다음 평일 오후 2시로 이동 (최대 7일 전진)
+    // 토·일이면 다음 평일 오후 2시로 이동 (공휴일은 보정 대상 아님)
     function adjustFinalDeadline_(dt) {
         if (!dt || isNaN(dt.getTime())) return dt;
         const out = new Date(dt.getTime());
         let shifted = false;
-        for (let i = 0; i < 7 && _isKRHolidayOrWeekend(out); i++) {
+        for (let i = 0; i < 2 && _isWeekend_(out); i++) {
             out.setDate(out.getDate() + 1);
             shifted = true;
         }
@@ -15612,7 +15638,7 @@ ${token}
         const ampmEl = document.getElementById('editD1-bidDatetime2-ampm');
         const hEl = document.getElementById('editD1-bidDatetime2-h');
         const mEl = document.getElementById('editD1-bidDatetime2-m');
-        // class_date 기준 +2일 가상 Date 계산 → 주말/공휴일 판정
+        // class_date 기준 +2일 가상 Date 계산 → 토/일 판정
         const classDateStr = document.getElementById('editD1-classDate')?.value || '';
         let dayOff = 2;
         let finalAmpm = ampm;
@@ -17780,7 +17806,7 @@ ${token}
         } else {
             rule = '📌 최종마감: 수업 유형별 설정 시각 기준';
         }
-        el.innerHTML = rule + ' <span class="text-gray-400">·</span> 주말·공휴일이면 <span class="font-semibold text-amber-700">다음 평일 오후 2시</span>로 자동 조정';
+        el.innerHTML = rule + ' <span class="text-gray-400">·</span> 토·일요일이면 <span class="font-semibold text-amber-700">다음 평일 오후 2시</span>로 자동 조정';
     }
 
     // 신규물건 등록 폼 - 종목별 UI 갱신 및 대표 회원 자동 연동
