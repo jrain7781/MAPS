@@ -73,6 +73,7 @@
     const formSakunNo = document.getElementById('form-sakun-no');
     const formCourt = document.getElementById('form-court');
     const formStuMember = document.getElementById('form-stu-member');
+    const formYongdo = document.getElementById('form-youngdo');
     const formMName = document.getElementById('form-m-name');
     const formMemberId = document.getElementById('form-member-id');
     const formMNameId = document.getElementById('form-m-name-id');
@@ -140,6 +141,7 @@
     const modalFormSakunNo = document.getElementById('modal-form-sakun-no');
     const modalFormCourt = document.getElementById('modal-form-court');
     const modalFormStuMember = document.getElementById('modal-form-stu-member');
+    const modalFormYongdo = document.getElementById('modal-form-youngdo');
     const modalFormMName = document.getElementById('modal-form-m-name');
     const modalFormMemberId = document.getElementById('modal-form-member-id');
     const modalFormMNameId = document.getElementById('modal-form-m-name-id');
@@ -547,8 +549,13 @@
 
     // 데이터 정렬 함수
     function _sakunNum(sakun) {
-        const m = String(sakun || '').match(/\d+/);
-        return m ? parseInt(m[0], 10) : 0;
+        // 사건번호의 모든 숫자 추출 (연도 + 사건번호 등)
+        const nums = String(sakun || '').match(/\d+/g) || [];
+        // 첫 번째 숫자(연도)와 마지막 숫자(사건번호)로 단일 정렬키 합성
+        // year * 10_000_000 + caseNo  → 연도 우선, 같은 연도 내 사건번호 자연수 순
+        const year = nums[0] ? parseInt(nums[0], 10) : 0;
+        const caseNo = nums[nums.length - 1] && nums.length > 1 ? parseInt(nums[nums.length - 1], 10) : 0;
+        return year * 10000000 + caseNo;
     }
 
     function dataComparator(a, b) {
@@ -1320,6 +1327,37 @@
         }
     }
 
+    // 물건용도 (items_youngdo) — 하드코딩 옵션, 표시 라벨, 태그 클래스, 탭별 허용 규칙
+    const YONGDO_OPTIONS = ['플레티넘', '블랙', '실버', '수익', '월세', '기타'];
+    const YONGDO_PRE_LABEL = '등록전'; // 빈값 표시 라벨
+    function getYongdoDisplayLabel(value) {
+        const v = String(value || '').trim();
+        return v === '' ? YONGDO_PRE_LABEL : v;
+    }
+    function getYongdoTagClass(value) {
+        const v = String(value || '').trim();
+        switch (v) {
+            case '플레티넘': return 'yongdo-tag yongdo-tag-platinum';
+            case '블랙': return 'yongdo-tag yongdo-tag-black';
+            case '실버': return 'yongdo-tag yongdo-tag-silver';
+            case '수익': return 'yongdo-tag yongdo-tag-income';
+            case '월세': return 'yongdo-tag yongdo-tag-rent';
+            case '기타': return 'yongdo-tag yongdo-tag-other';
+            default: return 'yongdo-tag yongdo-tag-pre'; // 빈값 = 등록전
+        }
+    }
+    // D1 picker 탭별 등록 가능 용도 (CLASS / PT / 돈클)
+    // CLASS: 빈값 + 기타 / PT: 플레티넘·블랙·실버·기타·빈값 / 돈클: 수익·월세·기타·빈값
+    function getAllowedYongdoForClassType(classType) {
+        const t = String(classType || '').trim().toUpperCase();
+        if (t === 'PT') return new Set(['플레티넘', '블랙', '실버', '기타', '']);
+        if (t === '돈클' || t === 'DONCLE') return new Set(['수익', '월세', '기타', '']);
+        return new Set(['기타', '']); // CLASS 또는 미상
+    }
+    function isYongdoAllowedForClassType(value, classType) {
+        return getAllowedYongdoForClassType(classType).has(String(value || '').trim());
+    }
+
     // 오늘 이후 모든 데이터 날짜 추출
     function getWorkingDaysFromToday() {
         const today = new Date();
@@ -1414,7 +1452,7 @@
             if (allBiddingData.length > 0) {
                 let msg = "검색어와 일치하는 데이터가 없습니다.";
                 if (dashboardFilter.active) msg = "해당 필터 조건에 맞는 데이터가 없습니다.";
-                dataTableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-gray-500">${msg}</td></tr>`;
+                dataTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500">${msg}</td></tr>`;
             } else {
                 if (noDataMessage) noDataMessage.classList.remove('content-hidden');
             }
@@ -1484,11 +1522,20 @@
                 cell = row.insertCell(4);
                 cell.textContent = String(item.court || '').trim();
                 cell.className = 'item-col-court text-left';
+                // [신규] 용도 셀 (상태 앞)
                 cell = row.insertCell(5);
+                {
+                    const yongdoVal = item.items_youngdo || '';
+                    const yongdoCls = getYongdoTagClass(yongdoVal);
+                    const yongdoLabel = getYongdoDisplayLabel(yongdoVal);
+                    cell.innerHTML = `<span class="${yongdoCls}">${yongdoLabel}</span>`;
+                }
+                cell.className = 'item-col-youngdo text-center';
+                cell = row.insertCell(6);
                 const statusClass = getStatusTagClass(item.stu_member);
                 cell.innerHTML = `<span class="${statusClass}">${item.stu_member}</span>`;
                 cell.className = 'item-col-status text-center';
-                cell = row.insertCell(6);
+                cell = row.insertCell(7);
                 {
                     const tEnabled = getMemberTelegramEnabled_(item.member_id);
                     const tBidState = String(item.bid_state || '').trim();
@@ -1496,13 +1543,13 @@
                     cell.innerHTML = tEnabled === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                 }
                 cell.className = 'item-col-telegram text-center';
-                cell = row.insertCell(7);
+                cell = row.insertCell(8);
                 {
                     const base = String(item.m_name || '').trim();
                     cell.textContent = base;
                 }
                 cell.className = 'item-col-member text-center';
-                cell = row.insertCell(8);
+                cell = row.insertCell(9);
                 {
                     const _r = resolveTeacherDisplay_(item.m_name_id);
                     cell.textContent = _r.display;
@@ -1515,22 +1562,24 @@
                     }
                 }
                 cell.className = 'item-col-manager text-center';
-                cell = row.insertCell(9);
+                cell = row.insertCell(10);
                 {
                     const bp = item.bidprice || 0;
                     const bpNum = parseInt(String(bp).replace(/,/g, ''), 10);
                     cell.textContent = (bpNum > 0) ? new Intl.NumberFormat('ko-KR').format(bpNum) + '원' : '';
+                    // 입찰일정 카드와 동일한 색상 규칙: 신규/빈값은 빨강, 전달완료·확인완료는 기본
+                    const isNewBid = (item.bid_state === '신규' || !item.bid_state);
+                    cell.className = isNewBid ? 'item-col-bidprice bidprice-cell text-red-600' : 'item-col-bidprice bidprice-cell';
                 }
-                cell.className = 'item-col-bidprice';
 
                 // 전송 컬럼이 있다면 제거 (즉시 실행)
                 const existingActionCells = row.querySelectorAll('.item-col-action');
                 existingActionCells.forEach(c => c.remove());
 
-                // 혹시 모를 추가 셀 제거 (11번째 셀 이상) - 안전하게
-                while (row.cells && row.cells.length > 10) {
+                // 혹시 모를 추가 셀 제거 (12번째 셀 이상) - 안전하게
+                while (row.cells && row.cells.length > 11) {
                     try {
-                        row.deleteCell(10);
+                        row.deleteCell(11);
                     } catch (e) {
                         break;
                     }
@@ -3778,6 +3827,7 @@
         if (formCourt) formCourt.value = '';
         if (formBidPrice) formBidPrice.value = '';
         if (formMName) formMName.value = '';
+        if (formYongdo) formYongdo.value = ''; // 신규 등록은 등록전(빈값)으로 시작
         if (formMemberId) formMemberId.value = '';
         const formMName2El = document.getElementById('form-m-name2');
         if (formMName2El) formMName2El.value = '';
@@ -3976,6 +4026,7 @@
             }
             if (formCourt) formCourt.value = data.court || '';
             if (formStuMember) formStuMember.value = data.stu_member || '미정';
+            if (formYongdo) formYongdo.value = data.items_youngdo || ''; // 빈값 = 등록전
             if (formMemberId) formMemberId.value = data.member_id || '';
             if (itemMemberTokenEl) itemMemberTokenEl.value = '';
             // [수정] items 시트의 m_name 우선순위 적용 (없을 경우에만 회원 DB 참조)
@@ -5351,6 +5402,7 @@
         }
         if (modalFormCourt) modalFormCourt.value = data.court || '';
         if (modalFormStuMember) modalFormStuMember.value = data.stu_member || '미정';
+        if (modalFormYongdo) modalFormYongdo.value = data.items_youngdo || ''; // 빈값 = 등록전
         if (modalFormMemberId) modalFormMemberId.value = data.member_id || '';
         // [수정] items 시트의 m_name 우선순위 적용 (없을 경우에만 회원 DB 참조)
         if (modalFormMName) {
@@ -6148,6 +6200,7 @@ MJ 이정우 팀장
         const sakunNo = modalFormSakunNo.value;
         const court = modalFormCourt.value;
         const stuMember = modalFormStuMember ? modalFormStuMember.value : '';
+        const itemsYongdo = modalFormYongdo ? modalFormYongdo.value : '';
         const mName = getBaseMemberNameForSave_('modal');
         const mName2 = getMemberName2ForSave_('modal');
         const memberId = modalFormMemberId ? modalFormMemberId.value : '';
@@ -6225,7 +6278,8 @@ MJ 이정우 팀장
             auction_id: auctionId,
             reg_member: regMember,
             note: note,
-            chuchen_state: chuchenState
+            chuchen_state: chuchenState,
+            items_youngdo: itemsYongdo
         };
 
         const idx = allBiddingData.findIndex(it => String(it.id) === String(id));
@@ -6284,8 +6338,8 @@ MJ 이정우 팀장
                 showStatus(`수정 오류: ${error.message}`, 'error');
                 loadData(true); // Optimistic Update 오염 복구
             })
-            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId)
-            .updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId);
+            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo)
+            .updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo);
     }
 
     function handleModalDelete() {
@@ -6337,6 +6391,7 @@ MJ 이정우 팀장
         const sakunNo = formSakunNo.value;
         const court = formCourt.value;
         const stuMember = formStuMember ? formStuMember.value : '';
+        const itemsYongdo = formYongdo ? formYongdo.value : '';
         const mName = getBaseMemberNameForSave_('main');
         const mName2 = getMemberName2ForSave_('main');
         const memberId = formMemberId ? formMemberId.value : '';
@@ -6473,7 +6528,8 @@ MJ 이정우 팀장
                 auction_id: auctionId,
                 reg_member: regMember,
                 note: note,
-                chuchen_state: panelChuchenState
+                chuchen_state: panelChuchenState,
+                items_youngdo: itemsYongdo
             };
             const idx = allBiddingData.findIndex(it => String(it.id) === String(id));
             if (idx >= 0) {
@@ -6489,13 +6545,13 @@ MJ 이정우 팀장
         }
 
         if (currentMode === 'create') {
-            // Server createData signature: (inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId)
+            // Server createData signature: (inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId, itemsYongdo)
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
-                .createData(processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, panelChuchenState, regMember, auctionId);
+                .createData(processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, panelChuchenState, regMember, auctionId, itemsYongdo);
         } else if (currentMode === 'edit') {
-            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId)
+            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo)
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
-                .updateData(id, processedInDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, panelChuchenState, imageId, regMember, mName2, auctionId);
+                .updateData(id, processedInDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, panelChuchenState, imageId, regMember, mName2, auctionId, itemsYongdo);
         }
     }
 
@@ -6540,7 +6596,7 @@ MJ 이정우 팀장
     function loadData(forceRefresh = false) {
         if (typeof google === 'undefined' || !google.script || !google.script.run) {
             if (dataTableBody) {
-                dataTableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-red-500 font-bold">⚠️ 오류: 이 코드는 구글 앱스 스크립트 환경이 아닙니다.</td></tr>`;
+                dataTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-red-500 font-bold">⚠️ 오류: 이 코드는 구글 앱스 스크립트 환경이 아닙니다.</td></tr>`;
             }
             return;
         }
@@ -6569,7 +6625,7 @@ MJ 이정우 팀장
                 toggleLoading(false);
                 showStatus(`데이터 로드 실패: ${error.message}`, 'error');
                 if (dataTableBody) {
-                    dataTableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-red-500">데이터 로드 중 오류가 발생했습니다.</td></tr>`;
+                    dataTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-red-500">데이터 로드 중 오류가 발생했습니다.</td></tr>`;
                 }
             });
 
@@ -7091,7 +7147,111 @@ MJ 이정우 팀장
     }
 
     // 드래그 리사이즈 초기화
-    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); });
+    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); initItemPaneResize(); initItemListColumnResize(); });
+
+    // 입찰물건 관리 리스트 — 컬럼 헤더 우측에 드래그 핸들 부착, 폭 저장
+    function initItemListColumnResize() {
+        const STORAGE_KEY = 'mj_item_list_col_widths';
+        const MIN_VALID_PX = 40; // 이보다 작으면 비정상 → 무시
+        const table = document.querySelector('.item-list-table');
+        if (!table) return;
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch (e) { saved = {}; }
+        // 무효한 값(40px 미만) 자동 제거
+        let cleaned = false;
+        Object.keys(saved).forEach(k => {
+            if (typeof saved[k] !== 'number' || saved[k] < MIN_VALID_PX) {
+                delete saved[k]; cleaned = true;
+            }
+        });
+        if (cleaned) {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) {}
+        }
+        const headers = table.querySelectorAll('thead th');
+        headers.forEach(th => {
+            const colClass = Array.from(th.classList).find(c => c.startsWith('item-col-'));
+            if (!colClass) return;
+            if (saved[colClass] && saved[colClass] >= MIN_VALID_PX) th.style.width = saved[colClass] + 'px';
+            // 이미 핸들이 있으면 중복 추가 안 함
+            if (th.querySelector('.col-resizer')) return;
+            const handle = document.createElement('span');
+            handle.className = 'col-resizer';
+            th.appendChild(handle);
+            let isDragging = false, startX = 0, startWidth = 0;
+            handle.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                handle.classList.add('dragging');
+                startX = e.clientX;
+                startWidth = th.getBoundingClientRect().width;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            handle.addEventListener('click', (e) => { e.stopPropagation(); });
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const newWidth = Math.max(40, startWidth + (e.clientX - startX));
+                th.style.width = newWidth + 'px';
+            });
+            document.addEventListener('mouseup', () => {
+                if (!isDragging) return;
+                isDragging = false;
+                handle.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                const finalWidth = Math.round(th.getBoundingClientRect().width);
+                saved[colClass] = finalWidth;
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) { /* ignore */ }
+            });
+        });
+    }
+
+    // 입찰물건 관리: 좌/우 패널 폭 드래그 조절 + localStorage 저장
+    function initItemPaneResize() {
+        const STORAGE_KEY = 'mj_item_pane_list_px';
+        const layout = document.querySelector('.item-management-layout');
+        const list = document.getElementById('listPane');
+        const resizer = document.getElementById('paneResizer');
+        if (!layout || !list || !resizer) return;
+
+        // 저장된 폭 복원
+        const savedPx = parseInt(localStorage.getItem(STORAGE_KEY) || '', 10);
+        if (!isNaN(savedPx) && savedPx >= 280) {
+            list.style.flex = `0 0 ${savedPx}px`;
+        }
+
+        let isDragging = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        resizer.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            resizer.classList.add('dragging');
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'col-resize';
+            startX = e.clientX;
+            startWidth = list.getBoundingClientRect().width;
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const layoutRect = layout.getBoundingClientRect();
+            const minPx = 280;
+            const maxPx = Math.max(minPx, layoutRect.width - 280 - 18); // detailPane min + gap+resizer
+            const newPx = Math.max(minPx, Math.min(maxPx, startWidth + (e.clientX - startX)));
+            list.style.flex = `0 0 ${newPx}px`;
+        });
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            resizer.classList.remove('dragging');
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+            const finalPx = Math.round(list.getBoundingClientRect().width);
+            try { localStorage.setItem(STORAGE_KEY, String(finalPx)); } catch (e) { /* ignore */ }
+        });
+    }
 
     // 상태 체크박스 변경 시 라벨 업데이트
     document.addEventListener('DOMContentLoaded', () => {
@@ -7210,6 +7370,53 @@ MJ 이정우 팀장
         }
     }
 
+    // --- 용도(items_youngdo) 다중선택 드롭다운 ---
+    function getSelectedYongdoValues() {
+        const cbs = document.querySelectorAll('input[name="bid-youngdo-cb"]:checked');
+        return Array.from(cbs).map(el => el.value);
+    }
+    function toggleYongdoDropdown(ev) {
+        ev.stopPropagation();
+        const dd = document.getElementById('bid-youngdo-dropdown');
+        const btn = document.getElementById('bid-youngdo-btn');
+        if (!dd || !btn) return;
+        const isHidden = dd.classList.contains('content-hidden');
+        dd.classList.toggle('content-hidden', !isHidden);
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (isHidden) {
+            document.addEventListener('click', closeYongdoDropdownOnce);
+        }
+    }
+    function closeYongdoDropdownOnce() {
+        const dd = document.getElementById('bid-youngdo-dropdown');
+        if (dd) dd.classList.add('content-hidden');
+        const btn = document.getElementById('bid-youngdo-btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', closeYongdoDropdownOnce);
+        updateYongdoLabel();
+    }
+    function handleYongdoAll(allCb) {
+        if (allCb.checked) {
+            document.querySelectorAll('input[name="bid-youngdo-cb"]').forEach(cb => cb.checked = false);
+        }
+    }
+    function handleYongdoOther(otherCb) {
+        if (otherCb.checked) {
+            const allCb = document.getElementById('bid-youngdo-all');
+            if (allCb) allCb.checked = false;
+        }
+    }
+    function updateYongdoLabel() {
+        const label = document.getElementById('bid-youngdo-label');
+        if (!label) return;
+        const allCb = document.getElementById('bid-youngdo-all');
+        const sels = getSelectedYongdoValues();
+        if (allCb && allCb.checked) { label.textContent = '용도'; return; }
+        if (sels.length === 0) { label.textContent = '용도'; return; }
+        const display = sels.map(v => v === '__pre__' ? '등록전' : v);
+        label.textContent = display.join(',');
+    }
+
     // --- [4] 필터링 로직 ---
     function applyFilters() {
         const currentFocusId = document.activeElement ? document.activeElement.id : '';
@@ -7224,6 +7431,10 @@ MJ 이정우 팀장
         const isAllManager = (allManagerCb && allManagerCb.checked);
         const selectedManagers = getSelectedManagerValues();
         const termMName = (searchMNameInput && searchMNameInput.value) ? searchMNameInput.value.toLowerCase().trim() : '';
+        // 용도 다중선택 필터 (입찰물건관리)
+        const yongdoAllCb = document.getElementById('bid-youngdo-all');
+        const isAllYongdo = (yongdoAllCb && yongdoAllCb.checked);
+        const selectedYongdo = getSelectedYongdoValues();
         // 수업 필터 (입찰물건관리)
         const termBidClassType = document.getElementById('bid-class-type')?.value || '';
         const termBidClassName = document.getElementById('bid-class-name')?.value || '';
@@ -7245,6 +7456,11 @@ MJ 이정우 팀장
         if (bidClassTypeSel) bidClassTypeSel.classList.toggle('filter-active-input', !!termBidClassType);
         if (bidClassNameSel) bidClassNameSel.classList.toggle('filter-active-input', !!termBidClassName);
         if (bidClassGradeSel) bidClassGradeSel.classList.toggle('filter-active-input', !!termBidClassGrade);
+        // 용도 다중선택 필터 강조 (전체가 아니면 강조)
+        const bidYongdoBtn = document.getElementById('bid-youngdo-btn');
+        if (bidYongdoBtn) bidYongdoBtn.classList.toggle('filter-active-input', !isAllYongdo);
+        // 용도 라벨 갱신
+        updateYongdoLabel();
         const sBtn = document.getElementById('search-status-btn');
         // 전체가 아니면 강조 (미선택 포함)
         if (sBtn) sBtn.classList.toggle('filter-active-input', !isAllStatus);
@@ -7340,7 +7556,19 @@ MJ 이정우 팀장
                 if (termBidClassName && (cls?.class_name || '') !== termBidClassName) matchesClass = false;
                 if (termBidClassGrade && (cls?.class_grade || '') !== termBidClassGrade) matchesClass = false;
             }
-            return matchesIndate && matchesSakunNo && matchesCourt && matchesStatus && matchesRegDate && matchesManager && matchesMName && matchesClass;
+            // 용도 다중선택 필터: __pre__=빈값(등록전), 전체 체크 시 모두 통과
+            let matchesYongdo = true;
+            if (!isAllYongdo) {
+                if (selectedYongdo.length === 0) {
+                    matchesYongdo = false; // 아무것도 선택 안 하면 통과 안 함
+                } else {
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    matchesYongdo = selectedYongdo.some(v =>
+                        v === '__pre__' ? itemYongdo === '' : itemYongdo === v
+                    );
+                }
+            }
+            return matchesIndate && matchesSakunNo && matchesCourt && matchesStatus && matchesRegDate && matchesManager && matchesMName && matchesClass && matchesYongdo;
         });
 
         filteredData = filteredData.filter(item => {
@@ -10549,24 +10777,24 @@ MJ 이정우 팀장
         tables.forEach(table => {
             forceRemoveNodes(table);
 
-            // 헤더가 10개를 초과하면 11번째부터 잘라내기 (입찰가 컬럼까지 10개 유지)
+            // 헤더가 11개를 초과하면 12번째부터 잘라내기 (용도+입찰가 컬럼까지 11개 유지)
             const headerRow = table.querySelector('thead tr');
             if (headerRow) {
-                while (headerRow.children && headerRow.children.length > 10) {
-                    try { headerRow.removeChild(headerRow.children[10]); } catch (e) { break; }
+                while (headerRow.children && headerRow.children.length > 11) {
+                    try { headerRow.removeChild(headerRow.children[11]); } catch (e) { break; }
                 }
             }
 
-            // 바디 행도 10개 초과 셀 제거
+            // 바디 행도 11개 초과 셀 제거
             const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
             bodyRows.forEach(row => {
                 // item-col-action을 우선 제거
                 Array.from(row.querySelectorAll('td.item-col-action, th.item-col-action')).forEach(n => {
                     try { n.remove(); } catch (e) { }
                 });
-                // 남아있으면 11번째 이상을 강제로 자름 (입찰가 컬럼까지 10개 유지)
-                while (row.cells && row.cells.length > 10) {
-                    try { row.deleteCell(10); } catch (e) { break; }
+                // 남아있으면 12번째 이상을 강제로 자름 (용도+입찰가 컬럼까지 11개 유지)
+                while (row.cells && row.cells.length > 11) {
+                    try { row.deleteCell(11); } catch (e) { break; }
                 }
             });
         });
@@ -10577,7 +10805,7 @@ MJ 이정우 팀장
         // 로딩 메시지 row의 colspan이 깨졌을 수 있어 보정
         const firstRowTd = document.querySelector('#dataTableBody tr td[colspan]');
         if (firstRowTd) {
-            firstRowTd.setAttribute('colspan', '10');
+            firstRowTd.setAttribute('colspan', '11');
         }
     }
 

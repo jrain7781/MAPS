@@ -14,7 +14,7 @@ const MEMBER_CLASS_DETAILS_SHEET_NAME_DB = 'member_class_details';
 
 // - m_name2: "선택된 명의 표시값" (예: "(MJ) 한한한") — 화면 복원/리스트 표시에 사용
 // - auction_id: "옥션 고유번호 (7자리)"
-const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'reg_date', 'reg_member', 'bid_state', 'image_id', 'note', 'm_name2', 'auction_id', 'chuchen_state', 'chuchen_date', 'class_d1_id', 'bid_datetime_2'];
+const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'reg_date', 'reg_member', 'bid_state', 'image_id', 'note', 'm_name2', 'auction_id', 'chuchen_state', 'chuchen_date', 'class_d1_id', 'bid_datetime_2', 'items_youngdo'];
 // chuchen_state:  Q열(idx 16) - '신규'|'전달완료'
 // chuchen_date:   R열(idx 17) - 최근 전달 일시 (ISO string)
 // class_d1_id:    S열(idx 18) - 수업 회차 ID (수업 물건 연결용)
@@ -214,6 +214,8 @@ function readAllData() {
     } else {
       rowData['bid_datetime_2'] = '';
     }
+    // [추가] 21번째 열(20번 인덱스, U열) items_youngdo (물건용도) 매핑
+    rowData['items_youngdo'] = (row.length > 20) ? String(row[20] || '').trim() : '';
 
     // [추가] item_images 테이블에 이미지가 있는지 확인
     rowData['has_images'] = itemsWithImages.has(String(row[0]).trim());
@@ -235,7 +237,7 @@ function formatParamsDate(value, format = 'yyMMdd') {
 /**
  * 새로운 입찰 물건 데이터를 생성합니다.
  */
-function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId) {
+function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId, itemsYongdo) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
 
   // 추천, 입찰만 회원명 필수 / 나머지 상태는 회원명 없어도 허용
@@ -329,6 +331,7 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
     if (header === 'auction_id') return auctionId || '';
     if (header === 'chuchen_state') return chuchenState || '';
     if (header === 'chuchen_date') return '';
+    if (header === 'items_youngdo') return String(itemsYongdo || '').trim();
     return '';
   });
 
@@ -350,7 +353,7 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
 /**
  * 기존 입찰 물건 데이터를 수정합니다.
  */
-function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId) {
+function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
 
   // 추천, 입찰만 회원명 필수 / 나머지 상태는 회원명 없어도 허용
@@ -481,6 +484,11 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
         if (bd2) newRowValues[19] = bd2; // T: bid_datetime_2
       }
     }
+  }
+
+  // [추가] items_youngdo (U열) — 클라이언트에서 값을 넘긴 경우에만 갱신, 아니면 기존값 유지
+  if (typeof itemsYongdo !== 'undefined' && itemsYongdo !== null) {
+    newRowValues[20] = String(itemsYongdo).trim();
   }
 
   // [중복 체크] 자기 자신 제외하고 동일 키 존재 여부 확인 (A,B,C,D열만 읽어 속도 최적화)
