@@ -2388,6 +2388,10 @@
                         const isNewBid = (bid.bid_state === '신규' || !bid.bid_state);
                         const bidPriceMobileClass = isNewBid ? 'text-red-600 font-bold' : 'text-gray-700 font-bold';
                         const bidPricePcClass = isNewBid ? 'bidprice-cell text-red-600' : 'bidprice-cell';
+                        // 용도 배지 (상태 배지 앞)
+                        const _bidYongdo = String(bid.items_youngdo || '').trim();
+                        const yongdoClass = (typeof getYongdoTagClass === 'function') ? getYongdoTagClass(_bidYongdo) : '';
+                        const yongdoLabel = (typeof getYongdoDisplayLabel === 'function') ? getYongdoDisplayLabel(_bidYongdo) : (_bidYongdo || '등록전');
 
                         const isNoPrice = (!bid.bidprice || bid.bidprice === 0 || bid.bidprice === '0');
                         const mobileBorder = isNoPrice ? 'border-2 border-red-600' : 'border-2 border-slate-400';
@@ -2421,7 +2425,7 @@
                         const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                              <span class="${yongdoClass} text-[10px] mr-1">${yongdoLabel}</span><span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
                               <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
@@ -2438,7 +2442,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
+                              <div class="bid-top-right"><span class="${yongdoClass}" style="margin-right:6px;">${yongdoLabel}</span><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div>
@@ -3116,6 +3120,10 @@
                         const isNewBid = (bid.bid_state === '신규' || !bid.bid_state);
                         const bidPriceMobileClass = isNewBid ? 'text-red-600 font-bold' : 'text-gray-700 font-bold';
                         const bidPricePcClass = isNewBid ? 'bidprice-cell text-red-600' : 'bidprice-cell';
+                        // 용도 배지 (상태 배지 앞)
+                        const _bidYongdo = String(bid.items_youngdo || '').trim();
+                        const yongdoClass = (typeof getYongdoTagClass === 'function') ? getYongdoTagClass(_bidYongdo) : '';
+                        const yongdoLabel = (typeof getYongdoDisplayLabel === 'function') ? getYongdoDisplayLabel(_bidYongdo) : (_bidYongdo || '등록전');
 
                         const isNoPrice = (!bid.bidprice || bid.bidprice === 0 || bid.bidprice === '0');
                         const mobileBorder = isNoPrice ? 'border-2 border-red-600' : 'border-2 border-slate-400';
@@ -3134,7 +3142,7 @@
                         const mobileHtml = `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                              <span class="${yongdoClass} text-[10px] mr-1">${yongdoLabel}</span><span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
                               <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
@@ -3154,7 +3162,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
+                              <div class="bid-top-right"><span class="${yongdoClass}" style="margin-right:6px;">${yongdoLabel}</span><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div>
@@ -17354,9 +17362,13 @@ ${token}
         });
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400 text-xs">조회 결과가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-400 text-xs">조회 결과가 없습니다.</td></tr>';
             return;
         }
+        // 현재 회차의 종목 타입 (CLASS / PT / 돈클) → 허용 용도 결정
+        const _d1info = (typeof allClassD1Data !== 'undefined') ? allClassD1Data.find(d => String(d.class_d1_id) === String(selectedClassD1Id)) : null;
+        const _curClassType = _d1info ? String(_d1info.class_type || '') : '';
+        const _allowedYongdoSet = (typeof getAllowedYongdoForClassType === 'function') ? getAllowedYongdoForClassType(_curClassType) : new Set(['', '기타', '플레티넘', '블랙', '실버', '수익', '월세']);
 
         filtered.sort((a, b) => {
             const va = String(a[d1PickerSortKey_] || '');
@@ -17377,17 +17389,24 @@ ${token}
             const alreadyIn = String(it.class_d1_id||'') === String(selectedClassD1Id||'');
             // 입찰/추천/취소 상태는 다른 회차/회원에서 이미 사용 중 → 신규 회차 등록 금지
             const lockedStatus = ['입찰','추천','취소'].includes(String(it.stu_member || '').trim());
-            const disabled = alreadyIn || lockedStatus;
+            // 용도 dim: 현재 종목(CLASS/PT/돈클)에서 허용 안 되는 용도 → 등록 불가
+            const _itemYongdo = String(it.items_youngdo || '').trim();
+            const yongdoBlocked = !_allowedYongdoSet.has(_itemYongdo);
+            const disabled = alreadyIn || lockedStatus || yongdoBlocked;
             const imgDot = (it.image_ids || it.image_id)
                 ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>' : '';
             const statusCls = getStatusTagClass ? getStatusTagClass(it.stu_member) : '';
+            const yongdoCls = (typeof getYongdoTagClass === 'function') ? getYongdoTagClass(_itemYongdo) : '';
+            const yongdoLabel = (typeof getYongdoDisplayLabel === 'function') ? getYongdoDisplayLabel(_itemYongdo) : (_itemYongdo || '등록전');
             const rowBg = inCart ? 'bg-indigo-50 border-l-4 border-indigo-400'
+                        : yongdoBlocked ? 'yongdo-row-dim'
                         : disabled ? 'bg-gray-50 opacity-50' : '';
             const cursor = disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-indigo-50 focus:outline-none focus:bg-indigo-100';
             const tabIdx = disabled ? '' : 'tabindex="0"';
             const kd = disabled ? '' : `onkeydown="d1PickerRowKeydown_(event,'${it.id}')"`;
             const titleText = alreadyIn ? '이미 이 회차에 등록된 물건'
                             : lockedStatus ? `'${it.stu_member}' 상태의 물건은 등록할 수 없습니다`
+                            : yongdoBlocked ? `'${_curClassType||'CLASS'}' 종목에는 용도 '${yongdoLabel}' 물건을 등록할 수 없습니다`
                             : '클릭하면 우측에 추가됩니다';
             return `<tr class="${cursor} transition-colors ${rowBg}" ${tabIdx} ${kd}
                 onclick="${disabled ? '' : `d1PickerClickRow('${it.id}')`}"
@@ -17396,6 +17415,7 @@ ${token}
                 <td class="item-col-img text-center">${imgDot}</td>
                 <td class="item-col-sakun text-left font-medium ${inCart?'text-indigo-700':'text-gray-800'}">${escapeHtml(it.sakun_no||'')}</td>
                 <td class="item-col-court text-left text-gray-600">${escapeHtml(it.court||'')}</td>
+                <td class="item-col-youngdo text-center"><span class="${yongdoCls}">${escapeHtml(yongdoLabel)}</span></td>
                 <td class="item-col-status text-center"><span class="${statusCls}">${escapeHtml(it.stu_member||'')}</span></td>
                 <td class="item-col-member text-center text-gray-700 max-w-[70px] truncate overflow-hidden" style="max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(it.m_name||'')}">${escapeHtml(it.m_name||'')}</td>
                 <td class="item-col-manager text-center text-gray-500">${escapeHtml(it.m_name_id||'')}</td>
@@ -17428,7 +17448,7 @@ ${token}
             // 이미 있으면 제거 (토글)
             d1PickerCart = d1PickerCart.filter(c => String(c.id) !== String(itemId));
         } else {
-            d1PickerCart.push({ id: item.id, sakun_no: item.sakun_no, court: item.court, stu_member: item.stu_member, m_name: item.m_name, 'in-date': item['in-date'] || '', m_name_id: item.m_name_id || '' });
+            d1PickerCart.push({ id: item.id, sakun_no: item.sakun_no, court: item.court, stu_member: item.stu_member, m_name: item.m_name, 'in-date': item['in-date'] || '', m_name_id: item.m_name_id || '', items_youngdo: item.items_youngdo || '' });
         }
         renderD1ItemPickerList();
         d1PickerRenderCart_();
@@ -17467,16 +17487,20 @@ ${token}
         if (cartArrow) cartArrow.textContent = d1CartSortAsc_ ? ' ↑' : ' ↓';
 
         if (list.length === 0) {
-            cart.innerHTML = '<tr><td colspan="7" class="text-xs text-gray-400 text-center py-4">' + (searchKw ? '조회 결과 없음' : '클릭하면 추가됩니다') + '</td></tr>';
+            cart.innerHTML = '<tr><td colspan="8" class="text-xs text-gray-400 text-center py-4">' + (searchKw ? '조회 결과 없음' : '클릭하면 추가됩니다') + '</td></tr>';
             return;
         }
         cart.innerHTML = list.map(c => {
             const statusCls = getStatusTagClass ? getStatusTagClass(c.stu_member) : '';
+            const yongdoVal = String(c.items_youngdo || '').trim();
+            const yongdoCls = (typeof getYongdoTagClass === 'function') ? getYongdoTagClass(yongdoVal) : '';
+            const yongdoLabel = (typeof getYongdoDisplayLabel === 'function') ? getYongdoDisplayLabel(yongdoVal) : (yongdoVal || '등록전');
             const dateShort = String(c['in-date'] || '').replace(/-/g, '').substring(2, 8) || '-';
             return `<tr class="hover:bg-indigo-50 border-b border-gray-100">
                 <td class="item-col-date text-center text-gray-500 whitespace-nowrap">${escapeHtml(dateShort)}</td>
                 <td class="item-col-sakun font-medium text-gray-800 overflow-hidden" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.sakun_no||'')}</td>
                 <td class="item-col-court text-gray-600 overflow-hidden" style="max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.court||'')}</td>
+                <td class="item-col-youngdo text-center"><span class="${yongdoCls} text-[10px]">${escapeHtml(yongdoLabel)}</span></td>
                 <td class="item-col-status text-center"><span class="${statusCls} text-[10px]">${escapeHtml(c.stu_member||'')}</span></td>
                 <td class="item-col-member text-center text-gray-700 overflow-hidden" style="max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.m_name||'')}">${escapeHtml(c.m_name||'')}</td>
                 <td class="item-col-manager text-center text-gray-500">${escapeHtml(c.m_name_id||'')}</td>
@@ -17767,7 +17791,7 @@ ${token}
         const arrow = k => d1ItemsSortKey_ === k ? (d1ItemsSortAsc_ ? ' ↑' : ' ↓') : '';
         let tbodyHtml;
         if (data.length === 0) {
-            tbodyHtml = '<tr><td colspan="9" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
+            tbodyHtml = '<tr><td colspan="11" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
         } else {
             const sorted = data.slice().sort((a, b) => {
                 const va = String(a[d1ItemsSortKey_] || '');
@@ -17802,6 +17826,7 @@ ${token}
                     <td class="item-col-img list-img-cell text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${imgHtml}</td>
                     <td class="item-col-sakun text-left font-medium cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.sakun_no||'')}</td>
                     <td class="item-col-court text-left cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.court||'')}</td>
+                    <td class="item-col-youngdo text-center cursor-pointer" onclick="openDetailModalById('${item.id}')"><span class="${getYongdoTagClass(item.items_youngdo||'')}">${getYongdoDisplayLabel(item.items_youngdo||'')}</span></td>
                     <td class="item-col-status text-center cursor-pointer" onclick="openDetailModalById('${item.id}')"><span class="${sc}">${escapeHtml(item.stu_member||'-')}</span></td>
                     <td class="item-col-deadline text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${deadlineCell}</td>
                     <td class="item-col-telegram text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${tHtml}</td>
@@ -17821,6 +17846,7 @@ ${token}
                     <th class="item-col-img text-center font-bold text-gray-700 py-2.5">IMG</th>
                     <th class="item-col-sakun text-left font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
                     <th class="item-col-court text-left font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('court')">법원${arrow('court')}</th>
+                    <th class="item-col-youngdo text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('items_youngdo')">용도${arrow('items_youngdo')}</th>
                     <th class="item-col-status text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('stu_member')">상태${arrow('stu_member')}</th>
                     <th class="item-col-deadline text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('bid_datetime_2')" title="최종마감까지 진행률 (chuchen_date ~ bid_datetime_2)">마감${arrow('bid_datetime_2')}</th>
                     <th class="item-col-telegram text-center font-bold text-gray-700 py-2.5">T</th>
