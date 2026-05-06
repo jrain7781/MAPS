@@ -1773,6 +1773,10 @@
         const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
         const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
         // fManager: matchesCalManager(item) 사용으로 대체됨
+        // 용도 다중선택 (입찰일정)
+        const fCalYongdos = getSelectedCalYongdoValues();
+        const allCalYongdoCb = document.getElementById('cal-search-youngdo-all');
+        const isAllCalYongdo = (allCalYongdoCb && allCalYongdoCb.checked);
         // 수업 필터 (입찰일정)
         const fCalClassType = document.getElementById('cal-class-type')?.value || '';
         const fCalClassName = document.getElementById('cal-class-name')?.value || '';
@@ -1798,6 +1802,15 @@
             // 상태 필터링: "전체" 체크 시 통과, 아무것도 선택 안 하면 조회 안 됨
             const matchesStatus = isAllCalStatus ? true : (fStatuses.length > 0 && fStatuses.includes(String(item.stu_member || '').trim()));
             if (!matchesStatus) pass = false;
+            // 용도 필터링: 동일 패턴 (전체 통과, __pre__=빈값)
+            if (!isAllCalYongdo) {
+                if (fCalYongdos.length === 0) pass = false;
+                else {
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    const ok = fCalYongdos.some(v => v === '__pre__' ? itemYongdo === '' : itemYongdo === v);
+                    if (!ok) pass = false;
+                }
+            }
             if (fMember) {
                 const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                 if (!memberDisp.includes(fMember)) pass = false;
@@ -2717,6 +2730,10 @@
         const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
         const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
         // fManager: matchesCalManager(item) 사용으로 대체됨
+        // 용도 다중선택 (입찰일정)
+        const fCalYongdos = getSelectedCalYongdoValues();
+        const allCalYongdoCb = document.getElementById('cal-search-youngdo-all');
+        const isAllCalYongdo = (allCalYongdoCb && allCalYongdoCb.checked);
         // 수업 필터 (입찰일정)
         const fCalClassType = document.getElementById('cal-class-type')?.value || '';
         const fCalClassName = document.getElementById('cal-class-name')?.value || '';
@@ -2741,6 +2758,15 @@
             // 상태 필터링: "전체" 체크 시 통과, 아무것도 선택 안 하면 조회 안 됨
             const matchesStatus = isAllCalStatus ? true : (fStatuses.length > 0 && fStatuses.includes(String(item.stu_member || '').trim()));
             if (!matchesStatus) pass = false;
+            // 용도 필터링: 동일 패턴 (전체 통과, __pre__=빈값)
+            if (!isAllCalYongdo) {
+                if (fCalYongdos.length === 0) pass = false;
+                else {
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    const ok = fCalYongdos.some(v => v === '__pre__' ? itemYongdo === '' : itemYongdo === v);
+                    if (!ok) pass = false;
+                }
+            }
             if (fMember) {
                 const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                 if (!memberDisp.includes(fMember)) pass = false;
@@ -7980,6 +8006,53 @@ MJ 이정우 팀장
         if (btn) btn.setAttribute('aria-expanded', 'false');
         document.removeEventListener('click', closeCalendarStatusDropdownOnce);
         updateCalendarStatusLabel();
+    }
+
+    // --- 입찰일정(Calendar) 용도(items_youngdo) 다중선택 드롭다운 ---
+    function getSelectedCalYongdoValues() {
+        const cbs = document.querySelectorAll('input[name="cal-search-youngdo-cb"]:checked');
+        return Array.from(cbs).map(el => el.value);
+    }
+    function handleCalYongdoAll(allCb) {
+        if (allCb.checked) {
+            document.querySelectorAll('input[name="cal-search-youngdo-cb"]').forEach(cb => cb.checked = false);
+        }
+    }
+    function handleCalYongdoOther(otherCb) {
+        if (otherCb.checked) {
+            const allCb = document.getElementById('cal-search-youngdo-all');
+            if (allCb) allCb.checked = false;
+        }
+    }
+    function toggleCalYongdoDropdown(ev) {
+        ev.stopPropagation();
+        const dd = document.getElementById('cal-search-youngdo-dropdown');
+        const btn = document.getElementById('cal-search-youngdo-btn');
+        if (!dd || !btn) return;
+        const isHidden = dd.classList.contains('content-hidden');
+        dd.classList.toggle('content-hidden', !isHidden);
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (isHidden) document.addEventListener('click', closeCalYongdoDropdownOnce);
+    }
+    function closeCalYongdoDropdownOnce() {
+        const dd = document.getElementById('cal-search-youngdo-dropdown');
+        if (dd) dd.classList.add('content-hidden');
+        const btn = document.getElementById('cal-search-youngdo-btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', closeCalYongdoDropdownOnce);
+        updateCalYongdoLabel();
+    }
+    function updateCalYongdoLabel() {
+        const label = document.getElementById('cal-search-youngdo-label');
+        if (!label) return;
+        const allCb = document.getElementById('cal-search-youngdo-all');
+        const sels = getSelectedCalYongdoValues();
+        if (allCb && allCb.checked) { label.textContent = '용도'; return; }
+        if (sels.length === 0) { label.textContent = '용도'; return; }
+        const display = sels.map(v => v === '__pre__' ? '등록전' : v);
+        label.textContent = display.join(',');
+        const btn = document.getElementById('cal-search-youngdo-btn');
+        if (btn) btn.classList.add('filter-active-input');
     }
 
     function updateCalendarStatusLabel() {
