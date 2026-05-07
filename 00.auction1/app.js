@@ -470,6 +470,37 @@
     activePriceTarget = null;
   }
 
+  // ── 면적 단위 자동 변환 (㎡ ↔ 평) ─────────────────────────
+  // 1평 = 3.305785㎡, 1㎡ ≈ 0.3025평 (옥션원 기준)
+  const M2_TO_PY = 0.3025;
+  const PY_TO_M2 = 3.305785;
+  let areaUpdating = false;
+  function bindAreaConversion() {
+    document.querySelectorAll('.area-inp').forEach(inp => {
+      inp.addEventListener('input', () => {
+        if (areaUpdating) return; // 페어 업데이트로 인한 재진입 방지
+        const pairName = inp.dataset.areaPair;
+        if (!pairName) return;
+        const pair = document.querySelector('input[name="' + pairName + '"]');
+        if (!pair) return;
+        const raw = String(inp.value || '').replace(/,/g, '').trim();
+        if (raw === '') {
+          areaUpdating = true; pair.value = ''; areaUpdating = false;
+          return;
+        }
+        const v = parseFloat(raw);
+        if (isNaN(v)) return;
+        const factor = inp.dataset.areaUnit === 'm2' ? M2_TO_PY : PY_TO_M2;
+        const conv = v * factor;
+        // 소수점 둘째까지, 끝의 0은 정리
+        const out = (Math.round(conv * 100) / 100).toString();
+        areaUpdating = true;
+        pair.value = out;
+        areaUpdating = false;
+      });
+    });
+  }
+
   // ── 초기화 ───────────────────────────────────────────
   function init() {
     fillStaticSelects();
@@ -480,6 +511,7 @@
       inp.addEventListener('focus', () => openPricePreset(inp));
       inp.addEventListener('click', () => openPricePreset(inp));
     });
+    bindAreaConversion();
     setStatus('준비 완료');
   }
 
