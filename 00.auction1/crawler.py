@@ -23,8 +23,9 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 
 # ── 로그인 정보 (00.imageup/01.i.py 의 ACCOUNTS 와 동일) ────────
@@ -123,35 +124,76 @@ def login_if_needed():
 
 
 def fill_form(d, form_data: dict):
-    """우리 폼 데이터 → 옥션원 폼 필드 setter via JS"""
+    """우리 폼 데이터 → 옥션원 폼 필드 setter
+    - select 는 Selenium Select API (값 매칭 + 옵션 selected 속성 정확히 토글)
+    - 일반 input 은 JS setter
+    """
     for our_name, val in (form_data or {}).items():
         if our_name.startswith("_"):
             continue
         ax = FIELD_MAP.get(our_name)
         if not ax:
             continue
-        v = "" if val is None else str(val).replace(",", "").strip()
-        if not v:
+        v_raw = "" if val is None else str(val).strip()
+        if not v_raw:
             continue
-        # JS 인젝션 방어 - 작은따옴표 escape
-        v_safe = v.replace("\\", "\\\\").replace("'", "\\'")
-        d.execute_script(
-            f"""
-            var el = document.querySelector('[name="{ax}"]');
-            if (el) {{
+        try:
+            el = d.find_element(By.NAME, ax)
+        except NoSuchElementException:
+            continue
+        tag = el.tag_name.lower()
+        if tag == "select":
+            # select 의 option value 는 원본 그대로 (콤마 포함된 값 - 진행물건 '1,2,17,18',
+            # 유찰횟수↓ 'b_count DESC,address DESC' 등 - 보존 필수)
+            try:
+                Select(el).select_by_value(v_raw)
+                d.execute_script("arguments[0].dispatchEvent(new Event('change'));", el)
+            except Exception as e:
+                print(f"[fill_form] select fail {ax}={v_raw}: {e}")
+        else:
+            # text/date input - 사용자가 입력한 콤마(천단위) 제거 후 숫자만
+            v_clean = v_raw.replace(",", "")
+            v_safe = v_clean.replace("\\", "\\\\").replace("'", "\\'")
+            d.execute_script(
+                f"""
+                var el = arguments[0];
                 el.value = '{v_safe}';
                 try {{ el.dispatchEvent(new Event('change')); }} catch(e) {{}}
-            }}
-            """
-        )
-    # 주소 다중 (_addrTags) 추가는 추후 구현 — 현재는 sido/gugun/dong 단일만
-    # 물건종류 복수 (_multiProp) 도 추후
+                """,
+                el,
+            )
+    # 주소 다중 추가: _addrTags 가 있으면 sido/gugun/dong 별로 set + addr_multi_plus() 호출
+    addr_tags = (form_data or {}).get("_addrTags") or []
+    sido_v = (form_data or {}).get("addrSido") or ""
+    gugun_v = (form_data or {}).get("addrGugun") or ""
+    dong_v = (form_data or {}).get("addrDong") or ""
+    # 단일 sido 라도 _addrTags 가 있다는 것은 사용자가 [추가] 클릭으로 다중 적용을 의도한 것
+    if addr_tags and sido_v:
+        # 이미 sido/gugun/dong 은 fill_form 루프에서 set 된 상태. 옥션원의 addr_multi_plus 함수 호출.
+        d.execute_script("if (typeof addr_multi_plus === 'function') addr_multi_plus();")
+        time.sleep(0.3)
 
 
 def submit_search(d):
-    # ca_title.php 의 종합검색은 폼 fm_aulist - 검색 버튼은 input(image) 라 id 없음.
-    # 폼 자체를 JS 로 submit (단순 사건번호 폼 fmSrchTop 과 구분).
-    d.execute_script("document.getElementById('fm_aulist').submit();")
+    # ca_title.php 의 종합검색 — 검색 input 을 직접 클릭 (옥션원 onclick 검증 로직을 거치게)
+    clicked = d.execute_script(
+        """
+        var f = document.getElementById('fm_aulist');
+        if (!f) return 'noform';
+        // 검색 버튼: input value=검색 또는 onclick 함수가 있는 element
+        var btn = Array.from(f.querySelectorAll('input, span, a, button')).find(function(b){
+            var v = (b.value || b.textContent || '').trim();
+            return v === '검색';
+        });
+        if (btn) { btn.click(); return 'clicked'; }
+        // fallback: search 함수 직접 호출
+        if (typeof auction_ser === 'function') { auction_ser(); return 'fn:auction_ser'; }
+        if (typeof go_search === 'function') { go_search(); return 'fn:go_search'; }
+        f.submit();
+        return 'fallback:submit';
+        """
+    )
+    print(f"[crawl] submit -> {clicked}")
     WebDriverWait(d, 30).until(
         lambda dr: "ca_list" in dr.current_url or dr.find_elements(By.CSS_SELECTOR, "table.tbl_list tbody tr")
     )
@@ -210,18 +252,25 @@ def crawl(form_data: dict, custom_filters: list | None = None):
         print(f"[crawl] after submit, current url={d.current_url}")
         items = parse_results(d)
         print(f"[crawl] parsed {len(items)} items")
-        # 디버그: 결과 0 이면 페이지에 어떤 메시지/요소가 있는지 확인
+        # 디버그: 결과 0 이면 페이지 스샷 + HTML 저장
         if not items:
             try:
-                msg_els = d.find_elements(By.CSS_SELECTOR, "td.center, .nodata, .empty_list")
-                msgs = [el.text.strip() for el in msg_els if el.text.strip()][:5]
-                if msgs:
-                    print(f"[crawl] page messages: {msgs}")
-                title_el = d.find_elements(By.CSS_SELECTOR, "h1, h2, h3, .title")
-                if title_el:
-                    print(f"[crawl] page title elements: {[t.text.strip() for t in title_el[:3]]}")
-            except Exception:
-                pass
+                ts = time.strftime("%H%M%S")
+                shot = os.path.join(os.path.dirname(__file__), f"_debug_{ts}.png")
+                html = os.path.join(os.path.dirname(__file__), f"_debug_{ts}.html")
+                d.save_screenshot(shot)
+                with open(html, "w", encoding="utf-8") as f:
+                    f.write(d.page_source)
+                print(f"[crawl] zero results - saved {shot} and {html}")
+                # 결과 영역 텍스트 추출 (어떤 안내 문구 떴는지)
+                try:
+                    body_text = d.find_element(By.TAG_NAME, "body").text
+                    snippet = body_text[:1500].replace("\n\n", "\n")
+                    print(f"[crawl] body text snippet:\n{snippet}")
+                except Exception:
+                    pass
+            except Exception as e:
+                print(f"[crawl] debug dump failed: {e}")
         return items
 
 
