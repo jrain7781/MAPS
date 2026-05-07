@@ -73,25 +73,25 @@
 
   // ── 사이드바 렌더 ───────────────────────────────────────
   function renderSidebar() {
-    const list = document.getElementById('sideList');
+    const list  = document.getElementById('sideList');
+    const empty = document.getElementById('sideEmpty');
     if (!presets.length) {
-      list.innerHTML = `<div class="side-empty">저장된 크롤링이 없습니다.<br><span class="muted">우측 [크롤링 만들기]로 추가하세요.</span></div>`;
+      list.innerHTML = '';
+      if (empty) empty.style.display = '';
       return;
     }
-    // 최신 수정 순
+    if (empty) empty.style.display = 'none';
     const sorted = presets.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     list.innerHTML = sorted.map(p => {
       const active = p.id === currentPresetId ? ' active' : '';
       const date = p.updatedAt ? new Date(p.updatedAt).toLocaleString('ko-KR', { hour12: false }) : '';
       const cnt = (p.customFilters || []).length;
-      return `<div class="side-item${active}" data-id="${p.id}">
-        <div>
-          <div class="side-item-title">${escHtml(p.title || '(제목 없음)')}</div>
-          <div class="side-item-sub">${date} · 추가필터 ${cnt}건</div>
-        </div>
-      </div>`;
+      return `<li class="snb_item${active}" data-id="${p.id}">
+        <div class="it-title">${escHtml(p.title || '(제목 없음)')}</div>
+        <div class="it-sub">${date} · 추가필터 ${cnt}건</div>
+      </li>`;
     }).join('');
-    list.querySelectorAll('.side-item').forEach(el => {
+    list.querySelectorAll('.snb_item').forEach(el => {
       el.addEventListener('click', () => loadPreset(el.dataset.id));
     });
   }

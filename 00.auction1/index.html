@@ -4,230 +4,48 @@
 <meta charset="utf-8">
 <title>옥션원 크롤링 매니저</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="styles.css">
+<!-- 옥션원 실제 CSS (auction1.co.kr 에서 다운로드, url() 절대경로 치환됨) -->
+<link rel="stylesheet" href="auction1-css/common.css">
+<link rel="stylesheet" href="auction1-css/aside.css">
+<link rel="stylesheet" href="auction1-css/btn_box.css">
+<link rel="stylesheet" href="auction1-css/input_box.css">
+<link rel="stylesheet" href="auction1-css/tooltip.css">
+<!-- 추가 (사이드바·추가필터 섹션 등 옥션원에 없는 부분 한정) -->
+<link rel="stylesheet" href="overlay.css">
 </head>
 <body>
 
-<header class="topbar">
-  <div class="topbar-inner">
-    <div class="brand"><span class="brand-mark">●</span> 옥션원 크롤링 매니저</div>
-    <div class="topbar-meta">로컬 전용 · 종합검색 미러</div>
+<!-- 상단 바 (옥션원 톤) -->
+<div id="topShell">
+  <div id="topShellInner">
+    <div class="brand"><a href="javascript:location.reload()"><img src="https://www.auction1.co.kr/img/icon/logo_icon.png" alt="옥션원" onerror="this.style.display='none'"> <span>옥션원 크롤링 매니저</span></a></div>
+    <div class="topShellMeta">로컬 전용 · 종합검색 미러</div>
   </div>
-</header>
+</div>
 
-<div class="layout">
+<div id="appLayout">
 
-  <!-- 사이드바: 저장된 크롤링 리스트 -->
-  <aside class="sidebar">
-    <div class="sidebar-head">
-      <h2>크롤링 리스트</h2>
-      <button id="btnNewTop" class="btn btn-primary btn-sm" title="새 크롤링 만들기">+ 만들기</button>
+  <!-- 좌측 사이드바: 저장된 크롤링 -->
+  <aside id="sideShell">
+    <div class="snb_title">크롤링 리스트</div>
+    <div class="side-actions">
+      <button id="btnNewTop" class="btn_box_sss btn_blue bold" type="button">+ 만들기</button>
     </div>
-    <div id="sideList" class="side-list">
-      <div class="side-empty">저장된 크롤링이 없습니다.<br><span class="muted">우측 [크롤링 만들기]로 추가하세요.</span></div>
+    <ul id="sideList" class="snb_ul"></ul>
+    <div id="sideEmpty" class="side-empty">
+      저장된 크롤링이 없습니다.<br>
+      <span class="f10 gray">우측 [크롤링 만들기]로 추가하세요.</span>
     </div>
   </aside>
 
-  <!-- 메인 -->
-  <main class="main">
+  <!-- 우측 메인 -->
+  <main id="mainShell">
 
-    <div class="main-toolbar">
-      <button id="btnNewMain" class="btn btn-primary">+ 크롤링 만들기</button>
-      <span class="toolbar-spacer"></span>
-      <span id="statusMsg" class="status-msg"></span>
+    <div id="topBar">
+      <button id="btnNewMain" class="btn_box_sss btn_blue bold" type="button">+ 크롤링 만들기</button>
+      <span class="bar-sp"></span>
+      <span id="statusMsg" class="f11 blue"></span>
     </div>
-
-    <!-- 만들기/편집 패널 -->
-    <section id="editorPanel" class="editor-panel hidden">
-
-      <div class="panel-head">
-        <div class="panel-title">
-          <span id="editorMode">새 크롤링 등록</span>
-          <span id="editorIdBadge" class="muted"></span>
-        </div>
-        <div class="panel-head-actions">
-          <button id="btnDelete" class="btn btn-danger hidden">삭제</button>
-          <button id="btnCancel" class="btn">취소</button>
-          <button id="btnSave" class="btn btn-primary">저장</button>
-        </div>
-      </div>
-
-      <!-- 제목 -->
-      <div class="title-row">
-        <label class="title-label">크롤링 제목</label>
-        <input type="text" id="presetTitle" class="title-input" placeholder="예: 서울 아파트 진행물건 5억 이하">
-      </div>
-
-      <!-- 종합검색 폼 (옥션원 동일) -->
-      <h3 class="section-h">데이터 필터링 조건 (종합검색)</h3>
-      <form id="filterForm" class="filter-form" autocomplete="off" onsubmit="return false;">
-        <table class="form-table">
-          <colgroup><col style="width:11%"><col style="width:55%"><col style="width:12%"><col style="width:22%"></colgroup>
-
-          <!-- row 1: 법원선택 / 사건번호 / 감정가격 -->
-          <tr>
-            <th>법원선택</th>
-            <td>
-              <select name="court" id="f_court" class="sel sel-court"></select>
-              <select name="branch" id="f_branch" class="sel sel-branch">
-                <option value="">계</option>
-              </select>
-            </td>
-            <th>사건번호</th>
-            <td>
-              <select name="caseYear" id="f_caseYear" class="sel sel-year"></select>
-              <span class="suffix">타경</span>
-              <input type="text" name="caseNo" id="f_caseNo" class="inp inp-sm">
-            </td>
-          </tr>
-
-          <tr>
-            <th>감정가격</th>
-            <td>
-              <input type="text" name="apprMin" class="inp inp-sm" data-numfmt="1"><span class="suffix">만원 ~</span>
-              <input type="text" name="apprMax" class="inp inp-sm" data-numfmt="1"><span class="suffix">만원</span>
-            </td>
-            <th>물건현황</th>
-            <td>
-              <select name="status" id="f_status" class="sel"></select>
-              <span class="suffix">유찰</span>
-              <input type="text" name="failMin" class="inp inp-xs" data-numfmt="1">
-              <span class="suffix">~</span>
-              <input type="text" name="failMax" class="inp inp-xs" data-numfmt="1">
-              <span class="suffix">회</span>
-            </td>
-          </tr>
-
-          <tr>
-            <th>물건종류</th>
-            <td colspan="3">
-              <select name="propType" id="f_propType" class="sel"></select>
-              <button type="button" class="btn btn-mini" id="btnMultiProp">복수선택</button>
-              <span id="multiPropTags" class="multi-tags"></span>
-            </td>
-          </tr>
-
-          <tr>
-            <th>최저가격</th>
-            <td>
-              <input type="text" name="lowMin" class="inp inp-sm" data-numfmt="1"><span class="suffix">만원 ~</span>
-              <input type="text" name="lowMax" class="inp inp-sm" data-numfmt="1"><span class="suffix">만원</span>
-            </td>
-            <th>매각기일</th>
-            <td>
-              <input type="date" name="bidDateFrom" class="inp inp-date">
-              <span class="suffix">~</span>
-              <input type="date" name="bidDateTo" class="inp inp-date">
-            </td>
-          </tr>
-
-          <tr>
-            <th>건물면적</th>
-            <td>
-              <input type="text" name="bldArea1Min" class="inp inp-xs" data-numfmt="1"><span class="suffix">㎡ ~</span>
-              <input type="text" name="bldArea1Max" class="inp inp-xs" data-numfmt="1"><span class="suffix">㎡</span>
-              <span class="cell-sep">/</span>
-              <input type="text" name="bldArea2Min" class="inp inp-xs" data-numfmt="1"><span class="suffix">평 ~</span>
-              <input type="text" name="bldArea2Max" class="inp inp-xs" data-numfmt="1"><span class="suffix">평</span>
-            </td>
-            <th>보존등기일</th>
-            <td>
-              <input type="date" name="regDateFrom" class="inp inp-date">
-              <span class="suffix">~</span>
-              <input type="date" name="regDateTo" class="inp inp-date">
-            </td>
-          </tr>
-
-          <tr>
-            <th>대지면적</th>
-            <td>
-              <input type="text" name="lndArea1Min" class="inp inp-xs" data-numfmt="1"><span class="suffix">㎡ ~</span>
-              <input type="text" name="lndArea1Max" class="inp inp-xs" data-numfmt="1"><span class="suffix">㎡</span>
-              <span class="cell-sep">/</span>
-              <input type="text" name="lndArea2Min" class="inp inp-xs" data-numfmt="1"><span class="suffix">평 ~</span>
-              <input type="text" name="lndArea2Max" class="inp inp-xs" data-numfmt="1"><span class="suffix">평</span>
-            </td>
-            <th>지번범위</th>
-            <td>
-              <select name="lotKind" class="sel sel-xs">
-                <option value="">전체</option>
-                <option value="2">일반</option>
-                <option value="1">산</option>
-              </select>
-              <input type="text" name="lotFrom" class="inp inp-xs">
-              <span class="suffix">~</span>
-              <input type="text" name="lotTo" class="inp inp-xs">
-            </td>
-          </tr>
-
-          <tr>
-            <th>주소선택</th>
-            <td colspan="3">
-              <div class="addr-row">
-                <select name="addrSido" id="f_addrSido" class="sel"><option value="">-시/도-</option></select>
-                <select name="addrGugun" id="f_addrGugun" class="sel"><option value="">-구/군-</option></select>
-                <select name="addrDong" id="f_addrDong" class="sel"><option value="">-읍/면/동-</option></select>
-                <button type="button" id="btnAddrAdd" class="btn btn-mini">추가</button>
-                <span class="muted small">(최대 20개 추가 가능)</span>
-              </div>
-              <div id="addrTags" class="addr-tags"></div>
-              <div class="addr-row">
-                <span class="muted small">건물명칭</span>
-                <input type="text" name="bldName" class="inp" style="min-width:240px">
-              </div>
-            </td>
-          </tr>
-
-          <tr>
-            <th>특수물건</th>
-            <td colspan="3">
-              <select name="special" id="f_special" class="sel sel-wide"></select>
-            </td>
-          </tr>
-
-          <tr>
-            <th>정렬방법</th>
-            <td>
-              <select name="orderBy" id="f_orderBy" class="sel"></select>
-              <span class="cell-sep">목록수</span>
-              <select name="pageSize" id="f_pageSize" class="sel sel-xs">
-                <option value="">목록수</option>
-                <option>20</option><option>30</option><option>40</option><option>50</option>
-                <option>60</option><option>70</option><option>80</option><option>90</option><option>100</option>
-              </select>
-            </td>
-            <th>경매절차</th>
-            <td>
-              <select name="procType" class="sel">
-                <option value="">임의/강제</option>
-                <option value="4">임의경매</option>
-                <option value="5">강제경매</option>
-              </select>
-            </td>
-          </tr>
-
-        </table>
-      </form>
-
-      <!-- 추가 필터링 조건 (옥션원에서 못 하는 후처리 필터) -->
-      <h3 class="section-h">
-        추가 필터링 조건
-        <span class="muted small">옥션원 검색 후 결과에 적용할 자체 필터 — 종류는 한번 등록하면 다음 만들기에 재사용</span>
-      </h3>
-      <div class="cust-filter-box">
-        <div id="custFilterRows" class="cust-rows"></div>
-        <div class="cust-actions">
-          <button type="button" id="btnAddCustRow" class="btn btn-mini">+ 필터 조건 추가</button>
-          <button type="button" id="btnManageTypes" class="btn btn-mini btn-ghost">필터 종류 관리</button>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <button type="button" id="btnReset" class="btn">다시</button>
-        <button type="button" id="btnRunCrawl" class="btn btn-primary">크롤링 실행</button>
-      </div>
-
-    </section>
 
     <!-- 빈 상태 안내 -->
     <section id="emptyHint" class="empty-hint">
@@ -240,6 +58,201 @@
       </div>
     </section>
 
+    <!-- 만들기/편집 패널 -->
+    <section id="editorPanel" class="hidden">
+
+      <div class="panel-head">
+        <div class="panel-title">
+          <span id="editorMode" class="f24 bold_900">새 크롤링 등록</span>
+          <span id="editorIdBadge" class="f11 gray"></span>
+        </div>
+        <div class="panel-head-actions">
+          <button id="btnDelete" class="btn_box_sss btn_white bold hidden" type="button">삭제</button>
+          <button id="btnCancel" class="btn_box_sss btn_white bold" type="button">취소</button>
+          <button id="btnSave" class="btn_box_sss btn_blue bold" type="button">저장</button>
+        </div>
+      </div>
+
+      <!-- 제목 -->
+      <div class="title-row">
+        <span class="title-label">크롤링 제목</span>
+        <input type="text" id="presetTitle" class="title-input" placeholder="예: 서울 아파트 진행물건 5억 이하">
+      </div>
+
+      <!-- 옥션원 종합검색 폼 (실제 클래스 사용) -->
+      <div class="section-h">데이터 필터링 조건 (종합검색)</div>
+      <div class="search_form">
+        <form id="filterForm" autocomplete="off" onsubmit="return false;">
+          <table class="tbl_fmSrch" cellpadding="0" cellspacing="0">
+            <colgroup><col style="width:8%"><col style="width:25%"><col style="width:8%"><col style="width:25%"><col style="width:8%"><col style="width:26%"></colgroup>
+            <tbody>
+
+              <!-- row: 법원/사건/감정가 -->
+              <tr>
+                <th>법원선택</th>
+                <td>
+                  <select name="court" id="f_court"></select>
+                  <select name="branch" id="f_branch"><option value="">계</option></select>
+                </td>
+                <th>사건번호</th>
+                <td>
+                  <select name="caseYear" id="f_caseYear"></select>
+                  <span>타경</span>
+                  <input type="text" name="caseNo" id="f_caseNo" size="10">
+                </td>
+                <th>감정가격</th>
+                <td>
+                  <input type="text" name="apprMin" class="unite_ju min_price" data-numfmt="1" size="8"><span>만원~</span>
+                  <input type="text" name="apprMax" class="unite_ju max_price" data-numfmt="1" size="8"><span>만원</span>
+                </td>
+              </tr>
+
+              <!-- row: 물건현황/물건종류/최저가격 -->
+              <tr>
+                <th>물건현황</th>
+                <td>
+                  <select name="status" id="f_status"></select>
+                  <span>유찰</span>
+                  <input type="text" name="failMin" data-numfmt="1" size="3">
+                  <span>~</span>
+                  <input type="text" name="failMax" data-numfmt="1" size="3">
+                  <span>회</span>
+                </td>
+                <th>물건종류</th>
+                <td>
+                  <select name="propType" id="f_propType"></select>
+                  <button type="button" id="btnMultiProp" class="btn_box_sss btn_white">복수선택</button>
+                  <div id="multiPropTags" class="multi-tags"></div>
+                </td>
+                <th>최저가격</th>
+                <td>
+                  <input type="text" name="lowMin" class="unite_ju min_price" data-numfmt="1" size="8"><span>만원~</span>
+                  <input type="text" name="lowMax" class="unite_ju max_price" data-numfmt="1" size="8"><span>만원</span>
+                </td>
+              </tr>
+
+              <!-- row: 매각기일/건물면적/대지면적 -->
+              <tr>
+                <th>매각기일</th>
+                <td>
+                  <input type="date" name="bidDateFrom">
+                  <span>~</span>
+                  <input type="date" name="bidDateTo">
+                </td>
+                <th>건물면적</th>
+                <td>
+                  <input type="text" name="bldArea1Min" data-numfmt="1" size="4"><span>㎡~</span>
+                  <input type="text" name="bldArea1Max" data-numfmt="1" size="4"><span>㎡ /</span>
+                  <input type="text" name="bldArea2Min" data-numfmt="1" size="4"><span>평~</span>
+                  <input type="text" name="bldArea2Max" data-numfmt="1" size="4"><span>평</span>
+                </td>
+                <th>대지면적</th>
+                <td>
+                  <input type="text" name="lndArea1Min" data-numfmt="1" size="4"><span>㎡~</span>
+                  <input type="text" name="lndArea1Max" data-numfmt="1" size="4"><span>㎡ /</span>
+                  <input type="text" name="lndArea2Min" data-numfmt="1" size="4"><span>평~</span>
+                  <input type="text" name="lndArea2Max" data-numfmt="1" size="4"><span>평</span>
+                </td>
+              </tr>
+
+              <!-- row: 보존등기일/주소선택/지번범위 -->
+              <tr>
+                <th>보존등기일</th>
+                <td>
+                  <input type="date" name="regDateFrom">
+                  <span>~</span>
+                  <input type="date" name="regDateTo">
+                </td>
+                <th>주소선택</th>
+                <td>
+                  <select name="addrSido" id="f_addrSido"><option value="">-시/도-</option></select>
+                  <select name="addrGugun" id="f_addrGugun"><option value="">-구/군-</option></select>
+                  <select name="addrDong" id="f_addrDong"><option value="">-읍/면/동-</option></select>
+                  <button type="button" id="btnAddrAdd" class="btn_box_sss btn_white">추가</button>
+                </td>
+                <th>지번범위</th>
+                <td>
+                  <select name="lotKind">
+                    <option value="">전체</option>
+                    <option value="2">일반</option>
+                    <option value="1">산</option>
+                  </select>
+                  <input type="text" name="lotFrom" size="4">
+                  <span>~</span>
+                  <input type="text" name="lotTo" size="4">
+                </td>
+              </tr>
+
+              <!-- row: 주소태그/건물명칭 -->
+              <tr>
+                <th>추가주소</th>
+                <td colspan="3">
+                  <div id="addrTags" class="addr-tags"></div>
+                  <span class="f10 gray">최대 20개 추가 가능</span>
+                </td>
+                <th>건물명칭</th>
+                <td>
+                  <input type="text" name="bldName" size="14">
+                </td>
+              </tr>
+
+              <!-- row: 특수물건 -->
+              <tr>
+                <th>특수물건</th>
+                <td colspan="5">
+                  <select name="special" id="f_special" style="min-width:380px;"></select>
+                </td>
+              </tr>
+
+              <!-- row: 정렬/목록수/경매절차 -->
+              <tr>
+                <th>정렬방법</th>
+                <td>
+                  <select name="orderBy" id="f_orderBy"></select>
+                </td>
+                <th>목록수</th>
+                <td>
+                  <select name="pageSize" id="f_pageSize">
+                    <option value="">목록수</option>
+                    <option>20</option><option>30</option><option>40</option><option>50</option>
+                    <option>60</option><option>70</option><option>80</option><option>90</option><option>100</option>
+                  </select>
+                </td>
+                <th>경매절차</th>
+                <td>
+                  <select name="procType">
+                    <option value="">임의/강제</option>
+                    <option value="4">임의경매</option>
+                    <option value="5">강제경매</option>
+                  </select>
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+
+          <div class="form-actions">
+            <button type="button" id="btnReset" class="btn_box_sss btn_white bold">다시</button>
+            <button type="button" id="btnRunCrawl" class="btn_box_sss btn_blue bold">크롤링 실행</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- 추가 필터링 조건 -->
+      <div class="section-h">
+        추가 필터링 조건
+        <span class="f10 gray">옥션원 검색 후 결과에 적용할 자체 필터 — 종류는 한번 등록하면 다음 만들기에 재사용</span>
+      </div>
+      <div class="cust-filter-box">
+        <div id="custFilterRows" class="cust-rows"></div>
+        <div class="cust-actions">
+          <button type="button" id="btnAddCustRow" class="btn_box_sss btn_white">+ 필터 조건 추가</button>
+          <button type="button" id="btnManageTypes" class="btn_box_sss btn_white">필터 종류 관리</button>
+        </div>
+      </div>
+
+    </section>
+
   </main>
 </div>
 
@@ -248,13 +261,13 @@
   <div class="modal-bg"></div>
   <div class="modal-box">
     <div class="modal-head">
-      <span>물건종류 복수선택</span>
-      <button class="btn btn-mini" id="multiPropClose">닫기</button>
+      <span class="bold">물건종류 복수선택</span>
+      <button class="btn_box_sss btn_white" id="multiPropClose" type="button">닫기</button>
     </div>
     <div id="multiPropList" class="modal-body"></div>
     <div class="modal-foot">
-      <button class="btn" id="multiPropClear">전체해제</button>
-      <button class="btn btn-primary" id="multiPropApply">적용</button>
+      <button class="btn_box_sss btn_white" id="multiPropClear" type="button">전체해제</button>
+      <button class="btn_box_sss btn_blue bold" id="multiPropApply" type="button">적용</button>
     </div>
   </div>
 </div>
