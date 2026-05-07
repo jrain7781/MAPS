@@ -1788,6 +1788,14 @@
       visibility: visible !important;
     }
 
+    /* 일괄 프린트 모드: position fixed 면 한 페이지만 잡혀서 멀티페이지가 안 나옴.
+       body.bulk-printing 일 때 static 흐름으로 전환해 자연스러운 페이지 분할 허용. */
+    body.bulk-printing #printInvestigationArea {
+      position: static !important;
+      height: auto !important;
+      width: auto !important;
+      padding: 0 !important;
+    }
     /* 일괄 프린트: 물건당 한 페이지 */
     #printInvestigationArea .bulk-print-page,
     #printInvestigationArea .bulk-print-page * {
@@ -1796,8 +1804,9 @@
     #printInvestigationArea .bulk-print-page {
       page-break-after: always;
       break-after: page;
+      page-break-inside: avoid;
+      break-inside: avoid;
       width: 100%;
-      min-height: 100vh;
       box-sizing: border-box;
       padding: 8mm;
       display: flex;

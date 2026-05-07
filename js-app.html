@@ -8218,8 +8218,12 @@ MJ 이정우 팀장
 
         printArea.innerHTML = html;
 
+        // 멀티페이지 모드 활성 (CSS 에서 position: fixed → static 으로 전환되어야 페이지가 여러 장 나옴)
+        document.body.classList.add('bulk-printing');
+
         const restore = () => {
             printArea.innerHTML = originalHTML;
+            document.body.classList.remove('bulk-printing');
             window.removeEventListener('afterprint', restore);
         };
         window.addEventListener('afterprint', restore);
@@ -8231,18 +8235,22 @@ MJ 이정우 팀장
         }
         if (typeof showStatus === 'function') showStatus(`${items.length}건 조사이미지 로딩 중...`, 'info');
         let loaded = 0;
+        let printed = false;
+        const triggerPrint = () => {
+            if (printed) return;
+            printed = true;
+            setTimeout(() => window.print(), 200);
+        };
         const onDone = () => {
             loaded++;
-            if (loaded >= imgs.length) {
-                setTimeout(() => window.print(), 200);
-            }
+            if (loaded >= imgs.length) triggerPrint();
         };
         imgs.forEach(img => {
             if (img.complete && img.naturalWidth > 0) onDone();
             else { img.onload = onDone; img.onerror = onDone; }
         });
         // 안전망: 8초 내 모든 이미지 로딩 안 끝나도 강제 인쇄
-        setTimeout(() => { if (loaded < imgs.length) window.print(); }, 8000);
+        setTimeout(triggerPrint, 8000);
     }
 
     async function handleItemCaptureListDownload() {
