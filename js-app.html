@@ -3535,6 +3535,49 @@
                 widths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w; });
             }
         } catch (e) { }
+
+        // ④ 물건 용도 관리 테이블 컬럼 — 헤더 우측 드래그
+        document.querySelectorAll('#yongdoTable .th-resize-handle').forEach(handle => {
+            handle.addEventListener('mousedown', e => {
+                const colIdx = parseInt(handle.dataset.yongdoCol);
+                const cols = document.querySelectorAll('#yongdoTableColgroup col');
+                const table = document.getElementById('yongdoTable');
+                if (!cols[colIdx] || !table) return;
+                const tableW = table.offsetWidth;
+                const startX = e.clientX;
+                const startW = parseFloat(cols[colIdx].style.width) / 100 * tableW;
+                handle.classList.add('active');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                const onMove = e2 => {
+                    const newW = Math.max(28, startW + (e2.clientX - startX));
+                    cols[colIdx].style.width = (newW / tableW * 100).toFixed(2) + '%';
+                };
+                const onUp = () => {
+                    handle.classList.remove('active');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    const widths = Array.from(cols).map(c => c.style.width);
+                    localStorage.setItem('yongdoColWidths', JSON.stringify(widths));
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        // 저장된 yongdo 테이블 컬럼 너비 복원
+        try {
+            const savedY = localStorage.getItem('yongdoColWidths');
+            if (savedY) {
+                const widths = JSON.parse(savedY);
+                const cols = document.querySelectorAll('#yongdoTableColgroup col');
+                widths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w; });
+            }
+        } catch (e) { }
     }
 
     function _saveDashLayout() {
@@ -6913,6 +6956,7 @@ MJ 이정우 팀장
                 updateDashboardFilterOptions();
                 renderMissingBidDashboard();
                 renderStatusManagementDashboard();
+                renderYongdoManagementDashboard();
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
             })
