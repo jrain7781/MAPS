@@ -1330,6 +1330,9 @@
     // 물건용도 (items_youngdo) — 하드코딩 옵션, 표시 라벨, 태그 클래스, 탭별 허용 규칙
     const YONGDO_OPTIONS = ['플래티넘', '블랙', '실버', '돈클수익', '돈클월세', 'PT, 단투'];
     const YONGDO_PRE_LABEL = '등록전'; // 빈값 표시 라벨
+    // 공백 / 반각콤마 / 전각콤마 무시 정규화 (사용자 시트 입력 다양성 흡수)
+    function _yongdoNorm(s) { return String(s || '').trim().replace(/[\s,，]/g, ''); }
+    function _yongdoEq(a, b) { return _yongdoNorm(a) === _yongdoNorm(b); }
     function getYongdoDisplayLabel(value) {
         const v = String(value || '').trim();
         return v === '' ? YONGDO_PRE_LABEL : v;
@@ -1355,7 +1358,12 @@
         return new Set(['PT, 단투', '']); // CLASS 또는 미상
     }
     function isYongdoAllowedForClassType(value, classType) {
-        return getAllowedYongdoForClassType(classType).has(String(value || '').trim());
+        const allowed = getAllowedYongdoForClassType(classType);
+        const v = String(value || '').trim();
+        if (v === '') return allowed.has('');
+        // 공백/콤마 무시 매칭 (시트 입력 다양성 흡수)
+        for (const a of allowed) { if (_yongdoEq(v, a)) return true; }
+        return false;
     }
 
     // 오늘 이후 모든 데이터 날짜 추출
@@ -1807,7 +1815,7 @@
                 if (fCalYongdos.length === 0) pass = false;
                 else {
                     const itemYongdo = String(item.items_youngdo || '').trim();
-                    const ok = fCalYongdos.some(v => v === '__pre__' ? itemYongdo === '' : itemYongdo === v);
+                    const ok = fCalYongdos.some(v => v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v));
                     if (!ok) pass = false;
                 }
             }
@@ -2767,7 +2775,7 @@
                 if (fCalYongdos.length === 0) pass = false;
                 else {
                     const itemYongdo = String(item.items_youngdo || '').trim();
-                    const ok = fCalYongdos.some(v => v === '__pre__' ? itemYongdo === '' : itemYongdo === v);
+                    const ok = fCalYongdos.some(v => v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v));
                     if (!ok) pass = false;
                 }
             }
@@ -3693,7 +3701,7 @@
         const v = String(itemYongdoRaw || '').trim();
         if (target === '__pre__') return v === '';
         if (target === '__all__') return true;
-        return v === target;
+        return _yongdoEq(v, target);
     }
 
     function renderYongdoManagementDashboard() {
@@ -7839,7 +7847,7 @@ MJ 이정우 팀장
                 } else {
                     const itemYongdo = String(item.items_youngdo || '').trim();
                     matchesYongdo = selectedYongdo.some(v =>
-                        v === '__pre__' ? itemYongdo === '' : itemYongdo === v
+                        v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v)
                     );
                 }
             }
@@ -7865,7 +7873,7 @@ MJ 이정우 팀장
                     const itemYongdo = String(item.items_youngdo || '').trim();
                     const yongdoMatch = (dashboardFilter.status === '__pre__' || dashboardFilter.status === '')
                         ? itemYongdo === ''
-                        : itemYongdo === dashboardFilter.status;
+                        : _yongdoEq(itemYongdo, dashboardFilter.status);
                     return itemDate === dashboardFilter.date && item.stu_member === '상품' && yongdoMatch;
                 } else if (dashboardFilter.type === 'yongdo_all_product') {
                     // 상품 컬럼 셀 클릭: 해당 날짜 + stu_member='상품' (yongdo 무관)
@@ -7880,7 +7888,7 @@ MJ 이정우 팀장
                     return yongdos.some(y => {
                         if (y === '__all__') return true;
                         if (y === '__pre__') return itemYongdo === '';
-                        return itemYongdo === y;
+                        return _yongdoEq(itemYongdo, y);
                     });
                 } else if (dashboardFilter.type === 'total_yongdo') {
                     // tfoot 전체(오늘~) 특정 yongdo
@@ -7888,7 +7896,7 @@ MJ 이정우 팀장
                     const itemYongdo = String(item.items_youngdo || '').trim();
                     return (dashboardFilter.status === '__pre__' || dashboardFilter.status === '')
                         ? itemYongdo === ''
-                        : itemYongdo === dashboardFilter.status;
+                        : _yongdoEq(itemYongdo, dashboardFilter.status);
                 } else if (dashboardFilter.type === 'total_yongdo_all_product') {
                     // tfoot 전체(오늘~) 상품 (yongdo 무관)
                     return itemDate >= todayYYMMDD && item.stu_member === '상품';
@@ -17681,7 +17689,10 @@ ${token}
             const lockedStatus = ['입찰','추천','취소'].includes(String(it.stu_member || '').trim());
             // 용도 dim: 현재 종목(CLASS/PT/돈클)에서 허용 안 되는 용도 → 등록 불가
             const _itemYongdo = String(it.items_youngdo || '').trim();
-            const yongdoBlocked = !_allowedYongdoSet.has(_itemYongdo);
+            // 정규화 매칭 (공백/콤마 무시) - PT,단투 vs PT, 단투 등 흡수
+            const yongdoBlocked = !(typeof isYongdoAllowedForClassType === 'function')
+                ? !_allowedYongdoSet.has(_itemYongdo)
+                : !isYongdoAllowedForClassType(_itemYongdo, _curClassType);
             const disabled = alreadyIn || lockedStatus || yongdoBlocked;
             const imgDot = (it.image_ids || it.image_id)
                 ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>' : '';
