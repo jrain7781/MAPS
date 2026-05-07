@@ -3432,16 +3432,33 @@
         _loadDashLayout();
 
         // ① 카드 높이 — 하단 경계 드래그
+        // data-pair-card 가 지정되어 있으면 스플리터 동작 (위 카드 + dY, 아래 카드 - dY → 합 유지)
+        // 없으면 기존 단일 카드 리사이즈 (위 카드만 변경)
         document.querySelectorAll('.dash-card-h-resizer').forEach(handle => {
             handle.addEventListener('mousedown', e => {
                 const card = document.getElementById(handle.dataset.card);
                 if (!card) return;
-                const startY = e.clientY, startH = card.offsetHeight;
+                const pairId = handle.dataset.pairCard;
+                const pairCard = pairId ? document.getElementById(pairId) : null;
+                const startY = e.clientY;
+                const startH = card.offsetHeight;
+                const startPairH = pairCard ? pairCard.offsetHeight : 0;
+                const totalH = startH + startPairH; // 스플리터 모드에서 두 카드 합계
                 handle.classList.add('active');
                 document.body.style.cursor = 'row-resize';
                 document.body.style.userSelect = 'none';
                 const onMove = e2 => {
-                    card.style.height = Math.max(100, startH + (e2.clientY - startY)) + 'px';
+                    const dY = e2.clientY - startY;
+                    if (pairCard) {
+                        // 스플리터: 위는 +dY, 아래는 -dY (둘 다 최소 100 유지)
+                        let newCardH = startH + dY;
+                        newCardH = Math.max(100, Math.min(newCardH, totalH - 100));
+                        const newPairH = totalH - newCardH;
+                        card.style.height = newCardH + 'px';
+                        pairCard.style.height = newPairH + 'px';
+                    } else {
+                        card.style.height = Math.max(100, startH + dY) + 'px';
+                    }
                 };
                 const onUp = () => {
                     handle.classList.remove('active');
