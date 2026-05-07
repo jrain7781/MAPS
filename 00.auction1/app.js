@@ -363,14 +363,7 @@
     document.getElementById('btnDelete').addEventListener('click', deletePreset);
     document.getElementById('btnCancel').addEventListener('click', hideEditor);
     document.getElementById('btnReset').addEventListener('click', () => { clearForm(); custRows = []; renderCustRows(); });
-    document.getElementById('btnRunCrawl').addEventListener('click', () => {
-      const data = collectFormData();
-      const cust = custRows.slice();
-      console.log('[크롤링 실행 요청]', { title: document.getElementById('presetTitle').value, formData: data, customFilters: cust });
-      // 결과 패널 노출 (현재는 placeholder. 백엔드 연결 후 실제 데이터 채워짐)
-      document.getElementById('resultPanel').classList.remove('hidden');
-      setStatus('크롤링 실행 요청 전송 (백엔드 연결 대기)');
-    });
+    document.getElementById('btnRunCrawl').addEventListener('click', runCrawl);
 
     // 복수선택
     document.getElementById('btnMultiProp').addEventListener('click', openMultiPropModal);
@@ -470,6 +463,56 @@
     pricePanelEl = null;
     pricePanelInp = null;
     activePriceTarget = null;
+  }
+
+  // ── 크롤링 실행 (백엔드 /api/crawl 호출) ─────────────────────
+  async function runCrawl() {
+    const formData = collectFormData();
+    const customFilters = custRows.slice();
+    const titleEl = document.getElementById('presetTitle');
+    const title = titleEl ? titleEl.value : '';
+    const resultPanel = document.getElementById('resultPanel');
+    const resBody = document.getElementById('resBody');
+    const resCount = document.getElementById('resCount');
+    resultPanel.classList.remove('hidden');
+    resBody.innerHTML = '<tr><td colspan="8" class="center" style="padding:40px 0;color:#2563eb;">크롤링 실행 중... (옥션원 자동 검색)</td></tr>';
+    setStatus('크롤링 실행 중...');
+    try {
+      const r = await fetch('/api/crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title, formData: formData, customFilters: customFilters })
+      });
+      const data = await r.json();
+      if (!data.success) throw new Error(data.error || '백엔드 오류');
+      renderResults(data.items || []);
+      if (resCount) resCount.textContent = data.count || 0;
+      setStatus(`결과 ${data.count}건 수신`);
+    } catch (e) {
+      resBody.innerHTML = `<tr><td colspan="8" class="center" style="padding:40px 0;color:#dc2626;">크롤링 실패: ${escHtml(String(e.message || e))}<br><span class="muted small">crawler.py 가 실행 중인지 확인 (python crawler.py)</span></td></tr>`;
+      setStatus('크롤링 실패', true);
+    }
+  }
+
+  function renderResults(items) {
+    const resBody = document.getElementById('resBody');
+    if (!items.length) {
+      resBody.innerHTML = '<tr><td colspan="8" class="center" style="padding:40px 0;color:#888;">결과 없음</td></tr>';
+      return;
+    }
+    resBody.innerHTML = items.map((it, idx) => {
+      const img = it.img_url ? `<img src="${escAttr(it.img_url)}" style="max-width:100px;max-height:60px;" referrerpolicy="no-referrer">` : '';
+      return `<tr>
+        <td class="center"><input type="checkbox" class="res-cb" data-idx="${idx}"></td>
+        <td class="center">${img}</td>
+        <td class="left">${escHtml(it.sakun_no)}<br><span class="f10 gray">${escHtml(it.prop_kind)}</span></td>
+        <td class="left" style="padding-left:6px;">${escHtml(it.address)}</td>
+        <td class="center">${escHtml(it.price)}</td>
+        <td class="center">${escHtml(it.status)}</td>
+        <td class="center">${escHtml(it.bid_date)}</td>
+        <td class="right">${escHtml(it.view_count)}</td>
+      </tr>`;
+    }).join('');
   }
 
   // ── 면적 단위 자동 변환 (㎡ ↔ 평) ─────────────────────────
