@@ -57,6 +57,7 @@
     opts.forEach(o => {
       const opt = document.createElement('option');
       opt.value = o.v; opt.textContent = o.t;
+      if (o.cls) opt.className = o.cls; // bg_yellow 등 그룹 헤더 색상
       el.appendChild(opt);
     });
   }
@@ -396,11 +397,66 @@
     });
   }
 
+  // ── 가격 프리셋 패널 ─────────────────────────────────────
+  let activePriceTarget = null; // 'apprMin' | 'apprMax' | 'lowMin' | 'lowMax'
+  function openPricePreset(inp) {
+    const cell = inp.closest('.price-cell');
+    if (!cell) return;
+    activePriceTarget = inp.dataset.priceKey;
+    // 기존 패널 제거
+    document.querySelectorAll('.price-preset').forEach(p => p.remove());
+    const panel = document.createElement('div');
+    panel.className = 'price-preset show';
+    const targetLabel = (cell.dataset.priceTarget === 'appr') ? '감정가격' : '최저가격';
+    const slot = (activePriceTarget||'').endsWith('Min') ? '최소' : '최대';
+    panel.innerHTML =
+      '<div class="pp-head">'
+      + '<span><b>' + targetLabel + '</b> <span class="pp-target">' + slot + '값</span> 빠른 선택 (만원 단위)</span>'
+      + '<button type="button" class="pp-close">닫기</button>'
+      + '</div>'
+      + '<div class="pp-grid">'
+      + D.PRICE_PRESETS.map(p => '<button type="button" class="pp-btn' + (p.special ? ' special' : '') + '" data-v="' + p.v + '">' + p.t + '</button>').join('')
+      + '</div>'
+      + '<div class="pp-foot">* 1억 = 10,000 (만원). [이하] 클릭 시 0 입력, [최대] 클릭 시 99,999,999 입력</div>';
+    cell.appendChild(panel);
+    panel.querySelector('.pp-close').addEventListener('click', closePricePreset);
+    panel.querySelectorAll('.pp-btn').forEach(b => {
+      b.addEventListener('click', function () {
+        const v = parseInt(b.dataset.v, 10);
+        const f = document.querySelector('input[data-price-key="' + activePriceTarget + '"]');
+        if (!f) return;
+        if (v === 0) f.value = '0';
+        else if (v < 0) f.value = '99,999,999';
+        else f.value = Number(v).toLocaleString('ko-KR');
+        closePricePreset();
+      });
+    });
+    // 외부 클릭 닫기
+    setTimeout(() => {
+      const onDoc = function (e) {
+        if (!panel.contains(e.target) && e.target !== inp) {
+          closePricePreset();
+          document.removeEventListener('mousedown', onDoc);
+        }
+      };
+      document.addEventListener('mousedown', onDoc);
+    }, 0);
+  }
+  function closePricePreset() {
+    document.querySelectorAll('.price-preset').forEach(p => p.remove());
+    activePriceTarget = null;
+  }
+
   // ── 초기화 ───────────────────────────────────────────
   function init() {
     fillStaticSelects();
     renderSidebar();
     bind();
+    // 가격 input 클릭 → 프리셋 펼침
+    document.querySelectorAll('.price-inp').forEach(inp => {
+      inp.addEventListener('focus', () => openPricePreset(inp));
+      inp.addEventListener('click', () => openPricePreset(inp));
+    });
     setStatus('준비 완료');
   }
 
