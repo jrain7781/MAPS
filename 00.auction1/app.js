@@ -119,6 +119,7 @@
     renderAddrTags();
     multiPropSelected = new Set((data && Array.isArray(data._multiProp)) ? data._multiProp : []);
     renderMultiPropTags();
+    if (typeof window.__refreshHighlights === 'function') window.__refreshHighlights();
   }
   function clearForm() { applyFormData({}); }
 
@@ -442,6 +443,7 @@
           if (v === 0) f.value = '0';
           else if (v < 0) f.value = '99,999,999';
           else f.value = Number(v).toLocaleString('ko-KR');
+          if (typeof window.__refreshHighlights === 'function') window.__refreshHighlights();
         }
         closePricePreset();
       };
@@ -497,6 +499,7 @@
         areaUpdating = true;
         pair.value = out;
         areaUpdating = false;
+        if (typeof window.__refreshHighlights === 'function') window.__refreshHighlights();
       });
     });
   }
@@ -513,7 +516,38 @@
     });
     bindAreaConversion();
     bindAddrCascade();
+    bindValueHighlight();
     setStatus('준비 완료');
+  }
+
+  // ── 입력된 값 하이라이트 ────────────────────────────────
+  function _hasValue(el) {
+    if (!el || !el.name) return false;
+    if (el.tagName === 'SELECT') {
+      // 첫 옵션이 placeholder("", "전체", "-시/도-" 등) 인 경우 그 옵션 선택은 미입력으로 간주
+      var v = el.value;
+      return v !== '' && v !== '0';
+    }
+    var t = (el.type || '').toLowerCase();
+    if (t === 'checkbox' || t === 'radio') return el.checked;
+    return String(el.value || '').trim() !== '';
+  }
+  function refreshHighlights() {
+    var form = document.getElementById('filterForm');
+    if (!form) return;
+    Array.from(form.elements).forEach(function (el) {
+      if (!el.name) return;
+      el.classList.toggle('has-value', _hasValue(el));
+    });
+  }
+  function bindValueHighlight() {
+    var form = document.getElementById('filterForm');
+    if (!form) return;
+    form.addEventListener('input', refreshHighlights);
+    form.addEventListener('change', refreshHighlights);
+    // 폼 데이터 셋팅 직후에도 갱신할 수 있도록 노출
+    window.__refreshHighlights = refreshHighlights;
+    refreshHighlights();
   }
 
   // ── 주소 시/도 → 구/군 자동 채움 ─────────────────────────
