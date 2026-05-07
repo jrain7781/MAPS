@@ -3233,7 +3233,7 @@
         sortedLabels.forEach(l => {
             optsHtml += `<option value="${escapeHtml(l)}"${styAttr(colorByLabel[l])}>${escapeHtml(l)}</option>`;
         });
-        ['missingBidFilterMember', 'statusFilterMember'].forEach(id => {
+        ['missingBidFilterMember', 'statusFilterMember', 'yongdoFilterMember'].forEach(id => {
             const sel = document.getElementById(id);
             if (!sel) return;
             const cur = sel.value;
@@ -3543,7 +3543,7 @@
             const el = document.getElementById(id);
             if (el) layout[id] = el.offsetWidth;
         });
-        ['missingBidCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
+        ['missingBidCard', 'yongdoManagementCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
             const el = document.getElementById(id);
             if (el) layout[id + '_h'] = el.offsetHeight;
         });
@@ -3561,7 +3561,7 @@
                     if (el) { el.style.flex = `0 0 ${layout[id]}px`; el.style.width = layout[id] + 'px'; }
                 }
             });
-            ['missingBidCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
+            ['missingBidCard', 'yongdoManagementCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
                 if (layout[id + '_h']) {
                     const el = document.getElementById(id);
                     if (el) el.style.height = layout[id + '_h'] + 'px';
@@ -3570,6 +3570,168 @@
         } catch (e) { }
     }
     // ─────────────────────────────────────────────────────────────
+
+    // ── 물건 용도 관리 대쉬보드 ───────────────────────────
+    // 셀: stu_member='상품' 인 물건만 집계, 컬럼은 items_youngdo 별 분포
+    // - 상품 컬럼 = 그날 상품 총 합
+    // - 등록전 컬럼 = items_youngdo 비어있는 건
+    function toggleAllYongdoColumn(headerCb) {
+        const yongdo = headerCb.dataset.yongdo;
+        const checked = headerCb.checked;
+        document.querySelectorAll(`.yongdo-cell-cb[data-yongdo="${yongdo}"]`).forEach(cb => {
+            cb.checked = checked;
+        });
+        updateYongdoBidMoveBtn();
+    }
+
+    function updateYongdoBidMoveBtn() {
+        const btn = document.getElementById('yongdoBidMoveBtn');
+        const checked = document.querySelectorAll('.yongdo-cell-cb:checked');
+        if (btn) btn.classList.toggle('hidden', checked.length === 0);
+        // 헤더 "전체" 체크박스 상태 동기화
+        document.querySelectorAll('.yongdo-col-all').forEach(allCb => {
+            const yongdo = allCb.dataset.yongdo;
+            const cells = document.querySelectorAll(`.yongdo-cell-cb[data-yongdo="${yongdo}"]`);
+            if (cells.length === 0) { allCb.checked = false; return; }
+            const allChecked = Array.from(cells).every(c => c.checked);
+            allCb.checked = allChecked;
+        });
+    }
+
+    function goToItemManagementFromYongdoSelection() {
+        const checked = document.querySelectorAll('.yongdo-cell-cb:checked');
+        if (checked.length === 0) return;
+        const filterMember = document.getElementById('yongdoFilterMember')?.value || '';
+        const dateSet = new Set();
+        const yongdoSet = new Set();
+        Array.from(checked).forEach(cb => {
+            dateSet.add(cb.dataset.date);
+            yongdoSet.add(cb.dataset.yongdo);
+        });
+        const dates = Array.from(dateSet);
+        const yongdos = Array.from(yongdoSet);
+        if (checked.length === 1) {
+            filterFromDashboard(dates[0], 'yongdo', yongdos[0], filterMember);
+        } else {
+            dashboardFilter = {
+                active: true,
+                dates: dates,
+                yongdos: yongdos,
+                type: 'yongdo_multi',
+                status: null,
+                manager: filterMember
+            };
+            navigateTo('ItemManagement');
+        }
+    }
+
+    // 용도값 매칭 헬퍼 (등록전 = '__pre__' = 빈값)
+    function _matchYongdoVal(itemYongdoRaw, target) {
+        const v = String(itemYongdoRaw || '').trim();
+        if (target === '__pre__') return v === '';
+        if (target === '__all__') return true;
+        return v === target;
+    }
+
+    function renderYongdoManagementDashboard() {
+        const tbody = document.getElementById('yongdoTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const tfoot = document.getElementById('yongdoTableFoot');
+        if (tfoot) tfoot.innerHTML = '';
+        // 헤더 전체 체크박스 + 이동 버튼 초기화
+        document.querySelectorAll('.yongdo-col-all').forEach(cb => cb.checked = false);
+        updateYongdoBidMoveBtn();
+
+        const targetDates = getWorkingDaysFromToday();
+        const yongdoCols = ['__all__', '플레티넘', '블랙', '실버', '수익', '월세', '기타', '__pre__'];
+        const yongdoStyles = {
+            '__all__': 'bg-yellow-100 text-yellow-800',  // 상품(전체)
+            '플레티넘': 'bg-purple-100 text-purple-800',
+            '블랙': 'bg-gray-700 text-white',
+            '실버': 'bg-gray-200 text-gray-800',
+            '수익': 'bg-green-100 text-green-800',
+            '월세': 'bg-blue-100 text-blue-800',
+            '기타': 'bg-pink-100 text-pink-800',
+            '__pre__': 'bg-red-50 text-red-700'
+        };
+        const filterMember = document.getElementById('yongdoFilterMember') ? document.getElementById('yongdoFilterMember').value : '';
+
+        // 날짜별 행 렌더
+        targetDates.forEach((dateObj, index) => {
+            const year = String(dateObj.getFullYear()).slice(-2);
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const targetYYMMDD = `${year}${month}${day}`;
+            const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+            const dDay = index === 0 ? "오늘" : `D-${index}`;
+            const dDayColor = index === 0 ? "text-gray-800" : "text-red-500";
+            const dateStr = `${month}/${day} (${dayNames[dateObj.getDay()]})`;
+
+            const row = document.createElement('tr');
+            row.className = "border-b border-gray-100 hover:bg-gray-50";
+
+            let html = `<td class="py-2 px-2 text-center border-r bg-gray-50 whitespace-nowrap">
+                  <span class="${dDayColor} font-bold mr-1 text-sm">${dDay}</span>
+                  <span class="text-gray-500 text-sm">${dateStr}</span>
+              </td>`;
+
+            yongdoCols.forEach(yongdo => {
+                const count = allBiddingData.filter(item => {
+                    const isDateMatch = String(item['in-date']) === targetYYMMDD;
+                    const isProduct = item.stu_member === '상품';
+                    const itemMember = item.m_name_id || '';
+                    const isMemberMatch = (filterMember === 'All' || filterMember === '') || (itemMember === filterMember);
+                    return isDateMatch && isProduct && isMemberMatch && _matchYongdoVal(item.items_youngdo, yongdo);
+                }).length;
+
+                const styleClass = count > 0 ? `${yongdoStyles[yongdo]} font-bold` : "";
+                if (count > 0) {
+                    // 셀 클릭 → 단건 필터, 체크박스 클릭 → 다중선택 (이벤트 분리)
+                    const yongdoArg = yongdo === '__all__' ? '' : yongdo;
+                    const yongdoType = yongdo === '__all__' ? 'yongdo_all_product' : 'yongdo';
+                    html += `<td class="py-2 px-1 ${styleClass} text-center text-sm transition duration-150 border-r border-gray-100 cursor-pointer hover:opacity-80"
+                              onclick="if(event.target.tagName==='INPUT')return; filterFromDashboard('${targetYYMMDD}', '${yongdoType}', '${yongdoArg}', '${filterMember}')">
+                              <input type="checkbox" class="yongdo-cell-cb mr-1 align-middle cursor-pointer" data-date="${targetYYMMDD}" data-yongdo="${yongdo}" onclick="event.stopPropagation()" onchange="updateYongdoBidMoveBtn()">${count}
+                          </td>`;
+                } else {
+                    html += `<td class="py-2 px-1 text-center text-sm text-gray-300 border-r border-gray-100"></td>`;
+                }
+            });
+
+            row.innerHTML = html;
+            tbody.appendChild(row);
+        });
+
+        // tfoot: 전체 (오늘~) 합계 - total_yongdo 클릭 가능
+        if (tfoot) {
+            const totalRow = document.createElement('tr');
+            let totalHtml = `<td class="py-2 px-3 text-center border-r text-blue-800 text-sm">전체 (오늘~)</td>`;
+            yongdoCols.forEach(yongdo => {
+                const totalCount = allBiddingData.filter(item => {
+                    const isDateMatch = String(item['in-date']) >= todayYYMMDD;
+                    const isProduct = item.stu_member === '상품';
+                    const itemMember = item.m_name_id || '';
+                    const isMemberMatch = (filterMember === 'All' || filterMember === '') || (itemMember === filterMember);
+                    return isDateMatch && isProduct && isMemberMatch && _matchYongdoVal(item.items_youngdo, yongdo);
+                }).length;
+
+                const display = totalCount > 0 ? totalCount : "";
+                const cursorClass = totalCount > 0 ? "cursor-pointer hover:bg-blue-200 text-blue-800" : "text-gray-300";
+                if (totalCount > 0) {
+                    const yongdoArg = yongdo === '__all__' ? '' : yongdo;
+                    const yongdoType = yongdo === '__all__' ? 'total_yongdo_all_product' : 'total_yongdo';
+                    totalHtml += `<td class="py-2 px-1 ${cursorClass} text-center text-sm transition duration-150 border-r border-blue-100"
+                                onclick="filterFromDashboard('${todayYYMMDD}', '${yongdoType}', '${yongdoArg}', '${filterMember}')">${display}</td>`;
+                } else {
+                    totalHtml += `<td class="py-2 px-1 ${cursorClass} text-center text-sm transition duration-150 border-r border-blue-100">${display}</td>`;
+                }
+            });
+            totalRow.innerHTML = totalHtml;
+            tfoot.appendChild(totalRow);
+        }
+    }
+    // ─────────────────────────────────────────────────────
 
     function renderStatusManagementDashboard() {
         if (!statusTableBody) return;
@@ -6739,6 +6901,7 @@ MJ 이정우 팀장
             updateDashboardFilterOptions();
             renderMissingBidDashboard();
             renderStatusManagementDashboard();
+            renderYongdoManagementDashboard();
             renderMemberBidChart();
             return;
         }
@@ -7516,13 +7679,26 @@ MJ 이정우 팀장
                 : '';
             if (dashboardFilter.type === 'total_status') {
                 filterDesc = `당일 이후 전체 [${dashboardFilter.status}] 건`;
+            } else if (dashboardFilter.type === 'total_yongdo') {
+                const yLabel = dashboardFilter.status === '__pre__' ? '등록전' : dashboardFilter.status;
+                filterDesc = `당일 이후 상품 [${yLabel}] 건`;
+            } else if (dashboardFilter.type === 'total_yongdo_all_product') {
+                filterDesc = `당일 이후 상품 전체`;
             } else if (dashboardFilter.type === 'missing_multi') {
                 filterDesc = `${(dashboardFilter.dates || []).length}개 날짜 입찰가 미입력 건`;
+            } else if (dashboardFilter.type === 'yongdo_multi') {
+                const yLabels = (dashboardFilter.yongdos || []).map(y => y === '__pre__' ? '등록전' : (y === '__all__' ? '상품' : y));
+                filterDesc = `${(dashboardFilter.dates || []).length}개 날짜 상품 [${yLabels.join('/')}] 건`;
             } else {
                 const d = dashboardFilter.date;
                 const niceDate = `${d.substring(0, 2)}/${d.substring(2, 4)}/${d.substring(4, 6)}`;
                 if (dashboardFilter.type === 'missing') {
                     filterDesc = `${niceDate} 입찰가 미입력 건`;
+                } else if (dashboardFilter.type === 'yongdo') {
+                    const yLabel = dashboardFilter.status === '__pre__' ? '등록전' : dashboardFilter.status;
+                    filterDesc = `${niceDate} 상품 [${yLabel}] 건`;
+                } else if (dashboardFilter.type === 'yongdo_all_product') {
+                    filterDesc = `${niceDate} 상품 전체`;
                 } else if (dashboardFilter.type === 'status') {
                     filterDesc = `${niceDate} [${dashboardFilter.status}] 건`;
                 } else if (dashboardFilter.type === 'auto_all') {
@@ -7565,7 +7741,7 @@ MJ 이정우 팀장
             const inDateNum = inDateStr.replace(/\D/g, '');
             // all_status/all_bid_state/item_ids 타입은 날짜 전체 범위를 조회 (과거 날짜 포함)
             const bypassDateFilter = dashboardFilter.active &&
-                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids' || dashboardFilter.type === 'missing_multi');
+                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids' || dashboardFilter.type === 'missing_multi' || dashboardFilter.type === 'yongdo_multi' || dashboardFilter.type === 'total_yongdo' || dashboardFilter.type === 'total_yongdo_all_product');
             const matchesIndate = bypassDateFilter
                 ? true
                 : (syncSakunFilter.active
@@ -7619,6 +7795,38 @@ MJ 이정우 팀장
                     return itemDate === dashboardFilter.date && (isNaN(price) || price === 0) && item.stu_member === '입찰';
                 } else if (dashboardFilter.type === 'missing_multi') {
                     return (dashboardFilter.dates || []).includes(itemDate) && (isNaN(price) || price === 0) && item.stu_member === '입찰';
+                } else if (dashboardFilter.type === 'yongdo') {
+                    // 단건 셀 클릭: 해당 날짜 + stu_member='상품' + 특정 yongdo
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    const yongdoMatch = (dashboardFilter.status === '__pre__' || dashboardFilter.status === '')
+                        ? itemYongdo === ''
+                        : itemYongdo === dashboardFilter.status;
+                    return itemDate === dashboardFilter.date && item.stu_member === '상품' && yongdoMatch;
+                } else if (dashboardFilter.type === 'yongdo_all_product') {
+                    // 상품 컬럼 셀 클릭: 해당 날짜 + stu_member='상품' (yongdo 무관)
+                    return itemDate === dashboardFilter.date && item.stu_member === '상품';
+                } else if (dashboardFilter.type === 'yongdo_multi') {
+                    // 다중 선택: dates × yongdos 카르테시안 + stu_member='상품'
+                    if (item.stu_member !== '상품') return false;
+                    const dates = dashboardFilter.dates || [];
+                    const yongdos = dashboardFilter.yongdos || [];
+                    if (!dates.includes(itemDate)) return false;
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    return yongdos.some(y => {
+                        if (y === '__all__') return true;
+                        if (y === '__pre__') return itemYongdo === '';
+                        return itemYongdo === y;
+                    });
+                } else if (dashboardFilter.type === 'total_yongdo') {
+                    // tfoot 전체(오늘~) 특정 yongdo
+                    if (item.stu_member !== '상품' || itemDate < todayYYMMDD) return false;
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    return (dashboardFilter.status === '__pre__' || dashboardFilter.status === '')
+                        ? itemYongdo === ''
+                        : itemYongdo === dashboardFilter.status;
+                } else if (dashboardFilter.type === 'total_yongdo_all_product') {
+                    // tfoot 전체(오늘~) 상품 (yongdo 무관)
+                    return itemDate >= todayYYMMDD && item.stu_member === '상품';
                 } else if (dashboardFilter.type === 'status') {
                     return itemDate === dashboardFilter.date && item.stu_member === dashboardFilter.status;
                 } else if (dashboardFilter.type === 'total_status') {
@@ -7747,6 +7955,23 @@ MJ 이정우 팀장
             updateManagerLabel();
             const mgrBtn2 = document.getElementById('search-manager-btn');
             if (mgrBtn2) mgrBtn2.classList.add('filter-active-input');
+        }
+
+        // yongdo 계열: 상태='상품' 고정 + 용도 라벨 표시
+        if (dashboardFilter.type === 'yongdo' || dashboardFilter.type === 'yongdo_multi' ||
+            dashboardFilter.type === 'yongdo_all_product' || dashboardFilter.type === 'total_yongdo' ||
+            dashboardFilter.type === 'total_yongdo_all_product') {
+            // 상태 체크박스는 '상품' 로 설정
+            const allStatusCb = document.getElementById('search-status-all');
+            if (allStatusCb) allStatusCb.checked = false;
+            document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => {
+                cb.checked = (cb.value === '상품');
+            });
+            const statusBtn = document.getElementById('search-status-btn');
+            const statusLabel = document.getElementById('search-status-label');
+            if (statusBtn) statusBtn.classList.add('filter-active-input');
+            if (statusLabel) statusLabel.textContent = '상품';
+            return;
         }
 
         // all_status / all_bid_state / item_ids 타입: dashboardFilter가 2단계에서 처리하므로

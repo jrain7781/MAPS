@@ -279,10 +279,80 @@
                     <!-- 경계 ①↔② -->
                     <div class="dash-col-resizer" data-left="dashCol1" data-right="dashCol2"></div>
 
-                    <!-- ② 물건 상태 관리 -->
-                    <div id="dashCol2" style="flex:0 0 41.7%; min-width:180px; padding:0 8px; box-sizing:border-box;">
+                    <!-- ② 물건 용도 관리 + 물건 상태 관리 (위/아래 분할) -->
+                    <div id="dashCol2" style="flex:0 0 41.7%; min-width:180px; padding:0 8px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px;">
+                        <!-- ②-위: 물건 용도 관리 -->
                         <div style="position:relative;">
-                            <div id="statusManagementCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:750px;">
+                            <div id="yongdoManagementCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:367px;">
+                                <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <h2 class="text-sm font-bold text-gray-800">물건 용도 관리</h2>
+                                        <div class="flex items-center gap-2">
+                                            <button id="yongdoBidMoveBtn" onclick="goToItemManagementFromYongdoSelection()"
+                                                class="hidden text-xs bg-blue-500 text-white rounded px-2 py-1 hover:bg-blue-600">물건관리이동</button>
+                                            <select id="yongdoFilterMember" onchange="renderYongdoManagementDashboard()"
+                                                class="text-xs text-gray-800 bg-gray-50 border border-gray-300 rounded px-2 py-1 focus:outline-none cursor-pointer">
+                                                <option value="All">전체</option>
+                                                <option value="대표님" selected>대표님</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex-1 overflow-y-auto">
+                                    <table id="yongdoTable" class="w-full text-center border-collapse text-sm" style="table-layout:fixed;">
+                                        <colgroup id="yongdoTableColgroup">
+                                            <col style="width:30%;">
+                                            <col style="width:9%;">
+                                            <col style="width:9%;">
+                                            <col style="width:9%;">
+                                            <col style="width:9%;">
+                                            <col style="width:8%;">
+                                            <col style="width:8%;">
+                                            <col style="width:8%;">
+                                            <col style="width:10%;">
+                                        </colgroup>
+                                        <thead class="sticky top-0 bg-gray-50 z-10">
+                                            <tr class="border-b border-gray-200 text-gray-600 text-sm leading-normal">
+                                                <th class="py-2 px-2 font-bold border-r text-center">날짜</th>
+                                                <th class="py-2 px-1 font-bold">상품</th>
+                                                <th class="py-2 px-1 font-bold">플레티넘</th>
+                                                <th class="py-2 px-1 font-bold">블랙</th>
+                                                <th class="py-2 px-1 font-bold">실버</th>
+                                                <th class="py-2 px-1 font-bold">수익</th>
+                                                <th class="py-2 px-1 font-bold">월세</th>
+                                                <th class="py-2 px-1 font-bold">기타</th>
+                                                <th class="py-2 px-1 font-bold">등록전</th>
+                                            </tr>
+                                            <tr class="border-b border-gray-200 bg-gray-50 text-xs">
+                                                <th class="py-1 px-2 text-center text-gray-500">전체</th>
+                                                <th class="py-1 px-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="__all__" onchange="toggleAllYongdoColumn(this)"></th>
+                                                <th class="py-1 px-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="플레티넘" onchange="toggleAllYongdoColumn(this)"></th>
+                                                <th class="py-1 px-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="블랙" onchange="toggleAllYongdoColumn(this)"></th>
+                                                <th class="py-1 px-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="실버" onchange="toggleAllYongdoColumn(this)"></th>
+                                                <th class="py-1 px-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="수익" onchange="toggleAllYongdoColumn(this)"></th>
+                                                <th class="py-1 px-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="월세" onchange="toggleAllYongdoColumn(this)"></th>
+                                                <th class="py-1 px-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="기타" onchange="toggleAllYongdoColumn(this)"></th>
+                                                <th class="py-1 px-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="__pre__" onchange="toggleAllYongdoColumn(this)"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="yongdoTableBody" class="text-gray-700 text-sm text-nowrap">
+                                            <tr>
+                                                <td colspan="9" class="py-4 text-center">데이터 로딩 중...</td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot id="yongdoTableFoot"
+                                            class="sticky bottom-0 bg-blue-50 z-10 font-bold border-t-2 border-blue-100">
+                                            <!-- JS에서 채움 -->
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="dash-card-h-resizer" data-card="yongdoManagementCard"></div>
+                        </div>
+
+                        <!-- ②-아래: 물건 상태 관리 -->
+                        <div style="position:relative;">
+                            <div id="statusManagementCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:367px;">
                                 <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
                                     <div class="flex justify-between items-center mb-1">
                                         <h2 class="text-sm font-bold text-gray-800">물건 상태 관리</h2>
