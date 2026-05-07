@@ -365,7 +365,9 @@
       const data = collectFormData();
       const cust = custRows.slice();
       console.log('[크롤링 실행 요청]', { title: document.getElementById('presetTitle').value, formData: data, customFilters: cust });
-      alert('크롤링 백엔드는 다음 단계에서 연결됩니다 (Selenium).\n현재 폼 값은 콘솔(F12)에 출력했습니다.');
+      // 결과 패널 노출 (현재는 placeholder. 백엔드 연결 후 실제 데이터 채워짐)
+      document.getElementById('resultPanel').classList.remove('hidden');
+      setStatus('크롤링 실행 요청 전송 (백엔드 연결 대기)');
     });
 
     // 복수선택
