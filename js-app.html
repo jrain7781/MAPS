@@ -1328,7 +1328,7 @@
     }
 
     // 물건용도 (items_youngdo) — 하드코딩 옵션, 표시 라벨, 태그 클래스, 탭별 허용 규칙
-    const YONGDO_OPTIONS = ['플레티넘', '블랙', '실버', '수익', '월세', '기타'];
+    const YONGDO_OPTIONS = ['플래티넘', '블랙', '실버', '돈클수익', '돈클월세', 'PT, 단투'];
     const YONGDO_PRE_LABEL = '등록전'; // 빈값 표시 라벨
     function getYongdoDisplayLabel(value) {
         const v = String(value || '').trim();
@@ -1337,22 +1337,22 @@
     function getYongdoTagClass(value) {
         const v = String(value || '').trim();
         switch (v) {
-            case '플레티넘': return 'yongdo-tag yongdo-tag-platinum';
+            case '플래티넘': return 'yongdo-tag yongdo-tag-platinum';
             case '블랙': return 'yongdo-tag yongdo-tag-black';
             case '실버': return 'yongdo-tag yongdo-tag-silver';
-            case '수익': return 'yongdo-tag yongdo-tag-income';
-            case '월세': return 'yongdo-tag yongdo-tag-rent';
-            case '기타': return 'yongdo-tag yongdo-tag-other';
+            case '돈클수익': return 'yongdo-tag yongdo-tag-income';
+            case '돈클월세': return 'yongdo-tag yongdo-tag-rent';
+            case 'PT, 단투': return 'yongdo-tag yongdo-tag-other';
             default: return 'yongdo-tag yongdo-tag-pre'; // 빈값 = 등록전
         }
     }
     // D1 picker 탭별 등록 가능 용도 (CLASS / PT / 돈클)
-    // CLASS: 빈값 + 기타 / PT: 플레티넘·블랙·실버·기타·빈값 / 돈클: 수익·월세·기타·빈값
+    // CLASS: 빈값 + PT,단투 / PT: 플래티넘·블랙·실버·PT,단투·빈값 / 돈클: 돈클수익·돈클월세·PT,단투·빈값
     function getAllowedYongdoForClassType(classType) {
         const t = String(classType || '').trim().toUpperCase();
-        if (t === 'PT') return new Set(['플레티넘', '블랙', '실버', '기타', '']);
-        if (t === '돈클' || t === 'DONCLE') return new Set(['수익', '월세', '기타', '']);
-        return new Set(['기타', '']); // CLASS 또는 미상
+        if (t === 'PT') return new Set(['플래티넘', '블랙', '실버', 'PT, 단투', '']);
+        if (t === '돈클' || t === 'DONCLE') return new Set(['돈클수익', '돈클월세', 'PT, 단투', '']);
+        return new Set(['PT, 단투', '']); // CLASS 또는 미상
     }
     function isYongdoAllowedForClassType(value, classType) {
         return getAllowedYongdoForClassType(classType).has(String(value || '').trim());
@@ -3598,6 +3598,12 @@
             const saved = localStorage.getItem('dashLayout');
             if (!saved) return;
             const layout = JSON.parse(saved);
+            // yongdoManagementCard 도입 전 저장된 레이아웃은 statusCard 높이가
+            // 750px 등으로 저장돼 있어 신규 카드 도입 후 비정상 길이를 만들기에 무시
+            if (!layout.yongdoManagementCard_h) {
+                localStorage.removeItem('dashLayout');
+                return;
+            }
             ['dashCol1', 'dashCol2'].forEach(id => {
                 if (layout[id]) {
                     const el = document.getElementById(id);
@@ -3687,16 +3693,17 @@
         updateYongdoBidMoveBtn();
 
         const targetDates = getWorkingDaysFromToday();
-        const yongdoCols = ['__all__', '플레티넘', '블랙', '실버', '수익', '월세', '기타', '__pre__'];
+        // 상품(전체) → 등록전 → 나머지 순서
+        const yongdoCols = ['__all__', '__pre__', '플래티넘', '블랙', '실버', '돈클수익', '돈클월세', 'PT, 단투'];
         const yongdoStyles = {
             '__all__': 'bg-yellow-100 text-yellow-800',  // 상품(전체)
-            '플레티넘': 'bg-purple-100 text-purple-800',
+            '__pre__': 'bg-red-50 text-red-700',         // 등록전
+            '플래티넘': 'bg-purple-100 text-purple-800',
             '블랙': 'bg-gray-700 text-white',
             '실버': 'bg-gray-200 text-gray-800',
-            '수익': 'bg-green-100 text-green-800',
-            '월세': 'bg-blue-100 text-blue-800',
-            '기타': 'bg-pink-100 text-pink-800',
-            '__pre__': 'bg-red-50 text-red-700'
+            '돈클수익': 'bg-green-100 text-green-800',
+            '돈클월세': 'bg-blue-100 text-blue-800',
+            'PT, 단투': 'bg-pink-100 text-pink-800'
         };
         const filterMember = document.getElementById('yongdoFilterMember') ? document.getElementById('yongdoFilterMember').value : '';
 
@@ -17637,7 +17644,7 @@ ${token}
         // 현재 회차의 종목 타입 (CLASS / PT / 돈클) → 허용 용도 결정
         const _d1info = (typeof allClassD1Data !== 'undefined') ? allClassD1Data.find(d => String(d.class_d1_id) === String(selectedClassD1Id)) : null;
         const _curClassType = _d1info ? String(_d1info.class_type || '') : '';
-        const _allowedYongdoSet = (typeof getAllowedYongdoForClassType === 'function') ? getAllowedYongdoForClassType(_curClassType) : new Set(['', '기타', '플레티넘', '블랙', '실버', '수익', '월세']);
+        const _allowedYongdoSet = (typeof getAllowedYongdoForClassType === 'function') ? getAllowedYongdoForClassType(_curClassType) : new Set(['', 'PT, 단투', '플래티넘', '블랙', '실버', '돈클수익', '돈클월세']);
 
         filtered.sort((a, b) => {
             const va = String(a[d1PickerSortKey_] || '');
