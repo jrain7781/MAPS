@@ -3590,20 +3590,17 @@
             const el = document.getElementById(id);
             if (el) layout[id + '_h'] = el.offsetHeight;
         });
-        localStorage.setItem('dashLayout', JSON.stringify(layout));
+        localStorage.setItem('dashLayoutV2', JSON.stringify(layout));
     }
 
     function _loadDashLayout() {
         try {
-            const saved = localStorage.getItem('dashLayout');
+            // 옛 키('dashLayout')는 yongdoCard 도입 전후로 저장된 비정상 높이가 있어
+            // V2 신규 키로 전환하며 한번 클리어
+            localStorage.removeItem('dashLayout');
+            const saved = localStorage.getItem('dashLayoutV2');
             if (!saved) return;
             const layout = JSON.parse(saved);
-            // yongdoManagementCard 도입 전 저장된 레이아웃은 statusCard 높이가
-            // 750px 등으로 저장돼 있어 신규 카드 도입 후 비정상 길이를 만들기에 무시
-            if (!layout.yongdoManagementCard_h) {
-                localStorage.removeItem('dashLayout');
-                return;
-            }
             ['dashCol1', 'dashCol2'].forEach(id => {
                 if (layout[id]) {
                     const el = document.getElementById(id);
