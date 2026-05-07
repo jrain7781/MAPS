@@ -8193,26 +8193,47 @@ MJ 이정우 팀장
         // 단건 프린트용 원래 구조 백업 (인쇄 후 복원)
         const originalHTML = printArea.innerHTML;
 
-        // 인쇄용 페이지 생성: 각 물건당 헤더 + 이미지 1장
+        // 인쇄용 페이지 생성: 각 물건당 헤더 2줄 + 이미지 1장
+        // - 1줄: 입찰일자 / 사건번호 / 법원 / 용도 / 물건상태
+        // - 2줄: 물건비고
+        function _bulkEscHtml(s) {
+            return String(s == null ? '' : s)
+                .split('&').join('&amp;')
+                .split('<').join('&lt;')
+                .split('>').join('&gt;')
+                .split('"').join('&quot;')
+                .split("'").join('&#39;');
+        }
+        function _bulkFmtIndate(s) {
+            var v = String(s == null ? '' : s).replace(/\D/g, '');
+            if (v.length === 6) return v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4,6);
+            return v;
+        }
         let html = '';
         items.forEach(item => {
-            const headerLine = [
+            const yongdoDisp = (typeof getYongdoDisplayLabel === 'function')
+                ? getYongdoDisplayLabel(item.items_youngdo)
+                : (item.items_youngdo || '등록전');
+            const line1Parts = [
+                _bulkFmtIndate(item['in-date']),
                 item.sakun_no || '',
                 item.court || '',
-                item.m_name || ''
-            ].filter(Boolean).join(' / ');
+                yongdoDisp,
+                item.stu_member || ''
+            ].filter(function(v){ return !!v; }).map(_bulkEscHtml);
+            const line1 = line1Parts.join(' / ');
+            const line2 = _bulkEscHtml(item.note || '');
+
             const imgId = item.image_id || '';
+            const headerHtml = '<div class="bulk-print-header">'
+                +   '<div class="bulk-print-header-line1">' + line1 + '</div>'
+                +   (line2 ? '<div class="bulk-print-header-line2">' + line2 + '</div>' : '')
+                + '</div>';
             if (imgId) {
                 const url = 'https://drive.google.com/thumbnail?sz=w1000&id=' + encodeURIComponent(imgId);
-                html += `<div class="bulk-print-page">`
-                     +    `<div class="bulk-print-header">${headerLine}</div>`
-                     +    `<img src="${url}" alt="조사이미지">`
-                     +  `</div>`;
+                html += '<div class="bulk-print-page">' + headerHtml + '<img src="' + url + '" alt="조사이미지"></div>';
             } else {
-                html += `<div class="bulk-print-page">`
-                     +    `<div class="bulk-print-header">${headerLine}</div>`
-                     +    `<p class="bulk-print-noimg">이미지 없음</p>`
-                     +  `</div>`;
+                html += '<div class="bulk-print-page">' + headerHtml + '<p class="bulk-print-noimg">이미지 없음</p></div>';
             }
         });
 
