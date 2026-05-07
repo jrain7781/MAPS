@@ -2350,6 +2350,10 @@
                 const allCalStatusCb = document.getElementById('cal-search-status-all');
                 const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
                 const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
+                // 용도 다중선택 필터 (입찰일정 주/월별 셀 단위 필터)
+                const fCalYongdosCell = getSelectedCalYongdoValues();
+                const allCalYongdoCbCell = document.getElementById('cal-search-youngdo-all');
+                const isAllCalYongdoCell = (allCalYongdoCbCell && allCalYongdoCbCell.checked);
                 // fManager: matchesCalManager(item) 사용으로 대체됨
 
                 const bids = filteredData.filter(item => {
@@ -2362,6 +2366,13 @@
                     // 상태 필터링: "전체" 체크 시 통과, 아무것도 선택 안 하면 조회 안 됨
                     const matchesStatus = isAllCalStatus ? true : (fStatuses.length > 0 && fStatuses.includes(item.stu_member || '미정'));
                     if (!matchesStatus) return false;
+                    // 용도 필터링: 전체 통과, 선택값과 _yongdoEq 매칭 (__pre__=빈값)
+                    if (!isAllCalYongdoCell) {
+                        if (fCalYongdosCell.length === 0) return false;
+                        const itemYongdo = String(item.items_youngdo || '').trim();
+                        const yongdoOk = fCalYongdosCell.some(v => v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v));
+                        if (!yongdoOk) return false;
+                    }
                     if (fMember) {
                         const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                         if (!memberDisp.includes(fMember)) return false;
@@ -3082,6 +3093,10 @@
                 const allCalStatusCb = document.getElementById('cal-search-status-all');
                 const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
                 const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
+                // 용도 다중선택 필터 (입찰일정 주/월별 셀 단위 필터)
+                const fCalYongdosCell = getSelectedCalYongdoValues();
+                const allCalYongdoCbCell = document.getElementById('cal-search-youngdo-all');
+                const isAllCalYongdoCell = (allCalYongdoCbCell && allCalYongdoCbCell.checked);
                 // fManager: matchesCalManager(item) 사용으로 대체됨
 
                 const bids = filteredData.filter(item => {
@@ -3094,6 +3109,13 @@
                     // 상태 필터링: "전체" 체크 시 통과, 아무것도 선택 안 하면 조회 안 됨
                     const matchesStatus = isAllCalStatus ? true : (fStatuses.length > 0 && fStatuses.includes(item.stu_member || '미정'));
                     if (!matchesStatus) return false;
+                    // 용도 필터링: 전체 통과, 선택값과 _yongdoEq 매칭 (__pre__=빈값)
+                    if (!isAllCalYongdoCell) {
+                        if (fCalYongdosCell.length === 0) return false;
+                        const itemYongdo = String(item.items_youngdo || '').trim();
+                        const yongdoOk = fCalYongdosCell.some(v => v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v));
+                        if (!yongdoOk) return false;
+                    }
                     if (fMember) {
                         const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                         if (!memberDisp.includes(fMember)) return false;
