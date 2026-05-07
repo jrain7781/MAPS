@@ -398,17 +398,26 @@
   }
 
   // ── 가격 프리셋 패널 ─────────────────────────────────────
+  // 단일 상태 (다중 panel 인스턴스 closure 누수 방지)
   let activePriceTarget = null; // 'apprMin' | 'apprMax' | 'lowMin' | 'lowMax'
+  let pricePanelEl    = null;
+  let pricePanelInp   = null;
+  let pricePanelDoc   = null;
+
   function openPricePreset(inp) {
     const cell = inp.closest('.price-cell');
     if (!cell) return;
+    // 같은 input 으로 이미 열려있으면 그대로 둠
+    if (pricePanelInp === inp && pricePanelEl && pricePanelEl.parentNode) return;
+    closePricePreset(); // 다른 input 의 패널 등은 정리
+
     activePriceTarget = inp.dataset.priceKey;
-    // 기존 패널 제거
-    document.querySelectorAll('.price-preset').forEach(p => p.remove());
+    pricePanelInp = inp;
+
     const panel = document.createElement('div');
     panel.className = 'price-preset show';
     const targetLabel = (cell.dataset.priceTarget === 'appr') ? '감정가격' : '최저가격';
-    const slot = (activePriceTarget||'').endsWith('Min') ? '최소' : '최대';
+    const slot = (activePriceTarget || '').endsWith('Min') ? '최소' : '최대';
     panel.innerHTML =
       '<div class="pp-head">'
       + '<span><b>' + targetLabel + '</b> <span class="pp-target">' + slot + '값</span> 빠른 선택 (만원 단위)</span>'
@@ -419,31 +428,45 @@
       + '</div>'
       + '<div class="pp-foot">* 1억 = 10,000 (만원). [이하] 클릭 시 0 입력, [최대] 클릭 시 99,999,999 입력</div>';
     cell.appendChild(panel);
+    pricePanelEl = panel;
+
     panel.querySelector('.pp-close').addEventListener('click', closePricePreset);
+    // 버튼 클릭은 mousedown 단계에서 값 적용 (외부 클릭 감지가 click 보다 먼저 닫는 문제 회피)
     panel.querySelectorAll('.pp-btn').forEach(b => {
-      b.addEventListener('click', function () {
+      const apply = function (e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
         const v = parseInt(b.dataset.v, 10);
-        const f = document.querySelector('input[data-price-key="' + activePriceTarget + '"]');
-        if (!f) return;
-        if (v === 0) f.value = '0';
-        else if (v < 0) f.value = '99,999,999';
-        else f.value = Number(v).toLocaleString('ko-KR');
-        closePricePreset();
-      });
-    });
-    // 외부 클릭 닫기
-    setTimeout(() => {
-      const onDoc = function (e) {
-        if (!panel.contains(e.target) && e.target !== inp) {
-          closePricePreset();
-          document.removeEventListener('mousedown', onDoc);
+        const key = activePriceTarget;
+        const f = document.querySelector('input[data-price-key="' + key + '"]');
+        if (f) {
+          if (v === 0) f.value = '0';
+          else if (v < 0) f.value = '99,999,999';
+          else f.value = Number(v).toLocaleString('ko-KR');
         }
+        closePricePreset();
       };
-      document.addEventListener('mousedown', onDoc);
-    }, 0);
+      b.addEventListener('mousedown', apply);  // 외부 클릭 감지 직전 처리
+      b.addEventListener('click', apply);       // 키보드 enter 등 폴백
+    });
+
+    // 외부 클릭 닫기 (단일 핸들러)
+    pricePanelDoc = function (e) {
+      // 패널 내부 클릭은 자체 처리. 입력 자기자신은 토글 X.
+      if (pricePanelEl && (pricePanelEl.contains(e.target) || e.target === pricePanelInp)) return;
+      closePricePreset();
+    };
+    setTimeout(() => { document.addEventListener('mousedown', pricePanelDoc); }, 0);
   }
   function closePricePreset() {
-    document.querySelectorAll('.price-preset').forEach(p => p.remove());
+    if (pricePanelDoc) {
+      document.removeEventListener('mousedown', pricePanelDoc);
+      pricePanelDoc = null;
+    }
+    if (pricePanelEl && pricePanelEl.parentNode) {
+      pricePanelEl.parentNode.removeChild(pricePanelEl);
+    }
+    pricePanelEl = null;
+    pricePanelInp = null;
     activePriceTarget = null;
   }
 
