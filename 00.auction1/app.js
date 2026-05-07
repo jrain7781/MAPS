@@ -512,7 +512,28 @@
       inp.addEventListener('click', () => openPricePreset(inp));
     });
     bindAreaConversion();
+    bindAddrCascade();
     setStatus('준비 완료');
+  }
+
+  // ── 주소 시/도 → 구/군 자동 채움 ─────────────────────────
+  function bindAddrCascade() {
+    const sidoEl  = document.getElementById('f_addrSido');
+    const gugunEl = document.getElementById('f_addrGugun');
+    const dongEl  = document.getElementById('f_addrDong');
+    if (!sidoEl || !gugunEl) return;
+    sidoEl.addEventListener('change', function () {
+      const sidoCode = sidoEl.value;
+      gugunEl.innerHTML = '<option value="">-구/군-</option>';
+      if (dongEl) dongEl.innerHTML = '<option value="">-읍/면/동-</option>';
+      if (!sidoCode) return;
+      const list = (D.GUGUN_BY_SIDO || {})[sidoCode] || [];
+      list.forEach(function (g) {
+        const o = document.createElement('option');
+        o.value = g.v; o.textContent = g.t;
+        gugunEl.appendChild(o);
+      });
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);
