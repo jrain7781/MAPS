@@ -8171,6 +8171,80 @@ MJ 이정우 팀장
         cbs.forEach(cb => { cb.checked = !!headerCheckbox.checked; });
     }
 
+    // 체크된 입찰물건들의 조사이미지(첫 장)를 한 페이지씩 모아 일괄 프린트
+    function handleBulkInvestigationPrint() {
+        const cbs = dataTableBody ? dataTableBody.querySelectorAll('input.item-row-cb:checked') : [];
+        const ids = Array.from(cbs).map(cb => cb.getAttribute('data-id')).filter(Boolean);
+        if (ids.length === 0) {
+            if (typeof showStatus === 'function') showStatus('프린트할 물건을 선택해 주세요.', 'warning');
+            return;
+        }
+        const items = ids
+            .map(id => (allBiddingData || []).find(it => String(it.id) === String(id)))
+            .filter(Boolean);
+        if (items.length === 0) {
+            if (typeof showStatus === 'function') showStatus('선택한 물건 데이터를 찾지 못했습니다.', 'error');
+            return;
+        }
+
+        const printArea = document.getElementById('printInvestigationArea');
+        if (!printArea) return;
+
+        // 단건 프린트용 원래 구조 백업 (인쇄 후 복원)
+        const originalHTML = printArea.innerHTML;
+
+        // 인쇄용 페이지 생성: 각 물건당 헤더 + 이미지 1장
+        let html = '';
+        items.forEach(item => {
+            const headerLine = [
+                item.sakun_no || '',
+                item.court || '',
+                item.m_name || ''
+            ].filter(Boolean).join(' / ');
+            const imgId = item.image_id || '';
+            if (imgId) {
+                const url = 'https://drive.google.com/thumbnail?sz=w1000&id=' + encodeURIComponent(imgId);
+                html += `<div class="bulk-print-page">`
+                     +    `<div class="bulk-print-header">${headerLine}</div>`
+                     +    `<img src="${url}" alt="조사이미지">`
+                     +  `</div>`;
+            } else {
+                html += `<div class="bulk-print-page">`
+                     +    `<div class="bulk-print-header">${headerLine}</div>`
+                     +    `<p class="bulk-print-noimg">이미지 없음</p>`
+                     +  `</div>`;
+            }
+        });
+
+        printArea.innerHTML = html;
+
+        const restore = () => {
+            printArea.innerHTML = originalHTML;
+            window.removeEventListener('afterprint', restore);
+        };
+        window.addEventListener('afterprint', restore);
+
+        const imgs = printArea.querySelectorAll('img');
+        if (imgs.length === 0) {
+            window.print();
+            return;
+        }
+        if (typeof showStatus === 'function') showStatus(`${items.length}건 조사이미지 로딩 중...`, 'info');
+        let loaded = 0;
+        const onDone = () => {
+            loaded++;
+            if (loaded >= imgs.length) {
+                setTimeout(() => window.print(), 200);
+            }
+        };
+        imgs.forEach(img => {
+            if (img.complete && img.naturalWidth > 0) onDone();
+            else { img.onload = onDone; img.onerror = onDone; }
+        });
+        // 안전망: 8초 내 모든 이미지 로딩 안 끝나도 강제 인쇄
+        setTimeout(() => { if (loaded < imgs.length) window.print(); }, 8000);
+    }
+
     async function handleItemCaptureListDownload() {
         const cbs = dataTableBody ? dataTableBody.querySelectorAll('input.item-row-cb:checked') : [];
         const list = Array.from(cbs).map(cb => (cb.getAttribute('data-sakun-no') || cb.dataset.sakunNo || '').trim()).filter(Boolean);
