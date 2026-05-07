@@ -12,6 +12,13 @@ from __future__ import annotations
 import json, os, sys, time, traceback, threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
+# stdout 버퍼링 비활성 (디버그 로그 즉시 보이게)
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+    sys.stderr.reconfigure(line_buffering=True)
+except Exception:
+    pass
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -52,6 +59,14 @@ FIELD_MAP = {
     "addrSido": "sido",
     "addrGugun": "gugun",
     "addrDong": "dong",
+    "lotKind": "bunji_key",
+    "lotFrom": "bunji1",
+    "lotTo": "bunji2",
+    "bldName": "bldname",
+    "special": "special",
+    "orderBy": "order",
+    "pageSize": "scale",
+    "procType": "sagun_type",
 }
 
 URL_LOGIN  = "https://www.auction1.co.kr/common/login_box.php"
@@ -131,19 +146,6 @@ def fill_form(d, form_data: dict):
         )
     # 주소 다중 (_addrTags) 추가는 추후 구현 — 현재는 sido/gugun/dong 단일만
     # 물건종류 복수 (_multiProp) 도 추후
-    # 정렬·목록수
-    if form_data.get("orderBy"):
-        v = form_data["orderBy"].replace("'", "\\'")
-        d.execute_script(
-            f"var s=document.querySelector('[name=\"order_type\"]');"
-            f"if(s){{s.value='{v}';s.dispatchEvent(new Event('change'));}}"
-        )
-    if form_data.get("pageSize"):
-        v = form_data["pageSize"]
-        d.execute_script(
-            f"var s=document.querySelector('[name=\"list_scale\"]');"
-            f"if(s){{s.value='{v}';s.dispatchEvent(new Event('change'));}}"
-        )
 
 
 def submit_search(d):
@@ -194,6 +196,7 @@ def parse_results(d, max_rows: int = 100):
 
 def crawl(form_data: dict, custom_filters: list | None = None):
     with _lock:
+        print(f"\n[crawl] formData={form_data}")
         login_if_needed()
         d = get_driver()
         d.get(URL_SEARCH)
@@ -202,9 +205,23 @@ def crawl(form_data: dict, custom_filters: list | None = None):
         )
         time.sleep(0.5)
         fill_form(d, form_data)
+        print(f"[crawl] form filled, current url={d.current_url}")
         submit_search(d)
+        print(f"[crawl] after submit, current url={d.current_url}")
         items = parse_results(d)
-        # TODO: customFilters 후처리 적용
+        print(f"[crawl] parsed {len(items)} items")
+        # 디버그: 결과 0 이면 페이지에 어떤 메시지/요소가 있는지 확인
+        if not items:
+            try:
+                msg_els = d.find_elements(By.CSS_SELECTOR, "td.center, .nodata, .empty_list")
+                msgs = [el.text.strip() for el in msg_els if el.text.strip()][:5]
+                if msgs:
+                    print(f"[crawl] page messages: {msgs}")
+                title_el = d.find_elements(By.CSS_SELECTOR, "h1, h2, h3, .title")
+                if title_el:
+                    print(f"[crawl] page title elements: {[t.text.strip() for t in title_el[:3]]}")
+            except Exception:
+                pass
         return items
 
 
