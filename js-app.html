@@ -8171,22 +8171,12 @@ MJ 이정우 팀장
         cbs.forEach(cb => { cb.checked = !!headerCheckbox.checked; });
     }
 
-    // 체크된 입찰물건들의 조사이미지(첫 장)를 한 페이지씩 모아 일괄 프린트
-    function handleBulkInvestigationPrint() {
-        const cbs = dataTableBody ? dataTableBody.querySelectorAll('input.item-row-cb:checked') : [];
-        const ids = Array.from(cbs).map(cb => cb.getAttribute('data-id')).filter(Boolean);
-        if (ids.length === 0) {
+    // 공용 헬퍼: 주어진 items 배열로 조사이미지 일괄 프린트 실행
+    function _doBulkInvestigationPrint(items) {
+        if (!items || items.length === 0) {
             if (typeof showStatus === 'function') showStatus('프린트할 물건을 선택해 주세요.', 'warning');
             return;
         }
-        const items = ids
-            .map(id => (allBiddingData || []).find(it => String(it.id) === String(id)))
-            .filter(Boolean);
-        if (items.length === 0) {
-            if (typeof showStatus === 'function') showStatus('선택한 물건 데이터를 찾지 못했습니다.', 'error');
-            return;
-        }
-
         const printArea = document.getElementById('printInvestigationArea');
         if (!printArea) return;
 
@@ -8194,7 +8184,7 @@ MJ 이정우 팀장
         const originalHTML = printArea.innerHTML;
 
         // 인쇄용 페이지 생성: 각 물건당 헤더 2줄 + 이미지 1장
-        // - 1줄: 입찰일자 / 사건번호 / 법원 / 용도 / 물건상태
+        // - 1줄: 입찰일자 / 사건번호 / 법원 / 담당자 / 용도 / 물건상태
         // - 2줄: 물건비고
         function _bulkEscHtml(s) {
             return String(s == null ? '' : s)
@@ -8273,6 +8263,38 @@ MJ 이정우 팀장
         });
         // 안전망: 8초 내 모든 이미지 로딩 안 끝나도 강제 인쇄
         setTimeout(triggerPrint, 8000);
+    }
+
+    // 입찰물건관리 리스트: 체크된 물건들의 조사이미지 일괄 프린트
+    function handleBulkInvestigationPrint() {
+        const cbs = dataTableBody ? dataTableBody.querySelectorAll('input.item-row-cb:checked') : [];
+        const ids = Array.from(cbs).map(cb => cb.getAttribute('data-id')).filter(Boolean);
+        const items = ids
+            .map(id => (allBiddingData || []).find(it => String(it.id) === String(id)))
+            .filter(Boolean);
+        if (ids.length > 0 && items.length === 0) {
+            if (typeof showStatus === 'function') showStatus('선택한 물건 데이터를 찾지 못했습니다.', 'error');
+            return;
+        }
+        _doBulkInvestigationPrint(items);
+    }
+
+    // 수업관리 - 물건탭 - 물건리스트: 체크된 물건들의 조사이미지 일괄 프린트
+    function handleBulkInvestigationPrintD1_() {
+        if (typeof d1ItemsSelectedIds_ === 'undefined' || !d1ItemsSelectedIds_) {
+            if (typeof showStatus === 'function') showStatus('프린트할 물건을 선택해 주세요.', 'warning');
+            return;
+        }
+        const ids = Array.from(d1ItemsSelectedIds_);
+        const source = (typeof d1ItemsData !== 'undefined' && Array.isArray(d1ItemsData)) ? d1ItemsData : [];
+        const items = ids
+            .map(id => source.find(it => String(it.id) === String(id)))
+            .filter(Boolean);
+        if (ids.length > 0 && items.length === 0) {
+            if (typeof showStatus === 'function') showStatus('선택한 물건 데이터를 찾지 못했습니다.', 'error');
+            return;
+        }
+        _doBulkInvestigationPrint(items);
     }
 
     async function handleItemCaptureListDownload() {
