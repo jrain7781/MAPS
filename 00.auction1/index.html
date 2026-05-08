@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="auction1-css/input_box.css">
 <link rel="stylesheet" href="auction1-css/tooltip.css">
 <!-- 추가 (사이드바·추가필터 섹션 등 옥션원에 없는 부분 한정) -->
-<link rel="stylesheet" href="overlay.css?v=17">
+<link rel="stylesheet" href="overlay.css?v=31">
 </head>
 <body>
 
@@ -67,6 +67,7 @@
           <span id="editorIdBadge" class="f11 gray"></span>
         </div>
         <div class="panel-head-actions">
+          <button id="btnDuplicate" class="btn_box_sss btn_white bold hidden" type="button" title="현재 크롤링을 복사 — 제목만 비우고 새로 저장">📋 복사하기</button>
           <button id="btnDelete" class="btn_box_sss btn_white bold hidden" type="button">삭제</button>
           <button id="btnCancel" class="btn_box_sss btn_white bold" type="button">취소</button>
           <button id="btnSave" class="btn_box_sss btn_blue bold" type="button">저장</button>
@@ -243,6 +244,7 @@
           <div class="form-actions">
             <button type="button" id="btnReset" class="btn_box_sss btn_white bold">다시</button>
             <button type="button" id="btnRunCrawl" class="btn_box_sss btn_blue bold">크롤링 실행</button>
+            <button type="button" id="btnCancelCrawl" class="btn_box_sss btn_red bold hidden" title="진행 중인 페이지 순회 중지 — 그때까지 받은 결과는 유지">⏹ 중지</button>
           </div>
         </form>
       </div>
@@ -277,15 +279,29 @@
           <span id="resCount" class="content-hidden">0</span>
           <span id="resTimestamp" class="f11 res-timestamp"></span>
         </div>
-        <div class="result-sort-tabs">
-          <button type="button" class="sort-tab" data-sort="num1">사건번호</button>
+        <div class="result-sort-tabs" id="sortBar">
+          <span class="f11 gray">정렬:</span>
+          <select class="sort-sel" data-group="sakun" title="사건번호 셀 — 사건번호/물건종류 선택">
+            <option value="">사건번호 셀</option>
+            <option value="sakun_no">사건번호</option>
+            <option value="prop_kind">물건종류</option>
+          </select>
           <button type="button" class="sort-tab" data-sort="address">소재지</button>
-          <button type="button" class="sort-tab" data-sort="ju_price">감정가</button>
-          <button type="button" class="sort-tab" data-sort="bi_price">최저가</button>
-          <button type="button" class="sort-tab active" data-sort="next_biddate">매각기일↑</button>
-          <button type="button" class="sort-tab" data-sort="view_count">조회수</button>
-          <button type="button" class="sort-tab" data-sort="list">목록</button>
-          <button type="button" class="sort-tab" data-sort="print">🖨 인쇄</button>
+          <select class="sort-sel" data-group="price" title="가격 셀 — 감정가/최저가/평당가/유찰율 선택">
+            <option value="">가격 셀</option>
+            <option value="appraisal">감정가</option>
+            <option value="low">최저매각가</option>
+            <option value="pyeong">평당가</option>
+            <option value="failrate">유찰율</option>
+          </select>
+          <button type="button" class="sort-tab" data-sort="failcnt">유찰횟수</button>
+          <select class="sort-sel" data-group="bid" title="매각기일 셀 — 날짜/입찰N일전 선택">
+            <option value="">매각기일 셀</option>
+            <option value="biddate">매각기일</option>
+            <option value="biddays">입찰N일전</option>
+          </select>
+          <button type="button" class="sort-tab" data-sort="view">조회수</button>
+          <button type="button" class="sort-tab sort-clear" id="btnSortClear" title="정렬 해제">↺</button>
         </div>
       </div>
 
@@ -365,7 +381,7 @@
   </div>
 </div>
 
-<script src="data.js?v=17"></script>
-<script src="app.js?v=17"></script>
+<script src="data.js?v=31"></script>
+<script src="app.js?v=31"></script>
 </body>
 </html>

@@ -15,11 +15,20 @@
   const LS_CACHE_PFX  = 'auction1_cache_';      // + presetId → {items, ts}
   const LS_LAST_PRESET = 'auction1_last_preset'; // 마지막 active preset id
 
-  // 기본 추가 필터 종류 (예시 - 처음 한번만 시드)
+  // 기본 추가 필터 종류 — FILTER_FIELDS 와 정확히 매칭되는 이름들
+  // (사용자가 손으로 만들지 않아도 즉시 사용 가능)
   const DEFAULT_FTYPES = [
-    { id: 'ft_keyword',  name: '비고/특이사항 키워드 포함', valueType: 'text'   },
-    { id: 'ft_failcnt',  name: '유찰 횟수',                valueType: 'number' },
-    { id: 'ft_apprmin',  name: '감정가 최소 (만원)',       valueType: 'number' }
+    { id: 'ft_failrate',  name: '유찰율',                  valueType: 'number' },
+    { id: 'ft_failcnt',   name: '유찰 횟수',               valueType: 'number' },
+    { id: 'ft_apprmin',   name: '감정가 최소 (만원)',      valueType: 'number' },
+    { id: 'ft_address',   name: '주소',                    valueType: 'text'   },
+    { id: 'ft_addrsido',  name: '주소 시도',               valueType: 'text'   },
+    { id: 'ft_addrgugun', name: '주소 구군',               valueType: 'text'   },
+    { id: 'ft_specials',  name: '특수물건',                valueType: 'text'   },
+    { id: 'ft_propkind',  name: '물건종류',                valueType: 'text'   },
+    { id: 'ft_keyword',   name: '비고/특이사항 키워드 포함', valueType: 'text'   },
+    { id: 'ft_dae_remove',  name: '대항력 제거',           valueType: 'text'   },
+    { id: 'ft_dae_hug_inc', name: '대항력(HUG포함)',       valueType: 'text'   }
   ];
 
   // 상태
@@ -37,7 +46,20 @@
   function loadFtypes() {
     try {
       const raw = localStorage.getItem(LS_FTYPES);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        // 마이그레이션: DEFAULT_FTYPES 중 누락된 종류 자동 추가 (사용자 추가분은 보존)
+        const have = new Set(arr.map(t => t.name));
+        let changed = false;
+        DEFAULT_FTYPES.forEach(d => {
+          if (!have.has(d.name)) {
+            arr.push({ id: uid('ft'), name: d.name, valueType: d.valueType });
+            changed = true;
+          }
+        });
+        if (changed) localStorage.setItem(LS_FTYPES, JSON.stringify(arr));
+        return arr;
+      }
     } catch (e) { }
     // 첫 실행 시 기본 시드
     localStorage.setItem(LS_FTYPES, JSON.stringify(DEFAULT_FTYPES));
@@ -149,6 +171,46 @@
     ).join('');
   }
 
+  // 종류별 권장 op/값 (선택 시 자동 채움)
+  const TYPE_PRESETS = {
+    '유찰율':                              { op: 'lte', value: '50' },
+    '유찰 횟수':                           { op: 'gte', value: '2' },
+    '감정가 최소 (만원)':                  { op: 'gte', value: '10000' },
+    '주소':                                { op: 'contains',  value: '' },
+    '주소 시도':                           { op: 'ncontains', value: '' },
+    '주소시도':                            { op: 'ncontains', value: '' },
+    '주소 구군':                           { op: 'ncontains', value: '' },
+    '주소구군':                            { op: 'ncontains', value: '' },
+    '특수물건':                            { op: 'ncontains', value: '대항력' },
+    '특수권리':                            { op: 'ncontains', value: '대항력' },
+    '물건종류':                            { op: 'contains',  value: '' },
+    '비고/특이사항 키워드 포함':           { op: 'contains',  value: '' },
+    '대항력(HUG포함)':                     { op: 'ncontains', value: '제거대상' },
+    '대항력(HUG제외)':                     { op: 'ncontains', value: '제거대상' },
+    '대항력 (HUG제외)':                    { op: 'ncontains', value: '제거대상' },
+    '대항력 제거':                         { op: 'ncontains', value: '대항력' }
+  };
+
+  // 종류별 동작 설명 (행에 인라인 표시)
+  const TYPE_HINTS = {
+    '유찰율':                              '단위: % (51 = 51%). 예) ≤ 50',
+    '유찰 횟수':                           '예) ≥ 2 → 유찰 2회 이상',
+    '감정가 최소 (만원)':                  '단위: 만원. 예) ≥ 10000 = 1억 이상',
+    '주소':                                '주소 전체 텍스트 검색. 콤마 다중 키워드',
+    '주소 시도':                           '시/도(첫 단어). 예) 미포함 "서울,경기"',
+    '주소시도':                            '시/도(첫 단어). 예) 미포함 "서울,경기"',
+    '주소 구군':                           '구/군(둘째 단어). 예) 미포함 "강남구,서초구"',
+    '주소구군':                            '구/군(둘째 단어). 예) 미포함 "강남구,서초구"',
+    '특수물건':                            '대항력/임차권등기/HUG/유치권 등 빨강 표시',
+    '특수권리':                            '대항력/임차권등기/HUG/유치권 등 빨강 표시',
+    '물건종류':                            '예) "다세대" / "오피스텔" 포함',
+    '비고/특이사항 키워드 포함':           '주소+상태+종류+특수물건 통합 검색',
+    '대항력(HUG포함)':                     '대항력+HUG 같이 있으면 살림. 대항력만 있으면 제거 (미포함 "제거대상")',
+    '대항력(HUG제외)':                     '대항력+HUG 같이 있으면 살림. 대항력만 있으면 제거 (미포함 "제거대상")',
+    '대항력 (HUG제외)':                    '대항력+HUG 같이 있으면 살림. 대항력만 있으면 제거 (미포함 "제거대상")',
+    '대항력 제거':                         '대항력 있는 행 무조건 제거 (HUG 여부 무관). 미포함 "대항력"'
+  };
+
   // ── 추가 필터 행 렌더링 ───────────────────────────────────
   let custRows = []; // [{typeId, op, value}]
   function renderCustRows() {
@@ -161,10 +223,13 @@
       const typeOpts = ftypes.map(t => `<option value="${t.id}"${t.id === r.typeId ? ' selected' : ''}>${escHtml(t.name)}</option>`).join('')
                        + `<option value="__new__">+ 새 필터 종류 추가...</option>`;
       const opOpts = D.CUSTOM_OPS.map(o => `<option value="${o.v}"${o.v === r.op ? ' selected' : ''}>${o.t}</option>`).join('');
+      const t = ftypes.find(x => x.id === r.typeId);
+      const hint = (t && TYPE_HINTS[t.name]) || '';
       return `<div class="cust-row" data-i="${i}">
         <select class="sel ftype-sel">${typeOpts}</select>
         <select class="sel fop-sel">${opOpts}</select>
-        <input type="text" class="inp fval-inp" value="${escAttr(r.value || '')}" placeholder="비교값">
+        <input type="text" class="inp fval-inp" value="${escAttr(r.value || '')}" placeholder="값">
+        <span class="cust-hint">${escHtml(hint)}</span>
         <button class="row-del" title="이 행 삭제">×</button>
       </div>`;
     }).join('');
@@ -178,15 +243,34 @@
   }
   function onCustTypeChange(idx, sel) {
     if (sel.value === '__new__') {
-      const name = prompt('새 필터 종류 이름을 입력하세요\n(예: 임차인 수, 유치권 여부, 키워드 포함 등)');
+      const supported = Object.keys(FILTER_FIELDS).join(', ');
+      const msg = '새 필터 종류 이름을 입력하세요.\n\n' +
+                  '⚠ 아래 목록과 정확히 일치하는 이름만 작동합니다 (안 맞으면 무시):\n\n' +
+                  supported + '\n\n' +
+                  '입력 예) 유찰율 / 주소 시도 / 특수물건';
+      const name = prompt(msg);
       if (!name) { sel.value = custRows[idx].typeId || ''; return; }
-      const newType = { id: uid('ft'), name: name.trim(), valueType: 'text' };
+      const trimmed = name.trim();
+      if (!FILTER_FIELDS[trimmed]) {
+        if (!confirm(`"${trimmed}" 는 현재 매핑이 없어 필터링 시 무시됩니다.\n\n그래도 등록하시겠습니까?`)) {
+          sel.value = custRows[idx].typeId || ''; return;
+        }
+      }
+      const newType = { id: uid('ft'), name: trimmed, valueType: 'text' };
       ftypes.push(newType);
       saveFtypes();
       custRows[idx].typeId = newType.id;
       renderCustRows();
     } else {
       custRows[idx].typeId = sel.value;
+      // 권장 op/값 자동 채움 (사용자가 손봐도 됨)
+      const t = ftypes.find(x => x.id === sel.value);
+      const preset = t && TYPE_PRESETS[t.name];
+      if (preset) {
+        custRows[idx].op = preset.op;
+        custRows[idx].value = preset.value;
+      }
+      renderCustRows();
     }
   }
 
@@ -196,6 +280,7 @@
     document.getElementById('editorMode').textContent = '새 크롤링 등록';
     document.getElementById('editorIdBadge').textContent = '';
     document.getElementById('btnDelete').classList.add('hidden');
+    document.getElementById('btnDuplicate').classList.add('hidden');
     document.getElementById('presetTitle').value = '';
     clearForm();
     custRows = [];
@@ -209,6 +294,7 @@
     document.getElementById('editorMode').textContent = '크롤링 수정';
     document.getElementById('editorIdBadge').textContent = '· ID: ' + id;
     document.getElementById('btnDelete').classList.remove('hidden');
+    document.getElementById('btnDuplicate').classList.remove('hidden');
     document.getElementById('presetTitle').value = p.title || '';
     applyFormData(p.formData || {});
     custRows = (p.customFilters || []).map(c => ({ ...c }));
@@ -217,11 +303,37 @@
     renderSidebar();
     // 캐시된 결과 자동 복원 (있으면)
     if (!restoreCachedResult(id)) {
-      // 캐시 없으면 결과 패널 비움
+      // 캐시 없으면 결과 + 메모리 변수 비움 (이전 프리셋 잔재 제거)
+      lastRawItems = [];
+      lastFilteredItems = [];
+      lastFilterApplied = 0;
+      lastItems = [];
+      setResultCounts(0, 0, 0);
       document.getElementById('resultPanel').classList.add('hidden');
       showResTimestamp(0);
     }
     try { localStorage.setItem(LS_LAST_PRESET, id); } catch (e) {}
+  }
+
+  // 현재 편집 중인 프리셋 복사 → 제목 비우고 폼/필터는 그대로, 새 프리셋 모드
+  function duplicatePreset() {
+    if (!currentPresetId) { setStatus('편집 중인 프리셋이 없습니다.', true); return; }
+    currentPresetId = null;
+    document.getElementById('editorMode').textContent = '새 크롤링 등록 (복사본)';
+    document.getElementById('editorIdBadge').textContent = '';
+    document.getElementById('btnDelete').classList.add('hidden');
+    document.getElementById('btnDuplicate').classList.add('hidden');
+    document.getElementById('presetTitle').value = '';
+    document.getElementById('presetTitle').focus();
+    // 결과/카운트는 이전 프리셋 거였으니 비움 — 새로 [크롤링 실행] 필요
+    lastRawItems = [];
+    lastFilteredItems = [];
+    lastFilterApplied = 0;
+    setResultCounts(0, 0, 0);
+    showResTimestamp(0);
+    document.getElementById('resultPanel').classList.add('hidden');
+    renderSidebar();
+    setStatus('복사 — 새 제목 입력 후 [저장], 결과는 [크롤링 실행]');
   }
   function showEditor() {
     document.getElementById('editorPanel').classList.remove('hidden');
@@ -235,6 +347,30 @@
   }
 
   // ── 저장/삭제 ────────────────────────────────────────────
+  // formData / customFilters 의 빈값 제거 후 정렬된 직렬화 (중복 비교용)
+  function normalizeFormData(fd) {
+    const out = {};
+    Object.keys(fd || {}).forEach(k => {
+      const v = fd[k];
+      if (v == null) return;
+      if (Array.isArray(v)) { if (v.length) out[k] = v.slice().sort(); return; }
+      const s = typeof v === 'string' ? v.trim() : String(v);
+      if (s !== '') out[k] = s;
+    });
+    return out;
+  }
+  function normalizeCustomFilters(rows) {
+    return (rows || []).filter(r => r && r.typeId && String(r.value || '').trim() !== '')
+      .map(r => ({ typeId: r.typeId, op: r.op || 'eq', value: String(r.value).trim() }))
+      .sort((a, b) => (a.typeId + a.op + a.value).localeCompare(b.typeId + b.op + b.value));
+  }
+  function presetSignature(formData, customFilters) {
+    return JSON.stringify({
+      f: normalizeFormData(formData),
+      c: normalizeCustomFilters(customFilters)
+    });
+  }
+
   function savePreset() {
     const title = document.getElementById('presetTitle').value.trim();
     if (!title) { setStatus('제목을 입력해 주세요.', true); return; }
@@ -242,6 +378,14 @@
     const customFilters = custRows.filter(r => r.typeId).map(r => ({
       typeId: r.typeId, op: r.op || 'eq', value: r.value || ''
     }));
+    // 중복 체크: 같은 formData + customFilters 인 다른 프리셋 존재 여부
+    const sig = presetSignature(formData, customFilters);
+    const dup = presets.find(p => p.id !== currentPresetId && presetSignature(p.formData, p.customFilters) === sig);
+    if (dup) {
+      alert(`동일한 검색 조건의 프리셋이 이미 있습니다:\n\n[${dup.title}]\n\n저장하지 않습니다.`);
+      setStatus(`중복 — [${dup.title}] 와 동일한 조건`, true);
+      return;
+    }
     if (currentPresetId) {
       const idx = presets.findIndex(p => p.id === currentPresetId);
       if (idx >= 0) {
@@ -258,6 +402,7 @@
     document.getElementById('editorMode').textContent = '크롤링 수정';
     document.getElementById('editorIdBadge').textContent = '· ID: ' + currentPresetId;
     document.getElementById('btnDelete').classList.remove('hidden');
+    document.getElementById('btnDuplicate').classList.remove('hidden');
   }
   function deletePreset() {
     if (!currentPresetId) return;
@@ -375,9 +520,11 @@
     document.getElementById('btnNewMain').addEventListener('click', newPreset);
     document.getElementById('btnSave').addEventListener('click', savePreset);
     document.getElementById('btnDelete').addEventListener('click', deletePreset);
+    document.getElementById('btnDuplicate').addEventListener('click', duplicatePreset);
     document.getElementById('btnCancel').addEventListener('click', hideEditor);
     document.getElementById('btnReset').addEventListener('click', () => { clearForm(); custRows = []; renderCustRows(); });
     document.getElementById('btnRunCrawl').addEventListener('click', runCrawl);
+    document.getElementById('btnCancelCrawl').addEventListener('click', cancelCrawl);
 
     // 복수선택
     document.getElementById('btnMultiProp').addEventListener('click', openMultiPropModal);
@@ -400,6 +547,15 @@
     // 결과 뷰 탭: 필터링 / 전체
     document.getElementById('viewTabFiltered')?.addEventListener('click', () => setViewMode('filtered'));
     document.getElementById('viewTabAll')?.addEventListener('click', () => setViewMode('all'));
+
+    // 정렬바 — 단일 키 버튼 + 다중 키 select + 해제
+    document.querySelectorAll('#sortBar .sort-tab[data-sort]').forEach(b => {
+      b.addEventListener('click', () => setSort(b.dataset.sort));
+    });
+    document.querySelectorAll('#sortBar .sort-sel').forEach(s => {
+      s.addEventListener('change', () => setSort(s.value || null));
+    });
+    document.getElementById('btnSortClear')?.addEventListener('click', () => setSort(null));
 
     // 숫자 입력 콤마 자동
     document.querySelectorAll('input[data-numfmt="1"]').forEach(inp => {
@@ -540,13 +696,30 @@
     '유찰율':                  it => parsePriceCell(it.price).pct,
     '유찰 횟수':               it => parseFailCount(it.status),
     '감정가 최소 (만원)':      it => { const a = parsePriceCell(it.price).appraisal; return a == null ? null : Math.round(a / 10000); },
-    '비고/특이사항 키워드 포함': it => `${it.address} ${it.status} ${it.prop_kind}`,
+    '비고/특이사항 키워드 포함': it => `${it.address} ${it.status} ${it.prop_kind} ${it.specials || ''}`,
     '주소':                    it => it.address || '',
     '주소 시도':               it => addrTokens(it)[0] || '',
     '주소시도':                it => addrTokens(it)[0] || '',
     '주소 구군':               it => addrTokens(it)[1] || '',
-    '주소구군':                it => addrTokens(it)[1] || ''
+    '주소구군':                it => addrTokens(it)[1] || '',
+    '특수물건':                it => it.specials || it.address || '',
+    '특수권리':                it => it.specials || it.address || '',
+    '물건종류':                it => it.prop_kind || '',
+    // ── 대항력 관련 필터 ──────────────────────────
+    // (1) '대항력 제거' — 대항력 있으면 무조건 '대항력' (HUG 여부 무관). 사용 예) 미포함 '대항력'
+    '대항력 제거':             it => /대항력/.test(it.specials || it.address || '') ? '대항력' : '',
+    // (2) '대항력(HUG포함)' — 대항력 + HUG 같이 있으면 살림. 대항력만 있으면 '제거대상'. 사용 예) 미포함 '제거대상'
+    '대항력(HUG포함)':         it => _daeNoHugMark(it),
+    // 호환: 옛 이름들도 같은 동작 유지
+    '대항력(HUG제외)':         it => _daeNoHugMark(it),
+    '대항력 (HUG제외)':        it => _daeNoHugMark(it)
   };
+  function _daeNoHugMark(it) {
+    const s = (it.specials || it.address || '');
+    const hasDae = /대항력/.test(s);
+    const hasHug = /HUG|주택도시보증|임차권인수조건변경/.test(s);
+    return hasDae && !hasHug ? '제거대상' : '안전';
+  }
   function applyCustomFilters(items, rows) {
     if (!rows || !rows.length) return { items, applied: 0, skipped: [] };
     const handlers = [];
@@ -564,6 +737,53 @@
     return { items: filtered, applied: handlers.length, skipped };
   }
 
+  // 크롤링 진행 중 [중지] 버튼 토글
+  function setCrawlRunning(running) {
+    const run = document.getElementById('btnRunCrawl');
+    const cancel = document.getElementById('btnCancelCrawl');
+    if (run)    run.classList.toggle('hidden', !!running);
+    if (cancel) cancel.classList.toggle('hidden', !running);
+  }
+
+  // 백엔드 진행상황 폴링 (크롤링 중 1초마다)
+  let _progressTimer = null;
+  function startProgressPolling() {
+    stopProgressPolling();
+    _progressTimer = setInterval(async () => {
+      try {
+        const r = await fetch('/api/progress');
+        if (!r.ok) return;
+        const p = await r.json();
+        let msg;
+        if (p.stage === 'login')        msg = '옥션원 로그인 중...';
+        else if (p.stage === 'search')  msg = '옥션원 검색 중...';
+        else if (p.stage === 'paging')  {
+          msg = `페이지 ${p.pages_done} 진행 중 · ${p.current}` +
+                (p.total ? ` / ${p.total}건` : '건');
+        } else if (p.stage === 'cancelled') msg = `⏹ 중지 처리 중... (${p.current}건 까지)`;
+        else                            msg = '크롤링 진행 중...';
+        setStatus(msg);
+        // 상단 [전체] 카운트 미리보기
+        const elAll = document.getElementById('resCountAll');
+        if (elAll && p.total) elAll.textContent = `${p.current}/${p.total}`;
+        else if (elAll) elAll.textContent = p.current || 0;
+      } catch (e) { /* 일시 실패 무시 */ }
+    }, 1000);
+  }
+  function stopProgressPolling() {
+    if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+  }
+  async function cancelCrawl() {
+    setStatus('중지 신호 전송 중...');
+    try {
+      const r = await fetch('/api/cancel');
+      if (r.ok) setStatus('중지 신호 전송됨 — 진행 중인 페이지 끝나면 결과 반환');
+      else      setStatus('중지 신호 실패', true);
+    } catch (e) {
+      setStatus('중지 신호 실패: ' + (e.message || e), true);
+    }
+  }
+
   // ── 크롤링 실행 (백엔드 /api/crawl 호출) ─────────────────────
   async function runCrawl() {
     const formData = collectFormData();
@@ -574,8 +794,10 @@
     const resBody = document.getElementById('resBody');
     const resCount = document.getElementById('resCount');
     resultPanel.classList.remove('hidden');
-    resBody.innerHTML = '<tr><td colspan="8" class="center" style="padding:40px 0;color:#2563eb;">크롤링 실행 중... (옥션원 자동 검색)</td></tr>';
-    setStatus('크롤링 실행 중...');
+    resBody.innerHTML = '<tr><td colspan="8" class="center" style="padding:40px 0;color:#2563eb;">크롤링 실행 중... (옥션원 자동 검색) — 중지 가능</td></tr>';
+    setStatus('크롤링 실행 중... (중지하려면 [⏹ 중지])');
+    setCrawlRunning(true);
+    startProgressPolling();
     try {
       const r = await fetch('/api/crawl', {
         method: 'POST',
@@ -587,30 +809,58 @@
       const raw = data.items || [];
       const ts = Date.now();
       const { filtered, applied, skipped } = applyAndRender(raw, customFilters, ts);
-      // 결과 캐시 — quota 초과 시 다른 프리셋 캐시 LRU 제거 후 재시도
+      // 결과 캐시 — full → quota 초과 시 lite(텍스트만) → 그래도 안 되면 LRU
       if (currentPresetId) {
-        const payload = JSON.stringify({ items: raw, ts });
         const key = LS_CACHE_PFX + currentPresetId;
-        let saved = false;
-        try { localStorage.setItem(key, payload); saved = true; }
-        catch (_) {
-          try {
-            // 다른 프리셋 캐시 모두 제거 → 재시도
-            Object.keys(localStorage).forEach(k => { if (k.startsWith(LS_CACHE_PFX) && k !== key) localStorage.removeItem(k); });
-            localStorage.setItem(key, payload); saved = true;
-          } catch (_) { /* 그래도 큼 — 포기 */ }
+        const fullPayload = JSON.stringify({ items: raw, ts });
+        const stripHtml = it => {
+          const o = {};
+          for (const k in it) if (!k.endsWith('_html')) o[k] = it[k];
+          return o;
+        };
+        const litePayload = JSON.stringify({ items: raw.map(stripHtml), ts, lite: true });
+        let saved = false, savedMode = '';
+        const trySave = (payload, mode) => {
+          try { localStorage.setItem(key, payload); saved = true; savedMode = mode; return true; }
+          catch (_) { return false; }
+        };
+        if (!trySave(fullPayload, 'full')) {
+          // full 실패 → 옛 캐시 자기 자신부터 제거하고 lite 시도
+          try { localStorage.removeItem(key); } catch (_) {}
+          if (!trySave(litePayload, 'lite')) {
+            // lite 도 실패 → 다른 프리셋 캐시 LRU 제거 후 lite 재시도
+            const others = Object.keys(localStorage)
+              .filter(k => k.startsWith(LS_CACHE_PFX) && k !== key)
+              .map(k => {
+                let t = 0;
+                try { t = (JSON.parse(localStorage.getItem(k) || '{}').ts) || 0; } catch (_) {}
+                return [k, t];
+              })
+              .sort((a, b) => a[1] - b[1]);
+            for (const [k] of others) {
+              localStorage.removeItem(k);
+              if (trySave(litePayload, 'lite')) break;
+            }
+          }
         }
-        // last_preset 은 작은 string — cache 와 분리해서 항상 저장
         try { localStorage.setItem(LS_LAST_PRESET, currentPresetId); } catch (_) {}
-        if (!saved) console.warn('[cache] save failed (too large):', payload.length, 'bytes');
+        if (!saved) console.warn('[cache] save failed even as lite:', litePayload.length, 'bytes');
+        else console.log(`[cache] saved ${savedMode}: ${(saved && savedMode==='full' ? fullPayload : litePayload).length} bytes`);
       }
       let msg = `옥션원 ${raw.length}건 수신`;
+      if (data.cancelled) msg = `⏹ 중지됨 — 옥션원 ${raw.length}건까지 받음`;
       if (applied) msg += ` · 추가필터 후 ${filtered.length}건`;
-      if (skipped.length) msg += ` · 미지원 필터 무시: ${skipped.join(', ')}`;
-      setStatus(msg);
+      if (skipped.length) {
+        msg += ` · 미지원 필터 무시: ${skipped.join(', ')}`;
+        alert(`아래 필터 종류는 매핑이 없어 무시됐습니다:\n\n${skipped.join(', ')}\n\n[필터 종류 관리]에서 정확한 이름으로 변경하세요.\n\n지원 목록:\n${Object.keys(FILTER_FIELDS).join(', ')}`);
+      }
+      setStatus(msg, !!data.cancelled || skipped.length > 0);
     } catch (e) {
       resBody.innerHTML = `<tr><td colspan="8" class="center" style="padding:40px 0;color:#dc2626;">크롤링 실패: ${escHtml(String(e.message || e))}<br><span class="muted small">crawler.py 가 실행 중인지 확인 (python crawler.py)</span></td></tr>`;
       setStatus('크롤링 실패', true);
+    } finally {
+      stopProgressPolling();
+      setCrawlRunning(false);
     }
   }
 
@@ -645,7 +895,7 @@
     renderResults(items);
   }
 
-  // 새 결과를 받았을 때 통합 처리 — raw 보관, filtered 계산, 카운트 + 뷰모드 적용
+  // 새 결과를 받았을 때 통합 처리 — raw 보관, filtered 계산, 카운트 + 뷰모드 + 정렬 적용
   function applyAndRender(rawItems, customFilters, ts) {
     const { items: filtered, applied, skipped } = applyCustomFilters(rawItems, customFilters);
     lastRawItems = rawItems;
@@ -654,20 +904,33 @@
     setResultCounts(rawItems.length, filtered.length, applied);
     showResTimestamp(ts);
     document.getElementById('resultPanel').classList.remove('hidden');
-    setViewMode(viewMode); // 현재 모드로 렌더
+    applySort(); // 현재 정렬 키 있으면 적용
+    setViewMode(viewMode);
     return { filtered, applied, skipped };
   }
 
-  // 캐시된 raw 에 현재 편집 중인 custRows 적용 (셀레니움 안 돌림)
+  // 캐시된 raw 에 현재 편집 중인 custRows 적용 (셀레니움 안 돌림).
+  // 메모리(lastRawItems) 가 있으면 우선 사용 — full *_html 보존 (캐시는 lite 일 수도)
   function refilterFromCache() {
     if (!currentPresetId) { setStatus('프리셋을 먼저 선택/저장하세요.', true); return; }
-    let cache;
-    try { cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + currentPresetId) || 'null'); } catch (e) { cache = null; }
-    if (!cache || !Array.isArray(cache.items)) { setStatus('캐시 없음 — 먼저 [크롤링 실행] 한 번 필요', true); return; }
-    const { filtered, skipped } = applyAndRender(cache.items, custRows.slice(), cache.ts);
-    let msg = `재필터링: 옥션원 ${cache.items.length}건 → ${filtered.length}건`;
-    if (skipped.length) msg += ` · 미지원 필터 무시: ${skipped.join(', ')}`;
-    setStatus(msg);
+    let raw, ts;
+    if (lastRawItems && lastRawItems.length) {
+      raw = lastRawItems;
+      ts = Date.now();
+    } else {
+      let cache;
+      try { cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + currentPresetId) || 'null'); } catch (e) { cache = null; }
+      if (!cache || !Array.isArray(cache.items)) { setStatus('캐시 없음 — 먼저 [크롤링 실행] 한 번 필요', true); return; }
+      raw = cache.items;
+      ts = cache.ts;
+    }
+    const { filtered, skipped } = applyAndRender(raw, custRows.slice(), ts);
+    let msg = `재필터링: 옥션원 ${raw.length}건 → ${filtered.length}건`;
+    if (skipped.length) {
+      msg += ` · 미지원 필터 무시: ${skipped.join(', ')}`;
+      alert(`아래 필터 종류는 매핑이 없어 무시됐습니다:\n\n${skipped.join(', ')}\n\n[필터 종류 관리]에서 이름을 정확히 (예: "특수물건", "주소 시도") 사용하세요.`);
+    }
+    setStatus(msg, skipped.length > 0);
   }
 
   // 캐시된 결과 복원 (프리셋 로드 / 페이지 시작 시)
@@ -752,6 +1015,82 @@
   let lastFilteredItems = [];        // 필터 적용 결과
   let lastFilterApplied = 0;
   let lastItems = [];
+
+  // 정렬 상태
+  let sortKey = null;   // null | 'sakun_no' | 'prop_kind' | 'address' | 'appraisal' | 'low' | 'pyeong' | 'failrate' | 'failcnt' | 'biddate' | 'biddays' | 'view'
+  let sortDir = 'asc';  // 'asc' | 'desc'
+
+  // 정렬 키별 값 추출기
+  const SORT_GETTERS = {
+    sakun_no:  it => it.sakun_no || '',
+    prop_kind: it => it.prop_kind || '',
+    address:   it => it.address || '',
+    appraisal: it => parsePriceCell(it.price).appraisal || 0,
+    low:       it => parsePriceCell(it.price).low || 0,
+    pyeong:    it => {
+      const m = String(it.price || '').match(/평당[^\d]*([\d,]+)/);
+      return m ? parseInt(m[1].replace(/,/g, ''), 10) : 0;
+    },
+    failrate:  it => parsePriceCell(it.price).pct || 0,
+    failcnt:   it => parseFailCount(it.status) || 0,
+    biddate:   it => {
+      // "2026.05.12" 또는 "2026-05-12" 형태 → 비교 가능 문자열
+      const m = String(it.bid_date || '').match(/(\d{4})[.\-](\d{2})[.\-](\d{2})/);
+      return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+    },
+    biddays:   it => {
+      const m = String(it.bid_date || '').match(/입찰\s*(\d+)\s*일전/);
+      return m ? parseInt(m[1], 10) : (/오늘/.test(it.bid_date || '') ? 0 : 9999);
+    },
+    view:      it => parseInt(String(it.view_count || '0').replace(/[^\d]/g, ''), 10) || 0
+  };
+
+  // 두 값 비교 (숫자/문자열 자동 분기)
+  function sortCompare(a, b, dir) {
+    const m = dir === 'desc' ? -1 : 1;
+    if (typeof a === 'number' && typeof b === 'number') return (a - b) * m;
+    return String(a).localeCompare(String(b), 'ko') * m;
+  }
+
+  // 정렬 적용 — lastRawItems / lastFilteredItems 둘 다 같은 키로 정렬
+  function applySort() {
+    if (!sortKey || !SORT_GETTERS[sortKey]) return;
+    const get = SORT_GETTERS[sortKey];
+    const sorter = (a, b) => sortCompare(get(a), get(b), sortDir);
+    lastRawItems = lastRawItems.slice().sort(sorter);
+    lastFilteredItems = lastFilteredItems.slice().sort(sorter);
+  }
+
+  // 정렬 컨트롤 active 표시 갱신 (▲▼)
+  function refreshSortUI() {
+    document.querySelectorAll('#sortBar .sort-tab[data-sort]').forEach(b => {
+      const k = b.dataset.sort;
+      const isOn = k === sortKey;
+      b.classList.toggle('active', isOn);
+      const arrow = isOn ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '';
+      const label = b.textContent.replace(/\s*[▲▼]\s*$/, '');
+      b.textContent = label + arrow;
+    });
+    document.querySelectorAll('#sortBar .sort-sel').forEach(s => {
+      const isOn = s.value && s.value === sortKey;
+      s.classList.toggle('active', !!isOn);
+    });
+  }
+
+  // 정렬 키 설정 (같은 키면 방향 토글, 다른 키면 asc 부터)
+  function setSort(key) {
+    if (!key) { sortKey = null; sortDir = 'asc'; }
+    else if (key === sortKey) { sortDir = (sortDir === 'asc' ? 'desc' : 'asc'); }
+    else { sortKey = key; sortDir = 'asc'; }
+    // select 동기화: sakun/price/bid 그룹 중 선택된 것 외 reset
+    document.querySelectorAll('#sortBar .sort-sel').forEach(s => {
+      const opts = Array.from(s.options).map(o => o.value).filter(Boolean);
+      s.value = (sortKey && opts.includes(sortKey)) ? sortKey : '';
+    });
+    applySort();
+    refreshSortUI();
+    setViewMode(viewMode);
+  }
   function renderResults(items) {
     const resBody = document.getElementById('resBody');
     if (!items.length) {

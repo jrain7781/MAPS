@@ -10,7 +10,7 @@ crawler.py — 옥션원 크롤링 매니저 백엔드
 """
 from __future__ import annotations
 import json, os, re, sys, time, traceback, threading
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 # stdout 버퍼링 비활성 (디버그 로그 즉시 보이게)
 try:
@@ -78,6 +78,34 @@ _driver = None
 _lock = threading.Lock()
 _last_login_at = 0.0
 LOGIN_TTL_SEC = 30 * 60  # 30분 — 옥션원 세션 안에서 재로그인 안 하고 빠르게 처리
+_cancel_event = threading.Event()  # 크롤링 페이지 순회 중간 중지 신호
+
+# 크롤링 진행상황 (프론트 폴링용)
+_progress = {
+    "running": False,
+    "current": 0,          # 지금까지 받은 행 수
+    "total": 0,            # 옥션원이 알린 전체 건수 (0 = 미정)
+    "pages_done": 0,
+    "started_at": 0.0,
+    "cancelled": False,
+    "stage": "",           # 'login' | 'search' | 'paging' | 'done' | 'cancelled' | 'fail'
+}
+
+def _get_total_record(d):
+    """ca_list.php 페이지에서 '물건수 : N건' 텍스트 또는 URL total_record=N 추출"""
+    try:
+        src = d.page_source or ""
+    except Exception:
+        return 0
+    m = re.search(r"물건수\s*:\s*([\d,]+)\s*건", src)
+    if m:
+        try: return int(m.group(1).replace(",", ""))
+        except: pass
+    m = re.search(r"total_record=(\d+)", src)
+    if m:
+        try: return int(m.group(1))
+        except: pass
+    return 0
 
 def _looks_like_login(html: str) -> bool:
     """응답 HTML 이 옥션원 로그인 페이지 / 비로그인 모달 페이지인지 판정"""
@@ -208,6 +236,39 @@ def fill_form(d, form_data: dict):
         d.execute_script("if (typeof addr_multi_plus === 'function') addr_multi_plus();")
         time.sleep(0.3)
 
+    # 물건종류 복수선택: _multiProp = ['8','19',...] → s_class2 hidden 에 콤마 join + 각 clg_<v> 체크박스 체크
+    multi_props = (form_data or {}).get("_multiProp") or []
+    multi_props = [str(v).strip() for v in multi_props if str(v).strip()]
+    if multi_props:
+        s_class2_val = ",".join(multi_props)
+        try:
+            d.execute_script(
+                f"""
+                var el = document.getElementById('s_class2');
+                if (el) {{ el.value = '{s_class2_val}'; try {{ el.dispatchEvent(new Event('change')); }} catch(e){{}} }}
+                // 단일 select 는 비움 (복수선택이 우선)
+                var single = document.getElementById('s_class');
+                if (single) {{ single.value = ''; try {{ single.dispatchEvent(new Event('change')); }} catch(e){{}} }}
+                // 'clg_all' (전체 선택) 체크 풀어서 옥션원이 '복수선택 모드' 로 인식
+                var allCb = document.getElementById('clg_all');
+                if (allCb && allCb.checked) {{ allCb.checked = false; try {{ allCb.dispatchEvent(new Event('change')); }} catch(e){{}} }}
+                """
+            )
+        except Exception as e:
+            print(f"[multi_prop] hidden set fail: {e}")
+        # 각 clg_<v> 체크박스도 체크 (옥션원 검증/제출 시 사용 가능)
+        for v in multi_props:
+            try:
+                cb = d.find_element(By.ID, f"clg_{v}")
+                d.execute_script(
+                    "arguments[0].checked = true; try { arguments[0].dispatchEvent(new Event('change')); } catch(e){}",
+                    cb,
+                )
+            except Exception:
+                pass
+        print(f"[multi_prop] s_class2={s_class2_val}, checkboxes={len(multi_props)}")
+        time.sleep(0.2)
+
 
 def submit_search(d):
     # ca_title.php 의 종합검색 — 검색 input 을 직접 클릭 (옥션원 onclick 검증 로직을 거치게)
@@ -235,11 +296,42 @@ def submit_search(d):
     time.sleep(1.5)
 
 
-def parse_results(d, max_rows: int = 100):
+def _extract_specials(td3):
+    """소재지 셀(td3) 에서 [임차권등기 / 대항력 / HUG인수조건변경 / 공시가격...] 같은
+    특수물건 표시 (옥션원이 빨강 #961c00 색으로 표시) 만 추출."""
+    parts = []
+    try:
+        # 빨강(#961c00) 색 div = 특수물건 표시
+        for el in td3.find_elements(By.CSS_SELECTOR, 'div[style*="#961c00"], div[style*="961c00"]'):
+            t = (el.text or "").strip()
+            if t: parts.append(t)
+    except Exception:
+        pass
+    if parts:
+        return " ".join(parts)
+    # fallback: 텍스트에서 [...] 안에 특수 키워드 들어간 줄
+    try:
+        text = td3.text or ""
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line.startswith("["): continue
+            if any(kw in line for kw in ["대항력", "임차권등기", "HUG", "선순위", "유치권", "재매각", "분묘", "법정지상권", "지분", "공시가격"]):
+                parts.append(line)
+    except Exception:
+        pass
+    return " ".join(parts)
+
+
+def parse_results(d, max_rows: int = 200):
     """결과 페이지 tbl_list tbody tr 파싱 → 리스트 of dict
     각 셀의 innerHTML 도 함께 보내서 프론트엔드에서 옥션원 디자인 그대로 렌더한다.
+    selector 는 결과 표(list_header tr 가 있는 tbody) 의 데이터 행만 한정.
     """
-    rows = d.find_elements(By.CSS_SELECTOR, "table.tbl_list tbody tr")
+    # 결과 표 = id="list_header" 인 tr 의 형제 tr 들 (검색폼 등 다른 tbl_list 제외)
+    rows = d.find_elements(By.XPATH, "//tr[@id='list_header']/following-sibling::tr")
+    if not rows:
+        # fallback: 옛 selector (호환)
+        rows = d.find_elements(By.CSS_SELECTOR, "table.tbl_list tbody tr")
     # 페이지 전역 변수에서 user_ssid 추출 (옥션원 ca_view URL 조립 필수)
     try:
         user_ssid = d.execute_script("return (typeof user_ssid !== 'undefined') ? user_ssid : '';") or ""
@@ -309,6 +401,7 @@ def parse_results(d, max_rows: int = 100):
                 "sakun_no": sakun_no,
                 "prop_kind": prop_kind,
                 "address": tds[3].text.strip(),
+                "specials": _extract_specials(tds[3]),
                 "price": tds[4].text.strip(),
                 "status": tds[5].text.strip(),
                 "bid_date": tds[6].text.strip(),
@@ -329,7 +422,39 @@ def parse_results(d, max_rows: int = 100):
     return items
 
 
+def _next_page_link(d, visited: set):
+    """결과 페이지의 페이지네이션(div.pagn) 에서 아직 안 본 가장 작은 start 의 링크 반환"""
+    try:
+        links = d.find_elements(By.CSS_SELECTOR, "div.pagn a")
+    except Exception:
+        return None
+    candidates = []
+    for a in links:
+        try:
+            href = (a.get_attribute("href") or "").strip()
+        except Exception:
+            continue
+        m = re.search(r"[?&]start=(\d+)", href)
+        if not m:
+            continue
+        s = int(m.group(1))
+        if s in visited:
+            continue
+        candidates.append((s, href))
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[0]
+
+
 def crawl(form_data: dict, custom_filters: list | None = None):
+    # 새 크롤링 시작 — 이전 cancel 신호 초기화
+    _cancel_event.clear()
+    _progress.update({
+        "running": True, "current": 0, "total": 0,
+        "pages_done": 0, "started_at": time.time(),
+        "cancelled": False, "stage": "login",
+    })
     with _lock:
         print(f"\n[crawl] formData={form_data}")
         def _do_search():
@@ -345,7 +470,9 @@ def crawl(form_data: dict, custom_filters: list | None = None):
             print(f"[crawl] after submit, current url={d2.current_url}")
             return d2, parse_results(d2)
         # 사용자 요구: 크롤링 시 매번 강제 로그인 — 사건상세 모달 fetch 등으로 driver 가 다른 페이지에 있더라도 안전
+        _progress["stage"] = "login"
         login_if_needed(force=True)
+        _progress["stage"] = "search"
         d, items = _do_search()
         # 그래도 비로그인 모달 등이 보이면 1회 재시도
         if not items and _looks_like_login(d.page_source or ""):
@@ -353,7 +480,50 @@ def crawl(form_data: dict, custom_filters: list | None = None):
             time.sleep(1)
             login_if_needed(force=True)
             d, items = _do_search()
-        print(f"[crawl] parsed {len(items)} items")
+        # 첫 페이지 결과 progress 반영 + 옥션원 전체 건수 추출
+        _progress["pages_done"] = 1
+        _progress["current"] = len(items)
+        _progress["total"] = _get_total_record(d) or len(items)
+        _progress["stage"] = "paging"
+        print(f"[crawl] page 1: {len(items)} items, total_record={_progress['total']}")
+        # 페이지네이션 순회 (start=100, start=200, ...)
+        visited = {0}
+        max_pages = 20  # 안전 한도
+        cancelled = False
+        while len(visited) < max_pages:
+            if _cancel_event.is_set():
+                print("[crawl] cancelled by user")
+                cancelled = True
+                break
+            nxt = _next_page_link(d, visited)
+            if not nxt:
+                break
+            start, href = nxt
+            print(f"[crawl] page start={start} → {href[:120]}...")
+            visited.add(start)
+            try:
+                d.get(href)
+                WebDriverWait(d, 15).until(
+                    EC.presence_of_element_located((By.XPATH, "//tr[@id='list_header']"))
+                )
+                time.sleep(0.5)
+                page_items = parse_results(d)
+                print(f"[crawl] page {len(visited)}: {len(page_items)} items")
+                items.extend(page_items)
+                _progress["pages_done"] = len(visited)
+                _progress["current"] = len(items)
+            except Exception as e:
+                print(f"[crawl] page fetch fail (start={start}): {e}")
+                break
+        print(f"[crawl] total {len(items)} items across {len(visited)} pages{' (cancelled)' if cancelled else ''}")
+        crawl.last_cancelled = cancelled
+        _progress.update({
+            "running": False,
+            "current": len(items),
+            "pages_done": len(visited),
+            "cancelled": cancelled,
+            "stage": "cancelled" if cancelled else "done",
+        })
         # 디버그: 결과 0 이면 페이지 스샷 + HTML 저장
         if not items:
             try:
@@ -403,6 +573,21 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'{"ok":true,"service":"auction1-crawler"}')
             return
+        # 크롤링 진행상황 폴링
+        if self.path.startswith("/api/progress"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps(_progress, ensure_ascii=False).encode("utf-8"))
+            return
+        # 크롤링 중지 신호: 진행 중인 페이지 순회 다음 iteration 에서 break
+        if self.path.startswith("/api/cancel"):
+            _cancel_event.set()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true,"cancelled":true}')
+            return
         return super().do_GET()
 
     def do_POST(self):
@@ -417,7 +602,8 @@ class Handler(SimpleHTTPRequestHandler):
             form_data = payload.get("formData") or {}
             custom_filters = payload.get("customFilters") or []
             items = crawl(form_data, custom_filters)
-            body = json.dumps({"success": True, "count": len(items), "items": items}, ensure_ascii=False)
+            cancelled = bool(getattr(crawl, "last_cancelled", False))
+            body = json.dumps({"success": True, "count": len(items), "items": items, "cancelled": cancelled}, ensure_ascii=False)
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
@@ -435,7 +621,8 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     os.chdir(here)
     port = 8765
-    server = HTTPServer(("0.0.0.0", port), Handler)
+    # ThreadingHTTPServer: /api/crawl 진행 중에도 /api/cancel 등 다른 요청 동시 처리
+    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"[crawler] http://localhost:{port}  (정적 서버 + /api/crawl)")
     print(f"[crawler] working dir: {here}")
     try:
