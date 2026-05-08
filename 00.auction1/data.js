@@ -386,7 +386,9 @@ window.AUCTION1_DATA = (function () {
     { v: 'eq',       t: '=' },
     { v: 'ne',       t: '≠' },
     { v: 'gte',      t: '≥' },
+    { v: 'gt',       t: '>' },
     { v: 'lte',      t: '≤' },
+    { v: 'lt',       t: '<' },
     { v: 'contains', t: '포함' },
     { v: 'ncontains',t: '미포함' },
     { v: 'regex',    t: '정규식' }

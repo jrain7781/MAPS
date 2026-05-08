@@ -9,7 +9,7 @@ crawler.py — 옥션원 크롤링 매니저 백엔드
 브라우저: http://localhost:8765
 """
 from __future__ import annotations
-import json, os, sys, time, traceback, threading
+import json, os, re, sys, time, traceback, threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 # stdout 버퍼링 비활성 (디버그 로그 즉시 보이게)
@@ -70,12 +70,28 @@ FIELD_MAP = {
     "procType": "sagun_type",
 }
 
-URL_LOGIN  = "https://www.auction1.co.kr/common/login_box.php"
-URL_SEARCH = "https://www.auction1.co.kr/auction/ca_title.php"
+A1_BASE    = "https://www.auction1.co.kr"
+URL_LOGIN  = f"{A1_BASE}/common/login_box.php"
+URL_SEARCH = f"{A1_BASE}/auction/ca_title.php"
 
 _driver = None
-_logged_in = False
 _lock = threading.Lock()
+_last_login_at = 0.0
+LOGIN_TTL_SEC = 30 * 60  # 30분 — 옥션원 세션 안에서 재로그인 안 하고 빠르게 처리
+
+def _looks_like_login(html: str) -> bool:
+    """응답 HTML 이 옥션원 로그인 페이지 / 비로그인 모달 페이지인지 판정"""
+    if not html:
+        return False
+    head = html[:15000]
+    if 'id="client_id"' in head or 'name="client_id"' in head:
+        return True
+    # ca_title.php 등에서 비로그인 시 옥션원이 띄우는 모달
+    if '로그인 후 이용' in head:
+        return True
+    if 'popup_login' in head or 'login_pop' in head:
+        return True
+    return False
 
 
 def get_driver():
@@ -96,13 +112,22 @@ def get_driver():
     return _driver
 
 
-def login_if_needed():
-    global _logged_in
-    if _logged_in:
+def login_if_needed(force: bool = False):
+    """TTL(30분) 내에는 로그인 skip — 첫 요청만 느리고 이후 매 요청은 즉시.
+    force=True 또는 TTL 만료 시 옥션원 로그인 페이지로 가서 재로그인.
+    """
+    global _last_login_at
+    if not force and (time.time() - _last_login_at) < LOGIN_TTL_SEC:
         return
     d = get_driver()
+    print(f"[login] (re)login → {URL_LOGIN}")
     d.get(URL_LOGIN)
-    WebDriverWait(d, 15).until(EC.presence_of_element_located((By.ID, "client_id")))
+    try:
+        WebDriverWait(d, 15).until(EC.presence_of_element_located((By.ID, "client_id")))
+    except Exception:
+        # 이미 로그인된 상태에서 옥션원이 메인으로 redirect — 강제로 logout 후 재시도하기보다 그대로 진행
+        print("[login] client_id input not found (이미 로그인 상태?). 그대로 진행")
+        return
     d.execute_script(
         f"""
         document.getElementById('client_id').value = '{ACCOUNT['id']}';
@@ -119,8 +144,18 @@ def login_if_needed():
         ).click()
     except Exception:
         d.find_element(By.ID, "passwd").send_keys(Keys.RETURN)
-    time.sleep(2)
-    _logged_in = True
+    # 로그인 완료 대기: client_id input 이 사라지거나 페이지가 다른 곳으로 이동할 때까지
+    try:
+        WebDriverWait(d, 10).until(
+            lambda dr: "login_box" not in dr.current_url
+            or not dr.find_elements(By.ID, "client_id")
+        )
+    except Exception:
+        time.sleep(2)
+    # 옥션원 세션 cookie / user_ssid 안정화 대기
+    time.sleep(1.2)
+    _last_login_at = time.time()
+    print(f"[login] done, current_url={d.current_url}")
 
 
 def fill_form(d, form_data: dict):
@@ -201,35 +236,93 @@ def submit_search(d):
 
 
 def parse_results(d, max_rows: int = 100):
-    """결과 페이지 tbl_list tbody tr 파싱 → 리스트 of dict"""
+    """결과 페이지 tbl_list tbody tr 파싱 → 리스트 of dict
+    각 셀의 innerHTML 도 함께 보내서 프론트엔드에서 옥션원 디자인 그대로 렌더한다.
+    """
     rows = d.find_elements(By.CSS_SELECTOR, "table.tbl_list tbody tr")
-    items = []
+    # 페이지 전역 변수에서 user_ssid 추출 (옥션원 ca_view URL 조립 필수)
+    try:
+        user_ssid = d.execute_script("return (typeof user_ssid !== 'undefined') ? user_ssid : '';") or ""
+    except Exception:
+        user_ssid = ""
+    # 결과 행만 미리 필터 → line_tnum (전체 건수) 계산
+    valid_rows = []
     for r in rows[:max_rows]:
         try:
-            tds = r.find_elements(By.TAG_NAME, "td")
+            tds_chk = r.find_elements(By.TAG_NAME, "td")
+            if len(tds_chk) >= 8:
+                valid_rows.append((r, tds_chk))
+        except Exception:
+            pass
+    line_tnum = len(valid_rows)
+    items = []
+    for r, tds in valid_rows:
+        try:
             if len(tds) < 8:
                 continue
             # 셀 인덱스: 0체크 / 1사진 / 2사건번호+물건종류 / 3소재지 / 4감정/최저/평당 / 5진행상태 / 6매각기일 / 7조회수
             sakun_block = tds[2].text.strip().split("\n")
             sakun_no = sakun_block[0] if sakun_block else ""
             prop_kind = sakun_block[1] if len(sakun_block) > 1 else ""
-            address = tds[3].text.strip()
-            price = tds[4].text.strip()
-            status = tds[5].text.strip()
-            bid_date = tds[6].text.strip()
-            view_count = tds[7].text.strip()
+            # product_id (체크박스 value) + line_num (hidden input) 추출
+            product_id = ""
+            line_num = ""
+            try:
+                cb = tds[0].find_element(By.CSS_SELECTOR, "input[type=checkbox]")
+                product_id = (cb.get_attribute("value") or "").strip()
+            except Exception:
+                pass
+            try:
+                ln_el = tds[0].find_element(By.CSS_SELECTOR, "input[name='line_num']")
+                line_num = (ln_el.get_attribute("value") or "").strip()
+            except Exception:
+                pass
+            if not product_id:
+                try:
+                    inner = tds[2].get_attribute("innerHTML") or ""
+                    m = re.search(r"\(\s*(\d{5,})\s*,", inner)
+                    if m:
+                        product_id = m.group(1)
+                except Exception:
+                    pass
+            # ca_view URL 조립 (옥션원이 user_ssid + line_tnum 검증함)
+            view_url = ""
+            if product_id:
+                parts = [f"product_id={product_id}"]
+                if line_num:  parts.append(f"line_num={line_num}")
+                if line_tnum: parts.append(f"line_tnum={line_tnum}")
+                if user_ssid: parts.append(f"user_ssid={user_ssid}")
+                parts.append("person_hide=0")
+                view_url = f"{A1_BASE}/auction/ca_view.php?" + "&".join(parts)
             # 사진 url
             img_el = tds[1].find_elements(By.TAG_NAME, "img")
             img_url = img_el[0].get_attribute("src") if img_el else ""
+
+            def html_of(td):
+                try:
+                    return td.get_attribute("innerHTML") or ""
+                except Exception:
+                    return ""
+
             items.append({
+                # 텍스트 (필터/검색용)
                 "sakun_no": sakun_no,
                 "prop_kind": prop_kind,
-                "address": address,
-                "price": price,
-                "status": status,
-                "bid_date": bid_date,
-                "view_count": view_count,
+                "address": tds[3].text.strip(),
+                "price": tds[4].text.strip(),
+                "status": tds[5].text.strip(),
+                "bid_date": tds[6].text.strip(),
+                "view_count": tds[7].text.strip(),
                 "img_url": img_url,
+                "view_url": view_url,
+                # 옥션원 원본 셀 HTML (렌더용)
+                "img_html":     html_of(tds[1]),
+                "sakun_html":   html_of(tds[2]),
+                "address_html": html_of(tds[3]),
+                "price_html":   html_of(tds[4]),
+                "status_html":  html_of(tds[5]),
+                "bid_html":     html_of(tds[6]),
+                "view_html":    html_of(tds[7]),
             })
         except Exception as e:
             print(f"[parse row err] {e}")
@@ -239,18 +332,27 @@ def parse_results(d, max_rows: int = 100):
 def crawl(form_data: dict, custom_filters: list | None = None):
     with _lock:
         print(f"\n[crawl] formData={form_data}")
-        login_if_needed()
-        d = get_driver()
-        d.get(URL_SEARCH)
-        WebDriverWait(d, 15).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, "table.tbl_fmSrch"))
-        )
-        time.sleep(0.5)
-        fill_form(d, form_data)
-        print(f"[crawl] form filled, current url={d.current_url}")
-        submit_search(d)
-        print(f"[crawl] after submit, current url={d.current_url}")
-        items = parse_results(d)
+        def _do_search():
+            d2 = get_driver()
+            d2.get(URL_SEARCH)
+            WebDriverWait(d2, 15).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "table.tbl_fmSrch"))
+            )
+            time.sleep(0.5)
+            fill_form(d2, form_data)
+            print(f"[crawl] form filled, current url={d2.current_url}")
+            submit_search(d2)
+            print(f"[crawl] after submit, current url={d2.current_url}")
+            return d2, parse_results(d2)
+        # 사용자 요구: 크롤링 시 매번 강제 로그인 — 사건상세 모달 fetch 등으로 driver 가 다른 페이지에 있더라도 안전
+        login_if_needed(force=True)
+        d, items = _do_search()
+        # 그래도 비로그인 모달 등이 보이면 1회 재시도
+        if not items and _looks_like_login(d.page_source or ""):
+            print("[crawl] still not logged in — retry")
+            time.sleep(1)
+            login_if_needed(force=True)
+            d, items = _do_search()
         print(f"[crawl] parsed {len(items)} items")
         # 디버그: 결과 0 이면 페이지 스샷 + HTML 저장
         if not items:
@@ -280,8 +382,28 @@ class Handler(SimpleHTTPRequestHandler):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 
     def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        # CORS — MAPS (GAS 웹앱) 등 외부 origin 에서 /api/case_detail, /health 호출 허용
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         super().end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.end_headers()
+
+    def do_GET(self):
+        # ping: 백엔드 살아있는지 빠른 감지용
+        if self.path.startswith("/health"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true,"service":"auction1-crawler"}')
+            return
+        return super().do_GET()
 
     def do_POST(self):
         if self.path != "/api/crawl":
