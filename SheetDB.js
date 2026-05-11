@@ -3380,9 +3380,16 @@ function saveMemberClassDetail(classD1Id, memberId, updates) {
 
   if (existingRow > 0) {
     var rowVals = sheet.getRange(existingRow, 1, 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues()[0];
+    var statusIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_status');
+    var prevStatus = String(rowVals[statusIdx] || '');
     MEMBER_CLASS_DETAILS_HEADERS.forEach(function(h, i) {
       if (updates[h] !== undefined) rowVals[i] = updates[h];
     });
+    var newStatus = String(rowVals[statusIdx] || '');
+    // 상태 변경 시 미래 심볼 자동 처리 (비활성 = 미래 비움, 활성 전환 = 남은회차만큼 미래 ● 채움)
+    if (updates.member_status !== undefined && prevStatus !== newStatus) {
+      _applyStatusFutureShift_(rowVals, classD1Id, prevStatus, newStatus);
+    }
     sheet.getRange(existingRow, 1, 1, MEMBER_CLASS_DETAILS_HEADERS.length).setValues([rowVals]);
   } else {
     var regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
@@ -3403,6 +3410,86 @@ function saveMemberClassDetail(classD1Id, memberId, updates) {
     _cache.remove('mcd_' + batchKey_);
   } catch(e) {}
   return { success: true };
+}
+
+/**
+ * 회원 상태 변경에 따른 미래 심볼 자동 시프트
+ *  - 비활성('종료'/'홀딩')으로 전환: 미래 회차 셀 모두 비움 (휴강 제외)
+ *  - 활성(그 외)으로 전환: 미래 빈 셀에 (contract - used)만큼 ● 자동 채움
+ *  - 과거 셀은 절대 건드리지 않음, 휴강 회차는 제외
+ *  rowVals를 in-place 수정
+ */
+function _applyStatusFutureShift_(rowVals, classD1Id, prevStatus, newStatus) {
+  var INACTIVE_STATUSES = ['종료', '홀딩'];
+  var wasInactive = INACTIVE_STATUSES.indexOf(String(prevStatus || '')) >= 0;
+  var isInactive  = INACTIVE_STATUSES.indexOf(String(newStatus || '')) >= 0;
+  if (wasInactive === isInactive) return; // 활성/비활성 그룹 내 이동(예: 종료↔홀딩, 진행중↔빈)은 무영향
+
+  // 같은 배치의 회차 정보 수집 (휴강 + 날짜)
+  var batchKey = extractD1BatchKey_(classD1Id);
+  var d1Sheet = ensureClassD1Sheet_();
+  var d1Last = d1Sheet.getLastRow();
+  if (d1Last < 2) return;
+  var d1Data = d1Sheet.getRange(2, 1, d1Last - 1, CLASS_D1_HEADERS.length).getValues();
+  var classD1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
+  var classLoopIdx = CLASS_D1_HEADERS.indexOf('class_loop');
+  var classDateIdx = CLASS_D1_HEADERS.indexOf('class_date');
+  var holidayIdx   = CLASS_D1_HEADERS.indexOf('holiday');
+  var tz = Session.getScriptTimeZone();
+  var batchD1List = [];
+  for (var i = 0; i < d1Data.length; i++) {
+    if (extractD1BatchKey_(String(d1Data[i][classD1IdIdx])) !== batchKey) continue;
+    var rawDate = d1Data[i][classDateIdx];
+    var dateStr = (rawDate instanceof Date)
+      ? Utilities.formatDate(rawDate, tz, 'yyyyMMdd')
+      : String(rawDate || '').replace(/-/g, '');
+    batchD1List.push({
+      loop: Number(d1Data[i][classLoopIdx]),
+      date: dateStr,
+      holiday: String(d1Data[i][holidayIdx] || '') === 'Y'
+    });
+  }
+  batchD1List.sort(function(a, b) { return a.loop - b.loop; });
+
+  var todayStr = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
+
+  if (isInactive) {
+    // 비활성 전환: 미래 회차 셀 비움 (휴강 제외)
+    batchD1List.forEach(function(bd) {
+      if (bd.holiday) return;
+      if (bd.date === '' || bd.date <= todayStr) return; // 과거/오늘 보존
+      var idx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + bd.loop);
+      if (idx >= 0) rowVals[idx] = '';
+    });
+  } else {
+    // 활성 전환: contract - used 계산 후 미래 빈 셀에 ● 채움
+    var contractIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('contract_loop');
+    var contract = parseInt(rowVals[contractIdx], 10) || 0;
+    if (contract <= 0) return;
+    var used = 0;
+    batchD1List.forEach(function(bd) {
+      if (bd.holiday) return;
+      if (bd.date === '' || bd.date > todayStr) return;
+      var idx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + bd.loop);
+      if (idx < 0) return;
+      var v = String(rowVals[idx] || '').trim().toUpperCase();
+      if (v === 'O' || v === 'R') used++;
+    });
+    var needed = Math.max(0, contract - used);
+    if (needed <= 0) return;
+    var added = 0;
+    for (var bi = 0; bi < batchD1List.length && added < needed; bi++) {
+      var bd2 = batchD1List[bi];
+      if (bd2.holiday) continue;
+      if (bd2.date === '' || bd2.date <= todayStr) continue;
+      var idx2 = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + bd2.loop);
+      if (idx2 < 0) continue;
+      if (String(rowVals[idx2] || '').trim() === '') {
+        rowVals[idx2] = 'O';
+        added++;
+      }
+    }
+  }
 }
 
 /**
