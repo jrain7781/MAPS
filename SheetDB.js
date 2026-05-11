@@ -2553,10 +2553,111 @@ function deleteClassD1(classD1Id) {
 }
 
 /**
+ * [정리용] class.class_loop 초과 회차 자동 식별 + 삭제
+ *  - 2026-05-11 잘못 실행된 appendRoundsForContract로 추가된 회차를 정리
+ *  - class 시트의 class_loop가 N인데 class_d1에 N보다 큰 회차가 있으면 그게 잘못 추가된 회차
+ *  - 해당 회차의 class_d1 행 삭제 + 모든 회원의 no_<loop> 빈값으로
+ *  - 휴강 회차는 건드리지 않음 (휴강은 정상 회차로 간주)
+ * @return 삭제된 회차 정보
+ */
+function cleanupExtraRoundsBeyondClassLoop() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var classSh = ss.getSheetByName(CLASS_SHEET_NAME_DB);
+  if (!classSh) return { success: false, message: 'class 시트 없음' };
+  var clast = classSh.getLastRow();
+  if (clast < 2) return { success: false, message: 'class 데이터 없음' };
+  var cData = classSh.getRange(2, 1, clast - 1, CLASS_HEADERS.length).getValues();
+  var cidIdx = CLASS_HEADERS.indexOf('class_id');
+  var clpIdx = CLASS_HEADERS.indexOf('class_loop');
+  var classLoopMap = {};
+  cData.forEach(function(r) {
+    classLoopMap[String(r[cidIdx])] = parseInt(r[clpIdx], 10) || 0;
+  });
+
+  var d1Sh = ensureClassD1Sheet_();
+  var d1Last = d1Sh.getLastRow();
+  if (d1Last < 2) return { success: false, message: 'class_d1 데이터 없음' };
+  var d1Data = d1Sh.getRange(2, 1, d1Last - 1, CLASS_D1_HEADERS.length).getValues();
+  var classIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
+  var loopIdx = CLASS_D1_HEADERS.indexOf('class_loop');
+  var classD1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
+  var holidayIdx = CLASS_D1_HEADERS.indexOf('holiday');
+
+  // 삭제 후보 식별
+  var toDelete = []; // { rowIdx, classD1Id, classId, loop, batchKey }
+  for (var i = 0; i < d1Data.length; i++) {
+    var classId = String(d1Data[i][classIdIdx]);
+    var loop = parseInt(d1Data[i][loopIdx], 10);
+    var maxLoop = classLoopMap[classId] || 0;
+    if (maxLoop > 0 && loop > maxLoop && String(d1Data[i][holidayIdx] || '') !== 'Y') {
+      toDelete.push({
+        rowIdx: i + 2,
+        classD1Id: String(d1Data[i][classD1IdIdx]),
+        classId: classId,
+        loop: loop,
+        batchKey: extractD1BatchKey_(String(d1Data[i][classD1IdIdx]))
+      });
+    }
+  }
+
+  if (toDelete.length === 0) {
+    return { success: true, message: '정리할 회차 없음', deletedCount: 0 };
+  }
+
+  // 회원 셀의 no_<loop> 빈값으로 정리
+  var mcdSh = ensureMemberClassDetailsSheet_();
+  var mcdLast = mcdSh.getLastRow();
+  if (mcdLast >= 2) {
+    var mcdData = mcdSh.getRange(2, 1, mcdLast - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+    var d1IdMcdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+    for (var mi = 0; mi < mcdData.length; mi++) {
+      var memBatchKey = String(mcdData[mi][d1IdMcdIdx]);
+      var changed = false;
+      var rowVals = mcdData[mi].slice();
+      toDelete.forEach(function(d) {
+        if (d.batchKey !== memBatchKey) return;
+        var fieldIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + d.loop);
+        if (fieldIdx >= 0 && rowVals[fieldIdx] !== '') {
+          rowVals[fieldIdx] = '';
+          changed = true;
+        }
+      });
+      if (changed) {
+        mcdSh.getRange(mi + 2, 1, 1, MEMBER_CLASS_DETAILS_HEADERS.length).setValues([rowVals]);
+      }
+    }
+  }
+
+  // class_d1 행 삭제 (역순으로)
+  toDelete.sort(function(a, b) { return b.rowIdx - a.rowIdx; });
+  toDelete.forEach(function(d) {
+    d1Sh.deleteRow(d.rowIdx);
+  });
+
+  SpreadsheetApp.flush();
+  // 캐시 무효화
+  var cache = CacheService.getScriptCache();
+  var seenBatches = {};
+  toDelete.forEach(function(d) {
+    if (!seenBatches[d.batchKey]) {
+      cache.remove('mcd_' + d.batchKey);
+      seenBatches[d.batchKey] = true;
+    }
+    cache.remove('sessions_' + d.classId);
+  });
+  cache.remove('all_class_d1_sessions');
+
+  return {
+    success: true,
+    message: toDelete.length + '개 잉여 회차 삭제 완료',
+    deletedCount: toDelete.length,
+    deleted: toDelete.map(function(d) { return { classD1Id: d.classD1Id, loop: d.loop, classId: d.classId }; })
+  };
+}
+
+/**
+ * @deprecated 2026-05-11 사용자 의도와 반대로 회차 자동 추가 → 호출 중단. 함수 본체 보존.
  * 계약회차 증가 시 미래 슬롯이 부족하면 끝에 회차 자동 추가
- * - 같은 배치의 마지막 회차 정보 복사 (시간/입찰시간/요일/강사 동일)
- * - 일자: 마지막 회차 + 7일 간격
- * - 새 회차의 회원 셀에 'O' 자동 채움 (해당 회원만)
  * @param {string} classD1Id - 회원의 한 회차 ID (배치 식별용)
  * @param {string} memberId - 새 ●를 받을 회원 ID
  * @param {number} count - 추가할 회차 수
