@@ -13545,7 +13545,13 @@ ${token}
             if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">배치를 선택하세요</td></tr>';
             return;
         }
-        if (detail) detail.innerHTML = '<div class="text-gray-400 text-xs text-center py-4">회원을 선택하세요</div>';
+        if (detail) detail.innerHTML = `
+            <div id="summaryMemberSection">
+                <div class="text-gray-400 text-xs text-center py-4">회원을 선택하세요</div>
+            </div>
+            <div id="summaryClassNoteSection" class="mt-3 pt-2 border-t border-gray-200"></div>
+        `;
+        if (typeof renderClassD1NoteSection_ === 'function') renderClassD1NoteSection_();
         selectedSummaryMemberId_ = null;
         if (_summaryCache[batchKey]) {
             summaryMemberData_ = _summaryCache[batchKey];
@@ -13649,32 +13655,19 @@ ${token}
             }
             const isActive = summarySortKey_ === 'no_' + d.class_loop;
             const isUpcoming = i === upcomingIdx;
+            const isHoliday = String(d.holiday || '') === 'Y';
             const upcomingThClass = isUpcoming
                 ? 'border-l-2 border-r-2 border-t-2 border-red-400'
-                : (isActive ? 'border-l border-gray-200 bg-blue-200' : 'border-l border-gray-200 hover:bg-blue-100');
+                : (isHoliday ? 'border-l border-gray-200 bg-gray-300' : (isActive ? 'border-l border-gray-200 bg-blue-200' : 'border-l border-gray-200 hover:bg-blue-100'));
             const isFirstSessionTh = i === 0;
             const resizeHandleHtml = isFirstSessionTh
                 ? `<div class="d1sess-resize-handle" onmousedown="d1SessColResizeStart_(event)" title="드래그하여 모든 회차 폭 조정"></div>`
                 : '';
             sessionColHeaders += `<th class="d1-sess-th px-1 py-1 text-center cursor-pointer ${upcomingThClass}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;position:relative" onclick="sortSummaryBySession_(${d.class_loop})">
-                <div class="text-[11px] font-bold ${isUpcoming ? 'text-red-600' : 'text-blue-600'}">${d.class_loop}회</div>
-                <div class="text-[9px] font-semibold ${isUpcoming ? 'text-red-400' : 'text-blue-500'} whitespace-nowrap">${dateDisp} ${dayDisp}</div>
+                <div class="text-[11px] font-bold ${isUpcoming ? 'text-red-600' : (isHoliday ? 'text-gray-700' : 'text-blue-600')}">${d.class_loop}회</div>
+                <div class="text-[9px] font-semibold ${isUpcoming ? 'text-red-400' : (isHoliday ? 'text-gray-600' : 'text-blue-500')} whitespace-nowrap">${dateDisp} ${dayDisp}</div>
                 ${resizeHandleHtml}
             </th>`;
-        }
-
-        // 휴강 행 (연도 행과 회차 행 사이): 휴강 회차 위치에 "휴강" 빨간 박스
-        let holidayRowHeaders = '';
-        for (let i = 0; i < d1List.length; i++) {
-            const d = d1List[i];
-            const isHoliday = String(d.holiday || '') === 'Y';
-            if (isHoliday) {
-                holidayRowHeaders += `<th class="px-0.5 py-0.5 text-center bg-gray-100 border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px">
-                    <div class="text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>
-                </th>`;
-            } else {
-                holidayRowHeaders += `<th class="bg-gray-100 border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px"></th>`;
-            }
         }
         // [패딩] class.class_loop만큼 회차 컬럼 채움 (실제 회차가 부족할 때 빈칸 표시)
         const _padCount_ = Math.max(0, classTotalLoop_ - N);
@@ -13688,10 +13681,6 @@ ${token}
         // 연도 행에 패딩용 빈 colspan 추가
         if (_padCount_ > 0) {
             yearColHeaders += `<th colspan="${_padCount_}" class="bg-gray-50 border-l border-gray-200"></th>`;
-            // 휴강 행도 패딩 셀 추가
-            for (let i = 0; i < _padCount_; i++) {
-                holidayRowHeaders += `<th class="bg-gray-50 border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px"></th>`;
-            }
         }
 
         // 총 컬럼 수 (checkbox + 이름 + 전화 + 상태 + 계약회차 + 수업회차 + 남은회차 + 이월회차 + 실제회차 + 패딩)
@@ -13708,20 +13697,17 @@ ${token}
         const wStyle = (px) => `min-width:${px}px;width:${px}px;max-width:${px}px`;
         thead.innerHTML = `
             <tr class="bg-blue-50">
-                <th rowspan="3" class="px-1 py-2 text-center align-middle" style="${wStyle(COLW_.check)}">
+                <th rowspan="2" class="px-1 py-2 text-center align-middle" style="${wStyle(COLW_.check)}">
                     <input type="checkbox" id="d1SummaryCheckAll" onchange="toggleAllSummaryCheck(this.checked)" class="cursor-pointer">
                 </th>
-                <th rowspan="3" class="px-2 py-2 text-center text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none align-middle" style="${wStyle(COLW_.name)}" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
-                <th rowspan="3" class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none align-middle" style="${wStyle(COLW_.phone)}" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
-                <th rowspan="3" class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none align-middle" style="${wStyle(COLW_.status)}" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
-                <th rowspan="3" class="px-1 py-2 text-center text-[11px] font-bold text-indigo-700 cursor-pointer hover:text-indigo-900 select-none leading-tight align-middle" style="${wStyle(COLW_.contract)}" onclick="sortSummaryByField_('contract')" title="계약 회차 (클릭하여 수정)"><div>계약</div><div>회차${sortArrow('contract')}</div></th>
-                <th rowspan="3" class="px-1 py-2 text-center text-[11px] font-bold text-emerald-700 cursor-pointer hover:text-emerald-900 select-none leading-tight align-middle" style="${wStyle(COLW_.used)}" onclick="sortSummaryByField_('used')" title="과거 O의 개수(받은 회차)"><div>수업</div><div>회차${sortArrow('used')}</div></th>
-                <th rowspan="3" class="px-1 py-2 text-center text-[11px] font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none leading-tight align-middle" style="${wStyle(COLW_.rem)}" onclick="sortSummaryByField_('remaining')" title="계약회차 − 수업회차"><div>남은</div><div>회차${sortArrow('remaining')}</div></th>
-                <th rowspan="3" class="px-1 py-2 text-center text-[11px] font-bold text-orange-600 cursor-pointer hover:text-orange-800 select-none leading-tight align-middle" style="${wStyle(COLW_.carry)}" onclick="sortSummaryByField_('carry')" title="이번 배치에서 못 채운 잔여 (다음 배치 이월)"><div>이월</div><div>회차${sortArrow('carry')}</div></th>
+                <th rowspan="2" class="px-2 py-2 text-center text-xs font-bold text-blue-700 cursor-pointer hover:text-blue-900 select-none align-middle" style="${wStyle(COLW_.name)}" onclick="sortSummaryByName_()">이름${sortArrow('name')}</th>
+                <th rowspan="2" class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none align-middle" style="${wStyle(COLW_.phone)}" onclick="sortSummaryByField_('phone')">전화번호${sortArrow('phone')}</th>
+                <th rowspan="2" class="px-2 py-2 text-center text-xs font-bold text-gray-600 cursor-pointer hover:text-gray-900 select-none align-middle" style="${wStyle(COLW_.status)}" onclick="sortSummaryByField_('status')">상태${sortArrow('status')}</th>
+                <th rowspan="2" class="px-1 py-2 text-center text-[11px] font-bold text-indigo-700 cursor-pointer hover:text-indigo-900 select-none leading-tight align-middle" style="${wStyle(COLW_.contract)}" onclick="sortSummaryByField_('contract')" title="계약 회차 (클릭하여 수정)"><div>계약</div><div>회차${sortArrow('contract')}</div></th>
+                <th rowspan="2" class="px-1 py-2 text-center text-[11px] font-bold text-emerald-700 cursor-pointer hover:text-emerald-900 select-none leading-tight align-middle" style="${wStyle(COLW_.used)}" onclick="sortSummaryByField_('used')" title="과거 O의 개수(받은 회차)"><div>수업</div><div>회차${sortArrow('used')}</div></th>
+                <th rowspan="2" class="px-1 py-2 text-center text-[11px] font-bold text-purple-600 cursor-pointer hover:text-purple-800 select-none leading-tight align-middle" style="${wStyle(COLW_.rem)}" onclick="sortSummaryByField_('remaining')" title="계약회차 − 수업회차"><div>남은</div><div>회차${sortArrow('remaining')}</div></th>
+                <th rowspan="2" class="px-1 py-2 text-center text-[11px] font-bold text-orange-600 cursor-pointer hover:text-orange-800 select-none leading-tight align-middle" style="${wStyle(COLW_.carry)}" onclick="sortSummaryByField_('carry')" title="이번 배치에서 못 채운 잔여 (다음 배치 이월)"><div>이월</div><div>회차${sortArrow('carry')}</div></th>
                 ${yearColHeaders}
-            </tr>
-            <tr class="bg-gray-100">
-                ${holidayRowHeaders}
             </tr>
             <tr class="bg-blue-50">
                 ${sessionColHeaders}
@@ -14067,6 +14053,23 @@ ${token}
             });
         });
 
+        // 그룹 헤더용 휴강 셀 (각 회차 위치에 휴강 박스 또는 빈 셀)
+        let groupHolidayCells = '';
+        for (let i = 0; i < d1List.length; i++) {
+            const d = d1List[i];
+            const isHoliday = String(d.holiday || '') === 'Y';
+            if (isHoliday) {
+                groupHolidayCells += `<td class="d1-group-header-holiday-td px-0.5 py-0 text-center align-middle border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;background:#f3f4f6">
+                    <div class="text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5 inline-block leading-tight" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>
+                </td>`;
+            } else {
+                groupHolidayCells += `<td class="d1-group-header-holiday-td border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;background:#f3f4f6"></td>`;
+            }
+        }
+        for (let i = 0; i < _padCount_; i++) {
+            groupHolidayCells += `<td class="d1-group-header-holiday-td border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;background:#f3f4f6"></td>`;
+        }
+
         // 그룹 헤더 + 회원 행 조립
         const collapsedMap = getD1GroupCollapsed_();
         let bodyHtml = '';
@@ -14077,17 +14080,20 @@ ${token}
             const arrow = isCollapsed ? '▶' : '▼';
             const fg = _contrastTextColor_(g.color);
             const gNameEsc = escapeHtml(g.name);
-            bodyHtml += `<tr class="d1-group-header"><td colspan="${totalCols}" class="d1-group-header-cell">
-                <div class="d1-group-tab" style="background:${g.color};color:${fg}">
-                    <input type="checkbox" class="d1-group-checkall cursor-pointer align-middle" title="${gNameEsc} 전체 선택"
-                        onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this, '${gNameEsc}')">
-                    <span style="cursor:pointer" onclick="toggleD1Group_('${gNameEsc}')">
-                        <span style="display:inline-block;width:12px;text-align:center">${arrow}</span>
-                        <span>${gNameEsc}</span>
-                        <span style="opacity:0.85;font-weight:normal;margin-left:4px;font-size:11px">${g.members.length}명</span>
-                    </span>
-                </div>
-            </td></tr>`;
+            bodyHtml += `<tr class="d1-group-header">
+                <td colspan="8" class="d1-group-header-cell">
+                    <div class="d1-group-tab" style="background:${g.color};color:${fg}">
+                        <input type="checkbox" class="d1-group-checkall cursor-pointer align-middle" title="${gNameEsc} 전체 선택"
+                            onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this, '${gNameEsc}')">
+                        <span style="cursor:pointer" onclick="toggleD1Group_('${gNameEsc}')">
+                            <span style="display:inline-block;width:12px;text-align:center">${arrow}</span>
+                            <span>${gNameEsc}</span>
+                            <span style="opacity:0.85;font-weight:normal;margin-left:4px;font-size:11px">${g.members.length}명</span>
+                        </span>
+                    </div>
+                </td>
+                ${groupHolidayCells}
+            </tr>`;
             if (isCollapsed) continue;
             for (let j = 0; j < g.members.length; j++) {
                 bodyHtml += renderRow_(g.members[j], globalIdx, g.name);
@@ -15255,7 +15261,20 @@ ${token}
         const batchKey = escapeHtml(String(m.class_d1_id || ''));
         const memId = escapeHtml(String(m.member_id || ''));
 
-        detail.innerHTML = `
+        // 회원비고 textarea 높이 (사용자가 드래그로 조절, localStorage 보존)
+        const savedRemarkH = parseInt(localStorage.getItem('d1_summary_remark_h') || '120', 10) || 120;
+
+        // 회원 영역만 부분 갱신 (수업비고는 별도 selectClassD1로 관리)
+        let memSection = document.getElementById('summaryMemberSection');
+        if (!memSection) {
+            // detail 구조가 없으면 초기화
+            detail.innerHTML = `
+                <div id="summaryMemberSection"></div>
+                <div id="summaryClassNoteSection" class="mt-3 pt-2 border-t border-gray-200"></div>
+            `;
+            memSection = document.getElementById('summaryMemberSection');
+        }
+        memSection.innerHTML = `
             <div class="mb-3 pb-2 border-b border-gray-100">
                 <div class="flex items-center gap-2 mb-1 flex-wrap">
                     <span class="font-bold text-sm text-gray-800">${escapeHtml(m.member_name || '-')}</span>
@@ -15268,21 +15287,21 @@ ${token}
                 </div>
             </div>
             <div>
-                <div class="text-[10px] font-bold text-gray-500 mb-1">회원비고 <span class="font-normal text-gray-400">(remark1)</span></div>
-                <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400" rows="6" placeholder="회원비고를 입력하세요">${escapeHtml(m.remark1 || '')}</textarea>
-                <button onclick="saveSummaryRemark_('${memId}','${batchKey}')" class="mt-1 w-full py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">회원비고 저장</button>
-            </div>
-            <div id="summaryClassNoteSection" class="mt-3 pt-2 border-t border-gray-200"></div>
-            <div class="mt-3 pt-2 border-t border-gray-200 hidden">
                 <div class="flex justify-between items-center mb-1">
-                    <span class="text-[10px] font-bold text-gray-500">💬 카카오 메시지</span>
-                    <button onclick="sendD1MemberKakao_()" class="px-2 py-1 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-xs font-bold rounded">💬카톡</button>
+                    <span class="text-[10px] font-bold text-gray-500">회원비고 <span class="font-normal text-gray-400">(remark1)</span></span>
+                    <button onclick="saveSummaryRemark_('${memId}','${batchKey}')" class="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] rounded font-semibold">저장</button>
                 </div>
-                <div class="flex flex-wrap gap-0.5 border-b border-gray-200 mb-1" id="d1member-kakao-tabs-container"></div>
-                <div id="d1member-kakao-name-row" class="py-1"></div>
-                <textarea id="d1member-template-textarea" rows="5" readonly class="w-full px-2 py-1 border border-blue-200 rounded text-xs font-mono bg-blue-50 focus:outline-none"></textarea>
-            </div>`;
+                <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400" style="height:${savedRemarkH}px;resize:vertical;min-height:60px" placeholder="회원비고를 입력하세요" onmouseup="_saveRemarkHeight_(this)" ontouchend="_saveRemarkHeight_(this)">${escapeHtml(m.remark1 || '')}</textarea>
+            </div>
+        `;
+        // 수업비고 갱신 (회원 선택과 무관하게 selectedClassD1Id 기준)
         renderClassD1NoteSection_();
+    }
+
+    function _saveRemarkHeight_(ta) {
+        if (!ta) return;
+        const h = ta.offsetHeight;
+        if (h > 0) localStorage.setItem('d1_summary_remark_h', String(h));
     }
 
     function saveSummaryRemark_(memberId, batchKey) {
@@ -15319,16 +15338,25 @@ ${token}
         const holidayNoteRow = isHoliday && d1.holiday_note
             ? `<div class="mt-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-200 rounded px-1.5 py-1"><span class="font-semibold">휴강 사유:</span> ${escapeHtml(d1.holiday_note)}</div>`
             : '';
+        const savedClassNoteH = parseInt(localStorage.getItem('d1_summary_classnote_h') || '100', 10) || 100;
         sec.innerHTML = `
-            <div class="text-[10px] font-bold text-gray-500 mb-1 flex items-center">
-                <span>수업비고</span>
-                <span class="ml-1 font-normal text-gray-400">${escapeHtml(loopLabel)} ${escapeHtml(dateLabel)}</span>
-                ${holidayBadge}
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] font-bold text-gray-500 flex items-center">
+                    <span>수업비고</span>
+                    <span class="ml-1 font-normal text-gray-400">${escapeHtml(loopLabel)} ${escapeHtml(dateLabel)}</span>
+                    ${holidayBadge}
+                </span>
+                <button onclick="saveClassD1Note_('${escapeHtml(String(d1Id))}')" class="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] rounded font-semibold">저장</button>
             </div>
             ${holidayNoteRow}
-            <textarea id="summaryClassNoteInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400 mt-1" rows="4" placeholder="수업비고를 입력하세요 (이 회차 전체에 적용)">${escapeHtml(note)}</textarea>
-            <button onclick="saveClassD1Note_('${escapeHtml(String(d1Id))}')" class="mt-1 w-full py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded font-semibold">수업비고 저장</button>
+            <textarea id="summaryClassNoteInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400 mt-1" style="height:${savedClassNoteH}px;resize:vertical;min-height:60px" placeholder="수업비고를 입력하세요 (이 회차 전체에 적용)" onmouseup="_saveClassNoteHeight_(this)" ontouchend="_saveClassNoteHeight_(this)">${escapeHtml(note)}</textarea>
         `;
+    }
+
+    function _saveClassNoteHeight_(ta) {
+        if (!ta) return;
+        const h = ta.offsetHeight;
+        if (h > 0) localStorage.setItem('d1_summary_classnote_h', String(h));
     }
 
     function saveClassD1Note_(classD1Id) {
