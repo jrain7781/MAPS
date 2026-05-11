@@ -14827,26 +14827,24 @@ ${token}
             const isStrictUpcoming = (i === upcomingIdx) && dateRaw !== '' && dateRaw > todayStr;
 
             let borderCls, bgStyle = '', cellContent = '';
-            // 그룹 헤더의 "아래" 테두리는 안 테두리(회원 행과 경계) → 항상 회색
-            // 좌/우/위 테두리는 강조(빨간/진한) 가능
+            // 박스 가독성 향상: text-[10px] + py-0.5 px-1 (이전 text-[9px] px-0.5보다 큼)
+            // 휴강: 검은 바탕 + 흰 글자 (예정 빨간과 시각적 구분)
             if (isHoliday) {
-                // 휴강: 회색 배경 + 사방 회색-400 (안 테두리는 동일 회색-300 통일)
                 borderCls = isStrictUpcoming
                     ? 'border-l-2 border-r-2 border-t-2 border-red-400 border-b border-gray-300'
                     : 'border-l border-r border-t border-gray-400 border-b border-gray-300';
-                cellContent = `<div class="text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5 inline-block leading-tight" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>`;
+                cellContent = `<div class="text-[10px] font-bold text-white bg-gray-900 border border-gray-900 rounded px-1 py-0.5 inline-block leading-tight" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>`;
                 bgStyle = 'background:#d1d5db';
             } else if (isStrictUpcoming) {
-                // 미래 첫 회차 = 예정 (좌/우/위 빨강, 아래 회색)
                 borderCls = 'border-l-2 border-r-2 border-t-2 border-red-400 border-b border-gray-300';
-                cellContent = `<div class="text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5 inline-block leading-tight">예정</div>`;
+                cellContent = `<div class="text-[10px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-1 py-0.5 inline-block leading-tight">예정</div>`;
             } else if (isPastOrToday) {
                 borderCls = 'border border-gray-300';
-                cellContent = `<div class="text-[9px] font-bold text-green-700 bg-green-50 border border-green-300 rounded px-0.5 inline-block leading-tight" title="수강">수강</div>`;
+                cellContent = `<div class="text-[10px] font-bold text-green-700 bg-green-50 border border-green-300 rounded px-1 py-0.5 inline-block leading-tight" title="수강">수강</div>`;
             } else {
                 borderCls = 'border border-gray-300';
             }
-            groupHolidayCells += `<td class="d1-group-header-holiday-td px-0.5 py-0 text-center align-middle ${borderCls}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;${bgStyle}">${cellContent}</td>`;
+            groupHolidayCells += `<td class="d1-group-header-holiday-td px-0.5 py-0.5 text-center align-middle ${borderCls}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;${bgStyle}">${cellContent}</td>`;
         }
         for (let i = 0; i < _padCount_; i++) {
             groupHolidayCells += `<td class="d1-group-header-holiday-td border border-gray-300" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px"></td>`;
