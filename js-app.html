@@ -14300,12 +14300,17 @@ ${token}
             if (tbody) tbody.innerHTML = '<tr><td colspan="99" class="p-4 text-center text-gray-400 text-xs">배치를 선택하세요</td></tr>';
             return;
         }
-        if (detail) detail.innerHTML = `
-            <div id="summaryMemberSection">
-                <div class="text-gray-400 text-xs text-center py-4">회원을 선택하세요</div>
-            </div>
-            <div id="summaryClassNoteSection" class="mt-3 pt-2 border-t border-gray-200"></div>
-        `;
+        if (detail) {
+            const savedMemH = parseInt(localStorage.getItem('d1_summary_member_h') || '320', 10) || 320;
+            detail.innerHTML = `
+                <div id="summaryMemberSection" style="height:${savedMemH}px;overflow-y:auto">
+                    <div class="text-gray-400 text-xs text-center py-4">회원을 선택하세요</div>
+                </div>
+                <div id="summarySplitter" style="height:6px;cursor:row-resize;background:#d1d5db;margin:4px 0;border-radius:3px" title="드래그하여 회원비고/수업비고 영역 크기 조절"></div>
+                <div id="summaryClassNoteSection" style="overflow-y:auto"></div>
+            `;
+            _setupSummarySplitter_();
+        }
         if (typeof renderClassD1NoteSection_ === 'function') renderClassD1NoteSection_();
         selectedSummaryMemberId_ = null;
         if (_summaryCache[batchKey]) {
@@ -14674,11 +14679,11 @@ ${token}
                 if (isPastIncludingToday && v === 'O') _lastPastOLoop_ = Number(d1List[i].class_loop);
             }
             const _isEnded_ = String(m.member_status || '').trim() === '종료';
-            // 검정 = 계약이 이번 배치에서 정확히 끝남 (carry=0). 이월 시 마지막 ●도 회색.
+            const _isInactiveMember_ = ['종료','홀딩'].indexOf(String(m.member_status||'').trim()) >= 0;
             // 검정 = 계약이 이번 배치에서 정확히 끝남 (carry=0). carry>0 시 마지막 ●도 회색.
             const _futureLastIsBlack_ = (remaining === _futureOCount_) && _futureOCount_ > 0;
-            // 이월회차: 남은회차 중 이번 배치에서 못 채운 잔여 (다음 배치 이월)
-            const _carryOver_ = Math.max(0, remaining - _futureOCount_);
+            // 이월회차: 비활성(종료/홀딩) 회원은 항상 0, 그 외엔 남은 - 미래O
+            const _carryOver_ = _isInactiveMember_ ? 0 : Math.max(0, remaining - _futureOCount_);
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
@@ -14692,7 +14697,10 @@ ${token}
                 const isHoliday = String(d1List[i].holiday || '') === 'Y';
 
                 let display, colorClass, cellBg;
-                if (isHoliday) {
+                if (_isInactiveMember_ && !isPast) {
+                    // 비활성(종료/홀딩) 회원: 미래 회차 모두 빈 점 (휴강 포함 표시 안 함)
+                    display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
+                } else if (isHoliday) {
                     // 휴강 회차: 검정 ✕ + 진한 회색 배경 (테두리는 upcomingTdClass에서 일괄 처리)
                     display = '✕';
                     colorClass = 'text-gray-900 font-bold text-[13px]';
@@ -14729,11 +14737,10 @@ ${token}
                             : 'text-gray-300 text-[15px]';
                         cellBg = '';
                     } else if (val === 'X') {
-                        // 미래 X: 첫 마크 ~ 마지막 마크 사이 (O+X 모두 포함)일 때 회색 ✕ 표시
-                        // → 마지막 ● 클릭(시프트할 빈셀 없음) 또는 첫 ● 클릭 후에도 X가 보임
-                        const inRange = _firstFutureMarkLoop_ !== -1
-                            && Number(loopNo) >= _firstFutureMarkLoop_
-                            && Number(loopNo) <= _lastFutureMarkLoop_;
+                        // 미래 X: ● 범위 내(첫 ● ~ 마지막 ●)에서만 표시. 마지막 ● 이후 X는 빈 점.
+                        const inRange = _firstFutureOLoop_ !== -1
+                            && Number(loopNo) >= _firstFutureOLoop_
+                            && Number(loopNo) <= _lastFutureOLoop_;
                         if (inRange) {
                             display = '✕'; colorClass = 'text-gray-400 text-[12px]'; cellBg = '';
                         } else {
@@ -16068,12 +16075,15 @@ ${token}
         // 회원 영역만 부분 갱신 (수업비고는 별도 selectClassD1로 관리)
         let memSection = document.getElementById('summaryMemberSection');
         if (!memSection) {
-            // detail 구조가 없으면 초기화
+            // detail 구조가 없으면 초기화 (splitter 포함)
+            const savedMemH2 = parseInt(localStorage.getItem('d1_summary_member_h') || '320', 10) || 320;
             detail.innerHTML = `
-                <div id="summaryMemberSection"></div>
-                <div id="summaryClassNoteSection" class="mt-3 pt-2 border-t border-gray-200"></div>
+                <div id="summaryMemberSection" style="height:${savedMemH2}px;overflow-y:auto"></div>
+                <div id="summarySplitter" style="height:6px;cursor:row-resize;background:#d1d5db;margin:4px 0;border-radius:3px" title="드래그하여 회원비고/수업비고 영역 크기 조절"></div>
+                <div id="summaryClassNoteSection" style="overflow-y:auto"></div>
             `;
             memSection = document.getElementById('summaryMemberSection');
+            _setupSummarySplitter_();
         }
         memSection.innerHTML = `
             <div class="mb-3 pb-2 border-b border-gray-100">
@@ -16103,6 +16113,30 @@ ${token}
         if (!ta) return;
         const h = ta.offsetHeight;
         if (h > 0) localStorage.setItem('d1_summary_remark_h', String(h));
+    }
+
+    // 회원비고/수업비고 영역 사이 splitter 드래그 핸들러
+    function _setupSummarySplitter_() {
+        const splitter = document.getElementById('summarySplitter');
+        const memSec = document.getElementById('summaryMemberSection');
+        if (!splitter || !memSec || splitter._setupDone) return;
+        splitter._setupDone = true;
+        splitter.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            const startY = e.pageY;
+            const startH = memSec.offsetHeight;
+            const onMove = function(ev) {
+                const h = Math.max(80, Math.min(800, startH + ev.pageY - startY));
+                memSec.style.height = h + 'px';
+            };
+            const onUp = function() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                localStorage.setItem('d1_summary_member_h', String(memSec.offsetHeight));
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
     }
 
     function saveSummaryRemark_(memberId, batchKey) {
