@@ -16152,10 +16152,21 @@ ${token}
     function renderClassD1NoteSection_() {
         const sec = document.getElementById('summaryClassNoteSection');
         if (!sec) return;
-        const d1Id = selectedClassD1Id;
+        // selectedClassD1Id가 없으면 현재 배치의 가장 가까운 미래 회차(없으면 마지막 회차) 자동 선택
+        let d1Id = selectedClassD1Id;
         if (!d1Id) {
-            sec.innerHTML = '<div class="text-[10px] font-bold text-gray-500 mb-1">수업비고</div><div class="text-[11px] text-gray-400 italic">회차를 선택하면 수업비고가 표시됩니다.</div>';
-            return;
+            const batch = d1Batches[d1BatchIdx];
+            if (batch && batch.items && batch.items.length) {
+                const items = batch.items.slice().sort((a,b) => Number(a.class_loop) - Number(b.class_loop));
+                const todayStr2 = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
+                let target = items.find(d => String(d.class_date || '').replace(/-/g,'') >= todayStr2);
+                if (!target) target = items[items.length - 1];
+                if (target) { d1Id = String(target.class_d1_id); selectedClassD1Id = d1Id; }
+            }
+            if (!d1Id) {
+                sec.innerHTML = '<div class="text-[10px] font-bold text-gray-500 mb-1">수업비고</div><div class="text-[11px] text-gray-400 italic">배치를 먼저 선택하세요.</div>';
+                return;
+            }
         }
         const d1 = (allClassD1Data || []).find(d => String(d.class_d1_id) === String(d1Id));
         if (!d1) {
@@ -16172,18 +16183,33 @@ ${token}
         const holidayNoteRow = isHoliday && d1.holiday_note
             ? `<div class="mt-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-200 rounded px-1.5 py-1"><span class="font-semibold">휴강 사유:</span> ${escapeHtml(d1.holiday_note)}</div>`
             : '';
-        const savedClassNoteH = parseInt(localStorage.getItem('d1_summary_classnote_h') || '100', 10) || 100;
+        const savedClassNoteH = parseInt(localStorage.getItem('d1_summary_classnote_h') || '120', 10) || 120;
+        // 회차 선택기: 같은 배치의 모든 회차 select. 사용자가 다른 회차 비고 보고 싶을 때.
+        const batchForSel = d1Batches[d1BatchIdx];
+        let selectorHtml = '';
+        if (batchForSel && batchForSel.items && batchForSel.items.length > 0) {
+            const sortedItems = batchForSel.items.slice().sort((a,b) => Number(a.class_loop) - Number(b.class_loop));
+            const opts = sortedItems.map(it => {
+                const dateDisp = it.class_date ? String(it.class_date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$2/$3') : '-';
+                const sel = String(it.class_d1_id) === String(d1Id) ? 'selected' : '';
+                const holidayMark = String(it.holiday || '') === 'Y' ? ' [휴강]' : '';
+                return `<option value="${escapeHtml(String(it.class_d1_id))}" ${sel}>${it.class_loop}회 ${dateDisp}${holidayMark}</option>`;
+            }).join('');
+            selectorHtml = `<select onchange="selectClassD1(this.value)" class="text-[10px] border border-gray-300 rounded px-1 py-0.5 ml-2 max-w-[140px]">${opts}</select>`;
+        }
         sec.innerHTML = `
             <div class="flex justify-between items-center mb-1">
                 <span class="text-[10px] font-bold text-gray-500 flex items-center">
                     <span>수업비고</span>
                     <span class="ml-1 font-normal text-gray-400">${escapeHtml(loopLabel)} ${escapeHtml(dateLabel)}</span>
                     ${holidayBadge}
+                    ${selectorHtml}
                 </span>
-                <button onclick="saveClassD1Note_('${escapeHtml(String(d1Id))}')" class="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] rounded font-semibold">저장</button>
+                <button onclick="saveClassD1Note_('${escapeHtml(String(d1Id))}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded font-semibold shadow-sm">저장</button>
             </div>
             ${holidayNoteRow}
-            <textarea id="summaryClassNoteInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400 mt-1" style="height:${savedClassNoteH}px;resize:vertical;min-height:60px" placeholder="수업비고를 입력하세요 (이 회차 전체에 적용)" onmouseup="_saveClassNoteHeight_(this)" ontouchend="_saveClassNoteHeight_(this)">${escapeHtml(note)}</textarea>
+            <textarea id="summaryClassNoteInput" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-emerald-400 mt-1" style="height:${savedClassNoteH}px;resize:vertical;min-height:80px" placeholder="수업비고를 입력하세요 (이 회차 전체에 적용)" onmouseup="_saveClassNoteHeight_(this)" ontouchend="_saveClassNoteHeight_(this)">${escapeHtml(note)}</textarea>
+            <button onclick="saveClassD1Note_('${escapeHtml(String(d1Id))}')" class="mt-1 w-full py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded font-semibold">수업비고 저장</button>
         `;
     }
 
