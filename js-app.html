@@ -14053,21 +14053,21 @@ ${token}
             });
         });
 
-        // 그룹 헤더용 휴강 셀 (각 회차 위치에 휴강 박스 또는 빈 셀)
+        // 그룹 헤더용 휴강 셀 (각 회차 위치에 휴강 박스 또는 빈 셀, 휴강 셀 배경 = 회차 헤더와 동일 회색)
         let groupHolidayCells = '';
         for (let i = 0; i < d1List.length; i++) {
             const d = d1List[i];
             const isHoliday = String(d.holiday || '') === 'Y';
             if (isHoliday) {
-                groupHolidayCells += `<td class="d1-group-header-holiday-td px-0.5 py-0 text-center align-middle border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;background:#f3f4f6">
+                groupHolidayCells += `<td class="d1-group-header-holiday-td px-0.5 py-0 text-center align-middle border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;background:#d1d5db">
                     <div class="text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5 inline-block leading-tight" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>
                 </td>`;
             } else {
-                groupHolidayCells += `<td class="d1-group-header-holiday-td border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;background:#f3f4f6"></td>`;
+                groupHolidayCells += `<td class="d1-group-header-holiday-td border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px"></td>`;
             }
         }
         for (let i = 0; i < _padCount_; i++) {
-            groupHolidayCells += `<td class="d1-group-header-holiday-td border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;background:#f3f4f6"></td>`;
+            groupHolidayCells += `<td class="d1-group-header-holiday-td border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px"></td>`;
         }
 
         // 그룹 헤더 + 회원 행 조립
@@ -14080,8 +14080,9 @@ ${token}
             const arrow = isCollapsed ? '▶' : '▼';
             const fg = _contrastTextColor_(g.color);
             const gNameEsc = escapeHtml(g.name);
+            const showHoliday = (g.name === '진행중');
             bodyHtml += `<tr class="d1-group-header">
-                <td colspan="8" class="d1-group-header-cell">
+                <td colspan="${showHoliday ? 8 : totalCols}" class="d1-group-header-cell">
                     <div class="d1-group-tab" style="background:${g.color};color:${fg}">
                         <input type="checkbox" class="d1-group-checkall cursor-pointer align-middle" title="${gNameEsc} 전체 선택"
                             onclick="event.stopPropagation(); toggleD1GroupSelectAll_(this, '${gNameEsc}')">
@@ -14092,7 +14093,7 @@ ${token}
                         </span>
                     </div>
                 </td>
-                ${groupHolidayCells}
+                ${showHoliday ? groupHolidayCells : ''}
             </tr>`;
             if (isCollapsed) continue;
             for (let j = 0; j < g.members.length; j++) {
