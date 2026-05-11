@@ -14053,18 +14053,24 @@ ${token}
             });
         });
 
-        // 그룹 헤더용 휴강 셀 (각 회차 위치에 휴강 박스 또는 빈 셀, 휴강 셀 배경 = 회차 헤더와 동일 회색)
+        // 그룹 헤더용 회차 셀 (휴강/과거 수강/upcoming 빨간 테두리 통합)
         let groupHolidayCells = '';
         for (let i = 0; i < d1List.length; i++) {
             const d = d1List[i];
             const isHoliday = String(d.holiday || '') === 'Y';
+            const isUpcoming = i === upcomingIdx;
+            const dateRaw = String(d.class_date || '').replace(/-/g,'');
+            const isPast = dateRaw !== '' && dateRaw < todayStr;
+            const borderCls = isUpcoming ? 'border-l-2 border-r-2 border-red-400' : 'border-l border-gray-200';
+            let cellContent = '';
+            let bgStyle = '';
             if (isHoliday) {
-                groupHolidayCells += `<td class="d1-group-header-holiday-td px-0.5 py-0 text-center align-middle border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;background:#d1d5db">
-                    <div class="text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5 inline-block leading-tight" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>
-                </td>`;
-            } else {
-                groupHolidayCells += `<td class="d1-group-header-holiday-td border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px"></td>`;
+                cellContent = `<div class="text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5 inline-block leading-tight" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>`;
+                bgStyle = 'background:#d1d5db';
+            } else if (isPast) {
+                cellContent = `<div class="text-[9px] font-bold text-green-700 bg-green-50 border border-green-300 rounded px-0.5 inline-block leading-tight" title="수강 완료">수강</div>`;
             }
+            groupHolidayCells += `<td class="d1-group-header-holiday-td px-0.5 py-0 text-center align-middle ${borderCls}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;${bgStyle}">${cellContent}</td>`;
         }
         for (let i = 0; i < _padCount_; i++) {
             groupHolidayCells += `<td class="d1-group-header-holiday-td border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px"></td>`;
