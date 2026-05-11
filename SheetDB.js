@@ -2552,6 +2552,110 @@ function deleteClassD1(classD1Id) {
   return { success: true, message: '회차 삭제 완료' };
 }
 
+/**
+ * 계약회차 증가 시 미래 슬롯이 부족하면 끝에 회차 자동 추가
+ * - 같은 배치의 마지막 회차 정보 복사 (시간/입찰시간/요일/강사 동일)
+ * - 일자: 마지막 회차 + 7일 간격
+ * - 새 회차의 회원 셀에 'O' 자동 채움 (해당 회원만)
+ * @param {string} classD1Id - 회원의 한 회차 ID (배치 식별용)
+ * @param {string} memberId - 새 ●를 받을 회원 ID
+ * @param {number} count - 추가할 회차 수
+ */
+function appendRoundsForContract(classD1Id, memberId, count) {
+  if (count <= 0) return { success: false, message: '추가할 회차 수가 0 이하입니다.' };
+  var d1Sheet = ensureClassD1Sheet_();
+  var lastRow = d1Sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '회차 데이터 없음.' };
+
+  var batchKey = extractD1BatchKey_(classD1Id);
+  var d1Data = d1Sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+  var classD1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
+  var classIdIdx   = CLASS_D1_HEADERS.indexOf('class_id');
+  var classLoopIdx = CLASS_D1_HEADERS.indexOf('class_loop');
+  var classDateIdx = CLASS_D1_HEADERS.indexOf('class_date');
+  var classWeekIdx = CLASS_D1_HEADERS.indexOf('class_week');
+  var holidayIdx   = CLASS_D1_HEADERS.indexOf('holiday');
+
+  // 같은 배치 행들 수집, class_loop 기준 마지막 행 찾기
+  var batchRows = [];
+  for (var i = 0; i < d1Data.length; i++) {
+    if (extractD1BatchKey_(String(d1Data[i][classD1IdIdx])) === batchKey) {
+      batchRows.push({ idx: i, loop: Number(d1Data[i][classLoopIdx]), row: d1Data[i] });
+    }
+  }
+  if (batchRows.length === 0) return { success: false, message: '배치 회차 없음.' };
+  batchRows.sort(function(a, b) { return a.loop - b.loop; });
+  var lastBatchRow = batchRows[batchRows.length - 1];
+  var lastLoop = lastBatchRow.loop;
+  var lastDateRaw = lastBatchRow.row[classDateIdx];
+  var tz = Session.getScriptTimeZone();
+  var lastDateStr = (lastDateRaw instanceof Date)
+    ? Utilities.formatDate(lastDateRaw, tz, 'yyyyMMdd')
+    : String(lastDateRaw || '').replace(/-/g, '');
+  if (!/^\d{8}$/.test(lastDateStr)) return { success: false, message: '마지막 회차 일자 형식 오류: ' + lastDateStr };
+
+  // 마지막 회차 행의 메타 정보 복사 (휴강/백업 필드는 비움)
+  var templateRow = lastBatchRow.row.slice();
+  templateRow[holidayIdx] = '';
+  var holidayNoteIdx2 = CLASS_D1_HEADERS.indexOf('holiday_note');
+  var holidayBackupIdx2 = CLASS_D1_HEADERS.indexOf('holiday_backup');
+  var classD1NoteIdx2 = CLASS_D1_HEADERS.indexOf('class_d1_note');
+  if (holidayNoteIdx2 >= 0)   templateRow[holidayNoteIdx2] = '';
+  if (holidayBackupIdx2 >= 0) templateRow[holidayBackupIdx2] = '';
+  if (classD1NoteIdx2 >= 0)   templateRow[classD1NoteIdx2] = '';
+
+  // count개 행 생성 (7일 간격)
+  var y = parseInt(lastDateStr.substring(0,4));
+  var m = parseInt(lastDateStr.substring(4,6)) - 1;
+  var d = parseInt(lastDateStr.substring(6,8));
+  var baseDate = new Date(y, m, d);
+  var weekNames = ['일','월','화','수','목','금','토'];
+  var newRows = [];
+  for (var k = 1; k <= count; k++) {
+    var newDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + 7 * k);
+    var newDateStr = Utilities.formatDate(newDate, tz, 'yyyyMMdd');
+    var newLoop = lastLoop + k;
+    var newId = batchKey + '_' + newLoop;
+    var row = templateRow.slice();
+    row[classD1IdIdx] = newId;
+    row[classLoopIdx] = newLoop;
+    row[classDateIdx] = newDateStr;
+    if (classWeekIdx >= 0) row[classWeekIdx] = weekNames[newDate.getDay()];
+    newRows.push(row);
+  }
+  if (newRows.length > 0) {
+    d1Sheet.getRange(d1Sheet.getLastRow() + 1, 1, newRows.length, CLASS_D1_HEADERS.length).setValues(newRows);
+  }
+
+  // 해당 회원의 member_class_details에 새 회차 'O' 채움
+  var mcdSheet = ensureMemberClassDetailsSheet_();
+  var mcdLast = mcdSheet.getLastRow();
+  if (mcdLast >= 2) {
+    var mcdData = mcdSheet.getRange(2, 1, mcdLast - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+    var midIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
+    var d1IdMcdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+    for (var r = 0; r < mcdData.length; r++) {
+      if (String(mcdData[r][d1IdMcdIdx]) !== String(batchKey)) continue;
+      if (String(mcdData[r][midIdx]) !== String(memberId)) continue;
+      var rowVals = mcdData[r].slice();
+      for (var k2 = 1; k2 <= count; k2++) {
+        var idx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + (lastLoop + k2));
+        if (idx >= 0) rowVals[idx] = 'O';
+      }
+      mcdSheet.getRange(r + 2, 1, 1, MEMBER_CLASS_DETAILS_HEADERS.length).setValues([rowVals]);
+      break;
+    }
+  }
+
+  SpreadsheetApp.flush();
+  var cache = CacheService.getScriptCache();
+  cache.remove('mcd_' + batchKey);
+  cache.remove('sessions_' + String(lastBatchRow.row[classIdIdx]));
+  cache.remove('all_class_d1_sessions');
+
+  return { success: true, message: count + '개 회차 추가 완료 (회원 ' + memberId + ')', addedCount: count };
+}
+
 // =============================================================================
 // 휴강(holiday) 처리 함수
 // =============================================================================

@@ -14980,8 +14980,28 @@ ${token}
                     added++;
                 }
             }
+            // 미래 빈 슬롯 부족 시 회차 자동 추가 (carry=0 유지)
             if (added < delta) {
-                showStatus(`미래 빈 회차 부족: ${delta - added}회는 다음 배치로 이월됩니다.`, 'info');
+                const needAdd = delta - added;
+                const batchKeyForAdd = String(m.class_d1_id || currentBatchKey || '');
+                if (batchKeyForAdd) {
+                    showStatus(`미래 슬롯 부족 ${needAdd}회 — 회차 자동 추가 중...`, 'info');
+                    google.script.run
+                        .withSuccessHandler(function(r) {
+                            if (r && r.success) {
+                                showStatus(`계약회차 저장 + 회차 ${needAdd}개 자동 추가 완료`, 'success');
+                                if (selectedClassId) {
+                                    reloadClassD1Grid(selectedClassId, function() { reloadD1SummaryGrid(); });
+                                } else {
+                                    reloadD1SummaryGrid();
+                                }
+                            } else {
+                                showStatus('회차 자동 추가 실패: ' + ((r && r.message) || ''), 'error');
+                            }
+                        })
+                        .withFailureHandler(function(e) { showStatus('회차 자동 추가 오류: ' + e.message, 'error'); })
+                        .appendRoundsForContract(batchKeyForAdd, memberId, needAdd);
+                }
             }
         } else if (delta < 0) {
             // 감소: 미래 'O' (R 제외) 가장 늦은 순으로 |delta|개를 빈값
