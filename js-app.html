@@ -73,6 +73,7 @@
     const formSakunNo = document.getElementById('form-sakun-no');
     const formCourt = document.getElementById('form-court');
     const formStuMember = document.getElementById('form-stu-member');
+    const formYongdo = document.getElementById('form-youngdo');
     const formMName = document.getElementById('form-m-name');
     const formMemberId = document.getElementById('form-member-id');
     const formMNameId = document.getElementById('form-m-name-id');
@@ -140,6 +141,7 @@
     const modalFormSakunNo = document.getElementById('modal-form-sakun-no');
     const modalFormCourt = document.getElementById('modal-form-court');
     const modalFormStuMember = document.getElementById('modal-form-stu-member');
+    const modalFormYongdo = document.getElementById('modal-form-youngdo');
     const modalFormMName = document.getElementById('modal-form-m-name');
     const modalFormMemberId = document.getElementById('modal-form-member-id');
     const modalFormMNameId = document.getElementById('modal-form-m-name-id');
@@ -547,8 +549,13 @@
 
     // 데이터 정렬 함수
     function _sakunNum(sakun) {
-        const m = String(sakun || '').match(/\d+/);
-        return m ? parseInt(m[0], 10) : 0;
+        // 사건번호의 모든 숫자 추출 (연도 + 사건번호 등)
+        const nums = String(sakun || '').match(/\d+/g) || [];
+        // 첫 번째 숫자(연도)와 마지막 숫자(사건번호)로 단일 정렬키 합성
+        // year * 10_000_000 + caseNo  → 연도 우선, 같은 연도 내 사건번호 자연수 순
+        const year = nums[0] ? parseInt(nums[0], 10) : 0;
+        const caseNo = nums[nums.length - 1] && nums.length > 1 ? parseInt(nums[nums.length - 1], 10) : 0;
+        return year * 10000000 + caseNo;
     }
 
     function dataComparator(a, b) {
@@ -1320,6 +1327,45 @@
         }
     }
 
+    // 물건용도 (items_youngdo) — 하드코딩 옵션, 표시 라벨, 태그 클래스, 탭별 허용 규칙
+    const YONGDO_OPTIONS = ['플래티넘', '블랙', '실버', '돈클수익', '돈클월세', 'PT, 단투'];
+    const YONGDO_PRE_LABEL = '등록전'; // 빈값 표시 라벨
+    // 공백 / 반각콤마 / 전각콤마 무시 정규화 (사용자 시트 입력 다양성 흡수)
+    function _yongdoNorm(s) { return String(s || '').trim().replace(/[\s,，]/g, ''); }
+    function _yongdoEq(a, b) { return _yongdoNorm(a) === _yongdoNorm(b); }
+    function getYongdoDisplayLabel(value) {
+        const v = String(value || '').trim();
+        return v === '' ? YONGDO_PRE_LABEL : v;
+    }
+    function getYongdoTagClass(value) {
+        const v = String(value || '').trim();
+        switch (v) {
+            case '플래티넘': return 'yongdo-tag yongdo-tag-platinum';
+            case '블랙': return 'yongdo-tag yongdo-tag-black';
+            case '실버': return 'yongdo-tag yongdo-tag-silver';
+            case '돈클수익': return 'yongdo-tag yongdo-tag-income';
+            case '돈클월세': return 'yongdo-tag yongdo-tag-rent';
+            case 'PT, 단투': return 'yongdo-tag yongdo-tag-other';
+            default: return 'yongdo-tag yongdo-tag-pre'; // 빈값 = 등록전
+        }
+    }
+    // D1 picker 탭별 등록 가능 용도 (CLASS / PT / 돈클)
+    // CLASS: 빈값 + PT,단투 / PT: 플래티넘·블랙·실버·PT,단투·빈값 / 돈클: 돈클수익·돈클월세·PT,단투·빈값
+    function getAllowedYongdoForClassType(classType) {
+        const t = String(classType || '').trim().toUpperCase();
+        if (t === 'PT') return new Set(['플래티넘', '블랙', '실버', 'PT, 단투', '']);
+        if (t === '돈클' || t === 'DONCLE') return new Set(['돈클수익', '돈클월세', 'PT, 단투', '']);
+        return new Set(['PT, 단투', '']); // CLASS 또는 미상
+    }
+    function isYongdoAllowedForClassType(value, classType) {
+        const allowed = getAllowedYongdoForClassType(classType);
+        const v = String(value || '').trim();
+        if (v === '') return allowed.has('');
+        // 공백/콤마 무시 매칭 (시트 입력 다양성 흡수)
+        for (const a of allowed) { if (_yongdoEq(v, a)) return true; }
+        return false;
+    }
+
     // 오늘 이후 모든 데이터 날짜 추출
     function getWorkingDaysFromToday() {
         const today = new Date();
@@ -1414,7 +1460,7 @@
             if (allBiddingData.length > 0) {
                 let msg = "검색어와 일치하는 데이터가 없습니다.";
                 if (dashboardFilter.active) msg = "해당 필터 조건에 맞는 데이터가 없습니다.";
-                dataTableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-gray-500">${msg}</td></tr>`;
+                dataTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500">${msg}</td></tr>`;
             } else {
                 if (noDataMessage) noDataMessage.classList.remove('content-hidden');
             }
@@ -1484,11 +1530,20 @@
                 cell = row.insertCell(4);
                 cell.textContent = String(item.court || '').trim();
                 cell.className = 'item-col-court text-left';
+                // [신규] 용도 셀 (상태 앞)
                 cell = row.insertCell(5);
+                {
+                    const yongdoVal = item.items_youngdo || '';
+                    const yongdoCls = getYongdoTagClass(yongdoVal);
+                    const yongdoLabel = getYongdoDisplayLabel(yongdoVal);
+                    cell.innerHTML = `<span class="${yongdoCls}">${yongdoLabel}</span>`;
+                }
+                cell.className = 'item-col-youngdo text-center';
+                cell = row.insertCell(6);
                 const statusClass = getStatusTagClass(item.stu_member);
                 cell.innerHTML = `<span class="${statusClass}">${item.stu_member}</span>`;
                 cell.className = 'item-col-status text-center';
-                cell = row.insertCell(6);
+                cell = row.insertCell(7);
                 {
                     const tEnabled = getMemberTelegramEnabled_(item.member_id);
                     const tBidState = String(item.bid_state || '').trim();
@@ -1496,13 +1551,13 @@
                     cell.innerHTML = tEnabled === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                 }
                 cell.className = 'item-col-telegram text-center';
-                cell = row.insertCell(7);
+                cell = row.insertCell(8);
                 {
                     const base = String(item.m_name || '').trim();
                     cell.textContent = base;
                 }
                 cell.className = 'item-col-member text-center';
-                cell = row.insertCell(8);
+                cell = row.insertCell(9);
                 {
                     const _r = resolveTeacherDisplay_(item.m_name_id);
                     cell.textContent = _r.display;
@@ -1515,22 +1570,24 @@
                     }
                 }
                 cell.className = 'item-col-manager text-center';
-                cell = row.insertCell(9);
+                cell = row.insertCell(10);
                 {
                     const bp = item.bidprice || 0;
                     const bpNum = parseInt(String(bp).replace(/,/g, ''), 10);
                     cell.textContent = (bpNum > 0) ? new Intl.NumberFormat('ko-KR').format(bpNum) + '원' : '';
+                    // 입찰일정 카드와 동일한 색상 규칙: 신규/빈값은 빨강, 전달완료·확인완료는 기본
+                    const isNewBid = (item.bid_state === '신규' || !item.bid_state);
+                    cell.className = isNewBid ? 'item-col-bidprice bidprice-cell text-red-600' : 'item-col-bidprice bidprice-cell';
                 }
-                cell.className = 'item-col-bidprice';
 
                 // 전송 컬럼이 있다면 제거 (즉시 실행)
                 const existingActionCells = row.querySelectorAll('.item-col-action');
                 existingActionCells.forEach(c => c.remove());
 
-                // 혹시 모를 추가 셀 제거 (11번째 셀 이상) - 안전하게
-                while (row.cells && row.cells.length > 10) {
+                // 혹시 모를 추가 셀 제거 (12번째 셀 이상) - 안전하게
+                while (row.cells && row.cells.length > 11) {
                     try {
-                        row.deleteCell(10);
+                        row.deleteCell(11);
                     } catch (e) {
                         break;
                     }
@@ -1724,6 +1781,10 @@
         const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
         const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
         // fManager: matchesCalManager(item) 사용으로 대체됨
+        // 용도 다중선택 (입찰일정)
+        const fCalYongdos = getSelectedCalYongdoValues();
+        const allCalYongdoCb = document.getElementById('cal-search-youngdo-all');
+        const isAllCalYongdo = (allCalYongdoCb && allCalYongdoCb.checked);
         // 수업 필터 (입찰일정)
         const fCalClassType = document.getElementById('cal-class-type')?.value || '';
         const fCalClassName = document.getElementById('cal-class-name')?.value || '';
@@ -1749,6 +1810,15 @@
             // 상태 필터링: "전체" 체크 시 통과, 아무것도 선택 안 하면 조회 안 됨
             const matchesStatus = isAllCalStatus ? true : (fStatuses.length > 0 && fStatuses.includes(String(item.stu_member || '').trim()));
             if (!matchesStatus) pass = false;
+            // 용도 필터링: 동일 패턴 (전체 통과, __pre__=빈값)
+            if (!isAllCalYongdo) {
+                if (fCalYongdos.length === 0) pass = false;
+                else {
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    const ok = fCalYongdos.some(v => v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v));
+                    if (!ok) pass = false;
+                }
+            }
             if (fMember) {
                 const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                 if (!memberDisp.includes(fMember)) pass = false;
@@ -2280,6 +2350,10 @@
                 const allCalStatusCb = document.getElementById('cal-search-status-all');
                 const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
                 const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
+                // 용도 다중선택 필터 (입찰일정 주/월별 셀 단위 필터)
+                const fCalYongdosCell = getSelectedCalYongdoValues();
+                const allCalYongdoCbCell = document.getElementById('cal-search-youngdo-all');
+                const isAllCalYongdoCell = (allCalYongdoCbCell && allCalYongdoCbCell.checked);
                 // fManager: matchesCalManager(item) 사용으로 대체됨
 
                 const bids = filteredData.filter(item => {
@@ -2292,6 +2366,13 @@
                     // 상태 필터링: "전체" 체크 시 통과, 아무것도 선택 안 하면 조회 안 됨
                     const matchesStatus = isAllCalStatus ? true : (fStatuses.length > 0 && fStatuses.includes(item.stu_member || '미정'));
                     if (!matchesStatus) return false;
+                    // 용도 필터링: 전체 통과, 선택값과 _yongdoEq 매칭 (__pre__=빈값)
+                    if (!isAllCalYongdoCell) {
+                        if (fCalYongdosCell.length === 0) return false;
+                        const itemYongdo = String(item.items_youngdo || '').trim();
+                        const yongdoOk = fCalYongdosCell.some(v => v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v));
+                        if (!yongdoOk) return false;
+                    }
                     if (fMember) {
                         const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                         if (!memberDisp.includes(fMember)) return false;
@@ -2326,6 +2407,10 @@
                         const isNewBid = (bid.bid_state === '신규' || !bid.bid_state);
                         const bidPriceMobileClass = isNewBid ? 'text-red-600 font-bold' : 'text-gray-700 font-bold';
                         const bidPricePcClass = isNewBid ? 'bidprice-cell text-red-600' : 'bidprice-cell';
+                        // 용도 배지 (상태 배지 앞)
+                        const _bidYongdo = String(bid.items_youngdo || '').trim();
+                        const yongdoClass = (typeof getYongdoTagClass === 'function') ? getYongdoTagClass(_bidYongdo) : '';
+                        const yongdoLabel = (typeof getYongdoDisplayLabel === 'function') ? getYongdoDisplayLabel(_bidYongdo) : (_bidYongdo || '등록전');
 
                         const isNoPrice = (!bid.bidprice || bid.bidprice === 0 || bid.bidprice === '0');
                         const mobileBorder = isNoPrice ? 'border-2 border-red-600' : 'border-2 border-slate-400';
@@ -2359,7 +2444,7 @@
                         const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                              <span class="${yongdoClass} text-[10px] px-1.5 py-0.5 mr-1 align-middle">${yongdoLabel}</span><span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap align-middle" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
                               <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
@@ -2376,7 +2461,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
+                              <div class="bid-top-right"><span class="${yongdoClass}" style="margin-right:6px;">${yongdoLabel}</span><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div>
@@ -2668,6 +2753,10 @@
         const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
         const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
         // fManager: matchesCalManager(item) 사용으로 대체됨
+        // 용도 다중선택 (입찰일정)
+        const fCalYongdos = getSelectedCalYongdoValues();
+        const allCalYongdoCb = document.getElementById('cal-search-youngdo-all');
+        const isAllCalYongdo = (allCalYongdoCb && allCalYongdoCb.checked);
         // 수업 필터 (입찰일정)
         const fCalClassType = document.getElementById('cal-class-type')?.value || '';
         const fCalClassName = document.getElementById('cal-class-name')?.value || '';
@@ -2692,6 +2781,15 @@
             // 상태 필터링: "전체" 체크 시 통과, 아무것도 선택 안 하면 조회 안 됨
             const matchesStatus = isAllCalStatus ? true : (fStatuses.length > 0 && fStatuses.includes(String(item.stu_member || '').trim()));
             if (!matchesStatus) pass = false;
+            // 용도 필터링: 동일 패턴 (전체 통과, __pre__=빈값)
+            if (!isAllCalYongdo) {
+                if (fCalYongdos.length === 0) pass = false;
+                else {
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    const ok = fCalYongdos.some(v => v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v));
+                    if (!ok) pass = false;
+                }
+            }
             if (fMember) {
                 const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                 if (!memberDisp.includes(fMember)) pass = false;
@@ -2995,6 +3093,10 @@
                 const allCalStatusCb = document.getElementById('cal-search-status-all');
                 const isAllCalStatus = (allCalStatusCb && allCalStatusCb.checked);
                 const fMember = calSearchMember ? calSearchMember.value.toLowerCase().trim() : '';
+                // 용도 다중선택 필터 (입찰일정 주/월별 셀 단위 필터)
+                const fCalYongdosCell = getSelectedCalYongdoValues();
+                const allCalYongdoCbCell = document.getElementById('cal-search-youngdo-all');
+                const isAllCalYongdoCell = (allCalYongdoCbCell && allCalYongdoCbCell.checked);
                 // fManager: matchesCalManager(item) 사용으로 대체됨
 
                 const bids = filteredData.filter(item => {
@@ -3007,6 +3109,13 @@
                     // 상태 필터링: "전체" 체크 시 통과, 아무것도 선택 안 하면 조회 안 됨
                     const matchesStatus = isAllCalStatus ? true : (fStatuses.length > 0 && fStatuses.includes(item.stu_member || '미정'));
                     if (!matchesStatus) return false;
+                    // 용도 필터링: 전체 통과, 선택값과 _yongdoEq 매칭 (__pre__=빈값)
+                    if (!isAllCalYongdoCell) {
+                        if (fCalYongdosCell.length === 0) return false;
+                        const itemYongdo = String(item.items_youngdo || '').trim();
+                        const yongdoOk = fCalYongdosCell.some(v => v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v));
+                        if (!yongdoOk) return false;
+                    }
                     if (fMember) {
                         const memberDisp = `${String(item.m_name || '')}`.toLowerCase();
                         if (!memberDisp.includes(fMember)) return false;
@@ -3041,6 +3150,10 @@
                         const isNewBid = (bid.bid_state === '신규' || !bid.bid_state);
                         const bidPriceMobileClass = isNewBid ? 'text-red-600 font-bold' : 'text-gray-700 font-bold';
                         const bidPricePcClass = isNewBid ? 'bidprice-cell text-red-600' : 'bidprice-cell';
+                        // 용도 배지 (상태 배지 앞)
+                        const _bidYongdo = String(bid.items_youngdo || '').trim();
+                        const yongdoClass = (typeof getYongdoTagClass === 'function') ? getYongdoTagClass(_bidYongdo) : '';
+                        const yongdoLabel = (typeof getYongdoDisplayLabel === 'function') ? getYongdoDisplayLabel(_bidYongdo) : (_bidYongdo || '등록전');
 
                         const isNoPrice = (!bid.bidprice || bid.bidprice === 0 || bid.bidprice === '0');
                         const mobileBorder = isNoPrice ? 'border-2 border-red-600' : 'border-2 border-slate-400';
@@ -3059,7 +3172,7 @@
                         const mobileHtml = `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                              <span class="${yongdoClass} text-[10px] px-1.5 py-0.5 mr-1 align-middle">${yongdoLabel}</span><span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap align-middle" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
                               <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
@@ -3079,7 +3192,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
+                              <div class="bid-top-right"><span class="${yongdoClass}" style="margin-right:6px;">${yongdoLabel}</span><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div>
@@ -3150,7 +3263,7 @@
         sortedLabels.forEach(l => {
             optsHtml += `<option value="${escapeHtml(l)}"${styAttr(colorByLabel[l])}>${escapeHtml(l)}</option>`;
         });
-        ['missingBidFilterMember', 'statusFilterMember'].forEach(id => {
+        ['missingBidFilterMember', 'statusFilterMember', 'yongdoFilterMember'].forEach(id => {
             const sel = document.getElementById(id);
             if (!sel) return;
             const cur = sel.value;
@@ -3349,16 +3462,33 @@
         _loadDashLayout();
 
         // ① 카드 높이 — 하단 경계 드래그
+        // data-pair-card 가 지정되어 있으면 스플리터 동작 (위 카드 + dY, 아래 카드 - dY → 합 유지)
+        // 없으면 기존 단일 카드 리사이즈 (위 카드만 변경)
         document.querySelectorAll('.dash-card-h-resizer').forEach(handle => {
             handle.addEventListener('mousedown', e => {
                 const card = document.getElementById(handle.dataset.card);
                 if (!card) return;
-                const startY = e.clientY, startH = card.offsetHeight;
+                const pairId = handle.dataset.pairCard;
+                const pairCard = pairId ? document.getElementById(pairId) : null;
+                const startY = e.clientY;
+                const startH = card.offsetHeight;
+                const startPairH = pairCard ? pairCard.offsetHeight : 0;
+                const totalH = startH + startPairH; // 스플리터 모드에서 두 카드 합계
                 handle.classList.add('active');
                 document.body.style.cursor = 'row-resize';
                 document.body.style.userSelect = 'none';
                 const onMove = e2 => {
-                    card.style.height = Math.max(100, startH + (e2.clientY - startY)) + 'px';
+                    const dY = e2.clientY - startY;
+                    if (pairCard) {
+                        // 스플리터: 위는 +dY, 아래는 -dY (둘 다 최소 100 유지)
+                        let newCardH = startH + dY;
+                        newCardH = Math.max(100, Math.min(newCardH, totalH - 100));
+                        const newPairH = totalH - newCardH;
+                        card.style.height = newCardH + 'px';
+                        pairCard.style.height = newPairH + 'px';
+                    } else {
+                        card.style.height = Math.max(100, startH + dY) + 'px';
+                    }
                 };
                 const onUp = () => {
                     handle.classList.remove('active');
@@ -3452,6 +3582,49 @@
                 widths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w; });
             }
         } catch (e) { }
+
+        // ④ 물건 용도 관리 테이블 컬럼 — 헤더 우측 드래그
+        document.querySelectorAll('#yongdoTable .th-resize-handle').forEach(handle => {
+            handle.addEventListener('mousedown', e => {
+                const colIdx = parseInt(handle.dataset.yongdoCol);
+                const cols = document.querySelectorAll('#yongdoTableColgroup col');
+                const table = document.getElementById('yongdoTable');
+                if (!cols[colIdx] || !table) return;
+                const tableW = table.offsetWidth;
+                const startX = e.clientX;
+                const startW = parseFloat(cols[colIdx].style.width) / 100 * tableW;
+                handle.classList.add('active');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                const onMove = e2 => {
+                    const newW = Math.max(28, startW + (e2.clientX - startX));
+                    cols[colIdx].style.width = (newW / tableW * 100).toFixed(2) + '%';
+                };
+                const onUp = () => {
+                    handle.classList.remove('active');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                    const widths = Array.from(cols).map(c => c.style.width);
+                    localStorage.setItem('yongdoColWidths', JSON.stringify(widths));
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        // 저장된 yongdo 테이블 컬럼 너비 복원
+        try {
+            const savedY = localStorage.getItem('yongdoColWidths');
+            if (savedY) {
+                const widths = JSON.parse(savedY);
+                const cols = document.querySelectorAll('#yongdoTableColgroup col');
+                widths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w; });
+            }
+        } catch (e) { }
     }
 
     function _saveDashLayout() {
@@ -3460,16 +3633,19 @@
             const el = document.getElementById(id);
             if (el) layout[id] = el.offsetWidth;
         });
-        ['missingBidCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
+        ['missingBidCard', 'yongdoManagementCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
             const el = document.getElementById(id);
             if (el) layout[id + '_h'] = el.offsetHeight;
         });
-        localStorage.setItem('dashLayout', JSON.stringify(layout));
+        localStorage.setItem('dashLayoutV2', JSON.stringify(layout));
     }
 
     function _loadDashLayout() {
         try {
-            const saved = localStorage.getItem('dashLayout');
+            // 옛 키('dashLayout')는 yongdoCard 도입 전후로 저장된 비정상 높이가 있어
+            // V2 신규 키로 전환하며 한번 클리어
+            localStorage.removeItem('dashLayout');
+            const saved = localStorage.getItem('dashLayoutV2');
             if (!saved) return;
             const layout = JSON.parse(saved);
             ['dashCol1', 'dashCol2'].forEach(id => {
@@ -3478,7 +3654,7 @@
                     if (el) { el.style.flex = `0 0 ${layout[id]}px`; el.style.width = layout[id] + 'px'; }
                 }
             });
-            ['missingBidCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
+            ['missingBidCard', 'yongdoManagementCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
                 if (layout[id + '_h']) {
                     const el = document.getElementById(id);
                     if (el) el.style.height = layout[id + '_h'] + 'px';
@@ -3487,6 +3663,169 @@
         } catch (e) { }
     }
     // ─────────────────────────────────────────────────────────────
+
+    // ── 물건 용도 관리 대쉬보드 ───────────────────────────
+    // 셀: stu_member='상품' 인 물건만 집계, 컬럼은 items_youngdo 별 분포
+    // - 상품 컬럼 = 그날 상품 총 합
+    // - 등록전 컬럼 = items_youngdo 비어있는 건
+    function toggleAllYongdoColumn(headerCb) {
+        const yongdo = headerCb.dataset.yongdo;
+        const checked = headerCb.checked;
+        document.querySelectorAll(`.yongdo-cell-cb[data-yongdo="${yongdo}"]`).forEach(cb => {
+            cb.checked = checked;
+        });
+        updateYongdoBidMoveBtn();
+    }
+
+    function updateYongdoBidMoveBtn() {
+        const btn = document.getElementById('yongdoBidMoveBtn');
+        const checked = document.querySelectorAll('.yongdo-cell-cb:checked');
+        if (btn) btn.classList.toggle('hidden', checked.length === 0);
+        // 헤더 "전체" 체크박스 상태 동기화
+        document.querySelectorAll('.yongdo-col-all').forEach(allCb => {
+            const yongdo = allCb.dataset.yongdo;
+            const cells = document.querySelectorAll(`.yongdo-cell-cb[data-yongdo="${yongdo}"]`);
+            if (cells.length === 0) { allCb.checked = false; return; }
+            const allChecked = Array.from(cells).every(c => c.checked);
+            allCb.checked = allChecked;
+        });
+    }
+
+    function goToItemManagementFromYongdoSelection() {
+        const checked = document.querySelectorAll('.yongdo-cell-cb:checked');
+        if (checked.length === 0) return;
+        const filterMember = document.getElementById('yongdoFilterMember')?.value || '';
+        const dateSet = new Set();
+        const yongdoSet = new Set();
+        Array.from(checked).forEach(cb => {
+            dateSet.add(cb.dataset.date);
+            yongdoSet.add(cb.dataset.yongdo);
+        });
+        const dates = Array.from(dateSet);
+        const yongdos = Array.from(yongdoSet);
+        if (checked.length === 1) {
+            filterFromDashboard(dates[0], 'yongdo', yongdos[0], filterMember);
+        } else {
+            dashboardFilter = {
+                active: true,
+                dates: dates,
+                yongdos: yongdos,
+                type: 'yongdo_multi',
+                status: null,
+                manager: filterMember
+            };
+            navigateTo('ItemManagement');
+        }
+    }
+
+    // 용도값 매칭 헬퍼 (등록전 = '__pre__' = 빈값)
+    function _matchYongdoVal(itemYongdoRaw, target) {
+        const v = String(itemYongdoRaw || '').trim();
+        if (target === '__pre__') return v === '';
+        if (target === '__all__') return true;
+        return _yongdoEq(v, target);
+    }
+
+    function renderYongdoManagementDashboard() {
+        const tbody = document.getElementById('yongdoTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const tfoot = document.getElementById('yongdoTableFoot');
+        if (tfoot) tfoot.innerHTML = '';
+        // 헤더 전체 체크박스 + 이동 버튼 초기화
+        document.querySelectorAll('.yongdo-col-all').forEach(cb => cb.checked = false);
+        updateYongdoBidMoveBtn();
+
+        const targetDates = getWorkingDaysFromToday();
+        // 상품(전체) → 등록전 → 나머지 순서
+        const yongdoCols = ['__all__', '__pre__', '플래티넘', '블랙', '실버', '돈클수익', '돈클월세', 'PT, 단투'];
+        const yongdoStyles = {
+            '__all__': 'bg-yellow-100 text-yellow-800',  // 상품(전체)
+            '__pre__': 'bg-red-50 text-red-700',         // 등록전
+            '플래티넘': 'bg-purple-100 text-purple-800',
+            '블랙': 'bg-gray-700 text-white',
+            '실버': 'bg-gray-200 text-gray-800',
+            '돈클수익': 'bg-green-100 text-green-800',
+            '돈클월세': 'bg-blue-100 text-blue-800',
+            'PT, 단투': 'bg-pink-100 text-pink-800'
+        };
+        const filterMember = document.getElementById('yongdoFilterMember') ? document.getElementById('yongdoFilterMember').value : '';
+
+        // 날짜별 행 렌더
+        targetDates.forEach((dateObj, index) => {
+            const year = String(dateObj.getFullYear()).slice(-2);
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const targetYYMMDD = `${year}${month}${day}`;
+            const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+            const dDay = index === 0 ? "오늘" : `D-${index}`;
+            const dDayColor = index === 0 ? "text-gray-800" : "text-red-500";
+            const dateStr = `${month}/${day} (${dayNames[dateObj.getDay()]})`;
+
+            const row = document.createElement('tr');
+            row.className = "border-b border-gray-100 hover:bg-gray-50";
+
+            let html = `<td class="py-2 px-2 text-center border-r bg-gray-50 whitespace-nowrap">
+                  <span class="${dDayColor} font-bold mr-1 text-sm">${dDay}</span>
+                  <span class="text-gray-500 text-sm">${dateStr}</span>
+              </td>`;
+
+            yongdoCols.forEach(yongdo => {
+                const count = allBiddingData.filter(item => {
+                    const isDateMatch = String(item['in-date']) === targetYYMMDD;
+                    const isProduct = item.stu_member === '상품';
+                    const itemMember = item.m_name_id || '';
+                    const isMemberMatch = (filterMember === 'All' || filterMember === '') || (itemMember === filterMember);
+                    return isDateMatch && isProduct && isMemberMatch && _matchYongdoVal(item.items_youngdo, yongdo);
+                }).length;
+
+                const styleClass = count > 0 ? `${yongdoStyles[yongdo]} font-bold` : "";
+                if (count > 0) {
+                    // 셀 클릭 → 단건 필터, 체크박스 클릭 → 다중선택 (이벤트 분리)
+                    const yongdoArg = yongdo === '__all__' ? '' : yongdo;
+                    const yongdoType = yongdo === '__all__' ? 'yongdo_all_product' : 'yongdo';
+                    html += `<td class="py-2 px-1 ${styleClass} text-center text-sm transition duration-150 border-r border-gray-100 cursor-pointer hover:opacity-80"
+                              onclick="if(event.target.tagName==='INPUT')return; filterFromDashboard('${targetYYMMDD}', '${yongdoType}', '${yongdoArg}', '${filterMember}')">
+                              <input type="checkbox" class="yongdo-cell-cb mr-1 align-middle cursor-pointer" data-date="${targetYYMMDD}" data-yongdo="${yongdo}" onclick="event.stopPropagation()" onchange="updateYongdoBidMoveBtn()">${count}
+                          </td>`;
+                } else {
+                    html += `<td class="py-2 px-1 text-center text-sm text-gray-300 border-r border-gray-100"></td>`;
+                }
+            });
+
+            row.innerHTML = html;
+            tbody.appendChild(row);
+        });
+
+        // tfoot: 전체 (오늘~) 합계 - total_yongdo 클릭 가능
+        if (tfoot) {
+            const totalRow = document.createElement('tr');
+            let totalHtml = `<td class="py-2 px-3 text-center border-r text-blue-800 text-sm">전체 (오늘~)</td>`;
+            yongdoCols.forEach(yongdo => {
+                const totalCount = allBiddingData.filter(item => {
+                    const isDateMatch = String(item['in-date']) >= todayYYMMDD;
+                    const isProduct = item.stu_member === '상품';
+                    const itemMember = item.m_name_id || '';
+                    const isMemberMatch = (filterMember === 'All' || filterMember === '') || (itemMember === filterMember);
+                    return isDateMatch && isProduct && isMemberMatch && _matchYongdoVal(item.items_youngdo, yongdo);
+                }).length;
+
+                const display = totalCount > 0 ? totalCount : "";
+                const cursorClass = totalCount > 0 ? "cursor-pointer hover:bg-blue-200 text-blue-800" : "text-gray-300";
+                if (totalCount > 0) {
+                    const yongdoArg = yongdo === '__all__' ? '' : yongdo;
+                    const yongdoType = yongdo === '__all__' ? 'total_yongdo_all_product' : 'total_yongdo';
+                    totalHtml += `<td class="py-2 px-1 ${cursorClass} text-center text-sm transition duration-150 border-r border-blue-100"
+                                onclick="filterFromDashboard('${todayYYMMDD}', '${yongdoType}', '${yongdoArg}', '${filterMember}')">${display}</td>`;
+                } else {
+                    totalHtml += `<td class="py-2 px-1 ${cursorClass} text-center text-sm transition duration-150 border-r border-blue-100">${display}</td>`;
+                }
+            });
+            totalRow.innerHTML = totalHtml;
+            tfoot.appendChild(totalRow);
+        }
+    }
+    // ─────────────────────────────────────────────────────
 
     function renderStatusManagementDashboard() {
         if (!statusTableBody) return;
@@ -3778,6 +4117,7 @@
         if (formCourt) formCourt.value = '';
         if (formBidPrice) formBidPrice.value = '';
         if (formMName) formMName.value = '';
+        if (formYongdo) formYongdo.value = ''; // 신규 등록은 등록전(빈값)으로 시작
         if (formMemberId) formMemberId.value = '';
         const formMName2El = document.getElementById('form-m-name2');
         if (formMName2El) formMName2El.value = '';
@@ -3976,6 +4316,7 @@
             }
             if (formCourt) formCourt.value = data.court || '';
             if (formStuMember) formStuMember.value = data.stu_member || '미정';
+            if (formYongdo) formYongdo.value = data.items_youngdo || ''; // 빈값 = 등록전
             if (formMemberId) formMemberId.value = data.member_id || '';
             if (itemMemberTokenEl) itemMemberTokenEl.value = '';
             // [수정] items 시트의 m_name 우선순위 적용 (없을 경우에만 회원 DB 참조)
@@ -5351,6 +5692,7 @@
         }
         if (modalFormCourt) modalFormCourt.value = data.court || '';
         if (modalFormStuMember) modalFormStuMember.value = data.stu_member || '미정';
+        if (modalFormYongdo) modalFormYongdo.value = data.items_youngdo || ''; // 빈값 = 등록전
         if (modalFormMemberId) modalFormMemberId.value = data.member_id || '';
         // [수정] items 시트의 m_name 우선순위 적용 (없을 경우에만 회원 DB 참조)
         if (modalFormMName) {
@@ -6148,6 +6490,7 @@ MJ 이정우 팀장
         const sakunNo = modalFormSakunNo.value;
         const court = modalFormCourt.value;
         const stuMember = modalFormStuMember ? modalFormStuMember.value : '';
+        const itemsYongdo = modalFormYongdo ? modalFormYongdo.value : '';
         const mName = getBaseMemberNameForSave_('modal');
         const mName2 = getMemberName2ForSave_('modal');
         const memberId = modalFormMemberId ? modalFormMemberId.value : '';
@@ -6225,7 +6568,8 @@ MJ 이정우 팀장
             auction_id: auctionId,
             reg_member: regMember,
             note: note,
-            chuchen_state: chuchenState
+            chuchen_state: chuchenState,
+            items_youngdo: itemsYongdo
         };
 
         const idx = allBiddingData.findIndex(it => String(it.id) === String(id));
@@ -6284,8 +6628,8 @@ MJ 이정우 팀장
                 showStatus(`수정 오류: ${error.message}`, 'error');
                 loadData(true); // Optimistic Update 오염 복구
             })
-            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId)
-            .updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId);
+            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo)
+            .updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo);
     }
 
     function handleModalDelete() {
@@ -6337,6 +6681,7 @@ MJ 이정우 팀장
         const sakunNo = formSakunNo.value;
         const court = formCourt.value;
         const stuMember = formStuMember ? formStuMember.value : '';
+        const itemsYongdo = formYongdo ? formYongdo.value : '';
         const mName = getBaseMemberNameForSave_('main');
         const mName2 = getMemberName2ForSave_('main');
         const memberId = formMemberId ? formMemberId.value : '';
@@ -6473,7 +6818,8 @@ MJ 이정우 팀장
                 auction_id: auctionId,
                 reg_member: regMember,
                 note: note,
-                chuchen_state: panelChuchenState
+                chuchen_state: panelChuchenState,
+                items_youngdo: itemsYongdo
             };
             const idx = allBiddingData.findIndex(it => String(it.id) === String(id));
             if (idx >= 0) {
@@ -6489,13 +6835,13 @@ MJ 이정우 팀장
         }
 
         if (currentMode === 'create') {
-            // Server createData signature: (inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId)
+            // Server createData signature: (inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId, itemsYongdo)
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
-                .createData(processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, panelChuchenState, regMember, auctionId);
+                .createData(processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, panelChuchenState, regMember, auctionId, itemsYongdo);
         } else if (currentMode === 'edit') {
-            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId)
+            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo)
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
-                .updateData(id, processedInDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, panelChuchenState, imageId, regMember, mName2, auctionId);
+                .updateData(id, processedInDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, panelChuchenState, imageId, regMember, mName2, auctionId, itemsYongdo);
         }
     }
 
@@ -6540,7 +6886,7 @@ MJ 이정우 팀장
     function loadData(forceRefresh = false) {
         if (typeof google === 'undefined' || !google.script || !google.script.run) {
             if (dataTableBody) {
-                dataTableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-red-500 font-bold">⚠️ 오류: 이 코드는 구글 앱스 스크립트 환경이 아닙니다.</td></tr>`;
+                dataTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-red-500 font-bold">⚠️ 오류: 이 코드는 구글 앱스 스크립트 환경이 아닙니다.</td></tr>`;
             }
             return;
         }
@@ -6569,7 +6915,7 @@ MJ 이정우 팀장
                 toggleLoading(false);
                 showStatus(`데이터 로드 실패: ${error.message}`, 'error');
                 if (dataTableBody) {
-                    dataTableBody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-red-500">데이터 로드 중 오류가 발생했습니다.</td></tr>`;
+                    dataTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-red-500">데이터 로드 중 오류가 발생했습니다.</td></tr>`;
                 }
             });
 
@@ -6649,6 +6995,7 @@ MJ 이정우 팀장
             updateDashboardFilterOptions();
             renderMissingBidDashboard();
             renderStatusManagementDashboard();
+            renderYongdoManagementDashboard();
             renderMemberBidChart();
             return;
         }
@@ -6660,6 +7007,7 @@ MJ 이정우 팀장
                 updateDashboardFilterOptions();
                 renderMissingBidDashboard();
                 renderStatusManagementDashboard();
+                renderYongdoManagementDashboard();
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
             })
@@ -7091,7 +7439,111 @@ MJ 이정우 팀장
     }
 
     // 드래그 리사이즈 초기화
-    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); });
+    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); initItemPaneResize(); initItemListColumnResize(); });
+
+    // 입찰물건 관리 리스트 — 컬럼 헤더 우측에 드래그 핸들 부착, 폭 저장
+    function initItemListColumnResize() {
+        const STORAGE_KEY = 'mj_item_list_col_widths';
+        const MIN_VALID_PX = 40; // 이보다 작으면 비정상 → 무시
+        const table = document.querySelector('.item-list-table');
+        if (!table) return;
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch (e) { saved = {}; }
+        // 무효한 값(40px 미만) 자동 제거
+        let cleaned = false;
+        Object.keys(saved).forEach(k => {
+            if (typeof saved[k] !== 'number' || saved[k] < MIN_VALID_PX) {
+                delete saved[k]; cleaned = true;
+            }
+        });
+        if (cleaned) {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) {}
+        }
+        const headers = table.querySelectorAll('thead th');
+        headers.forEach(th => {
+            const colClass = Array.from(th.classList).find(c => c.startsWith('item-col-'));
+            if (!colClass) return;
+            if (saved[colClass] && saved[colClass] >= MIN_VALID_PX) th.style.width = saved[colClass] + 'px';
+            // 이미 핸들이 있으면 중복 추가 안 함
+            if (th.querySelector('.col-resizer')) return;
+            const handle = document.createElement('span');
+            handle.className = 'col-resizer';
+            th.appendChild(handle);
+            let isDragging = false, startX = 0, startWidth = 0;
+            handle.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                handle.classList.add('dragging');
+                startX = e.clientX;
+                startWidth = th.getBoundingClientRect().width;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            handle.addEventListener('click', (e) => { e.stopPropagation(); });
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const newWidth = Math.max(40, startWidth + (e.clientX - startX));
+                th.style.width = newWidth + 'px';
+            });
+            document.addEventListener('mouseup', () => {
+                if (!isDragging) return;
+                isDragging = false;
+                handle.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                const finalWidth = Math.round(th.getBoundingClientRect().width);
+                saved[colClass] = finalWidth;
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) { /* ignore */ }
+            });
+        });
+    }
+
+    // 입찰물건 관리: 좌/우 패널 폭 드래그 조절 + localStorage 저장
+    function initItemPaneResize() {
+        const STORAGE_KEY = 'mj_item_pane_list_px';
+        const layout = document.querySelector('.item-management-layout');
+        const list = document.getElementById('listPane');
+        const resizer = document.getElementById('paneResizer');
+        if (!layout || !list || !resizer) return;
+
+        // 저장된 폭 복원
+        const savedPx = parseInt(localStorage.getItem(STORAGE_KEY) || '', 10);
+        if (!isNaN(savedPx) && savedPx >= 280) {
+            list.style.flex = `0 0 ${savedPx}px`;
+        }
+
+        let isDragging = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        resizer.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            resizer.classList.add('dragging');
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'col-resize';
+            startX = e.clientX;
+            startWidth = list.getBoundingClientRect().width;
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const layoutRect = layout.getBoundingClientRect();
+            const minPx = 280;
+            const maxPx = Math.max(minPx, layoutRect.width - 280 - 18); // detailPane min + gap+resizer
+            const newPx = Math.max(minPx, Math.min(maxPx, startWidth + (e.clientX - startX)));
+            list.style.flex = `0 0 ${newPx}px`;
+        });
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            resizer.classList.remove('dragging');
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+            const finalPx = Math.round(list.getBoundingClientRect().width);
+            try { localStorage.setItem(STORAGE_KEY, String(finalPx)); } catch (e) { /* ignore */ }
+        });
+    }
 
     // 상태 체크박스 변경 시 라벨 업데이트
     document.addEventListener('DOMContentLoaded', () => {
@@ -7210,6 +7662,53 @@ MJ 이정우 팀장
         }
     }
 
+    // --- 용도(items_youngdo) 다중선택 드롭다운 ---
+    function getSelectedYongdoValues() {
+        const cbs = document.querySelectorAll('input[name="bid-youngdo-cb"]:checked');
+        return Array.from(cbs).map(el => el.value);
+    }
+    function toggleYongdoDropdown(ev) {
+        ev.stopPropagation();
+        const dd = document.getElementById('bid-youngdo-dropdown');
+        const btn = document.getElementById('bid-youngdo-btn');
+        if (!dd || !btn) return;
+        const isHidden = dd.classList.contains('content-hidden');
+        dd.classList.toggle('content-hidden', !isHidden);
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (isHidden) {
+            document.addEventListener('click', closeYongdoDropdownOnce);
+        }
+    }
+    function closeYongdoDropdownOnce() {
+        const dd = document.getElementById('bid-youngdo-dropdown');
+        if (dd) dd.classList.add('content-hidden');
+        const btn = document.getElementById('bid-youngdo-btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', closeYongdoDropdownOnce);
+        updateYongdoLabel();
+    }
+    function handleYongdoAll(allCb) {
+        if (allCb.checked) {
+            document.querySelectorAll('input[name="bid-youngdo-cb"]').forEach(cb => cb.checked = false);
+        }
+    }
+    function handleYongdoOther(otherCb) {
+        if (otherCb.checked) {
+            const allCb = document.getElementById('bid-youngdo-all');
+            if (allCb) allCb.checked = false;
+        }
+    }
+    function updateYongdoLabel() {
+        const label = document.getElementById('bid-youngdo-label');
+        if (!label) return;
+        const allCb = document.getElementById('bid-youngdo-all');
+        const sels = getSelectedYongdoValues();
+        if (allCb && allCb.checked) { label.textContent = '용도'; return; }
+        if (sels.length === 0) { label.textContent = '용도'; return; }
+        const display = sels.map(v => v === '__pre__' ? '등록전' : v);
+        label.textContent = display.join(',');
+    }
+
     // --- [4] 필터링 로직 ---
     function applyFilters() {
         const currentFocusId = document.activeElement ? document.activeElement.id : '';
@@ -7224,6 +7723,10 @@ MJ 이정우 팀장
         const isAllManager = (allManagerCb && allManagerCb.checked);
         const selectedManagers = getSelectedManagerValues();
         const termMName = (searchMNameInput && searchMNameInput.value) ? searchMNameInput.value.toLowerCase().trim() : '';
+        // 용도 다중선택 필터 (입찰물건관리)
+        const yongdoAllCb = document.getElementById('bid-youngdo-all');
+        const isAllYongdo = (yongdoAllCb && yongdoAllCb.checked);
+        const selectedYongdo = getSelectedYongdoValues();
         // 수업 필터 (입찰물건관리)
         const termBidClassType = document.getElementById('bid-class-type')?.value || '';
         const termBidClassName = document.getElementById('bid-class-name')?.value || '';
@@ -7245,6 +7748,11 @@ MJ 이정우 팀장
         if (bidClassTypeSel) bidClassTypeSel.classList.toggle('filter-active-input', !!termBidClassType);
         if (bidClassNameSel) bidClassNameSel.classList.toggle('filter-active-input', !!termBidClassName);
         if (bidClassGradeSel) bidClassGradeSel.classList.toggle('filter-active-input', !!termBidClassGrade);
+        // 용도 다중선택 필터 강조 (전체가 아니면 강조)
+        const bidYongdoBtn = document.getElementById('bid-youngdo-btn');
+        if (bidYongdoBtn) bidYongdoBtn.classList.toggle('filter-active-input', !isAllYongdo);
+        // 용도 라벨 갱신
+        updateYongdoLabel();
         const sBtn = document.getElementById('search-status-btn');
         // 전체가 아니면 강조 (미선택 포함)
         if (sBtn) sBtn.classList.toggle('filter-active-input', !isAllStatus);
@@ -7266,13 +7774,26 @@ MJ 이정우 팀장
                 : '';
             if (dashboardFilter.type === 'total_status') {
                 filterDesc = `당일 이후 전체 [${dashboardFilter.status}] 건`;
+            } else if (dashboardFilter.type === 'total_yongdo') {
+                const yLabel = dashboardFilter.status === '__pre__' ? '등록전' : dashboardFilter.status;
+                filterDesc = `당일 이후 상품 [${yLabel}] 건`;
+            } else if (dashboardFilter.type === 'total_yongdo_all_product') {
+                filterDesc = `당일 이후 상품 전체`;
             } else if (dashboardFilter.type === 'missing_multi') {
                 filterDesc = `${(dashboardFilter.dates || []).length}개 날짜 입찰가 미입력 건`;
+            } else if (dashboardFilter.type === 'yongdo_multi') {
+                const yLabels = (dashboardFilter.yongdos || []).map(y => y === '__pre__' ? '등록전' : (y === '__all__' ? '상품' : y));
+                filterDesc = `${(dashboardFilter.dates || []).length}개 날짜 상품 [${yLabels.join('/')}] 건`;
             } else {
                 const d = dashboardFilter.date;
                 const niceDate = `${d.substring(0, 2)}/${d.substring(2, 4)}/${d.substring(4, 6)}`;
                 if (dashboardFilter.type === 'missing') {
                     filterDesc = `${niceDate} 입찰가 미입력 건`;
+                } else if (dashboardFilter.type === 'yongdo') {
+                    const yLabel = dashboardFilter.status === '__pre__' ? '등록전' : dashboardFilter.status;
+                    filterDesc = `${niceDate} 상품 [${yLabel}] 건`;
+                } else if (dashboardFilter.type === 'yongdo_all_product') {
+                    filterDesc = `${niceDate} 상품 전체`;
                 } else if (dashboardFilter.type === 'status') {
                     filterDesc = `${niceDate} [${dashboardFilter.status}] 건`;
                 } else if (dashboardFilter.type === 'auto_all') {
@@ -7315,7 +7836,7 @@ MJ 이정우 팀장
             const inDateNum = inDateStr.replace(/\D/g, '');
             // all_status/all_bid_state/item_ids 타입은 날짜 전체 범위를 조회 (과거 날짜 포함)
             const bypassDateFilter = dashboardFilter.active &&
-                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids' || dashboardFilter.type === 'missing_multi');
+                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids' || dashboardFilter.type === 'missing_multi' || dashboardFilter.type === 'yongdo_multi' || dashboardFilter.type === 'total_yongdo' || dashboardFilter.type === 'total_yongdo_all_product');
             const matchesIndate = bypassDateFilter
                 ? true
                 : (syncSakunFilter.active
@@ -7340,7 +7861,19 @@ MJ 이정우 팀장
                 if (termBidClassName && (cls?.class_name || '') !== termBidClassName) matchesClass = false;
                 if (termBidClassGrade && (cls?.class_grade || '') !== termBidClassGrade) matchesClass = false;
             }
-            return matchesIndate && matchesSakunNo && matchesCourt && matchesStatus && matchesRegDate && matchesManager && matchesMName && matchesClass;
+            // 용도 다중선택 필터: __pre__=빈값(등록전), 전체 체크 시 모두 통과
+            let matchesYongdo = true;
+            if (!isAllYongdo) {
+                if (selectedYongdo.length === 0) {
+                    matchesYongdo = false; // 아무것도 선택 안 하면 통과 안 함
+                } else {
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    matchesYongdo = selectedYongdo.some(v =>
+                        v === '__pre__' ? itemYongdo === '' : _yongdoEq(itemYongdo, v)
+                    );
+                }
+            }
+            return matchesIndate && matchesSakunNo && matchesCourt && matchesStatus && matchesRegDate && matchesManager && matchesMName && matchesClass && matchesYongdo;
         });
 
         filteredData = filteredData.filter(item => {
@@ -7357,6 +7890,38 @@ MJ 이정우 팀장
                     return itemDate === dashboardFilter.date && (isNaN(price) || price === 0) && item.stu_member === '입찰';
                 } else if (dashboardFilter.type === 'missing_multi') {
                     return (dashboardFilter.dates || []).includes(itemDate) && (isNaN(price) || price === 0) && item.stu_member === '입찰';
+                } else if (dashboardFilter.type === 'yongdo') {
+                    // 단건 셀 클릭: 해당 날짜 + stu_member='상품' + 특정 yongdo
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    const yongdoMatch = (dashboardFilter.status === '__pre__' || dashboardFilter.status === '')
+                        ? itemYongdo === ''
+                        : _yongdoEq(itemYongdo, dashboardFilter.status);
+                    return itemDate === dashboardFilter.date && item.stu_member === '상품' && yongdoMatch;
+                } else if (dashboardFilter.type === 'yongdo_all_product') {
+                    // 상품 컬럼 셀 클릭: 해당 날짜 + stu_member='상품' (yongdo 무관)
+                    return itemDate === dashboardFilter.date && item.stu_member === '상품';
+                } else if (dashboardFilter.type === 'yongdo_multi') {
+                    // 다중 선택: dates × yongdos 카르테시안 + stu_member='상품'
+                    if (item.stu_member !== '상품') return false;
+                    const dates = dashboardFilter.dates || [];
+                    const yongdos = dashboardFilter.yongdos || [];
+                    if (!dates.includes(itemDate)) return false;
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    return yongdos.some(y => {
+                        if (y === '__all__') return true;
+                        if (y === '__pre__') return itemYongdo === '';
+                        return _yongdoEq(itemYongdo, y);
+                    });
+                } else if (dashboardFilter.type === 'total_yongdo') {
+                    // tfoot 전체(오늘~) 특정 yongdo
+                    if (item.stu_member !== '상품' || itemDate < todayYYMMDD) return false;
+                    const itemYongdo = String(item.items_youngdo || '').trim();
+                    return (dashboardFilter.status === '__pre__' || dashboardFilter.status === '')
+                        ? itemYongdo === ''
+                        : _yongdoEq(itemYongdo, dashboardFilter.status);
+                } else if (dashboardFilter.type === 'total_yongdo_all_product') {
+                    // tfoot 전체(오늘~) 상품 (yongdo 무관)
+                    return itemDate >= todayYYMMDD && item.stu_member === '상품';
                 } else if (dashboardFilter.type === 'status') {
                     return itemDate === dashboardFilter.date && item.stu_member === dashboardFilter.status;
                 } else if (dashboardFilter.type === 'total_status') {
@@ -7487,6 +8052,23 @@ MJ 이정우 팀장
             if (mgrBtn2) mgrBtn2.classList.add('filter-active-input');
         }
 
+        // yongdo 계열: 상태='상품' 고정 + 용도 라벨 표시
+        if (dashboardFilter.type === 'yongdo' || dashboardFilter.type === 'yongdo_multi' ||
+            dashboardFilter.type === 'yongdo_all_product' || dashboardFilter.type === 'total_yongdo' ||
+            dashboardFilter.type === 'total_yongdo_all_product') {
+            // 상태 체크박스는 '상품' 로 설정
+            const allStatusCb = document.getElementById('search-status-all');
+            if (allStatusCb) allStatusCb.checked = false;
+            document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => {
+                cb.checked = (cb.value === '상품');
+            });
+            const statusBtn = document.getElementById('search-status-btn');
+            const statusLabel = document.getElementById('search-status-label');
+            if (statusBtn) statusBtn.classList.add('filter-active-input');
+            if (statusLabel) statusLabel.textContent = '상품';
+            return;
+        }
+
         // all_status / all_bid_state / item_ids 타입: dashboardFilter가 2단계에서 처리하므로
         // 1단계 상태 체크박스는 '전체' 로 설정 (모두 통과)
         if (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids') {
@@ -7587,6 +8169,132 @@ MJ 이정우 팀장
     function toggleAllItemCheckboxes(headerCheckbox) {
         const cbs = dataTableBody ? dataTableBody.querySelectorAll('input.item-row-cb') : [];
         cbs.forEach(cb => { cb.checked = !!headerCheckbox.checked; });
+    }
+
+    // 공용 헬퍼: 주어진 items 배열로 조사이미지 일괄 프린트 실행
+    function _doBulkInvestigationPrint(items) {
+        if (!items || items.length === 0) {
+            if (typeof showStatus === 'function') showStatus('프린트할 물건을 선택해 주세요.', 'warning');
+            return;
+        }
+        const printArea = document.getElementById('printInvestigationArea');
+        if (!printArea) return;
+
+        // 단건 프린트용 원래 구조 백업 (인쇄 후 복원)
+        const originalHTML = printArea.innerHTML;
+
+        // 인쇄용 페이지 생성: 각 물건당 헤더 2줄 + 이미지 1장
+        // - 1줄: 입찰일자 / 사건번호 / 법원 / 담당자 / 용도 / 물건상태
+        // - 2줄: 물건비고
+        function _bulkEscHtml(s) {
+            return String(s == null ? '' : s)
+                .split('&').join('&amp;')
+                .split('<').join('&lt;')
+                .split('>').join('&gt;')
+                .split('"').join('&quot;')
+                .split("'").join('&#39;');
+        }
+        function _bulkFmtIndate(s) {
+            var v = String(s == null ? '' : s).replace(/\D/g, '');
+            if (v.length === 6) return v.slice(0,2) + '-' + v.slice(2,4) + '-' + v.slice(4,6);
+            return v;
+        }
+        let html = '';
+        items.forEach(item => {
+            const yongdoDisp = (typeof getYongdoDisplayLabel === 'function')
+                ? getYongdoDisplayLabel(item.items_youngdo)
+                : (item.items_youngdo || '등록전');
+            const line1Parts = [
+                _bulkFmtIndate(item['in-date']),
+                item.sakun_no || '',
+                item.court || '',
+                item.m_name_id || '',
+                yongdoDisp,
+                item.stu_member || ''
+            ].filter(function(v){ return !!v; }).map(_bulkEscHtml);
+            const line1 = line1Parts.join(' / ');
+            const line2 = _bulkEscHtml(item.note || '');
+
+            const imgId = item.image_id || '';
+            const headerHtml = '<div class="bulk-print-header">'
+                +   '<div class="bulk-print-header-line1">' + line1 + '</div>'
+                +   (line2 ? '<div class="bulk-print-header-line2">' + line2 + '</div>' : '')
+                + '</div>';
+            if (imgId) {
+                const url = 'https://drive.google.com/thumbnail?sz=w1000&id=' + encodeURIComponent(imgId);
+                html += '<div class="bulk-print-page">' + headerHtml + '<img src="' + url + '" alt="조사이미지"></div>';
+            } else {
+                html += '<div class="bulk-print-page">' + headerHtml + '<p class="bulk-print-noimg">이미지 없음</p></div>';
+            }
+        });
+
+        printArea.innerHTML = html;
+
+        // 멀티페이지 모드 활성 (CSS 에서 position: fixed → static 으로 전환되어야 페이지가 여러 장 나옴)
+        document.body.classList.add('bulk-printing');
+
+        const restore = () => {
+            printArea.innerHTML = originalHTML;
+            document.body.classList.remove('bulk-printing');
+            window.removeEventListener('afterprint', restore);
+        };
+        window.addEventListener('afterprint', restore);
+
+        const imgs = printArea.querySelectorAll('img');
+        if (imgs.length === 0) {
+            window.print();
+            return;
+        }
+        if (typeof showStatus === 'function') showStatus(`${items.length}건 조사이미지 로딩 중...`, 'info');
+        let loaded = 0;
+        let printed = false;
+        const triggerPrint = () => {
+            if (printed) return;
+            printed = true;
+            setTimeout(() => window.print(), 200);
+        };
+        const onDone = () => {
+            loaded++;
+            if (loaded >= imgs.length) triggerPrint();
+        };
+        imgs.forEach(img => {
+            if (img.complete && img.naturalWidth > 0) onDone();
+            else { img.onload = onDone; img.onerror = onDone; }
+        });
+        // 안전망: 8초 내 모든 이미지 로딩 안 끝나도 강제 인쇄
+        setTimeout(triggerPrint, 8000);
+    }
+
+    // 입찰물건관리 리스트: 체크된 물건들의 조사이미지 일괄 프린트
+    function handleBulkInvestigationPrint() {
+        const cbs = dataTableBody ? dataTableBody.querySelectorAll('input.item-row-cb:checked') : [];
+        const ids = Array.from(cbs).map(cb => cb.getAttribute('data-id')).filter(Boolean);
+        const items = ids
+            .map(id => (allBiddingData || []).find(it => String(it.id) === String(id)))
+            .filter(Boolean);
+        if (ids.length > 0 && items.length === 0) {
+            if (typeof showStatus === 'function') showStatus('선택한 물건 데이터를 찾지 못했습니다.', 'error');
+            return;
+        }
+        _doBulkInvestigationPrint(items);
+    }
+
+    // 수업관리 - 물건탭 - 물건리스트: 체크된 물건들의 조사이미지 일괄 프린트
+    function handleBulkInvestigationPrintD1_() {
+        if (typeof d1ItemsSelectedIds_ === 'undefined' || !d1ItemsSelectedIds_) {
+            if (typeof showStatus === 'function') showStatus('프린트할 물건을 선택해 주세요.', 'warning');
+            return;
+        }
+        const ids = Array.from(d1ItemsSelectedIds_);
+        const source = (typeof d1ItemsData !== 'undefined' && Array.isArray(d1ItemsData)) ? d1ItemsData : [];
+        const items = ids
+            .map(id => source.find(it => String(it.id) === String(id)))
+            .filter(Boolean);
+        if (ids.length > 0 && items.length === 0) {
+            if (typeof showStatus === 'function') showStatus('선택한 물건 데이터를 찾지 못했습니다.', 'error');
+            return;
+        }
+        _doBulkInvestigationPrint(items);
     }
 
     async function handleItemCaptureListDownload() {
@@ -7752,6 +8460,53 @@ MJ 이정우 팀장
         if (btn) btn.setAttribute('aria-expanded', 'false');
         document.removeEventListener('click', closeCalendarStatusDropdownOnce);
         updateCalendarStatusLabel();
+    }
+
+    // --- 입찰일정(Calendar) 용도(items_youngdo) 다중선택 드롭다운 ---
+    function getSelectedCalYongdoValues() {
+        const cbs = document.querySelectorAll('input[name="cal-search-youngdo-cb"]:checked');
+        return Array.from(cbs).map(el => el.value);
+    }
+    function handleCalYongdoAll(allCb) {
+        if (allCb.checked) {
+            document.querySelectorAll('input[name="cal-search-youngdo-cb"]').forEach(cb => cb.checked = false);
+        }
+    }
+    function handleCalYongdoOther(otherCb) {
+        if (otherCb.checked) {
+            const allCb = document.getElementById('cal-search-youngdo-all');
+            if (allCb) allCb.checked = false;
+        }
+    }
+    function toggleCalYongdoDropdown(ev) {
+        ev.stopPropagation();
+        const dd = document.getElementById('cal-search-youngdo-dropdown');
+        const btn = document.getElementById('cal-search-youngdo-btn');
+        if (!dd || !btn) return;
+        const isHidden = dd.classList.contains('content-hidden');
+        dd.classList.toggle('content-hidden', !isHidden);
+        btn.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        if (isHidden) document.addEventListener('click', closeCalYongdoDropdownOnce);
+    }
+    function closeCalYongdoDropdownOnce() {
+        const dd = document.getElementById('cal-search-youngdo-dropdown');
+        if (dd) dd.classList.add('content-hidden');
+        const btn = document.getElementById('cal-search-youngdo-btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', closeCalYongdoDropdownOnce);
+        updateCalYongdoLabel();
+    }
+    function updateCalYongdoLabel() {
+        const label = document.getElementById('cal-search-youngdo-label');
+        if (!label) return;
+        const allCb = document.getElementById('cal-search-youngdo-all');
+        const sels = getSelectedCalYongdoValues();
+        if (allCb && allCb.checked) { label.textContent = '용도'; return; }
+        if (sels.length === 0) { label.textContent = '용도'; return; }
+        const display = sels.map(v => v === '__pre__' ? '등록전' : v);
+        label.textContent = display.join(',');
+        const btn = document.getElementById('cal-search-youngdo-btn');
+        if (btn) btn.classList.add('filter-active-input');
     }
 
     function updateCalendarStatusLabel() {
@@ -10549,24 +11304,24 @@ MJ 이정우 팀장
         tables.forEach(table => {
             forceRemoveNodes(table);
 
-            // 헤더가 10개를 초과하면 11번째부터 잘라내기 (입찰가 컬럼까지 10개 유지)
+            // 헤더가 11개를 초과하면 12번째부터 잘라내기 (용도+입찰가 컬럼까지 11개 유지)
             const headerRow = table.querySelector('thead tr');
             if (headerRow) {
-                while (headerRow.children && headerRow.children.length > 10) {
-                    try { headerRow.removeChild(headerRow.children[10]); } catch (e) { break; }
+                while (headerRow.children && headerRow.children.length > 11) {
+                    try { headerRow.removeChild(headerRow.children[11]); } catch (e) { break; }
                 }
             }
 
-            // 바디 행도 10개 초과 셀 제거
+            // 바디 행도 11개 초과 셀 제거
             const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
             bodyRows.forEach(row => {
                 // item-col-action을 우선 제거
                 Array.from(row.querySelectorAll('td.item-col-action, th.item-col-action')).forEach(n => {
                     try { n.remove(); } catch (e) { }
                 });
-                // 남아있으면 11번째 이상을 강제로 자름 (입찰가 컬럼까지 10개 유지)
-                while (row.cells && row.cells.length > 10) {
-                    try { row.deleteCell(10); } catch (e) { break; }
+                // 남아있으면 12번째 이상을 강제로 자름 (용도+입찰가 컬럼까지 11개 유지)
+                while (row.cells && row.cells.length > 11) {
+                    try { row.deleteCell(11); } catch (e) { break; }
                 }
             });
         });
@@ -10577,7 +11332,7 @@ MJ 이정우 팀장
         // 로딩 메시지 row의 colspan이 깨졌을 수 있어 보정
         const firstRowTd = document.querySelector('#dataTableBody tr td[colspan]');
         if (firstRowTd) {
-            firstRowTd.setAttribute('colspan', '10');
+            firstRowTd.setAttribute('colspan', '11');
         }
     }
 
@@ -17393,9 +18148,13 @@ ${token}
         });
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400 text-xs">조회 결과가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-gray-400 text-xs">조회 결과가 없습니다.</td></tr>';
             return;
         }
+        // 현재 회차의 종목 타입 (CLASS / PT / 돈클) → 허용 용도 결정
+        const _d1info = (typeof allClassD1Data !== 'undefined') ? allClassD1Data.find(d => String(d.class_d1_id) === String(selectedClassD1Id)) : null;
+        const _curClassType = _d1info ? String(_d1info.class_type || '') : '';
+        const _allowedYongdoSet = (typeof getAllowedYongdoForClassType === 'function') ? getAllowedYongdoForClassType(_curClassType) : new Set(['', 'PT, 단투', '플래티넘', '블랙', '실버', '돈클수익', '돈클월세']);
 
         filtered.sort((a, b) => {
             const va = String(a[d1PickerSortKey_] || '');
@@ -17416,17 +18175,27 @@ ${token}
             const alreadyIn = String(it.class_d1_id||'') === String(selectedClassD1Id||'');
             // 입찰/추천/취소 상태는 다른 회차/회원에서 이미 사용 중 → 신규 회차 등록 금지
             const lockedStatus = ['입찰','추천','취소'].includes(String(it.stu_member || '').trim());
-            const disabled = alreadyIn || lockedStatus;
+            // 용도 dim: 현재 종목(CLASS/PT/돈클)에서 허용 안 되는 용도 → 등록 불가
+            const _itemYongdo = String(it.items_youngdo || '').trim();
+            // 정규화 매칭 (공백/콤마 무시) - PT,단투 vs PT, 단투 등 흡수
+            const yongdoBlocked = !(typeof isYongdoAllowedForClassType === 'function')
+                ? !_allowedYongdoSet.has(_itemYongdo)
+                : !isYongdoAllowedForClassType(_itemYongdo, _curClassType);
+            const disabled = alreadyIn || lockedStatus || yongdoBlocked;
             const imgDot = (it.image_ids || it.image_id)
                 ? '<span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500"></span>' : '';
             const statusCls = getStatusTagClass ? getStatusTagClass(it.stu_member) : '';
+            const yongdoCls = (typeof getYongdoTagClass === 'function') ? getYongdoTagClass(_itemYongdo) : '';
+            const yongdoLabel = (typeof getYongdoDisplayLabel === 'function') ? getYongdoDisplayLabel(_itemYongdo) : (_itemYongdo || '등록전');
             const rowBg = inCart ? 'bg-indigo-50 border-l-4 border-indigo-400'
+                        : yongdoBlocked ? 'yongdo-row-dim'
                         : disabled ? 'bg-gray-50 opacity-50' : '';
             const cursor = disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-indigo-50 focus:outline-none focus:bg-indigo-100';
             const tabIdx = disabled ? '' : 'tabindex="0"';
             const kd = disabled ? '' : `onkeydown="d1PickerRowKeydown_(event,'${it.id}')"`;
             const titleText = alreadyIn ? '이미 이 회차에 등록된 물건'
                             : lockedStatus ? `'${it.stu_member}' 상태의 물건은 등록할 수 없습니다`
+                            : yongdoBlocked ? `'${_curClassType||'CLASS'}' 종목에는 용도 '${yongdoLabel}' 물건을 등록할 수 없습니다`
                             : '클릭하면 우측에 추가됩니다';
             return `<tr class="${cursor} transition-colors ${rowBg}" ${tabIdx} ${kd}
                 onclick="${disabled ? '' : `d1PickerClickRow('${it.id}')`}"
@@ -17435,6 +18204,7 @@ ${token}
                 <td class="item-col-img text-center">${imgDot}</td>
                 <td class="item-col-sakun text-left font-medium ${inCart?'text-indigo-700':'text-gray-800'}">${escapeHtml(it.sakun_no||'')}</td>
                 <td class="item-col-court text-left text-gray-600">${escapeHtml(it.court||'')}</td>
+                <td class="item-col-youngdo text-center"><span class="${yongdoCls}">${escapeHtml(yongdoLabel)}</span></td>
                 <td class="item-col-status text-center"><span class="${statusCls}">${escapeHtml(it.stu_member||'')}</span></td>
                 <td class="item-col-member text-center text-gray-700 max-w-[70px] truncate overflow-hidden" style="max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(it.m_name||'')}">${escapeHtml(it.m_name||'')}</td>
                 <td class="item-col-manager text-center text-gray-500">${escapeHtml(it.m_name_id||'')}</td>
@@ -17467,7 +18237,7 @@ ${token}
             // 이미 있으면 제거 (토글)
             d1PickerCart = d1PickerCart.filter(c => String(c.id) !== String(itemId));
         } else {
-            d1PickerCart.push({ id: item.id, sakun_no: item.sakun_no, court: item.court, stu_member: item.stu_member, m_name: item.m_name, 'in-date': item['in-date'] || '', m_name_id: item.m_name_id || '' });
+            d1PickerCart.push({ id: item.id, sakun_no: item.sakun_no, court: item.court, stu_member: item.stu_member, m_name: item.m_name, 'in-date': item['in-date'] || '', m_name_id: item.m_name_id || '', items_youngdo: item.items_youngdo || '' });
         }
         renderD1ItemPickerList();
         d1PickerRenderCart_();
@@ -17506,16 +18276,20 @@ ${token}
         if (cartArrow) cartArrow.textContent = d1CartSortAsc_ ? ' ↑' : ' ↓';
 
         if (list.length === 0) {
-            cart.innerHTML = '<tr><td colspan="7" class="text-xs text-gray-400 text-center py-4">' + (searchKw ? '조회 결과 없음' : '클릭하면 추가됩니다') + '</td></tr>';
+            cart.innerHTML = '<tr><td colspan="8" class="text-xs text-gray-400 text-center py-4">' + (searchKw ? '조회 결과 없음' : '클릭하면 추가됩니다') + '</td></tr>';
             return;
         }
         cart.innerHTML = list.map(c => {
             const statusCls = getStatusTagClass ? getStatusTagClass(c.stu_member) : '';
+            const yongdoVal = String(c.items_youngdo || '').trim();
+            const yongdoCls = (typeof getYongdoTagClass === 'function') ? getYongdoTagClass(yongdoVal) : '';
+            const yongdoLabel = (typeof getYongdoDisplayLabel === 'function') ? getYongdoDisplayLabel(yongdoVal) : (yongdoVal || '등록전');
             const dateShort = String(c['in-date'] || '').replace(/-/g, '').substring(2, 8) || '-';
             return `<tr class="hover:bg-indigo-50 border-b border-gray-100">
                 <td class="item-col-date text-center text-gray-500 whitespace-nowrap">${escapeHtml(dateShort)}</td>
                 <td class="item-col-sakun font-medium text-gray-800 overflow-hidden" style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.sakun_no||'')}</td>
                 <td class="item-col-court text-gray-600 overflow-hidden" style="max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.court||'')}</td>
+                <td class="item-col-youngdo text-center"><span class="${yongdoCls} text-[10px]">${escapeHtml(yongdoLabel)}</span></td>
                 <td class="item-col-status text-center"><span class="${statusCls} text-[10px]">${escapeHtml(c.stu_member||'')}</span></td>
                 <td class="item-col-member text-center text-gray-700 overflow-hidden" style="max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.m_name||'')}">${escapeHtml(c.m_name||'')}</td>
                 <td class="item-col-manager text-center text-gray-500">${escapeHtml(c.m_name_id||'')}</td>
@@ -17806,7 +18580,7 @@ ${token}
         const arrow = k => d1ItemsSortKey_ === k ? (d1ItemsSortAsc_ ? ' ↑' : ' ↓') : '';
         let tbodyHtml;
         if (data.length === 0) {
-            tbodyHtml = '<tr><td colspan="9" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
+            tbodyHtml = '<tr><td colspan="11" class="text-gray-400 py-4 text-xs text-center">등록된 물건이 없습니다.</td></tr>';
         } else {
             const sorted = data.slice().sort((a, b) => {
                 const va = String(a[d1ItemsSortKey_] || '');
@@ -17841,6 +18615,7 @@ ${token}
                     <td class="item-col-img list-img-cell text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${imgHtml}</td>
                     <td class="item-col-sakun text-left font-medium cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.sakun_no||'')}</td>
                     <td class="item-col-court text-left cursor-pointer" onclick="openDetailModalById('${item.id}')">${escapeHtml(item.court||'')}</td>
+                    <td class="item-col-youngdo text-center cursor-pointer" onclick="openDetailModalById('${item.id}')"><span class="${getYongdoTagClass(item.items_youngdo||'')}">${getYongdoDisplayLabel(item.items_youngdo||'')}</span></td>
                     <td class="item-col-status text-center cursor-pointer" onclick="openDetailModalById('${item.id}')"><span class="${sc}">${escapeHtml(item.stu_member||'-')}</span></td>
                     <td class="item-col-deadline text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${deadlineCell}</td>
                     <td class="item-col-telegram text-center cursor-pointer" onclick="openDetailModalById('${item.id}')">${tHtml}</td>
@@ -17860,6 +18635,7 @@ ${token}
                     <th class="item-col-img text-center font-bold text-gray-700 py-2.5">IMG</th>
                     <th class="item-col-sakun text-left font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('sakun_no')">사건번호${arrow('sakun_no')}</th>
                     <th class="item-col-court text-left font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('court')">법원${arrow('court')}</th>
+                    <th class="item-col-youngdo text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('items_youngdo')">용도${arrow('items_youngdo')}</th>
                     <th class="item-col-status text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('stu_member')">상태${arrow('stu_member')}</th>
                     <th class="item-col-deadline text-center font-bold text-gray-700 py-2.5 cursor-pointer hover:bg-gray-100 select-none" onclick="d1ItemsSort_('bid_datetime_2')" title="최종마감까지 진행률 (chuchen_date ~ bid_datetime_2)">마감${arrow('bid_datetime_2')}</th>
                     <th class="item-col-telegram text-center font-bold text-gray-700 py-2.5">T</th>

@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>옥션원 크롤링 매니저</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 옥션원 실제 CSS (auction1.co.kr 에서 다운로드, url() 절대경로 치환됨) -->
+<link rel="stylesheet" href="auction1-css/common.css">
+<link rel="stylesheet" href="auction1-css/aside.css">
+<link rel="stylesheet" href="auction1-css/btn_box.css">
+<link rel="stylesheet" href="auction1-css/input_box.css">
+<link rel="stylesheet" href="auction1-css/tooltip.css">
+<!-- 추가 (사이드바·추가필터 섹션 등 옥션원에 없는 부분 한정) -->
+<link rel="stylesheet" href="overlay.css?v=31">
+</head>
+<body>
+
+<!-- 상단 바 (옥션원 톤) -->
+<div id="topShell">
+  <div id="topShellInner">
+    <div class="brand"><a href="javascript:location.reload()"><img src="https://www.auction1.co.kr/img/icon/logo_icon.png" alt="옥션원" onerror="this.style.display='none'"> <span>옥션원 크롤링 매니저</span></a></div>
+    <div class="topShellMeta">로컬 전용 · 종합검색 미러</div>
+  </div>
+</div>
+
+<div id="appLayout">
+
+  <!-- 좌측 사이드바: 저장된 크롤링 -->
+  <aside id="sideShell">
+    <div class="snb_title">크롤링 리스트</div>
+    <div class="side-actions">
+      <button id="btnNewTop" class="btn_box_sss btn_blue bold" type="button">+ 만들기</button>
+    </div>
+    <ul id="sideList" class="snb_ul"></ul>
+    <div id="sideEmpty" class="side-empty">
+      저장된 크롤링이 없습니다.<br>
+      <span class="f10 gray">우측 [크롤링 만들기]로 추가하세요.</span>
+    </div>
+  </aside>
+
+  <!-- 우측 메인 -->
+  <main id="mainShell">
+
+    <div id="topBar">
+      <button id="btnNewMain" class="btn_box_sss btn_blue bold" type="button">+ 크롤링 만들기</button>
+      <span class="bar-sp"></span>
+      <span id="statusMsg" class="f11 blue"></span>
+    </div>
+
+    <!-- 빈 상태 안내 -->
+    <section id="emptyHint" class="empty-hint">
+      <div class="empty-card">
+        <div class="empty-title">크롤링 만들기</div>
+        <div class="empty-desc">
+          상단 <b>[+ 크롤링 만들기]</b> 또는 좌측 사이드바의 <b>+ 만들기</b> 를 누르면<br>
+          크롤링 제목과 검색 조건을 입력할 수 있습니다.
+        </div>
+      </div>
+    </section>
+
+    <!-- 만들기/편집 패널 -->
+    <section id="editorPanel" class="hidden">
+
+      <div class="panel-head">
+        <div class="panel-title">
+          <span id="editorMode" class="f24 bold_900">새 크롤링 등록</span>
+          <span id="editorIdBadge" class="f11 gray"></span>
+        </div>
+        <div class="panel-head-actions">
+          <button id="btnDuplicate" class="btn_box_sss btn_white bold hidden" type="button" title="현재 크롤링을 복사 — 제목만 비우고 새로 저장">📋 복사하기</button>
+          <button id="btnDelete" class="btn_box_sss btn_white bold hidden" type="button">삭제</button>
+          <button id="btnCancel" class="btn_box_sss btn_white bold" type="button">취소</button>
+          <button id="btnSave" class="btn_box_sss btn_blue bold" type="button">저장</button>
+        </div>
+      </div>
+
+      <!-- 제목 -->
+      <div class="title-row">
+        <span class="title-label">크롤링 제목</span>
+        <input type="text" id="presetTitle" class="title-input" placeholder="예: 서울 아파트 진행물건 5억 이하">
+      </div>
+
+      <!-- 옥션원 종합검색 폼 (실제 클래스 사용) -->
+      <div class="section-h">데이터 필터링 조건 (종합검색)</div>
+      <div class="search_form" style="width:1200px;">
+        <form id="filterForm" autocomplete="off" onsubmit="return false;">
+          <table class="tbl_fmSrch" cellpadding="0" cellspacing="0" style="width:1200px;table-layout:fixed;">
+            <colgroup><col style="width:85px"><col style="width:295px"><col style="width:85px"><col style="width:340px"><col style="width:85px"><col style="width:310px"></colgroup>
+            <tbody>
+
+              <!-- row: 법원/사건/감정가 -->
+              <tr>
+                <th>법원선택</th>
+                <td>
+                  <select name="court" id="f_court"></select>
+                  <select name="branch" id="f_branch"><option value="">계</option></select>
+                </td>
+                <th>사건번호</th>
+                <td>
+                  <select name="caseYear" id="f_caseYear"></select>
+                  <span>타경</span>
+                  <input type="text" name="caseNo" id="f_caseNo" size="10">
+                </td>
+                <th>감정가격</th>
+                <td class="price-cell" data-price-target="appr">
+                  <span class="price-row">
+                    <input type="text" name="apprMin" class="unite_ju min_price price-inp" data-numfmt="1" data-price-key="apprMin"><span class="suf">만원~</span>
+                    <input type="text" name="apprMax" class="unite_ju max_price price-inp" data-numfmt="1" data-price-key="apprMax"><span class="suf">만원</span>
+                  </span>
+                </td>
+              </tr>
+
+              <!-- row: 물건현황/물건종류/최저가격 -->
+              <tr>
+                <th>물건현황</th>
+                <td>
+                  <select name="status" id="f_status"></select>
+                  <span>유찰</span>
+                  <input type="text" name="failMin" class="failcnt-inp" data-numfmt="1">
+                  <span>~</span>
+                  <input type="text" name="failMax" class="failcnt-inp" data-numfmt="1">
+                  <span>회</span>
+                </td>
+                <th>물건종류</th>
+                <td>
+                  <select name="propType" id="f_propType"></select>
+                  <button type="button" id="btnMultiProp" class="btn_box_sss form-side-btn">복수선택</button>
+                  <div id="multiPropTags" class="multi-tags"></div>
+                </td>
+                <th>최저가격</th>
+                <td class="price-cell" data-price-target="low">
+                  <span class="price-row">
+                    <input type="text" name="lowMin" class="unite_ju min_price price-inp" data-numfmt="1" data-price-key="lowMin"><span class="suf">만원~</span>
+                    <input type="text" name="lowMax" class="unite_ju max_price price-inp" data-numfmt="1" data-price-key="lowMax"><span class="suf">만원</span>
+                  </span>
+                </td>
+              </tr>
+
+              <!-- row: 매각기일/건물면적(2줄)/대지면적(2줄) -->
+              <tr>
+                <th>매각기일</th>
+                <td>
+                  <input type="date" name="bidDateFrom">
+                  <span>~</span>
+                  <input type="date" name="bidDateTo">
+                </td>
+                <th>건물면적</th>
+                <td>
+                  <div class="area-row">
+                    <input type="text" name="bldArea1Min" class="area-inp" data-area-unit="m2" data-area-pair="bldArea2Min" size="5"><span>㎡~</span>
+                    <input type="text" name="bldArea1Max" class="area-inp" data-area-unit="m2" data-area-pair="bldArea2Max" size="5"><span>㎡</span>
+                  </div>
+                  <div class="area-row">
+                    <input type="text" name="bldArea2Min" class="area-inp" data-area-unit="py" data-area-pair="bldArea1Min" size="5"><span>평~</span>
+                    <input type="text" name="bldArea2Max" class="area-inp" data-area-unit="py" data-area-pair="bldArea1Max" size="5"><span>평</span>
+                  </div>
+                </td>
+                <th>대지면적</th>
+                <td>
+                  <div class="area-row">
+                    <input type="text" name="lndArea1Min" class="area-inp" data-area-unit="m2" data-area-pair="lndArea2Min" size="5"><span>㎡~</span>
+                    <input type="text" name="lndArea1Max" class="area-inp" data-area-unit="m2" data-area-pair="lndArea2Max" size="5"><span>㎡</span>
+                  </div>
+                  <div class="area-row">
+                    <input type="text" name="lndArea2Min" class="area-inp" data-area-unit="py" data-area-pair="lndArea1Min" size="5"><span>평~</span>
+                    <input type="text" name="lndArea2Max" class="area-inp" data-area-unit="py" data-area-pair="lndArea1Max" size="5"><span>평</span>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- row: 보존등기일 / (빈) / 지번범위 -->
+              <tr>
+                <th>보존등기일</th>
+                <td>
+                  <input type="date" name="regDateFrom">
+                  <span>~</span>
+                  <input type="date" name="regDateTo">
+                </td>
+                <th class="empty-th"></th>
+                <td class="empty-td"></td>
+                <th>지번범위</th>
+                <td>
+                  <select name="lotKind">
+                    <option value="">전체</option>
+                    <option value="2">일반</option>
+                    <option value="1">산</option>
+                  </select>
+                  <input type="text" name="lotFrom" size="3">
+                  <span>~</span>
+                  <input type="text" name="lotTo" size="3">
+                </td>
+              </tr>
+
+              <!-- row: 주소선택 (보존등기일 아래) / (빈) / 건물명칭 (지번범위 아래) -->
+              <tr>
+                <th>주소선택</th>
+                <td colspan="3" class="addr-cell">
+                  <select name="addrSido" id="f_addrSido" class="sel-addr"><option value="">-시/도-</option></select><select name="addrGugun" id="f_addrGugun" class="sel-addr"><option value="">-구/군-</option></select><select name="addrDong" id="f_addrDong" class="sel-addr"><option value="">-읍/면/동-</option></select><button type="button" id="btnAddrAdd" class="btn_box_sss form-side-btn addr-add-btn">추가</button>
+                  <span class="f10 gray" style="margin-left:8px;">시/도만 또는 시/도+구/군 등 어떤 조합이든 [추가]</span>
+                </td>
+                <th>건물명칭</th>
+                <td>
+                  <input type="text" name="bldName" size="14">
+                </td>
+              </tr>
+
+              <!-- row: 추가주소 (태그) -->
+              <tr>
+                <th>추가주소</th>
+                <td colspan="5">
+                  <div id="addrTags" class="addr-tags"></div>
+                  <span class="f10 gray">최대 20개 추가 가능</span>
+                </td>
+              </tr>
+
+              <!-- row: 특수물건 / 정렬방법+목록수 / 경매절차 (옥션원 동일 한 줄) -->
+              <tr>
+                <th>특수물건</th>
+                <td>
+                  <select name="special" id="f_special" style="width:100%;"></select>
+                </td>
+                <th>정렬방법</th>
+                <td>
+                  <select name="orderBy" id="f_orderBy" style="width:120px;"></select>
+                  <select name="pageSize" id="f_pageSize" style="width:70px;margin-left:4px;">
+                    <option value="">목록수</option>
+                    <option>20</option><option>30</option><option>40</option><option>50</option>
+                    <option>60</option><option>70</option><option>80</option><option>90</option><option>100</option>
+                  </select>
+                </td>
+                <th>경매절차</th>
+                <td>
+                  <select name="procType">
+                    <option value="">임의/강제</option>
+                    <option value="4">임의경매</option>
+                    <option value="5">강제경매</option>
+                  </select>
+                </td>
+              </tr>
+
+            </tbody>
+          </table>
+
+          <div class="form-actions">
+            <button type="button" id="btnReset" class="btn_box_sss btn_white bold">다시</button>
+            <button type="button" id="btnRunCrawl" class="btn_box_sss btn_blue bold">크롤링 실행</button>
+            <button type="button" id="btnCancelCrawl" class="btn_box_sss btn_red bold hidden" title="진행 중인 페이지 순회 중지 — 그때까지 받은 결과는 유지">⏹ 중지</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- 추가 필터링 조건 -->
+      <div class="section-h">
+        추가 필터링 조건
+        <span class="f10 gray">옥션원 검색 후 결과에 적용할 자체 필터 — 종류는 한번 등록하면 다음 만들기에 재사용</span>
+      </div>
+      <div class="cust-filter-box">
+        <div id="custFilterRows" class="cust-rows"></div>
+        <div class="cust-actions">
+          <button type="button" id="btnAddCustRow" class="btn_box_sss btn_white">+ 필터 조건 추가</button>
+          <button type="button" id="btnManageTypes" class="btn_box_sss btn_white">필터 종류 관리</button>
+          <button type="button" id="btnRefilter" class="btn_box_sss btn_blue" title="크롤링 안 하고 캐시된 결과에 현재 필터 다시 적용">⚡ 다시 필터하기</button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 검색 결과 영역 (옥션원 ca_list.php 동일 구조) -->
+    <section id="resultPanel" class="hidden" style="width:1232px;box-sizing:border-box;">
+
+      <!-- 결과 헤더 + 정렬 탭 (옥션원 동일) -->
+      <div class="result-head">
+        <div class="result-title">
+          <span id="resTitle" class="bold blue">법원전체</span>
+          <span class="view-tabs">
+            <button type="button" id="viewTabFiltered" class="view-tab active">필터링 <b id="resCountFiltered">0</b></button>
+            <button type="button" id="viewTabAll" class="view-tab">전체 <b id="resCountAll">0</b></button>
+          </span>
+          <span id="resCount" class="content-hidden">0</span>
+          <span id="resTimestamp" class="f11 res-timestamp"></span>
+        </div>
+        <div class="result-sort-tabs" id="sortBar">
+          <span class="f11 gray">정렬:</span>
+          <select class="sort-sel" data-group="sakun" title="사건번호 셀 — 사건번호/물건종류 선택">
+            <option value="">사건번호 셀</option>
+            <option value="sakun_no">사건번호</option>
+            <option value="prop_kind">물건종류</option>
+          </select>
+          <button type="button" class="sort-tab" data-sort="address">소재지</button>
+          <select class="sort-sel" data-group="price" title="가격 셀 — 감정가/최저가/평당가/유찰율 선택">
+            <option value="">가격 셀</option>
+            <option value="appraisal">감정가</option>
+            <option value="low">최저매각가</option>
+            <option value="pyeong">평당가</option>
+            <option value="failrate">유찰율</option>
+          </select>
+          <button type="button" class="sort-tab" data-sort="failcnt">유찰횟수</button>
+          <select class="sort-sel" data-group="bid" title="매각기일 셀 — 날짜/입찰N일전 선택">
+            <option value="">매각기일 셀</option>
+            <option value="biddate">매각기일</option>
+            <option value="biddays">입찰N일전</option>
+          </select>
+          <button type="button" class="sort-tab" data-sort="view">조회수</button>
+          <button type="button" class="sort-tab sort-clear" id="btnSortClear" title="정렬 해제">↺</button>
+        </div>
+      </div>
+
+      <!-- 결과 액션 바 -->
+      <div class="result-action">
+        <label><input type="checkbox" id="resCheckAll"> 전체</label>
+        <button type="button" class="btn_box_sss btn_white">전체보기</button>
+        <button type="button" class="btn_box_sss btn_white">선택보기</button>
+        <button type="button" class="btn_box_sss btn_white">선택인쇄</button>
+        <button type="button" class="btn_box_sss btn_white">관심없음</button>
+        <span class="bar-sp"></span>
+        <button type="button" id="btnUploadMaps" class="btn_box_sss btn_blue bold">선택 → MAPS 업로드</button>
+      </div>
+
+      <!-- 결과 테이블 (1200px 로 확장, 컬럼 비율 유지) -->
+      <table class="tbl_list" cellpadding="0" cellspacing="0" style="width:1200px;table-layout:fixed;">
+        <colgroup>
+          <col style="width:39px">
+          <col style="width:140px">
+          <col style="width:133px">
+          <col style="width:466px">
+          <col style="width:139px">
+          <col style="width:82px">
+          <col style="width:126px">
+          <col style="width:75px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="no_print"><input type="checkbox" id="resColCheckAll"></th>
+            <th>사진</th>
+            <th>사건번호(물번)<br>물건종류</th>
+            <th>소재지</th>
+            <th>감정가<br>최저매각가<br>평당가</th>
+            <th>진행<br>상태</th>
+            <th>매각기일<br>(시간)</th>
+            <th class="right no_print">조회수</th>
+          </tr>
+        </thead>
+        <tbody id="resBody">
+          <tr><td colspan="8" class="center" style="padding:40px 0;color:#888;">크롤링 실행 시 결과가 여기에 표시됩니다.</td></tr>
+        </tbody>
+      </table>
+
+      <!-- 페이지네이션 placeholder -->
+      <div id="resPaging" class="result-paging"></div>
+
+    </section>
+
+  </main>
+</div>
+
+<!-- 복수선택 모달 -->
+<div id="multiPropModal" class="modal hidden">
+  <div class="modal-bg"></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="bold">물건종류 복수선택</span>
+      <button class="btn_box_sss btn_white" id="multiPropClose" type="button">닫기</button>
+    </div>
+    <div id="multiPropList" class="modal-body"></div>
+    <div class="modal-foot">
+      <button class="btn_box_sss btn_white" id="multiPropClear" type="button">전체해제</button>
+      <button class="btn_box_sss btn_blue bold" id="multiPropApply" type="button">적용</button>
+    </div>
+  </div>
+</div>
+
+<!-- 관심물건 메모 모달 -->
+<div id="memoModal" class="modal hidden">
+  <div class="modal-bg"></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="bold" id="memoModalTitle">관심물건 메모</span>
+      <button class="btn_box_sss btn_white" id="memoModalClose" type="button">닫기</button>
+    </div>
+    <div id="memoModalBody" class="modal-body"></div>
+  </div>
+</div>
+
+<script src="data.js?v=31"></script>
+<script src="app.js?v=31"></script>
+</body>
+</html>

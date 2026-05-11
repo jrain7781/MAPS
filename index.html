@@ -279,10 +279,69 @@
                     <!-- 경계 ①↔② -->
                     <div class="dash-col-resizer" data-left="dashCol1" data-right="dashCol2"></div>
 
-                    <!-- ② 물건 상태 관리 -->
-                    <div id="dashCol2" style="flex:0 0 41.7%; min-width:180px; padding:0 8px; box-sizing:border-box;">
+                    <!-- ② 물건 용도 관리 + 물건 상태 관리 (위/아래 분할) -->
+                    <div id="dashCol2" style="flex:0 0 41.7%; min-width:180px; padding:0 8px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px;">
+                        <!-- ②-위: 물건 용도 관리 -->
                         <div style="position:relative;">
-                            <div id="statusManagementCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:750px;">
+                            <div id="yongdoManagementCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:434px;">
+                                <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <h2 class="text-sm font-bold text-gray-800">물건 용도 관리</h2>
+                                        <div class="flex items-center gap-2">
+                                            <button id="yongdoBidMoveBtn" onclick="goToItemManagementFromYongdoSelection()"
+                                                class="hidden text-xs bg-blue-500 text-white rounded px-2 py-1 hover:bg-blue-600">물건관리이동</button>
+                                            <select id="yongdoFilterMember" onchange="renderYongdoManagementDashboard()"
+                                                class="text-xs text-gray-800 bg-gray-50 border border-gray-300 rounded px-2 py-1 focus:outline-none cursor-pointer">
+                                                <option value="All">전체</option>
+                                                <option value="대표님" selected>대표님</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex-1 overflow-y-auto">
+                                    <table id="yongdoTable" class="w-full text-center border-collapse text-sm" style="table-layout:fixed;">
+                                        <colgroup id="yongdoTableColgroup">
+                                            <col style="width:30%;">
+                                            <col style="width:9%;">
+                                            <col style="width:9%;">
+                                            <col style="width:9%;">
+                                            <col style="width:9%;">
+                                            <col style="width:8%;">
+                                            <col style="width:8%;">
+                                            <col style="width:8%;">
+                                            <col style="width:10%;">
+                                        </colgroup>
+                                        <thead class="sticky top-0 bg-gray-50 z-10">
+                                            <tr class="border-b border-gray-200 text-gray-600 text-sm leading-normal">
+                                                <th class="py-2 px-2 font-bold border-r text-center" style="position:relative;">날짜<div class="th-resize-handle" data-yongdo-col="0"></div></th>
+                                                <th class="py-2 px-1 font-bold" style="position:relative;"><div class="flex items-center justify-center gap-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="__all__" onchange="toggleAllYongdoColumn(this)"><span>상품</span></div><div class="th-resize-handle" data-yongdo-col="1"></div></th>
+                                                <th class="py-2 px-1 font-bold" style="position:relative;"><div class="flex items-center justify-center gap-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="__pre__" onchange="toggleAllYongdoColumn(this)"><span>등록전</span></div><div class="th-resize-handle" data-yongdo-col="2"></div></th>
+                                                <th class="py-2 px-1 font-bold" style="position:relative;"><div class="flex items-center justify-center gap-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="플래티넘" onchange="toggleAllYongdoColumn(this)"><span>플래티넘</span></div><div class="th-resize-handle" data-yongdo-col="3"></div></th>
+                                                <th class="py-2 px-1 font-bold" style="position:relative;"><div class="flex items-center justify-center gap-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="블랙" onchange="toggleAllYongdoColumn(this)"><span>블랙</span></div><div class="th-resize-handle" data-yongdo-col="4"></div></th>
+                                                <th class="py-2 px-1 font-bold" style="position:relative;"><div class="flex items-center justify-center gap-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="실버" onchange="toggleAllYongdoColumn(this)"><span>실버</span></div><div class="th-resize-handle" data-yongdo-col="5"></div></th>
+                                                <th class="py-2 px-1 font-bold" style="position:relative;"><div class="flex items-center justify-center gap-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="돈클수익" onchange="toggleAllYongdoColumn(this)"><span>돈클수익</span></div><div class="th-resize-handle" data-yongdo-col="6"></div></th>
+                                                <th class="py-2 px-1 font-bold" style="position:relative;"><div class="flex items-center justify-center gap-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="돈클월세" onchange="toggleAllYongdoColumn(this)"><span>돈클월세</span></div><div class="th-resize-handle" data-yongdo-col="7"></div></th>
+                                                <th class="py-2 px-1 font-bold"><div class="flex items-center justify-center gap-1"><input type="checkbox" class="yongdo-col-all cursor-pointer" data-yongdo="PT, 단투" onchange="toggleAllYongdoColumn(this)"><span>PT, 단투</span></div></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="yongdoTableBody" class="text-gray-700 text-sm text-nowrap">
+                                            <tr>
+                                                <td colspan="9" class="py-4 text-center">데이터 로딩 중...</td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot id="yongdoTableFoot"
+                                            class="sticky bottom-0 bg-blue-50 z-10 font-bold border-t-2 border-blue-100">
+                                            <!-- JS에서 채움 -->
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="dash-card-h-resizer" data-card="yongdoManagementCard" data-pair-card="statusManagementCard"></div>
+                        </div>
+
+                        <!-- ②-아래: 물건 상태 관리 -->
+                        <div style="position:relative;">
+                            <div id="statusManagementCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:300px;">
                                 <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
                                     <div class="flex justify-between items-center mb-1">
                                         <h2 class="text-sm font-bold text-gray-800">물건 상태 관리</h2>
@@ -746,6 +805,46 @@
                                                         class="rounded"> 전체</label>
                                             </div>
                                         </div>
+                                        <!-- 용도 다중선택 (입찰물건 관리와 동일) -->
+                                        <div class="relative min-w-[90px] flex-shrink-0" id="cal-search-youngdo-wrap">
+                                            <button type="button" onclick="toggleCalYongdoDropdown(event)" aria-haspopup="listbox"
+                                                aria-expanded="false" id="cal-search-youngdo-btn"
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm flex items-center focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                title="용도">
+                                                <span id="cal-search-youngdo-label" class="flex-1 text-center text-gray-500">용도</span>
+                                                <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                                </svg>
+                                            </button>
+                                            <div id="cal-search-youngdo-dropdown" onclick="event.stopPropagation()"
+                                                class="content-hidden absolute top-full left-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[140px]"
+                                                role="listbox">
+                                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                                    type="checkbox" id="cal-search-youngdo-all" value="All" checked
+                                                    onchange="handleCalYongdoAll(this); renderCalendar()" class="rounded"> 전체</label>
+                                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                                    type="checkbox" name="cal-search-youngdo-cb" value="__pre__"
+                                                    onchange="handleCalYongdoOther(this); renderCalendar()" class="rounded"> 등록전</label>
+                                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                                    type="checkbox" name="cal-search-youngdo-cb" value="플래티넘"
+                                                    onchange="handleCalYongdoOther(this); renderCalendar()" class="rounded"> 플래티넘</label>
+                                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                                    type="checkbox" name="cal-search-youngdo-cb" value="블랙"
+                                                    onchange="handleCalYongdoOther(this); renderCalendar()" class="rounded"> 블랙</label>
+                                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                                    type="checkbox" name="cal-search-youngdo-cb" value="실버"
+                                                    onchange="handleCalYongdoOther(this); renderCalendar()" class="rounded"> 실버</label>
+                                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                                    type="checkbox" name="cal-search-youngdo-cb" value="돈클수익"
+                                                    onchange="handleCalYongdoOther(this); renderCalendar()" class="rounded"> 돈클수익</label>
+                                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                                    type="checkbox" name="cal-search-youngdo-cb" value="돈클월세"
+                                                    onchange="handleCalYongdoOther(this); renderCalendar()" class="rounded"> 돈클월세</label>
+                                                <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                                    type="checkbox" name="cal-search-youngdo-cb" value="PT, 단투"
+                                                    onchange="handleCalYongdoOther(this); renderCalendar()" class="rounded"> PT, 단투</label>
+                                            </div>
+                                        </div>
                                         <!-- 수업 조회 필터 (캐스케이딩) -->
                                         <div class="flex-shrink-0">
                                             <select id="cal-class-type"
@@ -828,7 +927,7 @@
             </div>
 
             <div id="ItemManagement" class="tab-content h-full flex content-hidden item-management-layout">
-                <div id="listPane" class="flex-1 flex flex-col bg-white overflow-y-auto item-list-pane">
+                <div id="listPane" class="flex flex-col bg-white overflow-y-auto item-list-pane">
                     <div id="activeFilterBanner"
                         class="bg-indigo-100 text-indigo-800 px-4 py-2 text-sm font-semibold flex justify-between items-center content-hidden">
                         <span id="activeFilterText">필터 적용 중</span>
@@ -860,6 +959,9 @@
                             <button type="button" onclick="handleItemCaptureListDownload()"
                                 class="list-title-strip-btn flex items-center justify-center text-blue-600 hover:text-blue-800 transition duration-200 border border-blue-200 rounded-md hover:bg-blue-50"
                                 title="물건선택후 버튼을 누르시면 텍스트 파일이 저장 됩니다. 그 파일을 이정우 팀장에게 카톡으로 전달해 주세요">이미지 등록 요청</button>
+                            <button type="button" onclick="handleBulkInvestigationPrint()"
+                                class="list-title-strip-btn flex items-center justify-center text-emerald-700 hover:text-emerald-900 transition duration-200 border border-emerald-200 rounded-md hover:bg-emerald-50"
+                                title="체크된 물건들의 조사이미지 첫 장을 한 페이지씩 모아 일괄 프린트">일괄프린트</button>
 
                             <!-- Group 2: 텔레그램 전송 세트 -->
                             <div class="flex items-center gap-1 flex-shrink-0">
@@ -1023,6 +1125,45 @@
                         </div>
                         <!-- 수업 조회 필터 (2번째 줄) -->
                         <div class="flex flex-wrap gap-2 items-center mt-1.5">
+                            <div class="relative min-w-[90px] flex-shrink-0" id="bid-youngdo-wrap">
+                                <button type="button" onclick="toggleYongdoDropdown(event)" aria-haspopup="listbox"
+                                    aria-expanded="false" id="bid-youngdo-btn"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm flex items-center focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                    title="용도">
+                                    <span id="bid-youngdo-label" class="flex-1 text-center text-gray-500">용도</span>
+                                    <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                </button>
+                                <div id="bid-youngdo-dropdown" onclick="event.stopPropagation()"
+                                    class="content-hidden absolute top-full left-0 z-20 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-2 min-w-[140px]"
+                                    role="listbox">
+                                    <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                        type="checkbox" id="bid-youngdo-all" value="All" checked
+                                        onchange="handleYongdoAll(this); applyFilters()" class="rounded"> 전체</label>
+                                    <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                        type="checkbox" name="bid-youngdo-cb" value="__pre__"
+                                        onchange="handleYongdoOther(this); applyFilters()" class="rounded"> 등록전</label>
+                                    <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                        type="checkbox" name="bid-youngdo-cb" value="플래티넘"
+                                        onchange="handleYongdoOther(this); applyFilters()" class="rounded"> 플래티넘</label>
+                                    <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                        type="checkbox" name="bid-youngdo-cb" value="블랙"
+                                        onchange="handleYongdoOther(this); applyFilters()" class="rounded"> 블랙</label>
+                                    <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                        type="checkbox" name="bid-youngdo-cb" value="실버"
+                                        onchange="handleYongdoOther(this); applyFilters()" class="rounded"> 실버</label>
+                                    <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                        type="checkbox" name="bid-youngdo-cb" value="돈클수익"
+                                        onchange="handleYongdoOther(this); applyFilters()" class="rounded"> 돈클수익</label>
+                                    <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                        type="checkbox" name="bid-youngdo-cb" value="돈클월세"
+                                        onchange="handleYongdoOther(this); applyFilters()" class="rounded"> 돈클월세</label>
+                                    <label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1"><input
+                                        type="checkbox" name="bid-youngdo-cb" value="PT, 단투"
+                                        onchange="handleYongdoOther(this); applyFilters()" class="rounded"> PT, 단투</label>
+                                </div>
+                            </div>
                             <select id="bid-class-type" onchange="onBidClassTypeChange(); applyFilters()"
                                 class="min-w-[90px] px-2 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm bg-white text-center"
                                 title="종목구분">
@@ -1068,6 +1209,9 @@
                                     <th data-sort="court" onclick="sortItemList('court')"
                                         class="item-col-court px-2 py-3 text-left text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none">
                                         법원</th>
+                                    <th data-sort="items_youngdo" onclick="sortItemList('items_youngdo')"
+                                        class="item-col-youngdo px-1 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none">
+                                        용도</th>
                                     <th data-sort="stu_member" onclick="sortItemList('stu_member')"
                                         class="item-col-status px-1 py-3 text-center text-xs md:text-base font-bold text-gray-800 cursor-pointer hover:bg-gray-100 select-none">
                                         상태</th>
@@ -1088,7 +1232,7 @@
                             </thead>
                             <tbody id="dataTableBody" class="bg-white divide-y divide-gray-100">
                                 <tr>
-                                    <td colspan="10" class="p-4 text-center text-gray-500">
+                                    <td colspan="11" class="p-4 text-center text-gray-500">
                                         <div id="loadingIndicator" class="flex justify-center items-center p-4">
                                             <div
                                                 class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 mr-3">
@@ -1108,8 +1252,9 @@
                             </path>
                         </svg></button>
                 </div>
+                <div id="paneResizer" class="pane-resizer" title="드래그해서 폭 조절"></div>
                 <div id="detailPane"
-                    class="flex-1 p-0 md:p-0 overflow-y-auto mobile-hidden flex flex-col item-detail-pane detail-pane-card">
+                    class="p-0 md:p-0 overflow-y-auto mobile-hidden flex flex-col item-detail-pane detail-pane-card">
                     <div class="detail-tab-strip flex flex-shrink-0 items-end flex-wrap gap-2" id="itemDetailTabs">
                         <div class="flex">
                             <button type="button" id="btnTabDetail" onclick="switchItemDetailTab('detail')"
@@ -1194,31 +1339,49 @@
                                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                         </div>
                                         <div class="mb-4">
-                                            <div class="flex justify-between items-center mb-1">
-                                                <label for="form-stu-member"
-                                                    class="block text-sm font-medium text-gray-700">물건상태</label>
-                                                <div class="space-x-1 flex items-center gap-1" id="chuchen-state-buttons">
-                                                    <span id="btn-extend-deadline-info" class="text-[10px] text-gray-500 mr-1 hidden font-mono"></span>
-                                                    <button type="button" onclick="setChuchenState('신규')"
-                                                        id="btn-chuchen-new"
-                                                        class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
-                                                    <button type="button" onclick="setChuchenState('전달완료')"
-                                                        id="btn-chuchen-done"
-                                                        class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
-                                                    <button type="button" onclick="onClickExtendDeadlineSidebar_()"
-                                                        id="btn-extend-deadline"
-                                                        class="text-xs px-2 py-0.5 rounded border bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300 hidden">만기연장</button>
+                                            <div class="flex gap-2">
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex justify-between items-center mb-1">
+                                                        <label for="form-stu-member"
+                                                            class="block text-sm font-medium text-gray-700">물건상태</label>
+                                                        <div class="space-x-1 flex items-center gap-1" id="chuchen-state-buttons">
+                                                            <span id="btn-extend-deadline-info" class="text-[10px] text-gray-500 mr-1 hidden font-mono"></span>
+                                                            <button type="button" onclick="setChuchenState('신규')"
+                                                                id="btn-chuchen-new"
+                                                                class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
+                                                            <button type="button" onclick="setChuchenState('전달완료')"
+                                                                id="btn-chuchen-done"
+                                                                class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
+                                                            <button type="button" onclick="onClickExtendDeadlineSidebar_()"
+                                                                id="btn-extend-deadline"
+                                                                class="text-xs px-2 py-0.5 rounded border bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300 hidden">만기연장</button>
+                                                        </div>
+                                                    </div>
+                                                    <select id="form-stu-member" name="stu_member" required onchange="if(typeof refreshExtendBtnSidebar_==='function')refreshExtendBtnSidebar_()"
+                                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                                        <option value="상품">상품</option>
+                                                        <option value="검증">검증</option>
+                                                        <option value="미정">미정</option>
+                                                        <option value="추천">추천</option>
+                                                        <option value="입찰">입찰</option>
+                                                        <option value="취소">취소</option>
+                                                    </select>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <label for="form-youngdo"
+                                                        class="block text-sm font-medium text-gray-700 mb-1">물건용도</label>
+                                                    <select id="form-youngdo" name="items_youngdo"
+                                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white">
+                                                        <option value="">등록전</option>
+                                                        <option value="플래티넘">플래티넘</option>
+                                                        <option value="블랙">블랙</option>
+                                                        <option value="실버">실버</option>
+                                                        <option value="돈클수익">돈클수익</option>
+                                                        <option value="돈클월세">돈클월세</option>
+                                                        <option value="PT, 단투">PT, 단투</option>
+                                                    </select>
                                                 </div>
                                             </div>
-                                            <select id="form-stu-member" name="stu_member" required onchange="if(typeof refreshExtendBtnSidebar_==='function')refreshExtendBtnSidebar_()"
-                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                                <option value="상품">상품</option>
-                                                <option value="검증">검증</option>
-                                                <option value="미정">미정</option>
-                                                <option value="추천">추천</option>
-                                                <option value="입찰">입찰</option>
-                                                <option value="취소">취소</option>
-                                            </select>
                                         </div>
                                         <div class="col-span-1 md:col-span-2">
                                             <div class="mb-4">
@@ -1238,7 +1401,6 @@
                                                         class="ml-2 text-xs text-gray-500"></span>
                                                 </div>
                                                 <datalist id="member-name-with-myungui-datalist"></datalist>
-                                                <!-- 명의 선택 체크박스 영역 삭제됨 -->
                                             </div>
                                         </div>
                                         <div class="mb-4">
@@ -2186,7 +2348,7 @@
                                     </div>
                                     <div><label class="block text-xs font-medium text-gray-600 mb-1">종목등급</label>
                                         <input type="text" id="cls-class_grade" name="class_grade"
-                                            placeholder="일반, 플레티넘 등"
+                                            placeholder="일반, 플래티넘 등"
                                             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                                             onfocus="this.select()">
                                     </div>
@@ -2479,6 +2641,9 @@
                                             </div>
                                         </div>
                                         <span class="flex-1"></span>
+                                        <button type="button" id="d1-items-print-btn" onclick="handleBulkInvestigationPrintD1_()"
+                                            class="text-sm px-2.5 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold border border-emerald-200 shadow-sm"
+                                            title="체크된 물건들의 조사이미지 첫 장을 한 페이지씩 모아 일괄 프린트">일괄프린트</button>
                                         <button type="button" id="d1-items-delete-btn" onclick="deleteSelectedD1Items_()"
                                             class="text-sm px-2.5 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-semibold border border-red-200 shadow-sm">삭제</button>
                                         <button type="button" id="d1-items-extend-btn" onclick="extendSelectedD1Items_()"
@@ -2632,6 +2797,7 @@
                                             <th class="item-col-img text-center font-bold text-gray-600">IMG</th>
                                             <th class="item-col-sakun text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1PickerSortBy_('sakun_no')">사건번호<span id="dpk-sort-sakun"></span></th>
                                             <th class="item-col-court text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1PickerSortBy_('court')">법원<span id="dpk-sort-court"></span></th>
+                                            <th class="item-col-youngdo text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1PickerSortBy_('items_youngdo')">용도<span id="dpk-sort-youngdo"></span></th>
                                             <th class="item-col-status text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1PickerSortBy_('stu_member')">상태<span id="dpk-sort-status"></span></th>
                                             <th class="item-col-member text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1PickerSortBy_('m_name')">회원<span id="dpk-sort-member"></span></th>
                                             <th class="item-col-manager text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-100 select-none" onclick="d1PickerSortBy_('m_name_id')">담당<span id="dpk-sort-mgr"></span></th>
@@ -2679,6 +2845,7 @@
                                             <th class="item-col-date text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none whitespace-nowrap" onclick="d1CartSort_('in-date')">일자<span id="d1cart-sort-date"></span></th>
                                             <th class="item-col-sakun text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('sakun_no')">사건번호<span id="d1cart-sort-sakun"></span></th>
                                             <th class="item-col-court text-left font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('court')">법원<span id="d1cart-sort-court"></span></th>
+                                            <th class="item-col-youngdo text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('items_youngdo')">용도<span id="d1cart-sort-youngdo"></span></th>
                                             <th class="item-col-status text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('stu_member')">상태<span id="d1cart-sort-status"></span></th>
                                             <th class="item-col-member text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('m_name')">회원<span id="d1cart-sort-member"></span></th>
                                             <th class="item-col-manager text-center font-bold text-gray-600 cursor-pointer hover:bg-gray-200 select-none" onclick="d1CartSort_('m_name_id')">담당<span id="d1cart-sort-mgr"></span></th>
@@ -4206,30 +4373,48 @@
                             <datalist id="modal-court-datalist"></datalist>
                         </div>
                         <div class="mb-4">
-                            <div class="flex justify-between items-center mb-1">
-                                <label class="block text-sm font-medium text-gray-700">물건상태</label>
-                                <div class="flex items-center gap-1" id="modal-chuchen-state-buttons">
-                                    <span id="modal-btn-extend-deadline-info" class="text-[10px] text-gray-500 mr-1 hidden font-mono"></span>
-                                    <button type="button" onclick="setModalChuchenState('신규')"
-                                        id="modal-btn-chuchen-new"
-                                        class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
-                                    <button type="button" onclick="setModalChuchenState('전달완료')"
-                                        id="modal-btn-chuchen-done"
-                                        class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
-                                    <button type="button" onclick="onClickExtendDeadlineModal_()"
-                                        id="modal-btn-extend-deadline"
-                                        class="text-xs px-2 py-0.5 rounded border bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300 hidden">만기연장</button>
+                            <div class="flex gap-2">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <label class="block text-sm font-medium text-gray-700">물건상태</label>
+                                        <div class="flex items-center gap-1" id="modal-chuchen-state-buttons">
+                                            <span id="modal-btn-extend-deadline-info" class="text-[10px] text-gray-500 mr-1 hidden font-mono"></span>
+                                            <button type="button" onclick="setModalChuchenState('신규')"
+                                                id="modal-btn-chuchen-new"
+                                                class="text-xs px-2 py-0.5 rounded border transition bg-gray-100 text-gray-500 border-gray-300">신규</button>
+                                            <button type="button" onclick="setModalChuchenState('전달완료')"
+                                                id="modal-btn-chuchen-done"
+                                                class="text-xs px-2 py-0.5 rounded border transition bg-white text-gray-600 border-gray-300">전달완료</button>
+                                            <button type="button" onclick="onClickExtendDeadlineModal_()"
+                                                id="modal-btn-extend-deadline"
+                                                class="text-xs px-2 py-0.5 rounded border bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-300 hidden">만기연장</button>
+                                        </div>
+                                    </div>
+                                    <select id="modal-form-stu-member" onchange="if(typeof refreshExtendBtnModal_==='function')refreshExtendBtnModal_()"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
+                                        <option value="상품">상품</option>
+                                        <option value="검증">검증</option>
+                                        <option value="미정">미정</option>
+                                        <option value="추천">추천</option>
+                                        <option value="입찰">입찰</option>
+                                        <option value="취소">취소</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <label for="modal-form-youngdo"
+                                        class="block text-sm font-medium text-gray-700 mb-1">물건용도</label>
+                                    <select id="modal-form-youngdo" name="items_youngdo"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-white">
+                                        <option value="">등록전</option>
+                                        <option value="플래티넘">플래티넘</option>
+                                        <option value="블랙">블랙</option>
+                                        <option value="실버">실버</option>
+                                        <option value="돈클수익">돈클수익</option>
+                                        <option value="돈클월세">돈클월세</option>
+                                        <option value="PT, 단투">PT, 단투</option>
+                                    </select>
                                 </div>
                             </div>
-                            <select id="modal-form-stu-member" onchange="if(typeof refreshExtendBtnModal_==='function')refreshExtendBtnModal_()"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
-                                <option value="상품">상품</option>
-                                <option value="검증">검증</option>
-                                <option value="미정">미정</option>
-                                <option value="추천">추천</option>
-                                <option value="입찰">입찰</option>
-                                <option value="취소">취소</option>
-                            </select>
                         </div>
                         <div class="mb-4 md:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">회원명 <span
