@@ -14684,6 +14684,26 @@ ${token}
             const _futureLastIsBlack_ = (remaining === _futureOCount_) && _futureOCount_ > 0;
             // 이월회차: 비활성(종료/홀딩) 회원은 항상 0, 그 외엔 남은 - 미래O
             const _carryOver_ = _isInactiveMember_ ? 0 : Math.max(0, remaining - _futureOCount_);
+            // 미래 ● 시각 정규화: 'O'/'R' 데이터 개수만큼을 가장 빠른 미래 슬롯(휴강·X 제외)에 배치
+            // → 데이터에 ●가 뒤에 몰려있어도 화면엔 가장 빠른 빈 셀부터 ● 표시
+            const _visibleFutureOSet_ = new Set();
+            let _visibleFutureLastLoop_ = -1;
+            {
+                let placed = 0;
+                const targetCount = _futureOCount_;
+                for (let _i = 0; _i < d1List.length && placed < targetCount; _i++) {
+                    const _d = d1List[_i];
+                    const _raw = String(_d.class_date || '').replace(/-/g, '');
+                    const _isFut = _raw !== '' && _raw > todayStr;
+                    if (!_isFut) continue;
+                    if (String(_d.holiday || '') === 'Y') continue;
+                    const _v = String(m['no_' + _d.class_loop] || '').trim().toUpperCase();
+                    if (_v === 'X') continue; // X 위치는 그대로 유지
+                    _visibleFutureOSet_.add(Number(_d.class_loop));
+                    _visibleFutureLastLoop_ = Number(_d.class_loop);
+                    placed++;
+                }
+            }
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
@@ -14725,28 +14745,27 @@ ${token}
                         display = '·'; colorClass = 'text-gray-300 text-[10px]'; cellBg = '';
                     }
                 } else {
-                    // 미래
+                    // 미래 (시각 정규화: visibleFutureOSet에 속한 셀만 ●, 그 외 'O' 데이터는 점)
                     if (val === 'R') {
                         display = '●'; colorClass = 'text-red-600 text-[15px]'; cellBg = '';
-                    } else if (val === 'O') {
-                        const isLastFutureO_ = (Number(loopNo) === _lastFutureOLoop_);
+                    } else if (_visibleFutureOSet_.has(loopNo)) {
+                        // 가장 빠른 미래 슬롯에 ● 배치 (데이터값이 'O'든 빈값이든)
+                        const isLastVisible_ = (loopNo === _visibleFutureLastLoop_);
                         display = '●';
-                        // 검정 = 이번 배치에서 남은회차가 정확히 끝나는 마지막 회차일 때만
-                        colorClass = (isLastFutureO_ && _futureLastIsBlack_)
+                        colorClass = (isLastVisible_ && _futureLastIsBlack_)
                             ? 'text-gray-900 text-[15px]'
                             : 'text-gray-300 text-[15px]';
                         cellBg = '';
                     } else if (val === 'X') {
-                        // 미래 X: ● 범위 내(첫 ● ~ 마지막 ●)에서만 표시. 마지막 ● 이후 X는 빈 점.
-                        const inRange = _firstFutureOLoop_ !== -1
-                            && Number(loopNo) >= _firstFutureOLoop_
-                            && Number(loopNo) <= _lastFutureOLoop_;
+                        // 미래 X: visible ● 범위 내에서만 표시 (마지막 ● 이후 X는 빈 점)
+                        const inRange = _visibleFutureLastLoop_ !== -1 && loopNo <= _visibleFutureLastLoop_;
                         if (inRange) {
                             display = '✕'; colorClass = 'text-gray-400 text-[12px]'; cellBg = '';
                         } else {
                             display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
                         }
                     } else {
+                        // 빈셀 또는 visibleSet에 없는 'O' (시각상 ● 안 보임)
                         display = '·'; colorClass = 'text-gray-200 text-[10px]'; cellBg = '';
                     }
                 }
