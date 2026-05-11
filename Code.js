@@ -140,7 +140,11 @@ const CLASS_D1_HEADERS = [
   '1cha_bid',         // 1차 선택 가능 개수 (R열)
   '2cha_bid',         // 2차 선택 가능 개수 (S열)
   'teacher_id',       // 강사 회원 ID (T열)
-  'bid_datetime_2_origin' // 최종마감 사용자 원본 입력 "{day}|{HH:MM}" (U열)
+  'bid_datetime_2_origin', // 최종마감 사용자 원본 입력 "{day}|{HH:MM}" (U열)
+  'holiday',          // 휴강 여부 Y/N (V열)
+  'holiday_note',     // 휴강 사유 텍스트 (W열)
+  'holiday_backup',   // 휴강 적용 시 변경 전 회원 셀 백업 JSON (X열)
+  'class_d1_note'     // 회차별 수업비고 (Y열)
 ];
 
 // --- 회원 수업 상세(member_class_details) 시트 헤더 ---

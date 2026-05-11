@@ -3533,6 +3533,62 @@
             <!-- 출석 드롭다운 팝업 (JS에서 동적 생성) -->
             <div id="d1AttendDropdown" class="content-hidden fixed bg-white border border-gray-200 rounded-lg shadow-xl z-[10020] min-w-[100px]" style="font-size:12px"></div>
 
+            <!-- 휴강 관리 모달 -->
+            <div id="holidayManageModal" class="modal content-hidden" onclick="closeHolidayManageModal_(event)" style="z-index:10010">
+                <div class="modal-content max-w-2xl" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-base font-bold text-gray-800">🚫 휴강 관리</h3>
+                        <button onclick="closeHolidayManageModal_()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+                    </div>
+                    <div class="text-[11px] text-gray-500 mb-2">
+                        체크 = 휴강 지정 / 해제 = 휴강 해제. 미래 회차 휴강 시 ●는 다음 빈 셀로 시프트되고, 오늘/과거 회차는 ●가 X로 바뀌고 미래 빈 셀에 ●가 자동 추가됩니다.
+                    </div>
+                    <div id="holidayManageList" class="mb-3 space-y-1 max-h-[420px] overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50"></div>
+                    <div class="flex justify-between gap-2 mt-3">
+                        <button type="button" onclick="closeHolidayManageModal_()" class="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-sm">취소</button>
+                        <button type="button" onclick="applyHolidayChanges_()" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded">변경 적용</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 휴강 해제 옵션 모달 (회차 1개 해제 시 라디오 선택) -->
+            <div id="holidayUnsetOptionModal" class="modal content-hidden" onclick="closeHolidayUnsetOptionModal_(event)" style="z-index:10020">
+                <div class="modal-content max-w-md" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-base font-bold text-gray-800">휴강 해제 복원 방식</h3>
+                        <button onclick="closeHolidayUnsetOptionModal_()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+                    </div>
+                    <div id="holidayUnsetOptionInfo" class="text-xs text-gray-600 mb-3"></div>
+                    <div class="space-y-2 mb-3">
+                        <label class="flex items-start gap-2 cursor-pointer p-2 rounded border border-gray-200 hover:bg-gray-50">
+                            <input type="radio" name="holidayUnsetMode" value="backup" checked class="mt-0.5">
+                            <div class="text-xs">
+                                <div class="font-semibold text-gray-800">기존 데이터 복원 (백업)</div>
+                                <div class="text-gray-500">휴강 지정 전 ●/X/빈값을 그대로 되돌립니다. 시프트도 자동 되돌림.</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-2 cursor-pointer p-2 rounded border border-gray-200 hover:bg-gray-50">
+                            <input type="radio" name="holidayUnsetMode" value="allO" class="mt-0.5">
+                            <div class="text-xs">
+                                <div class="font-semibold text-gray-800">전체 참석 (●)</div>
+                                <div class="text-gray-500">모든 회원의 해당 회차를 출석(●)으로 처리합니다. 시프트는 되돌림.</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-2 cursor-pointer p-2 rounded border border-gray-200 hover:bg-gray-50">
+                            <input type="radio" name="holidayUnsetMode" value="allX" class="mt-0.5">
+                            <div class="text-xs">
+                                <div class="font-semibold text-gray-800">전체 불참 (✕)</div>
+                                <div class="text-gray-500">모든 회원의 해당 회차를 결석(X)으로 처리합니다. 시프트는 되돌림.</div>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="flex justify-between gap-2">
+                        <button type="button" onclick="closeHolidayUnsetOptionModal_()" class="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 rounded text-sm">취소</button>
+                        <button type="button" onclick="confirmHolidayUnsetMode_()" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded">확인</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- 회원 추가 모달 -->
             <div id="addMemberToD1Modal" class="modal content-hidden" onclick="closeAddMemberToD1Modal(event)">
                 <div class="modal-content max-w-md" onclick="event.stopPropagation()">

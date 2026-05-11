@@ -13247,6 +13247,7 @@ ${token}
     function selectClassD1(classD1Id) {
         selectedClassD1Id = classD1Id;
         renderClassD1Grid();
+        if (typeof renderClassD1NoteSection_ === 'function') renderClassD1NoteSection_();
         // 물건/회원 섹션 제목에 회차 정보 표시
         let sectionInfo = '';
         if (classD1Id) {
@@ -13379,6 +13380,7 @@ ${token}
         const dList = (allClassD1Data || []).filter(d => String(d.class_id) === String(selectedClassId)).sort((a,b)=>Number(a.class_loop)-Number(b.class_loop));
         const futureLoops = [];
         for (const d of dList) {
+            if (String(d.holiday || '') === 'Y') continue; // 휴강 제외
             const raw = String(d.class_date || '').replace(/-/g,'');
             if (raw !== '' && raw >= todayStr_) futureLoops.push(Number(d.class_loop));
         }
@@ -13415,6 +13417,7 @@ ${token}
         let usedNow = 0;
         let oldFutureO = 0;
         for (const d of dList) {
+            if (String(d.holiday || '') === 'Y') continue; // 휴강 제외
             const v = String(oldVals['no_'+d.class_loop] !== undefined ? oldVals['no_'+d.class_loop] : m['no_'+d.class_loop]).trim().toUpperCase();
             const raw = String(d.class_date || '').replace(/-/g,'');
             const isPast = raw !== '' && raw < todayStr_;
@@ -13646,16 +13649,23 @@ ${token}
             }
             const isActive = summarySortKey_ === 'no_' + d.class_loop;
             const isUpcoming = i === upcomingIdx;
-            const upcomingThClass = isUpcoming
-                ? 'border-l-2 border-r-2 border-t-2 border-red-400'
-                : (isActive ? 'border-l border-gray-200 bg-blue-200' : 'border-l border-gray-200 hover:bg-blue-100');
+            const isHoliday = String(d.holiday || '') === 'Y';
+            const upcomingThClass = isHoliday
+                ? 'border-l-2 border-r-2 border-t-2 border-red-500 bg-gray-300'
+                : (isUpcoming
+                    ? 'border-l-2 border-r-2 border-t-2 border-red-400'
+                    : (isActive ? 'border-l border-gray-200 bg-blue-200' : 'border-l border-gray-200 hover:bg-blue-100'));
             const isFirstSessionTh = i === 0;
             const resizeHandleHtml = isFirstSessionTh
                 ? `<div class="d1sess-resize-handle" onmousedown="d1SessColResizeStart_(event)" title="드래그하여 모든 회차 폭 조정"></div>`
                 : '';
+            const holidayBadge = isHoliday
+                ? `<div class="mt-0.5 text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>`
+                : '';
             sessionColHeaders += `<th class="d1-sess-th px-1 py-1 text-center cursor-pointer ${upcomingThClass}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;position:relative" onclick="sortSummaryBySession_(${d.class_loop})">
-                <div class="text-[11px] font-bold ${isUpcoming ? 'text-red-600' : 'text-blue-600'}">${d.class_loop}회</div>
-                <div class="text-[9px] font-semibold ${isUpcoming ? 'text-red-400' : 'text-blue-500'} whitespace-nowrap">${dateDisp} ${dayDisp}</div>
+                <div class="text-[11px] font-bold ${isHoliday ? 'text-gray-700' : (isUpcoming ? 'text-red-600' : 'text-blue-600')}">${d.class_loop}회</div>
+                <div class="text-[9px] font-semibold ${isHoliday ? 'text-gray-600' : (isUpcoming ? 'text-red-400' : 'text-blue-500')} whitespace-nowrap">${dateDisp} ${dayDisp}</div>
+                ${holidayBadge}
                 ${resizeHandleHtml}
             </th>`;
         }
@@ -13715,6 +13725,7 @@ ${token}
             let used = 0;
             let futureO = 0;
             for (let i = 0; i < d1List.length; i++) {
+                if (String(d1List[i].holiday || '') === 'Y') continue; // 휴강 제외
                 const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
                 const isPastIncludingToday = raw !== '' && raw <= todayStr;
@@ -13890,6 +13901,8 @@ ${token}
             let _futureOCount_ = 0;
             let _lastPastOLoop_ = -1;
             for (let i = 0; i < d1List.length; i++) {
+                // 휴강 회차는 모든 카운팅에서 제외
+                if (String(d1List[i].holiday || '') === 'Y') continue;
                 const v = String(m['no_'+d1List[i].class_loop] || '').trim().toUpperCase();
                 const r = String(d1List[i].class_date || '').replace(/-/g,'');
                 const isStrictFuture = r !== '' && r > todayStr;
@@ -13920,9 +13933,15 @@ ${token}
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
                 const isPast = raw !== '' && raw <= todayStr;
                 const isUpcoming = i === upcomingIdx;
+                const isHoliday = String(d1List[i].holiday || '') === 'Y';
 
                 let display, colorClass, cellBg;
-                if (isPast) {
+                if (isHoliday) {
+                    // 휴강 회차: 검정 ✕ + 진한 회색 배경 + 클릭 차단
+                    display = '✕';
+                    colorClass = 'text-gray-900 font-bold text-[13px]';
+                    cellBg = 'bg-gray-300';
+                } else if (isPast) {
                     if (val === 'X') {
                         display = '✕'; colorClass = 'text-red-500 font-semibold'; cellBg = 'bg-red-50';
                     } else if (val === 'R') {
@@ -14118,6 +14137,7 @@ ${token}
         let used = 0;
         const futureCells = []; // [{ loopNo, val }]
         for (const d of dList) {
+            if (String(d.holiday || '') === 'Y') continue; // 휴강 제외
             const v = String(m['no_'+d.class_loop] || '').trim().toUpperCase();
             const raw = String(d.class_date || '').replace(/-/g,'');
             const isPastIncludingToday = raw !== '' && raw <= todayStr_;
@@ -14256,7 +14276,8 @@ ${token}
             <select id="d1BulkStatusSel" class="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none bg-white">
                 <option value="">상태값</option>${bulkStatusOpts}
             </select>
-            <button onclick="bulkUpdateSummaryStatus_()" class="px-2.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">일괄변경</button>`;
+            <button onclick="bulkUpdateSummaryStatus_()" class="px-2.5 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">일괄변경</button>
+            <button onclick="openHolidayManageModal_()" class="ml-1 px-2.5 py-0.5 bg-rose-100 hover:bg-rose-200 text-rose-700 text-xs rounded font-semibold border border-rose-300" title="회차 휴강 지정/해제">🚫 휴강관리</button>`;
         const editActive = d1AttendEditMode_;
         const pendingCount = Object.keys(d1AttendPending_).length;
         leftHtml += `<span class="text-gray-200 mx-1">|</span>
@@ -14658,9 +14679,16 @@ ${token}
         const dateRaw = d1Item ? String(d1Item.class_date || '').replace(/-/g,'') : '';
         const isPast = dateRaw !== '' && dateRaw <= todayStr_;
 
+        // 휴강 회차 클릭 차단
+        if (d1Item && String(d1Item.holiday || '') === 'Y') {
+            alert('이 회차는 휴강입니다.\n출석 변경은 휴강관리에서 해제 후 가능합니다.');
+            return;
+        }
+
         // 미래 셀 보조 함수
         const findFirstFutureBlank_ = (afterLoop) => {
             for (const d of dList) {
+                if (String(d.holiday || '') === 'Y') continue; // 휴강 제외
                 const ln = Number(d.class_loop);
                 if (afterLoop !== undefined && ln <= afterLoop) continue;
                 const r = String(d.class_date || '').replace(/-/g,'');
@@ -14674,6 +14702,7 @@ ${token}
         };
         const findLastFutureO_ = () => {
             for (let i = dList.length - 1; i >= 0; i--) {
+                if (String(dList[i].holiday || '') === 'Y') continue; // 휴강 제외
                 const ln = Number(dList[i].class_loop);
                 const r = String(dList[i].class_date || '').replace(/-/g,'');
                 if (r === '' || r > todayStr_) {
@@ -14710,6 +14739,7 @@ ${token}
                 let used_ = 0;
                 let curFutureO_ = 0;
                 for (const d of dList) {
+                    if (String(d.holiday || '') === 'Y') continue; // 휴강 제외
                     const r = String(d.class_date || '').replace(/-/g,'');
                     const v = String(m['no_' + d.class_loop] || '').trim().toUpperCase();
                     if (r !== '' && r <= todayStr_ && (v === 'O' || v === 'R')) used_++;
@@ -14725,6 +14755,7 @@ ${token}
                 // 변경 후 futureO = curFutureO_ + 1. 이게 remaining_을 초과해야만 제거.
                 if ((curFutureO_ + 1) > remaining_) {
                     for (let i = dList.length - 1; i >= 0; i--) {
+                        if (String(dList[i].holiday || '') === 'Y') continue; // 휴강 제외
                         const ln = Number(dList[i].class_loop);
                         if (ln <= Number(loopNo)) break;
                         const r = String(dList[i].class_date || '').replace(/-/g,'');
@@ -14827,6 +14858,161 @@ ${token}
             hideAttendDropdown_();
         }
     });
+
+    // ─── 휴강 관리 모달 ──────────────────────────────────────────────────────
+    // 모달 상태: 현재 배치의 회차 목록 (휴강 토글 상태 보관)
+    let _holidayModalState_ = []; // [{ classD1Id, loop, date, isHoliday, note, origHoliday }]
+    // 해제 옵션 모달용 임시 저장 (해제 확정 시 사용)
+    let _holidayUnsetPending_ = null; // { items: [{classD1Id, loop, date, note}] }
+
+    function openHolidayManageModal_() {
+        const batch = d1Batches[d1BatchIdx];
+        if (!batch || !batch.items || batch.items.length === 0) {
+            showStatus('배치를 선택하세요.', 'error');
+            return;
+        }
+        // 회차 정렬: class_loop 오름차순
+        const items = batch.items.slice().sort((a, b) =>
+            Number(a.class_loop) - Number(b.class_loop)
+        );
+        _holidayModalState_ = items.map(d => ({
+            classD1Id: String(d.class_d1_id),
+            loop: Number(d.class_loop),
+            date: String(d.class_date || '').replace(/-/g, ''),
+            week: d.class_week || '',
+            isHoliday: String(d.holiday || '') === 'Y',
+            origHoliday: String(d.holiday || '') === 'Y',
+            note: String(d.holiday_note || '')
+        }));
+        renderHolidayModalList_();
+        const modal = document.getElementById('holidayManageModal');
+        if (modal) modal.classList.remove('content-hidden');
+    }
+
+    function closeHolidayManageModal_(event) {
+        if (event && event.target !== event.currentTarget) return;
+        const modal = document.getElementById('holidayManageModal');
+        if (modal) modal.classList.add('content-hidden');
+    }
+
+    function renderHolidayModalList_() {
+        const list = document.getElementById('holidayManageList');
+        if (!list) return;
+        const todayStr = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
+        if (_holidayModalState_.length === 0) {
+            list.innerHTML = '<div class="text-gray-400 text-xs text-center py-4">회차가 없습니다.</div>';
+            return;
+        }
+        const header = `<div class="grid grid-cols-[24px_44px_90px_70px_1fr] gap-2 items-center px-2 py-1 text-[10px] font-semibold text-gray-500 border-b bg-white sticky top-0">
+            <span class="text-center">휴강</span>
+            <span class="text-center">회차</span>
+            <span>날짜</span>
+            <span class="text-center">시점</span>
+            <span>사유</span>
+        </div>`;
+        const rows = _holidayModalState_.map((row, idx) => {
+            const dateDisplay = row.date ? `${row.date.substring(0,4)}-${row.date.substring(4,6)}-${row.date.substring(6,8)}${row.week ? ' (' + row.week + ')' : ''}` : '-';
+            let timing, timingCls;
+            if (!row.date) { timing = '-'; timingCls = 'text-gray-400'; }
+            else if (row.date < todayStr) { timing = '과거'; timingCls = 'text-gray-500'; }
+            else if (row.date === todayStr) { timing = '오늘'; timingCls = 'text-orange-600 font-semibold'; }
+            else { timing = '미래'; timingCls = 'text-blue-600'; }
+            const rowBg = row.isHoliday ? 'bg-rose-50 border-rose-200' : 'bg-white border-gray-100';
+            const changed = row.isHoliday !== row.origHoliday;
+            const changeMark = changed ? '<span class="text-rose-600 font-bold ml-1" title="변경됨">●</span>' : '';
+            return `<div class="grid grid-cols-[24px_44px_90px_70px_1fr] gap-2 items-center px-2 py-1.5 rounded border ${rowBg}">
+                <label class="flex items-center justify-center cursor-pointer">
+                    <input type="checkbox" ${row.isHoliday ? 'checked' : ''} onchange="toggleHolidayRow_(${idx}, this.checked)" class="cursor-pointer">
+                </label>
+                <div class="text-center text-xs font-semibold text-gray-700">${row.loop}회${changeMark}</div>
+                <div class="text-xs text-gray-600">${escapeHtml(dateDisplay)}</div>
+                <div class="text-center text-[11px] ${timingCls}">${timing}</div>
+                <input type="text" value="${escapeHtml(row.note)}" oninput="updateHolidayNote_(${idx}, this.value)"
+                    placeholder="${row.isHoliday ? '휴강 사유 (선택)' : '체크 시 사유 입력 가능'}"
+                    ${row.isHoliday ? '' : 'disabled'}
+                    class="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:border-rose-400 ${row.isHoliday ? 'bg-white' : 'bg-gray-100 text-gray-400'}">
+            </div>`;
+        }).join('');
+        list.innerHTML = header + rows;
+    }
+
+    function toggleHolidayRow_(idx, checked) {
+        if (idx < 0 || idx >= _holidayModalState_.length) return;
+        _holidayModalState_[idx].isHoliday = !!checked;
+        renderHolidayModalList_();
+    }
+
+    function updateHolidayNote_(idx, val) {
+        if (idx < 0 || idx >= _holidayModalState_.length) return;
+        _holidayModalState_[idx].note = String(val || '');
+    }
+
+    // 변경 적용: 지정/해제 분리 처리. 해제가 1건 이상이면 옵션 모달 먼저.
+    function applyHolidayChanges_() {
+        const changes = _holidayModalState_.filter(r => r.isHoliday !== r.origHoliday);
+        if (changes.length === 0) {
+            showStatus('변경된 회차가 없습니다.', 'info');
+            return;
+        }
+        const setItems = changes.filter(r => r.isHoliday);   // 지정
+        const unsetItems = changes.filter(r => !r.isHoliday); // 해제
+
+        if (unsetItems.length > 0) {
+            // 해제 모드 선택 모달 띄우기
+            _holidayUnsetPending_ = { setItems, unsetItems };
+            const info = document.getElementById('holidayUnsetOptionInfo');
+            if (info) {
+                const loops = unsetItems.map(r => r.loop + '회').join(', ');
+                info.textContent = '휴강 해제 회차: ' + loops + ' (' + unsetItems.length + '개). 복원 방식을 선택하세요.';
+            }
+            const modal = document.getElementById('holidayUnsetOptionModal');
+            if (modal) modal.classList.remove('content-hidden');
+            return;
+        }
+
+        // 해제 없음 → 지정만 즉시 처리
+        _submitHolidayChanges_(setItems, [], 'backup');
+    }
+
+    function closeHolidayUnsetOptionModal_(event) {
+        if (event && event.target !== event.currentTarget) return;
+        const modal = document.getElementById('holidayUnsetOptionModal');
+        if (modal) modal.classList.add('content-hidden');
+    }
+
+    function confirmHolidayUnsetMode_() {
+        const checked = document.querySelector('input[name="holidayUnsetMode"]:checked');
+        const mode = checked ? checked.value : 'backup';
+        const pending = _holidayUnsetPending_;
+        _holidayUnsetPending_ = null;
+        closeHolidayUnsetOptionModal_();
+        if (!pending) return;
+        _submitHolidayChanges_(pending.setItems, pending.unsetItems, mode);
+    }
+
+    function _submitHolidayChanges_(setItems, unsetItems, restoreMode) {
+        const updates = []
+            .concat(setItems.map(r => ({ classD1Id: r.classD1Id, isHoliday: true, note: r.note })))
+            .concat(unsetItems.map(r => ({ classD1Id: r.classD1Id, isHoliday: false, restoreMode: restoreMode })));
+        if (updates.length === 0) return;
+        showStatus('휴강 변경 적용 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function(r) {
+                if (r && r.success) {
+                    showStatus(r.message || '휴강 변경 완료', 'success');
+                    closeHolidayManageModal_();
+                    // 갱신: 회차 메타 + 회원 데이터
+                    if (selectedClassId) reloadClassD1Grid(selectedClassId);
+                    reloadD1SummaryGrid();
+                } else {
+                    showStatus((r && r.message) || '휴강 변경 실패', 'error');
+                }
+            })
+            .withFailureHandler(function(e) {
+                showStatus('휴강 변경 오류: ' + e.message, 'error');
+            })
+            .bulkSetClassD1Holiday(updates);
+    }
 
     // ─── 상태값 관리 모달 ────────────────────────────────────────────────────
     function openD1StatusMgmtModal() {
@@ -15043,10 +15229,11 @@ ${token}
                 </div>
             </div>
             <div>
-                <div class="text-[10px] font-bold text-gray-500 mb-1">비고 <span class="font-normal text-gray-400">(remark1)</span></div>
-                <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400" rows="9" placeholder="비고를 입력하세요">${escapeHtml(m.remark1 || '')}</textarea>
-                <button onclick="saveSummaryRemark_('${memId}','${batchKey}')" class="mt-1 w-full py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">저장</button>
+                <div class="text-[10px] font-bold text-gray-500 mb-1">회원비고 <span class="font-normal text-gray-400">(remark1)</span></div>
+                <textarea id="summaryRemarkInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400" rows="6" placeholder="회원비고를 입력하세요">${escapeHtml(m.remark1 || '')}</textarea>
+                <button onclick="saveSummaryRemark_('${memId}','${batchKey}')" class="mt-1 w-full py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs rounded font-semibold">회원비고 저장</button>
             </div>
+            <div id="summaryClassNoteSection" class="mt-3 pt-2 border-t border-gray-200"></div>
             <div class="mt-3 pt-2 border-t border-gray-200 hidden">
                 <div class="flex justify-between items-center mb-1">
                     <span class="text-[10px] font-bold text-gray-500">💬 카카오 메시지</span>
@@ -15056,6 +15243,7 @@ ${token}
                 <div id="d1member-kakao-name-row" class="py-1"></div>
                 <textarea id="d1member-template-textarea" rows="5" readonly class="w-full px-2 py-1 border border-blue-200 rounded text-xs font-mono bg-blue-50 focus:outline-none"></textarea>
             </div>`;
+        renderClassD1NoteSection_();
     }
 
     function saveSummaryRemark_(memberId, batchKey) {
@@ -15066,6 +15254,62 @@ ${token}
             .withSuccessHandler(function (r) { showStatus(r.success ? '비고 저장 완료' : r.message || '저장 실패', r.success ? 'success' : 'error'); })
             .withFailureHandler(function (e) { showStatus(e.message || '저장 실패', 'error'); })
             .saveMemberClassDetail(batchKey, memberId, { remark1: textarea.value });
+    }
+
+    // 수업비고 영역 렌더 (선택된 회차 = selectedClassD1Id 기준)
+    function renderClassD1NoteSection_() {
+        const sec = document.getElementById('summaryClassNoteSection');
+        if (!sec) return;
+        const d1Id = selectedClassD1Id;
+        if (!d1Id) {
+            sec.innerHTML = '<div class="text-[10px] font-bold text-gray-500 mb-1">수업비고</div><div class="text-[11px] text-gray-400 italic">회차를 선택하면 수업비고가 표시됩니다.</div>';
+            return;
+        }
+        const d1 = (allClassD1Data || []).find(d => String(d.class_d1_id) === String(d1Id));
+        if (!d1) {
+            sec.innerHTML = '<div class="text-[10px] font-bold text-gray-500 mb-1">수업비고</div><div class="text-[11px] text-red-400 italic">회차 정보 없음</div>';
+            return;
+        }
+        const loopLabel = (d1.class_loop ? d1.class_loop + '회' : '');
+        const dateLabel = d1.class_date ? String(d1.class_date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') : '';
+        const isHoliday = String(d1.holiday || '') === 'Y';
+        const note = String(d1.class_d1_note || '');
+        const holidayBadge = isHoliday
+            ? `<span class="ml-1 px-1 py-0.5 text-[9px] font-bold text-white bg-rose-500 rounded">🚫 휴강</span>`
+            : '';
+        const holidayNoteRow = isHoliday && d1.holiday_note
+            ? `<div class="mt-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-200 rounded px-1.5 py-1"><span class="font-semibold">휴강 사유:</span> ${escapeHtml(d1.holiday_note)}</div>`
+            : '';
+        sec.innerHTML = `
+            <div class="text-[10px] font-bold text-gray-500 mb-1 flex items-center">
+                <span>수업비고</span>
+                <span class="ml-1 font-normal text-gray-400">${escapeHtml(loopLabel)} ${escapeHtml(dateLabel)}</span>
+                ${holidayBadge}
+            </div>
+            ${holidayNoteRow}
+            <textarea id="summaryClassNoteInput" class="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:border-blue-400 mt-1" rows="4" placeholder="수업비고를 입력하세요 (이 회차 전체에 적용)">${escapeHtml(note)}</textarea>
+            <button onclick="saveClassD1Note_('${escapeHtml(String(d1Id))}')" class="mt-1 w-full py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded font-semibold">수업비고 저장</button>
+        `;
+    }
+
+    function saveClassD1Note_(classD1Id) {
+        const textarea = document.getElementById('summaryClassNoteInput');
+        if (!textarea) return;
+        const note = textarea.value;
+        showStatus('수업비고 저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function (r) {
+                if (r && r.success) {
+                    showStatus('수업비고 저장 완료', 'success');
+                    // 로컬 캐시 업데이트
+                    const d1 = (allClassD1Data || []).find(d => String(d.class_d1_id) === String(classD1Id));
+                    if (d1) d1.class_d1_note = note;
+                } else {
+                    showStatus((r && r.message) || '저장 실패', 'error');
+                }
+            })
+            .withFailureHandler(function (e) { showStatus(e.message || '저장 실패', 'error'); })
+            .saveClassD1Note(classD1Id, note);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -16447,6 +16691,7 @@ ${token}
             if (totalLoop > 0) {
                 let used = 0;
                 for (let i = 0; i < batchSessions.length; i++) {
+                    if (String(batchSessions[i].holiday || '') === 'Y') continue; // 휴강 제외
                     const val = String(m['no_' + batchSessions[i].class_loop] || '').trim().toUpperCase();
                     if (val === 'O' || val === 'R') used++;
                 }

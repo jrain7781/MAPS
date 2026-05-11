@@ -18,31 +18,22 @@ const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_nam
 // chuchen_state:  Q열(idx 16) - '신규'|'전달완료'
 // chuchen_date:   R열(idx 17) - 최근 전달 일시 (ISO string)
 // class_d1_id:    S열(idx 18) - 수업 회차 ID (수업 물건 연결용)
-// bid_datetime_2: T열(idx 19) - 최종 마감 일시 (yyMMddHHmm). 일반=chuchen_date+48h+주말보정, 수업=회차값
+// bid_datetime_2: T열(idx 19) - 최종 마감 일시 (yyMMddHHmm). 일반=chuchen_date+48h+토/일보정, 수업=회차값
 
 // ============================================================================
 // 마감일 보정 헬퍼 (서버) — js-app.html의 adjustFinalDeadline_ 와 동일 로직
-// 토/일/공휴일이면 다음 평일로 이동(최대 7일), 보정 시 14:00로 설정
+// 토·일이면 다음 평일 14:00으로 이동 (공휴일은 보정 대상 아님)
 // ============================================================================
-const _KR_HOLIDAYS_GLOBAL_ = (function() {
-  return new Set([
-    '2026-01-01','2026-02-16','2026-02-17','2026-02-18','2026-03-01','2026-03-02',
-    '2026-05-05','2026-05-24','2026-05-25','2026-06-03','2026-06-06','2026-08-15','2026-08-17',
-    '2026-09-24','2026-09-25','2026-09-26','2026-10-03','2026-10-05','2026-10-09','2026-12-25'
-  ]);
-})();
-function _isKRHolidayOrWeekend_(dt) {
+function _isWeekend_(dt) {
   if (!dt || isNaN(dt.getTime())) return false;
   var w = dt.getDay();
-  if (w === 0 || w === 6) return true;
-  var ymd = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
-  return _KR_HOLIDAYS_GLOBAL_.has(ymd);
+  return w === 0 || w === 6;
 }
 function adjustFinalDeadline_(dt) {
   if (!dt || isNaN(dt.getTime())) return dt;
   var out = new Date(dt.getTime());
   var shifted = false;
-  for (var i = 0; i < 7 && _isKRHolidayOrWeekend_(out); i++) {
+  for (var i = 0; i < 2 && _isWeekend_(out); i++) {
     out.setDate(out.getDate() + 1);
     shifted = true;
   }
@@ -53,7 +44,7 @@ function _formatBd2_(dt) {
   if (!dt || isNaN(dt.getTime())) return '';
   return Utilities.formatDate(dt, Session.getScriptTimeZone(), 'yyMMddHHmm');
 }
-// chuchen_date(ISO) + 48h + 주말/공휴일 보정 → bid_datetime_2 문자열 반환
+// chuchen_date(ISO) + 48h + 토/일 보정 → bid_datetime_2 문자열 반환
 function calcBidDatetime2FromChuchen_(chuchenDateIso) {
   if (!chuchenDateIso) return '';
   var d = new Date(chuchenDateIso);
@@ -2537,11 +2528,346 @@ function deleteClassD1(classD1Id) {
   if (idx < 0) return { success: false, message: '해당 회차를 찾을 수 없습니다.' };
   const classId = String(rawData[idx][1] || '');
 
+  // 휴강 회차 삭제 차단
+  const holidayColIdx = CLASS_D1_HEADERS.indexOf('holiday') + 1;
+  if (holidayColIdx > 0) {
+    const holidayVal = String(sheet.getRange(idx + 2, holidayColIdx).getValue() || '');
+    if (holidayVal === 'Y') {
+      return { success: false, message: '휴강 회차는 먼저 해제 후 삭제하세요.' };
+    }
+  }
+
   sheet.deleteRow(idx + 2);
   const cache = CacheService.getScriptCache();
   if (classId) cache.remove('sessions_' + classId);
   cache.remove('all_class_d1_sessions');
   return { success: true, message: '회차 삭제 완료' };
+}
+
+// =============================================================================
+// 휴강(holiday) 처리 함수
+// =============================================================================
+
+/**
+ * 회차를 휴강으로 지정합니다.
+ *  - 미래 회차: 회원 O/R → 다음 미래 빈 셀로 시프트, 회원 셀은 '' 처리
+ *  - 오늘/과거 회차: 회원 O/R → 'X' 변경 + 미래 빈 셀에 'O' 자동 추가
+ *  - 변경 전 값은 class_d1.holiday_backup(X열)에 JSON 저장
+ *  - 다른 휴강 회차는 시프트 대상 후보에서 제외
+ */
+function setClassD1Holiday(classD1Id, note) {
+  var d1Sheet = ensureClassD1Sheet_();
+  var lastRow = d1Sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '회차 데이터가 없습니다.' };
+
+  var classD1IdIdx     = CLASS_D1_HEADERS.indexOf('class_d1_id');
+  var classIdIdx       = CLASS_D1_HEADERS.indexOf('class_id');
+  var classLoopIdx     = CLASS_D1_HEADERS.indexOf('class_loop');
+  var classDateIdx     = CLASS_D1_HEADERS.indexOf('class_date');
+  var holidayIdx       = CLASS_D1_HEADERS.indexOf('holiday');
+  var holidayNoteIdx   = CLASS_D1_HEADERS.indexOf('holiday_note');
+  var holidayBackupIdx = CLASS_D1_HEADERS.indexOf('holiday_backup');
+
+  var d1Data = d1Sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+  var targetRow = -1, targetLoop = null, targetDate = null, classId = null;
+  for (var i = 0; i < d1Data.length; i++) {
+    if (String(d1Data[i][classD1IdIdx]) === String(classD1Id)) {
+      targetRow = i;
+      targetLoop = Number(d1Data[i][classLoopIdx]);
+      var rawDate = d1Data[i][classDateIdx];
+      if (rawDate instanceof Date) {
+        targetDate = Utilities.formatDate(rawDate, Session.getScriptTimeZone(), 'yyyyMMdd');
+      } else {
+        targetDate = String(rawDate || '').replace(/-/g, '');
+      }
+      classId = String(d1Data[i][classIdIdx]);
+      break;
+    }
+  }
+  if (targetRow < 0) return { success: false, message: '회차를 찾을 수 없습니다.' };
+  if (String(d1Data[targetRow][holidayIdx]) === 'Y') {
+    return { success: false, message: '이미 휴강 지정된 회차입니다.' };
+  }
+
+  // 같은 배치의 회차 정보 수집 (시프트 후보)
+  var batchKey = extractD1BatchKey_(classD1Id);
+  var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
+  var batchD1List = [];
+  for (var i = 0; i < d1Data.length; i++) {
+    if (extractD1BatchKey_(String(d1Data[i][classD1IdIdx])) !== batchKey) continue;
+    var rawDate = d1Data[i][classDateIdx];
+    var dateStr = (rawDate instanceof Date)
+      ? Utilities.formatDate(rawDate, Session.getScriptTimeZone(), 'yyyyMMdd')
+      : String(rawDate || '').replace(/-/g, '');
+    batchD1List.push({
+      loop: Number(d1Data[i][classLoopIdx]),
+      date: dateStr,
+      holiday: String(d1Data[i][holidayIdx] || '') === 'Y'
+    });
+  }
+  batchD1List.sort(function(a, b) { return a.loop - b.loop; });
+
+  var mcdSheet = ensureMemberClassDetailsSheet_();
+  var mcdLastRow = mcdSheet.getLastRow();
+  var backup = {};
+  var modifiedCount = 0;
+
+  if (mcdLastRow >= 2) {
+    var mcdData = mcdSheet.getRange(2, 1, mcdLastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+    var memberIdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
+    var d1IdMcdIdx  = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+    var fieldKeyIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + targetLoop);
+    if (fieldKeyIdx < 0) return { success: false, message: 'no_' + targetLoop + ' 컬럼이 없습니다.' };
+
+    var isFuture = targetDate !== '' && targetDate > todayStr;
+    var isPastOrToday = targetDate !== '' && targetDate <= todayStr;
+    var modifiedRows = [];
+
+    for (var mi = 0; mi < mcdData.length; mi++) {
+      if (String(mcdData[mi][d1IdMcdIdx]) !== String(batchKey)) continue;
+      var memberId = String(mcdData[mi][memberIdIdx]);
+      var origVal = String(mcdData[mi][fieldKeyIdx] || '').trim().toUpperCase();
+      var rowVals = mcdData[mi].slice();
+      var memberBackup = { orig: origVal, shifted_loop: null };
+      var modified = false;
+
+      if (isFuture) {
+        if (origVal === 'O' || origVal === 'R') {
+          // 다음 미래 빈 셀로 시프트 (휴강 제외, date > today, val === '')
+          var shiftToLoop = null;
+          for (var bi = 0; bi < batchD1List.length; bi++) {
+            var bd = batchD1List[bi];
+            if (bd.loop <= targetLoop) continue;
+            if (bd.holiday) continue;
+            if (bd.date === '' || bd.date <= todayStr) continue;
+            var bdFieldIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + bd.loop);
+            if (bdFieldIdx < 0) continue;
+            if (String(rowVals[bdFieldIdx] || '').trim() === '') {
+              rowVals[bdFieldIdx] = origVal;
+              shiftToLoop = bd.loop;
+              break;
+            }
+          }
+          memberBackup.shifted_loop = shiftToLoop;
+          rowVals[fieldKeyIdx] = '';
+          modified = true;
+        } else if (origVal === 'X') {
+          rowVals[fieldKeyIdx] = '';
+          modified = true;
+        }
+      } else if (isPastOrToday) {
+        if (origVal === 'O' || origVal === 'R') {
+          // 미래 빈 셀에 ● 추가 + 현 셀 'X'
+          var shiftToLoop = null;
+          for (var bi = 0; bi < batchD1List.length; bi++) {
+            var bd = batchD1List[bi];
+            if (bd.holiday) continue;
+            if (bd.date === '' || bd.date <= todayStr) continue;
+            var bdFieldIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + bd.loop);
+            if (bdFieldIdx < 0) continue;
+            if (String(rowVals[bdFieldIdx] || '').trim() === '') {
+              rowVals[bdFieldIdx] = 'O';
+              shiftToLoop = bd.loop;
+              break;
+            }
+          }
+          memberBackup.shifted_loop = shiftToLoop;
+          rowVals[fieldKeyIdx] = 'X';
+          modified = true;
+        }
+      }
+
+      if (modified) {
+        backup[memberId] = memberBackup;
+        modifiedRows.push({ rowIdx: mi + 2, values: rowVals });
+        modifiedCount++;
+      }
+    }
+
+    modifiedRows.forEach(function(mr) {
+      mcdSheet.getRange(mr.rowIdx, 1, 1, MEMBER_CLASS_DETAILS_HEADERS.length).setValues([mr.values]);
+    });
+  }
+
+  // class_d1 휴강 마크 저장
+  d1Sheet.getRange(targetRow + 2, holidayIdx + 1).setValue('Y');
+  d1Sheet.getRange(targetRow + 2, holidayNoteIdx + 1).setValue(String(note || ''));
+  d1Sheet.getRange(targetRow + 2, holidayBackupIdx + 1).setValue(JSON.stringify(backup));
+  SpreadsheetApp.flush();
+
+  var cache = CacheService.getScriptCache();
+  cache.remove('mcd_' + batchKey);
+  if (classId) cache.remove('sessions_' + classId);
+  cache.remove('all_class_d1_sessions');
+
+  return {
+    success: true,
+    message: targetLoop + '회차 휴강 지정 완료 (회원 ' + modifiedCount + '명 변경)',
+    modifiedCount: modifiedCount
+  };
+}
+
+/**
+ * 회차의 휴강을 해제합니다.
+ * @param {string} restoreMode - 'backup'(백업 복원) / 'allO'(전체 참석) / 'allX'(전체 결석)
+ */
+function unsetClassD1Holiday(classD1Id, restoreMode) {
+  var mode = String(restoreMode || 'backup');
+  var d1Sheet = ensureClassD1Sheet_();
+  var lastRow = d1Sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '회차 데이터가 없습니다.' };
+
+  var classD1IdIdx     = CLASS_D1_HEADERS.indexOf('class_d1_id');
+  var classIdIdx       = CLASS_D1_HEADERS.indexOf('class_id');
+  var classLoopIdx     = CLASS_D1_HEADERS.indexOf('class_loop');
+  var holidayIdx       = CLASS_D1_HEADERS.indexOf('holiday');
+  var holidayNoteIdx   = CLASS_D1_HEADERS.indexOf('holiday_note');
+  var holidayBackupIdx = CLASS_D1_HEADERS.indexOf('holiday_backup');
+
+  var d1Data = d1Sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+  var targetRow = -1, targetLoop = null, classId = null;
+  for (var i = 0; i < d1Data.length; i++) {
+    if (String(d1Data[i][classD1IdIdx]) === String(classD1Id)) {
+      targetRow = i;
+      targetLoop = Number(d1Data[i][classLoopIdx]);
+      classId = String(d1Data[i][classIdIdx]);
+      break;
+    }
+  }
+  if (targetRow < 0) return { success: false, message: '회차를 찾을 수 없습니다.' };
+  if (String(d1Data[targetRow][holidayIdx]) !== 'Y') {
+    return { success: false, message: '휴강 상태가 아닙니다.' };
+  }
+
+  var backup = {};
+  try {
+    var backupStr = String(d1Data[targetRow][holidayBackupIdx] || '');
+    if (backupStr) backup = JSON.parse(backupStr);
+  } catch (e) {
+    return { success: false, message: '백업 데이터 파싱 실패: ' + e.message };
+  }
+
+  var batchKey = extractD1BatchKey_(classD1Id);
+  var mcdSheet = ensureMemberClassDetailsSheet_();
+  var mcdLastRow = mcdSheet.getLastRow();
+  var fieldKeyIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + targetLoop);
+  var modifiedCount = 0;
+
+  if (mcdLastRow >= 2 && fieldKeyIdx >= 0) {
+    var mcdData = mcdSheet.getRange(2, 1, mcdLastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+    var memberIdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_id');
+    var d1IdMcdIdx  = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+    var modifiedRows = [];
+
+    for (var mi = 0; mi < mcdData.length; mi++) {
+      if (String(mcdData[mi][d1IdMcdIdx]) !== String(batchKey)) continue;
+      var memberId = String(mcdData[mi][memberIdIdx]);
+      var rowVals = mcdData[mi].slice();
+      var memberBackup = backup[memberId] || null;
+      var modified = false;
+
+      // 1단계: 시프트 되돌리기
+      if (memberBackup && memberBackup.shifted_loop) {
+        var shiftedFieldIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + memberBackup.shifted_loop);
+        if (shiftedFieldIdx >= 0) {
+          rowVals[shiftedFieldIdx] = '';
+          modified = true;
+        }
+      }
+
+      // 2단계: 휴강 셀 복원 (모드별)
+      if (mode === 'backup') {
+        if (memberBackup) {
+          rowVals[fieldKeyIdx] = memberBackup.orig || '';
+          modified = true;
+        }
+      } else if (mode === 'allO') {
+        rowVals[fieldKeyIdx] = 'O';
+        modified = true;
+      } else if (mode === 'allX') {
+        rowVals[fieldKeyIdx] = 'X';
+        modified = true;
+      }
+
+      if (modified) {
+        modifiedRows.push({ rowIdx: mi + 2, values: rowVals });
+        modifiedCount++;
+      }
+    }
+
+    modifiedRows.forEach(function(mr) {
+      mcdSheet.getRange(mr.rowIdx, 1, 1, MEMBER_CLASS_DETAILS_HEADERS.length).setValues([mr.values]);
+    });
+  }
+
+  d1Sheet.getRange(targetRow + 2, holidayIdx + 1).setValue('N');
+  d1Sheet.getRange(targetRow + 2, holidayNoteIdx + 1).setValue('');
+  d1Sheet.getRange(targetRow + 2, holidayBackupIdx + 1).setValue('');
+  SpreadsheetApp.flush();
+
+  var cache = CacheService.getScriptCache();
+  cache.remove('mcd_' + batchKey);
+  if (classId) cache.remove('sessions_' + classId);
+  cache.remove('all_class_d1_sessions');
+
+  return {
+    success: true,
+    message: targetLoop + '회차 휴강 해제 완료 (' + mode + ', 회원 ' + modifiedCount + '명 변경)',
+    modifiedCount: modifiedCount
+  };
+}
+
+/**
+ * 휴강 일괄 적용 (휴강관리 모달에서 호출)
+ * @param {Array} updates - [{classD1Id, isHoliday, note, restoreMode}]
+ */
+function bulkSetClassD1Holiday(updates) {
+  if (!Array.isArray(updates) || updates.length === 0) {
+    return { success: false, message: '변경할 회차가 없습니다.' };
+  }
+  var results = [];
+  var totalModified = 0;
+  var okCount = 0;
+  for (var i = 0; i < updates.length; i++) {
+    var u = updates[i];
+    var r = u.isHoliday
+      ? setClassD1Holiday(u.classD1Id, u.note || '')
+      : unsetClassD1Holiday(u.classD1Id, u.restoreMode || 'backup');
+    results.push(r);
+    if (r && r.success) okCount++;
+    if (r && r.modifiedCount) totalModified += r.modifiedCount;
+  }
+  return {
+    success: okCount === updates.length,
+    message: okCount + '/' + updates.length + ' 회차 처리 (회원 ' + totalModified + '회 변경)',
+    results: results
+  };
+}
+
+/**
+ * 회차별 수업비고 저장 (Y열 class_d1_note)
+ */
+function saveClassD1Note(classD1Id, note) {
+  var sheet = ensureClassD1Sheet_();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '회차 데이터가 없습니다.' };
+
+  var classD1IdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id');
+  var classIdIdx   = CLASS_D1_HEADERS.indexOf('class_id');
+  var noteIdx      = CLASS_D1_HEADERS.indexOf('class_d1_note');
+
+  var data = sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][classD1IdIdx]) === String(classD1Id)) {
+      sheet.getRange(i + 2, noteIdx + 1).setValue(String(note || ''));
+      var classId = String(data[i][classIdIdx]);
+      var cache = CacheService.getScriptCache();
+      if (classId) cache.remove('sessions_' + classId);
+      cache.remove('all_class_d1_sessions');
+      return { success: true, message: '수업비고 저장 완료' };
+    }
+  }
+  return { success: false, message: '회차를 찾을 수 없습니다.' };
 }
 
 /**
@@ -2681,8 +3007,15 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
     sheet.getRange(row, chuchenDateCol).setValue(nowIso);
     sheet.getRange(row, bd2Col).setValue(bidDatetime2Val);
     var existingMid = String(scanData[idx][midColRel] || '').trim();
-    // PT/돈클 일괄등록: items.member_id가 비어있으면 대표회원 ID로 채움 (텔레그램 심볼 등 회원연계용)
-    if (!existingMid && repMemberIdForBulk) {
+    // PT/돈클 일괄등록: m_name을 회차 대표 이름으로 덮어쓸 때 member_id도 반드시 동기화
+    // (mNameOverride 케이스는 신규물건 폼에서 m_name+member_id 동시 주입되므로 건드리지 않음)
+    if (!hasOverride && repMemberIdForBulk) {
+      if (existingMid !== repMemberIdForBulk) {
+        sheet.getRange(row, memberIdCol).setValue(repMemberIdForBulk);
+        if (existingMid) affectedMemberIds[existingMid] = true; // 옛 회원 캐시도 무효화
+      }
+      affectedMemberIds[repMemberIdForBulk] = true;
+    } else if (!existingMid && repMemberIdForBulk) {
       sheet.getRange(row, memberIdCol).setValue(repMemberIdForBulk);
       affectedMemberIds[repMemberIdForBulk] = true;
     } else if (existingMid) {
@@ -3309,6 +3642,90 @@ function _getBatchRepMemberInfo_(classD1Id) {
 function _getBatchRepMemberName_(classD1Id) {
   var info = _getBatchRepMemberInfo_(classD1Id);
   return info ? info.name : '';
+}
+
+/**
+ * [Dry-run] items 시트에서 m_name과 member_id 불일치 행을 찾아 리스트만 반환 (시트 변경 없음).
+ *
+ * 기준: class_d1_id가 있는 행 중, 그 회차의 대표회원 정보(_getBatchRepMemberInfo_)와
+ *      m_name 또는 member_id가 어긋난 행을 보고.
+ *
+ * 반환: { success, total, mismatchCount, items: [{ row, id, sakun_no, classD1Id,
+ *        currentMName, currentMemberId, expectedMName, expectedMemberId, reason }] }
+ */
+function dryRunFindMNameMemberIdMismatch() {
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  if (!sheet) return { success: false, message: 'items 시트 없음' };
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, total: 0, mismatchCount: 0, items: [] };
+
+  var idCol        = ITEM_HEADERS.indexOf('id') + 1;
+  var sakunCol     = ITEM_HEADERS.indexOf('sakun_no') + 1;
+  var mNameCol     = ITEM_HEADERS.indexOf('m_name') + 1;
+  var memberIdCol  = ITEM_HEADERS.indexOf('member_id') + 1;
+  var classD1IdCol = ITEM_HEADERS.indexOf('class_d1_id') + 1;
+
+  var width = ITEM_HEADERS.length;
+  var data = sheet.getRange(2, 1, lastRow - 1, width).getValues();
+  var repCache = {}; // classD1Id → repInfo
+  var mismatches = [];
+
+  for (var i = 0; i < data.length; i++) {
+    var classD1Id = String(data[i][classD1IdCol - 1] || '').trim();
+    if (!classD1Id) continue;
+    var currentMName = String(data[i][mNameCol - 1] || '').trim();
+    var currentMid   = String(data[i][memberIdCol - 1] || '').trim();
+
+    var rep = repCache[classD1Id];
+    if (rep === undefined) {
+      rep = _getBatchRepMemberInfo_(classD1Id) || null;
+      repCache[classD1Id] = rep;
+    }
+    // 대표 회원이 없는 회차(CLASS 등)는 자동명 사용 → 보정 대상 아님
+    if (!rep || !rep.name || !rep.memberId) continue;
+
+    var nameMatch = (currentMName === rep.name);
+    var idMatch   = (currentMid === String(rep.memberId));
+
+    // m_name이 대표명과 같은데 member_id가 다른 경우 = 명백한 보정 대상
+    // (m_name이 다른 경우는 회원 별칭/명의 등 다른 사정일 수 있어 제외)
+    if (nameMatch && !idMatch) {
+      mismatches.push({
+        row: i + 2,
+        id: String(data[i][idCol - 1] || ''),
+        sakun_no: String(data[i][sakunCol - 1] || ''),
+        classD1Id: classD1Id,
+        currentMName: currentMName,
+        currentMemberId: currentMid || '(빈값)',
+        expectedMName: rep.name,
+        expectedMemberId: String(rep.memberId),
+        reason: 'm_name=대표명 일치 / member_id=' + (currentMid || '빈') + ' → 대표(' + rep.memberId + ')로 보정 필요'
+      });
+    }
+  }
+
+  // GAS 에디터 실행로그용 출력 (브라우저 콘솔 호출 시에도 동일하게 반환)
+  Logger.log('=== dryRunFindMNameMemberIdMismatch ===');
+  Logger.log('총 검사 행: ' + data.length);
+  Logger.log('보정 대상: ' + mismatches.length + ' 건');
+  for (var k = 0; k < mismatches.length; k++) {
+    var m = mismatches[k];
+    Logger.log(
+      (k + 1) + ') row=' + m.row +
+      ' | id=' + m.id +
+      ' | 사건=' + m.sakun_no +
+      ' | 회차=' + m.classD1Id +
+      ' | m_name=' + m.currentMName +
+      ' | member_id: ' + m.currentMemberId + ' → ' + m.expectedMemberId
+    );
+  }
+
+  return {
+    success: true,
+    total: data.length,
+    mismatchCount: mismatches.length,
+    items: mismatches
+  };
 }
 
 /**
