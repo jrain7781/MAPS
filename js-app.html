@@ -14780,30 +14780,54 @@ ${token}
             }
         } else {
             // 과거 셀
+            // 변경 전 used / curFutureO / carry 계산 (휴강 제외)
+            let used_pre = 0;
+            let curFutureO_pre = 0;
+            for (const d of dList) {
+                if (String(d.holiday || '') === 'Y') continue;
+                const r = String(d.class_date || '').replace(/-/g,'');
+                const v = String(m['no_' + d.class_loop] || '').trim().toUpperCase();
+                if (r !== '' && r <= todayStr_ && (v === 'O' || v === 'R')) used_pre++;
+                if (r !== '' && r > todayStr_ && (v === 'O' || v === 'R')) curFutureO_pre++;
+            }
+            const contract_pre = parseInt(m.contract_loop, 10) || 0;
+            const remaining_pre = Math.max(0, contract_pre - used_pre);
+            const carry_pre = Math.max(0, remaining_pre - curFutureO_pre);
+
             if (curVal === 'O') {
-                // O → X: used -1, remaining +1 → 미래 가장 빠른 빈 셀에 ● 자동 추가
+                // O → X: used -1, remaining +1
+                //  - carry > 0이었음: carry가 1 감소 (미래 ● 추가 X)
+                //  - carry = 0이었음: 미래 빈 셀에 ● 1개 자동 추가 (시프트 보충)
                 oldVals[fieldKey] = m[fieldKey];
                 updates[fieldKey] = 'X';
                 m[fieldKey] = 'X';
-                const next = findFirstFutureBlank_();
-                if (next !== null) {
-                    const nk = 'no_' + next;
-                    oldVals[nk] = m[nk];
-                    updates[nk] = 'O';
-                    m[nk] = 'O';
+                if (carry_pre === 0) {
+                    const next = findFirstFutureBlank_();
+                    if (next !== null) {
+                        const nk = 'no_' + next;
+                        oldVals[nk] = m[nk];
+                        updates[nk] = 'O';
+                        m[nk] = 'O';
+                    }
                 }
+                // else: carry > 0이었음 → 미래 ● 추가 없이 carry만 1 감소
             } else if (curVal === 'X' || curVal === '') {
-                // X → O (or 빈값 → O): used +1, remaining -1 → 미래 가장 늦은 ● 자동 제거
+                // X → O (or 빈값 → O): used +1, remaining -1
+                //  - carry > 0이었음: carry가 1 감소 (미래 ● 제거 X)
+                //  - carry = 0이었음: 미래 가장 늦은 ● 1개 자동 제거 (over budget)
                 oldVals[fieldKey] = m[fieldKey];
                 updates[fieldKey] = 'O';
                 m[fieldKey] = 'O';
-                const last = findLastFutureO_();
-                if (last !== null) {
-                    const lk = 'no_' + last;
-                    oldVals[lk] = m[lk];
-                    updates[lk] = '';
-                    m[lk] = '';
+                if (carry_pre === 0) {
+                    const last = findLastFutureO_();
+                    if (last !== null) {
+                        const lk = 'no_' + last;
+                        oldVals[lk] = m[lk];
+                        updates[lk] = '';
+                        m[lk] = '';
+                    }
                 }
+                // else: carry > 0이었음 → 미래 ● 제거 없이 carry만 1 감소
             } else {
                 // R 등 기타 — 토글 안 함
                 return;
