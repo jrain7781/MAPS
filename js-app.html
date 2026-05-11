@@ -13938,10 +13938,10 @@ ${token}
 
                 let display, colorClass, cellBg;
                 if (isHoliday) {
-                    // 휴강 회차: 검정 ✕ + 진한 회색 배경 + 행 구분용 가로 테두리 + 클릭 차단
+                    // 휴강 회차: 검정 ✕ + 진한 회색 배경 (테두리는 upcomingTdClass에서 일괄 처리)
                     display = '✕';
                     colorClass = 'text-gray-900 font-bold text-[13px]';
-                    cellBg = 'bg-gray-300 border-b border-gray-400';
+                    cellBg = 'bg-gray-300';
                 } else if (isPast) {
                     if (val === 'X') {
                         display = '✕'; colorClass = 'text-red-500 font-semibold'; cellBg = 'bg-red-50';
@@ -13989,11 +13989,19 @@ ${token}
                     }
                 }
 
-                // 마지막 행: 하단 테두리 (upcoming=붉은색, 일반=회색)
-                const lastBorderCls = isLastRow ? (isUpcoming ? 'border-b-2 border-red-400' : 'border-b-2 border-gray-300') : '';
-                const upcomingTdClass = isUpcoming
-                    ? `border-l-2 border-r-2 border-red-400 ${lastBorderCls}`
-                    : `border-l border-gray-300 ${lastBorderCls}`;
+                // 셀 테두리: 좌우 + 하단(행 구분). 안쪽 가로(행 사이)는 항상 회색, 좌우만 upcoming/휴강일 때 강조.
+                //  - upcoming: 좌우 빨강, 위/아래 회색 (안 테두리에 빨강 X)
+                //  - 휴강: 사방 진한 회색
+                //  - 일반: 좌측 회색만
+                const hBorderCls = isLastRow ? 'border-b-2 border-gray-300' : 'border-b border-gray-200';
+                let upcomingTdClass;
+                if (isHoliday) {
+                    upcomingTdClass = `border-l border-r border-gray-400 ${isLastRow ? 'border-b-2 border-gray-400' : 'border-b border-gray-400'}`;
+                } else if (isUpcoming) {
+                    upcomingTdClass = `border-l-2 border-r-2 border-red-400 ${hBorderCls}`;
+                } else {
+                    upcomingTdClass = `border-l border-gray-300 ${hBorderCls}`;
+                }
                 const d1IdEsc = escapeHtml(String(d1List[i].class_d1_id));
                 const batchKeyEsc = escapeHtml(getD1BatchKey_(String(d1List[i].class_d1_id)));
                 let tdBg, tdInteract, tdOnclick;
@@ -14064,19 +14072,20 @@ ${token}
             const isStrictUpcoming = (i === upcomingIdx) && dateRaw !== '' && dateRaw > todayStr;
 
             let borderCls, bgStyle = '', cellContent = '';
+            // 그룹 헤더의 "아래" 테두리는 안 테두리(회원 행과 경계) → 항상 회색
+            // 좌/우/위 테두리는 강조(빨간/진한) 가능
             if (isHoliday) {
-                // 휴강: 회색 배경 + 사방 테두리 (gray-400)
+                // 휴강: 회색 배경 + 사방 회색-400 (안 테두리는 동일 회색-300 통일)
                 borderCls = isStrictUpcoming
-                    ? 'border-l-2 border-r-2 border-t-2 border-b border-red-400'
-                    : 'border-l border-r border-t border-b border-gray-400';
+                    ? 'border-l-2 border-r-2 border-t-2 border-red-400 border-b border-gray-300'
+                    : 'border-l border-r border-t border-gray-400 border-b border-gray-300';
                 cellContent = `<div class="text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5 inline-block leading-tight" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>`;
                 bgStyle = 'background:#d1d5db';
             } else if (isStrictUpcoming) {
-                // 미래 첫 회차 = 예정 (빨간 테두리)
-                borderCls = 'border-l-2 border-r-2 border-t-2 border-b border-red-400';
+                // 미래 첫 회차 = 예정 (좌/우/위 빨강, 아래 회색)
+                borderCls = 'border-l-2 border-r-2 border-t-2 border-red-400 border-b border-gray-300';
                 cellContent = `<div class="text-[9px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-0.5 inline-block leading-tight">예정</div>`;
             } else if (isPastOrToday) {
-                // 과거/오늘 = 수강 (초록 박스, 사방 회색 테두리)
                 borderCls = 'border border-gray-300';
                 cellContent = `<div class="text-[9px] font-bold text-green-700 bg-green-50 border border-green-300 rounded px-0.5 inline-block leading-tight" title="수강">수강</div>`;
             } else {
