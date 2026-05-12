@@ -1294,30 +1294,41 @@
     }
     function refreshExtendBtnSidebar_() {
         _refreshExtendBtn_('sidebar');
-        if (typeof renderSidebarChuchenInfo_ === 'function') {
-            renderSidebarChuchenInfo_(typeof currentDetailItem !== 'undefined' ? currentDetailItem : null);
-        }
+        renderChuchenInfo_('sidebar', typeof currentDetailItem !== 'undefined' ? currentDetailItem : null);
     }
-    function refreshExtendBtnModal_() { _refreshExtendBtn_('modal'); }
+    function refreshExtendBtnModal_() {
+        _refreshExtendBtn_('modal');
+        renderChuchenInfo_('modal', typeof currentModalItemData !== 'undefined' ? currentModalItemData : null);
+    }
+    // 사이드패널 전용 wrapper (기존 호출처 호환)
+    function renderSidebarChuchenInfo_(data) { renderChuchenInfo_('sidebar', data); }
 
-    // 상세탭 사이드패널: 추천 상태일 때 "날짜 범위 + 타이머 바" 표시
-    // (입찰일정 물건카드와 동일 — formatChuchenDate + createChuchenTimerBar)
-    // data는 cached currentDetailItem. 선택지(stu_member/chuchen_state)는 live select 값으로 덮어씀.
-    // 표시 시 추천 select의 하단 라운드를 제거(rounded-b-none)하여 wrap과 시각적으로 연결.
-    function renderSidebarChuchenInfo_(data) {
-        const wrap = document.getElementById('form-chuchen-info-wrap');
-        const barWrap = document.getElementById('form-chuchen-timer-bar-wrap');
-        const infoEl = document.getElementById('form-bid-deadline-info');
-        const stuSel = document.getElementById('form-stu-member');
+    // 추천 상태 정보 박스 렌더링 (사이드패널 + 모달 공용)
+    //  - select 하단에 wrap(타이머 바)을 한 박스로 붙임
+    //  - 기한 텍스트(formatChuchenDate)는 박스 밖, 아래 별도 라인
+    //  - scope: 'sidebar' | 'modal'
+    function renderChuchenInfo_(scope, data) {
+        const isModal = (scope === 'modal');
+        const wrapId = isModal ? 'modal-chuchen-info-wrap' : 'form-chuchen-info-wrap';
+        const barWrapId = isModal ? 'modal-chuchen-timer-bar-wrap' : 'form-chuchen-timer-bar-wrap';
+        const infoId = isModal ? 'modal-bid-deadline-info' : 'form-bid-deadline-info';
+        const stuId = isModal ? 'modal-form-stu-member' : 'form-stu-member';
+        const csId = isModal ? 'modal-form-chuchen-state' : 'form-chuchen-state';
+
+        const wrap = document.getElementById(wrapId);
+        const barWrap = document.getElementById(barWrapId);
+        const infoEl = document.getElementById(infoId);
+        const stuSel = document.getElementById(stuId);
         if (!wrap && !barWrap && !infoEl) return;
-        const stuEl = stuSel;
-        const csEl = document.getElementById('form-chuchen-state');
-        const liveStu = stuEl ? String(stuEl.value || '').trim() : '';
+
+        const csEl = document.getElementById(csId);
+        const liveStu = stuSel ? String(stuSel.value || '').trim() : '';
         const liveCs = csEl ? String(csEl.value || '').trim() : '';
         const eff = Object.assign({}, data || {});
         if (liveStu) eff.stu_member = liveStu;
         if (liveCs) eff.chuchen_state = liveCs;
         const showBar = _shouldShowChuchenBar_(eff);
+
         if (infoEl) {
             infoEl.textContent = showBar ? formatChuchenDate(eff.chuchen_date, eff.bid_datetime_2) : '';
             infoEl.classList.toggle('hidden', !showBar);
@@ -1328,13 +1339,8 @@
         if (wrap) {
             wrap.classList.toggle('hidden', !showBar);
         }
-        // 추천 select와 wrap이 한 박스처럼 보이도록 하단 라운드 제어
         if (stuSel) {
-            if (showBar) {
-                stuSel.classList.add('rounded-b-none');
-            } else {
-                stuSel.classList.remove('rounded-b-none');
-            }
+            stuSel.classList.toggle('rounded-b-none', showBar);
         }
     }
 
@@ -5856,6 +5862,8 @@
             modalChuchenBtns.style.display = isChuchen ? '' : 'none';
         }
         setModalChuchenState(data.chuchen_state || '신규');
+        // 추천 상태 정보 박스 (사이드패널과 동일 — 타이머 바 + 기한 텍스트)
+        renderChuchenInfo_('modal', data);
 
         // 모달 하단 탭: 비고 탭으로 초기화
         switchModalSubTab('note');
