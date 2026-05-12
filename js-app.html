@@ -318,6 +318,8 @@
     // 입찰가 헤더 4-state 사이클: 'red_top' → 'empty_top' → 'asc' → 'desc' → 'red_top' …
     // null이면 입찰가 모드가 아니며 itemListSort.key 기준으로 정렬
     let bidpriceSortMode = null;
+    // 입찰일정 회원명 정렬 토글 (체크 시 회원명 → 사건번호, 빈 회원명은 맨 아래)
+    let calSortByMember_ = (function(){ try { return localStorage.getItem('calSortByMember') === '1'; } catch(e) { return false; } })();
     let summaryClickFilter = null;
 
     // 데이터 캐시 관리
@@ -569,6 +571,50 @@
         if (a.m_name < b.m_name) return -1;
         if (a.m_name > b.m_name) return 1;
         return 0;
+    }
+
+    // 입찰일정 카드 정렬 (같은 날짜 셀 안에서 적용)
+    // calSortByMember_ = true: 회원명 asc → 사건번호 asc (빈 회원명은 맨 아래)
+    // calSortByMember_ = false: 기본 (사건번호 asc → 회원명 asc) — dataComparator 결과 그대로 유지
+    function _bidScheduleCompare_(a, b) {
+        if (calSortByMember_) {
+            const ma = String(a.m_name || '').trim();
+            const mb = String(b.m_name || '').trim();
+            const aEmpty = ma === '';
+            const bEmpty = mb === '';
+            if (aEmpty !== bEmpty) return aEmpty ? 1 : -1; // 빈값은 아래
+            if (ma < mb) return -1;
+            if (ma > mb) return 1;
+            const na = _sakunNum(a.sakun_no), nb = _sakunNum(b.sakun_no);
+            return na - nb;
+        }
+        // 기본: 사건번호 → 회원명
+        const na = _sakunNum(a.sakun_no), nb = _sakunNum(b.sakun_no);
+        if (na !== nb) return na - nb;
+        const ma = String(a.m_name || ''), mb = String(b.m_name || '');
+        if (ma < mb) return -1;
+        if (ma > mb) return 1;
+        return 0;
+    }
+
+    // 회원명 정렬 토글 onchange 핸들러
+    function onCalSortByMemberChange_() {
+        const cb = document.getElementById('cal-sort-by-member');
+        if (!cb) return;
+        calSortByMember_ = !!cb.checked;
+        try { localStorage.setItem('calSortByMember', calSortByMember_ ? '1' : '0'); } catch(e) {}
+        if (typeof renderCalendar === 'function') renderCalendar();
+    }
+
+    // 초기 로드 시 체크박스 상태 복원
+    function _initCalSortByMemberCheckbox_() {
+        const cb = document.getElementById('cal-sort-by-member');
+        if (cb) cb.checked = !!calSortByMember_;
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _initCalSortByMemberCheckbox_);
+    } else {
+        _initCalSortByMemberCheckbox_();
     }
 
     // 탭(메뉴) 이동 처리
@@ -2396,6 +2442,7 @@
                 });
 
                 if (bids.length > 0) {
+                    bids.sort(_bidScheduleCompare_);
                     bids.forEach(bid => {
                         const bidprice = bid.bidprice || 0;
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
@@ -2645,6 +2692,7 @@
             let contentHtml = '';
 
             if (bids.length > 0) {
+                bids.sort(_bidScheduleCompare_);
                 bids.forEach(bid => {
                     const bidprice = bid.bidprice || 0;
                     const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
@@ -3139,6 +3187,7 @@
                 });
 
                 if (bids.length > 0) {
+                    bids.sort(_bidScheduleCompare_);
                     bids.forEach(bid => {
                         const bidprice = bid.bidprice || 0;
                         const bidpriceFormatted = (bidprice > 0) ? new Intl.NumberFormat('ko-KR').format(bidprice) + '원' : '';
