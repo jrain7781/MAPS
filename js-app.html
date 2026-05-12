@@ -1300,8 +1300,8 @@
     }
     function refreshExtendBtnModal_() { _refreshExtendBtn_('modal'); }
 
-    // 상세탭 사이드패널: 추천 상태일 때 타이머 바 + 마감일자 표시
-    // (입찰일정 물건카드와 동일 createChuchenTimerBar 사용)
+    // 상세탭 사이드패널: 추천 상태일 때 "날짜 범위 + 타이머 바" 표시
+    // (입찰일정 물건카드와 동일 — formatChuchenDate + createChuchenTimerBar)
     // data는 cached currentDetailItem. 선택지(stu_member/chuchen_state)는 live select 값으로 덮어씀.
     function renderSidebarChuchenInfo_(data) {
         const barWrap = document.getElementById('form-chuchen-timer-bar-wrap');
@@ -1315,17 +1315,11 @@
         if (liveStu) eff.stu_member = liveStu;
         if (liveCs) eff.chuchen_state = liveCs;
         const showBar = _shouldShowChuchenBar_(eff);
+        if (infoEl) {
+            infoEl.textContent = showBar ? formatChuchenDate(eff.chuchen_date, eff.bid_datetime_2) : '';
+        }
         if (barWrap) {
             barWrap.innerHTML = showBar ? createChuchenTimerBar(eff.chuchen_date, eff) : '';
-        }
-        if (infoEl) {
-            const bd2 = String(eff.bid_datetime_2 || '').trim();
-            if (showBar && /^\d{10}$/.test(bd2)) {
-                const ts = parseYymmddHHmm_(bd2);
-                infoEl.textContent = !isNaN(ts) ? ('마감 ' + fmtDReadable_(new Date(ts))) : '';
-            } else {
-                infoEl.textContent = '';
-            }
         }
     }
 
