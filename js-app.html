@@ -1292,8 +1292,42 @@
             } else { info.classList.add('hidden'); }
         }
     }
-    function refreshExtendBtnSidebar_() { _refreshExtendBtn_('sidebar'); }
+    function refreshExtendBtnSidebar_() {
+        _refreshExtendBtn_('sidebar');
+        if (typeof renderSidebarChuchenInfo_ === 'function') {
+            renderSidebarChuchenInfo_(typeof currentDetailItem !== 'undefined' ? currentDetailItem : null);
+        }
+    }
     function refreshExtendBtnModal_() { _refreshExtendBtn_('modal'); }
+
+    // 상세탭 사이드패널: 추천 상태일 때 타이머 바 + 마감일자 표시
+    // (입찰일정 물건카드와 동일 createChuchenTimerBar 사용)
+    // data는 cached currentDetailItem. 선택지(stu_member/chuchen_state)는 live select 값으로 덮어씀.
+    function renderSidebarChuchenInfo_(data) {
+        const barWrap = document.getElementById('form-chuchen-timer-bar-wrap');
+        const infoEl = document.getElementById('form-bid-deadline-info');
+        if (!barWrap && !infoEl) return;
+        const stuEl = document.getElementById('form-stu-member');
+        const csEl = document.getElementById('form-chuchen-state');
+        const liveStu = stuEl ? String(stuEl.value || '').trim() : '';
+        const liveCs = csEl ? String(csEl.value || '').trim() : '';
+        const eff = Object.assign({}, data || {});
+        if (liveStu) eff.stu_member = liveStu;
+        if (liveCs) eff.chuchen_state = liveCs;
+        const showBar = _shouldShowChuchenBar_(eff);
+        if (barWrap) {
+            barWrap.innerHTML = showBar ? createChuchenTimerBar(eff.chuchen_date, eff) : '';
+        }
+        if (infoEl) {
+            const bd2 = String(eff.bid_datetime_2 || '').trim();
+            if (showBar && /^\d{10}$/.test(bd2)) {
+                const ts = parseYymmddHHmm_(bd2);
+                infoEl.textContent = !isNaN(ts) ? ('마감 ' + fmtDReadable_(new Date(ts))) : '';
+            } else {
+                infoEl.textContent = '';
+            }
+        }
+    }
 
     // 회원명 클릭 → ClassSchedule 탭 + 종목 탭 전환 + 종목 선택 + 물건 서브탭
     function navigateToClassItemTab_(classId, classType) {
@@ -4476,6 +4510,8 @@
                 chuchenStateButtonsEl.style.display = isChuchen ? '' : 'none';
             }
             setChuchenState(data.chuchen_state || '신규'); // hidden input도 항목 로드 시 갱신
+            // 추천 상태 + 4키 조건 충족 시 타이머 바 / 마감일자 표시 (입찰일정 카드와 동일)
+            renderSidebarChuchenInfo_(data);
 
             currentDetailItem = data;
             // 물건 선택 시 항상 상세 탭으로 시작
