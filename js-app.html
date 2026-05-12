@@ -1575,9 +1575,12 @@
                     const bp = item.bidprice || 0;
                     const bpNum = parseInt(String(bp).replace(/,/g, ''), 10);
                     cell.textContent = (bpNum > 0) ? new Intl.NumberFormat('ko-KR').format(bpNum) + '원' : '';
-                    // 입찰일정 카드와 동일한 색상 규칙: 신규/빈값은 빨강, 전달완료·확인완료는 기본
-                    const isNewBid = (item.bid_state === '신규' || !item.bid_state);
-                    cell.className = isNewBid ? 'item-col-bidprice bidprice-cell text-red-600' : 'item-col-bidprice bidprice-cell';
+                    // 전달완료/확인완료 외엔 붉은색 (신규/빈값/기타)
+                    // .item-list-table .item-col-bidprice CSS가 text-red-600 클래스를 덮어쓰므로 inline style 사용
+                    const bidState = String(item.bid_state || '').trim();
+                    const isDelivered = bidState === '전달완료' || bidState === '확인완료';
+                    cell.className = 'item-col-bidprice bidprice-cell';
+                    cell.style.color = isDelivered ? '' : '#dc2626';
                 }
 
                 // 전송 컬럼이 있다면 제거 (즉시 실행)
