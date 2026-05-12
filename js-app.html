@@ -14359,9 +14359,10 @@ ${token}
         // 총 차수: 현재 배치 세션 수 (no_N 인덱스와 1:1 대응)
         const totalLoop = N;
 
-        // 다가오는 수업(오늘 이후 가장 빠른) 인덱스
+        // 다가오는 수업(오늘 이후 가장 빠른) 인덱스 — 휴강은 건너뜀
         let upcomingIdx = -1;
         for (let i = 0; i < d1List.length; i++) {
+            if (String(d1List[i].holiday || '') === 'Y') continue;
             const raw = String(d1List[i].class_date || '').replace(/-/g, '');
             if (raw >= todayStr) { upcomingIdx = i; break; }
         }
@@ -14770,16 +14771,16 @@ ${token}
                     }
                 }
 
-                // 셀 테두리: 좌우 + 하단(행 구분). 안쪽 가로(행 사이)는 항상 회색, 좌우만 upcoming/휴강일 때 강조.
-                //  - upcoming: 좌우 빨강, 위/아래 회색 (안 테두리에 빨강 X)
-                //  - 휴강: 사방 진한 회색
+                // 셀 테두리: 외부(컬럼 boundary)만 강조, 행 사이 내부 가로선은 일반 회색.
+                //  - upcoming: 좌우 빨강, 마지막 행 하단도 빨강 (red box close), 그 외 하단은 회색
+                //  - 휴강: 좌우 진한 회색, 마지막 행 하단만 진한 회색, 그 외 하단은 일반 회색
                 //  - 일반: 좌측 회색만
                 const hBorderCls = isLastRow ? 'border-b-2 border-gray-300' : 'border-b border-gray-200';
                 let upcomingTdClass;
                 if (isHoliday) {
-                    upcomingTdClass = `border-l border-r border-gray-400 ${isLastRow ? 'border-b-2 border-gray-400' : 'border-b border-gray-400'}`;
+                    upcomingTdClass = `border-l border-r border-gray-400 ${isLastRow ? 'border-b-2 border-gray-400' : 'border-b border-gray-200'}`;
                 } else if (isUpcoming) {
-                    upcomingTdClass = `border-l-2 border-r-2 border-red-400 ${hBorderCls}`;
+                    upcomingTdClass = `border-l-2 border-r-2 border-red-400 ${isLastRow ? 'border-b-2 border-red-400' : 'border-b border-gray-200'}`;
                 } else {
                     upcomingTdClass = `border-l border-gray-300 ${hBorderCls}`;
                 }
@@ -14842,29 +14843,30 @@ ${token}
             });
         });
 
-        // 그룹 헤더용 회차 셀 (휴강/과거 수강/오늘 수강/미래 예정 + 빨간 테두리 통합)
+        // 그룹 헤더용 회차 셀 (휴강/과거 수강/오늘/미래 예정 + 빨간 테두리 통합)
+        // - upcomingIdx는 휴강을 이미 건너뛰었으므로 "오늘/예정" 모두 비휴강에만 표시됨
         let groupHolidayCells = '';
         for (let i = 0; i < d1List.length; i++) {
             const d = d1List[i];
             const isHoliday = String(d.holiday || '') === 'Y';
             const dateRaw = String(d.class_date || '').replace(/-/g,'');
-            const isPastOrToday = dateRaw !== '' && dateRaw <= todayStr;
-            // strict 미래 첫 회차만 "예정" (오늘 = 수강)
-            const isStrictUpcoming = (i === upcomingIdx) && dateRaw !== '' && dateRaw > todayStr;
+            const isUpcomingCell = (i === upcomingIdx);
+            const isTodayCell = isUpcomingCell && dateRaw === todayStr;
+            const isFutureUpcoming = isUpcomingCell && dateRaw > todayStr;
+            const isPast = !isUpcomingCell && dateRaw !== '' && dateRaw <= todayStr;
 
             let borderCls, bgStyle = '', cellContent = '';
-            // 박스 가독성 향상: text-[10px] + py-0.5 px-1 (이전 text-[9px] px-0.5보다 큼)
-            // 휴강: 검은 바탕 + 흰 글자 (예정 빨간과 시각적 구분)
             if (isHoliday) {
-                borderCls = isStrictUpcoming
-                    ? 'border-l-2 border-r-2 border-t-2 border-red-400 border-b border-gray-300'
-                    : 'border-l border-r border-t border-gray-400 border-b border-gray-300';
+                borderCls = 'border-l border-r border-t border-gray-400 border-b border-gray-300';
                 cellContent = `<div class="text-[10px] font-bold text-white bg-gray-900 border border-gray-900 rounded px-1 py-0.5 inline-block leading-tight" title="${escapeHtml(d.holiday_note || '휴강')}">휴강</div>`;
                 bgStyle = 'background:#d1d5db';
-            } else if (isStrictUpcoming) {
+            } else if (isTodayCell) {
+                borderCls = 'border-l-2 border-r-2 border-t-2 border-red-400 border-b border-gray-300';
+                cellContent = `<div class="text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-300 rounded px-1 py-0.5 inline-block leading-tight">오늘</div>`;
+            } else if (isFutureUpcoming) {
                 borderCls = 'border-l-2 border-r-2 border-t-2 border-red-400 border-b border-gray-300';
                 cellContent = `<div class="text-[10px] font-bold text-red-600 bg-red-50 border border-red-300 rounded px-1 py-0.5 inline-block leading-tight">예정</div>`;
-            } else if (isPastOrToday) {
+            } else if (isPast) {
                 borderCls = 'border border-gray-300';
                 cellContent = `<div class="text-[10px] font-bold text-green-700 bg-green-50 border border-green-300 rounded px-1 py-0.5 inline-block leading-tight" title="수강">수강</div>`;
             } else {
@@ -16152,14 +16154,16 @@ ${token}
     function renderClassD1NoteSection_() {
         const sec = document.getElementById('summaryClassNoteSection');
         if (!sec) return;
-        // selectedClassD1Id가 없으면 현재 배치의 가장 가까운 미래 회차(없으면 마지막 회차) 자동 선택
+        // selectedClassD1Id가 없으면 현재 배치의 가장 가까운 미래 비휴강 회차(없으면 마지막 비휴강, 그래도 없으면 마지막) 자동 선택
         let d1Id = selectedClassD1Id;
         if (!d1Id) {
             const batch = d1Batches[d1BatchIdx];
             if (batch && batch.items && batch.items.length) {
                 const items = batch.items.slice().sort((a,b) => Number(a.class_loop) - Number(b.class_loop));
                 const todayStr2 = (function(){const n=new Date();return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0');})();
-                let target = items.find(d => String(d.class_date || '').replace(/-/g,'') >= todayStr2);
+                const nonHoliday = items.filter(d => String(d.holiday || '') !== 'Y');
+                let target = nonHoliday.find(d => String(d.class_date || '').replace(/-/g,'') >= todayStr2);
+                if (!target) target = nonHoliday[nonHoliday.length - 1];
                 if (!target) target = items[items.length - 1];
                 if (target) { d1Id = String(target.class_d1_id); selectedClassD1Id = d1Id; }
             }
@@ -16173,15 +16177,12 @@ ${token}
             sec.innerHTML = '<div class="text-[10px] font-bold text-gray-500 mb-1">수업비고</div><div class="text-[11px] text-red-400 italic">회차 정보 없음</div>';
             return;
         }
-        const loopLabel = (d1.class_loop ? d1.class_loop + '회' : '');
-        const dateLabel = d1.class_date ? String(d1.class_date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') : '';
         const isHoliday = String(d1.holiday || '') === 'Y';
         const note = String(d1.class_d1_note || '');
-        const holidayBadge = isHoliday
-            ? `<span class="ml-1 px-1 py-0.5 text-[9px] font-bold text-white bg-rose-500 rounded">🚫 휴강</span>`
-            : '';
-        const holidayNoteRow = isHoliday && d1.holiday_note
-            ? `<div class="mt-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-200 rounded px-1.5 py-1"><span class="font-semibold">휴강 사유:</span> ${escapeHtml(d1.holiday_note)}</div>`
+        const holidayBlock = isHoliday
+            ? `<div class="mb-1 text-[10px] text-rose-600 bg-rose-50 border border-rose-200 rounded px-1.5 py-1 leading-snug">
+                <span class="font-bold text-white bg-rose-500 px-1 rounded">🚫 휴강</span>${d1.holiday_note ? ` <span class="font-semibold">사유:</span> ${escapeHtml(d1.holiday_note)}` : ''}
+              </div>`
             : '';
         const savedClassNoteH = parseInt(localStorage.getItem('d1_summary_classnote_h') || '120', 10) || 120;
         // 회차 선택기: 같은 배치의 모든 회차 select. 사용자가 다른 회차 비고 보고 싶을 때.
@@ -16195,20 +16196,14 @@ ${token}
                 const holidayMark = String(it.holiday || '') === 'Y' ? ' [휴강]' : '';
                 return `<option value="${escapeHtml(String(it.class_d1_id))}" ${sel}>${it.class_loop}회 ${dateDisp}${holidayMark}</option>`;
             }).join('');
-            selectorHtml = `<select onchange="selectClassD1(this.value)" class="text-[10px] border border-gray-300 rounded px-1 py-0.5 ml-2 max-w-[140px]">${opts}</select>`;
+            selectorHtml = `<select onchange="selectClassD1(this.value)" class="text-[10px] border border-gray-300 rounded px-1 py-0.5 max-w-[160px]">${opts}</select>`;
         }
+        const selectorBlock = selectorHtml ? `<div class="mb-1">${selectorHtml}</div>` : '';
         sec.innerHTML = `
-            <div class="flex justify-between items-center mb-1">
-                <span class="text-[10px] font-bold text-gray-500 flex items-center">
-                    <span>수업비고</span>
-                    <span class="ml-1 font-normal text-gray-400">${escapeHtml(loopLabel)} ${escapeHtml(dateLabel)}</span>
-                    ${holidayBadge}
-                    ${selectorHtml}
-                </span>
-                <button onclick="saveClassD1Note_('${escapeHtml(String(d1Id))}')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded font-semibold shadow-sm">저장</button>
-            </div>
-            ${holidayNoteRow}
-            <textarea id="summaryClassNoteInput" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-emerald-400 mt-1" style="height:${savedClassNoteH}px;resize:vertical;min-height:80px" placeholder="수업비고를 입력하세요 (이 회차 전체에 적용)" onmouseup="_saveClassNoteHeight_(this)" ontouchend="_saveClassNoteHeight_(this)">${escapeHtml(note)}</textarea>
+            <div class="text-[10px] font-bold text-gray-500 mb-1">수업비고</div>
+            ${selectorBlock}
+            ${holidayBlock}
+            <textarea id="summaryClassNoteInput" class="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-emerald-400" style="height:${savedClassNoteH}px;resize:vertical;min-height:80px" placeholder="수업비고를 입력하세요 (이 회차 전체에 적용)" onmouseup="_saveClassNoteHeight_(this)" ontouchend="_saveClassNoteHeight_(this)">${escapeHtml(note)}</textarea>
             <button onclick="saveClassD1Note_('${escapeHtml(String(d1Id))}')" class="mt-1 w-full py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded font-semibold">수업비고 저장</button>
         `;
     }
