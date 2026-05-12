@@ -1303,11 +1303,14 @@
     // 상세탭 사이드패널: 추천 상태일 때 "날짜 범위 + 타이머 바" 표시
     // (입찰일정 물건카드와 동일 — formatChuchenDate + createChuchenTimerBar)
     // data는 cached currentDetailItem. 선택지(stu_member/chuchen_state)는 live select 값으로 덮어씀.
+    // 표시 시 추천 select의 하단 라운드를 제거(rounded-b-none)하여 wrap과 시각적으로 연결.
     function renderSidebarChuchenInfo_(data) {
+        const wrap = document.getElementById('form-chuchen-info-wrap');
         const barWrap = document.getElementById('form-chuchen-timer-bar-wrap');
         const infoEl = document.getElementById('form-bid-deadline-info');
-        if (!barWrap && !infoEl) return;
-        const stuEl = document.getElementById('form-stu-member');
+        const stuSel = document.getElementById('form-stu-member');
+        if (!wrap && !barWrap && !infoEl) return;
+        const stuEl = stuSel;
         const csEl = document.getElementById('form-chuchen-state');
         const liveStu = stuEl ? String(stuEl.value || '').trim() : '';
         const liveCs = csEl ? String(csEl.value || '').trim() : '';
@@ -1320,6 +1323,17 @@
         }
         if (barWrap) {
             barWrap.innerHTML = showBar ? createChuchenTimerBar(eff.chuchen_date, eff) : '';
+        }
+        if (wrap) {
+            wrap.classList.toggle('hidden', !showBar);
+        }
+        // 추천 select와 wrap이 한 박스처럼 보이도록 하단 라운드 제어
+        if (stuSel) {
+            if (showBar) {
+                stuSel.classList.add('rounded-b-none');
+            } else {
+                stuSel.classList.remove('rounded-b-none');
+            }
         }
     }
 
