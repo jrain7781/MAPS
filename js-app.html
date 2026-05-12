@@ -1400,10 +1400,12 @@
     }
     // D1 picker 탭별 등록 가능 용도 (CLASS / PT / 돈클)
     // CLASS: 빈값 + PT,단투 / PT: 플래티넘·블랙·실버·PT,단투·빈값 / 돈클: 돈클수익·돈클월세·PT,단투·빈값
+    // PT 계열은 'PT' + '프리미엄 PT' 모두 포함 (다른 화면의 isD1NewClassPTDK_와 동일 기준)
     function getAllowedYongdoForClassType(classType) {
-        const t = String(classType || '').trim().toUpperCase();
-        if (t === 'PT') return new Set(['플래티넘', '블랙', '실버', 'PT, 단투', '']);
-        if (t === '돈클' || t === 'DONCLE') return new Set(['돈클수익', '돈클월세', 'PT, 단투', '']);
+        const t = String(classType || '').trim();
+        const tUp = t.toUpperCase();
+        if (t === 'PT' || t === '프리미엄 PT' || tUp === 'PT') return new Set(['플래티넘', '블랙', '실버', 'PT, 단투', '']);
+        if (t === '돈클' || tUp === 'DONCLE') return new Set(['돈클수익', '돈클월세', 'PT, 단투', '']);
         return new Set(['PT, 단투', '']); // CLASS 또는 미상
     }
     function isYongdoAllowedForClassType(value, classType) {
