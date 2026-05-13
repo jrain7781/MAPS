@@ -23627,6 +23627,8 @@ MJ 이정우 팀장
         jmPresets.forEach(function (p) { presetMap[p.preset_id] = p.preset_title; });
 
         function fmtNum(n) { if (!n) return ''; var s = String(n); return s.replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+        // 2026-05-13 16:07:44 → 26-05-13 16:07:44 (yy)
+        function fmtRegDate(s) { return s ? String(s).replace(/^(\d{2})(\d{2})-/, '$2-') : ''; }
         function bidDateDday(bd) {
             if (!bd || !/^\d{6}$/.test(bd)) return { date: escHtml(bd || ''), dday: '' };
             var yy = '20' + bd.slice(0,2), mm = bd.slice(2,4), dd = bd.slice(4,6);
@@ -23713,7 +23715,7 @@ MJ 이정우 팀장
                 '<td class="jm-td text-center">' + failCell + '</td>' +
                 '<td class="jm-td text-center">' + escHtml(it.view_count || '') + '</td>' +
                 '<td class="jm-td text-left text-[11px] text-gray-600">' + escHtml(it.memo || '') + '</td>' +
-                '<td class="jm-td text-center text-[11px] text-gray-500">' + escHtml(it.reg_date || '') + '</td>' +
+                '<td class="jm-td text-center text-[11px] text-gray-500">' + escHtml(fmtRegDate(it.reg_date)) + '</td>' +
                 '</tr>';
         }).join('');
     }
