@@ -92,8 +92,12 @@
             overflow-y: auto !important;
             overflow-x: auto !important;
         }
-        /* 좌측 사이드 트리도 내부 스크롤 */
-        #JosaManagement aside { min-height: 0; max-height: 100%; overflow-y: auto; }
+        /* 좌측 사이드 트리 (헤더 + 내부 스크롤) */
+        #JosaManagement aside { min-height: 0; max-height: 100%; overflow: hidden; }
+        #JosaManagement aside .jm-side-header {
+            min-height: 90px;  /* 우측 검색폼(~55px) + 상태 썸머리(~35px) 영역과 매칭 */
+        }
+        #JosaManagement aside #jm-tree-list { min-height: 0; }
         /* 그리드 thead sticky — 본문이 헤더 위로 올라가는 문제 해결 (z-index 50 + thead 자체 sticky) */
         #jm-grid thead { position: sticky; top: 0; z-index: 50; background: #f7f8fa; }
         #jm-grid thead tr { background: #f7f8fa; }
@@ -1642,15 +1646,15 @@
                 <!-- 본문 = [좌측 트리] [메인 영역] -->
                 <div class="flex flex-1 overflow-hidden">
                     <!-- 좌측 사이드 트리: 크롤링리스트 -->
-                    <aside class="w-64 border-r bg-gray-50 overflow-y-auto p-3 text-sm flex-shrink-0">
-                        <div class="flex items-center justify-between mb-2">
+                    <aside class="w-64 border-r bg-gray-50 text-sm flex-shrink-0 flex flex-col">
+                        <div class="jm-side-header flex items-center justify-between px-3 border-b bg-gray-50">
                             <span class="font-semibold text-gray-700">크롤링리스트</span>
                             <label class="flex items-center gap-1 cursor-pointer text-xs">
                                 <input type="checkbox" id="jm-tree-all" class="rounded" onchange="onJmTreeAllChange(this)">
                                 <span>전체</span>
                             </label>
                         </div>
-                        <ul id="jm-tree-list" class="space-y-1"></ul>
+                        <ul id="jm-tree-list" class="space-y-1 px-3 py-2 flex-1 overflow-y-auto"></ul>
                     </aside>
 
                     <!-- 메인 영역 -->
