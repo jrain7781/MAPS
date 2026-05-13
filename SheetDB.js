@@ -7662,6 +7662,48 @@ function jmLoadAllData() {
   }
 }
 
+/**
+ * josa_items 한 행의 특정 필드 1개 업데이트 (memo/josaja/josa_status 등)
+ * @param {string} josaId   PK
+ * @param {string} field    수정할 컬럼명 (JOSA_ITEMS_HEADERS 에 있어야 함)
+ * @param {string} value    새 값
+ */
+function updateJosaField(josaId, field, value) {
+  if (!josaId || !field) return { success: false, message: 'josa_id / field 필수' };
+  var colIdx = JOSA_ITEMS_HEADERS.indexOf(field);
+  if (colIdx < 0) return { success: false, message: '알 수 없는 컬럼: ' + field };
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+  if (!sheet) return { success: false, message: 'josa_items 시트 없음' };
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: false, message: '데이터 없음' };
+
+  // josa_id 컬럼은 항상 1번 (헤더 첫 컬럼)
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  var targetId = String(josaId).trim();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === targetId) {
+      var rowNum = i + 2;
+      sheet.getRange(rowNum, colIdx + 1).setValue(String(value || ''));
+      // update_date 갱신
+      var udCol = JOSA_ITEMS_HEADERS.indexOf('update_date') + 1;
+      if (udCol > 0) sheet.getRange(rowNum, udCol).setValue(_josaNowText_());
+      // 상태 변경 시 시각 자동 기록
+      if (field === 'josa_status') {
+        var v = String(value || '');
+        var nowText = _josaNowText_();
+        if (v === '조사요청')      { var c = JOSA_ITEMS_HEADERS.indexOf('requested_at') + 1; if (c > 0) sheet.getRange(rowNum, c).setValue(nowText); }
+        else if (v === '조사접수') { var c2 = JOSA_ITEMS_HEADERS.indexOf('accepted_at') + 1; if (c2 > 0) sheet.getRange(rowNum, c2).setValue(nowText); }
+        else if (v === '조사확정' || v === '조사불가') { var c3 = JOSA_ITEMS_HEADERS.indexOf('finalized_at') + 1; if (c3 > 0) sheet.getRange(rowNum, c3).setValue(nowText); }
+      }
+      return { success: true, josa_id: targetId, field: field, value: String(value || '') };
+    }
+  }
+  return { success: false, message: '해당 josa_id 없음: ' + targetId };
+}
+
 function handleJosaApiPost_(payload) {
   var action = String(payload.api_action || '');
   if (action === 'syncJosaPresets') return syncJosaPresets(payload.presets || [], payload.mode);
@@ -7669,5 +7711,6 @@ function handleJosaApiPost_(payload) {
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
+  if (action === 'updateJosaField') return updateJosaField(payload.josa_id, payload.field, payload.value);
   return { success: false, message: '알 수 없는 josa API 액션: ' + action };
 }

@@ -23695,17 +23695,28 @@ MJ 이정우 팀장
             if (!failCell) failCell = '<span class="text-gray-300">-</span>';
 
             // 상태 뱃지
-            // 상태 — 버튼 형식 (클릭 시 드롭다운 → 상태 변경)
+            // 상태 — 버튼 형식 (클릭 시 prompt → 변경 → GAS 저장)
             var statusBtn = (function () {
                 var s = it.josa_status || '분류필요';
                 var palette = { '분류필요': 'bg-gray-200 text-gray-700', '조사요청': 'bg-blue-200 text-blue-800', '조사접수': 'bg-indigo-200 text-indigo-800', '조사확정': 'bg-green-200 text-green-800', '조사불가': 'bg-orange-200 text-orange-800', '폐기': 'bg-red-200 text-red-800' };
                 return '<button type="button" onclick="openJmStatusMenu(this, \'' + escAttr(it.josa_id) + '\')" class="jm-status-btn ' + (palette[s] || 'bg-gray-200') + '">' + escHtml(s) + '</button>';
             })();
 
+            // 조사자 — input + datalist (자동 검색 + 엔터 저장)
+            var josajaListId = 'jm-josaja-' + it.josa_id;
+            var optionsHtml = (smInvestigators || []).map(function (m) { return '<option value="' + escAttr(m.member_name) + '">'; }).join('');
+            var josajaCell = '<input type="text" list="' + josajaListId + '" value="' + escAttr(it.josaja || '') + '" data-id="' + escAttr(it.josa_id) + '" class="jm-josaja-input" onkeydown="onJmJosajaKeydown(event, this)" onblur="onJmJosajaBlur(this)">' +
+                             '<datalist id="' + josajaListId + '">' + optionsHtml + '</datalist>';
+
+            // 비고 — 클릭 시 모달 열기
+            var memoCell = '<div class="jm-memo-cell" onclick="openJmMemoModal(\'' + escAttr(it.josa_id) + '\')" title="클릭해서 편집">' +
+                           (it.memo ? escHtml(it.memo) : '<span class="text-gray-300">+ 메모</span>') +
+                           '</div>';
+
             return '<tr class="jm-row">' +
                 '<td class="jm-td text-center"><input type="checkbox" class="jm-row-cb rounded" data-id="' + escAttr(it.josa_id) + '"></td>' +
                 '<td class="jm-td text-center">' + statusBtn + '</td>' +
-                '<td class="jm-td text-center">' + escHtml(it.josaja || '') + '</td>' +
+                '<td class="jm-td text-center">' + josajaCell + '</td>' +
                 '<td class="jm-td text-center">' + imgCell + '</td>' +
                 '<td class="jm-td text-center">' + sakunCell + '</td>' +
                 '<td class="jm-td text-center">' + escHtml(it.court || '') + '</td>' +
@@ -23714,7 +23725,7 @@ MJ 이정우 팀장
                 '<td class="jm-td text-right">' + priceCell + '</td>' +
                 '<td class="jm-td text-center">' + failCell + '</td>' +
                 '<td class="jm-td text-center">' + escHtml(it.view_count || '') + '</td>' +
-                '<td class="jm-td text-left text-[11px] text-gray-600">' + escHtml(it.memo || '') + '</td>' +
+                '<td class="jm-td text-left text-[11px] text-gray-600">' + memoCell + '</td>' +
                 '<td class="jm-td text-center text-[11px] text-gray-500">' + escHtml(fmtRegDate(it.reg_date)) + '</td>' +
                 '</tr>';
         }).join('');
