@@ -23647,9 +23647,9 @@ MJ 이정우 팀장
             var sakunCls = isMulti ? 'jm-sakun-multi' : 'jm-sakun';
             var sakunTip = isMulti ? ('속한 리스트:\n' + multiList) : (multiList || '');
 
-            // 사진 — cross-PC 호환 위해 crossorigin 폴백
+            // 사진 — 옥션원 CDN 은 CORS 헤더 안 줘서 crossorigin 사용 X. referrerpolicy 만.
             var imgCell = it.img_url
-                ? '<img src="' + escAttr(it.img_url) + '" class="jm-thumb" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.removeAttribute(\'crossorigin\');this.src=this.src;">'
+                ? '<img src="' + escAttr(it.img_url) + '" class="jm-thumb" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'">'
                 : '<span class="text-gray-300">-</span>';
 
             // 사건번호 + 물건종류 + [옥션원] / [조사내용] 버튼 (조사내용은 입찰물건 등록된 경우만)
@@ -23755,17 +23755,43 @@ MJ 이정우 팀장
             .updateJosaField(josaId, field, String(value || ''));
     }
 
-    // 상태 변경 — prompt → GAS 저장
+    // 상태 변경 — 인라인 드롭다운 (6개 버튼 세로 펼침)
     function openJmStatusMenu(btn, josaId) {
+        // 기존 열린 메뉴 닫기
+        var prev = document.querySelector('.jm-status-menu');
+        if (prev) prev.remove();
+
         var statuses = ['분류필요', '조사요청', '조사접수', '조사확정', '조사불가', '폐기'];
+        var palette = { '분류필요': 'bg-gray-200 text-gray-700', '조사요청': 'bg-blue-200 text-blue-800', '조사접수': 'bg-indigo-200 text-indigo-800', '조사확정': 'bg-green-200 text-green-800', '조사불가': 'bg-orange-200 text-orange-800', '폐기': 'bg-red-200 text-red-800' };
         var cur = btn.textContent.trim();
-        var picked = prompt('상태 변경 (1~6 입력):\n1=분류필요  2=조사요청  3=조사접수\n4=조사확정  5=조사불가  6=폐기\n\n현재: ' + cur, '');
-        if (!picked) return;
-        var idx = parseInt(picked, 10) - 1;
-        if (idx < 0 || idx >= statuses.length) { alert('1~6 사이 숫자만 입력'); return; }
-        var newStatus = statuses[idx];
-        if (newStatus === cur) return;
-        _jmSaveField(josaId, 'josa_status', newStatus, function () { applyJosaFilters(); });
+
+        var menu = document.createElement('div');
+        menu.className = 'jm-status-menu';
+        menu.innerHTML = statuses.map(function (s) {
+            var sel = (s === cur) ? ' jm-status-sel' : '';
+            return '<button type="button" class="jm-status-btn ' + (palette[s] || 'bg-gray-200') + sel + '" data-status="' + escAttr(s) + '">' + escHtml(s) + '</button>';
+        }).join('');
+        // 버튼 바로 아래 position
+        var rect = btn.getBoundingClientRect();
+        menu.style.left = rect.left + 'px';
+        menu.style.top = (rect.bottom + 2) + 'px';
+        document.body.appendChild(menu);
+
+        menu.querySelectorAll('button').forEach(function (b) {
+            b.addEventListener('click', function () {
+                var newStatus = b.dataset.status;
+                menu.remove();
+                if (newStatus === cur) return;
+                _jmSaveField(josaId, 'josa_status', newStatus, function () { applyJosaFilters(); });
+            });
+        });
+
+        // 외부 클릭 시 닫기
+        setTimeout(function () {
+            document.addEventListener('click', function closeOnce(e) {
+                if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', closeOnce); }
+            });
+        }, 0);
     }
 
     // 조사자 input — 엔터 시 저장, ESC 취소, blur 시 변경되었으면 저장
