@@ -23731,7 +23731,31 @@ MJ 이정우 팀장
         }).join('');
     }
 
-    // 상태 변경 메뉴 (확인 다이얼로그 → GAS 호출)
+    // 공통: 필드 1개 GAS 저장 (메모리 즉시 반영 + 서버 비동기)
+    function _jmSaveField(josaId, field, value, onDone) {
+        var it = jmItems.find(function (x) { return x.josa_id === josaId; });
+        if (it) it[field] = value;  // 메모리 즉시 반영
+        if (typeof google === 'undefined' || !google.script || !google.script.run) {
+            if (onDone) onDone({ success: false, message: 'google.script.run 사용 불가' });
+            return;
+        }
+        google.script.run
+            .withSuccessHandler(function (resp) {
+                if (resp && resp.success) {
+                    if (typeof showStatus === 'function') showStatus(field + ' 저장됨', 'success');
+                } else {
+                    if (typeof showStatus === 'function') showStatus('저장 실패: ' + (resp && resp.message || '?'), 'error');
+                }
+                if (onDone) onDone(resp);
+            })
+            .withFailureHandler(function (err) {
+                if (typeof showStatus === 'function') showStatus('저장 실패: ' + (err && err.message || err), 'error');
+                if (onDone) onDone({ success: false, message: String(err) });
+            })
+            .updateJosaField(josaId, field, String(value || ''));
+    }
+
+    // 상태 변경 — prompt → GAS 저장
     function openJmStatusMenu(btn, josaId) {
         var statuses = ['분류필요', '조사요청', '조사접수', '조사확정', '조사불가', '폐기'];
         var cur = btn.textContent.trim();
@@ -23741,12 +23765,65 @@ MJ 이정우 팀장
         if (idx < 0 || idx >= statuses.length) { alert('1~6 사이 숫자만 입력'); return; }
         var newStatus = statuses[idx];
         if (newStatus === cur) return;
-        // 메모리 변경 + 화면 즉시 반영
+        _jmSaveField(josaId, 'josa_status', newStatus, function () { applyJosaFilters(); });
+    }
+
+    // 조사자 input — 엔터 시 저장, ESC 취소, blur 시 변경되었으면 저장
+    function onJmJosajaKeydown(e, input) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === 'Escape') {
+            // 원래 값 복원
+            var it = jmItems.find(function (x) { return x.josa_id === input.dataset.id; });
+            input.value = (it && it.josaja) || '';
+            input.blur();
+        }
+    }
+    function onJmJosajaBlur(input) {
+        var josaId = input.dataset.id;
+        var newVal = String(input.value || '').trim();
         var it = jmItems.find(function (x) { return x.josa_id === josaId; });
-        if (it) it.josa_status = newStatus;
-        applyJosaFilters();
-        // TODO: GAS 저장 함수 (다음 작업)
-        showStatus('상태 변경: ' + newStatus + ' (GAS 저장은 다음 작업)', 'info');
+        var curVal = (it && it.josaja) || '';
+        if (newVal === curVal) return;
+        // 조사자 목록(smInvestigators)에 없는 이름이면 확인
+        var validNames = (smInvestigators || []).map(function (m) { return m.member_name; });
+        if (newVal && validNames.indexOf(newVal) === -1) {
+            if (!confirm('"' + newVal + '" 는 회원 목록에 없는 조사자입니다. 그대로 저장?')) {
+                input.value = curVal;
+                return;
+            }
+        }
+        _jmSaveField(josaId, 'josaja', newVal);
+    }
+
+    // ── 비고 모달 ─────────────────────────────────────────
+    var __jmMemoCurId = null;
+    function openJmMemoModal(josaId) {
+        var it = jmItems.find(function (x) { return x.josa_id === josaId; });
+        if (!it) return;
+        __jmMemoCurId = josaId;
+        var meta = '사건번호: ' + (it.sakun_no || '') + ' · ' + (it.address || '').slice(0, 40);
+        var metaEl = document.getElementById('jm-memo-meta');
+        if (metaEl) metaEl.textContent = meta;
+        var ta = document.getElementById('jm-memo-text');
+        if (ta) { ta.value = it.memo || ''; setTimeout(function () { ta.focus(); ta.select(); }, 50); }
+        document.getElementById('jm-memo-modal').classList.remove('content-hidden');
+    }
+    function closeJmMemoModal() {
+        document.getElementById('jm-memo-modal').classList.add('content-hidden');
+        __jmMemoCurId = null;
+    }
+    function saveJmMemo() {
+        if (!__jmMemoCurId) return closeJmMemoModal();
+        var ta = document.getElementById('jm-memo-text');
+        var newMemo = ta ? ta.value : '';
+        _jmSaveField(__jmMemoCurId, 'memo', newMemo, function (resp) {
+            if (resp && resp.success) {
+                applyJosaFilters();  // 그리드 재렌더
+                closeJmMemoModal();
+            }
+        });
     }
 
     // 정렬 헤더 클릭
