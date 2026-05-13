@@ -23342,4 +23342,327 @@ MJ 이정우 팀장
         updateGubunHidden();
     }
 
+    // ════════════════════════════════════════════════════════════════
+    // 조사물건관리 v2 (JosaManagement) — 매니저 결과 기반 새 화면
+    // ════════════════════════════════════════════════════════════════
+    var jmPresets = [];           // [{preset_id, preset_title, items_count, is_active, deleted_in_manager_at, ...}]
+    var jmItems = [];             // [{item_key, sakun_no, ...}]
+    var jmSelectedPresetIds = new Set();
+    var jmCurrentSort = { key: 'reg_date', dir: 'desc' };
+
+    // navigateTo 진입 시 데이터 로드
+    (function () {
+        if (typeof navigateTo !== 'function') return;
+        var _origNav = navigateTo;
+        navigateTo = function (tabId) {
+            _origNav(tabId);
+            if (tabId === 'JosaManagement') loadJosaData();
+        };
+    })();
+
+    // 단일 wrapper 호출 (jmLoadAllData) — 3개 chained call 문제 회피
+    function loadJosaData(forceRefresh) {
+        var summary = document.getElementById('jm-summary');
+        var t0 = Date.now();
+        if (summary) summary.textContent = '데이터 로딩 중...';
+
+        if (typeof google === 'undefined' || !google.script || !google.script.run) {
+            if (summary) summary.textContent = 'google.script.run 사용 불가';
+            return;
+        }
+
+        google.script.run
+            .withSuccessHandler(function (d) {
+                if (!d || !d.success) {
+                    if (summary) summary.textContent = 'GAS 에러: ' + (d && (d.error || d.message) || 'unknown');
+                    console.error('jmLoadAllData failed:', d);
+                    return;
+                }
+                smInvestigators = d.investigators || [];
+                jmPresets = d.presets || [];
+                jmItems = d.items || [];
+                rebuildJmJosajaFilter();
+                if (jmSelectedPresetIds.size === 0) {
+                    jmPresets.forEach(function (p) { if (p.preset_id) jmSelectedPresetIds.add(p.preset_id); });
+                }
+                renderJosaTree();
+                applyJosaFilters();
+                var ms = Date.now() - t0;
+                if (summary) summary.textContent = 'preset ' + jmPresets.length + ' · items ' + jmItems.length + ' (' + ms + 'ms)';
+            })
+            .withFailureHandler(function (err) {
+                var msg = (err && (err.message || err.name)) || String(err) || 'unknown';
+                if (summary) {
+                    summary.textContent = 'jmLoadAllData 실패: ' + msg;
+                    summary.title = JSON.stringify(err);
+                }
+                console.error('jmLoadAllData failed:', err);
+            })
+            .jmLoadAllData();
+    }
+
+    function rebuildJmJosajaFilter() {
+        var sel = document.getElementById('jm-filter-josaja');
+        if (!sel) return;
+        var current = sel.value;
+        sel.innerHTML = '<option value="">조사자 전체</option>';
+        (smInvestigators || []).forEach(function (m) {
+            var opt = document.createElement('option');
+            opt.value = m.member_name;
+            opt.textContent = m.member_name;
+            sel.appendChild(opt);
+        });
+        sel.value = current;
+    }
+
+    function renderJosaTree() {
+        var list = document.getElementById('jm-tree-list');
+        if (!list) return;
+        var html = jmPresets.map(function (p) {
+            var checked = jmSelectedPresetIds.has(p.preset_id) ? 'checked' : '';
+            var deleted = (p.is_active === 'N') || p.deleted_in_manager_at;
+            var labelCls = 'flex items-center gap-1 cursor-pointer ' + (deleted ? 'text-red-600' : 'text-gray-700');
+            var badge = deleted ? '<span class="text-[10px] bg-red-100 text-red-700 px-1 rounded">삭제됨</span>' : '';
+            var cnt = '<span class="text-[10px] text-gray-400 ml-auto">(' + (p.items_count || '0') + ')</span>';
+            return '<li><label class="' + labelCls + '">' +
+                   '<input type="checkbox" class="jm-tree-cb rounded" data-id="' + escAttr(p.preset_id) + '" ' + checked + '>' +
+                   '<span class="truncate flex-1" title="' + escAttr(p.preset_title || '') + '">' + escHtml(p.preset_title || '(제목없음)') + '</span>' +
+                   badge + cnt +
+                   '</label></li>';
+        }).join('');
+        list.innerHTML = html || '<li class="text-gray-400 text-xs">크롤링리스트 없음</li>';
+        list.querySelectorAll('.jm-tree-cb').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                var id = cb.dataset.id;
+                if (cb.checked) jmSelectedPresetIds.add(id); else jmSelectedPresetIds.delete(id);
+                syncJmTreeAllState();
+                applyJosaFilters();
+            });
+        });
+        syncJmTreeAllState();
+    }
+
+    function syncJmTreeAllState() {
+        var all = document.getElementById('jm-tree-all');
+        if (!all) return;
+        var total = jmPresets.length;
+        var sel = jmSelectedPresetIds.size;
+        if (sel === 0) { all.checked = false; all.indeterminate = false; }
+        else if (sel === total) { all.checked = true; all.indeterminate = false; }
+        else { all.checked = false; all.indeterminate = true; }
+    }
+
+    function onJmTreeAllChange(el) {
+        var checked = !!el.checked;
+        jmSelectedPresetIds = new Set();
+        if (checked) jmPresets.forEach(function (p) { jmSelectedPresetIds.add(p.preset_id); });
+        renderJosaTree();
+        applyJosaFilters();
+    }
+
+    function onJmGridAllChange(el) {
+        var checked = !!el.checked;
+        document.querySelectorAll('#jm-grid-body .jm-row-cb').forEach(function (cb) { cb.checked = checked; });
+    }
+
+    function resetJosaFilters() {
+        ['jm-search-sakun', 'jm-search-bid', 'jm-search-court', 'jm-search-addr', 'jm-search-prop', 'jm-search-special']
+            .forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+        var sStatus = document.getElementById('jm-filter-status'); if (sStatus) sStatus.value = '';
+        var sJ = document.getElementById('jm-filter-josaja');     if (sJ) sJ.value = '';
+        var today = document.getElementById('jm-today-only');     if (today) today.checked = true;
+        applyJosaFilters();
+    }
+
+    function applyJosaFilters() {
+        var sakun = (document.getElementById('jm-search-sakun')?.value || '').trim().toLowerCase();
+        var bid   = (document.getElementById('jm-search-bid')?.value || '').trim();
+        var court = (document.getElementById('jm-search-court')?.value || '').trim();
+        var status = document.getElementById('jm-filter-status')?.value || '';
+        var josaja = document.getElementById('jm-filter-josaja')?.value || '';
+        var addr  = (document.getElementById('jm-search-addr')?.value || '').trim();
+        var prop  = (document.getElementById('jm-search-prop')?.value || '').trim();
+        var spec  = (document.getElementById('jm-search-special')?.value || '').trim();
+        var todayOnly = !!document.getElementById('jm-today-only')?.checked;
+        var todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+
+        var filtered = jmItems.filter(function (it) {
+            // preset 트리 필터 (선택된 preset 에 속한 것만)
+            var ids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); });
+            var inTree = ids.some(function (id) { return jmSelectedPresetIds.has(id); });
+            if (!inTree) return false;
+
+            if (sakun && String(it.sakun_no || '').toLowerCase().indexOf(sakun) === -1) return false;
+            if (bid && String(it.bid_date || '').indexOf(bid) === -1) return false;
+            if (court && String(it.court || '').indexOf(court) === -1) return false;
+            if (status && String(it.josa_status || '') !== status) return false;
+            if (josaja && String(it.josaja || '') !== josaja) return false;
+            if (addr && String(it.address || '').indexOf(addr) === -1) return false;
+            if (prop && String(it.prop_kind || '').indexOf(prop) === -1) return false;
+            if (spec && String(it.specials || '').indexOf(spec) === -1) return false;
+
+            if (todayOnly) {
+                // bid_date 가 오늘(YYYYMMDD 또는 YYYY-MM-DD) 이후만
+                var d = String(it.bid_date || '').replace(/[^0-9]/g, '').slice(0, 8);
+                if (d && d < todayStr) return false;
+            }
+            return true;
+        });
+
+        // 정렬
+        filtered.sort(function (a, b) {
+            var av = String(a[jmCurrentSort.key] || '');
+            var bv = String(b[jmCurrentSort.key] || '');
+            if (av < bv) return jmCurrentSort.dir === 'asc' ? -1 : 1;
+            if (av > bv) return jmCurrentSort.dir === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        renderJosaGrid(filtered);
+        renderJmStatusSummary(filtered);
+    }
+
+    function renderJmStatusSummary(filtered) {
+        var bar = document.getElementById('jm-status-summary');
+        if (!bar) return;
+        var counts = { '분류필요': 0, '조사요청': 0, '조사접수': 0, '조사확정': 0, '조사불가': 0, '폐기': 0 };
+        filtered.forEach(function (it) { var s = it.josa_status; if (counts[s] !== undefined) counts[s]++; });
+        var palette = {
+            '분류필요': 'bg-gray-100 text-gray-700',
+            '조사요청': 'bg-blue-100 text-blue-700',
+            '조사접수': 'bg-indigo-100 text-indigo-700',
+            '조사확정': 'bg-green-100 text-green-700',
+            '조사불가': 'bg-orange-100 text-orange-700',
+            '폐기':     'bg-red-100 text-red-700',
+        };
+        var html = Object.keys(counts).map(function (k) {
+            return '<span class="px-2 py-0.5 rounded ' + palette[k] + '">' + k + ' <strong>' + counts[k] + '</strong></span>';
+        }).join('');
+        bar.innerHTML = '<span class="text-gray-500">필터: 총 <strong>' + filtered.length + '</strong></span>' + html;
+    }
+
+    function renderJosaGrid(filtered) {
+        var body = document.getElementById('jm-grid-body');
+        if (!body) return;
+        if (!filtered.length) {
+            body.innerHTML = '<tr><td colspan="15" class="text-center text-gray-400 py-10">조회 결과 없음</td></tr>';
+            return;
+        }
+        // preset_id → title 맵 (사건번호 툴팁용)
+        var presetMap = {};
+        jmPresets.forEach(function (p) { presetMap[p.preset_id] = p.preset_title; });
+
+        body.innerHTML = filtered.map(function (it) {
+            var ids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+            var multiList = ids.map(function (id) { return presetMap[id] || id; }).join('\n');
+            var isMulti = ids.length > 1;
+            var sakunCls = isMulti ? 'text-red-600 font-bold' : 'text-gray-800';
+            var sakunTip = isMulti ? ('속한 리스트:\n' + multiList) : (multiList || '');
+
+            var statusBadge = (function () {
+                var s = it.josa_status || '분류필요';
+                var palette = { '분류필요': 'bg-gray-200 text-gray-700', '조사요청': 'bg-blue-200 text-blue-800', '조사접수': 'bg-indigo-200 text-indigo-800', '조사확정': 'bg-green-200 text-green-800', '조사불가': 'bg-orange-200 text-orange-800', '폐기': 'bg-red-200 text-red-800' };
+                return '<span class="px-1.5 py-0.5 rounded text-[10px] ' + (palette[s] || 'bg-gray-200') + '">' + escHtml(s) + '</span>';
+            })();
+
+            var viewBtn = it.view_url
+                ? '<a href="' + escAttr(it.view_url) + '" target="_blank" class="text-blue-600 hover:underline">상세</a>'
+                : '<span class="text-gray-300">-</span>';
+
+            // bid_date 표시: 260520 → 26-05-20 + 시간
+            var bidDateDisp = '';
+            if (it.bid_date && /^\d{6}$/.test(it.bid_date)) {
+                bidDateDisp = it.bid_date.slice(0,2) + '-' + it.bid_date.slice(2,4) + '-' + it.bid_date.slice(4,6);
+            } else {
+                bidDateDisp = escHtml(it.bid_date || '');
+            }
+            var bidCell = bidDateDisp + (it.bid_time ? '<br><span class="text-[10px] text-gray-500">' + escHtml(it.bid_time) + '</span>' : '');
+
+            // 유찰: 13회 / 100%
+            var failCell = '';
+            if (it.fail_count) failCell += escHtml(it.fail_count) + '회';
+            if (it.fail_rate)  failCell += (failCell ? '<br>' : '') + '<span class="text-[10px] text-gray-500">' + escHtml(it.fail_rate) + '%</span>';
+            if (!failCell) failCell = '<span class="text-gray-300">-</span>';
+
+            // 가격: 감정 / 최저 / 평당
+            function fmtNum(n) { if (!n) return '-'; var s = String(n); return s.replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+            var priceCell = '<div>감 ' + fmtNum(it.kamjungka) + '</div>' +
+                            '<div>최 ' + fmtNum(it.low_price) + '</div>' +
+                            (it.pyeong_price ? '<div class="text-[10px] text-gray-500">평 ' + fmtNum(it.pyeong_price) + '만</div>' : '');
+
+            return '<tr class="hover:bg-yellow-50">' +
+                '<td class="border px-2 py-1 text-center"><input type="checkbox" class="jm-row-cb rounded" data-key="' + escAttr(it.item_key) + '"></td>' +
+                '<td class="border px-2 py-1 text-center">' + statusBadge + '</td>' +
+                '<td class="border px-2 py-1 text-center ' + sakunCls + '" title="' + escAttr(sakunTip) + '">' + escHtml(it.sakun_no || '') + '</td>' +
+                '<td class="border px-2 py-1 text-center">' + escHtml(it.court || '') + '</td>' +
+                '<td class="border px-2 py-1 text-center text-[11px]">' + bidCell + '</td>' +
+                '<td class="border px-2 py-1 text-center text-[11px]">' + failCell + '</td>' +
+                '<td class="border px-2 py-1 text-left text-[11px]">' +
+                    '<div>' + escHtml(it.address || '') + '</div>' +
+                    (it.size_info ? '<div class="text-gray-500">' + escHtml(it.size_info) + '</div>' : '') +
+                    (it.specials_all ? '<div class="text-orange-700">' + escHtml(it.specials_all) + '</div>' : '') +
+                    (it.issue ? '<div class="text-red-600 font-semibold">⚠ ' + escHtml(it.issue) + '</div>' : '') +
+                '</td>' +
+                '<td class="border px-2 py-1 text-left text-[11px]">' + escHtml(it.prop_kind || '') + (it.specials ? '<br><span class="text-orange-700">' + escHtml(it.specials) + '</span>' : '') + '</td>' +
+                '<td class="border px-2 py-1 text-right text-[11px]">' + priceCell + '</td>' +
+                '<td class="border px-2 py-1 text-center text-[11px]">' + escHtml(it.view_count || '') + '</td>' +
+                '<td class="border px-2 py-1 text-center">' + escHtml(it.josaja || '') + '</td>' +
+                '<td class="border px-2 py-1 text-center"><button type="button" onclick="openJosaContentModal(\'' + escAttr(it.item_key) + '\')" class="text-blue-600 hover:underline text-[11px]">보기</button></td>' +
+                '<td class="border px-2 py-1 text-left text-[11px] text-gray-600">' + escHtml(it.memo || '') + '</td>' +
+                '<td class="border px-2 py-1 text-center text-[11px] text-gray-500">' + escHtml(it.reg_date || '') + '</td>' +
+                '<td class="border px-2 py-1 text-center">' + viewBtn + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    // 정렬 헤더 클릭
+    document.addEventListener('click', function (e) {
+        var th = e.target.closest && e.target.closest('#jm-grid thead th[data-sort]');
+        if (!th) return;
+        var key = th.dataset.sort;
+        if (jmCurrentSort.key === key) {
+            jmCurrentSort.dir = jmCurrentSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            jmCurrentSort.key = key;
+            jmCurrentSort.dir = 'asc';
+        }
+        applyJosaFilters();
+    });
+
+    // 조사내용 보기 — 입찰물건 상세 모달 [조사탭] 으로 전환
+    // 사용자 사양: "입찰물건보기 조사탭내용 모달로 띄움" — sakun_no 매칭으로 기존 패턴 재사용
+    function openJosaContentModal(itemKey) {
+        var it = jmItems.find(function (x) { return x.item_key === itemKey; });
+        if (!it) { showStatus('항목 없음', 'error'); return; }
+        var sakun = String(it.sakun_no || '').trim();
+        if (!sakun) { showStatus('사건번호 없음', 'error'); return; }
+
+        if (typeof allBiddingData === 'undefined' || !Array.isArray(allBiddingData) || !allBiddingData.length) {
+            alert('입찰물건 데이터가 아직 로드되지 않았습니다.\n좌측 [입찰물건관리] 메뉴를 한 번 열어 데이터를 로드한 후 다시 시도해주세요.');
+            return;
+        }
+        var bidItem = allBiddingData.find(function (d) {
+            return String(d.sakun_no || '').trim() === sakun;
+        });
+        if (!bidItem) {
+            alert('MAPS 입찰물건에 미등록된 사건입니다.\n사건번호: ' + sakun + '\n\n입찰물건으로 등록되면 조사내용을 확인할 수 있습니다.');
+            return;
+        }
+        if (typeof openDetailModal === 'function') {
+            openDetailModal(bidItem);
+            setTimeout(function () {
+                if (typeof switchModalTab === 'function') switchModalTab('investigation');
+            }, 100);
+        } else {
+            alert('openDetailModal 함수를 찾을 수 없습니다 (기존 입찰물건 상세 모달).');
+        }
+    }
+
+    // 검색 input Enter 키 → 조회
+    ['jm-search-sakun', 'jm-search-bid', 'jm-search-court', 'jm-search-addr', 'jm-search-prop', 'jm-search-special'].forEach(function (id) {
+        document.addEventListener('keydown', function (e) {
+            if (e.target && e.target.id === id && e.key === 'Enter') applyJosaFilters();
+        });
+    });
+
 </script>

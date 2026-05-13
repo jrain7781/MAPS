@@ -141,7 +141,7 @@
             <button id="menu-ItemManagement" onclick="navigateTo('ItemManagement')"
                 class="py-4 px-6 text-base text-left text-gray-700 hover:bg-gray-100 transition duration-150">입찰물건
                 관리</button>
-            <button id="menu-SearchManagement" onclick="navigateTo('SearchManagement')"
+            <button id="menu-JosaManagement" onclick="navigateTo('JosaManagement')"
                 class="py-4 px-6 text-base text-left text-gray-700 hover:bg-gray-100 transition duration-150">조사물건
                 관리</button>
             <button id="menu-MemberManagement" onclick="navigateTo('MemberManagement')"
@@ -1563,7 +1563,97 @@
 
 
 
-            <!-- ================================ 조사물건 관리 (SearchManagement) ================================ -->
+            <!-- ================================ 조사물건관리 v2 (JosaManagement) ================================ -->
+            <div id="JosaManagement" class="tab-content h-full flex flex-col content-hidden bg-white overflow-hidden">
+                <!-- 상단 타이틀 -->
+                <div class="list-title-strip flex flex-col md:flex-row items-start md:items-center bg-gray-50 border-b shadow-sm gap-2 px-4 py-2">
+                    <h2 class="text-xl font-semibold text-gray-800 flex-shrink-0">조사물건관리</h2>
+                    <div class="flex flex-wrap items-center gap-2 py-1 text-xs">
+                        <span id="jm-summary" class="text-gray-600">로딩 중...</span>
+                        <button type="button" onclick="loadJosaData(true)"
+                            class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded transition font-bold">↻ 새로고침</button>
+                    </div>
+                </div>
+
+                <!-- 본문 = [좌측 트리] [메인 영역] -->
+                <div class="flex flex-1 overflow-hidden">
+                    <!-- 좌측 사이드 트리: 크롤링리스트 -->
+                    <aside class="w-64 border-r bg-gray-50 overflow-y-auto p-3 text-sm flex-shrink-0">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-semibold text-gray-700">크롤링리스트</span>
+                            <label class="flex items-center gap-1 cursor-pointer text-xs">
+                                <input type="checkbox" id="jm-tree-all" class="rounded" onchange="onJmTreeAllChange(this)">
+                                <span>전체</span>
+                            </label>
+                        </div>
+                        <ul id="jm-tree-list" class="space-y-1"></ul>
+                    </aside>
+
+                    <!-- 메인 영역 -->
+                    <main class="flex-1 overflow-hidden flex flex-col min-w-0">
+                        <!-- 검색폼 -->
+                        <div class="border-b bg-white p-3 flex flex-wrap gap-2 items-center text-xs">
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="jm-today-only" checked class="rounded" onchange="applyJosaFilters()"> 오늘 이후만</label>
+                            <span class="text-gray-300">|</span>
+                            <input type="text" id="jm-search-sakun" placeholder="사건번호" class="border rounded px-2 py-1 w-28" onfocus="this.select()" onclick="this.select()">
+                            <input type="text" id="jm-search-bid"   placeholder="입찰일자(YYYY-MM-DD)" class="border rounded px-2 py-1 w-36" onfocus="this.select()" onclick="this.select()">
+                            <input type="text" id="jm-search-court" placeholder="법원" class="border rounded px-2 py-1 w-24" onfocus="this.select()" onclick="this.select()">
+                            <select id="jm-filter-status" class="border rounded px-2 py-1">
+                                <option value="">상태 전체</option>
+                                <option>분류필요</option>
+                                <option>조사요청</option>
+                                <option>조사접수</option>
+                                <option>조사확정</option>
+                                <option>조사불가</option>
+                                <option>폐기</option>
+                            </select>
+                            <select id="jm-filter-josaja" class="border rounded px-2 py-1">
+                                <option value="">조사자 전체</option>
+                            </select>
+                            <input type="text" id="jm-search-addr"    placeholder="주소" class="border rounded px-2 py-1 w-32" onfocus="this.select()" onclick="this.select()">
+                            <input type="text" id="jm-search-prop"    placeholder="물건타입" class="border rounded px-2 py-1 w-24" onfocus="this.select()" onclick="this.select()">
+                            <input type="text" id="jm-search-special" placeholder="특수물건" class="border rounded px-2 py-1 w-24" onfocus="this.select()" onclick="this.select()">
+                            <button type="button" onclick="applyJosaFilters()"
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-bold">조회</button>
+                            <button type="button" onclick="resetJosaFilters()"
+                                class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded">초기화</button>
+                        </div>
+
+                        <!-- 상태별 썸머리 -->
+                        <div id="jm-status-summary" class="border-b bg-white px-3 py-2 flex flex-wrap gap-2 text-xs"></div>
+
+                        <!-- 메인 그리드 -->
+                        <div class="flex-1 overflow-auto p-2">
+                            <table class="w-full text-xs border-collapse" id="jm-grid">
+                                <thead class="bg-gray-100 sticky top-0 z-10">
+                                    <tr>
+                                        <th class="border px-2 py-1 w-10"><input type="checkbox" id="jm-grid-all" class="rounded" onchange="onJmGridAllChange(this)"></th>
+                                        <th class="border px-2 py-1 w-20 cursor-pointer" data-sort="josa_status">상태</th>
+                                        <th class="border px-2 py-1 w-28 cursor-pointer" data-sort="sakun_no">사건번호</th>
+                                        <th class="border px-2 py-1 w-16 cursor-pointer" data-sort="court">법원</th>
+                                        <th class="border px-2 py-1 w-24 cursor-pointer" data-sort="bid_date">입찰일<br><span class="text-[10px] font-normal text-gray-500">시간</span></th>
+                                        <th class="border px-2 py-1 w-16 cursor-pointer" data-sort="fail_count">유찰<br><span class="text-[10px] font-normal text-gray-500">횟수/율</span></th>
+                                        <th class="border px-2 py-1 cursor-pointer text-left" data-sort="address">소재지</th>
+                                        <th class="border px-2 py-1 w-28 text-left">물건/특수</th>
+                                        <th class="border px-2 py-1 w-32 text-right">가격<br><span class="text-[10px] font-normal text-gray-500">감/최/평</span></th>
+                                        <th class="border px-2 py-1 w-14 cursor-pointer" data-sort="view_count">조회</th>
+                                        <th class="border px-2 py-1 w-16 cursor-pointer" data-sort="josaja">조사자</th>
+                                        <th class="border px-2 py-1 w-16">조사내용</th>
+                                        <th class="border px-2 py-1 w-28 text-left">비고</th>
+                                        <th class="border px-2 py-1 w-32 cursor-pointer" data-sort="reg_date">등록일자</th>
+                                        <th class="border px-2 py-1 w-14">옥션원</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="jm-grid-body">
+                                    <tr><td colspan="15" class="text-center text-gray-400 py-10">로딩 중...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </main>
+                </div>
+            </div>
+
+            <!-- ================================ 조사물건 관리 (SearchManagement) — 구버전 (비활성, 코드 안전 보존용) ================================ -->
             <div id="SearchManagement" class="tab-content h-full flex flex-col content-hidden bg-white overflow-hidden">
                 <!-- 상단 타이틀 + 버튼 -->
                 <div

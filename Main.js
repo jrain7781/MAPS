@@ -100,9 +100,16 @@ function doPost(e) {
           return ContentService.createTextOutput(JSON.stringify({ success: false, message: '인증 실패' }))
             .setMimeType(ContentService.MimeType.JSON);
         }
-        const result = (typeof handleSearchApiPost_ === 'function')
-          ? handleSearchApiPost_(payload)
-          : { success: false, message: 'handleSearchApiPost_ 함수 없음' };
+        // josa* 액션은 josa 라우터, 나머지는 search 라우터
+        const apiAction = String(payload.api_action || '');
+        var result;
+        if (apiAction.indexOf('Josa') !== -1 && typeof handleJosaApiPost_ === 'function') {
+          result = handleJosaApiPost_(payload);
+        } else if (typeof handleSearchApiPost_ === 'function') {
+          result = handleSearchApiPost_(payload);
+        } else {
+          result = { success: false, message: '핸들러 함수 없음' };
+        }
         return ContentService.createTextOutput(JSON.stringify(result))
           .setMimeType(ContentService.MimeType.JSON);
       } catch (apiErr) {

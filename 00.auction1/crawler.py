@@ -10,7 +10,37 @@ crawler.py — 옥션원 크롤링 매니저 백엔드
 """
 from __future__ import annotations
 import json, os, re, sys, time, traceback, threading
+import urllib.request, urllib.error
 from http.server import HTTPServer, ThreadingHTTPServer, SimpleHTTPRequestHandler
+
+# ── MAPS GAS 웹앱 (메인 deployment) ────────────────────────
+GAS_WEBAPP_URL = (
+    "https://script.google.com/macros/s/"
+    "AKfycby1SnLYJmPQ9PU0JlEZC5rG3e9y9s6wMVrsPeG_gqgDBnK9FMkyVPb3v5V0DFI14ETZiA"
+    "/exec"
+)
+
+
+def _gas_post(payload: dict, timeout: float = 60.0) -> dict:
+    """GAS 웹앱으로 JSON POST 호출. 응답 JSON 반환."""
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        GAS_WEBAPP_URL,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json; charset=utf-8"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                return {"success": False, "error": "GAS 응답 JSON 파싱 실패", "raw": raw[:500]}
+    except urllib.error.HTTPError as e:
+        return {"success": False, "error": f"HTTP {e.code} {e.reason}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 # stdout 버퍼링 비활성 (디버그 로그 즉시 보이게)
 try:
@@ -713,6 +743,10 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        # MAPS GAS 중계 엔드포인트 (매니저 JS → 이 서버 → GAS)
+        if self.path in ("/api/maps-sync-presets", "/api/maps-upload-items", "/api/maps-gas"):
+            self._handle_maps_proxy()
+            return
         if self.path != "/api/crawl":
             self.send_response(404)
             self.end_headers()
@@ -730,6 +764,34 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
             self.wfile.write(body.encode("utf-8"))
+        except Exception as e:
+            traceback.print_exc()
+            err = {"success": False, "error": str(e)}
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps(err, ensure_ascii=False).encode("utf-8"))
+
+    def _handle_maps_proxy(self):
+        """매니저 → 이 서버 → GAS 로 페이로드를 forward.
+        매니저는 api_key, presets/items 등만 보내면 됨. api_action 은 path 기준으로 부여."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+            payload = json.loads(raw or "{}")
+            action_map = {
+                "/api/maps-sync-presets":  "syncJosaPresets",
+                "/api/maps-upload-items":  "uploadJosaItems",
+            }
+            # /api/maps-gas 는 payload.api_action 그대로 사용 (진단용 일반 라우터)
+            if self.path in action_map:
+                payload["api_action"] = action_map[self.path]
+            result = _gas_post(payload)
+            body = json.dumps(result, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(body)
         except Exception as e:
             traceback.print_exc()
             err = {"success": False, "error": str(e)}

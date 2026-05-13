@@ -171,6 +171,10 @@ const GUBUN_OPTIONS = ['회원', '직원', '관리자', '조사자'];
 // --- 조사물건(search) 시트 이름 ---
 const SEARCH_SHEET_NAME = 'search';
 
+// --- 조사물건관리 v2 시트 이름 ---
+const JOSA_PRESETS_SHEET_NAME = 'josa_presets';
+const JOSA_ITEMS_SHEET_NAME = 'josa_items';
+
 // --- 명의 구분 드롭다운 옵션 ---
 const NAME_GUBUN_OPTIONS = ['개인', '법인'];
 

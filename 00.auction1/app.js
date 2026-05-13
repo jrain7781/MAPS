@@ -201,6 +201,10 @@
     syncInputFromSelect();
   }
 
+  // ── MAPS 동기화 선택 상태 ───────────────────────────────
+  // 사이드바 체크박스 (preset id Set). 새로고침 시 초기화 (영구 저장 X).
+  let selectedSyncIds = new Set();
+
   // ── 사이드바 렌더 ───────────────────────────────────────
   function renderSidebar() {
     const list  = document.getElementById('sideList');
@@ -208,6 +212,7 @@
     if (!presets.length) {
       list.innerHTML = '';
       if (empty) empty.style.display = '';
+      syncCheckAllState();
       return;
     }
     if (empty) empty.style.display = 'none';
@@ -222,6 +227,7 @@
     const sorted = presets.slice().sort((a, b) => lastTs(b) - lastTs(a));
     list.innerHTML = sorted.map(p => {
       const active = p.id === currentPresetId ? ' active' : '';
+      const checked = selectedSyncIds.has(p.id) ? ' checked' : '';
       // 캐시 결과 — 제목 옆 (필터링/전체) + 서브라인 = 마지막 크롤링 시각
       let countInline = '';
       let lastCrawl = '';
@@ -233,8 +239,6 @@
           const rawN = items.length;
           let filteredN = rawN;
           try {
-            // 활성 프리셋이면 편집 중인 custRows 로 카운트 (메인 패널과 일치),
-            // 비활성 프리셋이면 저장된 customFilters 로 카운트
             const filtersToUse = (p.id === currentPresetId) ? custRows : (p.customFilters || []);
             const { items: filt } = applyCustomFilters(items, filtersToUse);
             filteredN = filt.length;
@@ -245,13 +249,255 @@
       } catch (e) {}
       const subText = lastCrawl ? `최근 크롤링: ${lastCrawl}` : '아직 크롤링하지 않음';
       return `<li class="snb_item${active}" data-id="${p.id}">
-        <div class="it-title"><span class="it-icon">📋</span><span class="it-name">${escHtml(p.title || '(제목 없음)')}</span>${countInline}</div>
-        <div class="it-sub">${subText}</div>
+        <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
+        <div class="it-body">
+          <div class="it-title"><span class="it-icon">📋</span><span class="it-name">${escHtml(p.title || '(제목 없음)')}</span>${countInline}</div>
+          <div class="it-sub">${subText} <span class="it-id" title="크롤링 리스트 ID (MAPS 동기화 키)">${escHtml(p.id)}</span></div>
+        </div>
       </li>`;
     }).join('');
     list.querySelectorAll('.snb_item').forEach(el => {
-      el.addEventListener('click', () => loadPreset(el.dataset.id));
+      el.addEventListener('click', (e) => {
+        // 체크박스 클릭은 별도 처리, li 자체 클릭만 loadPreset
+        if (e.target && e.target.classList && e.target.classList.contains('ms-row-chk')) return;
+        loadPreset(el.dataset.id);
+      });
     });
+    list.querySelectorAll('.ms-row-chk').forEach(chk => {
+      chk.addEventListener('click', (e) => e.stopPropagation());
+      chk.addEventListener('change', (e) => {
+        const id = e.target.dataset.id;
+        if (e.target.checked) selectedSyncIds.add(id); else selectedSyncIds.delete(id);
+        syncCheckAllState();
+      });
+    });
+    syncCheckAllState();
+  }
+
+  // 상단 [전체] 체크박스 상태 동기화 (선택 수 ↔ 전체 체크 일치)
+  function syncCheckAllState() {
+    const all = document.getElementById('msCheckAll');
+    if (!all) return;
+    const total = presets.length;
+    const sel = selectedSyncIds.size;
+    if (sel === 0) { all.checked = false; all.indeterminate = false; }
+    else if (sel === total) { all.checked = true; all.indeterminate = false; }
+    else { all.checked = false; all.indeterminate = true; }
+  }
+
+  // ── MAPS 동기화 ─────────────────────────────────────────
+  const LS_MAPS_KEY = 'auction1_maps_admin_key';
+  function getMapsAdminKey() { try { return localStorage.getItem(LS_MAPS_KEY) || ''; } catch (e) { return ''; } }
+  function setMapsAdminKey(k) { try { localStorage.setItem(LS_MAPS_KEY, k || ''); } catch (e) {} }
+
+  function promptMapsAdminKey() {
+    const cur = getMapsAdminKey();
+    const masked = cur ? cur.substring(0, 4) + '…' + cur.substring(cur.length - 3) : '(미설정)';
+    const next = prompt(`MAPS Admin Key 입력\n(현재: ${masked})\n\n비우고 확인하면 저장된 값을 삭제합니다.`, cur);
+    if (next === null) return; // 취소
+    setMapsAdminKey(next.trim());
+    alert(next.trim() ? 'Admin Key 저장됨' : 'Admin Key 삭제됨');
+  }
+
+  function onMsCheckAllChange(e) {
+    const checked = !!e.target.checked;
+    selectedSyncIds = new Set();
+    if (checked) presets.forEach(p => selectedSyncIds.add(p.id));
+    renderSidebar();
+  }
+
+  // ── 옥션원 raw 데이터 정제 ───────────────────────────────
+  // 사건번호 "24-102685" → "24타경102685"
+  function _normSakun(s) {
+    if (!s) return '';
+    var t = String(s).replace(/[\r\n\t]+/g, ' ').trim();
+    if (/타경/.test(t)) return t.replace(/\s+/g, '');
+    var m = t.match(/^(\d{2,4})-(\d+)/);
+    if (m) return m[1] + '타경' + m[2];
+    return t;
+  }
+  // "2026.05.26\n(10:00)\n입찰 14일전" → { bid_date: "260526", bid_time: "10:00" }
+  function _parseBid(s) {
+    if (!s) return { bid_date: '', bid_time: '' };
+    var t = String(s).replace(/[\r\n\t]+/g, ' ').trim();
+    var dm = t.match(/(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/);
+    var tm = t.match(/(\d{1,2}):(\d{2})/);
+    return {
+      bid_date: dm ? dm[1].slice(-2) + ('0' + dm[2]).slice(-2) + ('0' + dm[3]).slice(-2) : '',
+      bid_time: tm ? ('0' + tm[1]).slice(-2) + ':' + tm[2] : ''
+    };
+  }
+  // "315,000,000\n315,000,000\n평당 1,299만원" → { kamjungka, low_price, pyeong_price } (숫자만)
+  function _parsePrice(s) {
+    if (!s) return { kamjungka: '', low_price: '', pyeong_price: '' };
+    var lines = String(s).split(/[\r\n]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    function num(x) { return String(x || '').replace(/[^\d]/g, ''); }
+    var pyeong = '';
+    if (lines[2]) pyeong = num(lines[2].replace(/평당|만원|만/g, ''));
+    return {
+      kamjungka:    num(lines[0]),
+      low_price:    num(lines[1]),
+      pyeong_price: pyeong
+    };
+  }
+  // "유찰 13회\n(100%)" → { fail_count: "13", fail_rate: "100" }
+  function _parseStatus(s) {
+    if (!s) return { fail_count: '', fail_rate: '' };
+    var t = String(s).replace(/[\r\n\t]+/g, ' ').trim();
+    var cm = t.match(/유찰\s*(\d+)\s*회/);
+    var rm = t.match(/\((\d+)\s*%\)/);
+    return {
+      fail_count: cm ? cm[1] : '',
+      fail_rate:  rm ? rm[1] : ''
+    };
+  }
+  // view_count "533" 또는 "201 2일전" → 맨 앞 숫자만
+  function _parseViewCount(s) {
+    if (!s) return '';
+    var t = String(s).replace(/[\r\n\t]+/g, ' ').trim();
+    var m = t.match(/^(\d+)/);
+    return m ? m[1] : '';
+  }
+  // 주소 등 일반 정제: 줄바꿈/탭 제거
+  function _normText(s) {
+    if (!s) return '';
+    return String(s).replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  // address raw 3~4 라인 분리: { address, size_info, specials_all, issue }
+  function _parseAddress(s) {
+    var out = { address: '', size_info: '', specials_all: '', issue: '' };
+    if (!s) return out;
+    var lines = String(s).split(/[\r\n]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    if (lines[0]) out.address = lines[0];
+    function strip(x) { return x.replace(/^\[|\]$/g, '').trim(); }
+    for (var i = 1; i < lines.length; i++) {
+      var ln = lines[i];
+      if (/투기과열|조정대상|개발제한|토지거래/.test(ln)) {
+        out.issue = strip(ln);
+      } else if (/㎡|평|대지권|건물|계약/.test(ln)) {
+        out.size_info = strip(ln);
+      } else {
+        // 그 외 [...] 라인 = 특수전체로 취급
+        if (!out.specials_all) out.specials_all = strip(ln);
+        else out.specials_all += ' / ' + strip(ln);
+      }
+    }
+    return out;
+  }
+
+  // ── MAPS 업로드 (현재 결과 화면의 체크된 items → josa_items) ──
+  async function uploadSelectedItemsToMaps() {
+    if (!currentPresetId) { alert('활성 크롤링 리스트가 없습니다. (사이드바에서 리스트 선택 후 크롤링 결과가 떠 있어야 함)'); return; }
+    const adminKey = getMapsAdminKey();
+    if (!adminKey) {
+      alert('MAPS Admin Key가 설정되지 않았습니다. 사이드바 [⚙] 버튼으로 먼저 설정하세요.');
+      return;
+    }
+    if (!Array.isArray(lastItems) || !lastItems.length) {
+      alert('업로드할 크롤링 결과가 없습니다. [크롤링 실행] 먼저 해주세요.');
+      return;
+    }
+    // 체크된 행 — 없으면 보이는 결과 전체로 동작
+    const checked = Array.from(document.querySelectorAll('#resBody .res-cb:checked'));
+    let targetItems;
+    if (checked.length) {
+      targetItems = checked.map(cb => lastItems[parseInt(cb.dataset.idx, 10)]).filter(Boolean);
+    } else {
+      if (!confirm(`체크된 행이 없습니다.\n현재 화면의 전체 ${lastItems.length}건을 MAPS로 업로드할까요?`)) return;
+      targetItems = lastItems.slice();
+    }
+    if (!targetItems.length) { alert('업로드할 항목이 없습니다.'); return; }
+
+    const preset = presets.find(p => p.id === currentPresetId);
+    const presetTitle = preset ? (preset.title || '') : '';
+
+    // 매니저 item → josa_items 스키마 매핑 (정제 적용, 필드 분리)
+    const items = targetItems.map(it => {
+      const bid = _parseBid(it.bid_date);
+      const pr  = _parsePrice(it.price);
+      const st  = _parseStatus(it.status);
+      const addr = _parseAddress(it.address);
+      return {
+        sakun_no:     _normSakun(it.sakun_no),
+        bid_date:     bid.bid_date,
+        bid_time:     bid.bid_time,
+        court:        '',  // 옥션원 결과에 법원명 별도 컬럼 없음 — 추후 보완
+        address:      addr.address,
+        size_info:    addr.size_info,
+        specials_all: addr.specials_all,
+        issue:        addr.issue,
+        prop_kind:    _normText(it.prop_kind),
+        specials:     Array.isArray(it.specials) ? it.specials.join(',') : _normText(it.specials),
+        kamjungka:    pr.kamjungka,
+        low_price:    pr.low_price,
+        pyeong_price: pr.pyeong_price,
+        area:         '',
+        fail_count:   st.fail_count,
+        fail_rate:    st.fail_rate,
+        view_count:   _parseViewCount(it.view_count),
+        view_url:     String(it.view_url || '').trim(),
+        img_url:      String(it.img_url || '').trim(),
+      };
+    });
+
+    const btn = document.getElementById('btnUploadMaps');
+    const prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'MAPS 업로드 중…'; }
+    try {
+      const resp = await fetch('/api/maps-upload-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: adminKey,
+          preset_id: currentPresetId,
+          preset_title: presetTitle,
+          items: items,
+        }),
+      });
+      const data = await resp.json();
+      if (!data.success) {
+        alert('MAPS items 업로드 실패: ' + (data.message || data.error || JSON.stringify(data)));
+      } else {
+        alert(`MAPS items 업로드 완료\n신규: ${data.added}  |  갱신: ${data.updated}  |  실패: ${data.failed || 0}\n총 ${data.total}건 전송`);
+      }
+    } catch (e) {
+      alert('MAPS 업로드 호출 실패: ' + (e && e.message ? e.message : e));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = prevText; }
+    }
+  }
+
+  async function syncSelectedPresetsToMaps() {
+    if (!selectedSyncIds.size) { alert('동기화할 크롤링 리스트를 체크해주세요.'); return; }
+    const adminKey = getMapsAdminKey();
+    if (!adminKey) {
+      alert('MAPS Admin Key가 설정되지 않았습니다. 사이드바 [⚙] 버튼으로 먼저 설정하세요.');
+      return;
+    }
+    const targets = presets.filter(p => selectedSyncIds.has(p.id)).map(p => ({ id: p.id, title: p.title || '' }));
+    const btn = document.getElementById('btnSyncToMaps');
+    const prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '동기화 중…'; }
+    try {
+      const resp = await fetch('/api/maps-sync-presets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: adminKey, presets: targets, mode: 'partial' }),
+      });
+      const data = await resp.json();
+      if (!data.success) {
+        alert('MAPS 동기화 실패: ' + (data.message || data.error || JSON.stringify(data)));
+      } else {
+        const msg = `MAPS 동기화 완료 (mode=${data.mode})\n` +
+                    `신규: ${data.added}  |  갱신: ${data.updated}  |  복원: ${data.restored || 0}\n` +
+                    `총 ${data.total}건 전송`;
+        alert(msg);
+      }
+    } catch (e) {
+      alert('MAPS 동기화 호출 실패: ' + (e && e.message ? e.message : e));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = prevText; }
+    }
   }
 
   // ── 폼 → 객체, 객체 → 폼 ────────────────────────────────
@@ -753,6 +999,27 @@
   function bind() {
     document.getElementById('btnNewTop').addEventListener('click', newPreset);
     document.getElementById('btnNewMain').addEventListener('click', newPreset);
+    // MAPS 동기화
+    document.getElementById('msCheckAll')?.addEventListener('change', onMsCheckAllChange);
+    document.getElementById('btnSyncToMaps')?.addEventListener('click', syncSelectedPresetsToMaps);
+    document.getElementById('btnMapsConfig')?.addEventListener('click', promptMapsAdminKey);
+    document.getElementById('btnUploadMaps')?.addEventListener('click', uploadSelectedItemsToMaps);
+    // 결과 테이블 헤더 [전체] 체크박스 (사진 옆) — 모든 행 체크박스 토글
+    document.getElementById('resColCheckAll')?.addEventListener('change', (e) => {
+      const checked = !!e.target.checked;
+      document.querySelectorAll('#resBody .res-cb').forEach(cb => { cb.checked = checked; });
+    });
+    // 행 체크박스 변경 시 헤더 [전체] 체크박스의 상태(checked/indeterminate) 동기화
+    document.getElementById('resBody')?.addEventListener('change', (e) => {
+      if (!e.target.classList || !e.target.classList.contains('res-cb')) return;
+      const all = document.getElementById('resColCheckAll');
+      if (!all) return;
+      const boxes = document.querySelectorAll('#resBody .res-cb');
+      const sel = document.querySelectorAll('#resBody .res-cb:checked').length;
+      if (sel === 0)              { all.checked = false; all.indeterminate = false; }
+      else if (sel === boxes.length) { all.checked = true;  all.indeterminate = false; }
+      else                        { all.checked = false; all.indeterminate = true; }
+    });
     document.getElementById('btnSave').addEventListener('click', savePreset);
     document.getElementById('btnDelete').addEventListener('click', deletePreset);
     document.getElementById('btnDuplicate').addEventListener('click', duplicatePreset);

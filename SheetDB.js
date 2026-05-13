@@ -6943,18 +6943,12 @@ const SEARCH_HEADERS = [
 ];
 
 /**
- * search 시트 초기화 (헤더 세팅)
+ * search 시트 초기화 — 비활성화 (조사물건관리 v2 = josa_items 로 이전됨)
+ * 호출되어도 새로 생성하지 않음. 이미 있으면 그대로 반환.
  */
 function initSearchSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(DB_SEARCH_SHEET_NAME);
-  }
-  const headerRange = sheet.getRange(1, 1, 1, SEARCH_HEADERS.length);
-  headerRange.setValues([SEARCH_HEADERS]);
-  headerRange.setFontWeight('bold');
-  return sheet;
+  return ss.getSheetByName(DB_SEARCH_SHEET_NAME); // null 가능
 }
 
 /**
@@ -6982,10 +6976,7 @@ function updateSearchHeaders() {
 function readAllSearchItems() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
-  if (!sheet) {
-    initSearchSheet_();
-    sheet = ss.getSheetByName(DB_SEARCH_SHEET_NAME);
-  }
+  if (!sheet) return []; // 시트 없으면 빈 배열 (자동 생성 X)
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
@@ -7204,4 +7195,465 @@ function handleSearchApiPost_(payload) {
     return { success: true, message: 'search 시트 초기화 완료' };
   }
   return { success: false, message: '알 수 없는 API 액션: ' + action };
+}
+
+// ============================================================
+// [조사물건관리 v2] josa_presets + josa_items 시트
+// - 매니저(00.auction1) 의 크롤링 결과를 받아 저장
+// - 매니저 → MAPS 단방향 동기화 (매니저가 source of truth)
+// - 매니저에서 리스트 삭제해도 MAPS 자동 폐기 X → 빨간 카드로 표시, 사용자가 결정
+// ============================================================
+
+const DB_JOSA_PRESETS_SHEET_NAME = 'josa_presets';
+const JOSA_PRESETS_HEADERS = [
+  'preset_id',              // 매니저 uid() 와 동일 (동기화 키)
+  'preset_title',           // 크롤링리스트 이름
+  'created_at',             // 최초 등록일 (YYYY-MM-DD HH:mm:ss)
+  'updated_at',             // 최종 동기화 시각
+  'last_upload_at',         // 마지막 크롤링 업로드 시각
+  'items_count',            // 현재 속한 물건 수 (캐시)
+  'is_active',              // Y/N (매니저에 존재 여부)
+  'deleted_in_manager_at'   // 매니저에서 삭제 감지된 시각 (빨간 카드 표시용)
+];
+
+function initJosaPresetsSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(DB_JOSA_PRESETS_SHEET_NAME);
+  }
+  const headerRange = sheet.getRange(1, 1, 1, JOSA_PRESETS_HEADERS.length);
+  headerRange.setValues([JOSA_PRESETS_HEADERS]);
+  headerRange.setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  return sheet;
+}
+
+const DB_JOSA_ITEMS_SHEET_NAME = 'josa_items';
+const JOSA_ITEMS_HEADERS = [
+  'item_key',               // sakun_no|bid_date|court (PK)
+  'sakun_no',               // 사건번호 (예: 24타경102685)
+  'bid_date',               // 입찰일자 YYMMDD (items.in-date 동일)
+  'bid_time',               // 입찰시간 HH:MM
+  'court',                  // 법원명
+  'address',                // 소재지 (정제된 주소만)
+  'size_info',              // 크기/면적정보 (대지권, 건물, 계약평형 등)
+  'specials_all',           // 특수전체 (address 라인 3)
+  'issue',                  // 정책 이슈 (투기과열지구/조정대상지역 등)
+  'prop_kind',              // 물건종류
+  'specials',               // 특수물건 (개별, raw 필드)
+  'kamjungka',              // 감정가 (숫자만)
+  'low_price',              // 최저입찰가 (숫자만)
+  'pyeong_price',           // 평당가 (숫자만, 만원 단위)
+  'area',                   // 면적
+  'fail_count',             // 유찰 횟수 (숫자만)
+  'fail_rate',              // 유찰율 % (숫자만)
+  'view_count',             // 옥션원 조회수 (숫자만)
+  'view_url',               // 옥션원 상세 URL (바로가기)
+  'img_url',                // 대표 이미지 URL
+  'preset_ids',             // 콤마 구분 다중값 (어느 크롤링리스트들에 속하는지)
+  'preset_titles_cached',   // 캐시 (표시용, 콤마 구분)
+  'josa_status',            // 분류필요/조사요청/조사접수/조사확정/조사불가/폐기
+  'josaja',                 // 조사자명 (members.member_name)
+  'requested_at',           // 조사요청 시각
+  'accepted_at',            // 조사접수 시각 (텔레그램 [접수] 클릭)
+  'finalized_at',           // 조사확정/조사불가 시각
+  'reject_reason',          // 일정불가/조사불가/기타텍스트
+  'memo',                   // 사용자 비고
+  'reg_date',               // YYYY-MM-DD HH:mm:ss 초단위
+  'update_date'             // 최종 갱신 시각
+];
+
+function initJosaItemsSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(DB_JOSA_ITEMS_SHEET_NAME);
+  }
+  // 헤더 갱신 (컬럼 수 부족 시 확장)
+  if (sheet.getMaxColumns() < JOSA_ITEMS_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), JOSA_ITEMS_HEADERS.length - sheet.getMaxColumns());
+  }
+  const headerRange = sheet.getRange(1, 1, 1, JOSA_ITEMS_HEADERS.length);
+  headerRange.setValues([JOSA_ITEMS_HEADERS]);
+  headerRange.setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  return sheet;
+}
+
+/**
+ * 두 시트 한번에 초기화 (GAS 에디터에서 1회 실행)
+ *   GAS 에디터 → 함수 선택 → initJosaSheetsAll → 실행
+ */
+function initJosaSheetsAll() {
+  initJosaPresetsSheet_();
+  initJosaItemsSheet_();
+  Logger.log('[josa] josa_presets / josa_items 시트 초기화 완료');
+  return { success: true, sheets: [DB_JOSA_PRESETS_SHEET_NAME, DB_JOSA_ITEMS_SHEET_NAME] };
+}
+
+/**
+ * josa_items 시트 데이터 행 전체 삭제 + 헤더 정상화 (GAS 에디터에서 1회 실행)
+ *   스키마 변경(컬럼 추가/순서 변경) 후 기존 행이 어긋났을 때 사용.
+ *   헤더 행(1행)은 보존, 나머지 모두 삭제.
+ */
+function resetJosaItemsData() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+  if (!sheet) { initJosaItemsSheet_(); return { success: true, message: '시트 새로 생성됨' }; }
+  var lastRow = sheet.getLastRow();
+  var deleted = 0;
+  if (lastRow > 1) {
+    sheet.deleteRows(2, lastRow - 1);
+    deleted = lastRow - 1;
+  }
+  // 헤더 강제 갱신
+  if (sheet.getMaxColumns() < JOSA_ITEMS_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), JOSA_ITEMS_HEADERS.length - sheet.getMaxColumns());
+  }
+  sheet.getRange(1, 1, 1, JOSA_ITEMS_HEADERS.length).setValues([JOSA_ITEMS_HEADERS]).setFontWeight('bold');
+  // josa_presets 의 items_count 초기화
+  var p = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME);
+  if (p && p.getLastRow() >= 2) {
+    var col = JOSA_PRESETS_HEADERS.indexOf('items_count') + 1;
+    var n = p.getLastRow() - 1;
+    p.getRange(2, col, n, 1).setValues(Array(n).fill(['0']));
+  }
+  Logger.log('[josa] josa_items 데이터 ' + deleted + '행 삭제 + 헤더 ' + JOSA_ITEMS_HEADERS.length + '컬럼으로 정상화');
+  return { success: true, deleted: deleted, headers: JOSA_ITEMS_HEADERS.length };
+}
+
+// 조사불가 사유 프리셋 (계속 추가 예정)
+const JOSA_REJECT_REASONS = ['일정불가', '조사불가', '기타'];
+
+// ────────────────────────────────────────────────────────────
+// [josa v2] 공통 헬퍼
+// ────────────────────────────────────────────────────────────
+
+function _josaNowText_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+}
+
+// google.script.run 직렬화 안전성을 위해 control character (CR/LF/TAB 등) 제거
+function _josaSafeStr_(v) {
+  if (v === null || v === undefined) return '';
+  var s = String(v);
+  //  - (제어문자),  (DEL), - (C1 제어) 모두 공백으로
+  return s.replace(/[ --]+/g, ' ').trim();
+}
+
+function _josaItemKey_(item) {
+  // PK = sakun_no|bid_date|court (사용자 사양)
+  var sakun = String(item.sakun_no || '').trim();
+  var bd    = String(item.bid_date  || '').trim();
+  var ct    = String(item.court     || '').trim();
+  if (!sakun) return '';
+  return sakun + '|' + bd + '|' + ct;
+}
+
+// ────────────────────────────────────────────────────────────
+// [josa v2] josa_presets CRUD
+// ────────────────────────────────────────────────────────────
+
+function readAllJosaPresets() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME);
+  if (!sheet) { initJosaPresetsSheet_(); sheet = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME); }
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, JOSA_PRESETS_HEADERS.length).getValues();
+  return values.map(function(row) {
+    var obj = {};
+    JOSA_PRESETS_HEADERS.forEach(function(h, i) {
+      var val = row[i];
+      if (val instanceof Date) val = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+      obj[h] = _josaSafeStr_(val);
+    });
+    return obj;
+  }).filter(function(r) { return r.preset_id; });
+}
+
+/**
+ * 매니저 → MAPS 동기화 (preset 목록 일괄)
+ * payload.presets = [{id, title}, ...]  ← 보낼 preset 목록
+ * payload.mode    = 'partial' (기본) | 'full'
+ *   - 'partial': 보낸 것만 upsert. 시트에 있지만 안 보낸 건 그대로 둠 (체크박스 선택 동기화)
+ *   - 'full':    보낸 게 매니저 전체. 시트엔 있지만 안 보낸 건 is_active=N + deleted_in_manager_at=now
+ */
+function syncJosaPresets(presetList, mode) {
+  if (!Array.isArray(presetList)) return { success: false, message: 'presets 배열 필요' };
+  var syncMode = (mode === 'full') ? 'full' : 'partial';
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME);
+  if (!sheet) { initJosaPresetsSheet_(); sheet = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME); }
+
+  var now = _josaNowText_();
+  var existing = readAllJosaPresets();
+  var existIdMap = {};
+  existing.forEach(function(e, i) { existIdMap[e.preset_id] = { row: i + 2, data: e }; });
+
+  var incomingIds = {};
+  var added = 0, updated = 0, marked = 0, restored = 0;
+
+  presetList.forEach(function(p) {
+    var id = String(p.id || '').trim();
+    var title = String(p.title || '').trim();
+    if (!id) return;
+    incomingIds[id] = true;
+
+    if (existIdMap[id]) {
+      var rowNum = existIdMap[id].row;
+      var prev = existIdMap[id].data;
+      var wasDeleted = prev.is_active === 'N' || !!prev.deleted_in_manager_at;
+      var rowObj = {
+        preset_id: id,
+        preset_title: title,
+        created_at: prev.created_at || now,
+        updated_at: now,
+        last_upload_at: prev.last_upload_at || '',
+        items_count: prev.items_count || '0',
+        is_active: 'Y',
+        deleted_in_manager_at: ''
+      };
+      var rowArr = JOSA_PRESETS_HEADERS.map(function(h) { return rowObj[h]; });
+      sheet.getRange(rowNum, 1, 1, JOSA_PRESETS_HEADERS.length).setValues([rowArr]);
+      if (wasDeleted) restored++; else updated++;
+    } else {
+      var rowObj2 = {
+        preset_id: id, preset_title: title,
+        created_at: now, updated_at: now, last_upload_at: '',
+        items_count: '0', is_active: 'Y', deleted_in_manager_at: ''
+      };
+      sheet.appendRow(JOSA_PRESETS_HEADERS.map(function(h) { return rowObj2[h]; }));
+      added++;
+    }
+  });
+
+  // mode='full' 일 때만 매니저에 없는 preset → deleted 표시 (자동 폐기 X)
+  if (syncMode === 'full') {
+    Object.keys(existIdMap).forEach(function(eid) {
+      if (incomingIds[eid]) return;
+      var rowNum = existIdMap[eid].row;
+      var prev = existIdMap[eid].data;
+      if (prev.is_active === 'N' && prev.deleted_in_manager_at) return; // 이미 표시됨
+      var isActiveCol = JOSA_PRESETS_HEADERS.indexOf('is_active') + 1;
+      var delCol = JOSA_PRESETS_HEADERS.indexOf('deleted_in_manager_at') + 1;
+      sheet.getRange(rowNum, isActiveCol).setValue('N');
+      sheet.getRange(rowNum, delCol).setValue(now);
+      marked++;
+    });
+  }
+
+  return { success: true, mode: syncMode, added: added, updated: updated, restored: restored, marked_deleted: marked, total: presetList.length };
+}
+
+// ────────────────────────────────────────────────────────────
+// [josa v2] josa_items CRUD
+// ────────────────────────────────────────────────────────────
+
+// 시트 헤더가 JOSA_ITEMS_HEADERS 와 다르면 강제 갱신 (스키마 변경 자동 반영)
+function _ensureJosaItemsHeader_(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) {
+    sheet.getRange(1, 1, 1, JOSA_ITEMS_HEADERS.length).setValues([JOSA_ITEMS_HEADERS]).setFontWeight('bold');
+    return;
+  }
+  var current = sheet.getRange(1, 1, 1, Math.max(lastCol, JOSA_ITEMS_HEADERS.length)).getValues()[0];
+  var match = true;
+  for (var i = 0; i < JOSA_ITEMS_HEADERS.length; i++) {
+    if (String(current[i] || '').trim() !== JOSA_ITEMS_HEADERS[i]) { match = false; break; }
+  }
+  if (!match) {
+    if (sheet.getMaxColumns() < JOSA_ITEMS_HEADERS.length) {
+      sheet.insertColumnsAfter(sheet.getMaxColumns(), JOSA_ITEMS_HEADERS.length - sheet.getMaxColumns());
+    }
+    sheet.getRange(1, 1, 1, JOSA_ITEMS_HEADERS.length).setValues([JOSA_ITEMS_HEADERS]).setFontWeight('bold');
+  }
+}
+
+function readAllJosaItems() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+  if (!sheet) { initJosaItemsSheet_(); sheet = ss.getSheetByName(DB_JOSA_ITEMS_SHEET_NAME); }
+  _ensureJosaItemsHeader_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, JOSA_ITEMS_HEADERS.length).getValues();
+  return values.map(function(row) {
+    var obj = {};
+    JOSA_ITEMS_HEADERS.forEach(function(h, i) {
+      var val = row[i];
+      if (val instanceof Date) val = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+      obj[h] = _josaSafeStr_(val);
+    });
+    return obj;
+  }).filter(function(r) { return r.item_key; });
+}
+
+/**
+ * 크롤링 결과 일괄 upsert
+ * payload: { preset_id, preset_title, items: [...] }
+ * 사용자 룰:
+ *   - 키 = sakun_no|bid_date|court
+ *   - 기존 행: 본문 덮어쓰기, 상태/조사자/사유/메모/시각들 보존
+ *   - preset_ids/preset_titles_cached 에 현재 preset 누적 (중복 제거)
+ */
+function bulkUpsertJosaItems(payload) {
+  var presetId = String(payload.preset_id || '').trim();
+  var presetTitle = String(payload.preset_title || '').trim();
+  var items = Array.isArray(payload.items) ? payload.items : [];
+  if (!presetId) return { success: false, message: 'preset_id 필요' };
+
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+  if (!sheet) { initJosaItemsSheet_(); sheet = ss.getSheetByName(DB_JOSA_ITEMS_SHEET_NAME); }
+  _ensureJosaItemsHeader_(sheet);  // 스키마 변경 시 헤더 자동 갱신
+
+  var now = _josaNowText_();
+  var existing = readAllJosaItems();
+  var keyToRow = {};
+  existing.forEach(function(e, i) { keyToRow[e.item_key] = { row: i + 2, data: e }; });
+
+  // 본문 컬럼 (크롤링 시 덮어쓰기) — 정제된 분리 필드
+  var BODY_FIELDS = ['sakun_no','bid_date','bid_time','court','address','size_info','specials_all','issue','prop_kind','specials','kamjungka','low_price','pyeong_price','area','fail_count','fail_rate','view_count','view_url','img_url'];
+  // 보존 컬럼 (사용자 룰 - 상태/조사자/메모 보존)
+  var PRESERVE_FIELDS = ['josa_status','josaja','requested_at','accepted_at','finalized_at','reject_reason','memo'];
+
+  var added = 0, updated = 0, failed = 0;
+
+  items.forEach(function(item) {
+    var key = _josaItemKey_(item);
+    if (!key) { failed++; return; }
+
+    if (keyToRow[key]) {
+      var rowNum = keyToRow[key].row;
+      var prev = keyToRow[key].data;
+
+      // preset_ids 누적 (콤마 구분, 중복 제거)
+      var prevIds = String(prev.preset_ids || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
+      var prevTitles = String(prev.preset_titles_cached || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
+      if (prevIds.indexOf(presetId) === -1) prevIds.push(presetId);
+      while (prevTitles.length < prevIds.length) prevTitles.push('');
+      var idx = prevIds.indexOf(presetId);
+      prevTitles[idx] = presetTitle;
+
+      var rowObj = {
+        item_key: key,
+        preset_ids: prevIds.join(','),
+        preset_titles_cached: prevTitles.join(','),
+        update_date: now,
+        reg_date: prev.reg_date || now
+      };
+      BODY_FIELDS.forEach(function(f) {
+        rowObj[f] = (item[f] !== undefined && item[f] !== null) ? String(item[f]) : '';
+      });
+      PRESERVE_FIELDS.forEach(function(f) {
+        rowObj[f] = prev[f] || '';
+      });
+      var rowArr = JOSA_ITEMS_HEADERS.map(function(h) { return rowObj[h] !== undefined ? rowObj[h] : (prev[h] || ''); });
+      sheet.getRange(rowNum, 1, 1, JOSA_ITEMS_HEADERS.length).setValues([rowArr]);
+      updated++;
+    } else {
+      var rowObj2 = {
+        item_key: key,
+        preset_ids: presetId,
+        preset_titles_cached: presetTitle,
+        josa_status: '분류필요',
+        reg_date: now,
+        update_date: now
+      };
+      BODY_FIELDS.forEach(function(f) {
+        rowObj2[f] = (item[f] !== undefined && item[f] !== null) ? String(item[f]) : '';
+      });
+      var rowArr2 = JOSA_ITEMS_HEADERS.map(function(h) { return rowObj2[h] !== undefined ? rowObj2[h] : ''; });
+      sheet.appendRow(rowArr2);
+      added++;
+    }
+  });
+
+  // josa_presets 의 items_count + last_upload_at 갱신
+  try { _updateJosaPresetUploadStat_(presetId, presetTitle); } catch (e) {}
+
+  return { success: true, added: added, updated: updated, failed: failed, total: items.length };
+}
+
+function _updateJosaPresetUploadStat_(presetId, presetTitle) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME);
+  if (!sheet) { initJosaPresetsSheet_(); sheet = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME); }
+  var now = _josaNowText_();
+  var lastRow = sheet.getLastRow();
+
+  // items_count 계산 (preset_ids 에 이 ID 포함된 행 수)
+  var itemsAll = readAllJosaItems();
+  var cnt = 0;
+  itemsAll.forEach(function(it) {
+    var ids = String(it.preset_ids || '').split(',').map(function(s){return s.trim();});
+    if (ids.indexOf(presetId) !== -1) cnt++;
+  });
+
+  if (lastRow < 2) {
+    // preset 시트 비어있으면 신규 추가
+    var rowObj = {
+      preset_id: presetId, preset_title: presetTitle,
+      created_at: now, updated_at: now, last_upload_at: now,
+      items_count: String(cnt), is_active: 'Y', deleted_in_manager_at: ''
+    };
+    sheet.appendRow(JOSA_PRESETS_HEADERS.map(function(h) { return rowObj[h]; }));
+    return;
+  }
+
+  var idCol = JOSA_PRESETS_HEADERS.indexOf('preset_id') + 1;
+  var ids = sheet.getRange(2, idCol, lastRow - 1, 1).getValues();
+  var rowNum = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === presetId) { rowNum = i + 2; break; }
+  }
+
+  if (rowNum < 0) {
+    var rowObj2 = {
+      preset_id: presetId, preset_title: presetTitle,
+      created_at: now, updated_at: now, last_upload_at: now,
+      items_count: String(cnt), is_active: 'Y', deleted_in_manager_at: ''
+    };
+    sheet.appendRow(JOSA_PRESETS_HEADERS.map(function(h) { return rowObj2[h]; }));
+  } else {
+    var luCol = JOSA_PRESETS_HEADERS.indexOf('last_upload_at') + 1;
+    var cntCol = JOSA_PRESETS_HEADERS.indexOf('items_count') + 1;
+    var upCol = JOSA_PRESETS_HEADERS.indexOf('updated_at') + 1;
+    sheet.getRange(rowNum, luCol).setValue(now);
+    sheet.getRange(rowNum, cntCol).setValue(cnt);
+    sheet.getRange(rowNum, upCol).setValue(now);
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// [josa v2] API 라우터 (doPost 에서 호출)
+// ────────────────────────────────────────────────────────────
+
+/**
+ * [JM] MAPS 새 화면 초기 데이터 일괄 로드 (google.script.run 단일 호출용)
+ * 3개 따로 호출 시 chained call 문제가 생길 수 있어 단일 wrapper 로 묶음.
+ */
+function jmLoadAllData() {
+  try {
+    return {
+      success: true,
+      investigators: getInvestigators(),
+      presets: readAllJosaPresets(),
+      items: readAllJosaItems()
+    };
+  } catch (e) {
+    return { success: false, error: String(e), stack: e && e.stack ? String(e.stack).substring(0, 500) : '' };
+  }
+}
+
+function handleJosaApiPost_(payload) {
+  var action = String(payload.api_action || '');
+  if (action === 'syncJosaPresets') return syncJosaPresets(payload.presets || [], payload.mode);
+  if (action === 'uploadJosaItems') return bulkUpsertJosaItems(payload);
+  if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
+  if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
+  if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
+  return { success: false, message: '알 수 없는 josa API 액션: ' + action };
 }
