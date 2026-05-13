@@ -14,6 +14,61 @@
   const LS_FTYPES   = 'auction1_ftypes_v1';    // [{id, name, valueType: 'text'|'number'|'date'}]
   const LS_CACHE_PFX  = 'auction1_cache_';      // + presetId → {items, ts}
   const LS_LAST_PRESET = 'auction1_last_preset'; // 마지막 active preset id
+  const LS_SIDE_W = 'auction1_side_w';          // 사이드바 폭 (px)
+
+  // 사이드바 폭 복원 + splitter 드래그 핸들러
+  (function setupSideSplitter() {
+    function clamp(w) { return Math.max(160, Math.min(600, w)); }
+    // 복원
+    try {
+      var saved = parseInt(localStorage.getItem(LS_SIDE_W), 10);
+      if (saved >= 160 && saved <= 600) {
+        document.documentElement.style.setProperty('--side-w', saved + 'px');
+        var layout = document.getElementById('appLayout');
+        if (layout) layout.style.setProperty('--side-w', saved + 'px');
+      }
+    } catch (e) {}
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var splitter = document.getElementById('sideSplitter');
+      var layout   = document.getElementById('appLayout');
+      if (!splitter || !layout) return;
+      var dragging = false;
+      var startX = 0, startW = 0;
+      function getCurW() {
+        var s = getComputedStyle(layout).getPropertyValue('--side-w').trim();
+        var n = parseInt(s, 10);
+        return isFinite(n) ? n : 240;
+      }
+      splitter.addEventListener('mousedown', function (e) {
+        dragging = true;
+        startX = e.clientX;
+        startW = getCurW();
+        splitter.classList.add('dragging');
+        document.body.classList.add('col-resizing');
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', function (e) {
+        if (!dragging) return;
+        var delta = e.clientX - startX;
+        var w = clamp(startW + delta);
+        layout.style.setProperty('--side-w', w + 'px');
+      });
+      document.addEventListener('mouseup', function () {
+        if (!dragging) return;
+        dragging = false;
+        splitter.classList.remove('dragging');
+        document.body.classList.remove('col-resizing');
+        var w = parseInt(getComputedStyle(layout).getPropertyValue('--side-w'), 10);
+        if (w >= 160 && w <= 600) localStorage.setItem(LS_SIDE_W, String(w));
+      });
+      // 더블클릭 → 기본값(240) 복원
+      splitter.addEventListener('dblclick', function () {
+        layout.style.setProperty('--side-w', '240px');
+        localStorage.setItem(LS_SIDE_W, '240');
+      });
+    });
+  })();
 
   // 기본 추가 필터 종류 — FILTER_FIELDS 와 정확히 매칭되는 이름들
   // (사용자가 손으로 만들지 않아도 즉시 사용 가능)
@@ -421,7 +476,7 @@
         sakun_no:     _normSakun(it.sakun_no),
         bid_date:     bid.bid_date,
         bid_time:     bid.bid_time,
-        court:        '',  // 옥션원 결과에 법원명 별도 컬럼 없음 — 추후 보완
+        court:        _normText(it.court || ''),  // crawler.py 에서 주소 기반 매핑된 법원명
         address:      addr.address,
         size_info:    addr.size_info,
         specials_all: addr.specials_all,
@@ -508,7 +563,8 @@
       if (!el.name) return;
       data[el.name] = el.value;
     });
-    data._addrTags = addrTags.slice();
+    // 옛 문자열 항목 자동 변환 후 전송 (옥션원 select value 까지 포함된 객체로)
+    data._addrTags = addrTags.map(_addrTagNormalize);
     data._multiProp = Array.from(multiPropSelected);
     return data;
   }
@@ -518,7 +574,13 @@
       if (!el.name) return;
       el.value = (data && data[el.name] != null) ? data[el.name] : '';
     });
-    addrTags = (data && Array.isArray(data._addrTags)) ? data._addrTags.slice() : [];
+    // backward compat: 옛 프리셋의 _addrTags 는 문자열 배열, 신규는 객체 배열
+    // 옛 객체 (sido:"") 또는 문자열 → _addrTextToObj 로 자동 매핑
+    addrTags = (data && Array.isArray(data._addrTags)) ? data._addrTags.map(function (a) {
+      if (a && typeof a === 'object' && a.sido) return a;  // sido 있는 객체만 그대로
+      var txt = (a && typeof a === 'object') ? (a.text || '') : String(a || '');
+      return _addrTextToObj(txt);
+    }) : [];
     renderAddrTags();
     multiPropSelected = new Set((data && Array.isArray(data._multiProp)) ? data._multiProp : []);
     renderMultiPropTags();
@@ -528,11 +590,43 @@
   function clearForm() { applyFormData({}); }
 
   // ── 주소 태그 ──────────────────────────────────────────
+  // addrTags 항목 → 표시용 텍스트 (객체 또는 문자열 둘 다 지원)
+  function _addrTagText(a) { return (a && typeof a === 'object') ? (a.text || '') : String(a || ''); }
+
+  // 텍스트("서울" / "서울 강남구") → 옥션원 value 객체로 변환 (옛 문자열 형식 자동 마이그레이션)
+  function _addrTextToObj(text) {
+    var t = String(text || '').trim();
+    if (!t) return { text: '', sido: '', gugun: '', dong: '' };
+    var parts = t.split(/\s+/);
+    var sidoTxt = parts[0] || '', gugunTxt = parts[1] || '', dongTxt = parts[2] || '';
+    var sidoOpt = (D.SIDO || []).find(function (x) { return x.t === sidoTxt; });
+    var sido_v = sidoOpt ? sidoOpt.v : '';
+    var gugun_v = '';
+    if (sido_v && gugunTxt) {
+      var list = (D.GUGUN_BY_SIDO || {})[sido_v] || [];
+      var gOpt = list.find(function (x) { return x.t === gugunTxt; });
+      if (gOpt) gugun_v = gOpt.v;
+    }
+    return { text: t, sido: sido_v, gugun: gugun_v, dong: '' };  // dong 은 옥션원 동적 로드라 무시
+  }
+  // addrTags 항목 정규화 (객체이지만 sido 빈 값이면 재변환, 문자열이면 변환)
+  function _addrTagNormalize(a) {
+    if (a && typeof a === 'object' && a.sido) return a;  // sido 채워진 객체만 그대로
+    var txt = (a && typeof a === 'object') ? (a.text || '') : String(a || '');
+    return _addrTextToObj(txt);
+  }
+
   function renderAddrTags() {
     const wrap = document.getElementById('addrTags');
-    if (!addrTags.length) { wrap.innerHTML = ''; return; }
+    if (!wrap) return;
+    const has = addrTags.length > 0;
+    ['f_addrSido', 'f_addrGugun', 'f_addrDong'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('has-multi-bg', has);
+    });
+    if (!has) { wrap.innerHTML = ''; return; }
     wrap.innerHTML = addrTags.map((a, i) =>
-      `<span class="addr-tag">${escHtml(a)} <button data-i="${i}" title="제거">×</button></span>`
+      `<span class="addr-tag">${escHtml(_addrTagText(a))} <button data-i="${i}" title="제거">×</button></span>`
     ).join('');
     wrap.querySelectorAll('button').forEach(b => {
       b.addEventListener('click', () => {
@@ -543,7 +637,11 @@
   }
   function renderMultiPropTags() {
     const wrap = document.getElementById('multiPropTags');
-    if (!multiPropSelected.size) { wrap.innerHTML = ''; return; }
+    if (!wrap) return;
+    const has = multiPropSelected.size > 0;
+    const sel = document.getElementById('f_propType');
+    if (sel) sel.classList.toggle('has-multi-bg', has);
+    if (!has) { wrap.innerHTML = ''; return; }
     const idToText = {};
     D.PROPERTY_GROUPS.forEach(g => g.items.forEach(it => { idToText[it.v] = it.t; }));
     wrap.innerHTML = Array.from(multiPropSelected).map(v =>
@@ -915,6 +1013,14 @@
   function applyMultiProp() {
     const cbs = document.querySelectorAll('#multiPropList input[type=checkbox]:checked');
     multiPropSelected = new Set(Array.from(cbs).map(cb => cb.value));
+    // 복수선택 있으면 단일 select 는 "전체보기" 로 reset (다중만 필터 기준이 되도록)
+    if (multiPropSelected.size > 0) {
+      const single = document.getElementById('f_propType');
+      if (single) {
+        single.value = '';
+        try { single.dispatchEvent(new Event('change')); } catch (e) {}
+      }
+    }
     renderMultiPropTags();
     closeMultiPropModal();
   }
@@ -937,7 +1043,16 @@
     ].filter(t => t && !t.startsWith('-'));
     if (!parts.length) { setStatus('시/도를 먼저 선택하세요.', true); return; }
     if (addrTags.length >= 20) { setStatus('주소는 최대 20개까지', true); return; }
-    addrTags.push(parts.join(' '));
+    // 객체로 저장: 옥션원 select value 까지 보관 → crawler.py 가 정확히 재현
+    addrTags.push({
+      text:  parts.join(' '),
+      sido:  sido.value || '',
+      gugun: gugun.value || '',
+      dong:  dong.value || ''
+    });
+    // [추가] 후 위쪽 select 자동 reset — addrTags 만 필터 기준이 되도록
+    sido.value = ''; gugun.value = ''; dong.value = '';
+    try { sido.dispatchEvent(new Event('change')); } catch (e) {}
     renderAddrTags();
   }
 
@@ -1334,9 +1449,15 @@
       if (currentPresetId) {
         const key = LS_CACHE_PFX + currentPresetId;
         const fullPayload = JSON.stringify({ items: raw, ts });
+        // lite 모드에서도 옥션원 색상/줄바꿈 시각화에 필수인 _html 은 보존
+        // (제거 대상: img_html/view_html/bid_html/status_html — 비교적 작은 셀이지만 시각 영향 적음)
+        const KEEP_HTML = new Set(['address_html', 'price_html', 'sakun_html']);
         const stripHtml = it => {
           const o = {};
-          for (const k in it) if (!k.endsWith('_html')) o[k] = it[k];
+          for (const k in it) {
+            if (k.endsWith('_html') && !KEEP_HTML.has(k)) continue;
+            o[k] = it[k];
+          }
           return o;
         };
         const litePayload = JSON.stringify({ items: raw.map(stripHtml), ts, lite: true });

@@ -48,6 +48,54 @@
                 transform: rotate(360deg)
             }
         }
+        /* MAPS 조사물건관리 v2 — 매니저 옥션원 그리드 스타일 재현 */
+        #jm-grid { border-collapse: collapse; font-size: 13px; }
+        .jm-th { background: #f7f8fa; border: 1px solid #d8def0; padding: 8px 6px; text-align: center; font-weight: 700; color: #2b3b5b; position: sticky; top: 0; z-index: 5; }
+        .jm-th-sub { font-size: 10px; font-weight: 400; color: #6b7280; display: block; }
+        .jm-td { border: 1px solid #e5e7eb; padding: 8px; vertical-align: middle; }
+        .jm-row:hover { background: #fff8dc; }
+        .jm-thumb { max-width: 80px; max-height: 50px; width: auto; height: auto; object-fit: cover; border-radius: 3px; display: block; margin: 0 auto; }
+        .jm-sakun { font-weight: 700; color: #d92d20; font-size: 13px; }
+        .jm-sakun-multi { font-weight: 800; color: #b91c1c; font-size: 13px; background: #fef2f2; padding: 2px 4px; border-radius: 3px; }
+        .jm-prop-kind { font-size: 11px; color: #6b7280; margin-top: 2px; }
+        .jm-bid-time { font-size: 11px; color: #6b7280; }
+        .jm-bid-dday { font-size: 11px; color: #1d4ed8; font-weight: 600; margin-top: 2px; }
+        .jm-addr { color: #1f2937; font-weight: 500; line-height: 1.55; }
+        .jm-size { color: #6b7280; font-size: 11px; line-height: 1.55; }
+        .jm-spec { color: #c2410c; font-size: 11px; line-height: 1.55; font-weight: 500; }
+        .jm-issue { color: #b91c1c; font-size: 11px; line-height: 1.55; font-weight: 600; }
+        .jm-price-kam { color: #1f2937; font-weight: 600; font-size: 13px; }
+        .jm-price-low { color: #1d4ed8; font-weight: 700; font-size: 13px; }
+        .jm-price-py { color: #059669; font-weight: 600; font-size: 11px; }
+        .jm-fail-cnt { color: #1d4ed8; font-weight: 600; font-size: 12px; }
+        .jm-fail-rate { color: #6b7280; font-size: 11px; }
+        /* 사건번호 색: 기본 검정, 중복 리스트일 때 빨강 */
+        .jm-sakun { font-weight: 700; color: #1f2937; font-size: 13px; }
+        .jm-sakun-multi { font-weight: 800; color: #b91c1c; font-size: 13px; background: #fef2f2; padding: 2px 4px; border-radius: 3px; display: inline-block; }
+        .jm-prop-kind { font-size: 12px; color: #374151; font-weight: 700; margin-top: 3px; }
+        /* 사건번호 셀 안 옥션원/조사내용 버튼 — 가로 길이 동일 */
+        .jm-cell-btns { margin-top: 6px; display: flex; gap: 4px; justify-content: center; }
+        .jm-cell-btn {
+            font-size: 10px; padding: 3px 6px; border-radius: 4px; font-weight: 600; cursor: pointer;
+            transition: all .12s; min-width: 56px; box-sizing: border-box;
+        }
+        .jm-btn-auction { background: #4f46e5; color: #fff; border: 0; }
+        .jm-btn-auction:hover { background: #4338ca; }
+        .jm-btn-josa { background: #0ea5e9; color: #fff; border: 0; }
+        .jm-btn-josa:hover { background: #0284c7; }
+        /* JM 그리드 컨테이너 — 마우스 휠 세로 스크롤 활성화 */
+        #JosaManagement .flex.flex-1.overflow-hidden { min-height: 0; }
+        #JosaManagement main > .flex-1.overflow-auto { min-height: 0; max-height: 100%; overflow-y: auto !important; overflow-x: auto !important; }
+        /* 상태 버튼 */
+        .jm-status-btn { font-size: 11px; padding: 4px 8px; border-radius: 4px; border: 0; cursor: pointer; font-weight: 600; }
+        /* 컬럼 리사이즈 grip */
+        .jm-th { position: relative; }
+        .jm-col-grip {
+            position: absolute; right: 0; top: 0; bottom: 0;
+            width: 6px; cursor: col-resize; user-select: none;
+            background: transparent; transition: background .12s;
+        }
+        .jm-col-grip:hover, .jm-col-grip.dragging { background: #1d4ed8; }
     </style>
 
     <!-- z-index: 모달(.modal z-index:1000) 위에 떠야 함 -->
@@ -1627,25 +1675,23 @@
                             <table class="w-full text-xs border-collapse" id="jm-grid">
                                 <thead class="bg-gray-100 sticky top-0 z-10">
                                     <tr>
-                                        <th class="border px-2 py-1 w-10"><input type="checkbox" id="jm-grid-all" class="rounded" onchange="onJmGridAllChange(this)"></th>
-                                        <th class="border px-2 py-1 w-20 cursor-pointer" data-sort="josa_status">상태</th>
-                                        <th class="border px-2 py-1 w-28 cursor-pointer" data-sort="sakun_no">사건번호</th>
-                                        <th class="border px-2 py-1 w-16 cursor-pointer" data-sort="court">법원</th>
-                                        <th class="border px-2 py-1 w-24 cursor-pointer" data-sort="bid_date">입찰일<br><span class="text-[10px] font-normal text-gray-500">시간</span></th>
-                                        <th class="border px-2 py-1 w-16 cursor-pointer" data-sort="fail_count">유찰<br><span class="text-[10px] font-normal text-gray-500">횟수/율</span></th>
-                                        <th class="border px-2 py-1 cursor-pointer text-left" data-sort="address">소재지</th>
-                                        <th class="border px-2 py-1 w-28 text-left">물건/특수</th>
-                                        <th class="border px-2 py-1 w-32 text-right">가격<br><span class="text-[10px] font-normal text-gray-500">감/최/평</span></th>
-                                        <th class="border px-2 py-1 w-14 cursor-pointer" data-sort="view_count">조회</th>
-                                        <th class="border px-2 py-1 w-16 cursor-pointer" data-sort="josaja">조사자</th>
-                                        <th class="border px-2 py-1 w-16">조사내용</th>
-                                        <th class="border px-2 py-1 w-28 text-left">비고</th>
-                                        <th class="border px-2 py-1 w-32 cursor-pointer" data-sort="reg_date">등록일자</th>
-                                        <th class="border px-2 py-1 w-14">옥션원</th>
+                                        <th class="jm-th w-10"><input type="checkbox" id="jm-grid-all" class="rounded" onchange="onJmGridAllChange(this)"></th>
+                                        <th class="jm-th w-24 cursor-pointer" data-sort="josa_status">상태</th>
+                                        <th class="jm-th w-16 cursor-pointer" data-sort="josaja">조사자</th>
+                                        <th class="jm-th w-24">사진</th>
+                                        <th class="jm-th w-36 cursor-pointer" data-sort="sakun_no">사건번호<br><span class="jm-th-sub">물건종류</span></th>
+                                        <th class="jm-th w-16 cursor-pointer" data-sort="court">법원</th>
+                                        <th class="jm-th w-28 cursor-pointer" data-sort="bid_date">매각기일<br><span class="jm-th-sub">(시간)</span></th>
+                                        <th class="jm-th cursor-pointer text-left" data-sort="address">소재지</th>
+                                        <th class="jm-th w-32 text-right">감정가<br><span class="jm-th-sub">최저매각가<br>평당가</span></th>
+                                        <th class="jm-th w-20 cursor-pointer" data-sort="fail_count">진행<br><span class="jm-th-sub">상태</span></th>
+                                        <th class="jm-th w-14 cursor-pointer" data-sort="view_count">조회수</th>
+                                        <th class="jm-th w-28 text-left">비고</th>
+                                        <th class="jm-th w-32 cursor-pointer" data-sort="reg_date">등록일자</th>
                                     </tr>
                                 </thead>
                                 <tbody id="jm-grid-body">
-                                    <tr><td colspan="15" class="text-center text-gray-400 py-10">로딩 중...</td></tr>
+                                    <tr><td colspan="14" class="text-center text-gray-400 py-10">로딩 중...</td></tr>
                                 </tbody>
                             </table>
                         </div>

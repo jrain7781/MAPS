@@ -27,9 +27,21 @@ body {
 
 /* 레이아웃 */
 #appLayout {
-  display:grid; grid-template-columns:240px 1fr;
-  gap:12px; max-width:1480px; margin:12px auto; padding:0 12px;
+  display:grid; grid-template-columns: var(--side-w, 240px) 6px 1fr;
+  gap:0; max-width:1480px; margin:12px auto; padding:0 12px;
 }
+/* 좌우 폭 조정 splitter */
+#sideSplitter {
+  cursor:col-resize; background:transparent; position:relative;
+}
+#sideSplitter::before {
+  content:''; position:absolute; left:50%; top:0; bottom:0; width:2px;
+  background:#e5e7eb; transform:translateX(-50%); border-radius:2px;
+  transition:background .12s;
+}
+#sideSplitter:hover::before, #sideSplitter.dragging::before { background:#1d4ed8; width:3px; }
+body.col-resizing { cursor:col-resize; user-select:none; }
+body.col-resizing iframe { pointer-events:none; }
 
 /* 사이드바 (sticky로 스크롤 시에도 따라오게 - 우측 메인과 시각 균형) */
 #sideShell {
@@ -74,13 +86,13 @@ body {
   font-family:monospace; color:#9ca3af; font-size:10px; margin-left:4px;
 }
 
-/* 결과 테이블 - 주소셀: 옥션원 raw HTML 의 색상/줄바꿈 복원 */
-.tbl_list td .addr,
-.tbl_list td article > div:first-child { color:#1f2937; font-weight:500; display:block; }
-.tbl_list td .fQSBhSwc { color:#6b7280; display:block; }
-.tbl_list td .gray    { color:#9ca3af; }
-.tbl_list td article > div { display:block; line-height:1.55; }
-.tbl_list td article > div[style*="color"] { display:block; font-weight:500; }
+/* 추가주소 / 복수물건종류에 값이 있을 때 — 옥션원 has-value 와 완전 동일 (색+테두리+굵기) */
+select.has-multi-bg {
+  background-color: #fef3c7 !important;
+  border-color: #f59e0b !important;
+  font-weight: 600;
+  transition: background-color .2s, border-color .2s;
+}
 #sideList li.snb_item:hover { background:#eef2ff; border-color:#93c5fd; }
 #sideList li.snb_item.active { background:#dbeafe; border-color:#1d4ed8; border-width:1.5px; }
 .snb_item .it-title {

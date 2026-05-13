@@ -13,6 +13,23 @@ import json, os, re, sys, time, traceback, threading
 import urllib.request, urllib.error
 from http.server import HTTPServer, ThreadingHTTPServer, SimpleHTTPRequestHandler
 
+# 법원 매칭 모듈 (00.imageup/court_jurisdiction.py 재사용)
+try:
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "00.imageup"))
+    from court_jurisdiction import find_court as _find_court, _JURISDICTION_MAP
+    def _court_from_address(addr_text):
+        if not addr_text: return ""
+        first_line = str(addr_text).split("\n")[0].strip()
+        try:
+            c = _find_court(first_line, _JURISDICTION_MAP)
+            return "" if c == "기타" else c
+        except Exception:
+            return ""
+except Exception as _e:
+    print(f"[court] 매핑 모듈 로드 실패: {_e}")
+    def _court_from_address(addr_text):
+        return ""
+
 # ── MAPS GAS 웹앱 (메인 deployment) ────────────────────────
 GAS_WEBAPP_URL = (
     "https://script.google.com/macros/s/"
@@ -336,16 +353,50 @@ def fill_form(d, form_data: dict):
                 """,
                 el,
             )
-    # 주소 다중 추가: _addrTags 가 있으면 sido/gugun/dong 별로 set + addr_multi_plus() 호출
+    # 주소 필터: _addrTags 만 기준 (위쪽 sido/gugun/dong 단일 select 는 무시)
+    # _addrTags 항목 형태:
+    #   - 신규: {text, sido, gugun, dong}  ← 매니저 [추가] 클릭 시점의 select value 포함
+    #   - 구버전 호환: "서울" 같은 문자열  ← sido/gugun/dong value 없음 → text 만 사용 (옥션원 폼 적용 불가)
     addr_tags = (form_data or {}).get("_addrTags") or []
-    sido_v = (form_data or {}).get("addrSido") or ""
-    gugun_v = (form_data or {}).get("addrGugun") or ""
-    dong_v = (form_data or {}).get("addrDong") or ""
-    # 단일 sido 라도 _addrTags 가 있다는 것은 사용자가 [추가] 클릭으로 다중 적용을 의도한 것
-    if addr_tags and sido_v:
-        # 이미 sido/gugun/dong 은 fill_form 루프에서 set 된 상태. 옥션원의 addr_multi_plus 함수 호출.
-        d.execute_script("if (typeof addr_multi_plus === 'function') addr_multi_plus();")
-        time.sleep(0.3)
+    if addr_tags:
+        for idx, tag in enumerate(addr_tags):
+            if not isinstance(tag, dict):
+                print(f"[addr] tag#{idx} 문자열 형태 (구버전 프리셋) — 옥션원 폼 적용 불가, 스킵: {tag}")
+                continue
+            sv = str(tag.get("sido")  or "").strip()
+            gv = str(tag.get("gugun") or "").strip()
+            dv = str(tag.get("dong")  or "").strip()
+            if not sv:
+                print(f"[addr] tag#{idx} sido 비어있음, 스킵: {tag}")
+                continue
+            try:
+                # sido 선택 → gugun option 로드 대기 → gugun 선택 → dong 로드 → dong 선택 → addr_multi_plus
+                el_sido = d.find_element(By.NAME, "sido")
+                Select(el_sido).select_by_value(sv)
+                d.execute_script("arguments[0].dispatchEvent(new Event('change'));", el_sido)
+                time.sleep(0.25)
+                if gv:
+                    el_gugun = d.find_element(By.NAME, "gugun")
+                    Select(el_gugun).select_by_value(gv)
+                    d.execute_script("arguments[0].dispatchEvent(new Event('change'));", el_gugun)
+                    time.sleep(0.25)
+                if dv:
+                    el_dong = d.find_element(By.NAME, "dong")
+                    Select(el_dong).select_by_value(dv)
+                    d.execute_script("arguments[0].dispatchEvent(new Event('change'));", el_dong)
+                    time.sleep(0.1)
+                d.execute_script("if (typeof addr_multi_plus === 'function') addr_multi_plus();")
+                time.sleep(0.2)
+            except Exception as e:
+                print(f"[addr] tag#{idx} 적용 실패: {e}")
+        # 다중 처리 끝 — 단일 sido/gugun/dong select 는 비움 (다중만 옥션원에 적용되도록)
+        for nm in ("sido", "gugun", "dong"):
+            try:
+                el = d.find_element(By.NAME, nm)
+                Select(el).select_by_value("")
+                d.execute_script("arguments[0].dispatchEvent(new Event('change'));", el)
+            except Exception:
+                pass
 
     # 물건종류 복수선택: _multiProp = ['8','19',...] → s_class2 hidden 에 콤마 join + 각 clg_<v> 체크박스 체크
     multi_props = (form_data or {}).get("_multiProp") or []
@@ -472,10 +523,18 @@ def parse_results(d, max_rows: int = 200):
             pass
     line_tnum = len(valid_rows)
     items = []
-    for r, tds in valid_rows:
+    for _dbg_idx, (r, tds) in enumerate(valid_rows):
         try:
             if len(tds) < 8:
                 continue
+            # ★ DEBUG: 첫 2개 행만 td innerHTML 길이 출력
+            if _dbg_idx < 2:
+                try:
+                    _addr_html = tds[3].get_attribute("innerHTML") or ""
+                    _price_html = tds[4].get_attribute("innerHTML") or ""
+                    print(f"[parse-debug] row#{_dbg_idx} tds={len(tds)} addr_html_len={len(_addr_html)} price_html_len={len(_price_html)} addr_text={tds[3].text[:60]!r}")
+                except Exception as _de:
+                    print(f"[parse-debug] row#{_dbg_idx} err={_de}")
             # 셀 인덱스: 0체크 / 1사진 / 2사건번호+물건종류 / 3소재지 / 4감정/최저/평당 / 5진행상태 / 6매각기일 / 7조회수
             sakun_block = tds[2].text.strip().split("\n")
             sakun_no = sakun_block[0] if sakun_block else ""
@@ -520,11 +579,13 @@ def parse_results(d, max_rows: int = 200):
                 except Exception:
                     return ""
 
+            address_text = tds[3].text.strip()
             items.append({
                 # 텍스트 (필터/검색용)
                 "sakun_no": sakun_no,
                 "prop_kind": prop_kind,
-                "address": tds[3].text.strip(),
+                "address": address_text,
+                "court": _court_from_address(address_text),  # 주소 → 법원명 자동 매핑
                 "specials": _extract_specials(tds[3]),
                 "price": tds[4].text.strip(),
                 "status": tds[5].text.strip(),

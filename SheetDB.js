@@ -7231,7 +7231,7 @@ function initJosaPresetsSheet_() {
 
 const DB_JOSA_ITEMS_SHEET_NAME = 'josa_items';
 const JOSA_ITEMS_HEADERS = [
-  'item_key',               // sakun_no|bid_date|court (PK)
+  'josa_id',                // PK — 자동 발급 (items.id 와 동일 패턴, Date.now() 기반 timestamp)
   'sakun_no',               // 사건번호 (예: 24타경102685)
   'bid_date',               // 입찰일자 YYMMDD (items.in-date 동일)
   'bid_time',               // 입찰시간 HH:MM
@@ -7342,13 +7342,17 @@ function _josaSafeStr_(v) {
   return s.replace(/[ --]+/g, ' ').trim();
 }
 
-function _josaItemKey_(item) {
-  // PK = sakun_no|bid_date|court (사용자 사양)
+// 중복 체크용 dedup 키 (시트에 저장 X, 메모리 조회용)
+function _josaDedupKey_(item) {
   var sakun = String(item.sakun_no || '').trim();
   var bd    = String(item.bid_date  || '').trim();
   var ct    = String(item.court     || '').trim();
   if (!sakun) return '';
   return sakun + '|' + bd + '|' + ct;
+}
+// 새 josa_id 발급 (items.id 와 동일 패턴: Date.now() ms timestamp + 랜덤 3자리)
+function _newJosaId_() {
+  return String(Date.now()) + String(Math.floor(Math.random() * 1000)).padStart(3, '0');
 }
 
 // ────────────────────────────────────────────────────────────
@@ -7483,11 +7487,15 @@ function readAllJosaItems() {
     var obj = {};
     JOSA_ITEMS_HEADERS.forEach(function(h, i) {
       var val = row[i];
-      if (val instanceof Date) val = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+      if (val instanceof Date) {
+        // bid_time 만 HH:mm (Sheets 가 시간 형식으로 자동 변환 시 1899-12-30 prefix 제거)
+        if (h === 'bid_time') val = Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
+        else val = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+      }
       obj[h] = _josaSafeStr_(val);
     });
     return obj;
-  }).filter(function(r) { return r.item_key; });
+  }).filter(function(r) { return r.josa_id; });
 }
 
 /**
@@ -7511,8 +7519,12 @@ function bulkUpsertJosaItems(payload) {
 
   var now = _josaNowText_();
   var existing = readAllJosaItems();
+  // dedup 키 (sakun|bid_date|court) → 행번호 매핑
   var keyToRow = {};
-  existing.forEach(function(e, i) { keyToRow[e.item_key] = { row: i + 2, data: e }; });
+  existing.forEach(function(e, i) {
+    var k = _josaDedupKey_(e);
+    if (k) keyToRow[k] = { row: i + 2, data: e };
+  });
 
   // 본문 컬럼 (크롤링 시 덮어쓰기) — 정제된 분리 필드
   var BODY_FIELDS = ['sakun_no','bid_date','bid_time','court','address','size_info','specials_all','issue','prop_kind','specials','kamjungka','low_price','pyeong_price','area','fail_count','fail_rate','view_count','view_url','img_url'];
@@ -7522,12 +7534,13 @@ function bulkUpsertJosaItems(payload) {
   var added = 0, updated = 0, failed = 0;
 
   items.forEach(function(item) {
-    var key = _josaItemKey_(item);
-    if (!key) { failed++; return; }
+    var dkey = _josaDedupKey_(item);
+    if (!dkey) { failed++; return; }
 
-    if (keyToRow[key]) {
-      var rowNum = keyToRow[key].row;
-      var prev = keyToRow[key].data;
+    if (keyToRow[dkey]) {
+      // 기존 행 — josa_id 그대로 유지
+      var rowNum = keyToRow[dkey].row;
+      var prev = keyToRow[dkey].data;
 
       // preset_ids 누적 (콤마 구분, 중복 제거)
       var prevIds = String(prev.preset_ids || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
@@ -7538,7 +7551,7 @@ function bulkUpsertJosaItems(payload) {
       prevTitles[idx] = presetTitle;
 
       var rowObj = {
-        item_key: key,
+        josa_id: prev.josa_id,  // 기존 ID 보존
         preset_ids: prevIds.join(','),
         preset_titles_cached: prevTitles.join(','),
         update_date: now,
@@ -7554,8 +7567,9 @@ function bulkUpsertJosaItems(payload) {
       sheet.getRange(rowNum, 1, 1, JOSA_ITEMS_HEADERS.length).setValues([rowArr]);
       updated++;
     } else {
+      // 신규 — josa_id 자동 발급
       var rowObj2 = {
-        item_key: key,
+        josa_id: _newJosaId_(),
         preset_ids: presetId,
         preset_titles_cached: presetTitle,
         josa_status: '분류필요',

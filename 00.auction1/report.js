@@ -57,17 +57,12 @@
     if (fd.regDateFrom || fd.regDateTo) add('보존등기일', `${fd.regDateFrom || ''} ~ ${fd.regDateTo || ''}`);
     if (fd.bldArea1Min || fd.bldArea1Max) add('건물면적', `${fd.bldArea1Min || '0'} ~ ${fd.bldArea1Max || '제한없음'} ㎡`);
     if (fd.lndArea1Min || fd.lndArea1Max) add('대지면적', `${fd.lndArea1Min || '0'} ~ ${fd.lndArea1Max || '제한없음'} ㎡`);
-    if (fd.addrSido) {
-      let addr = lookup(D.SIDO, fd.addrSido);
-      if (fd.addrGugun) {
-        const list = (D.GUGUN_BY_SIDO || {})[fd.addrSido] || [];
-        const g = list.find(x => String(x.v) === String(fd.addrGugun));
-        if (g) addr += ' / ' + g.t;
-      }
-      add('주소', addr);
-    }
+    // 위쪽 sido/gugun 단일 select 는 보고서에 기재하지 않음 (사용자 사양: 추가주소만)
     if (Array.isArray(fd._addrTags) && fd._addrTags.length) {
-      add('추가주소', fd._addrTags.join(', '));
+      var addrText = fd._addrTags.map(function (a) {
+        return (a && typeof a === 'object') ? (a.text || '') : String(a || '');
+      }).filter(Boolean).join(', ');
+      if (addrText) add('추가주소', addrText);
     }
     if (fd.bldName) add('건물명칭', fd.bldName);
     if (fd.lotKind || fd.lotFrom || fd.lotTo) {

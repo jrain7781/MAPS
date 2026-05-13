@@ -23345,34 +23345,108 @@ MJ 이정우 팀장
     // ════════════════════════════════════════════════════════════════
     // 조사물건관리 v2 (JosaManagement) — 매니저 결과 기반 새 화면
     // ════════════════════════════════════════════════════════════════
+    // HTML escape 유틸 (JM 코드 안에서만 사용)
+    function escHtml(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function escAttr(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
     var jmPresets = [];           // [{preset_id, preset_title, items_count, is_active, deleted_in_manager_at, ...}]
-    var jmItems = [];             // [{item_key, sakun_no, ...}]
+    var jmItems = [];             // [{josa_id, sakun_no, ...}]
     var jmSelectedPresetIds = new Set();
     var jmCurrentSort = { key: 'reg_date', dir: 'desc' };
 
-    // navigateTo 진입 시 데이터 로드
+    // navigateTo 진입 시 데이터 로드 + 컬럼 리사이즈 초기화
     (function () {
         if (typeof navigateTo !== 'function') return;
         var _origNav = navigateTo;
         navigateTo = function (tabId) {
             _origNav(tabId);
-            if (tabId === 'JosaManagement') loadJosaData();
+            if (tabId === 'JosaManagement') {
+                loadJosaData();
+                setupJmGridResize();
+            }
         };
     })();
 
-    // 단일 wrapper 호출 (jmLoadAllData) — 3개 chained call 문제 회피
+    // ── 그리드 컬럼 리사이즈 (드래그 + localStorage 저장) ──
+    var __jmResizeReady = false;
+    function setupJmGridResize() {
+        if (__jmResizeReady) return;
+        var table = document.getElementById('jm-grid');
+        if (!table) return;
+        var headers = table.querySelectorAll('thead th');
+        if (!headers.length) return;
+
+        // 저장된 width 복원
+        var saved = {};
+        try { saved = JSON.parse(localStorage.getItem('jm_col_widths') || '{}'); } catch (e) {}
+        headers.forEach(function (th, i) {
+            var key = 'col_' + i;
+            if (saved[key]) th.style.width = saved[key] + 'px';
+
+            // resize handle 추가 (마지막 컬럼 제외)
+            if (i === headers.length - 1) return;
+            var grip = document.createElement('span');
+            grip.className = 'jm-col-grip';
+            grip.title = '드래그로 컬럼 너비 조정';
+            th.appendChild(grip);
+            grip.addEventListener('mousedown', function (e) {
+                e.preventDefault(); e.stopPropagation();
+                var startX = e.clientX;
+                var startW = th.offsetWidth;
+                grip.classList.add('dragging');
+                document.body.style.cursor = 'col-resize';
+                function move(ev) {
+                    var w = Math.max(30, startW + (ev.clientX - startX));
+                    th.style.width = w + 'px';
+                }
+                function up() {
+                    document.removeEventListener('mousemove', move);
+                    document.removeEventListener('mouseup', up);
+                    grip.classList.remove('dragging');
+                    document.body.style.cursor = '';
+                    var widths = {};
+                    headers.forEach(function (h, j) { widths['col_' + j] = h.offsetWidth; });
+                    try { localStorage.setItem('jm_col_widths', JSON.stringify(widths)); } catch (e) {}
+                }
+                document.addEventListener('mousemove', move);
+                document.addEventListener('mouseup', up);
+            });
+            // 더블클릭 → 해당 컬럼 width 초기화
+            grip.addEventListener('dblclick', function (e) {
+                e.stopPropagation();
+                th.style.width = '';
+                var widths = {};
+                headers.forEach(function (h, j) { widths['col_' + j] = h.offsetWidth; });
+                try { localStorage.setItem('jm_col_widths', JSON.stringify(widths)); } catch (e) {}
+            });
+        });
+        __jmResizeReady = true;
+    }
+
+    // 단일 wrapper 호출 (jmLoadAllData) — 단계별 진단 메시지 표시
     function loadJosaData(forceRefresh) {
         var summary = document.getElementById('jm-summary');
         var t0 = Date.now();
-        if (summary) summary.textContent = '데이터 로딩 중...';
+        if (summary) summary.textContent = '[1] loadJosaData 진입';
 
-        if (typeof google === 'undefined' || !google.script || !google.script.run) {
-            if (summary) summary.textContent = 'google.script.run 사용 불가';
-            return;
-        }
+        if (typeof google === 'undefined') { if (summary) summary.textContent = '[ERR] google === undefined'; return; }
+        if (!google.script) { if (summary) summary.textContent = '[ERR] google.script === undefined'; return; }
+        if (!google.script.run) { if (summary) summary.textContent = '[ERR] google.script.run === undefined'; return; }
+        if (summary) summary.textContent = '[2] google.script.run OK, GAS 호출 시작';
+
+        var callTimer = setTimeout(function () {
+            if (summary && summary.textContent.indexOf('[2]') === 0) {
+                summary.textContent = '[ERR] GAS 응답 30초 timeout — google.script.run 응답 안 옴';
+            }
+        }, 30000);
 
         google.script.run
             .withSuccessHandler(function (d) {
+                clearTimeout(callTimer);
+                if (summary) summary.textContent = '[3] 응답 수신';
                 if (!d || !d.success) {
                     if (summary) summary.textContent = 'GAS 에러: ' + (d && (d.error || d.message) || 'unknown');
                     console.error('jmLoadAllData failed:', d);
@@ -23381,19 +23455,20 @@ MJ 이정우 팀장
                 smInvestigators = d.investigators || [];
                 jmPresets = d.presets || [];
                 jmItems = d.items || [];
-                rebuildJmJosajaFilter();
+                try { rebuildJmJosajaFilter(); } catch (e) { if (summary) summary.textContent = '[ERR-render-1] ' + e.message; return; }
                 if (jmSelectedPresetIds.size === 0) {
                     jmPresets.forEach(function (p) { if (p.preset_id) jmSelectedPresetIds.add(p.preset_id); });
                 }
-                renderJosaTree();
-                applyJosaFilters();
+                try { renderJosaTree(); } catch (e) { if (summary) summary.textContent = '[ERR-render-2] ' + e.message; return; }
+                try { applyJosaFilters(); } catch (e) { if (summary) summary.textContent = '[ERR-render-3] ' + e.message; return; }
                 var ms = Date.now() - t0;
                 if (summary) summary.textContent = 'preset ' + jmPresets.length + ' · items ' + jmItems.length + ' (' + ms + 'ms)';
             })
             .withFailureHandler(function (err) {
+                clearTimeout(callTimer);
                 var msg = (err && (err.message || err.name)) || String(err) || 'unknown';
                 if (summary) {
-                    summary.textContent = 'jmLoadAllData 실패: ' + msg;
+                    summary.textContent = '[ERR-gas] ' + msg;
                     summary.title = JSON.stringify(err);
                 }
                 console.error('jmLoadAllData failed:', err);
@@ -23545,74 +23620,120 @@ MJ 이정우 팀장
         var body = document.getElementById('jm-grid-body');
         if (!body) return;
         if (!filtered.length) {
-            body.innerHTML = '<tr><td colspan="15" class="text-center text-gray-400 py-10">조회 결과 없음</td></tr>';
+            body.innerHTML = '<tr><td colspan="16" class="text-center text-gray-400 py-10">조회 결과 없음</td></tr>';
             return;
         }
-        // preset_id → title 맵 (사건번호 툴팁용)
         var presetMap = {};
         jmPresets.forEach(function (p) { presetMap[p.preset_id] = p.preset_title; });
+
+        function fmtNum(n) { if (!n) return ''; var s = String(n); return s.replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+        function bidDateDday(bd) {
+            if (!bd || !/^\d{6}$/.test(bd)) return { date: escHtml(bd || ''), dday: '' };
+            var yy = '20' + bd.slice(0,2), mm = bd.slice(2,4), dd = bd.slice(4,6);
+            var disp = yy + '.' + mm + '.' + dd;
+            var target = new Date(+yy, +mm - 1, +dd);
+            var today = new Date(); today.setHours(0,0,0,0);
+            var diff = Math.round((target - today) / 86400000);
+            var dday = diff > 0 ? '입찰 ' + diff + '일전' : (diff === 0 ? '오늘' : '지남 ' + (-diff) + '일');
+            return { date: disp, dday: dday };
+        }
 
         body.innerHTML = filtered.map(function (it) {
             var ids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
             var multiList = ids.map(function (id) { return presetMap[id] || id; }).join('\n');
             var isMulti = ids.length > 1;
-            var sakunCls = isMulti ? 'text-red-600 font-bold' : 'text-gray-800';
+            var sakunCls = isMulti ? 'jm-sakun-multi' : 'jm-sakun';
             var sakunTip = isMulti ? ('속한 리스트:\n' + multiList) : (multiList || '');
 
-            var statusBadge = (function () {
-                var s = it.josa_status || '분류필요';
-                var palette = { '분류필요': 'bg-gray-200 text-gray-700', '조사요청': 'bg-blue-200 text-blue-800', '조사접수': 'bg-indigo-200 text-indigo-800', '조사확정': 'bg-green-200 text-green-800', '조사불가': 'bg-orange-200 text-orange-800', '폐기': 'bg-red-200 text-red-800' };
-                return '<span class="px-1.5 py-0.5 rounded text-[10px] ' + (palette[s] || 'bg-gray-200') + '">' + escHtml(s) + '</span>';
-            })();
-
-            var viewBtn = it.view_url
-                ? '<a href="' + escAttr(it.view_url) + '" target="_blank" class="text-blue-600 hover:underline">상세</a>'
+            // 사진 — cross-PC 호환 위해 crossorigin 폴백
+            var imgCell = it.img_url
+                ? '<img src="' + escAttr(it.img_url) + '" class="jm-thumb" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.onerror=null;this.removeAttribute(\'crossorigin\');this.src=this.src;">'
                 : '<span class="text-gray-300">-</span>';
 
-            // bid_date 표시: 260520 → 26-05-20 + 시간
-            var bidDateDisp = '';
-            if (it.bid_date && /^\d{6}$/.test(it.bid_date)) {
-                bidDateDisp = it.bid_date.slice(0,2) + '-' + it.bid_date.slice(2,4) + '-' + it.bid_date.slice(4,6);
-            } else {
-                bidDateDisp = escHtml(it.bid_date || '');
-            }
-            var bidCell = bidDateDisp + (it.bid_time ? '<br><span class="text-[10px] text-gray-500">' + escHtml(it.bid_time) + '</span>' : '');
+            // 사건번호 + 물건종류 + [옥션원] / [조사내용] 버튼 (조사내용은 입찰물건 등록된 경우만)
+            var auctionBtn = it.view_url
+                ? '<button type="button" onclick="window.open(\'' + escAttr(it.view_url) + '\',\'_auction\',\'width=896,height=900,left=100,top=50,resizable=yes,scrollbars=yes\')" class="jm-cell-btn jm-btn-auction">옥션원</button>'
+                : '';
+            // 조사내용 버튼: allBiddingData 에 sakun_no 매칭되는 입찰물건이 있을 때만 표시
+            var hasBidding = false;
+            try {
+                if (typeof allBiddingData !== 'undefined' && Array.isArray(allBiddingData) && it.sakun_no) {
+                    var sk = String(it.sakun_no).trim();
+                    hasBidding = allBiddingData.some(function (d) { return String(d.sakun_no || '').trim() === sk; });
+                }
+            } catch (e) {}
+            var josaBtn = hasBidding
+                ? '<button type="button" onclick="openJosaContentModal(\'' + escAttr(it.josa_id) + '\')" class="jm-cell-btn jm-btn-josa">조사내용</button>'
+                : '';
+            var sakunCell = '<div class="' + sakunCls + '" title="' + escAttr(sakunTip) + '">' + escHtml(it.sakun_no || '') + '</div>' +
+                            (it.prop_kind ? '<div class="jm-prop-kind">' + escHtml(it.prop_kind) + '</div>' : '') +
+                            (auctionBtn || josaBtn ? '<div class="jm-cell-btns">' + auctionBtn + josaBtn + '</div>' : '');
 
-            // 유찰: 13회 / 100%
+            // 매각기일 + 시간 + D-day (bid_time 의 1899-12-30 같은 prefix 자동 제거 — readAllJosaItems 에서 HH:mm 만)
+            var bd = bidDateDday(it.bid_date);
+            var bidCell = '<div>' + bd.date + '</div>' +
+                          (it.bid_time ? '<div class="jm-bid-time">(' + escHtml(it.bid_time) + ')</div>' : '') +
+                          (bd.dday ? '<div class="jm-bid-dday">' + bd.dday + '</div>' : '');
+
+            // 소재지 (매니저 옥션원 스타일: 4줄 색상)
+            var addrCell = '<div class="jm-addr">' + escHtml(it.address || '') + '</div>' +
+                           (it.size_info ? '<div class="jm-size">[' + escHtml(it.size_info) + ']</div>' : '') +
+                           (it.specials_all ? '<div class="jm-spec">[' + escHtml(it.specials_all) + ']</div>' : '') +
+                           (it.issue ? '<div class="jm-issue">[' + escHtml(it.issue) + ']</div>' : '');
+
+            // 가격: 감정가(검정) / 최저(파랑) / 평당(초록)
+            var priceCell = '<div class="jm-price-kam">' + fmtNum(it.kamjungka) + '</div>' +
+                            '<div class="jm-price-low">' + fmtNum(it.low_price) + '</div>' +
+                            (it.pyeong_price ? '<div class="jm-price-py">평당 ' + fmtNum(it.pyeong_price) + '만원</div>' : '');
+
+            // 진행상태: 유찰 N회 (파랑) + (N%) 회색
             var failCell = '';
-            if (it.fail_count) failCell += escHtml(it.fail_count) + '회';
-            if (it.fail_rate)  failCell += (failCell ? '<br>' : '') + '<span class="text-[10px] text-gray-500">' + escHtml(it.fail_rate) + '%</span>';
+            if (it.fail_count) failCell += '<div class="jm-fail-cnt">유찰 ' + escHtml(it.fail_count) + '회</div>';
+            if (it.fail_rate)  failCell += '<div class="jm-fail-rate">(' + escHtml(it.fail_rate) + '%)</div>';
             if (!failCell) failCell = '<span class="text-gray-300">-</span>';
 
-            // 가격: 감정 / 최저 / 평당
-            function fmtNum(n) { if (!n) return '-'; var s = String(n); return s.replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
-            var priceCell = '<div>감 ' + fmtNum(it.kamjungka) + '</div>' +
-                            '<div>최 ' + fmtNum(it.low_price) + '</div>' +
-                            (it.pyeong_price ? '<div class="text-[10px] text-gray-500">평 ' + fmtNum(it.pyeong_price) + '만</div>' : '');
+            // 상태 뱃지
+            // 상태 — 버튼 형식 (클릭 시 드롭다운 → 상태 변경)
+            var statusBtn = (function () {
+                var s = it.josa_status || '분류필요';
+                var palette = { '분류필요': 'bg-gray-200 text-gray-700', '조사요청': 'bg-blue-200 text-blue-800', '조사접수': 'bg-indigo-200 text-indigo-800', '조사확정': 'bg-green-200 text-green-800', '조사불가': 'bg-orange-200 text-orange-800', '폐기': 'bg-red-200 text-red-800' };
+                return '<button type="button" onclick="openJmStatusMenu(this, \'' + escAttr(it.josa_id) + '\')" class="jm-status-btn ' + (palette[s] || 'bg-gray-200') + '">' + escHtml(s) + '</button>';
+            })();
 
-            return '<tr class="hover:bg-yellow-50">' +
-                '<td class="border px-2 py-1 text-center"><input type="checkbox" class="jm-row-cb rounded" data-key="' + escAttr(it.item_key) + '"></td>' +
-                '<td class="border px-2 py-1 text-center">' + statusBadge + '</td>' +
-                '<td class="border px-2 py-1 text-center ' + sakunCls + '" title="' + escAttr(sakunTip) + '">' + escHtml(it.sakun_no || '') + '</td>' +
-                '<td class="border px-2 py-1 text-center">' + escHtml(it.court || '') + '</td>' +
-                '<td class="border px-2 py-1 text-center text-[11px]">' + bidCell + '</td>' +
-                '<td class="border px-2 py-1 text-center text-[11px]">' + failCell + '</td>' +
-                '<td class="border px-2 py-1 text-left text-[11px]">' +
-                    '<div>' + escHtml(it.address || '') + '</div>' +
-                    (it.size_info ? '<div class="text-gray-500">' + escHtml(it.size_info) + '</div>' : '') +
-                    (it.specials_all ? '<div class="text-orange-700">' + escHtml(it.specials_all) + '</div>' : '') +
-                    (it.issue ? '<div class="text-red-600 font-semibold">⚠ ' + escHtml(it.issue) + '</div>' : '') +
-                '</td>' +
-                '<td class="border px-2 py-1 text-left text-[11px]">' + escHtml(it.prop_kind || '') + (it.specials ? '<br><span class="text-orange-700">' + escHtml(it.specials) + '</span>' : '') + '</td>' +
-                '<td class="border px-2 py-1 text-right text-[11px]">' + priceCell + '</td>' +
-                '<td class="border px-2 py-1 text-center text-[11px]">' + escHtml(it.view_count || '') + '</td>' +
-                '<td class="border px-2 py-1 text-center">' + escHtml(it.josaja || '') + '</td>' +
-                '<td class="border px-2 py-1 text-center"><button type="button" onclick="openJosaContentModal(\'' + escAttr(it.item_key) + '\')" class="text-blue-600 hover:underline text-[11px]">보기</button></td>' +
-                '<td class="border px-2 py-1 text-left text-[11px] text-gray-600">' + escHtml(it.memo || '') + '</td>' +
-                '<td class="border px-2 py-1 text-center text-[11px] text-gray-500">' + escHtml(it.reg_date || '') + '</td>' +
-                '<td class="border px-2 py-1 text-center">' + viewBtn + '</td>' +
+            return '<tr class="jm-row">' +
+                '<td class="jm-td text-center"><input type="checkbox" class="jm-row-cb rounded" data-id="' + escAttr(it.josa_id) + '"></td>' +
+                '<td class="jm-td text-center">' + statusBtn + '</td>' +
+                '<td class="jm-td text-center">' + escHtml(it.josaja || '') + '</td>' +
+                '<td class="jm-td text-center">' + imgCell + '</td>' +
+                '<td class="jm-td text-center">' + sakunCell + '</td>' +
+                '<td class="jm-td text-center">' + escHtml(it.court || '') + '</td>' +
+                '<td class="jm-td text-center">' + bidCell + '</td>' +
+                '<td class="jm-td text-left">' + addrCell + '</td>' +
+                '<td class="jm-td text-right">' + priceCell + '</td>' +
+                '<td class="jm-td text-center">' + failCell + '</td>' +
+                '<td class="jm-td text-center">' + escHtml(it.view_count || '') + '</td>' +
+                '<td class="jm-td text-left text-[11px] text-gray-600">' + escHtml(it.memo || '') + '</td>' +
+                '<td class="jm-td text-center text-[11px] text-gray-500">' + escHtml(it.reg_date || '') + '</td>' +
                 '</tr>';
         }).join('');
+    }
+
+    // 상태 변경 메뉴 (확인 다이얼로그 → GAS 호출)
+    function openJmStatusMenu(btn, josaId) {
+        var statuses = ['분류필요', '조사요청', '조사접수', '조사확정', '조사불가', '폐기'];
+        var cur = btn.textContent.trim();
+        var picked = prompt('상태 변경 (1~6 입력):\n1=분류필요  2=조사요청  3=조사접수\n4=조사확정  5=조사불가  6=폐기\n\n현재: ' + cur, '');
+        if (!picked) return;
+        var idx = parseInt(picked, 10) - 1;
+        if (idx < 0 || idx >= statuses.length) { alert('1~6 사이 숫자만 입력'); return; }
+        var newStatus = statuses[idx];
+        if (newStatus === cur) return;
+        // 메모리 변경 + 화면 즉시 반영
+        var it = jmItems.find(function (x) { return x.josa_id === josaId; });
+        if (it) it.josa_status = newStatus;
+        applyJosaFilters();
+        // TODO: GAS 저장 함수 (다음 작업)
+        showStatus('상태 변경: ' + newStatus + ' (GAS 저장은 다음 작업)', 'info');
     }
 
     // 정렬 헤더 클릭
@@ -23632,7 +23753,7 @@ MJ 이정우 팀장
     // 조사내용 보기 — 입찰물건 상세 모달 [조사탭] 으로 전환
     // 사용자 사양: "입찰물건보기 조사탭내용 모달로 띄움" — sakun_no 매칭으로 기존 패턴 재사용
     function openJosaContentModal(itemKey) {
-        var it = jmItems.find(function (x) { return x.item_key === itemKey; });
+        var it = jmItems.find(function (x) { return x.josa_id === itemKey; });
         if (!it) { showStatus('항목 없음', 'error'); return; }
         var sakun = String(it.sakun_no || '').trim();
         if (!sakun) { showStatus('사건번호 없음', 'error'); return; }
