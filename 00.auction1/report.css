@@ -1,0 +1,122 @@
+/* 옥션원 크롤링 보고서 - 모달 + 카드 그리드 + 인쇄 최적화 */
+
+/* 모달 열려 있을 때 배경 스크롤/휠 차단 */
+body.report-open { overflow:hidden; }
+
+/* 모달 컨테이너: 거의 풀스크린 */
+.report-modal-wrap { z-index:200; }
+.report-modal-wrap .modal-bg { background:rgba(0,0,0,.5); }
+.report-modal-box {
+  width:97vw !important; height:95vh !important; max-height:95vh !important;
+  background:#f3f4f6 !important;
+  border-radius:8px;
+  overflow:hidden;
+  padding:0;
+}
+.report-modal-head {
+  display:flex; justify-content:space-between; align-items:center;
+  background:#1f3a8a; color:#fff;
+  padding:10px 16px; flex:0 0 auto;
+}
+.report-modal-head .gray { color:#dbeafe !important; }
+.report-modal-head .bold { color:#fff; }
+.report-modal-head .head-right { display:flex; gap:6px; }
+.report-modal-head .btn_box_sss { font-size:11.5px !important; padding:5px 12px !important; height:auto !important; line-height:1.5 !important; }
+.report-grid {
+  flex:1 1 auto; overflow-y:auto;
+  display:grid; gap:12px;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  padding:14px 16px;
+}
+
+/* 카드 */
+.rcard {
+  background:#fff; border:1.5px solid #d1d5db; border-radius:8px;
+  display:flex; flex-direction:column;
+}
+.rcard-head {
+  background:#eff6ff; border-bottom:1.5px solid #bfdbfe;
+  padding:10px 12px;
+}
+.rcard-title { font-size:14px; font-weight:700; color:#1e3a8a; display:flex; align-items:center; gap:6px; }
+.rcard-sub { font-size:11px; color:#475569; margin-top:3px; }
+
+.cnt-badge {
+  margin-left:auto; font-size:12px; font-weight:600;
+  background:#fff7ed; border:1px solid #fdba74; border-radius:4px;
+  padding:2px 8px;
+}
+.cnt-badge .cnt-filtered { color:#dc2626; font-weight:700; }
+.cnt-badge .cnt-total { color:#1f2937; font-weight:600; }
+.cnt-badge.cnt-empty { color:#9ca3af; background:#f3f4f6; border-color:#d1d5db; font-weight:500; }
+
+.rcard-sec { padding:8px 12px 10px; border-top:1px dashed #e5e7eb; }
+.rcard-sec:first-of-type { border-top:0; }
+.rcard-sec h3 {
+  margin:0 0 6px; font-size:11.5px; font-weight:700; color:#374151;
+  text-transform:none;
+}
+
+/* 검색조건 — 테이블 (라벨 왼쪽 정렬 + 값 왼쪽 정렬) */
+.kv-table { width:100%; border-collapse:collapse; font-size:11.5px; }
+.kv-table th {
+  text-align:left; font-weight:normal; color:#6b7280;
+  padding:3px 10px 3px 0; vertical-align:top;
+  white-space:nowrap; width:1%;
+}
+.kv-table td {
+  text-align:left; color:#1f2937; font-weight:600;
+  padding:3px 0; vertical-align:top;
+  word-break:break-word; overflow-wrap:anywhere;
+}
+
+/* 추가필터 — 테이블 */
+.cf-table { width:100%; border-collapse:separate; border-spacing:0 3px; font-size:11.5px; }
+.cf-table th, .cf-table td {
+  background:#fffbeb; border-top:1px solid #fde68a; border-bottom:1px solid #fde68a;
+  padding:4px 8px; vertical-align:top;
+}
+.cf-table th.cf-name {
+  text-align:left; color:#1f3a8a; font-weight:600;
+  white-space:nowrap; width:1%;
+  border-left:1px solid #fde68a; border-radius:3px 0 0 3px;
+}
+.cf-table td.cf-op {
+  text-align:left; color:#dc2626; font-weight:700;
+  white-space:nowrap; width:1%;
+}
+.cf-table td.cf-val {
+  text-align:left; color:#1f2937;
+  border-right:1px solid #fde68a; border-radius:0 3px 3px 0;
+  word-break:break-word; overflow-wrap:anywhere;
+}
+
+.empty { color:#9ca3af; font-size:11px; padding:4px 0; font-style:italic; }
+.empty-state { padding:60px 20px; text-align:center; color:#6b7280; font-size:14px; }
+
+/* ─── 인쇄 ─── 모달 열린 상태에서만 보고서 출력 */
+@media print {
+  @page { size:A4 landscape; margin:8mm; }
+  body.report-open > *:not(#reportModal) { display:none !important; }
+  body.report-open .modal-bg { display:none !important; }
+  body.report-open .report-modal-wrap {
+    position:static !important; display:block !important;
+  }
+  body.report-open .report-modal-box {
+    width:100% !important; height:auto !important; max-height:none !important;
+    background:#fff !important; border:0; box-shadow:none;
+  }
+  body.report-open .report-modal-head {
+    background:#fff; color:#000; border-bottom:2px solid #000; padding:6px 8px;
+  }
+  body.report-open .report-modal-head .bold { color:#000; font-size:13px; }
+  body.report-open .report-modal-head .gray { color:#444 !important; }
+  body.report-open .report-modal-head .head-right { display:none !important; }
+  body.report-open .report-grid {
+    overflow:visible !important;
+    padding:8px; grid-template-columns:repeat(2, 1fr); gap:8px;
+  }
+  .rcard { break-inside:avoid; page-break-inside:avoid; border-color:#999; }
+  .rcard-head { background:#f3f4f6; }
+  .cf-row { background:#fff; border-color:#999; }
+}

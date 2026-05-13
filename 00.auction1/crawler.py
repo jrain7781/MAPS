@@ -25,7 +25,10 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import (
+    NoSuchElementException, TimeoutException, NoAlertPresentException,
+    UnexpectedAlertPresentException,
+)
 from webdriver_manager.chrome import ChromeDriverManager
 
 # ── 로그인 정보 (00.imageup/01.i.py 의 ACCOUNTS 와 동일) ────────
@@ -140,6 +143,46 @@ def get_driver():
     return _driver
 
 
+def _accept_alert_if_any(d, timeout: float = 2.0, tag: str = "") -> str | None:
+    """alert 떠 있으면 텍스트 로깅 후 accept. 없으면 None.
+
+    옥션원 대표 alert:
+      - "같은 ID로 동시 접속하여 서비스를 이용할 수 없습니다." (동시접속 — accept 시 우리가 새 세션 차지)
+      - "로그인 후 이용..." (비로그인 — 검색 시도 시)
+      - 만료/에러 류
+    accept 자체가 옥션원 정책상 새 세션을 활성화시키는 동작이므로 안전.
+    """
+    try:
+        WebDriverWait(d, timeout).until(EC.alert_is_present())
+    except (TimeoutException, NoAlertPresentException):
+        return None
+    except Exception as e:
+        print(f"[alert{':'+tag if tag else ''}] wait failed: {e}")
+        return None
+    try:
+        a = d.switch_to.alert
+        text = (a.text or "").replace("\n", " ").strip()
+        print(f"[alert{':'+tag if tag else ''}] {text!r} → accept")
+        a.accept()
+        return text
+    except NoAlertPresentException:
+        return None
+    except Exception as e:
+        print(f"[alert{':'+tag if tag else ''}] accept failed: {e}")
+        return None
+
+
+def _drain_alerts(d, max_iter: int = 3, tag: str = "") -> list:
+    """여러 개 연속 알럿(드물지만 가능) 다 비우기."""
+    seen = []
+    for _ in range(max_iter):
+        t = _accept_alert_if_any(d, timeout=0.5, tag=tag)
+        if not t:
+            break
+        seen.append(t)
+    return seen
+
+
 def login_if_needed(force: bool = False):
     """TTL(30분) 내에는 로그인 skip — 첫 요청만 느리고 이후 매 요청은 즉시.
     force=True 또는 TTL 만료 시 옥션원 로그인 페이지로 가서 재로그인.
@@ -148,13 +191,24 @@ def login_if_needed(force: bool = False):
     if not force and (time.time() - _last_login_at) < LOGIN_TTL_SEC:
         return
     d = get_driver()
+    # 시작 전 잔여 알럿 정리 (이전 작업의 잔재일 수 있음)
+    _drain_alerts(d, tag="pre")
     print(f"[login] (re)login → {URL_LOGIN}")
-    d.get(URL_LOGIN)
+    # 페이지 이동 자체가 알럿을 띄울 수 있으므로 UnexpectedAlertPresent 안전 처리
+    try:
+        d.get(URL_LOGIN)
+    except UnexpectedAlertPresentException:
+        _drain_alerts(d, tag="nav")
+        d.get(URL_LOGIN)
+    _drain_alerts(d, tag="after-nav")
     try:
         WebDriverWait(d, 15).until(EC.presence_of_element_located((By.ID, "client_id")))
+    except UnexpectedAlertPresentException:
+        _drain_alerts(d, tag="wait-form")
     except Exception:
-        # 이미 로그인된 상태에서 옥션원이 메인으로 redirect — 강제로 logout 후 재시도하기보다 그대로 진행
+        # 이미 로그인된 상태에서 옥션원이 메인으로 redirect — 그대로 진행
         print("[login] client_id input not found (이미 로그인 상태?). 그대로 진행")
+        _last_login_at = time.time()
         return
     d.execute_script(
         f"""
@@ -170,20 +224,47 @@ def login_if_needed(force: bool = False):
             By.XPATH,
             "//div[@id='login_btn_area']//a | //input[@type='image' and contains(@src, 'login')]",
         ).click()
+    except UnexpectedAlertPresentException:
+        _drain_alerts(d, tag="submit-click")
     except Exception:
-        d.find_element(By.ID, "passwd").send_keys(Keys.RETURN)
+        try:
+            d.find_element(By.ID, "passwd").send_keys(Keys.RETURN)
+        except UnexpectedAlertPresentException:
+            _drain_alerts(d, tag="submit-enter")
+    # 옥션원이 즉시 띄우는 알럿(동시접속/잘못된 비번/만료 등) 처리.
+    #   동시접속 alert 은 accept 자체가 새 세션을 활성화 → 추가 retry 불필요.
+    seen = _drain_alerts(d, tag="post-submit")
+    if seen:
+        for t in seen:
+            if "동시 접속" in t or "동시접속" in t:
+                print("[login] 동시접속 alert → accept 로 우리 세션이 우선권 확보")
+            elif "비밀번호" in t or "아이디" in t:
+                print(f"[login][WARN] 자격 증명 오류 가능: {t!r}")
+            elif "로그인" in t and "이용" in t:
+                # 비로그인 상태 안내 — 단순 accept 후 진행
+                pass
     # 로그인 완료 대기: client_id input 이 사라지거나 페이지가 다른 곳으로 이동할 때까지
+    def _logged_in(dr):
+        # 대기 중에도 알럿이 새로 뜰 수 있어 매 폴 마다 안전 처리
+        try:
+            return "login_box" not in dr.current_url or not dr.find_elements(By.ID, "client_id")
+        except UnexpectedAlertPresentException:
+            _drain_alerts(dr, tag="wait-poll")
+            return False
     try:
-        WebDriverWait(d, 10).until(
-            lambda dr: "login_box" not in dr.current_url
-            or not dr.find_elements(By.ID, "client_id")
-        )
+        WebDriverWait(d, 10).until(_logged_in)
     except Exception:
         time.sleep(2)
     # 옥션원 세션 cookie / user_ssid 안정화 대기
     time.sleep(1.2)
+    _drain_alerts(d, tag="post-wait")
     _last_login_at = time.time()
-    print(f"[login] done, current_url={d.current_url}")
+    try:
+        cur = d.current_url
+    except UnexpectedAlertPresentException:
+        _drain_alerts(d, tag="post-cur")
+        cur = "(alert handled)"
+    print(f"[login] done, current_url={cur}")
 
 
 def fill_form(d, form_data: dict):
@@ -272,28 +353,41 @@ def fill_form(d, form_data: dict):
 
 def submit_search(d):
     # ca_title.php 의 종합검색 — 검색 input 을 직접 클릭 (옥션원 onclick 검증 로직을 거치게)
-    clicked = d.execute_script(
-        """
-        var f = document.getElementById('fm_aulist');
-        if (!f) return 'noform';
-        // 검색 버튼: input value=검색 또는 onclick 함수가 있는 element
-        var btn = Array.from(f.querySelectorAll('input, span, a, button')).find(function(b){
-            var v = (b.value || b.textContent || '').trim();
-            return v === '검색';
-        });
-        if (btn) { btn.click(); return 'clicked'; }
-        // fallback: search 함수 직접 호출
-        if (typeof auction_ser === 'function') { auction_ser(); return 'fn:auction_ser'; }
-        if (typeof go_search === 'function') { go_search(); return 'fn:go_search'; }
-        f.submit();
-        return 'fallback:submit';
-        """
-    )
+    try:
+        clicked = d.execute_script(
+            """
+            var f = document.getElementById('fm_aulist');
+            if (!f) return 'noform';
+            // 검색 버튼: input value=검색 또는 onclick 함수가 있는 element
+            var btn = Array.from(f.querySelectorAll('input, span, a, button')).find(function(b){
+                var v = (b.value || b.textContent || '').trim();
+                return v === '검색';
+            });
+            if (btn) { btn.click(); return 'clicked'; }
+            // fallback: search 함수 직접 호출
+            if (typeof auction_ser === 'function') { auction_ser(); return 'fn:auction_ser'; }
+            if (typeof go_search === 'function') { go_search(); return 'fn:go_search'; }
+            f.submit();
+            return 'fallback:submit';
+            """
+        )
+    except UnexpectedAlertPresentException:
+        _drain_alerts(d, tag="submit")
+        clicked = "alert-handled"
     print(f"[crawl] submit -> {clicked}")
-    WebDriverWait(d, 30).until(
-        lambda dr: "ca_list" in dr.current_url or dr.find_elements(By.CSS_SELECTOR, "table.tbl_list tbody tr")
-    )
+    def _ready(dr):
+        try:
+            return "ca_list" in dr.current_url or dr.find_elements(By.CSS_SELECTOR, "table.tbl_list tbody tr")
+        except UnexpectedAlertPresentException:
+            _drain_alerts(dr, tag="submit-wait")
+            return False
+    try:
+        WebDriverWait(d, 30).until(_ready)
+    except Exception:
+        # alert 이후 페이지 미이동일 수 있음 — 잔여 알럿 정리만 하고 진행
+        _drain_alerts(d, tag="submit-timeout")
     time.sleep(1.5)
+    _drain_alerts(d, tag="post-submit")
 
 
 def _extract_specials(td3):
@@ -459,15 +553,29 @@ def crawl(form_data: dict, custom_filters: list | None = None):
         print(f"\n[crawl] formData={form_data}")
         def _do_search():
             d2 = get_driver()
-            d2.get(URL_SEARCH)
-            WebDriverWait(d2, 15).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "table.tbl_fmSrch"))
-            )
+            try:
+                d2.get(URL_SEARCH)
+            except UnexpectedAlertPresentException:
+                _drain_alerts(d2, tag="search-nav")
+                d2.get(URL_SEARCH)
+            _drain_alerts(d2, tag="search-after-nav")
+            try:
+                WebDriverWait(d2, 15).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "table.tbl_fmSrch"))
+                )
+            except UnexpectedAlertPresentException:
+                _drain_alerts(d2, tag="search-wait-form")
             time.sleep(0.5)
             fill_form(d2, form_data)
-            print(f"[crawl] form filled, current url={d2.current_url}")
+            try:
+                print(f"[crawl] form filled, current url={d2.current_url}")
+            except UnexpectedAlertPresentException:
+                _drain_alerts(d2, tag="search-pre-submit")
             submit_search(d2)
-            print(f"[crawl] after submit, current url={d2.current_url}")
+            try:
+                print(f"[crawl] after submit, current url={d2.current_url}")
+            except UnexpectedAlertPresentException:
+                _drain_alerts(d2, tag="search-post-submit")
             return d2, parse_results(d2)
         # 사용자 요구: 크롤링 시 매번 강제 로그인 — 사건상세 모달 fetch 등으로 driver 가 다른 페이지에 있더라도 안전
         _progress["stage"] = "login"
@@ -475,7 +583,12 @@ def crawl(form_data: dict, custom_filters: list | None = None):
         _progress["stage"] = "search"
         d, items = _do_search()
         # 그래도 비로그인 모달 등이 보이면 1회 재시도
-        if not items and _looks_like_login(d.page_source or ""):
+        try:
+            still_login = not items and _looks_like_login(d.page_source or "")
+        except UnexpectedAlertPresentException:
+            _drain_alerts(d, tag="retry-check")
+            still_login = True
+        if still_login:
             print("[crawl] still not logged in — retry")
             time.sleep(1)
             login_if_needed(force=True)
@@ -502,10 +615,18 @@ def crawl(form_data: dict, custom_filters: list | None = None):
             print(f"[crawl] page start={start} → {href[:120]}...")
             visited.add(start)
             try:
-                d.get(href)
-                WebDriverWait(d, 15).until(
-                    EC.presence_of_element_located((By.XPATH, "//tr[@id='list_header']"))
-                )
+                try:
+                    d.get(href)
+                except UnexpectedAlertPresentException:
+                    _drain_alerts(d, tag=f"page{start}-nav")
+                    d.get(href)
+                _drain_alerts(d, tag=f"page{start}-after-nav")
+                try:
+                    WebDriverWait(d, 15).until(
+                        EC.presence_of_element_located((By.XPATH, "//tr[@id='list_header']"))
+                    )
+                except UnexpectedAlertPresentException:
+                    _drain_alerts(d, tag=f"page{start}-wait")
                 time.sleep(0.5)
                 page_items = parse_results(d)
                 print(f"[crawl] page {len(visited)}: {len(page_items)} items")
@@ -514,6 +635,7 @@ def crawl(form_data: dict, custom_filters: list | None = None):
                 _progress["current"] = len(items)
             except Exception as e:
                 print(f"[crawl] page fetch fail (start={start}): {e}")
+                _drain_alerts(d, tag=f"page{start}-error")
                 break
         print(f"[crawl] total {len(items)} items across {len(visited)} pages{' (cancelled)' if cancelled else ''}")
         crawl.last_cancelled = cancelled

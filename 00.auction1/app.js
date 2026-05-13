@@ -25,9 +25,9 @@
     { id: 'ft_addrsido',  name: '주소 시도',               valueType: 'text'   },
     { id: 'ft_addrgugun', name: '주소 구군',               valueType: 'text'   },
     { id: 'ft_specials',  name: '특수물건',                valueType: 'text'   },
+    { id: 'ft_specials_multi', name: '특수물건 다중',       valueType: 'specials' },
     { id: 'ft_propkind',  name: '물건종류',                valueType: 'text'   },
     { id: 'ft_keyword',   name: '비고/특이사항 키워드 포함', valueType: 'text'   },
-    { id: 'ft_dae_remove',  name: '대항력 제거',           valueType: 'text'   },
     { id: 'ft_dae_hug_inc', name: '대항력(HUG포함)',       valueType: 'text'   }
   ];
 
@@ -96,6 +96,111 @@
     fillSelect(document.getElementById('f_orderBy'),  D.ORDER_BY);
   }
 
+  // ── 특수물건 콤보박스 (검색 가능) ──────────────────────
+  // <select id="f_special"> 는 form 직렬화/프리셋 호환을 위해 그대로 두고 (CSS로 숨김),
+  // 위에 검색 가능한 input + 팝업 리스트를 띄워 동기화한다.
+  function initSpecialCombo() {
+    const sel    = document.getElementById('f_special');
+    const inp    = document.getElementById('specialComboInput');
+    const list   = document.getElementById('specialComboList');
+    const toggle = document.getElementById('specialComboToggle');
+    if (!sel || !inp || !list) return;
+
+    // 리스트에서 "설정안함(선택해제)"(v:'') 는 제외 — 입력란을 비우면 그 효과.
+    const items = (D.SPECIAL || []).filter(o => String(o.v) !== '');
+    let activeIdx = -1; // 키보드 하이라이트 인덱스 (현재 필터된 결과 기준)
+    let filtered  = items.slice();
+
+    function labelOf(v) {
+      const f = items.find(o => String(o.v) === String(v));
+      return f ? f.t : '';
+    }
+    function syncInputFromSelect() {
+      // 빈 값 = 설정안함 → 입력란을 비워서 placeholder 가 흐리게 보이도록.
+      // (리스트에는 "설정안함(선택해제)" 항목이 그대로 있어 다시 비우려면 그걸 선택)
+      inp.value = sel.value === '' ? '' : labelOf(sel.value);
+    }
+    function render(q) {
+      // 공백 무시 검색: 쿼리/라벨 양쪽에서 모든 공백 제거 후 includes
+      const qq = (q || '').replace(/\s+/g, '').toLowerCase();
+      filtered = qq
+        ? items.filter(o => (o.t || '').replace(/\s+/g, '').toLowerCase().includes(qq))
+        : items.slice();
+      list.innerHTML = filtered.map((o, i) => {
+        const kwHtml = o.kw ? ' <span class="combo-kw">[' + escHtml(o.kw) + ']</span>' : '';
+        return '<li class="combo-item' + (String(o.v) === String(sel.value) ? ' selected' : '') + '" data-v="' + escAttr(o.v) + '" data-i="' + i + '">' + escHtml(o.t) + kwHtml + '</li>';
+      }).join('') || '<li class="combo-empty">결과 없음</li>';
+      activeIdx = filtered.length ? 0 : -1;
+      paintActive();
+    }
+    function paintActive() {
+      list.querySelectorAll('.combo-item').forEach((el, i) => {
+        el.classList.toggle('active', i === activeIdx);
+      });
+      const cur = list.querySelector('.combo-item.active');
+      if (cur && list.classList.contains('hidden') === false) {
+        const r1 = cur.getBoundingClientRect();
+        const r2 = list.getBoundingClientRect();
+        if (r1.top < r2.top) cur.scrollIntoView({ block: 'nearest' });
+        else if (r1.bottom > r2.bottom) cur.scrollIntoView({ block: 'nearest' });
+      }
+    }
+    function open() {
+      list.classList.remove('hidden');
+      render(inp.value);
+      paintActive();
+    }
+    function close() { list.classList.add('hidden'); }
+    function pick(o) {
+      sel.value = o.v;
+      inp.value = o.t;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      close();
+      if (typeof window.__refreshHighlights === 'function') window.__refreshHighlights();
+    }
+
+    inp.addEventListener('focus', () => { inp.select(); open(); });
+    inp.addEventListener('click', () => { inp.select(); open(); });
+    inp.addEventListener('input', () => {
+      // 입력을 모두 지우면 hidden select 도 빈 값(설정안함) 으로 동기화
+      if (inp.value === '') {
+        sel.value = '';
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        if (typeof window.__refreshHighlights === 'function') window.__refreshHighlights();
+      }
+      open(); render(inp.value);
+    });
+    inp.addEventListener('keydown', (e) => {
+      if (list.classList.contains('hidden')) { if (e.key === 'ArrowDown' || e.key === 'Enter') { open(); e.preventDefault(); return; } }
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (filtered.length) { activeIdx = (activeIdx + 1) % filtered.length; paintActive(); } }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (filtered.length) { activeIdx = (activeIdx - 1 + filtered.length) % filtered.length; paintActive(); } }
+      else if (e.key === 'Enter') { e.preventDefault(); if (activeIdx >= 0 && filtered[activeIdx]) pick(filtered[activeIdx]); }
+      else if (e.key === 'Escape') { close(); inp.blur(); }
+    });
+    toggle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      if (list.classList.contains('hidden')) { inp.focus(); open(); }
+      else close();
+    });
+    list.addEventListener('mousedown', (e) => {
+      const li = e.target.closest('.combo-item');
+      if (!li) return;
+      e.preventDefault();
+      const v = li.getAttribute('data-v');
+      const o = items.find(it => String(it.v) === String(v));
+      if (o) pick(o);
+    });
+    document.addEventListener('mousedown', (e) => {
+      if (e.target === inp || e.target === toggle) return;
+      if (list.contains(e.target)) return;
+      close();
+    });
+
+    // 외부에서 (프리셋 로드 등) sel.value 가 바뀐 뒤 호출
+    window.__refreshSpecialCombo = syncInputFromSelect;
+    syncInputFromSelect();
+  }
+
   // ── 사이드바 렌더 ───────────────────────────────────────
   function renderSidebar() {
     const list  = document.getElementById('sideList');
@@ -106,14 +211,42 @@
       return;
     }
     if (empty) empty.style.display = 'none';
-    const sorted = presets.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    // 최근 크롤링 시각 기준 정렬 (캐시 ts 우선, 없으면 preset.updatedAt 으로 폴백)
+    const lastTs = p => {
+      try {
+        const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
+        if (raw) { const c = JSON.parse(raw); if (c && c.ts) return c.ts; }
+      } catch (_) {}
+      return p.updatedAt || 0;
+    };
+    const sorted = presets.slice().sort((a, b) => lastTs(b) - lastTs(a));
     list.innerHTML = sorted.map(p => {
       const active = p.id === currentPresetId ? ' active' : '';
-      const date = p.updatedAt ? new Date(p.updatedAt).toLocaleString('ko-KR', { hour12: false }) : '';
-      const cnt = (p.customFilters || []).length;
+      // 캐시 결과 — 제목 옆 (필터링/전체) + 서브라인 = 마지막 크롤링 시각
+      let countInline = '';
+      let lastCrawl = '';
+      try {
+        const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
+        if (raw) {
+          const cache = JSON.parse(raw);
+          const items = cache.items || [];
+          const rawN = items.length;
+          let filteredN = rawN;
+          try {
+            // 활성 프리셋이면 편집 중인 custRows 로 카운트 (메인 패널과 일치),
+            // 비활성 프리셋이면 저장된 customFilters 로 카운트
+            const filtersToUse = (p.id === currentPresetId) ? custRows : (p.customFilters || []);
+            const { items: filt } = applyCustomFilters(items, filtersToUse);
+            filteredN = filt.length;
+          } catch (_) {}
+          countInline = `<span class="it-count">(<span class="cnt-filtered">${filteredN}</span>/<span class="cnt-total">${rawN}</span>)</span>`;
+          if (cache.ts) lastCrawl = new Date(cache.ts).toLocaleString('ko-KR', { hour12: false });
+        }
+      } catch (e) {}
+      const subText = lastCrawl ? `최근 크롤링: ${lastCrawl}` : '아직 크롤링하지 않음';
       return `<li class="snb_item${active}" data-id="${p.id}">
-        <div class="it-title">${escHtml(p.title || '(제목 없음)')}</div>
-        <div class="it-sub">${date} · 추가필터 ${cnt}건</div>
+        <div class="it-title"><span class="it-icon">📋</span><span class="it-name">${escHtml(p.title || '(제목 없음)')}</span>${countInline}</div>
+        <div class="it-sub">${subText}</div>
       </li>`;
     }).join('');
     list.querySelectorAll('.snb_item').forEach(el => {
@@ -143,6 +276,7 @@
     renderAddrTags();
     multiPropSelected = new Set((data && Array.isArray(data._multiProp)) ? data._multiProp : []);
     renderMultiPropTags();
+    if (typeof window.__refreshSpecialCombo === 'function') window.__refreshSpecialCombo();
     if (typeof window.__refreshHighlights === 'function') window.__refreshHighlights();
   }
   function clearForm() { applyFormData({}); }
@@ -182,6 +316,7 @@
     '주소 구군':                           { op: 'ncontains', value: '' },
     '주소구군':                            { op: 'ncontains', value: '' },
     '특수물건':                            { op: 'ncontains', value: '대항력' },
+    '특수물건 다중':                       { op: 'ncontains', value: '' },
     '특수권리':                            { op: 'ncontains', value: '대항력' },
     '물건종류':                            { op: 'contains',  value: '' },
     '비고/특이사항 키워드 포함':           { op: 'contains',  value: '' },
@@ -202,6 +337,7 @@
     '주소 구군':                           '구/군(둘째 단어). 예) 미포함 "강남구,서초구"',
     '주소구군':                            '구/군(둘째 단어). 예) 미포함 "강남구,서초구"',
     '특수물건':                            '대항력/임차권등기/HUG/유치권 등 빨강 표시',
+    '특수물건 다중':                       '버튼으로 항목 다중 선택. 포함=어느 하나라도, 미포함=모두 제외',
     '특수권리':                            '대항력/임차권등기/HUG/유치권 등 빨강 표시',
     '물건종류':                            '예) "다세대" / "오피스텔" 포함',
     '비고/특이사항 키워드 포함':           '주소+상태+종류+특수물건 통합 검색',
@@ -225,10 +361,22 @@
       const opOpts = D.CUSTOM_OPS.map(o => `<option value="${o.v}"${o.v === r.op ? ' selected' : ''}>${o.t}</option>`).join('');
       const t = ftypes.find(x => x.id === r.typeId);
       const hint = (t && TYPE_HINTS[t.name]) || '';
+      const isSpecials = t && t.valueType === 'specials';
+      let valHtml;
+      if (isSpecials) {
+        const tags = String(r.value || '').split(',').map(s => s.trim()).filter(Boolean);
+        const tagsHtml = tags.length
+          ? tags.map(tg => `<span class="multi-tag">${escHtml(tg)}</span>`).join(' ')
+          : `<span class="f10 gray">선택된 항목 없음</span>`;
+        valHtml = `<button type="button" class="btn_box_sss btn_white fval-specials" title="특수물건 항목 선택">선택 ▾</button>
+                   <span class="fval-specials-tags">${tagsHtml}</span>`;
+      } else {
+        valHtml = `<input type="text" class="inp fval-inp" value="${escAttr(r.value || '')}" placeholder="값">`;
+      }
       return `<div class="cust-row" data-i="${i}">
         <select class="sel ftype-sel">${typeOpts}</select>
         <select class="sel fop-sel">${opOpts}</select>
-        <input type="text" class="inp fval-inp" value="${escAttr(r.value || '')}" placeholder="값">
+        ${valHtml}
         <span class="cust-hint">${escHtml(hint)}</span>
         <button class="row-del" title="이 행 삭제">×</button>
       </div>`;
@@ -237,8 +385,95 @@
       const i = parseInt(row.dataset.i, 10);
       row.querySelector('.ftype-sel').addEventListener('change', e => onCustTypeChange(i, e.target));
       row.querySelector('.fop-sel').addEventListener('change', e => { custRows[i].op = e.target.value; });
-      row.querySelector('.fval-inp').addEventListener('input', e => { custRows[i].value = e.target.value; });
+      const inp = row.querySelector('.fval-inp');
+      if (inp) inp.addEventListener('input', e => { custRows[i].value = e.target.value; });
+      const btn = row.querySelector('.fval-specials');
+      if (btn) btn.addEventListener('click', () => openSpecialsFilterModal(i));
       row.querySelector('.row-del').addEventListener('click', () => { custRows.splice(i, 1); renderCustRows(); });
+    });
+  }
+
+  // ── 특수물건 다중 선택 모달 ───────────────────────────────
+  let _specialsFilterRowIdx = -1;
+  let _specialsFilterSelected = new Set(); // 현재 모달에서의 선택 상태 (검색 재렌더에도 유지)
+  function renderSpecialsModalBody(q) {
+    const qq = (q || '').replace(/\s+/g, '').toLowerCase();
+    // 전체 표시. kw 없는 항목은 결과 표시 안 됨 안내 + 체크박스 비활성.
+    const all = (D.SPECIAL || []).filter(o => String(o.v) !== '');
+    const filtered = qq
+      ? all.filter(o => {
+          const t = (o.t || '').replace(/\s+/g, '').toLowerCase();
+          const k = (o.kw || '').replace(/\s+/g, '').toLowerCase();
+          return t.includes(qq) || k.includes(qq);
+        })
+      : all;
+    const filterable = all.filter(o => o.kw && o.kw.length).length;
+    // 상단 카운트
+    const countEl = document.getElementById('specialsFilterCount');
+    if (countEl) {
+      countEl.textContent = qq
+        ? `· 검색 ${filtered.length} / 전체 ${all.length}건 (필터가능 ${filterable})`
+        : `· 전체 ${all.length}건 (필터가능 ${filterable} / 결과표시없음 ${all.length - filterable})`;
+    }
+    const body = document.getElementById('specialsFilterBody');
+    body.innerHTML = filtered.length
+      ? filtered.map(o => {
+          const hasKw = !!(o.kw && o.kw.length);
+          const sideHtml = hasKw
+            ? ` <span class="combo-kw">[${escHtml(o.kw)}]</span>`
+            : ` <span class="kw-none">[결과 표시 없음]</span>`;
+          const chk = _specialsFilterSelected.has(o.t) ? ' checked' : '';
+          const dis = hasKw ? '' : ' disabled';
+          const cls = hasKw ? 'specials-opt' : 'specials-opt disabled';
+          const title = hasKw ? '' : ' title="옥션원 검색조건 전용 — 결과 페이지에 표시되지 않아 필터링 불가"';
+          return `<label class="${cls}"${title}><input type="checkbox" value="${escAttr(o.t)}"${chk}${dis}> ${escHtml(o.t)}${sideHtml}</label>`;
+        }).join('')
+      : '<div class="f10 gray" style="padding:12px;text-align:center;">검색 결과 없음</div>';
+    // 체크박스 토글 → 선택 상태 갱신
+    body.querySelectorAll('input[type=checkbox]:not(:disabled)').forEach(c => {
+      c.addEventListener('change', () => {
+        if (c.checked) _specialsFilterSelected.add(c.value);
+        else _specialsFilterSelected.delete(c.value);
+      });
+    });
+  }
+  function openSpecialsFilterModal(rowIdx) {
+    _specialsFilterRowIdx = rowIdx;
+    _specialsFilterSelected = new Set(String(custRows[rowIdx].value || '').split(',').map(s => s.trim()).filter(Boolean));
+    const search = document.getElementById('specialsFilterSearch');
+    if (search) search.value = '';
+    renderSpecialsModalBody('');
+    document.getElementById('specialsFilterModal').classList.remove('hidden');
+    if (search) setTimeout(() => search.focus(), 0);
+  }
+  function closeSpecialsFilterModal() {
+    document.getElementById('specialsFilterModal').classList.add('hidden');
+    _specialsFilterRowIdx = -1;
+  }
+  function applySpecialsFilterModal() {
+    if (_specialsFilterRowIdx < 0) return;
+    // 현재 검색뷰 밖에 있는 항목까지 보존
+    const labels = Array.from(_specialsFilterSelected);
+    custRows[_specialsFilterRowIdx].value = labels.join(',');
+    closeSpecialsFilterModal();
+    renderCustRows();
+  }
+  function bindSpecialsFilterModal() {
+    document.getElementById('specialsFilterClose')?.addEventListener('click', closeSpecialsFilterModal);
+    document.getElementById('specialsFilterApply')?.addEventListener('click', applySpecialsFilterModal);
+    document.getElementById('specialsFilterAll')?.addEventListener('click', () => {
+      // 현재 검색뷰의 항목만 전체선택 (사용자 의도 명확)
+      document.querySelectorAll('#specialsFilterBody input[type=checkbox]').forEach(c => {
+        c.checked = true; _specialsFilterSelected.add(c.value);
+      });
+    });
+    document.getElementById('specialsFilterNone')?.addEventListener('click', () => {
+      document.querySelectorAll('#specialsFilterBody input[type=checkbox]').forEach(c => {
+        c.checked = false; _specialsFilterSelected.delete(c.value);
+      });
+    });
+    document.getElementById('specialsFilterSearch')?.addEventListener('input', (e) => {
+      renderSpecialsModalBody(e.target.value);
     });
   }
   function onCustTypeChange(idx, sel) {
@@ -704,6 +939,7 @@
     '주소구군':                it => addrTokens(it)[1] || '',
     '특수물건':                it => it.specials || it.address || '',
     '특수권리':                it => it.specials || it.address || '',
+    '특수물건 다중':           it => it.specials || it.address || '',
     '물건종류':                it => it.prop_kind || '',
     // ── 대항력 관련 필터 ──────────────────────────
     // (1) '대항력 제거' — 대항력 있으면 무조건 '대항력' (HUG 여부 무관). 사용 예) 미포함 '대항력'
@@ -720,6 +956,21 @@
     const hasHug = /HUG|주택도시보증|임차권인수조건변경/.test(s);
     return hasDae && !hasHug ? '제거대상' : '안전';
   }
+  // 라벨 콤마 CSV → 결과 매칭용 키워드 콤마 CSV
+  function expandSpecialsLabels(labelsCSV) {
+    const labels = String(labelsCSV || '').split(',').map(s => s.trim()).filter(Boolean);
+    const out = [];
+    labels.forEach(lab => {
+      const it = (D.SPECIAL || []).find(o => o.t === lab);
+      if (!it) return;
+      const src = it.kw && it.kw.length ? it.kw : it.t;
+      src.split(',').forEach(k => {
+        const t = k.trim();
+        if (t && !out.includes(t)) out.push(t);
+      });
+    });
+    return out.join(',');
+  }
   function applyCustomFilters(items, rows) {
     if (!rows || !rows.length) return { items, applied: 0, skipped: [] };
     const handlers = [];
@@ -730,7 +981,10 @@
       if (!t) return;
       const fn = FILTER_FIELDS[t.name];
       if (!fn) { skipped.push(t.name); return; }
-      handlers.push({ name: t.name, fn, op: r.op || 'eq', value: r.value });
+      // 특수물건 다중 — 라벨을 결과 텍스트의 단축 키워드로 변환
+      const value = (t.valueType === 'specials') ? expandSpecialsLabels(r.value) : r.value;
+      if (!value) return; // 변환 결과 빈값(매핑 없음) 이면 무시
+      handlers.push({ name: t.name, fn, op: r.op || 'eq', value });
     });
     if (!handlers.length) return { items, applied: 0, skipped };
     const filtered = items.filter(it => handlers.every(h => cmp(h.fn(it), h.op, h.value)));
@@ -861,6 +1115,8 @@
     } finally {
       stopProgressPolling();
       setCrawlRunning(false);
+      // 사이드바 캐시 표시 갱신
+      renderSidebar();
     }
   }
 
@@ -906,6 +1162,8 @@
     document.getElementById('resultPanel').classList.remove('hidden');
     applySort(); // 현재 정렬 키 있으면 적용
     setViewMode(viewMode);
+    // 사이드바 활성 프리셋 카운트도 갱신 (custRows 변경/재필터 시 동기화)
+    renderSidebar();
     return { filtered, applied, skipped };
   }
 
@@ -1210,9 +1468,166 @@
     });
   }
 
+  // ── 보고서 모달 ──────────────────────────────────────────
+  function _rptEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function _rptDate(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function _rptMan(s) {
+    if (!s) return '';
+    const n = parseInt(String(s).replace(/[^0-9-]/g, ''), 10);
+    if (isNaN(n)) return s;
+    if (n >= 10000) return `${(n/10000).toLocaleString('ko-KR', {maximumFractionDigits:2})}억`;
+    return `${n.toLocaleString('ko-KR')}만원`;
+  }
+  function _rptLookup(arr, v) {
+    if (!arr || v == null || v === '') return '';
+    const it = arr.find(o => String(o.v) === String(v));
+    return it ? it.t : v;
+  }
+  // STATUS 는 '1,2,17,18' 같은 복합값이 하나의 라벨('진행물건') — 통째 매칭 우선
+  function _rptStatus(v) {
+    if (!v) return '';
+    const exact = (D.STATUS || []).find(o => String(o.v) === String(v));
+    if (exact) return exact.t;
+    return String(v).split(',').map(x => {
+      const f = (D.STATUS || []).find(o => String(o.v) === String(x).trim());
+      return f ? f.t : x;
+    }).filter(Boolean).join(', ');
+  }
+  function _rptRange(a, b, unit) {
+    const aa = (a != null && a !== '') ? String(a) : '';
+    const bb = (b != null && b !== '') ? String(b) : '';
+    if (!aa && !bb) return '';
+    return `${aa}~${bb}${unit ? ' ' + unit : ''}`;
+  }
+  function _rptFormData(fd) {
+    if (!fd) return [];
+    const out = [];
+    const add = (k, v) => { if (v !== '' && v != null) out.push({ k, v }); };
+    if (fd.court)    add('법원', _rptLookup(D.COURTS, fd.court));
+    if (fd.branch)   add('법원지원', _rptLookup(D.BRANCHES, fd.branch));
+    if (fd.caseYear || fd.caseNo) add('사건번호', `${fd.caseYear || ''}타경${fd.caseNo || ''}`);
+    if (fd.apprMin || fd.apprMax) add('감정가', _rptRange(_rptMan(fd.apprMin), _rptMan(fd.apprMax)));
+    if (fd.lowMin || fd.lowMax)   add('최저가', _rptRange(_rptMan(fd.lowMin), _rptMan(fd.lowMax)));
+    if (fd.status)   add('물건현황', _rptStatus(fd.status));
+    if (fd.failMin || fd.failMax) add('유찰횟수', _rptRange(fd.failMin, fd.failMax, '회'));
+    if (fd.propType) add('물건종류', _rptLookup(D.PROPERTY_FLAT, fd.propType));
+    if (Array.isArray(fd._multiProp) && fd._multiProp.length) {
+      add('물건종류(다중)', fd._multiProp.map(v => _rptLookup(D.PROPERTY_FLAT, v)).filter(Boolean).join(', '));
+    }
+    if (fd.bidDateFrom || fd.bidDateTo) add('매각기일', _rptRange(fd.bidDateFrom, fd.bidDateTo));
+    if (fd.regDateFrom || fd.regDateTo) add('보존등기일', _rptRange(fd.regDateFrom, fd.regDateTo));
+    if (fd.bldArea1Min || fd.bldArea1Max) add('건물면적', _rptRange(fd.bldArea1Min, fd.bldArea1Max, '㎡'));
+    if (fd.lndArea1Min || fd.lndArea1Max) add('대지면적', _rptRange(fd.lndArea1Min, fd.lndArea1Max, '㎡'));
+    if (fd.addrSido) {
+      let addr = _rptLookup(D.SIDO, fd.addrSido);
+      if (fd.addrGugun) {
+        const list = (D.GUGUN_BY_SIDO || {})[fd.addrSido] || [];
+        const g = list.find(x => String(x.v) === String(fd.addrGugun));
+        if (g) addr += ' / ' + g.t;
+      }
+      add('주소', addr);
+    }
+    if (Array.isArray(fd._addrTags) && fd._addrTags.length) add('추가주소', fd._addrTags.join(', '));
+    if (fd.bldName) add('건물명칭', fd.bldName);
+    if (fd.lotKind || fd.lotFrom || fd.lotTo) {
+      const kind = fd.lotKind === '1' ? '산' : (fd.lotKind === '2' ? '일반' : '');
+      add('지번', `${kind} ${fd.lotFrom || ''}~${fd.lotTo || ''}`.trim());
+    }
+    if (fd.special)  add('특수물건', _rptLookup(D.SPECIAL, fd.special));
+    if (fd.orderBy)  add('정렬', _rptLookup(D.ORDER_BY, fd.orderBy));
+    if (fd.pageSize) add('페이지당', `${fd.pageSize}건`);
+    if (fd.procType) add('경매절차', fd.procType === '4' ? '임의경매' : (fd.procType === '5' ? '강제경매' : ''));
+    return out;
+  }
+  function _rptFilter(filter) {
+    const t = ftypes.find(x => x.id === filter.typeId);
+    const name = t ? t.name : '(알 수 없는 종류)';
+    const opMap = { eq:'=', ne:'≠', gte:'≥', gt:'>', lte:'≤', lt:'<', contains:'포함', ncontains:'미포함', regex:'정규식' };
+    return { name, op: opMap[filter.op] || filter.op || '', v: filter.value || '' };
+  }
+  function _rptCard(p) {
+    let cache = null;
+    try { cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null'); } catch (_) {}
+    const items = cache ? (cache.items || []) : [];
+    let filteredN = items.length;
+    try {
+      const { items: filt } = applyCustomFilters(items, p.customFilters || []);
+      filteredN = filt.length;
+    } catch (_) {}
+
+    const fdLines = _rptFormData(p.formData);
+    const fdHtml = fdLines.length
+      ? `<table class="kv-table">${
+          fdLines.map(l => `<tr><th>${_rptEsc(l.k)}</th><td>${_rptEsc(l.v)}</td></tr>`).join('')
+        }</table>`
+      : '<div class="empty">설정된 검색조건 없음</div>';
+
+    const cfHtml = (p.customFilters || []).length
+      ? `<table class="cf-table">${
+          (p.customFilters || []).map(c => {
+            const f = _rptFilter(c);
+            return `<tr><th class="cf-name">${_rptEsc(f.name)}</th><td class="cf-op">${_rptEsc(f.op)}</td><td class="cf-val">${_rptEsc(f.v)}</td></tr>`;
+          }).join('')
+        }</table>`
+      : '<div class="empty">추가 필터 없음</div>';
+
+    const lastTs = cache && cache.ts ? _rptDate(cache.ts) : '—';
+    const countBadge = cache
+      ? `<span class="cnt-badge"><span class="cnt-filtered">${filteredN}</span>/<span class="cnt-total">${items.length}</span></span>`
+      : '<span class="cnt-badge cnt-empty">결과 없음</span>';
+
+    return `<article class="rcard">
+      <header class="rcard-head">
+        <div class="rcard-title">📋 ${_rptEsc(p.title || '(제목 없음)')} ${countBadge}</div>
+        <div class="rcard-sub">최근 크롤링: ${_rptEsc(lastTs)}</div>
+      </header>
+      <section class="rcard-sec"><h3>🔍 검색 조건</h3>${fdHtml}</section>
+      <section class="rcard-sec"><h3>⚡ 추가 필터 (${(p.customFilters || []).length})</h3>${cfHtml}</section>
+    </article>`;
+  }
+  function openReportModal() {
+    const lastTs = p => { try { const c = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null'); return (c && c.ts) || p.updatedAt || 0; } catch (_) { return p.updatedAt || 0; } };
+    const sorted = presets.slice().sort((a, b) => lastTs(b) - lastTs(a));
+    document.getElementById('reportGenTs').textContent = _rptDate(Date.now());
+    document.getElementById('reportGenCnt').textContent = sorted.length;
+    document.getElementById('reportGrid').innerHTML = sorted.length
+      ? sorted.map(_rptCard).join('')
+      : '<div class="empty-state">등록된 크롤링이 없습니다.</div>';
+    document.getElementById('reportModal').classList.remove('hidden');
+    document.body.classList.add('report-open');
+  }
+  function closeReportModal() {
+    document.getElementById('reportModal').classList.add('hidden');
+    document.body.classList.remove('report-open');
+  }
+
+  // ── 입력박스 클릭/포커스 시 전체선택 (전역) ────────────────
+  // 사용자 메모리: 텍스트 입력 박스는 한 번 클릭으로 기존 값 전체선택 → 즉시 덮어쓰기 가능.
+  function bindGlobalInputSelectAll() {
+    const ALLOWED = new Set(['text', 'number', 'search', 'tel', 'url', 'email', '']);
+    function trySelect(el) {
+      if (!el || el.tagName !== 'INPUT') return;
+      const t = (el.type || '').toLowerCase();
+      if (!ALLOWED.has(t)) return;
+      try { el.select(); } catch (_) {}
+    }
+    document.addEventListener('focusin', e => trySelect(e.target));
+    document.addEventListener('click',   e => trySelect(e.target));
+  }
+
   // ── 초기화 ───────────────────────────────────────────
   function init() {
     fillStaticSelects();
+    initSpecialCombo();
     renderSidebar();
     bind();
     // 가격 input 클릭 → 프리셋 펼침
@@ -1224,6 +1639,11 @@
     bindAddrCascade();
     bindValueHighlight();
     bindMemoModal();
+    bindSpecialsFilterModal();
+    bindGlobalInputSelectAll();
+    document.getElementById('btnReport')?.addEventListener('click', openReportModal);
+    document.getElementById('btnReportClose')?.addEventListener('click', closeReportModal);
+    document.getElementById('btnReportPrint')?.addEventListener('click', () => window.print());
     setStatus('준비 완료');
     // 마지막에 본 프리셋 자동 복원 (캐시 결과 + 폼)
     try {
@@ -1251,6 +1671,10 @@
       if (!el.name) return;
       el.classList.toggle('has-value', _hasValue(el));
     });
+    // 특수물건 콤보 — hidden select 값에 따라 노랑 표시
+    var sp = document.getElementById('f_special');
+    var spBox = document.getElementById('specialCombo');
+    if (sp && spBox) spBox.classList.toggle('has-value', sp.value !== '' && sp.value !== '0');
   }
   function bindValueHighlight() {
     var form = document.getElementById('filterForm');

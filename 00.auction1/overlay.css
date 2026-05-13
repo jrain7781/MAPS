@@ -50,13 +50,28 @@ body {
 .side-empty { padding:24px 12px; text-align:center; color:#6b7280; font-size:12px; line-height:1.6; }
 #sideList li.snb_item {
   padding:8px 10px; border-radius:6px; cursor:pointer;
-  border:1px solid transparent; margin-bottom:4px;
+  border:1px solid #d1d5db; margin-bottom:5px;
   background:#fff;
 }
-#sideList li.snb_item:hover { background:#eef2ff; border-color:#d6dffb; }
-#sideList li.snb_item.active { background:#dbeafe; border-color:#93c5fd; }
-.snb_item .it-title { font-weight:600; color:#1f2937; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#sideList li.snb_item:hover { background:#eef2ff; border-color:#93c5fd; }
+#sideList li.snb_item.active { background:#dbeafe; border-color:#1d4ed8; border-width:1.5px; }
+.snb_item .it-title {
+  font-weight:600; color:#1f2937; font-size:13px;
+  display:flex; align-items:baseline; gap:6px; min-width:0;
+}
+.snb_item .it-title > :first-child,
+.snb_item .it-title { /* fallback when not flex content */ }
+.snb_item .it-title { display:flex; }
+.snb_item .it-title .it-icon { flex:0 0 auto; font-size:12px; }
+.snb_item .it-title .it-name {
+  flex:1 1 auto; min-width:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.snb_item .it-title .it-count { flex:0 0 auto; }
 .snb_item .it-sub { font-size:11px; color:#6b7280; margin-top:2px; }
+.snb_item .it-count { font-weight:400; }
+.snb_item .it-count .cnt-filtered { color:#dc2626; font-weight:700; }
+.snb_item .it-count .cnt-total { color:#1f2937; font-weight:600; }
 
 /* 메인 */
 #mainShell { display:flex; flex-direction:column; gap:10px; min-width:0; }
@@ -313,6 +328,9 @@ option.bg_yellow { background:#fff9c0; color:#1f3a8a; font-weight:700; }
   border-color:#f59e0b !important;
   font-weight:600;
 }
+/* 특수물건 콤보 — 컨테이너에 has-value 적용 (input 자체는 투명 배경) */
+.combo-box.has-value { background-color:#fef3c7; border-color:#f59e0b; }
+.combo-box.has-value .combo-input { font-weight:600; }
 
 /* 빈 셀 (보존등기일 row 의 가운데) 시각 정리 */
 .tbl_fmSrch th.empty-th { background:transparent; border-right:none; }
@@ -386,3 +404,86 @@ option.bg_yellow { background:#fff9c0; color:#1f3a8a; font-weight:700; }
 .tbl_list .left { text-align:left; padding-left:8px; }
 .tbl_list .right { text-align:right; padding-right:8px; }
 .result-paging { text-align:center; margin-top:12px; }
+
+/* 특수물건 검색 콤보박스 ─ 옥션원 input 톤 매치 */
+.combo-hidden-select { display:none !important; }
+.combo-box {
+  position:relative; display:inline-flex; align-items:center;
+  width:100%; box-sizing:border-box;
+  border:1px solid #c2c2c2; background:#fff; height:28px;
+  padding:0; vertical-align:middle;
+}
+.combo-box .combo-input {
+  flex:1; height:26px; line-height:26px;
+  border:0; outline:none; padding:0 5px;
+  font-size:13px; background:transparent;
+  font-family:inherit; color:#333;
+  box-sizing:border-box;
+}
+.combo-box .combo-caret {
+  width:20px; height:26px; border:0; background:#f5f5f5;
+  border-left:1px solid #ddd; color:#666; cursor:pointer;
+  font-size:11px; padding:0; line-height:26px;
+}
+.combo-box .combo-caret:hover { background:#e9eef5; color:#1f3a8a; }
+.combo-pop {
+  position:absolute; left:-1px; right:-1px; top:28px; z-index:50;
+  margin:0; padding:0; list-style:none;
+  max-height:280px; overflow-y:auto;
+  background:#fff; border:1px solid #999; border-top:1px solid #ccc;
+  box-shadow:0 4px 10px rgba(0,0,0,0.08);
+  font-size:12px;
+}
+.combo-pop.hidden { display:none; }
+.combo-pop .combo-item {
+  padding:5px 8px; cursor:pointer; line-height:1.3;
+  border-bottom:1px solid #f1f1f1;
+}
+.combo-pop .combo-item:last-child { border-bottom:0; }
+.combo-pop .combo-item:hover,
+.combo-pop .combo-item.active { background:#fff7e0; }
+.combo-pop .combo-item.selected { color:#1f3a8a; font-weight:600; }
+.combo-pop .combo-item.selected.active { background:#fde68a; }
+.combo-pop .combo-empty { padding:8px; color:#888; text-align:center; }
+/* 매칭 키워드 빨강 뱃지 (옥션원 specials 색감) */
+.combo-kw { color:#961c00; font-size:11.5px; margin-left:4px; }
+
+/* 특수물건 다중 필터 — 행 표시 (.btn_box_sss !important 보다 강제 우선) */
+.cust-row .fval-specials {
+  height:32px !important; box-sizing:border-box;
+  padding:0 10px !important; line-height:30px !important;
+  font-size:13px; display:inline-flex; align-items:center;
+}
+.fval-specials-tags {
+  flex:1; display:flex; flex-wrap:wrap; gap:3px; align-items:center;
+  padding:0 6px; min-width:0; overflow:hidden;
+}
+.fval-specials-tags .multi-tag {
+  background:#ecfeff; border:1px solid #67e8f9; color:#0e7490;
+  padding:1px 6px; border-radius:3px; font-size:11.5px; white-space:nowrap;
+}
+
+/* 특수물건 다중선택 모달 */
+.specials-filter-modal { width: min(820px, 95vw); }
+.specials-filter-search {
+  padding:8px 12px 4px; border-bottom:1px solid #eee;
+}
+.specials-filter-search input {
+  width:100%; height:30px; box-sizing:border-box;
+  border:1px solid #c2c2c2; padding:0 8px; font-size:13px;
+  outline:none;
+}
+.specials-filter-search input:focus { border-color:#1f3a8a; }
+.specials-filter-body {
+  max-height:55vh; overflow-y:auto; padding:8px 12px;
+  display:grid; grid-template-columns:1fr; gap:2px;
+}
+.specials-filter-body .specials-opt {
+  display:flex; align-items:center; gap:6px;
+  padding:4px 6px; font-size:12.5px; cursor:pointer; border-radius:3px;
+}
+.specials-filter-body .specials-opt:hover { background:#f3f6fb; }
+.specials-filter-body .specials-opt input { margin:0; }
+.specials-filter-body .specials-opt.disabled { color:#aaa; cursor:not-allowed; }
+.specials-filter-body .specials-opt.disabled:hover { background:transparent; }
+.kw-none { color:#999; font-size:11.5px; margin-left:4px; font-style:italic; }

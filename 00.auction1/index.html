@@ -11,7 +11,8 @@
 <link rel="stylesheet" href="auction1-css/input_box.css">
 <link rel="stylesheet" href="auction1-css/tooltip.css">
 <!-- 추가 (사이드바·추가필터 섹션 등 옥션원에 없는 부분 한정) -->
-<link rel="stylesheet" href="overlay.css?v=31">
+<link rel="stylesheet" href="overlay.css?v=51">
+<link rel="stylesheet" href="report.css?v=6">
 </head>
 <body>
 
@@ -43,6 +44,7 @@
 
     <div id="topBar">
       <button id="btnNewMain" class="btn_box_sss btn_blue bold" type="button">+ 크롤링 만들기</button>
+      <button id="btnReport" class="btn_box_sss btn_white bold" type="button" title="등록된 모든 크롤링을 한 페이지 보고서로 보기 / 인쇄">📊 보고서</button>
       <span class="bar-sp"></span>
       <span id="statusMsg" class="f11 blue"></span>
     </div>
@@ -217,7 +219,12 @@
               <tr>
                 <th>특수물건</th>
                 <td>
-                  <select name="special" id="f_special" style="width:100%;"></select>
+                  <div id="specialCombo" class="combo-box">
+                    <input type="text" id="specialComboInput" class="combo-input" placeholder="설정안함(선택해제)" autocomplete="off">
+                    <button type="button" id="specialComboToggle" class="combo-caret" tabindex="-1" title="펼치기">▾</button>
+                    <ul id="specialComboList" class="combo-pop hidden"></ul>
+                  </div>
+                  <select name="special" id="f_special" class="combo-hidden-select" tabindex="-1" aria-hidden="true"></select>
                 </td>
                 <th>정렬방법</th>
                 <td>
@@ -369,6 +376,44 @@
   </div>
 </div>
 
+<!-- 크롤링 보고서 모달 -->
+<div id="reportModal" class="modal hidden report-modal-wrap">
+  <div class="modal-bg"></div>
+  <div class="modal-box report-modal-box">
+    <header id="reportModalHead" class="report-modal-head">
+      <div class="head-left">
+        <span class="bold f14">📊 옥션원 크롤링 보고서</span>
+        <span class="f11 gray" style="margin-left:10px;">생성: <span id="reportGenTs"></span> · 등록된 크롤링 <span id="reportGenCnt">0</span>건</span>
+      </div>
+      <div class="head-right">
+        <button type="button" class="btn_box_sss btn_white" id="btnReportClose">닫기</button>
+        <button type="button" class="btn_box_sss btn_blue bold" id="btnReportPrint">🖨 인쇄 / PDF 저장</button>
+      </div>
+    </header>
+    <main id="reportGrid" class="report-grid"></main>
+  </div>
+</div>
+
+<!-- 특수물건 다중선택 필터 모달 -->
+<div id="specialsFilterModal" class="modal hidden">
+  <div class="modal-bg"></div>
+  <div class="modal-box specials-filter-modal">
+    <div class="modal-head">
+      <span class="bold">특수물건 항목 선택 (다중) <span id="specialsFilterCount" class="f11 gray" style="font-weight:400;margin-left:6px;"></span></span>
+      <button class="btn_box_sss btn_white" id="specialsFilterClose" type="button">닫기</button>
+    </div>
+    <div class="specials-filter-search">
+      <input type="text" id="specialsFilterSearch" class="combo-input" placeholder="검색 (공백 무시 · 라벨/키워드 모두 매칭)" autocomplete="off">
+    </div>
+    <div id="specialsFilterBody" class="modal-body specials-filter-body"></div>
+    <div class="modal-foot">
+      <button class="btn_box_sss btn_white" id="specialsFilterAll" type="button">전체선택</button>
+      <button class="btn_box_sss btn_white" id="specialsFilterNone" type="button">전체해제</button>
+      <button class="btn_box_sss btn_blue bold" id="specialsFilterApply" type="button">적용</button>
+    </div>
+  </div>
+</div>
+
 <!-- 관심물건 메모 모달 -->
 <div id="memoModal" class="modal hidden">
   <div class="modal-bg"></div>
@@ -381,7 +426,7 @@
   </div>
 </div>
 
-<script src="data.js?v=31"></script>
-<script src="app.js?v=31"></script>
+<script src="data.js?v=51"></script>
+<script src="app.js?v=54"></script>
 </body>
 </html>
