@@ -348,7 +348,6 @@
   function _renderLeafLi(p, depth, isLast) {
     const active = p.id === currentPresetId ? ' active' : '';
     const checked = selectedSyncIds.has(p.id) ? ' checked' : '';
-    const tcLastCls = isLast ? ' tc-last' : '';
     let countInline = '', lastCrawl = '';
     try {
       const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
@@ -376,10 +375,7 @@
     // leaf 라벨 = 제목의 마지막 hyphen 부분만 (간결)
     const parts = String(p.title || '').split('-').map(s => s.trim()).filter(Boolean);
     const leafLabel = parts.length ? parts[parts.length - 1] : (p.title || '(제목없음)');
-    const connChar = isLast ? '└' : '├';
-    const connector = depth > 0 ? `<span class="tree-connector${tcLastCls}">${connChar}</span>` : '';
-    return `<li class="snb_item${active}${tcLastCls}" data-id="${p.id}" draggable="true" style="padding-left:${depth * 16 + 4}px">
-      ${connector}
+    return `<li class="snb_item${active}" data-id="${p.id}" data-kind="leaf" draggable="true" style="padding-left:${depth * 16 + 8}px">
       <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
       <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
       <div class="it-body">
@@ -412,16 +408,14 @@
       const ids = _collectSubtreeIds(child);
       const cs = _branchCheckState(ids);
       const checkedAttr = cs === 'all' ? 'checked' : '';
-      const bConnChar = isLast ? '└' : '├';
-      const bconn = depth > 0 ? `<span class="tree-connector${isLast ? ' tc-last' : ''}">${bConnChar}</span>` : '';
       const sc = _subtreeCounts(child);
       const summary = (sc.total > 0)
         ? `<span class="it-count b-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
         : `<span class="b-count">(${cnt})</span>`;
-      html += `<li class="snb_branch${isLast ? ' tc-last' : ''}" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" style="padding-left:${depth * 16 + 4}px">
-        ${bconn}
-        <span class="b-toggle">${isCollapsed ? '▶' : '▼'}</span>
+      html += `<li class="snb_branch${isCollapsed ? ' collapsed' : ''}" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" data-kind="branch" draggable="true" style="padding-left:${depth * 16 + 8}px">
+        <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
         <input type="checkbox" class="b-check" ${checkedAttr} title="이 그룹 전체 선택/해제">
+        <span class="b-icon">📁</span>
         <span class="b-label">${escHtml(child.label)}</span>
         ${summary}
       </li>`;
@@ -448,9 +442,9 @@
     const cardSummary = (sc.total > 0)
       ? `<span class="it-count card-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
       : `<span class="card-count">(${cnt})</span>`;
-    return `<li class="snb_card" data-path="${escHtml(top.path)}">
+    return `<li class="snb_card" data-path="${escHtml(top.path)}" data-ids="${ids.join(',')}" data-kind="card" draggable="true">
       <div class="card-head" data-path="${escHtml(top.path)}" data-ids="${ids.join(',')}">
-        <span class="card-toggle">${isCollapsed ? '▶' : '▼'}</span>
+        <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
         <input type="checkbox" class="card-check" ${checkedAttr} title="이 카드 전체 선택/해제">
         <span class="card-icon">📁</span>
         <span class="card-title">${escHtml(top.label)}</span>
@@ -478,32 +472,13 @@
     let html = '';
     tree.children.forEach(top => { html += _renderTopCard(top, collapsed); });
     list.innerHTML = html;
-    // leaf 클릭 / 체크박스
+    // leaf 클릭/체크박스/드래그
     list.querySelectorAll('.snb_item').forEach(el => {
       el.addEventListener('click', (e) => {
         if (e.target && e.target.classList && (e.target.classList.contains('ms-row-chk') || e.target.classList.contains('drag-handle'))) return;
         loadPreset(el.dataset.id);
       });
-      // 드래그 핸들러
-      el.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/plain', el.dataset.id);
-        e.dataTransfer.effectAllowed = 'move';
-        el.classList.add('dragging');
-      });
-      el.addEventListener('dragend', () => el.classList.remove('dragging'));
-      el.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        el.classList.add('drag-over');
-      });
-      el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
-      el.addEventListener('drop', (e) => {
-        e.preventDefault();
-        el.classList.remove('drag-over');
-        const draggedId = e.dataTransfer.getData('text/plain');
-        if (!draggedId || draggedId === el.dataset.id) return;
-        _reorderPresetById(draggedId, el.dataset.id);
-      });
+      _bindDragOn(el, 'leaf');
     });
     list.querySelectorAll('.ms-row-chk').forEach(chk => {
       chk.addEventListener('click', (e) => e.stopPropagation());
@@ -513,16 +488,18 @@
         syncCheckAllState();
       });
     });
-    // 폴더 접기/펴기 (브랜치) — 체크박스 클릭은 stopPropagation
+    // 폴더 접기/펴기 (브랜치) + 드래그
     list.querySelectorAll('.snb_branch').forEach(b => {
       b.addEventListener('click', (e) => {
-        if (e.target && e.target.classList && e.target.classList.contains('b-check')) return;
+        const cl = e.target && e.target.classList;
+        if (cl && (cl.contains('b-check') || cl.contains('drag-handle'))) return;
         const c = _loadCollapsed();
         const path = b.dataset.path;
         if (c.has(path)) c.delete(path); else c.add(path);
         _saveCollapsed(c);
         renderSidebar();
       });
+      _bindDragOn(b, 'branch');
     });
     // 브랜치 체크박스 — 하위 모든 preset 토글
     list.querySelectorAll('.b-check').forEach(cb => {
@@ -535,16 +512,21 @@
         renderSidebar();
       });
     });
-    // 카드 헤더 클릭 (체크박스 제외) → 카드 접기/펴기
+    // 카드 헤더 클릭 (체크박스/드래그 제외) → 카드 접기/펴기
     list.querySelectorAll('.card-head').forEach(h => {
       h.addEventListener('click', (e) => {
-        if (e.target && e.target.classList && e.target.classList.contains('card-check')) return;
+        const cl = e.target && e.target.classList;
+        if (cl && (cl.contains('card-check') || cl.contains('drag-handle'))) return;
         const c = _loadCollapsed();
         const path = h.dataset.path;
         if (c.has(path)) c.delete(path); else c.add(path);
         _saveCollapsed(c);
         renderSidebar();
       });
+    });
+    // 카드 자체 드래그 (1단계)
+    list.querySelectorAll('.snb_card').forEach(card => {
+      _bindDragOn(card, 'card');
     });
     // 카드 체크박스 — 카드 전체 하위 토글
     list.querySelectorAll('.card-check').forEach(cb => {
@@ -574,7 +556,6 @@
   }
   function _reorderPresetById(draggedId, targetId) {
     let order = _loadPresetOrder();
-    // 모든 현재 preset 이 order 에 포함되도록 보강
     presets.forEach(p => { if (!order.includes(p.id)) order.push(p.id); });
     order = order.filter(id => id !== draggedId);
     const targetIdx = order.indexOf(targetId);
@@ -582,6 +563,67 @@
     else order.splice(targetIdx, 0, draggedId);
     _savePresetOrder(order);
     renderSidebar();
+  }
+  // path 로 노드 찾기 (tree 안에서)
+  function _findNodeByPath(root, path) {
+    if (!path) return root;
+    const parts = String(path).split('/');
+    let node = root;
+    for (const part of parts) {
+      if (!node.children.has(part)) return null;
+      node = node.children.get(part);
+    }
+    return node;
+  }
+  // 서브트리 단위 드래그 reorder — draggedPath 의 모든 leaf 들을 targetPath 의 첫 leaf 앞으로 이동
+  function _reorderSubtreeByPath(draggedPath, targetPath) {
+    if (!draggedPath || !targetPath || draggedPath === targetPath) return;
+    const ordered = _getOrderedPresets();
+    const tree = _buildPresetTree(ordered);
+    const dragNode = _findNodeByPath(tree, draggedPath);
+    const tgtNode = _findNodeByPath(tree, targetPath);
+    if (!dragNode || !tgtNode) return;
+    const draggedIds = _collectSubtreeIds(dragNode);
+    const targetIds = _collectSubtreeIds(tgtNode);
+    if (!draggedIds.length || !targetIds.length) return;
+    let order = _loadPresetOrder();
+    presets.forEach(p => { if (!order.includes(p.id)) order.push(p.id); });
+    order = order.filter(id => !draggedIds.includes(id));
+    const insertIdx = order.indexOf(targetIds[0]);
+    if (insertIdx < 0) order.push(...draggedIds);
+    else order.splice(insertIdx, 0, ...draggedIds);
+    _savePresetOrder(order);
+    renderSidebar();
+  }
+  // 드래그 공용 핸들러 — DOM 요소에 dragstart/dragover/drop 바인딩
+  function _bindDragOn(el, kind) {
+    el.addEventListener('dragstart', (e) => {
+      const key = (kind === 'leaf') ? el.dataset.id : el.dataset.path;
+      try { e.dataTransfer.setData('text/plain', JSON.stringify({ kind, key })); } catch (_) {}
+      e.dataTransfer.effectAllowed = 'move';
+      el.classList.add('dragging');
+      e.stopPropagation();
+    });
+    el.addEventListener('dragend', () => el.classList.remove('dragging'));
+    el.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      el.classList.add('drag-over');
+      e.stopPropagation();
+    });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('drag-over');
+      let data; try { data = JSON.parse(e.dataTransfer.getData('text/plain') || '{}'); } catch (_) { data = {}; }
+      if (!data.kind || data.kind !== kind) return;  // same-kind drops only
+      if (kind === 'leaf') {
+        if (data.key !== el.dataset.id) _reorderPresetById(data.key, el.dataset.id);
+      } else {
+        if (data.key !== el.dataset.path) _reorderSubtreeByPath(data.key, el.dataset.path);
+      }
+    });
   }
 
   // 상단 [전체] 체크박스 상태 동기화 (선택 수 ↔ 전체 체크 일치)
