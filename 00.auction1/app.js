@@ -1585,6 +1585,7 @@
     const resCount = document.getElementById('resCount');
     resultPanel.classList.remove('hidden');
     resBody.innerHTML = '<tr><td colspan="8" class="center" style="padding:40px 0;color:#2563eb;">크롤링 실행 중... (옥션원 자동 검색) — 중지 가능</td></tr>';
+    setResultCounts(0, 0, 0);  // 전체/필터링 카운트 모두 리셋 (이전 크롤 잔재 표시 방지)
     setStatus('크롤링 실행 중... (중지하려면 [⏹ 중지])');
     setCrawlRunning(true);
     startProgressPolling();
