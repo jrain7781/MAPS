@@ -7351,13 +7351,12 @@ function _josaSafeStr_(v) {
   return s.replace(/[ --]+/g, ' ').trim();
 }
 
-// 중복 체크용 dedup 키 (시트에 저장 X, 메모리 조회용)
+// 중복 체크용 dedup 키 — court 제외 (주소 파생값이라 늦게/일찍 매핑된 차이로 옛 row 가 영원히 잔존하는 버그 방지)
 function _josaDedupKey_(item) {
   var sakun = String(item.sakun_no || '').trim();
   var bd    = String(item.bid_date  || '').trim();
-  var ct    = String(item.court     || '').trim();
   if (!sakun) return '';
-  return sakun + '|' + bd + '|' + ct;
+  return sakun + '|' + bd;
 }
 // 새 josa_id 발급 — Sheets Number 자동변환 방지 위해 'J' prefix (16자리 순수숫자 정밀도 손실 차단)
 function _newJosaId_() {
@@ -7783,41 +7782,105 @@ function deleteJosaPreset(presetId) {
 }
 
 /**
+ * 정리 — 같은 (sakun_no, bid_date) 인데 court 가 비어 있는 옛 row 와 채워진 새 row 가 공존하는 경우,
+ * 빈 court row 를 삭제하여 dedup 통합. dedup 키에서 court 빠진 후 1회 실행 권장.
+ */
+function mergeEmptyCourtJosaDuplicates() {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+    if (!sheet) { Logger.log('[merge] no sheet'); return { error: 'no sheet' }; }
+    var data = sheet.getDataRange().getValues();
+    if (data.length < 2) { Logger.log('[merge] empty'); return { rows: 0 }; }
+    var headers = data[0];
+    var sakunIdx = headers.indexOf('sakun_no');
+    var bdIdx    = headers.indexOf('bid_date');
+    var courtIdx = headers.indexOf('court');
+    if (sakunIdx < 0 || bdIdx < 0 || courtIdx < 0) { Logger.log('[merge] col missing'); return { error: 'col missing' }; }
+    // 그룹핑
+    var groups = {};
+    for (var i = 1; i < data.length; i++) {
+      var k = String(data[i][sakunIdx]).trim() + '|' + String(data[i][bdIdx]).trim();
+      if (!k || k === '|') continue;
+      if (!groups[k]) groups[k] = [];
+      groups[k].push({ row: i + 1, court: String(data[i][courtIdx] || '').trim() });
+    }
+    // 삭제 대상: 같은 그룹에 court 채워진 row 가 있는데 본인은 빈 court
+    var toDelete = [];
+    Object.keys(groups).forEach(function (k) {
+      var g = groups[k];
+      if (g.length < 2) return;
+      var hasNonEmpty = g.some(function (r) { return r.court; });
+      if (!hasNonEmpty) return;
+      g.forEach(function (r) { if (!r.court) toDelete.push(r.row); });
+    });
+    // 아래에서 위로 삭제 (인덱스 보존)
+    toDelete.sort(function (a, b) { return b - a; });
+    toDelete.forEach(function (row) { sheet.deleteRow(row); });
+    Logger.log('[merge] 삭제 ' + toDelete.length + '행 (빈 court 중복)');
+    return { success: true, deleted: toDelete.length };
+  } catch (e) {
+    Logger.log('[merge] err: ' + e);
+    return { success: false, error: String(e) };
+  }
+}
+
+/**
  * 진단 — 첫 http img_url 1개를 GAS UrlFetchApp 으로 직접 받아 응답 코드 + 크기 보고
  * (사진 안 변환되는 원인이 fetch 차단인지 / 크기 초과인지 가르는 용)
  */
 function testFirstJosaImgFetch() {
+  var out;
   try {
     var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
     var data = sheet.getDataRange().getValues();
-    if (data.length < 2) return { error: 'no rows' };
+    if (data.length < 2) { out = { error: 'no rows' }; Logger.log(JSON.stringify(out)); return out; }
     var imgIdx = data[0].indexOf('img_url');
-    for (var i = 1; i < Math.min(20, data.length); i++) {
+    Logger.log('[diag] total_rows=' + (data.length-1) + ', img_url 컬럼 인덱스=' + imgIdx);
+    var httpFound = 0, dataFound = 0, emptyFound = 0;
+    for (var i = 1; i < data.length; i++) {
       var u = String(data[i][imgIdx] || '');
-      if (u && u.indexOf('http') === 0) {
+      if (!u) emptyFound++;
+      else if (u.indexOf('data:') === 0) dataFound++;
+      else if (u.indexOf('http') === 0) httpFound++;
+    }
+    Logger.log('[diag] http_url 행=' + httpFound + ' / data_uri 행=' + dataFound + ' / empty 행=' + emptyFound);
+
+    for (var j = 1; j < data.length; j++) {
+      var v = String(data[j][imgIdx] || '');
+      if (v && v.indexOf('http') === 0) {
+        Logger.log('[diag] row ' + (j+1) + ' url prefix: ' + v.substring(0, 200));
         try {
-          var resp = UrlFetchApp.fetch(u, {
+          var resp = UrlFetchApp.fetch(v, {
             headers: { 'Referer': 'https://www.auction1.co.kr/', 'User-Agent': 'Mozilla/5.0' },
             muteHttpExceptions: true,
             followRedirects: true
           });
           var blob = resp.getBlob();
           var bytes = blob.getBytes();
-          return {
-            row: i + 1,
-            url_prefix: u.substring(0, 120),
+          out = {
+            row: j + 1,
             response_code: resp.getResponseCode(),
             content_type: blob.getContentType(),
             size_bytes: bytes.length,
             would_b64_fit: bytes.length <= 35000 ? 'YES — 변환됨' : 'NO — 35KB 초과 skip'
           };
+          Logger.log('[diag] RESULT: ' + JSON.stringify(out));
+          return out;
         } catch (e) {
-          return { row: i + 1, url_prefix: u.substring(0, 120), fetch_error: String(e) };
+          out = { row: j + 1, fetch_error: String(e) };
+          Logger.log('[diag] FETCH ERR: ' + JSON.stringify(out));
+          return out;
         }
       }
     }
-    return { error: 'http URL 없음 — 모두 data: 거나 빈값' };
-  } catch (e) { return { error: String(e) }; }
+    out = { error: 'http URL 없음 — 모두 data: 거나 빈값', http_count: httpFound, data_count: dataFound, empty_count: emptyFound };
+    Logger.log('[diag] RESULT: ' + JSON.stringify(out));
+    return out;
+  } catch (e) {
+    out = { error: String(e) };
+    Logger.log('[diag] ERR: ' + JSON.stringify(out));
+    return out;
+  }
 }
 
 /**
