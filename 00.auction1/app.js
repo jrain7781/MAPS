@@ -376,7 +376,8 @@
     // leaf 라벨 = 제목의 마지막 hyphen 부분만 (간결)
     const parts = String(p.title || '').split('-').map(s => s.trim()).filter(Boolean);
     const leafLabel = parts.length ? parts[parts.length - 1] : (p.title || '(제목없음)');
-    const connector = depth > 0 ? `<span class="tree-connector${tcLastCls}"></span>` : '';
+    const connChar = isLast ? '└' : '├';
+    const connector = depth > 0 ? `<span class="tree-connector${tcLastCls}">${connChar}</span>` : '';
     return `<li class="snb_item${active}${tcLastCls}" data-id="${p.id}" draggable="true" style="padding-left:${depth * 16 + 4}px">
       ${connector}
       <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
@@ -411,7 +412,8 @@
       const ids = _collectSubtreeIds(child);
       const cs = _branchCheckState(ids);
       const checkedAttr = cs === 'all' ? 'checked' : '';
-      const bconn = depth > 0 ? `<span class="tree-connector${isLast ? ' tc-last' : ''}"></span>` : '';
+      const bConnChar = isLast ? '└' : '├';
+      const bconn = depth > 0 ? `<span class="tree-connector${isLast ? ' tc-last' : ''}">${bConnChar}</span>` : '';
       const sc = _subtreeCounts(child);
       const summary = (sc.total > 0)
         ? `<span class="it-count b-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
