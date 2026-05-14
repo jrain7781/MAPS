@@ -121,9 +121,16 @@
                          display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
                          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .jm-status-btn:hover { filter: brightness(0.92); }
-        /* 상단 상태 요약 칩 — 자기색 테두리 동일 적용 */
-        #jm-status-summary > span { border: 1px solid currentColor; }
-        #jm-status-summary > span:first-child { border: 0; }
+        /* 상단 상태 요약 — 동일 폭 클릭 가능 버튼 (해당 상태만 필터) */
+        #jm-status-summary { display: flex; gap: 6px; align-items: center; }
+        .jm-summary-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 92px; padding: 4px 10px; border-radius: 4px;
+            border: 1px solid currentColor; cursor: pointer; font-size: 12px; font-weight: 500;
+        }
+        .jm-summary-btn:hover { filter: brightness(0.92); }
+        .jm-summary-btn.jm-summary-btn-active { outline: 2px solid #1d4ed8; outline-offset: -1px; font-weight: 700; }
+        .jm-summary-btn strong { margin-left: 4px; }
         /* 상태 드롭다운 메뉴 (버튼 아래 펼침) */
         .jm-status-menu {
             position: fixed; z-index: 99999;
@@ -1738,6 +1745,7 @@
                         <!-- 검색폼 — 입력 즉시 필터 (조회 버튼 없음) -->
                         <div class="border-b bg-white p-3 flex flex-wrap gap-2 items-center text-xs jm-filter-bar">
                             <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="jm-today-only" checked class="rounded" onchange="applyJosaFilters()"> 오늘 이후만</label>
+                            <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="jm-exclude-polye" checked class="rounded" onchange="applyJosaFilters()"> 폐기 제외</label>
                             <span class="text-gray-300">|</span>
                             <input type="text" id="jm-search-sakun" placeholder="사건번호" class="border rounded px-2 w-28" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
                             <input type="text" id="jm-search-bid"   placeholder="입찰일자" class="border rounded px-2 w-20" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
@@ -1756,12 +1764,12 @@
                             <input type="text" id="jm-search-addr" placeholder="주소" class="border rounded px-2 w-32" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
                             <!-- 물건타입 자동완성 -->
                             <div class="jm-multi-wrap">
-                                <input type="text" id="jm-search-prop" placeholder="물건타입" class="border rounded px-2 w-24" onfocus="this.select(); openJmSuggest(this, 'prop_kind')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'prop_kind')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'prop_kind')">
+                                <input type="text" id="jm-search-prop" placeholder="물건타입" class="border rounded px-2 w-24" onfocus="this.select(); openJmSuggest(this, 'prop_kind')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'prop_kind')" onblur="scheduleCloseJmSuggest()" onkeydown="onJmSuggestKeydown(event, this, 'prop_kind')">
                                 <div class="jm-suggest-menu hidden" id="jm-suggest-prop"></div>
                             </div>
                             <!-- 특수물건 자동완성 (가로 1.5배) -->
                             <div class="jm-multi-wrap">
-                                <input type="text" id="jm-search-special" placeholder="특수물건" class="border rounded px-2 w-36" onfocus="this.select(); openJmSuggest(this, 'specials')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'specials')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'specials')">
+                                <input type="text" id="jm-search-special" placeholder="특수물건" class="border rounded px-2 w-36" onfocus="this.select(); openJmSuggest(this, 'specials')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'specials')" onblur="scheduleCloseJmSuggest()" onkeydown="onJmSuggestKeydown(event, this, 'specials')">
                                 <div class="jm-suggest-menu hidden" id="jm-suggest-special"></div>
                             </div>
                             <button type="button" onclick="resetJosaFilters()"

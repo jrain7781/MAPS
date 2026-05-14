@@ -23552,6 +23552,7 @@ MJ 이정우 팀장
         updateJmMultiLabel('status');
         updateJmMultiLabel('josaja');
         var today = document.getElementById('jm-today-only');     if (today) today.checked = true;
+        var ex    = document.getElementById('jm-exclude-polye');  if (ex)    ex.checked = true;
         applyJosaFilters();
     }
 
@@ -23563,6 +23564,7 @@ MJ 이정우 팀장
         var prop  = (document.getElementById('jm-search-prop')?.value || '').trim();
         var spec  = (document.getElementById('jm-search-special')?.value || '').trim();
         var todayOnly = !!document.getElementById('jm-today-only')?.checked;
+        var excludePolye = !!document.getElementById('jm-exclude-polye')?.checked;
         var todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
 
         var filtered = jmItems.filter(function (it) {
@@ -23574,6 +23576,7 @@ MJ 이정우 팀장
             if (sakun && String(it.sakun_no || '').toLowerCase().indexOf(sakun) === -1) return false;
             if (bid && String(it.bid_date || '').indexOf(bid) === -1) return false;
             if (court && String(it.court || '').indexOf(court) === -1) return false;
+            if (excludePolye && String(it.josa_status || '') === '폐기') return false;
             if (JM_FILTER_STATUS.size > 0 && !JM_FILTER_STATUS.has(String(it.josa_status || '분류필요'))) return false;
             if (JM_FILTER_JOSAJA.size > 0 && !JM_FILTER_JOSAJA.has(String(it.josaja || ''))) return false;
             if (addr && String(it.address || '').indexOf(addr) === -1) return false;
@@ -23605,7 +23608,17 @@ MJ 이정우 팀장
         var bar = document.getElementById('jm-status-summary');
         if (!bar) return;
         var counts = { '분류필요': 0, '조사요청': 0, '조사접수': 0, '조사확정': 0, '조사불가': 0, '폐기': 0 };
-        filtered.forEach(function (it) { var s = it.josa_status; if (counts[s] !== undefined) counts[s]++; });
+        // 폐기 카운트는 폐기제외 필터를 무시한 전체에서 산정
+        (jmItems || []).forEach(function (it) {
+            var ids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); });
+            var inTree = ids.some(function (id) { return jmSelectedPresetIds.has(id); });
+            if (!inTree) return;
+            var s = it.josa_status;
+            if (counts[s] !== undefined) counts[s]++;
+        });
+        // 단, 필터된 결과 카운트도 함께 표시 (filtered = 화면 표시 기준)
+        var filteredCounts = { '분류필요': 0, '조사요청': 0, '조사접수': 0, '조사확정': 0, '조사불가': 0, '폐기': 0 };
+        filtered.forEach(function (it) { var s = it.josa_status; if (filteredCounts[s] !== undefined) filteredCounts[s]++; });
         var palette = {
             '분류필요': 'bg-gray-100 text-gray-700',
             '조사요청': 'bg-blue-100 text-blue-700',
@@ -23614,10 +23627,27 @@ MJ 이정우 팀장
             '조사불가': 'bg-orange-100 text-orange-700',
             '폐기':     'bg-red-100 text-red-700',
         };
-        var html = Object.keys(counts).map(function (k) {
-            return '<span class="px-2 py-0.5 rounded ' + palette[k] + '">' + k + ' <strong>' + counts[k] + '</strong></span>';
+        var totalActive = (JM_FILTER_STATUS.size === 0);
+        var totalCls = totalActive ? ' jm-summary-btn-active' : '';
+        var html = '<button type="button" onclick="toggleJmSummaryFilter(\'\')" class="jm-summary-btn bg-white text-gray-700' + totalCls + '">총 <strong>' + filtered.length + '</strong></button>';
+        html += Object.keys(filteredCounts).map(function (k) {
+            var active = JM_FILTER_STATUS.has(k);
+            var actCls = active ? ' jm-summary-btn-active' : '';
+            return '<button type="button" onclick="toggleJmSummaryFilter(\'' + k + '\')" class="jm-summary-btn ' + palette[k] + actCls + '">' + k + ' <strong>' + filteredCounts[k] + '</strong></button>';
         }).join('');
-        bar.innerHTML = '<span class="text-gray-500">필터: 총 <strong>' + filtered.length + '</strong></span>' + html;
+        bar.innerHTML = html;
+    }
+    function toggleJmSummaryFilter(status) {
+        if (!status) {
+            JM_FILTER_STATUS.clear();
+        } else if (JM_FILTER_STATUS.has(status) && JM_FILTER_STATUS.size === 1) {
+            JM_FILTER_STATUS.clear();
+        } else {
+            JM_FILTER_STATUS.clear();
+            JM_FILTER_STATUS.add(status);
+        }
+        updateJmMultiLabel('status');
+        applyJosaFilters();
     }
 
     function renderJosaGrid(filtered) {
@@ -23781,7 +23811,8 @@ MJ 이정우 팀장
         var prev = document.querySelector('.jm-status-menu');
         if (prev) prev.remove();
 
-        var statuses = ['분류필요', '조사요청', '조사접수', '조사확정', '조사불가', '폐기'];
+        // 사용자가 직접 선택 가능한 상태 3가지만 (조사접수/확정/불가 는 조사자가 텔레그램 흐름에서 세팅)
+        var statuses = ['분류필요', '조사요청', '폐기'];
         var palette = { '분류필요': 'bg-gray-200 text-gray-700', '조사요청': 'bg-blue-200 text-blue-800', '조사접수': 'bg-indigo-200 text-indigo-800', '조사확정': 'bg-green-200 text-green-800', '조사불가': 'bg-orange-200 text-orange-800', '폐기': 'bg-red-200 text-red-800' };
         var cur = btn.textContent.trim();
 
@@ -24087,12 +24118,18 @@ MJ 이정우 팀장
 
     // ── 주소/물건타입/특수물건 자동완성 (필드 값에서 unique 추출) ─────────────────
     var JM_SUGGEST = { open: false, field: '', anchor: null, items: [], activeIndex: 0 };
+    var __jmSuggestCloseTimer = null;
     function _jmSuggestMenuId(field) {
         if (field === 'address') return 'jm-suggest-addr';
         if (field === 'prop_kind') return 'jm-suggest-prop';
         return 'jm-suggest-special';
     }
+    function scheduleCloseJmSuggest() {
+        if (__jmSuggestCloseTimer) clearTimeout(__jmSuggestCloseTimer);
+        __jmSuggestCloseTimer = setTimeout(closeJmSuggest, 200);
+    }
     function openJmSuggest(input, field) {
+        if (__jmSuggestCloseTimer) { clearTimeout(__jmSuggestCloseTimer); __jmSuggestCloseTimer = null; }
         JM_SUGGEST.anchor = input; JM_SUGGEST.field = field; JM_SUGGEST.open = true;
         var q = String(input.value || '').trim().toLowerCase();
         var seen = {}, list = [];

@@ -7719,9 +7719,16 @@ function handleJosaApiPost_(payload) {
 
 /**
  * 옥션원 이미지 프록시 — img_url 을 Referer:auction1 헤더와 함께 fetch,
- * base64 data URI 로 변환하여 josa_items.img_url 에 캐시 저장 후 반환.
- * (브라우저 직접 img src 로딩이 referer/CORS 차단되는 경우 fallback 용)
+ * Drive 공유 폴더에 업로드 후 공개 URL 을 josa_items.img_url 에 캐시.
+ * Drive thumbnail URL 은 모든 PC/네트워크에서 img src 로 로드 가능.
  */
+function _getOrCreateJosaImageFolder_() {
+  var folders = DriveApp.getFoldersByName('josa_images');
+  if (folders.hasNext()) return folders.next();
+  var folder = DriveApp.createFolder('josa_images');
+  try { folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  return folder;
+}
 function fetchJosaImage(josaId) {
   try {
     if (!josaId) return '';
@@ -7737,7 +7744,11 @@ function fetchJosaImage(josaId) {
       if (String(data[i][idIdx]) !== String(josaId)) continue;
       var u = String(data[i][imgIdx] || '').trim();
       if (!u) return '';
-      if (u.indexOf('data:') === 0) return u;  // 이미 캐시됨
+      // 이미 Drive thumbnail / lh3 / data: → 그대로 사용
+      if (u.indexOf('drive.google.com') !== -1 ||
+          u.indexOf('googleusercontent.com') !== -1 ||
+          u.indexOf('data:') === 0) return u;
+
       var resp;
       try {
         resp = UrlFetchApp.fetch(u, {
@@ -7749,14 +7760,24 @@ function fetchJosaImage(josaId) {
         Logger.log('[fetchJosaImage] ' + josaId + ' fetch err: ' + e);
         return '';
       }
-      if (resp.getResponseCode() !== 200) return '';
+      if (resp.getResponseCode() !== 200) {
+        Logger.log('[fetchJosaImage] ' + josaId + ' http ' + resp.getResponseCode());
+        return '';
+      }
       var blob = resp.getBlob();
-      var bytes = blob.getBytes();
-      if (bytes.length > 30000) return '';  // 30KB 이상은 base64 변환 시 셀 한도(50K) 초과 위험 → skip
-      var mime = blob.getContentType() || 'image/jpeg';
-      var dataUri = 'data:' + mime + ';base64,' + Utilities.base64Encode(bytes);
-      try { sheet.getRange(i + 1, imgIdx + 1).setValue(dataUri); } catch (e) { Logger.log('[fetchJosaImage] save err: ' + e); }
-      return dataUri;
+      try {
+        var folder = _getOrCreateJosaImageFolder_();
+        var ext = (blob.getContentType() || '').indexOf('png') !== -1 ? '.png' : '.jpg';
+        blob.setName(String(josaId) + ext);
+        var file = folder.createFile(blob);
+        try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+        var publicUrl = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w200';
+        try { sheet.getRange(i + 1, imgIdx + 1).setValue(publicUrl); } catch (e) { Logger.log('[fetchJosaImage] save err: ' + e); }
+        return publicUrl;
+      } catch (e) {
+        Logger.log('[fetchJosaImage] drive err: ' + e);
+        return '';
+      }
     }
     return '';
   } catch (err) {
