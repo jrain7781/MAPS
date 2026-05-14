@@ -23490,33 +23490,103 @@ MJ 이정우 팀장
         sel.value = current;
     }
 
+    function _jmRealItemCount(presetId) {
+        var n = 0;
+        (jmItems || []).forEach(function (it) {
+            var ids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); });
+            if (ids.indexOf(presetId) !== -1) n++;
+        });
+        return n;
+    }
+    function _jmRenderTreeLi(p) {
+        var checked = jmSelectedPresetIds.has(p.preset_id) ? 'checked' : '';
+        var deleted = (p.is_active === 'N') || p.deleted_in_manager_at;
+        var labelCls = 'flex items-center gap-1 cursor-pointer group ' + (deleted ? 'text-red-600' : 'text-gray-700');
+        var badge = deleted ? '<span class="text-[10px] bg-red-100 text-red-700 px-1 rounded">삭제됨</span>' : '';
+        var cnt = '<span class="text-[10px] text-gray-400">(' + p._realCount + ')</span>';
+        var delBtn = '<button type="button" onclick="onJmDeletePreset(\'' + escAttr(p.preset_id) + '\', event)" class="text-gray-400 hover:text-red-600 px-1 ml-1" title="이 리스트 삭제 (MAPS josa_presets 시트에서 행 제거)">✕</button>';
+        return '<li><label class="' + labelCls + '">' +
+               '<input type="checkbox" class="jm-tree-cb rounded" data-id="' + escAttr(p.preset_id) + '" ' + checked + '>' +
+               '<span class="truncate flex-1" title="' + escAttr(p.preset_title || '') + '">' + escHtml(p.preset_title || '(제목없음)') + '</span>' +
+               badge + cnt + delBtn +
+               '</label></li>';
+    }
     function renderJosaTree() {
-        var list = document.getElementById('jm-tree-list');
-        if (!list) return;
-        var html = jmPresets.map(function (p) {
-            var checked = jmSelectedPresetIds.has(p.preset_id) ? 'checked' : '';
-            var deleted = (p.is_active === 'N') || p.deleted_in_manager_at;
-            var labelCls = 'flex items-center gap-1 cursor-pointer group ' + (deleted ? 'text-red-600' : 'text-gray-700');
-            var badge = deleted ? '<span class="text-[10px] bg-red-100 text-red-700 px-1 rounded">삭제됨</span>' : '';
-            var cnt = '<span class="text-[10px] text-gray-400">(' + (p.items_count || '0') + ')</span>';
-            var delBtn = '<button type="button" onclick="onJmDeletePreset(\'' + escAttr(p.preset_id) + '\', event)" class="text-gray-400 hover:text-red-600 px-1 ml-1" title="이 리스트 삭제 (MAPS josa_presets 시트에서 행 제거)">✕</button>';
-            return '<li><label class="' + labelCls + '">' +
-                   '<input type="checkbox" class="jm-tree-cb rounded" data-id="' + escAttr(p.preset_id) + '" ' + checked + '>' +
-                   '<span class="truncate flex-1" title="' + escAttr(p.preset_title || '') + '">' + escHtml(p.preset_title || '(제목없음)') + '</span>' +
-                   badge + cnt + delBtn +
-                   '</label></li>';
-        }).join('');
-        list.innerHTML = html || '<li class="text-gray-400 text-xs">크롤링리스트 없음</li>';
-        list.querySelectorAll('.jm-tree-cb').forEach(function (cb) {
-            cb.addEventListener('change', function () {
-                var id = cb.dataset.id;
-                if (cb.checked) jmSelectedPresetIds.add(id); else jmSelectedPresetIds.delete(id);
-                syncJmTreeAllState();
-                applyJosaFilters();
+        var listA = document.getElementById('jm-tree-list');
+        var listE = document.getElementById('jm-tree-list-empty');
+        var cntE  = document.getElementById('jm-tree-empty-count');
+        if (!listA) return;
+        // 실제 items 카운트 기반 분할
+        var active = [], empty = [];
+        jmPresets.forEach(function (p) {
+            p._realCount = _jmRealItemCount(p.preset_id);
+            if (p._realCount > 0) active.push(p); else empty.push(p);
+        });
+        listA.innerHTML = active.map(_jmRenderTreeLi).join('') || '<li class="text-gray-400 text-xs">물건 있는 리스트 없음</li>';
+        if (listE) listE.innerHTML = empty.map(_jmRenderTreeLi).join('') || '<li class="text-gray-400 text-xs">없음</li>';
+        if (cntE)  cntE.textContent = '(' + empty.length + ')';
+        // 체크박스 핸들러 — 양쪽 ul 모두 바인딩
+        [listA, listE].forEach(function (ul) {
+            if (!ul) return;
+            ul.querySelectorAll('.jm-tree-cb').forEach(function (cb) {
+                cb.addEventListener('change', function () {
+                    var id = cb.dataset.id;
+                    if (cb.checked) jmSelectedPresetIds.add(id); else jmSelectedPresetIds.delete(id);
+                    syncJmTreeAllState();
+                    applyJosaFilters();
+                });
             });
         });
         syncJmTreeAllState();
     }
+
+    // 사이드 트리 splitter — 드래그로 빈리스트 영역 크기 조정, localStorage 저장
+    (function setupJmTreeSplitter() {
+        var KEY = 'jm_tree_split_ratio';
+        function init() {
+            var splitter = document.getElementById('jm-tree-splitter');
+            var emptyWrap = document.getElementById('jm-tree-empty-wrap');
+            var toggle = document.getElementById('jm-tree-empty-toggle');
+            if (!splitter || !emptyWrap) { setTimeout(init, 200); return; }
+            // 복원
+            try {
+                var saved = localStorage.getItem(KEY);
+                if (saved) emptyWrap.style.flex = '0 0 ' + saved;
+            } catch (e) {}
+            // 드래그
+            var dragging = false, asideEl = null, startY = 0, startBasis = 0;
+            splitter.addEventListener('mousedown', function (e) {
+                dragging = true;
+                splitter.classList.add('dragging');
+                asideEl = splitter.parentElement;
+                startY = e.clientY;
+                startBasis = emptyWrap.getBoundingClientRect().height;
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', function (e) {
+                if (!dragging) return;
+                var asideH = asideEl ? asideEl.getBoundingClientRect().height : 400;
+                var dy = e.clientY - startY;
+                var newH = Math.max(40, Math.min(asideH - 100, startBasis - dy));
+                emptyWrap.style.flex = '0 0 ' + newH + 'px';
+            });
+            document.addEventListener('mouseup', function () {
+                if (!dragging) return;
+                dragging = false;
+                splitter.classList.remove('dragging');
+                document.body.style.userSelect = '';
+                try { localStorage.setItem(KEY, emptyWrap.style.flex.split(' ').pop() || '30%'); } catch (e) {}
+            });
+            // 접기 토글
+            if (toggle) toggle.addEventListener('click', function () {
+                emptyWrap.classList.toggle('collapsed');
+                toggle.textContent = emptyWrap.classList.contains('collapsed') ? '▶' : '▼';
+            });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+        else init();
+    })();
 
     // ── 리스트(preset) 삭제 — josa_presets 시트에서 제거. josa_items 의 preset_ids 는 유지 ──
     function onJmDeletePreset(presetId, ev) {
@@ -23867,7 +23937,16 @@ MJ 이정우 팀장
                 var newStatus = b.dataset.status;
                 menu.remove();
                 if (newStatus === cur) return;
-                _jmSaveField(josaId, 'josa_status', newStatus, function () { applyJosaFilters(); });
+                _jmSaveField(josaId, 'josa_status', newStatus, function (resp) {
+                    applyJosaFilters();
+                    // 폐기로 변경 시 — 폐기 제외 체크 때문에 화면에서 사라지므로 명확한 toast
+                    if (newStatus === '폐기') {
+                        var excl = document.getElementById('jm-exclude-polye');
+                        if (excl && excl.checked) {
+                            if (typeof showStatus === 'function') showStatus('✓ 폐기로 변경됨 — \'폐기 제외\' 체크 때문에 목록에서 숨김', 'success');
+                        }
+                    }
+                });
             });
         });
 

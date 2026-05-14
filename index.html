@@ -108,6 +108,15 @@
             min-height: 90px;  /* 우측 검색폼(~55px) + 상태 썸머리(~35px) 영역과 매칭 */
         }
         #JosaManagement aside #jm-tree-list { min-height: 0; }
+        /* 사이드 트리 splitter */
+        #jm-tree-splitter {
+            flex-shrink: 0; height: 6px; cursor: ns-resize;
+            background: #d1d5db; border-top: 1px solid #9ca3af; border-bottom: 1px solid #9ca3af;
+            transition: background .12s;
+        }
+        #jm-tree-splitter:hover, #jm-tree-splitter.dragging { background: #6366f1; }
+        #jm-tree-empty-wrap.collapsed { flex: 0 0 28px !important; }
+        #jm-tree-empty-wrap.collapsed #jm-tree-list-empty { display: none; }
         /* 그리드 thead sticky — 본문이 헤더 위로 올라가는 문제 해결 (z-index 50 + thead 자체 sticky) */
         #jm-grid thead { position: sticky; top: 0; z-index: 50; background: #dbe2ec; }
         #jm-grid thead tr { background: #dbe2ec; }
@@ -138,8 +147,8 @@
             background: #fff; padding: 6px; border-radius: 6px;
             box-shadow: 0 8px 24px rgba(0,0,0,.18);
         }
-        .jm-status-menu .jm-status-btn { text-align: center; }
-        .jm-status-menu .jm-status-sel { outline: 3px solid #1d4ed8; outline-offset: -1px; }
+        .jm-status-menu .jm-status-btn { text-align: center; border: 1px solid currentColor; }
+        .jm-status-menu .jm-status-sel { border-width: 2px; font-weight: 800; }
         /* 조사자 input */
         .jm-josaja-input { width: 90%; font-size: 12px; padding: 3px 4px; border: 1px solid #d1d5db; border-radius: 3px; text-align: center; }
         .jm-josaja-input:focus { outline: none; border-color: #2563eb; background: #fffbeb; }
@@ -1728,7 +1737,7 @@
 
                 <!-- 본문 = [좌측 트리] [메인 영역] -->
                 <div class="flex flex-1 overflow-hidden">
-                    <!-- 좌측 사이드 트리: 크롤링리스트 -->
+                    <!-- 좌측 사이드 트리: 크롤링리스트 (활성 + 빈리스트 분할) -->
                     <aside class="w-64 border-r bg-gray-50 text-sm flex-shrink-0 flex flex-col">
                         <div class="jm-side-header flex items-center justify-between px-3 border-b bg-gray-50">
                             <span class="font-semibold text-gray-700">크롤링리스트</span>
@@ -1737,7 +1746,18 @@
                                 <span>전체</span>
                             </label>
                         </div>
-                        <ul id="jm-tree-list" class="space-y-1 px-3 py-2 flex-1 overflow-y-auto"></ul>
+                        <!-- 상단: 물건 있는 리스트 -->
+                        <ul id="jm-tree-list" class="space-y-1 px-3 py-2 overflow-y-auto" style="flex:1 1 0; min-height:60px;"></ul>
+                        <!-- splitter (드래그로 상/하 비율 조정, localStorage 저장) -->
+                        <div id="jm-tree-splitter" title="드래그로 상/하 비율 조정"></div>
+                        <!-- 하단: 물건 없는 리스트 (접힘 가능) -->
+                        <div id="jm-tree-empty-wrap" class="flex flex-col" style="flex:0 0 30%; min-height:40px; overflow:hidden;">
+                            <div class="px-3 py-1 text-xs bg-gray-100 border-y text-gray-600 font-semibold flex items-center justify-between flex-shrink-0">
+                                <span>빈 리스트 <span id="jm-tree-empty-count" class="text-gray-400">(0)</span></span>
+                                <button type="button" id="jm-tree-empty-toggle" class="text-gray-500 hover:text-gray-800" title="접기/펴기">▼</button>
+                            </div>
+                            <ul id="jm-tree-list-empty" class="space-y-1 px-3 py-2 flex-1 overflow-y-auto text-gray-500"></ul>
+                        </div>
                     </aside>
 
                     <!-- 메인 영역 -->
