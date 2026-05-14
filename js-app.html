@@ -23640,19 +23640,7 @@ MJ 이정우 팀장
             var target = new Date(+yy, +mm - 1, +dd);
             var today = new Date(); today.setHours(0,0,0,0);
             var diff = Math.round((target - today) / 86400000);
-            // 워킹데이(월~금) 카운트: today → target 까지 평일 수
-            var workdays = 0;
-            if (diff > 0) {
-                var d = new Date(today.getTime());
-                while (d < target) {
-                    d.setDate(d.getDate() + 1);
-                    var wd = d.getDay();
-                    if (wd !== 0 && wd !== 6) workdays++;
-                }
-            } else if (diff === 0) {
-                workdays = 0;
-            }
-            var urgent = (diff >= 0 && workdays <= 7);  // 워킹데이 7일 이내(오늘 포함) 빨강
+            var urgent = (diff >= 0 && diff <= 4);  // 입찰 4일전 이내(오늘 포함) 빨강
             var dday = diff > 0 ? '입찰 ' + diff + '일전' : (diff === 0 ? '오늘' : '지남 ' + (-diff) + '일');
             var weekday = ['일','월','화','수','목','금','토'][target.getDay()];
             return { date: disp, dday: dday, weekday: weekday, urgent: urgent };
@@ -23665,12 +23653,14 @@ MJ 이정우 팀장
             var sakunCls = isMulti ? 'jm-sakun-multi' : 'jm-sakun';
             var sakunTip = isMulti ? ('속한 리스트:\n' + multiList) : (multiList || '');
 
-            // 사진 — 옥션원 이미지는 referer 제한 있어 images.weserv.nl 프록시 경유 (다른 PC/네트워크에서도 표시)
+            // 사진 — img_url 이 이미 data: URI (캐시됨)이면 그대로, 아니면 직접 src + onerror 시 GAS 프록시(Referer:auction1) base64 캐시
             var imgCell = (function () {
                 if (!it.img_url) return '<span class="text-gray-300">-</span>';
-                var clean = String(it.img_url).replace(/^https?:\/\//, '');
-                var proxied = 'https://images.weserv.nl/?url=' + encodeURIComponent(clean);
-                return '<img src="' + escAttr(proxied) + '" class="jm-thumb" loading="lazy" onerror="this.onerror=null; this.src=' + JSON.stringify(it.img_url) + '">';
+                var u = String(it.img_url);
+                if (u.indexOf('data:') === 0) {
+                    return '<img src="' + escAttr(u) + '" class="jm-thumb" loading="lazy" onerror="this.style.display=\'none\'">';
+                }
+                return '<img src="' + escAttr(u) + '" class="jm-thumb" loading="lazy" referrerpolicy="no-referrer" data-josa-id="' + escAttr(it.josa_id) + '" onerror="jmRetryImg(this)">';
             })();
 
             // 사건번호 + 물건종류 + [옥션원] / [조사내용] 버튼 (조사내용은 입찰물건 등록된 경우만)
@@ -23747,7 +23737,7 @@ MJ 이정우 팀장
 
             return '<tr class="jm-row">' +
                 '<td class="jm-td text-center"><input type="checkbox" class="jm-row-cb rounded" data-id="' + escAttr(it.josa_id) + '"></td>' +
-                '<td class="jm-td text-center">' + statusBtn + '<div class="jm-status-memo-wrap">' + memoCell + '</div></td>' +
+                '<td class="jm-td text-center"><div class="jm-status-cell-stack">' + statusBtn + memoCell + '</div></td>' +
                 '<td class="jm-td text-center">' + josajaCell + '</td>' +
                 '<td class="jm-td text-center">' + imgCell + '</td>' +
                 '<td class="jm-td text-center">' + sakunCell + '</td>' +
@@ -24006,6 +23996,30 @@ MJ 이정우 팀장
         } else {
             alert('openDetailModal 함수를 찾을 수 없습니다 (기존 입찰물건 상세 모달).');
         }
+    }
+
+    // ── 이미지 onerror 시 GAS 프록시(Referer 우회) 호출 → base64 캐시 ──
+    var __jmImgRetried = {};  // josa_id 별 1회만 시도
+    function jmRetryImg(imgEl) {
+        if (!imgEl) return;
+        var josaId = imgEl.getAttribute('data-josa-id') || '';
+        if (!josaId || __jmImgRetried[josaId]) { imgEl.style.display = 'none'; return; }
+        __jmImgRetried[josaId] = true;
+        imgEl.onerror = null;
+        if (typeof google === 'undefined' || !google.script || !google.script.run) { imgEl.style.display = 'none'; return; }
+        google.script.run
+            .withSuccessHandler(function (dataUri) {
+                if (dataUri && String(dataUri).indexOf('data:') === 0) {
+                    imgEl.src = dataUri;
+                    // 메모리 캐시도 갱신
+                    var it = jmItems.find(function (x) { return x.josa_id === josaId; });
+                    if (it) it.img_url = dataUri;
+                } else {
+                    imgEl.style.display = 'none';
+                }
+            })
+            .withFailureHandler(function () { imgEl.style.display = 'none'; })
+            .fetchJosaImage(josaId);
     }
 
     // ── 상태/조사자 다중선택 드롭다운 ────────────────────────────────

@@ -50,7 +50,7 @@
         }
         /* MAPS 조사물건관리 v2 — 매니저 옥션원 그리드 스타일 재현 */
         #jm-grid { border-collapse: collapse; font-size: 13px; }
-        .jm-th { background: #f7f8fa; border: 1px solid #d8def0; padding: 8px 6px; text-align: center; font-weight: 700; color: #2b3b5b; position: sticky; top: 0; z-index: 5; }
+        .jm-th { background: #dbe2ec; border: 1px solid #b9c2d4; padding: 8px 6px; text-align: center; font-weight: 700; color: #1f2b46; position: sticky; top: 0; z-index: 5; }
         .jm-th-sub { font-size: 10px; font-weight: 400; color: #6b7280; display: block; }
         .jm-td { border: 1px solid #e5e7eb; padding: 8px; vertical-align: middle; }
         .jm-row:hover { background: #fff8dc; }
@@ -76,9 +76,8 @@
         /* 매각기일 — 7워킹데이 이내 빨강 강조 */
         .jm-bid-urgent { color: #dc2626 !important; font-weight: 700; }
         .jm-bid-weekday { color: #1f2937; font-weight: 600; margin-right: 2px; }
-        /* 상태 셀 안 메모 버튼 — 상태 버튼 아래로 stacking, 같은 폭 */
-        .jm-status-memo-wrap { margin-top: 5px; display: flex; justify-content: center; }
-        .jm-status-memo-wrap .jm-memo-btn { min-width: 70px; max-width: 90%; }
+        /* 상태 셀 stacking — 상태 btn + 메모 btn 동일 폭, 컬럼 폭 변경 시 함께 줄어듦 */
+        .jm-status-cell-stack { display: flex; flex-direction: column; gap: 5px; width: 100%; align-items: stretch; }
         /* 사건번호 셀 안 옥션원/조사내용 버튼 — 가로 길이 동일 */
         .jm-cell-btns { margin-top: 6px; display: flex; gap: 4px; justify-content: center; }
         .jm-cell-btn {
@@ -106,15 +105,17 @@
         }
         #JosaManagement aside #jm-tree-list { min-height: 0; }
         /* 그리드 thead sticky — 본문이 헤더 위로 올라가는 문제 해결 (z-index 50 + thead 자체 sticky) */
-        #jm-grid thead { position: sticky; top: 0; z-index: 50; background: #f7f8fa; }
-        #jm-grid thead tr { background: #f7f8fa; }
-        .jm-th { background: #f7f8fa; z-index: 50; }
+        #jm-grid thead { position: sticky; top: 0; z-index: 50; background: #dbe2ec; }
+        #jm-grid thead tr { background: #dbe2ec; }
+        .jm-th { background: #dbe2ec; z-index: 50; }
         /* 스크롤바 항상 보이게 (Windows + cross-browser) */
         #JosaManagement main > div.flex-1.overflow-auto::-webkit-scrollbar { width: 12px; height: 12px; }
         #JosaManagement main > div.flex-1.overflow-auto::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
         #JosaManagement main > div.flex-1.overflow-auto::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        /* 상태 버튼 — 옅은 자기색 테두리 (badge 색에 맞춤) */
-        .jm-status-btn { font-size: 11px; padding: 3px 10px; border-radius: 4px; border: 1px solid currentColor; cursor: pointer; font-weight: 700; min-width: 70px; }
+        /* 상태 버튼 — 옅은 자기색 테두리 (badge 색에 맞춤), 컬럼 폭에 fit */
+        .jm-status-btn { font-size: 11px; padding: 3px 8px; border-radius: 4px; border: 1px solid currentColor; cursor: pointer; font-weight: 700;
+                         display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
+                         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .jm-status-btn:hover { filter: brightness(0.92); }
         /* 상단 상태 요약 칩 — 자기색 테두리 동일 적용 */
         #jm-status-summary > span { border: 1px solid currentColor; }
@@ -145,9 +146,13 @@
         .jm-suggest-menu { position: absolute; top: 100%; left: 0; z-index: 200; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.12); min-width: 100%; max-height: 240px; overflow-y: auto; }
         .jm-suggest-item { padding: 5px 10px; font-size: 12px; cursor: pointer; color: #1f2937; }
         .jm-suggest-item:hover, .jm-suggest-item.active { background: #eef2ff; color: #3730a3; font-weight: 600; }
-        /* 메모 버튼 — 등록되면 노란 배경 + 짧게 표시, 비어있으면 옅은 회색 + 메모 */
+        /* 필터바 입력 박스 높이 1.2배 (py-1 4px → 6px) */
+        .jm-filter-bar input[type="text"],
+        .jm-filter-bar .jm-multi-btn,
+        .jm-filter-bar .jm-filter-reset { padding-top: 6px !important; padding-bottom: 6px !important; font-size: 12.5px; }
+        /* 메모 버튼 — 상태 버튼과 동일 폭 (컬럼 폭 변경 시 함께 줄어듦) */
         .jm-memo-btn {
-            display: inline-block; max-width: 100%; box-sizing: border-box;
+            display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
             font-size: 11px; padding: 3px 8px; border-radius: 4px;
             cursor: pointer; font-weight: 500;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1727,12 +1732,12 @@
                     <!-- 메인 영역 -->
                     <main class="flex-1 overflow-hidden flex flex-col min-w-0">
                         <!-- 검색폼 — 입력 즉시 필터 (조회 버튼 없음) -->
-                        <div class="border-b bg-white p-3 flex flex-wrap gap-2 items-center text-xs">
+                        <div class="border-b bg-white p-3 flex flex-wrap gap-2 items-center text-xs jm-filter-bar">
                             <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="jm-today-only" checked class="rounded" onchange="applyJosaFilters()"> 오늘 이후만</label>
                             <span class="text-gray-300">|</span>
-                            <input type="text" id="jm-search-sakun" placeholder="사건번호" class="border rounded px-2 py-1 w-28" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
-                            <input type="text" id="jm-search-bid"   placeholder="0512" class="border rounded px-2 py-1 w-16" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
-                            <input type="text" id="jm-search-court" placeholder="법원" class="border rounded px-2 py-1 w-24" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
+                            <input type="text" id="jm-search-sakun" placeholder="사건번호" class="border rounded px-2 w-28" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
+                            <input type="text" id="jm-search-bid"   placeholder="입찰일자" class="border rounded px-2 w-20" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
+                            <input type="text" id="jm-search-court" placeholder="법원" class="border rounded px-2 w-24" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
                             <!-- 상태 다중선택 -->
                             <div class="jm-multi-wrap">
                                 <button type="button" class="jm-multi-btn" id="jm-filter-status-btn" onclick="toggleJmMulti('status')">상태 전체</button>
@@ -1743,21 +1748,20 @@
                                 <button type="button" class="jm-multi-btn" id="jm-filter-josaja-btn" onclick="toggleJmMulti('josaja')">조사자 전체</button>
                                 <div class="jm-multi-menu hidden" id="jm-filter-josaja-menu"></div>
                             </div>
-                            <!-- 주소/물건타입/특수물건 자동완성 -->
+                            <!-- 주소: 단순 입력 즉시 필터 (드롭다운 없음) -->
+                            <input type="text" id="jm-search-addr" placeholder="주소" class="border rounded px-2 w-32" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
+                            <!-- 물건타입 자동완성 -->
                             <div class="jm-multi-wrap">
-                                <input type="text" id="jm-search-addr" placeholder="주소" class="border rounded px-2 py-1 w-32" onfocus="this.select(); openJmSuggest(this, 'address')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'address')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'address')">
-                                <div class="jm-suggest-menu hidden" id="jm-suggest-addr"></div>
-                            </div>
-                            <div class="jm-multi-wrap">
-                                <input type="text" id="jm-search-prop" placeholder="물건타입" class="border rounded px-2 py-1 w-24" onfocus="this.select(); openJmSuggest(this, 'prop_kind')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'prop_kind')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'prop_kind')">
+                                <input type="text" id="jm-search-prop" placeholder="물건타입" class="border rounded px-2 w-24" onfocus="this.select(); openJmSuggest(this, 'prop_kind')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'prop_kind')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'prop_kind')">
                                 <div class="jm-suggest-menu hidden" id="jm-suggest-prop"></div>
                             </div>
+                            <!-- 특수물건 자동완성 (가로 1.5배) -->
                             <div class="jm-multi-wrap">
-                                <input type="text" id="jm-search-special" placeholder="특수물건" class="border rounded px-2 py-1 w-24" onfocus="this.select(); openJmSuggest(this, 'specials')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'specials')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'specials')">
+                                <input type="text" id="jm-search-special" placeholder="특수물건" class="border rounded px-2 w-36" onfocus="this.select(); openJmSuggest(this, 'specials')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'specials')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'specials')">
                                 <div class="jm-suggest-menu hidden" id="jm-suggest-special"></div>
                             </div>
                             <button type="button" onclick="resetJosaFilters()"
-                                class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded">초기화</button>
+                                class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 rounded jm-filter-reset">초기화</button>
                         </div>
 
                         <!-- 상태별 썸머리 -->

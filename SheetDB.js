@@ -7714,3 +7714,51 @@ function handleJosaApiPost_(payload) {
   if (action === 'updateJosaField') return updateJosaField(payload.josa_id, payload.field, payload.value);
   return { success: false, message: '알 수 없는 josa API 액션: ' + action };
 }
+
+/**
+ * 옥션원 이미지 프록시 — img_url 을 Referer:auction1 헤더와 함께 fetch,
+ * base64 data URI 로 변환하여 josa_items.img_url 에 캐시 저장 후 반환.
+ * (브라우저 직접 img src 로딩이 referer/CORS 차단되는 경우 fallback 용)
+ */
+function fetchJosaImage(josaId) {
+  try {
+    if (!josaId) return '';
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+    if (!sheet) return '';
+    var data = sheet.getDataRange().getValues();
+    if (data.length < 2) return '';
+    var headers = data[0];
+    var idIdx  = headers.indexOf('josa_id');
+    var imgIdx = headers.indexOf('img_url');
+    if (idIdx < 0 || imgIdx < 0) return '';
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][idIdx]) !== String(josaId)) continue;
+      var u = String(data[i][imgIdx] || '').trim();
+      if (!u) return '';
+      if (u.indexOf('data:') === 0) return u;  // 이미 캐시됨
+      var resp;
+      try {
+        resp = UrlFetchApp.fetch(u, {
+          headers: { 'Referer': 'https://www.auction1.co.kr/', 'User-Agent': 'Mozilla/5.0' },
+          muteHttpExceptions: true,
+          followRedirects: true
+        });
+      } catch (e) {
+        Logger.log('[fetchJosaImage] ' + josaId + ' fetch err: ' + e);
+        return '';
+      }
+      if (resp.getResponseCode() !== 200) return '';
+      var blob = resp.getBlob();
+      var bytes = blob.getBytes();
+      if (bytes.length > 30000) return '';  // 30KB 이상은 base64 변환 시 셀 한도(50K) 초과 위험 → skip
+      var mime = blob.getContentType() || 'image/jpeg';
+      var dataUri = 'data:' + mime + ';base64,' + Utilities.base64Encode(bytes);
+      try { sheet.getRange(i + 1, imgIdx + 1).setValue(dataUri); } catch (e) { Logger.log('[fetchJosaImage] save err: ' + e); }
+      return dataUri;
+    }
+    return '';
+  } catch (err) {
+    Logger.log('[fetchJosaImage] err: ' + err);
+    return '';
+  }
+}
