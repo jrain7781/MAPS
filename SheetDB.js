@@ -3164,6 +3164,7 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
   var hasOverride = !!(mNameOverride && String(mNameOverride).trim());
   var mNameVal;
   var repMemberIdForBulk = '';
+  var isAutoMName = false;
   var repInfo = _getBatchRepMemberInfo_(classD1Id);
   if (hasOverride) {
     mNameVal = String(mNameOverride).trim();
@@ -3171,6 +3172,7 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
     mNameVal = repInfo.name;
   } else {
     mNameVal = autoMName;
+    isAutoMName = true;
   }
   if (repInfo && repInfo.memberId) repMemberIdForBulk = repInfo.memberId;
 
@@ -3220,9 +3222,14 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
     sheet.getRange(row, chuchenDateCol).setValue(nowIso);
     sheet.getRange(row, bd2Col).setValue(bidDatetime2Val);
     var existingMid = String(scanData[idx][midColRel] || '').trim();
-    // PT/돈클 일괄등록: m_name을 회차 대표 이름으로 덮어쓸 때 member_id도 반드시 동기화
-    // (mNameOverride 케이스는 신규물건 폼에서 m_name+member_id 동시 주입되므로 건드리지 않음)
-    if (!hasOverride && repMemberIdForBulk) {
+    // CLASS(일반): m_name이 자동생성(종목_yymmdd_N회차)이므로 기존 member_id 잔존 시 클리어 — 상세탭 회원박스 불일치 방지
+    if (isAutoMName) {
+      if (existingMid) {
+        sheet.getRange(row, memberIdCol).setValue('');
+        affectedMemberIds[existingMid] = true;
+      }
+    } else if (!hasOverride && repMemberIdForBulk) {
+      // PT/돈클 일괄등록: m_name을 회차 대표 이름으로 덮어쓸 때 member_id도 반드시 동기화
       if (existingMid !== repMemberIdForBulk) {
         sheet.getRange(row, memberIdCol).setValue(repMemberIdForBulk);
         if (existingMid) affectedMemberIds[existingMid] = true; // 옛 회원 캐시도 무효화
