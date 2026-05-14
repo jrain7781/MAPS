@@ -476,14 +476,21 @@
     if (!adminKey) { alert('MAPS Admin Key 미설정 — ⚙ 버튼으로 설정.'); return; }
 
     const targets = presets.filter(p => selectedSyncIds.has(p.id));
-    // 캐시 확인 — 캐시 없는 리스트는 사용자에게 알림
+    // 캐시 확인 — 캐시 없는 리스트는 사용자에게 알림. 캐시는 raw(필터 전)라 추가필터 적용 필요.
     const withItems = [];
     const noCache = [];
     for (const p of targets) {
       let cache = null;
       try { cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null'); } catch (_) {}
       if (cache && Array.isArray(cache.items) && cache.items.length) {
-        withItems.push({ preset: p, items: cache.items });
+        // 활성 preset 은 미저장 변경 가능성 — custRows 우선, 그외 저장된 p.customFilters
+        const rows = (p.id === currentPresetId) ? custRows : (p.customFilters || []);
+        const { items: filtered } = applyCustomFilters(cache.items, rows);
+        if (filtered.length) {
+          withItems.push({ preset: p, items: filtered, rawCount: cache.items.length, filteredCount: filtered.length });
+        } else {
+          noCache.push(p); // 필터 후 0건이면 캐시없음 취급
+        }
       } else {
         noCache.push(p);
       }
@@ -542,7 +549,7 @@
           totalAdded += (d.added || 0);
           totalUpdated += (d.updated || 0);
           totalFailed += (d.failed || 0);
-          okList.push(`${preset.title || preset.id}: 신규${d.added || 0} 갱신${d.updated || 0}`);
+          okList.push(`${preset.title || preset.id}: 추가필터 ${withItems[i].filteredCount}/${withItems[i].rawCount} → 신규${d.added || 0} 갱신${d.updated || 0}`);
         }
       } catch (e) {
         failList.push(`${preset.title || preset.id}: ${e && e.message ? e.message : e}`);
