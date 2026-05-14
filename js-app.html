@@ -23682,14 +23682,13 @@ MJ 이정우 팀장
                             (it.prop_kind ? '<div class="jm-prop-kind">' + escHtml(it.prop_kind) + '</div>' : '') +
                             (auctionBtn || josaBtn ? '<div class="jm-cell-btns">' + auctionBtn + josaBtn + '</div>' : '');
 
-            // 매각기일 + 요일 + 시간 + D-day (워킹데이 7일 이내 빨강)
+            // 매각기일 + 요일 + 시간 + D-day — 빨강은 dday 라인만 (날짜·시간 검정 유지)
             var bd = bidDateDday(it.bid_date);
-            var urg = bd.urgent ? ' jm-bid-urgent' : '';
-            var bidCell = '<div class="' + (bd.urgent ? 'jm-bid-urgent' : '') + '">' + bd.date + '</div>' +
+            var bidCell = '<div>' + bd.date + '</div>' +
                           (it.bid_time
-                              ? '<div class="jm-bid-time' + urg + '">' + (bd.weekday ? '<span class="jm-bid-weekday">(' + bd.weekday + ')</span>' : '') + escHtml(it.bid_time) + '</div>'
-                              : (bd.weekday ? '<div class="jm-bid-time' + urg + '"><span class="jm-bid-weekday">(' + bd.weekday + ')</span></div>' : '')) +
-                          (bd.dday ? '<div class="jm-bid-dday' + urg + '">' + bd.dday + '</div>' : '');
+                              ? '<div class="jm-bid-time">' + (bd.weekday ? '<span class="jm-bid-weekday">(' + bd.weekday + ')</span>' : '') + escHtml(it.bid_time) + '</div>'
+                              : (bd.weekday ? '<div class="jm-bid-time"><span class="jm-bid-weekday">(' + bd.weekday + ')</span></div>' : '')) +
+                          (bd.dday ? '<div class="jm-bid-dday' + (bd.urgent ? ' jm-bid-urgent' : '') + '">' + bd.dday + '</div>' : '');
 
             // 소재지 (매니저 옥션원 스타일: 4줄 색상)
             var addrCell = '<div class="jm-addr">' + escHtml(it.address || '') + '</div>' +
