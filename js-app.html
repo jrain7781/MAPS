@@ -23540,11 +23540,17 @@ MJ 이정우 팀장
         document.querySelectorAll('#jm-grid-body .jm-row-cb').forEach(function (cb) { cb.checked = checked; });
     }
 
+    // 상태/조사자 다중선택 상태 (Set)
+    var JM_FILTER_STATUS  = new Set();  // 비어있으면 전체
+    var JM_FILTER_JOSAJA  = new Set();  // 비어있으면 전체
+
     function resetJosaFilters() {
         ['jm-search-sakun', 'jm-search-bid', 'jm-search-court', 'jm-search-addr', 'jm-search-prop', 'jm-search-special']
             .forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
-        var sStatus = document.getElementById('jm-filter-status'); if (sStatus) sStatus.value = '';
-        var sJ = document.getElementById('jm-filter-josaja');     if (sJ) sJ.value = '';
+        JM_FILTER_STATUS.clear();
+        JM_FILTER_JOSAJA.clear();
+        updateJmMultiLabel('status');
+        updateJmMultiLabel('josaja');
         var today = document.getElementById('jm-today-only');     if (today) today.checked = true;
         applyJosaFilters();
     }
@@ -23553,8 +23559,6 @@ MJ 이정우 팀장
         var sakun = (document.getElementById('jm-search-sakun')?.value || '').trim().toLowerCase();
         var bid   = (document.getElementById('jm-search-bid')?.value || '').trim();
         var court = (document.getElementById('jm-search-court')?.value || '').trim();
-        var status = document.getElementById('jm-filter-status')?.value || '';
-        var josaja = document.getElementById('jm-filter-josaja')?.value || '';
         var addr  = (document.getElementById('jm-search-addr')?.value || '').trim();
         var prop  = (document.getElementById('jm-search-prop')?.value || '').trim();
         var spec  = (document.getElementById('jm-search-special')?.value || '').trim();
@@ -23570,8 +23574,8 @@ MJ 이정우 팀장
             if (sakun && String(it.sakun_no || '').toLowerCase().indexOf(sakun) === -1) return false;
             if (bid && String(it.bid_date || '').indexOf(bid) === -1) return false;
             if (court && String(it.court || '').indexOf(court) === -1) return false;
-            if (status && String(it.josa_status || '') !== status) return false;
-            if (josaja && String(it.josaja || '') !== josaja) return false;
+            if (JM_FILTER_STATUS.size > 0 && !JM_FILTER_STATUS.has(String(it.josa_status || '분류필요'))) return false;
+            if (JM_FILTER_JOSAJA.size > 0 && !JM_FILTER_JOSAJA.has(String(it.josaja || ''))) return false;
             if (addr && String(it.address || '').indexOf(addr) === -1) return false;
             if (prop && String(it.prop_kind || '').indexOf(prop) === -1) return false;
             if (spec && String(it.specials || '').indexOf(spec) === -1) return false;
@@ -23620,7 +23624,7 @@ MJ 이정우 팀장
         var body = document.getElementById('jm-grid-body');
         if (!body) return;
         if (!filtered.length) {
-            body.innerHTML = '<tr><td colspan="16" class="text-center text-gray-400 py-10">조회 결과 없음</td></tr>';
+            body.innerHTML = '<tr><td colspan="13" class="text-center text-gray-400 py-10">조회 결과 없음</td></tr>';
             return;
         }
         var presetMap = {};
@@ -23630,14 +23634,28 @@ MJ 이정우 팀장
         // 2026-05-13 16:07:44 → 26-05-13 16:07:44 (yy)
         function fmtRegDate(s) { return s ? String(s).replace(/^(\d{2})(\d{2})-/, '$2-') : ''; }
         function bidDateDday(bd) {
-            if (!bd || !/^\d{6}$/.test(bd)) return { date: escHtml(bd || ''), dday: '' };
+            if (!bd || !/^\d{6}$/.test(bd)) return { date: escHtml(bd || ''), dday: '', weekday: '', urgent: false };
             var yy = '20' + bd.slice(0,2), mm = bd.slice(2,4), dd = bd.slice(4,6);
             var disp = yy + '.' + mm + '.' + dd;
             var target = new Date(+yy, +mm - 1, +dd);
             var today = new Date(); today.setHours(0,0,0,0);
             var diff = Math.round((target - today) / 86400000);
+            // 워킹데이(월~금) 카운트: today → target 까지 평일 수
+            var workdays = 0;
+            if (diff > 0) {
+                var d = new Date(today.getTime());
+                while (d < target) {
+                    d.setDate(d.getDate() + 1);
+                    var wd = d.getDay();
+                    if (wd !== 0 && wd !== 6) workdays++;
+                }
+            } else if (diff === 0) {
+                workdays = 0;
+            }
+            var urgent = (diff >= 0 && workdays <= 7);  // 워킹데이 7일 이내(오늘 포함) 빨강
             var dday = diff > 0 ? '입찰 ' + diff + '일전' : (diff === 0 ? '오늘' : '지남 ' + (-diff) + '일');
-            return { date: disp, dday: dday };
+            var weekday = ['일','월','화','수','목','금','토'][target.getDay()];
+            return { date: disp, dday: dday, weekday: weekday, urgent: urgent };
         }
 
         body.innerHTML = filtered.map(function (it) {
@@ -23647,10 +23665,13 @@ MJ 이정우 팀장
             var sakunCls = isMulti ? 'jm-sakun-multi' : 'jm-sakun';
             var sakunTip = isMulti ? ('속한 리스트:\n' + multiList) : (multiList || '');
 
-            // 사진 — 옥션원 CDN 은 CORS 헤더 안 줘서 crossorigin 사용 X. referrerpolicy 만.
-            var imgCell = it.img_url
-                ? '<img src="' + escAttr(it.img_url) + '" class="jm-thumb" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'">'
-                : '<span class="text-gray-300">-</span>';
+            // 사진 — 옥션원 이미지는 referer 제한 있어 images.weserv.nl 프록시 경유 (다른 PC/네트워크에서도 표시)
+            var imgCell = (function () {
+                if (!it.img_url) return '<span class="text-gray-300">-</span>';
+                var clean = String(it.img_url).replace(/^https?:\/\//, '');
+                var proxied = 'https://images.weserv.nl/?url=' + encodeURIComponent(clean);
+                return '<img src="' + escAttr(proxied) + '" class="jm-thumb" loading="lazy" onerror="this.onerror=null; this.src=' + JSON.stringify(it.img_url) + '">';
+            })();
 
             // 사건번호 + 물건종류 + [옥션원] / [조사내용] 버튼 (조사내용은 입찰물건 등록된 경우만)
             var auctionBtn = it.view_url
@@ -23671,11 +23692,14 @@ MJ 이정우 팀장
                             (it.prop_kind ? '<div class="jm-prop-kind">' + escHtml(it.prop_kind) + '</div>' : '') +
                             (auctionBtn || josaBtn ? '<div class="jm-cell-btns">' + auctionBtn + josaBtn + '</div>' : '');
 
-            // 매각기일 + 시간 + D-day (bid_time 의 1899-12-30 같은 prefix 자동 제거 — readAllJosaItems 에서 HH:mm 만)
+            // 매각기일 + 요일 + 시간 + D-day (워킹데이 7일 이내 빨강)
             var bd = bidDateDday(it.bid_date);
-            var bidCell = '<div>' + bd.date + '</div>' +
-                          (it.bid_time ? '<div class="jm-bid-time">(' + escHtml(it.bid_time) + ')</div>' : '') +
-                          (bd.dday ? '<div class="jm-bid-dday">' + bd.dday + '</div>' : '');
+            var urg = bd.urgent ? ' jm-bid-urgent' : '';
+            var bidCell = '<div class="' + (bd.urgent ? 'jm-bid-urgent' : '') + '">' + bd.date + '</div>' +
+                          (it.bid_time
+                              ? '<div class="jm-bid-time' + urg + '">' + (bd.weekday ? '<span class="jm-bid-weekday">(' + bd.weekday + ')</span>' : '') + escHtml(it.bid_time) + '</div>'
+                              : (bd.weekday ? '<div class="jm-bid-time' + urg + '"><span class="jm-bid-weekday">(' + bd.weekday + ')</span></div>' : '')) +
+                          (bd.dday ? '<div class="jm-bid-dday' + urg + '">' + bd.dday + '</div>' : '');
 
             // 소재지 (매니저 옥션원 스타일: 4줄 색상)
             var addrCell = '<div class="jm-addr">' + escHtml(it.address || '') + '</div>' +
@@ -23723,10 +23747,9 @@ MJ 이정우 팀장
 
             return '<tr class="jm-row">' +
                 '<td class="jm-td text-center"><input type="checkbox" class="jm-row-cb rounded" data-id="' + escAttr(it.josa_id) + '"></td>' +
-                '<td class="jm-td text-center">' + statusBtn + '</td>' +
+                '<td class="jm-td text-center">' + statusBtn + '<div class="jm-status-memo-wrap">' + memoCell + '</div></td>' +
                 '<td class="jm-td text-center">' + josajaCell + '</td>' +
                 '<td class="jm-td text-center">' + imgCell + '</td>' +
-                '<td class="jm-td text-center">' + memoCell + '</td>' +
                 '<td class="jm-td text-center">' + sakunCell + '</td>' +
                 '<td class="jm-td text-center">' + escHtml(it.court || '') + '</td>' +
                 '<td class="jm-td text-center">' + bidCell + '</td>' +
@@ -23824,8 +23847,9 @@ MJ 이정우 팀장
         var r = st.anchor.getBoundingClientRect();
         st.container.style.left = (r.left + window.scrollX) + 'px';
         st.container.style.top  = (r.bottom + window.scrollY + 2) + 'px';
-        st.container.style.minWidth = Math.max(110, r.width + 20) + 'px';
-        st.container.style.maxWidth = '180px';
+        st.container.style.width = r.width + 'px';
+        st.container.style.minWidth = '';
+        st.container.style.maxWidth = '';
         st.container.style.maxHeight = '240px';
     }
     function closeJmJosajaAc() {
@@ -23984,11 +24008,133 @@ MJ 이정우 팀장
         }
     }
 
-    // 검색 input Enter 키 → 조회
-    ['jm-search-sakun', 'jm-search-bid', 'jm-search-court', 'jm-search-addr', 'jm-search-prop', 'jm-search-special'].forEach(function (id) {
-        document.addEventListener('keydown', function (e) {
-            if (e.target && e.target.id === id && e.key === 'Enter') applyJosaFilters();
+    // ── 상태/조사자 다중선택 드롭다운 ────────────────────────────────
+    function toggleJmMulti(kind) {
+        var menu = document.getElementById('jm-filter-' + kind + '-menu');
+        if (!menu) return;
+        if (menu.classList.contains('hidden')) {
+            renderJmMultiMenu(kind);
+            menu.classList.remove('hidden');
+            setTimeout(function () {
+                document.addEventListener('mousedown', _jmMultiOutsideHandler, { once: true });
+            }, 0);
+        } else {
+            menu.classList.add('hidden');
+        }
+    }
+    function _jmMultiOutsideHandler(e) {
+        ['status', 'josaja'].forEach(function (k) {
+            var wrap = document.getElementById('jm-filter-' + k + '-menu');
+            if (wrap && !wrap.classList.contains('hidden')) {
+                var btn = document.getElementById('jm-filter-' + k + '-btn');
+                if (!wrap.contains(e.target) && e.target !== btn) wrap.classList.add('hidden');
+            }
         });
-    });
+    }
+    function renderJmMultiMenu(kind) {
+        var menu = document.getElementById('jm-filter-' + kind + '-menu');
+        var sel = (kind === 'status') ? JM_FILTER_STATUS : JM_FILTER_JOSAJA;
+        var options;
+        if (kind === 'status') {
+            options = ['분류필요', '조사요청', '조사접수', '조사확정', '조사불가', '폐기'];
+        } else {
+            options = (typeof smInvestigators !== 'undefined' && Array.isArray(smInvestigators))
+                ? smInvestigators.map(function (m) { return m.member_name; }).filter(Boolean)
+                : [];
+        }
+        var html = '<label><input type="checkbox" id="jm-multi-' + kind + '-all" ' + (sel.size === 0 ? 'checked' : '') + ' onchange="onJmMultiAllChange(\'' + kind + '\', this.checked)"> <strong>전체</strong></label>';
+        html += options.map(function (v) {
+            return '<label><input type="checkbox" value="' + escAttr(v) + '" ' + (sel.has(v) ? 'checked' : '') + ' onchange="onJmMultiItemChange(\'' + kind + '\', this.value, this.checked)"> ' + escHtml(v) + '</label>';
+        }).join('');
+        menu.innerHTML = html;
+    }
+    function onJmMultiAllChange(kind, checked) {
+        var sel = (kind === 'status') ? JM_FILTER_STATUS : JM_FILTER_JOSAJA;
+        if (checked) { sel.clear(); }
+        renderJmMultiMenu(kind);
+        updateJmMultiLabel(kind);
+        applyJosaFilters();
+    }
+    function onJmMultiItemChange(kind, value, checked) {
+        var sel = (kind === 'status') ? JM_FILTER_STATUS : JM_FILTER_JOSAJA;
+        if (checked) sel.add(value); else sel.delete(value);
+        renderJmMultiMenu(kind);
+        updateJmMultiLabel(kind);
+        applyJosaFilters();
+    }
+    function updateJmMultiLabel(kind) {
+        var btn = document.getElementById('jm-filter-' + kind + '-btn');
+        if (!btn) return;
+        var sel = (kind === 'status') ? JM_FILTER_STATUS : JM_FILTER_JOSAJA;
+        var allLabel = (kind === 'status') ? '상태 전체' : '조사자 전체';
+        if (sel.size === 0) { btn.textContent = allLabel; return; }
+        var arr = Array.from(sel);
+        btn.textContent = arr.length <= 2 ? arr.join(', ') : (arr[0] + ' 외 ' + (arr.length - 1));
+    }
+
+    // ── 주소/물건타입/특수물건 자동완성 (필드 값에서 unique 추출) ─────────────────
+    var JM_SUGGEST = { open: false, field: '', anchor: null, items: [], activeIndex: 0 };
+    function _jmSuggestMenuId(field) {
+        if (field === 'address') return 'jm-suggest-addr';
+        if (field === 'prop_kind') return 'jm-suggest-prop';
+        return 'jm-suggest-special';
+    }
+    function openJmSuggest(input, field) {
+        JM_SUGGEST.anchor = input; JM_SUGGEST.field = field; JM_SUGGEST.open = true;
+        var q = String(input.value || '').trim().toLowerCase();
+        var seen = {}, list = [];
+        (jmItems || []).forEach(function (it) {
+            var v = String(it[field] || '').trim();
+            if (!v) return;
+            // specials 는 콤마/슬래시 분리
+            var tokens = (field === 'specials' || field === 'address')
+                ? (field === 'specials' ? v.split(/[,/]/) : [v])
+                : [v];
+            tokens.forEach(function (t) {
+                t = t.trim(); if (!t) return;
+                if (q && t.toLowerCase().indexOf(q) === -1) return;
+                if (!seen[t]) { seen[t] = 1; list.push(t); }
+            });
+        });
+        JM_SUGGEST.items = list.slice(0, 30);
+        JM_SUGGEST.activeIndex = 0;
+        renderJmSuggest();
+    }
+    function renderJmSuggest() {
+        var menu = document.getElementById(_jmSuggestMenuId(JM_SUGGEST.field));
+        if (!menu) return;
+        if (!JM_SUGGEST.items.length) { menu.classList.add('hidden'); return; }
+        menu.innerHTML = JM_SUGGEST.items.map(function (t, i) {
+            var act = (i === JM_SUGGEST.activeIndex) ? ' active' : '';
+            return '<div class="jm-suggest-item' + act + '" data-idx="' + i + '" onmousedown="event.preventDefault(); selectJmSuggest(' + i + ')">' + escHtml(t) + '</div>';
+        }).join('');
+        menu.classList.remove('hidden');
+    }
+    function selectJmSuggest(idx) {
+        var v = JM_SUGGEST.items[idx] || '';
+        if (JM_SUGGEST.anchor) { JM_SUGGEST.anchor.value = v; }
+        closeJmSuggest();
+        applyJosaFilters();
+    }
+    function closeJmSuggest() {
+        JM_SUGGEST.open = false;
+        ['jm-suggest-addr', 'jm-suggest-prop', 'jm-suggest-special'].forEach(function (id) {
+            var el = document.getElementById(id); if (el) el.classList.add('hidden');
+        });
+    }
+    function onJmSuggestKeydown(e, input, field) {
+        if (!JM_SUGGEST.open || JM_SUGGEST.field !== field) return;
+        if (e.key === 'ArrowDown') {
+            JM_SUGGEST.activeIndex = Math.min(JM_SUGGEST.items.length - 1, JM_SUGGEST.activeIndex + 1);
+            renderJmSuggest(); e.preventDefault();
+        } else if (e.key === 'ArrowUp') {
+            JM_SUGGEST.activeIndex = Math.max(0, JM_SUGGEST.activeIndex - 1);
+            renderJmSuggest(); e.preventDefault();
+        } else if (e.key === 'Enter') {
+            if (JM_SUGGEST.items.length) { selectJmSuggest(JM_SUGGEST.activeIndex); e.preventDefault(); }
+        } else if (e.key === 'Escape') {
+            closeJmSuggest();
+        }
+    }
 
 </script>

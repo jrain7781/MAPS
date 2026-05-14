@@ -72,7 +72,13 @@
         /* 사건번호 색: 기본 검정, 중복 리스트일 때 빨강 */
         .jm-sakun { font-weight: 700; color: #1f2937; font-size: 13px; }
         .jm-sakun-multi { font-weight: 800; color: #b91c1c; font-size: 13px; background: #fef2f2; padding: 2px 4px; border-radius: 3px; display: inline-block; }
-        .jm-prop-kind { font-size: 12px; color: #374151; font-weight: 700; margin-top: 3px; }
+        .jm-prop-kind { font-size: 12px; color: #92400e; font-weight: 700; margin-top: 3px; }
+        /* 매각기일 — 7워킹데이 이내 빨강 강조 */
+        .jm-bid-urgent { color: #dc2626 !important; font-weight: 700; }
+        .jm-bid-weekday { color: #1f2937; font-weight: 600; margin-right: 2px; }
+        /* 상태 셀 안 메모 버튼 — 상태 버튼 아래로 stacking, 같은 폭 */
+        .jm-status-memo-wrap { margin-top: 5px; display: flex; justify-content: center; }
+        .jm-status-memo-wrap .jm-memo-btn { min-width: 70px; max-width: 90%; }
         /* 사건번호 셀 안 옥션원/조사내용 버튼 — 가로 길이 동일 */
         .jm-cell-btns { margin-top: 6px; display: flex; gap: 4px; justify-content: center; }
         .jm-cell-btn {
@@ -129,6 +135,16 @@
         #jm-josaja-ac .jm-josaja-ac-item { padding: 6px 10px; font-size: 12px; cursor: pointer; color: #1f2937; line-height: 1.3; }
         #jm-josaja-ac .jm-josaja-ac-item.jm-josaja-ac-active,
         #jm-josaja-ac .jm-josaja-ac-item:hover { background: #eef2ff; color: #3730a3; font-weight: 600; }
+        /* 필터바 다중선택 / 자동완성 드롭다운 */
+        .jm-multi-wrap { position: relative; display: inline-block; }
+        .jm-multi-btn  { border: 1px solid #d1d5db; border-radius: 4px; padding: 4px 8px; background: #fff; font-size: 12px; cursor: pointer; min-width: 90px; text-align: left; }
+        .jm-multi-btn:hover { border-color: #6366f1; }
+        .jm-multi-menu { position: absolute; top: 100%; left: 0; z-index: 200; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; min-width: 140px; max-height: 260px; overflow-y: auto; }
+        .jm-multi-menu label { display: flex; align-items: center; gap: 6px; padding: 4px 6px; font-size: 12px; cursor: pointer; border-radius: 4px; }
+        .jm-multi-menu label:hover { background: #f3f4f6; }
+        .jm-suggest-menu { position: absolute; top: 100%; left: 0; z-index: 200; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.12); min-width: 100%; max-height: 240px; overflow-y: auto; }
+        .jm-suggest-item { padding: 5px 10px; font-size: 12px; cursor: pointer; color: #1f2937; }
+        .jm-suggest-item:hover, .jm-suggest-item.active { background: #eef2ff; color: #3730a3; font-weight: 600; }
         /* 메모 버튼 — 등록되면 노란 배경 + 짧게 표시, 비어있으면 옅은 회색 + 메모 */
         .jm-memo-btn {
             display: inline-block; max-width: 100%; box-sizing: border-box;
@@ -1710,30 +1726,36 @@
 
                     <!-- 메인 영역 -->
                     <main class="flex-1 overflow-hidden flex flex-col min-w-0">
-                        <!-- 검색폼 -->
+                        <!-- 검색폼 — 입력 즉시 필터 (조회 버튼 없음) -->
                         <div class="border-b bg-white p-3 flex flex-wrap gap-2 items-center text-xs">
                             <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" id="jm-today-only" checked class="rounded" onchange="applyJosaFilters()"> 오늘 이후만</label>
                             <span class="text-gray-300">|</span>
-                            <input type="text" id="jm-search-sakun" placeholder="사건번호" class="border rounded px-2 py-1 w-28" onfocus="this.select()" onclick="this.select()">
-                            <input type="text" id="jm-search-bid"   placeholder="입찰일자(YYYY-MM-DD)" class="border rounded px-2 py-1 w-36" onfocus="this.select()" onclick="this.select()">
-                            <input type="text" id="jm-search-court" placeholder="법원" class="border rounded px-2 py-1 w-24" onfocus="this.select()" onclick="this.select()">
-                            <select id="jm-filter-status" class="border rounded px-2 py-1">
-                                <option value="">상태 전체</option>
-                                <option>분류필요</option>
-                                <option>조사요청</option>
-                                <option>조사접수</option>
-                                <option>조사확정</option>
-                                <option>조사불가</option>
-                                <option>폐기</option>
-                            </select>
-                            <select id="jm-filter-josaja" class="border rounded px-2 py-1">
-                                <option value="">조사자 전체</option>
-                            </select>
-                            <input type="text" id="jm-search-addr"    placeholder="주소" class="border rounded px-2 py-1 w-32" onfocus="this.select()" onclick="this.select()">
-                            <input type="text" id="jm-search-prop"    placeholder="물건타입" class="border rounded px-2 py-1 w-24" onfocus="this.select()" onclick="this.select()">
-                            <input type="text" id="jm-search-special" placeholder="특수물건" class="border rounded px-2 py-1 w-24" onfocus="this.select()" onclick="this.select()">
-                            <button type="button" onclick="applyJosaFilters()"
-                                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-bold">조회</button>
+                            <input type="text" id="jm-search-sakun" placeholder="사건번호" class="border rounded px-2 py-1 w-28" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
+                            <input type="text" id="jm-search-bid"   placeholder="0512" class="border rounded px-2 py-1 w-16" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
+                            <input type="text" id="jm-search-court" placeholder="법원" class="border rounded px-2 py-1 w-24" onfocus="this.select()" onclick="this.select()" oninput="applyJosaFilters()">
+                            <!-- 상태 다중선택 -->
+                            <div class="jm-multi-wrap">
+                                <button type="button" class="jm-multi-btn" id="jm-filter-status-btn" onclick="toggleJmMulti('status')">상태 전체</button>
+                                <div class="jm-multi-menu hidden" id="jm-filter-status-menu"></div>
+                            </div>
+                            <!-- 조사자 다중선택 -->
+                            <div class="jm-multi-wrap">
+                                <button type="button" class="jm-multi-btn" id="jm-filter-josaja-btn" onclick="toggleJmMulti('josaja')">조사자 전체</button>
+                                <div class="jm-multi-menu hidden" id="jm-filter-josaja-menu"></div>
+                            </div>
+                            <!-- 주소/물건타입/특수물건 자동완성 -->
+                            <div class="jm-multi-wrap">
+                                <input type="text" id="jm-search-addr" placeholder="주소" class="border rounded px-2 py-1 w-32" onfocus="this.select(); openJmSuggest(this, 'address')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'address')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'address')">
+                                <div class="jm-suggest-menu hidden" id="jm-suggest-addr"></div>
+                            </div>
+                            <div class="jm-multi-wrap">
+                                <input type="text" id="jm-search-prop" placeholder="물건타입" class="border rounded px-2 py-1 w-24" onfocus="this.select(); openJmSuggest(this, 'prop_kind')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'prop_kind')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'prop_kind')">
+                                <div class="jm-suggest-menu hidden" id="jm-suggest-prop"></div>
+                            </div>
+                            <div class="jm-multi-wrap">
+                                <input type="text" id="jm-search-special" placeholder="특수물건" class="border rounded px-2 py-1 w-24" onfocus="this.select(); openJmSuggest(this, 'specials')" onclick="this.select()" oninput="applyJosaFilters(); openJmSuggest(this, 'specials')" onblur="setTimeout(closeJmSuggest, 120)" onkeydown="onJmSuggestKeydown(event, this, 'specials')">
+                                <div class="jm-suggest-menu hidden" id="jm-suggest-special"></div>
+                            </div>
                             <button type="button" onclick="resetJosaFilters()"
                                 class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded">초기화</button>
                         </div>
@@ -1747,10 +1769,9 @@
                                 <thead class="bg-gray-100 sticky top-0 z-10">
                                     <tr>
                                         <th class="jm-th w-10"><input type="checkbox" id="jm-grid-all" class="rounded" onchange="onJmGridAllChange(this)"></th>
-                                        <th class="jm-th w-24 cursor-pointer" data-sort="josa_status">상태</th>
+                                        <th class="jm-th w-28 cursor-pointer" data-sort="josa_status">상태<br><span class="jm-th-sub">메모</span></th>
                                         <th class="jm-th w-16 cursor-pointer" data-sort="josaja">조사자</th>
                                         <th class="jm-th w-24">사진</th>
-                                        <th class="jm-th w-24 text-center">메모</th>
                                         <th class="jm-th w-36 cursor-pointer" data-sort="sakun_no">사건번호<br><span class="jm-th-sub">물건종류</span></th>
                                         <th class="jm-th w-16 cursor-pointer" data-sort="court">법원</th>
                                         <th class="jm-th w-28 cursor-pointer" data-sort="bid_date">매각기일<br><span class="jm-th-sub">(시간)</span></th>
@@ -1762,7 +1783,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="jm-grid-body">
-                                    <tr><td colspan="14" class="text-center text-gray-400 py-10">로딩 중...</td></tr>
+                                    <tr><td colspan="13" class="text-center text-gray-400 py-10">로딩 중...</td></tr>
                                 </tbody>
                             </table>
                         </div>
