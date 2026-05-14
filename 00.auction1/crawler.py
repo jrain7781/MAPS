@@ -9,7 +9,7 @@ crawler.py — 옥션원 크롤링 매니저 백엔드
 브라우저: http://localhost:8765
 """
 from __future__ import annotations
-import json, os, re, sys, time, traceback, threading
+import json, os, re, sys, time, traceback, threading, base64
 import urllib.request, urllib.error
 from http.server import HTTPServer, ThreadingHTTPServer, SimpleHTTPRequestHandler
 
@@ -36,6 +36,33 @@ GAS_WEBAPP_URL = (
     "AKfycby1SnLYJmPQ9PU0JlEZC5rG3e9y9s6wMVrsPeG_gqgDBnK9FMkyVPb3v5V0DFI14ETZiA"
     "/exec"
 )
+
+
+def _img_to_b64_data_uri(url: str, max_bytes: int = 35000) -> str:
+    """옥션원 CloudFront signed URL 을 Python 으로 즉시 다운로드 후 base64 data: URI 로 반환.
+    실패 시 원본 URL 반환 (옛 동작 호환). 35KB 초과 시도 원본 URL 반환 (셀 한도 보호).
+    크롤 시점은 URL 이 살아있는 시각이라 거의 항상 200 응답."""
+    if not url or not isinstance(url, str): return ""
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Referer": "https://www.auction1.co.kr/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=8.0) as resp:
+            if resp.status != 200:
+                return url
+            raw = resp.read()
+            if len(raw) > max_bytes:
+                return url  # 너무 커서 시트 셀 한도(50K char) 위험 → URL 유지 (24h 만료 위험 감수)
+            mime = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip() or "image/jpeg"
+            b64 = base64.b64encode(raw).decode("ascii")
+            return f"data:{mime};base64,{b64}"
+    except Exception as e:
+        # 만료/네트워크/타임아웃 → 원본 URL 유지 (MAPS 가 그래도 24h 동안은 표시 가능)
+        return url
 
 
 def _gas_post(payload: dict, timeout: float = 60.0) -> dict:
@@ -569,9 +596,10 @@ def parse_results(d, max_rows: int = 200):
                 if user_ssid: parts.append(f"user_ssid={user_ssid}")
                 parts.append("person_hide=0")
                 view_url = f"{A1_BASE}/auction/ca_view.php?" + "&".join(parts)
-            # 사진 url
+            # 사진 url — 옥션원 CloudFront signed URL 은 24h 만료 → 크롤 직후 즉시 다운로드 + base64 변환
             img_el = tds[1].find_elements(By.TAG_NAME, "img")
-            img_url = img_el[0].get_attribute("src") if img_el else ""
+            img_url_raw = img_el[0].get_attribute("src") if img_el else ""
+            img_url = _img_to_b64_data_uri(img_url_raw) if img_url_raw else ""
 
             def html_of(td):
                 try:
