@@ -15,6 +15,8 @@
   const LS_CACHE_PFX  = 'auction1_cache_';      // + presetId → {items, ts}
   const LS_UPLOAD_PFX = 'auction1_upload_ts_';   // + presetId → 마지막 MAPS 전송 timestamp(ms)
   const LS_LAST_PRESET = 'auction1_last_preset'; // 마지막 active preset id
+  const LS_PRESET_ORDER = 'auction1_preset_order_v1';      // [id1, id2, ...] 사용자 드래그 순서
+  const LS_TREE_COLLAPSED = 'auction1_tree_collapsed_v1';  // [path1, path2, ...] 접힌 폴더 경로
   const LS_SIDE_W = 'auction1_side_w';          // 사이드바 폭 (px)
 
   // 사이드바 폭 복원 + splitter 드래그 핸들러
@@ -261,7 +263,115 @@
   // 사이드바 체크박스 (preset id Set). 새로고침 시 초기화 (영구 저장 X).
   let selectedSyncIds = new Set();
 
-  // ── 사이드바 렌더 ───────────────────────────────────────
+  // ── 트리 구조 헬퍼 ─────────────────────────────────────
+  function _loadPresetOrder() {
+    try { return JSON.parse(localStorage.getItem(LS_PRESET_ORDER) || '[]'); } catch (_) { return []; }
+  }
+  function _savePresetOrder(arr) {
+    try { localStorage.setItem(LS_PRESET_ORDER, JSON.stringify(arr)); } catch (_) {}
+  }
+  function _loadCollapsed() {
+    try { return new Set(JSON.parse(localStorage.getItem(LS_TREE_COLLAPSED) || '[]')); } catch (_) { return new Set(); }
+  }
+  function _saveCollapsed(set) {
+    try { localStorage.setItem(LS_TREE_COLLAPSED, JSON.stringify(Array.from(set))); } catch (_) {}
+  }
+  // 저장된 사용자 순서 + 신규 preset 은 끝에 append
+  function _getOrderedPresets() {
+    const order = _loadPresetOrder();
+    const byId = new Map(presets.map(p => [p.id, p]));
+    const out = [];
+    order.forEach(id => { if (byId.has(id)) { out.push(byId.get(id)); byId.delete(id); } });
+    presets.forEach(p => { if (byId.has(p.id)) out.push(p); });
+    return out;
+  }
+  // 제목을 '-' 로 분할하여 트리 빌드 (각 path 노드: label, path, children Map, presets 배열)
+  function _buildPresetTree(ordered) {
+    const root = { label: '', path: '', children: new Map(), presets: [] };
+    ordered.forEach(p => {
+      const parts = String(p.title || '(제목없음)').split('-').map(s => s.trim()).filter(Boolean);
+      if (!parts.length) parts.push('(제목없음)');
+      let node = root, path = '';
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        path = path ? (path + '/' + part) : part;
+        if (!node.children.has(part)) node.children.set(part, { label: part, path: path, children: new Map(), presets: [] });
+        node = node.children.get(part);
+        if (i === parts.length - 1) node.presets.push(p);
+      }
+    });
+    return root;
+  }
+  function _countSubtreePresets(node) {
+    let n = node.presets.length;
+    node.children.forEach(c => { n += _countSubtreePresets(c); });
+    return n;
+  }
+  function _renderLeafLi(p, depth) {
+    const active = p.id === currentPresetId ? ' active' : '';
+    const checked = selectedSyncIds.has(p.id) ? ' checked' : '';
+    let countInline = '', lastCrawl = '';
+    try {
+      const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
+      if (raw) {
+        const cache = JSON.parse(raw);
+        const items = cache.items || [];
+        const rawN = items.length;
+        let filteredN = rawN;
+        try {
+          const filtersToUse = (p.id === currentPresetId) ? custRows : (p.customFilters || []);
+          const { items: filt } = applyCustomFilters(items, filtersToUse);
+          filteredN = filt.length;
+        } catch (_) {}
+        countInline = `<span class="it-count">(<span class="cnt-filtered">${filteredN}</span>/<span class="cnt-total">${rawN}</span>)</span>`;
+        if (cache.ts) lastCrawl = new Date(cache.ts).toLocaleString('ko-KR', { hour12: false });
+      }
+    } catch (_) {}
+    const subText = lastCrawl ? `최근 크롤링: ${lastCrawl}` : '아직 크롤링하지 않음';
+    let lastUpload = '';
+    try {
+      const ts = parseInt(localStorage.getItem(LS_UPLOAD_PFX + p.id) || '0', 10);
+      if (ts) lastUpload = new Date(ts).toLocaleString('ko-KR', { hour12: false });
+    } catch (_) {}
+    const uploadLine = lastUpload ? `<div class="it-sub it-upload" title="MAPS 마지막 전송 시각">최근 전송: ${lastUpload}</div>` : '';
+    // leaf 라벨 = 제목의 마지막 hyphen 부분만 (간결)
+    const parts = String(p.title || '').split('-').map(s => s.trim()).filter(Boolean);
+    const leafLabel = parts.length ? parts[parts.length - 1] : (p.title || '(제목없음)');
+    return `<li class="snb_item${active}" data-id="${p.id}" draggable="true" style="padding-left:${depth * 14 + 4}px">
+      <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
+      <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
+      <div class="it-body">
+        <div class="it-title"><span class="it-icon">📋</span><span class="it-name" title="${escHtml(p.title || '')}">${escHtml(leafLabel)}</span>${countInline}</div>
+        <div class="it-sub">${subText}</div>
+        ${uploadLine}
+      </div>
+    </li>`;
+  }
+  function _renderTreeChildren(node, depth, collapsed) {
+    let html = '';
+    node.children.forEach(child => {
+      const isSimpleLeaf = (child.children.size === 0 && child.presets.length === 1);
+      if (isSimpleLeaf) {
+        html += _renderLeafLi(child.presets[0], depth);
+      } else {
+        const isCollapsed = collapsed.has(child.path);
+        const cnt = _countSubtreePresets(child);
+        html += `<li class="snb_branch" data-path="${escHtml(child.path)}" style="padding-left:${depth * 14 + 4}px">
+          <span class="b-toggle">${isCollapsed ? '▶' : '▼'}</span>
+          <span class="b-label">📁 ${escHtml(child.label)}</span>
+          <span class="b-count">(${cnt})</span>
+        </li>`;
+        if (!isCollapsed) {
+          // 같은 path 에 직접 속한 preset (예: '허그포기' 만 있는 경우 + '허그포기-빌라' 같이 존재 시)
+          child.presets.forEach(p => { html += _renderLeafLi(p, depth + 1); });
+          html += _renderTreeChildren(child, depth + 1, collapsed);
+        }
+      }
+    });
+    return html;
+  }
+
+  // ── 사이드바 렌더 (트리 + 드래그 순서 저장) ─────────────────
   function renderSidebar() {
     const list  = document.getElementById('sideList');
     const empty = document.getElementById('sideEmpty');
@@ -272,59 +382,35 @@
       return;
     }
     if (empty) empty.style.display = 'none';
-    // 최근 크롤링 시각 기준 정렬 (캐시 ts 우선, 없으면 preset.updatedAt 으로 폴백)
-    const lastTs = p => {
-      try {
-        const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
-        if (raw) { const c = JSON.parse(raw); if (c && c.ts) return c.ts; }
-      } catch (_) {}
-      return p.updatedAt || 0;
-    };
-    const sorted = presets.slice().sort((a, b) => lastTs(b) - lastTs(a));
-    list.innerHTML = sorted.map(p => {
-      const active = p.id === currentPresetId ? ' active' : '';
-      const checked = selectedSyncIds.has(p.id) ? ' checked' : '';
-      // 캐시 결과 — 제목 옆 (필터링/전체) + 서브라인 = 마지막 크롤링 시각
-      let countInline = '';
-      let lastCrawl = '';
-      try {
-        const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
-        if (raw) {
-          const cache = JSON.parse(raw);
-          const items = cache.items || [];
-          const rawN = items.length;
-          let filteredN = rawN;
-          try {
-            const filtersToUse = (p.id === currentPresetId) ? custRows : (p.customFilters || []);
-            const { items: filt } = applyCustomFilters(items, filtersToUse);
-            filteredN = filt.length;
-          } catch (_) {}
-          countInline = `<span class="it-count">(<span class="cnt-filtered">${filteredN}</span>/<span class="cnt-total">${rawN}</span>)</span>`;
-          if (cache.ts) lastCrawl = new Date(cache.ts).toLocaleString('ko-KR', { hour12: false });
-        }
-      } catch (e) {}
-      const subText = lastCrawl ? `최근 크롤링: ${lastCrawl}` : '아직 크롤링하지 않음';
-      // 최근 MAPS 전송 시간 (LS_UPLOAD_PFX)
-      let lastUpload = '';
-      try {
-        const ts = parseInt(localStorage.getItem(LS_UPLOAD_PFX + p.id) || '0', 10);
-        if (ts) lastUpload = new Date(ts).toLocaleString('ko-KR', { hour12: false });
-      } catch (_) {}
-      const uploadLine = lastUpload ? `<div class="it-sub it-upload" title="MAPS 마지막 전송 시각">최근 전송: ${lastUpload}</div>` : '';
-      return `<li class="snb_item${active}" data-id="${p.id}">
-        <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
-        <div class="it-body">
-          <div class="it-title"><span class="it-icon">📋</span><span class="it-name">${escHtml(p.title || '(제목 없음)')}</span>${countInline}</div>
-          <div class="it-sub">${subText}</div>
-          ${uploadLine}
-        </div>
-      </li>`;
-    }).join('');
+    const ordered = _getOrderedPresets();
+    const tree = _buildPresetTree(ordered);
+    const collapsed = _loadCollapsed();
+    list.innerHTML = _renderTreeChildren(tree, 0, collapsed);
+    // leaf 클릭 / 체크박스
     list.querySelectorAll('.snb_item').forEach(el => {
       el.addEventListener('click', (e) => {
-        // 체크박스 클릭은 별도 처리, li 자체 클릭만 loadPreset
-        if (e.target && e.target.classList && e.target.classList.contains('ms-row-chk')) return;
+        if (e.target && e.target.classList && (e.target.classList.contains('ms-row-chk') || e.target.classList.contains('drag-handle'))) return;
         loadPreset(el.dataset.id);
+      });
+      // 드래그 핸들러
+      el.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', el.dataset.id);
+        e.dataTransfer.effectAllowed = 'move';
+        el.classList.add('dragging');
+      });
+      el.addEventListener('dragend', () => el.classList.remove('dragging'));
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        el.classList.add('drag-over');
+      });
+      el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        el.classList.remove('drag-over');
+        const draggedId = e.dataTransfer.getData('text/plain');
+        if (!draggedId || draggedId === el.dataset.id) return;
+        _reorderPresetById(draggedId, el.dataset.id);
       });
     });
     list.querySelectorAll('.ms-row-chk').forEach(chk => {
@@ -335,7 +421,28 @@
         syncCheckAllState();
       });
     });
+    // 폴더 접기/펴기
+    list.querySelectorAll('.snb_branch').forEach(b => {
+      b.addEventListener('click', () => {
+        const c = _loadCollapsed();
+        const path = b.dataset.path;
+        if (c.has(path)) c.delete(path); else c.add(path);
+        _saveCollapsed(c);
+        renderSidebar();
+      });
+    });
     syncCheckAllState();
+  }
+  function _reorderPresetById(draggedId, targetId) {
+    let order = _loadPresetOrder();
+    // 모든 현재 preset 이 order 에 포함되도록 보강
+    presets.forEach(p => { if (!order.includes(p.id)) order.push(p.id); });
+    order = order.filter(id => id !== draggedId);
+    const targetIdx = order.indexOf(targetId);
+    if (targetIdx < 0) order.push(draggedId);
+    else order.splice(targetIdx, 0, draggedId);
+    _savePresetOrder(order);
+    renderSidebar();
   }
 
   // 상단 [전체] 체크박스 상태 동기화 (선택 수 ↔ 전체 체크 일치)
