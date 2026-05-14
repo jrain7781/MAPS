@@ -7783,6 +7783,44 @@ function deleteJosaPreset(presetId) {
 }
 
 /**
+ * 진단 — 첫 http img_url 1개를 GAS UrlFetchApp 으로 직접 받아 응답 코드 + 크기 보고
+ * (사진 안 변환되는 원인이 fetch 차단인지 / 크기 초과인지 가르는 용)
+ */
+function testFirstJosaImgFetch() {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+    var data = sheet.getDataRange().getValues();
+    if (data.length < 2) return { error: 'no rows' };
+    var imgIdx = data[0].indexOf('img_url');
+    for (var i = 1; i < Math.min(20, data.length); i++) {
+      var u = String(data[i][imgIdx] || '');
+      if (u && u.indexOf('http') === 0) {
+        try {
+          var resp = UrlFetchApp.fetch(u, {
+            headers: { 'Referer': 'https://www.auction1.co.kr/', 'User-Agent': 'Mozilla/5.0' },
+            muteHttpExceptions: true,
+            followRedirects: true
+          });
+          var blob = resp.getBlob();
+          var bytes = blob.getBytes();
+          return {
+            row: i + 1,
+            url_prefix: u.substring(0, 120),
+            response_code: resp.getResponseCode(),
+            content_type: blob.getContentType(),
+            size_bytes: bytes.length,
+            would_b64_fit: bytes.length <= 35000 ? 'YES — 변환됨' : 'NO — 35KB 초과 skip'
+          };
+        } catch (e) {
+          return { row: i + 1, url_prefix: u.substring(0, 120), fetch_error: String(e) };
+        }
+      }
+    }
+    return { error: 'http URL 없음 — 모두 data: 거나 빈값' };
+  } catch (e) { return { error: String(e) }; }
+}
+
+/**
  * 진단 — josa_items 첫 10행의 img_url 샘플 반환 (사진 안 나올 때 시트 실제 내용 확인용)
  */
 function diagJosaImgUrls() {
