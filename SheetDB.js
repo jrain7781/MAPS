@@ -7718,6 +7718,34 @@ function handleJosaApiPost_(payload) {
 }
 
 /**
+ * 리스트(preset) 1건 삭제 — josa_presets 시트에서 행 제거.
+ * josa_items 의 preset_ids 컬럼은 그대로 둠 (orphan 참조는 화면에서 fallback 표시).
+ */
+function deleteJosaPreset(presetId) {
+  try {
+    var id = String(presetId || '').trim();
+    if (!id) return { success: false, message: 'preset_id 필요' };
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_JOSA_PRESETS_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'josa_presets 시트 없음' };
+    var data = sheet.getDataRange().getValues();
+    if (data.length < 2) return { success: false, message: '빈 시트' };
+    var headers = data[0];
+    var idIdx = headers.indexOf('preset_id');
+    if (idIdx < 0) return { success: false, message: 'preset_id 컬럼 없음' };
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][idIdx]) === id) {
+        sheet.deleteRow(i + 1);
+        return { success: true, preset_id: id };
+      }
+    }
+    return { success: false, message: '해당 preset_id 없음: ' + id };
+  } catch (err) {
+    Logger.log('[deleteJosaPreset] err: ' + err);
+    return { success: false, message: String(err) };
+  }
+}
+
+/**
  * 옥션원 이미지 프록시 — img_url 을 Referer:auction1 헤더와 함께 fetch,
  * Drive 공유 폴더에 업로드 후 공개 URL 을 josa_items.img_url 에 캐시.
  * Drive thumbnail URL 은 모든 PC/네트워크에서 img src 로 로드 가능.

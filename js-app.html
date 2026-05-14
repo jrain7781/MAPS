@@ -23496,13 +23496,14 @@ MJ 이정우 팀장
         var html = jmPresets.map(function (p) {
             var checked = jmSelectedPresetIds.has(p.preset_id) ? 'checked' : '';
             var deleted = (p.is_active === 'N') || p.deleted_in_manager_at;
-            var labelCls = 'flex items-center gap-1 cursor-pointer ' + (deleted ? 'text-red-600' : 'text-gray-700');
+            var labelCls = 'flex items-center gap-1 cursor-pointer group ' + (deleted ? 'text-red-600' : 'text-gray-700');
             var badge = deleted ? '<span class="text-[10px] bg-red-100 text-red-700 px-1 rounded">삭제됨</span>' : '';
-            var cnt = '<span class="text-[10px] text-gray-400 ml-auto">(' + (p.items_count || '0') + ')</span>';
+            var cnt = '<span class="text-[10px] text-gray-400">(' + (p.items_count || '0') + ')</span>';
+            var delBtn = '<button type="button" onclick="onJmDeletePreset(\'' + escAttr(p.preset_id) + '\', event)" class="text-gray-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition px-1" title="이 리스트 삭제">✕</button>';
             return '<li><label class="' + labelCls + '">' +
                    '<input type="checkbox" class="jm-tree-cb rounded" data-id="' + escAttr(p.preset_id) + '" ' + checked + '>' +
                    '<span class="truncate flex-1" title="' + escAttr(p.preset_title || '') + '">' + escHtml(p.preset_title || '(제목없음)') + '</span>' +
-                   badge + cnt +
+                   badge + cnt + delBtn +
                    '</label></li>';
         }).join('');
         list.innerHTML = html || '<li class="text-gray-400 text-xs">크롤링리스트 없음</li>';
@@ -23515,6 +23516,39 @@ MJ 이정우 팀장
             });
         });
         syncJmTreeAllState();
+    }
+
+    // ── 리스트(preset) 삭제 — josa_presets 시트에서 제거. josa_items 의 preset_ids 는 유지 ──
+    function onJmDeletePreset(presetId, ev) {
+        if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+        var p = jmPresets.find(function (x) { return x.preset_id === presetId; });
+        if (!p) return;
+        if (!confirm('리스트 "' + (p.preset_title || presetId) + '" 를 삭제할까요?\n\n· josa_presets 시트에서 행 제거\n· josa_items 행 자체는 유지 (preset_ids 에 orphan 참조 가능)\n· 옥션원 매니저에서 [리스트 동기화] 누르면 다시 등록됨')) return;
+        if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+        google.script.run
+            .withSuccessHandler(function (resp) {
+                if (resp && resp.success) {
+                    if (typeof showStatus === 'function') showStatus('리스트 삭제됨', 'success');
+                    // 트리/그리드 동시 갱신을 위해 jmLoadAllData 재호출
+                    if (typeof jmLoadAllData === 'function' && google.script.run.jmLoadAllData) {
+                        google.script.run
+                            .withSuccessHandler(function (d) {
+                                if (d && d.success !== false) {
+                                    jmPresets = d.presets || [];
+                                    jmItems = d.items || [];
+                                    jmSelectedPresetIds = new Set(jmPresets.map(function (x) { return x.preset_id; }).filter(Boolean));
+                                    renderJosaTree();
+                                    applyJosaFilters();
+                                }
+                            })
+                            .jmLoadAllData();
+                    }
+                } else {
+                    alert('삭제 실패: ' + (resp && resp.message || '?'));
+                }
+            })
+            .withFailureHandler(function (err) { alert('삭제 호출 실패: ' + (err && err.message ? err.message : err)); })
+            .deleteJosaPreset(presetId);
     }
 
     function syncJmTreeAllState() {
