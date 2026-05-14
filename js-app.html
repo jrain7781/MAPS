@@ -11671,6 +11671,13 @@ MJ 이정우 팀장
             addMy('name1_gubun', 'name1');
             addMy('name2_gubun', 'name2');
             addMy('name3_gubun', 'name3');
+            addMy('name4_gubun', 'name4');
+            addMy('name5_gubun', 'name5');
+            addMy('name6_gubun', 'name6');
+            addMy('name7_gubun', 'name7');
+            addMy('name8_gubun', 'name8');
+            addMy('name9_gubun', 'name9');
+            addMy('name10_gubun', 'name10');
             // 완전일치 외 나머지(이름이 더 긴 후보)도 아래에 추가
             matches.filter(x => x.name.toLowerCase() !== q).forEach(x => {
                 list.push({
@@ -11925,22 +11932,15 @@ MJ 이정우 팀장
             // 본인 이름 추가
             options.push(`<option value="${String(name).trim()}">${String(name).trim()}</option>`);
 
-            // 명의1 추가
-            if (m.name1 && String(m.name1).trim()) {
-                const myungui1 = `${String(m.name1).trim()}`;
-                options.push(`<option value="${myungui1}">└ 명의1: ${m.name1_gubun || ''} - ${myungui1}</option>`);
-            }
-
-            // 명의2 추가
-            if (m.name2 && String(m.name2).trim()) {
-                const myungui2 = `${String(m.name2).trim()}`;
-                options.push(`<option value="${myungui2}">└ 명의2: ${m.name2_gubun || ''} - ${myungui2}</option>`);
-            }
-
-            // 명의3 추가
-            if (m.name3 && String(m.name3).trim()) {
-                const myungui3 = `${String(m.name3).trim()}`;
-                options.push(`<option value="${myungui3}">└ 명의3: ${m.name3_gubun || ''} - ${myungui3}</option>`);
+            // 명의1~10 추가
+            for (let i = 1; i <= 10; i++) {
+                const valKey = 'name' + i;
+                const gbKey  = 'name' + i + '_gubun';
+                const v = m[valKey];
+                if (v && String(v).trim()) {
+                    const myungui = String(v).trim();
+                    options.push(`<option value="${myungui}">└ 명의${i}: ${m[gbKey] || ''} - ${myungui}</option>`);
+                }
             }
         });
 
@@ -12033,14 +12033,12 @@ MJ 이정우 팀장
             // 명의 정보 표시 (박스 오른쪽)
             if (displayMemberMyungui) {
                 const myunguiList = [];
-                if (member.name1 && String(member.name1).trim()) {
-                    myunguiList.push(`${member.name1_gubun || ''}-${member.name1}`);
-                }
-                if (member.name2 && String(member.name2).trim()) {
-                    myunguiList.push(`${member.name2_gubun || ''}-${member.name2}`);
-                }
-                if (member.name3 && String(member.name3).trim()) {
-                    myunguiList.push(`${member.name3_gubun || ''}-${member.name3}`);
+                for (let i = 1; i <= 10; i++) {
+                    const v  = member['name' + i];
+                    const gb = member['name' + i + '_gubun'];
+                    if (v && String(v).trim()) {
+                        myunguiList.push(`${gb || ''}-${v}`);
+                    }
                 }
 
                 if (myunguiList.length > 0) {
@@ -13069,7 +13067,7 @@ MJ 이정우 팀장
             btnBack.classList.remove('content-hidden');
 
             // 폼 필드 채우기
-            ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'member_token', 'telegram_chat_id', 'telegram_username', 'telegram_enabled', 'kaib_date', 'kakao_name', 'teacher_nickname'].forEach(key => {
+            ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'name4_gubun', 'name4', 'name5_gubun', 'name5', 'name6_gubun', 'name6', 'name7_gubun', 'name7', 'name8_gubun', 'name8', 'name9_gubun', 'name9', 'name10_gubun', 'name10', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'member_token', 'telegram_chat_id', 'telegram_username', 'telegram_enabled', 'kaib_date', 'kakao_name', 'teacher_nickname'].forEach(key => {
                 const el = document.getElementById('mem-' + key);
                 if (el) el.value = member[key] || '';
             });
@@ -13104,7 +13102,7 @@ MJ 이정우 팀장
         const isEdit = !!memberId;
 
         const data = {};
-        ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'telegram_enabled', 'kaib_date', 'kakao_name', 'teacher_nickname', 'teacher_color'].forEach(key => {
+        ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'name4_gubun', 'name4', 'name5_gubun', 'name5', 'name6_gubun', 'name6', 'name7_gubun', 'name7', 'name8_gubun', 'name8', 'name9_gubun', 'name9', 'name10_gubun', 'name10', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'telegram_enabled', 'kaib_date', 'kakao_name', 'teacher_nickname', 'teacher_color'].forEach(key => {
             data[key] = document.getElementById('mem-' + key)?.value || '';
         });
         // 강사 아닌 회원은 닉네임/색상 저장 안 함 (실수 방지)
@@ -19785,26 +19783,16 @@ ${token}
             if (m.member_name) {
                 let hasMyungui = false;
 
-                // 명의 1
-                if (m.name1) {
-                    hasMyungui = true;
-                    const opt1 = document.createElement('option');
-                    opt1.value = `${m.member_name} (${m.name1_gubun || ''}) ${m.name1}`;
-                    datalist.appendChild(opt1);
-                }
-                // 명의 2
-                if (m.name2) {
-                    hasMyungui = true;
-                    const opt2 = document.createElement('option');
-                    opt2.value = `${m.member_name} (${m.name2_gubun || ''}) ${m.name2}`;
-                    datalist.appendChild(opt2);
-                }
-                // 명의 3
-                if (m.name3) {
-                    hasMyungui = true;
-                    const opt3 = document.createElement('option');
-                    opt3.value = `${m.member_name} (${m.name3_gubun || ''}) ${m.name3}`;
-                    datalist.appendChild(opt3);
+                // 명의 1~10
+                for (let i = 1; i <= 10; i++) {
+                    const v  = m['name' + i];
+                    const gb = m['name' + i + '_gubun'];
+                    if (v) {
+                        hasMyungui = true;
+                        const opt = document.createElement('option');
+                        opt.value = `${m.member_name} (${gb || ''}) ${v}`;
+                        datalist.appendChild(opt);
+                    }
                 }
 
                 // 명의가 하나도 없으면 기본 이름만 표시
@@ -19852,11 +19840,12 @@ ${token}
                 const candidates = memberList.filter(m => m.member_name === namePart);
 
                 member = candidates.find(m => {
-                    const myunguis = [
-                        m.name1 ? `(${m.name1_gubun || ''}) ${m.name1}` : null,
-                        m.name2 ? `(${m.name2_gubun || ''}) ${m.name2}` : null,
-                        m.name3 ? `(${m.name3_gubun || ''}) ${m.name3}` : null
-                    ];
+                    const myunguis = [];
+                    for (let i = 1; i <= 10; i++) {
+                        const v  = m['name' + i];
+                        const gb = m['name' + i + '_gubun'];
+                        if (v) myunguis.push(`(${gb || ''}) ${v}`);
+                    }
                     return myunguis.some(suffix => suffix && `${m.member_name} ${suffix}` === value);
                 });
             }

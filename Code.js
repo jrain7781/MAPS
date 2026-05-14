@@ -63,7 +63,14 @@ const MEMBER_HEADERS = [
   'reg_id',
   'kakao_name',
   'teacher_nickname',  // AB열: 강사 닉네임 (gubun에 '강사' 포함 시에만 의미)
-  'teacher_color'      // AC열: 강사 이름 글자색 (#RRGGBB)
+  'teacher_color',     // AC열: 강사 이름 글자색 (#RRGGBB)
+  'name4_gubun', 'name4',   // AD~AE
+  'name5_gubun', 'name5',   // AF~AG
+  'name6_gubun', 'name6',   // AH~AI
+  'name7_gubun', 'name7',   // AJ~AK
+  'name8_gubun', 'name8',   // AL~AM
+  'name9_gubun', 'name9',   // AN~AO
+  'name10_gubun', 'name10'  // AP~AQ
 ];
 
 // --- 수업(class) 시트 헤더 ---
