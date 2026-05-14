@@ -24151,17 +24151,25 @@ MJ 이정우 팀장
         imgEl.onerror = null;
         if (typeof google === 'undefined' || !google.script || !google.script.run) { imgEl.style.display = 'none'; return; }
         google.script.run
-            .withSuccessHandler(function (dataUri) {
-                if (dataUri && String(dataUri).indexOf('data:') === 0) {
-                    imgEl.src = dataUri;
-                    // 메모리 캐시도 갱신
+            .withSuccessHandler(function (resp) {
+                // GAS 가 data: URI 또는 http(s):// (Drive thumbnail URL) 반환. 둘 다 valid.
+                var u = String(resp || '').trim();
+                console.log('[jmRetryImg] josa_id=' + josaId + ' returned=' + u.substring(0, 120));
+                if (u && (u.indexOf('data:') === 0 || u.indexOf('http') === 0)) {
+                    imgEl.src = u;
+                    imgEl.style.display = '';
+                    // 메모리 캐시 갱신
                     var it = jmItems.find(function (x) { return x.josa_id === josaId; });
-                    if (it) it.img_url = dataUri;
+                    if (it) it.img_url = u;
                 } else {
+                    console.warn('[jmRetryImg] empty/invalid response for ' + josaId);
                     imgEl.style.display = 'none';
                 }
             })
-            .withFailureHandler(function () { imgEl.style.display = 'none'; })
+            .withFailureHandler(function (err) {
+                console.error('[jmRetryImg] GAS failed for ' + josaId, err);
+                imgEl.style.display = 'none';
+            })
             .fetchJosaImage(josaId);
     }
 
