@@ -307,6 +307,17 @@
     node.children.forEach(c => { n += _countSubtreePresets(c); });
     return n;
   }
+  function _collectSubtreeIds(node) {
+    const ids = node.presets.map(p => p.id);
+    node.children.forEach(c => { ids.push(..._collectSubtreeIds(c)); });
+    return ids;
+  }
+  function _branchCheckState(ids) {
+    if (!ids.length) return 'none';
+    let n = 0;
+    ids.forEach(id => { if (selectedSyncIds.has(id)) n++; });
+    return n === 0 ? 'none' : (n === ids.length ? 'all' : 'some');
+  }
   function _renderLeafLi(p, depth) {
     const active = p.id === currentPresetId ? ' active' : '';
     const checked = selectedSyncIds.has(p.id) ? ' checked' : '';
@@ -356,19 +367,47 @@
       } else {
         const isCollapsed = collapsed.has(child.path);
         const cnt = _countSubtreePresets(child);
-        html += `<li class="snb_branch" data-path="${escHtml(child.path)}" style="padding-left:${depth * 14 + 4}px">
+        const ids = _collectSubtreeIds(child);
+        const cs = _branchCheckState(ids);
+        const checkedAttr = cs === 'all' ? 'checked' : '';
+        html += `<li class="snb_branch" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" style="padding-left:${depth * 14 + 4}px">
           <span class="b-toggle">${isCollapsed ? '▶' : '▼'}</span>
-          <span class="b-label">📁 ${escHtml(child.label)}</span>
+          <input type="checkbox" class="b-check" ${checkedAttr} title="이 그룹 전체 선택/해제">
+          <span class="b-label">${escHtml(child.label)}</span>
           <span class="b-count">(${cnt})</span>
         </li>`;
         if (!isCollapsed) {
-          // 같은 path 에 직접 속한 preset (예: '허그포기' 만 있는 경우 + '허그포기-빌라' 같이 존재 시)
           child.presets.forEach(p => { html += _renderLeafLi(p, depth + 1); });
           html += _renderTreeChildren(child, depth + 1, collapsed);
         }
       }
     });
     return html;
+  }
+
+  // 최상단 그룹별 카드 렌더 (각 카드 = root 의 직속 자식 하나)
+  function _renderTopCard(top, collapsed) {
+    const ids = _collectSubtreeIds(top);
+    const cs = _branchCheckState(ids);
+    const checkedAttr = cs === 'all' ? 'checked' : '';
+    const cnt = _countSubtreePresets(top);
+    const isCollapsed = collapsed.has(top.path);
+    // body = top.presets (이 path 에 직접 매칭되는 preset) + children 재귀
+    let body = '';
+    if (!isCollapsed) {
+      top.presets.forEach(p => { body += _renderLeafLi(p, 1); });
+      body += _renderTreeChildren(top, 1, collapsed);
+    }
+    return `<li class="snb_card" data-path="${escHtml(top.path)}">
+      <div class="card-head" data-path="${escHtml(top.path)}" data-ids="${ids.join(',')}">
+        <span class="card-toggle">${isCollapsed ? '▶' : '▼'}</span>
+        <input type="checkbox" class="card-check" ${checkedAttr} title="이 카드 전체 선택/해제">
+        <span class="card-icon">📁</span>
+        <span class="card-title">${escHtml(top.label)}</span>
+        <span class="card-count">(${cnt})</span>
+      </div>
+      <ul class="card-body${isCollapsed ? ' collapsed' : ''}">${body}</ul>
+    </li>`;
   }
 
   // ── 사이드바 렌더 (트리 + 드래그 순서 저장) ─────────────────
@@ -385,7 +424,10 @@
     const ordered = _getOrderedPresets();
     const tree = _buildPresetTree(ordered);
     const collapsed = _loadCollapsed();
-    list.innerHTML = _renderTreeChildren(tree, 0, collapsed);
+    // 최상단 그룹별 카드 렌더 (root.children 의 각 직속 자식 = 1 카드)
+    let html = '';
+    tree.children.forEach(top => { html += _renderTopCard(top, collapsed); });
+    list.innerHTML = html;
     // leaf 클릭 / 체크박스
     list.querySelectorAll('.snb_item').forEach(el => {
       el.addEventListener('click', (e) => {
@@ -421,15 +463,62 @@
         syncCheckAllState();
       });
     });
-    // 폴더 접기/펴기
+    // 폴더 접기/펴기 (브랜치) — 체크박스 클릭은 stopPropagation
     list.querySelectorAll('.snb_branch').forEach(b => {
-      b.addEventListener('click', () => {
+      b.addEventListener('click', (e) => {
+        if (e.target && e.target.classList && e.target.classList.contains('b-check')) return;
         const c = _loadCollapsed();
         const path = b.dataset.path;
         if (c.has(path)) c.delete(path); else c.add(path);
         _saveCollapsed(c);
         renderSidebar();
       });
+    });
+    // 브랜치 체크박스 — 하위 모든 preset 토글
+    list.querySelectorAll('.b-check').forEach(cb => {
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', (e) => {
+        const li = cb.closest('.snb_branch');
+        const ids = String(li?.dataset.ids || '').split(',').filter(Boolean);
+        if (cb.checked) ids.forEach(id => selectedSyncIds.add(id));
+        else ids.forEach(id => selectedSyncIds.delete(id));
+        renderSidebar();
+      });
+    });
+    // 카드 헤더 클릭 (체크박스 제외) → 카드 접기/펴기
+    list.querySelectorAll('.card-head').forEach(h => {
+      h.addEventListener('click', (e) => {
+        if (e.target && e.target.classList && e.target.classList.contains('card-check')) return;
+        const c = _loadCollapsed();
+        const path = h.dataset.path;
+        if (c.has(path)) c.delete(path); else c.add(path);
+        _saveCollapsed(c);
+        renderSidebar();
+      });
+    });
+    // 카드 체크박스 — 카드 전체 하위 토글
+    list.querySelectorAll('.card-check').forEach(cb => {
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', (e) => {
+        const head = cb.closest('.card-head');
+        const ids = String(head?.dataset.ids || '').split(',').filter(Boolean);
+        if (cb.checked) ids.forEach(id => selectedSyncIds.add(id));
+        else ids.forEach(id => selectedSyncIds.delete(id));
+        renderSidebar();
+      });
+    });
+    // 브랜치 체크박스 indeterminate (부분 선택) 상태 설정
+    list.querySelectorAll('.snb_branch').forEach(b => {
+      const cb = b.querySelector('.b-check');
+      const ids = String(b.dataset.ids || '').split(',').filter(Boolean);
+      const st = _branchCheckState(ids);
+      if (cb) cb.indeterminate = (st === 'some');
+    });
+    list.querySelectorAll('.card-head').forEach(h => {
+      const cb = h.querySelector('.card-check');
+      const ids = String(h.dataset.ids || '').split(',').filter(Boolean);
+      const st = _branchCheckState(ids);
+      if (cb) cb.indeterminate = (st === 'some');
     });
     syncCheckAllState();
   }
