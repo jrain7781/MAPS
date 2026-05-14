@@ -440,6 +440,123 @@
     return out;
   }
 
+  // 매니저 item → josa_items 스키마 매핑 (정제 적용, 필드 분리) — uploadSelected + sendChecked 공용
+  function _mapItemForMaps(it) {
+    const bid = _parseBid(it.bid_date);
+    const pr  = _parsePrice(it.price);
+    const st  = _parseStatus(it.status);
+    const addr = _parseAddress(it.address);
+    return {
+      sakun_no:     _normSakun(it.sakun_no),
+      bid_date:     bid.bid_date,
+      bid_time:     bid.bid_time,
+      court:        _normText(it.court || ''),
+      address:      addr.address,
+      size_info:    addr.size_info,
+      specials_all: addr.specials_all,
+      issue:        addr.issue,
+      prop_kind:    _normText(it.prop_kind),
+      specials:     Array.isArray(it.specials) ? it.specials.join(',') : _normText(it.specials),
+      kamjungka:    pr.kamjungka,
+      low_price:    pr.low_price,
+      pyeong_price: pr.pyeong_price,
+      area:         '',
+      fail_count:   st.fail_count,
+      fail_rate:    st.fail_rate,
+      view_count:   _parseViewCount(it.view_count),
+      view_url:     String(it.view_url || '').trim(),
+      img_url:      String(it.img_url || '').trim(),
+    };
+  }
+
+  // ── MAPS 전송 (사이드바 체크된 리스트들의 캐시 items 일괄 → josa_items + 메타 sync) ──
+  async function sendCheckedListsToMaps() {
+    if (!selectedSyncIds.size) { alert('전송할 리스트를 사이드바 체크박스로 선택하세요.'); return; }
+    const adminKey = getMapsAdminKey();
+    if (!adminKey) { alert('MAPS Admin Key 미설정 — ⚙ 버튼으로 설정.'); return; }
+
+    const targets = presets.filter(p => selectedSyncIds.has(p.id));
+    // 캐시 확인 — 캐시 없는 리스트는 사용자에게 알림
+    const withItems = [];
+    const noCache = [];
+    for (const p of targets) {
+      let cache = null;
+      try { cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null'); } catch (_) {}
+      if (cache && Array.isArray(cache.items) && cache.items.length) {
+        withItems.push({ preset: p, items: cache.items });
+      } else {
+        noCache.push(p);
+      }
+    }
+    if (noCache.length) {
+      const names = noCache.map(p => '- ' + (p.title || p.id)).join('\n');
+      const msg = `다음 리스트는 크롤링 캐시가 없어 전송 불가:\n${names}\n\n해당 리스트 열고 [크롤링 실행] 후 다시 시도하세요.`;
+      if (!withItems.length) { alert(msg); return; }
+      if (!confirm(msg + `\n\n캐시 있는 ${withItems.length}개만 전송할까요?`)) return;
+    }
+
+    const btn = document.getElementById('btnSendToMaps');
+    const prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '전송 중…'; }
+
+    // 1) 메타데이터 sync (한번에)
+    try {
+      const syncTargets = withItems.map(x => ({ id: x.preset.id, title: x.preset.title || '' }));
+      const r = await fetch('/api/maps-sync-presets', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: adminKey, presets: syncTargets, mode: 'partial' })
+      });
+      const d = await r.json();
+      if (!d.success) {
+        alert('리스트 동기화 실패: ' + (d.message || d.error || JSON.stringify(d)));
+        if (btn) { btn.disabled = false; btn.textContent = prevText; }
+        return;
+      }
+    } catch (e) {
+      alert('동기화 호출 실패: ' + (e && e.message ? e.message : e));
+      if (btn) { btn.disabled = false; btn.textContent = prevText; }
+      return;
+    }
+
+    // 2) 각 리스트별 items 업로드 (sequential)
+    let totalAdded = 0, totalUpdated = 0, totalFailed = 0;
+    const okList = [], failList = [];
+    for (let i = 0; i < withItems.length; i++) {
+      const { preset, items } = withItems[i];
+      setStatus(`[${i + 1}/${withItems.length}] ${preset.title || preset.id} 업로드 중…`);
+      const mapped = items.map(_mapItemForMaps);
+      try {
+        const r = await fetch('/api/maps-upload-items', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: adminKey,
+            preset_id: preset.id,
+            preset_title: preset.title || '',
+            items: mapped,
+          })
+        });
+        const d = await r.json();
+        if (!d.success) {
+          failList.push(`${preset.title || preset.id}: ${d.message || d.error || '?'}`);
+        } else {
+          totalAdded += (d.added || 0);
+          totalUpdated += (d.updated || 0);
+          totalFailed += (d.failed || 0);
+          okList.push(`${preset.title || preset.id}: 신규${d.added || 0} 갱신${d.updated || 0}`);
+        }
+      } catch (e) {
+        failList.push(`${preset.title || preset.id}: ${e && e.message ? e.message : e}`);
+      }
+    }
+
+    let msg = `MAPS 전송 완료\n성공 ${okList.length} / 실패 ${failList.length}\n총 신규 ${totalAdded} · 갱신 ${totalUpdated}`;
+    if (okList.length) msg += '\n\n[성공]\n' + okList.join('\n');
+    if (failList.length) msg += '\n\n[실패]\n' + failList.join('\n');
+    alert(msg);
+    if (btn) { btn.disabled = false; btn.textContent = prevText; }
+    setStatus('');
+  }
+
   // ── MAPS 업로드 (현재 결과 화면의 체크된 items → josa_items) ──
   async function uploadSelectedItemsToMaps() {
     if (!currentPresetId) { alert('활성 크롤링 리스트가 없습니다. (사이드바에서 리스트 선택 후 크롤링 결과가 떠 있어야 함)'); return; }
@@ -1117,6 +1234,7 @@
     // MAPS 동기화
     document.getElementById('msCheckAll')?.addEventListener('change', onMsCheckAllChange);
     document.getElementById('btnSyncToMaps')?.addEventListener('click', syncSelectedPresetsToMaps);
+    document.getElementById('btnSendToMaps')?.addEventListener('click', sendCheckedListsToMaps);
     document.getElementById('btnMapsConfig')?.addEventListener('click', promptMapsAdminKey);
     document.getElementById('btnUploadMaps')?.addEventListener('click', uploadSelectedItemsToMaps);
     // 결과 테이블 헤더 [전체] 체크박스 (사진 옆) — 모든 행 체크박스 토글
