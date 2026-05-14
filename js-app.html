@@ -5673,28 +5673,13 @@
     }
 
     function handleInvestigationPrint() {
-        var inv = document.getElementById('itemInvestigationTabContent');
-        var printImg = document.getElementById('printInvestigationImg');
-        var wrap = document.getElementById('printInvestigationArea');
-        if (!inv || !wrap || !printImg) return;
-        var wasHidden = inv.classList.contains('content-hidden');
-        if (wasHidden) switchItemDetailTab('investigation');
-        function doPrint() {
-            var noImgEl = document.getElementById('printInvestigationNoImage');
-            var src = getFirstInvestigationImageSrc();
-            if (src) {
-                printImg.src = src;
-                printImg.style.display = 'block';
-                if (noImgEl) noImgEl.style.display = 'none';
-            } else {
-                printImg.src = '';
-                printImg.style.display = 'none';
-                if (noImgEl) noImgEl.style.display = 'block';
-            }
-            window.print();
-            if (wasHidden) switchItemDetailTab('detail');
+        // 단건이라도 일괄프린트 폼(헤더 2줄 + 이미지)으로 통일
+        var item = (typeof currentDetailItem !== 'undefined') ? currentDetailItem : null;
+        if (!item) {
+            if (typeof showStatus === 'function') showStatus('인쇄할 물건이 선택되지 않았습니다.', 'warning');
+            return;
         }
-        setTimeout(doPrint, wasHidden ? 600 : 100);
+        _doBulkInvestigationPrint([item]);
     }
 
     function handleInvestigationCopy() {
@@ -20397,32 +20382,12 @@ ${token}
     }
 
     function handleModalInvestigationPrint() {
-        if (!currentModalItemData) return;
-
-        const imageList = document.getElementById('modal-investigation-image-list');
-        if (!imageList) return;
-
-        const firstImg = imageList.querySelector('img');
-        if (!firstImg || !firstImg.src) {
-            showStatus('인쇄할 이미지가 없습니다.', 'error');
+        // 입찰일정/입찰물건 모달 공용. 단건이라도 일괄프린트 폼으로 통일.
+        if (!currentModalItemData) {
+            if (typeof showStatus === 'function') showStatus('인쇄할 물건이 선택되지 않았습니다.', 'warning');
             return;
         }
-
-        const printArea = document.getElementById('printInvestigationArea');
-        const printImg = document.getElementById('printInvestigationImg');
-        const printNoImage = document.getElementById('printInvestigationNoImage');
-
-        if (!printArea || !printImg || !printNoImage) return;
-
-        printNoImage.style.display = 'none';
-        printImg.src = firstImg.src;
-        printImg.style.display = 'block';
-        printImg.onload = () => { window.print(); };
-        printImg.onerror = () => {
-            printImg.style.display = 'none';
-            printNoImage.style.display = 'block';
-            window.print();
-        };
+        _doBulkInvestigationPrint([currentModalItemData]);
     }
 
     function handleModalInvestigationCopy() {
@@ -20463,6 +20428,8 @@ ${token}
             openBulkImageIdModal(cbs);
         } else if (type === 'fill_image_id') {
             openFillImageIdModal(cbs);
+        } else if (type === 'bulk_print') {
+            handleBulkInvestigationPrint();
         } else {
             if (typeof showStatus === 'function') showStatus('작업 유형을 선택해 주세요.', 'warning');
         }
