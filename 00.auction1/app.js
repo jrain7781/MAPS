@@ -481,48 +481,93 @@
   // 배치 크롤링 활성 플래그 — runCrawl 내부 alert 억제용
   let __batchCrawlActive__ = false;
 
+  // ── 일괄 크롤링 모달 헬퍼 ──
+  function openBatchModal(targets) {
+    const m = document.getElementById('batchCrawlModal');
+    if (!m) return;
+    const list = document.getElementById('batchModalList');
+    const prog = document.getElementById('batchModalProgress');
+    const close = document.getElementById('batchModalClose');
+    list.innerHTML = targets.map((p, i) =>
+      '<div class="b-item" id="b-item-' + i + '">' +
+        '<span class="b-icon">⏳</span>' +
+        '<span class="b-title" title="' + escHtml(p.title || p.id) + '">' + escHtml(p.title || p.id) + '</span>' +
+        '<span class="b-sub" id="b-sub-' + i + '">대기</span>' +
+      '</div>'
+    ).join('');
+    prog.textContent = '0 / ' + targets.length;
+    close.disabled = true;
+    close.onclick = closeBatchModal;
+    m.classList.remove('hidden');
+  }
+  function updateBatchItem(idx, statusCls, icon, sub) {
+    const el = document.getElementById('b-item-' + idx);
+    if (!el) return;
+    el.classList.remove('b-running', 'b-done', 'b-fail');
+    if (statusCls) el.classList.add(statusCls);
+    const iconEl = el.querySelector('.b-icon');
+    if (iconEl && icon != null) iconEl.textContent = icon;
+    const subEl = document.getElementById('b-sub-' + idx);
+    if (subEl && sub != null) subEl.textContent = sub;
+  }
+  function updateBatchProgress(done, total) {
+    const p = document.getElementById('batchModalProgress');
+    if (p) p.textContent = done + ' / ' + total;
+  }
+  function finishBatchModal() {
+    const c = document.getElementById('batchModalClose');
+    if (c) c.disabled = false;
+  }
+  function closeBatchModal() {
+    const m = document.getElementById('batchCrawlModal');
+    if (m) m.classList.add('hidden');
+  }
+
   // ── 일괄 크롤링 (체크된 리스트들을 순차적으로 크롤링) ──
   async function batchCrawlCheckedPresets() {
     if (!selectedSyncIds.size) { alert('일괄 크롤링할 리스트를 사이드바 체크박스로 선택하세요.'); return; }
     const targets = presets.filter(p => selectedSyncIds.has(p.id));
-    if (!confirm(`체크된 ${targets.length}개 리스트를 순차적으로 크롤링합니다.\n각 리스트마다 옥션원 fetch + 이미지 base64 변환이 진행됩니다.\n다소 시간이 걸릴 수 있습니다.\n\n진행할까요?`)) return;
+    if (!confirm(`체크된 ${targets.length}개 리스트를 순차적으로 크롤링합니다.\n각 리스트마다 옥션원 fetch + 이미지 base64 변환.\n진행 상황은 모달에 실시간 표시됩니다.\n\n진행할까요?`)) return;
 
     const btn = document.getElementById('btnBatchCrawl');
     const prevText = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; }
+    if (btn) { btn.disabled = true; btn.textContent = '진행 중…'; }
     __batchCrawlActive__ = true;
+
+    openBatchModal(targets);
 
     const results = [];
     for (let i = 0; i < targets.length; i++) {
       const p = targets[i];
-      if (btn) btn.textContent = `[${i + 1}/${targets.length}] 크롤링…`;
-      setStatus(`[${i + 1}/${targets.length}] ${p.title || p.id} 크롤링 중…`);
+      updateBatchItem(i, 'b-running', '🔄', '시작 중…');
+      // 이 preset 처리 중에 setStatus 가 호출되면 sub 영역 업데이트
+      __batchStatusObserver__ = function (msg) {
+        if (typeof msg === 'string' && msg) updateBatchItem(i, 'b-running', '🔄', msg.length > 60 ? msg.substring(0, 60) + '…' : msg);
+      };
       try {
-        loadPreset(p.id);  // editor 에 폼 로드 (currentPresetId 도 갱신)
-        await runCrawl();   // /api/crawl + localStorage 캐시 저장
-        // 캐시에서 카운트 추출
+        loadPreset(p.id);  // editor 에 폼 로드 (currentPresetId 갱신)
+        await runCrawl();   // /api/crawl + localStorage 캐시 저장 (이미지 b64 변환은 crawler.py 측)
         let n = 0;
         try {
           const cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null');
           n = (cache && Array.isArray(cache.items)) ? cache.items.length : 0;
         } catch (_) {}
+        updateBatchItem(i, 'b-done', '✓', n + '건 캐시 완료');
         results.push({ title: p.title || p.id, ok: true, count: n });
       } catch (e) {
-        results.push({ title: p.title || p.id, ok: false, err: (e && e.message) || String(e) });
+        const errMsg = (e && e.message) || String(e);
+        updateBatchItem(i, 'b-fail', '✗', errMsg.length > 60 ? errMsg.substring(0, 60) + '…' : errMsg);
+        results.push({ title: p.title || p.id, ok: false, err: errMsg });
       }
+      updateBatchProgress(i + 1, targets.length);
     }
 
+    __batchStatusObserver__ = null;
     __batchCrawlActive__ = false;
     if (btn) { btn.disabled = false; btn.textContent = prevText; }
     setStatus('');
     renderSidebar();  // 최근 크롤링 시각 즉시 반영
-
-    const okN = results.filter(r => r.ok).length;
-    const failN = results.length - okN;
-    let msg = `일괄 크롤링 완료\n성공 ${okN} / 실패 ${failN}\n\n[성공]\n` +
-              results.filter(r => r.ok).map(r => `- ${r.title}: ${r.count}건`).join('\n');
-    if (failN) msg += '\n\n[실패]\n' + results.filter(r => !r.ok).map(r => `- ${r.title}: ${r.err}`).join('\n');
-    alert(msg);
+    finishBatchModal();
   }
 
   // ── MAPS 전송 (사이드바 체크된 리스트들의 캐시 items 일괄 → josa_items + 메타 sync) ──
@@ -1300,7 +1345,13 @@
     el.textContent = msg;
     el.style.color = isErr ? '#dc2626' : '#2563eb';
     setTimeout(() => { el.textContent = ''; }, 3000);
+    // 배치 크롤링 활성 시 옵저버로 sub-status 전달
+    if (typeof __batchStatusObserver__ === 'function') {
+      try { __batchStatusObserver__(msg, isErr); } catch (_) {}
+    }
   }
+  // 배치 크롤링 sub-status 옵저버 (modal sub text 업데이트용)
+  let __batchStatusObserver__ = null;
   function escHtml(s) {
     return String(s == null ? '' : s)
       .split('&').join('&amp;')
