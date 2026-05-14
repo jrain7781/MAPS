@@ -318,6 +318,33 @@
     ids.forEach(id => { if (selectedSyncIds.has(id)) n++; });
     return n === 0 ? 'none' : (n === ids.length ? 'all' : 'some');
   }
+  // 노드 서브트리 합산 카운트 (filtered/total)
+  function _subtreeCounts(node) {
+    let total = 0, filtered = 0;
+    const accFor = (p) => {
+      try {
+        const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
+        if (!raw) return;
+        const cache = JSON.parse(raw);
+        const items = cache.items || [];
+        const rawN = items.length;
+        let fN = rawN;
+        try {
+          const rows = (p.id === currentPresetId) ? custRows : (p.customFilters || []);
+          const { items: filt } = applyCustomFilters(items, rows);
+          fN = filt.length;
+        } catch (_) {}
+        total += rawN;
+        filtered += fN;
+      } catch (_) {}
+    };
+    node.presets.forEach(accFor);
+    node.children.forEach(c => {
+      const s = _subtreeCounts(c);
+      total += s.total; filtered += s.filtered;
+    });
+    return { total, filtered };
+  }
   function _renderLeafLi(p, depth) {
     const active = p.id === currentPresetId ? ' active' : '';
     const checked = selectedSyncIds.has(p.id) ? ' checked' : '';
@@ -373,12 +400,16 @@
         const cs = _branchCheckState(ids);
         const checkedAttr = cs === 'all' ? 'checked' : '';
         const bconn = depth > 0 ? '<span class="tree-connector">└</span>' : '';
+        const sc = _subtreeCounts(child);
+        const summary = (sc.total > 0)
+          ? `<span class="it-count b-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
+          : `<span class="b-count">(${cnt})</span>`;
         html += `<li class="snb_branch" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" style="padding-left:${depth * 16 + 4}px">
           ${bconn}
           <span class="b-toggle">${isCollapsed ? '▶' : '▼'}</span>
           <input type="checkbox" class="b-check" ${checkedAttr} title="이 그룹 전체 선택/해제">
           <span class="b-label">${escHtml(child.label)}</span>
-          <span class="b-count">(${cnt})</span>
+          ${summary}
         </li>`;
         if (!isCollapsed) {
           child.presets.forEach(p => { html += _renderLeafLi(p, depth + 1); });
@@ -395,6 +426,7 @@
     const cs = _branchCheckState(ids);
     const checkedAttr = cs === 'all' ? 'checked' : '';
     const cnt = _countSubtreePresets(top);
+    const sc = _subtreeCounts(top);
     const isCollapsed = collapsed.has(top.path);
     // body = top.presets (이 path 에 직접 매칭되는 preset) + children 재귀
     let body = '';
@@ -402,13 +434,16 @@
       top.presets.forEach(p => { body += _renderLeafLi(p, 1); });
       body += _renderTreeChildren(top, 1, collapsed);
     }
+    const cardSummary = (sc.total > 0)
+      ? `<span class="it-count card-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
+      : `<span class="card-count">(${cnt})</span>`;
     return `<li class="snb_card" data-path="${escHtml(top.path)}">
       <div class="card-head" data-path="${escHtml(top.path)}" data-ids="${ids.join(',')}">
         <span class="card-toggle">${isCollapsed ? '▶' : '▼'}</span>
         <input type="checkbox" class="card-check" ${checkedAttr} title="이 카드 전체 선택/해제">
         <span class="card-icon">📁</span>
         <span class="card-title">${escHtml(top.label)}</span>
-        <span class="card-count">(${cnt})</span>
+        ${cardSummary}
       </div>
       <ul class="card-body${isCollapsed ? ' collapsed' : ''}">${body}</ul>
     </li>`;
