@@ -315,7 +315,7 @@
         <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
         <div class="it-body">
           <div class="it-title"><span class="it-icon">📋</span><span class="it-name">${escHtml(p.title || '(제목 없음)')}</span>${countInline}</div>
-          <div class="it-sub">${subText} <span class="it-id" title="크롤링 리스트 ID (MAPS 동기화 키)">${escHtml(p.id)}</span></div>
+          <div class="it-sub">${subText}</div>
           ${uploadLine}
         </div>
       </li>`;
