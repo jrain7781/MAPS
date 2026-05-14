@@ -375,7 +375,7 @@
     // leaf 라벨 = 제목의 마지막 hyphen 부분만 (간결)
     const parts = String(p.title || '').split('-').map(s => s.trim()).filter(Boolean);
     const leafLabel = parts.length ? parts[parts.length - 1] : (p.title || '(제목없음)');
-    return `<li class="snb_item${active}" data-id="${p.id}" data-kind="leaf" draggable="true" style="padding-left:${depth * 16 + 8}px">
+    return `<li class="snb_item${active}" data-id="${p.id}" data-kind="leaf" data-depth="${depth}" draggable="true" style="padding-left:${depth * 16 + 8}px">
       <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
       <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
       <span class="it-name" title="${escHtml(p.title || '')}">${escHtml(leafLabel)}</span>
@@ -411,7 +411,7 @@
       const summaryHtml = (sc.total > 0)
         ? `<span class="it-count b-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
         : '';
-      html += `<li class="snb_branch${isCollapsed ? ' collapsed' : ''}" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" data-kind="branch" draggable="true" style="padding-left:${depth * 16 + 8}px">
+      html += `<li class="snb_branch${isCollapsed ? ' collapsed' : ''}" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" data-kind="branch" data-depth="${depth}" draggable="true" style="padding-left:${depth * 16 + 8}px">
         <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
         <input type="checkbox" class="b-check" ${checkedAttr} title="이 그룹 전체 선택/해제">
         <span class="b-label">${escHtml(child.label)}</span>
