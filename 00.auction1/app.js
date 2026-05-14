@@ -844,26 +844,35 @@
     for (let i = 0; i < targets.length; i++) {
       const p = targets[i];
       updateBatchItem(i, 'b-running', '🔄', '시작 중…');
-      // 이 preset 처리 중에 setStatus 가 호출되면 sub 영역 업데이트
       __batchStatusObserver__ = function (msg) {
         if (typeof msg === 'string' && msg) updateBatchItem(i, 'b-running', '🔄', msg.length > 60 ? msg.substring(0, 60) + '…' : msg);
       };
       try {
-        loadPreset(p.id);  // editor 에 폼 로드 (currentPresetId 갱신)
-        await runCrawl();   // /api/crawl + localStorage 캐시 저장 (이미지 b64 변환은 crawler.py 측)
+        loadPreset(p.id);
+        await runCrawl();
         let n = 0;
         try {
           const cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null');
           n = (cache && Array.isArray(cache.items)) ? cache.items.length : 0;
         } catch (_) {}
-        updateBatchItem(i, 'b-done', '✓', n + '건 캐시 완료');
-        results.push({ title: p.title || p.id, ok: true, count: n });
+        if (n > 0) {
+          updateBatchItem(i, 'b-done', '✓', n + '건 캐시 완료');
+          results.push({ title: p.title || p.id, ok: true, count: n });
+        } else {
+          // 0건 — 로그인 실패 / 검색 매칭 0 / 기타 — 경고로 표시
+          updateBatchItem(i, 'b-warning', '⚠', '0건 — 로그인 실패 가능. 단일 [크롤링 실행] 으로 재시도 권장');
+          results.push({ title: p.title || p.id, ok: false, count: 0, warn: true });
+        }
       } catch (e) {
         const errMsg = (e && e.message) || String(e);
         updateBatchItem(i, 'b-fail', '✗', errMsg.length > 60 ? errMsg.substring(0, 60) + '…' : errMsg);
         results.push({ title: p.title || p.id, ok: false, err: errMsg });
       }
       updateBatchProgress(i + 1, targets.length);
+      // 다음 리스트 처리 전 짧은 대기 — 옥션원 측 rate-limit / 세션 안정화
+      if (i < targets.length - 1) {
+        await new Promise(r => setTimeout(r, 1500));
+      }
     }
 
     __batchStatusObserver__ = null;
