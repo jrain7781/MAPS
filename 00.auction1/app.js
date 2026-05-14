@@ -13,6 +13,7 @@
   const LS_PRESETS  = 'auction1_presets_v1';   // [{id, title, formData, customFilters, updatedAt}]
   const LS_FTYPES   = 'auction1_ftypes_v1';    // [{id, name, valueType: 'text'|'number'|'date'}]
   const LS_CACHE_PFX  = 'auction1_cache_';      // + presetId → {items, ts}
+  const LS_UPLOAD_PFX = 'auction1_upload_ts_';   // + presetId → 마지막 MAPS 전송 timestamp(ms)
   const LS_LAST_PRESET = 'auction1_last_preset'; // 마지막 active preset id
   const LS_SIDE_W = 'auction1_side_w';          // 사이드바 폭 (px)
 
@@ -303,11 +304,19 @@
         }
       } catch (e) {}
       const subText = lastCrawl ? `최근 크롤링: ${lastCrawl}` : '아직 크롤링하지 않음';
+      // 최근 MAPS 전송 시간 (LS_UPLOAD_PFX)
+      let lastUpload = '';
+      try {
+        const ts = parseInt(localStorage.getItem(LS_UPLOAD_PFX + p.id) || '0', 10);
+        if (ts) lastUpload = new Date(ts).toLocaleString('ko-KR', { hour12: false });
+      } catch (_) {}
+      const uploadLine = lastUpload ? `<div class="it-sub it-upload" title="MAPS 마지막 전송 시각">최근 전송: ${lastUpload}</div>` : '';
       return `<li class="snb_item${active}" data-id="${p.id}">
         <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
         <div class="it-body">
           <div class="it-title"><span class="it-icon">📋</span><span class="it-name">${escHtml(p.title || '(제목 없음)')}</span>${countInline}</div>
           <div class="it-sub">${subText} <span class="it-id" title="크롤링 리스트 ID (MAPS 동기화 키)">${escHtml(p.id)}</span></div>
+          ${uploadLine}
         </div>
       </li>`;
     }).join('');
@@ -549,6 +558,7 @@
           totalAdded += (d.added || 0);
           totalUpdated += (d.updated || 0);
           totalFailed += (d.failed || 0);
+          try { localStorage.setItem(LS_UPLOAD_PFX + preset.id, String(Date.now())); } catch (_) {}
           okList.push(`${preset.title || preset.id}: 추가필터 ${withItems[i].filteredCount}/${withItems[i].rawCount} → 신규${d.added || 0} 갱신${d.updated || 0}`);
         }
       } catch (e) {
@@ -562,6 +572,7 @@
     alert(msg);
     if (btn) { btn.disabled = false; btn.textContent = prevText; }
     setStatus('');
+    renderSidebar();
   }
 
   // ── MAPS 업로드 (현재 결과 화면의 체크된 items → josa_items) ──
@@ -652,7 +663,9 @@
       if (!data.success) {
         alert('MAPS items 업로드 실패: ' + (data.message || data.error || JSON.stringify(data)));
       } else {
+        try { localStorage.setItem(LS_UPLOAD_PFX + currentPresetId, String(Date.now())); } catch (_) {}
         alert(`MAPS items 업로드 완료\n신규: ${data.added}  |  갱신: ${data.updated}  |  실패: ${data.failed || 0}\n총 ${data.total}건 전송`);
+        renderSidebar();
       }
     } catch (e) {
       alert('MAPS 업로드 호출 실패: ' + (e && e.message ? e.message : e));
