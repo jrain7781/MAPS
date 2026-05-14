@@ -478,6 +478,53 @@
     };
   }
 
+  // 배치 크롤링 활성 플래그 — runCrawl 내부 alert 억제용
+  let __batchCrawlActive__ = false;
+
+  // ── 일괄 크롤링 (체크된 리스트들을 순차적으로 크롤링) ──
+  async function batchCrawlCheckedPresets() {
+    if (!selectedSyncIds.size) { alert('일괄 크롤링할 리스트를 사이드바 체크박스로 선택하세요.'); return; }
+    const targets = presets.filter(p => selectedSyncIds.has(p.id));
+    if (!confirm(`체크된 ${targets.length}개 리스트를 순차적으로 크롤링합니다.\n각 리스트마다 옥션원 fetch + 이미지 base64 변환이 진행됩니다.\n다소 시간이 걸릴 수 있습니다.\n\n진행할까요?`)) return;
+
+    const btn = document.getElementById('btnBatchCrawl');
+    const prevText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; }
+    __batchCrawlActive__ = true;
+
+    const results = [];
+    for (let i = 0; i < targets.length; i++) {
+      const p = targets[i];
+      if (btn) btn.textContent = `[${i + 1}/${targets.length}] 크롤링…`;
+      setStatus(`[${i + 1}/${targets.length}] ${p.title || p.id} 크롤링 중…`);
+      try {
+        loadPreset(p.id);  // editor 에 폼 로드 (currentPresetId 도 갱신)
+        await runCrawl();   // /api/crawl + localStorage 캐시 저장
+        // 캐시에서 카운트 추출
+        let n = 0;
+        try {
+          const cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null');
+          n = (cache && Array.isArray(cache.items)) ? cache.items.length : 0;
+        } catch (_) {}
+        results.push({ title: p.title || p.id, ok: true, count: n });
+      } catch (e) {
+        results.push({ title: p.title || p.id, ok: false, err: (e && e.message) || String(e) });
+      }
+    }
+
+    __batchCrawlActive__ = false;
+    if (btn) { btn.disabled = false; btn.textContent = prevText; }
+    setStatus('');
+    renderSidebar();  // 최근 크롤링 시각 즉시 반영
+
+    const okN = results.filter(r => r.ok).length;
+    const failN = results.length - okN;
+    let msg = `일괄 크롤링 완료\n성공 ${okN} / 실패 ${failN}\n\n[성공]\n` +
+              results.filter(r => r.ok).map(r => `- ${r.title}: ${r.count}건`).join('\n');
+    if (failN) msg += '\n\n[실패]\n' + results.filter(r => !r.ok).map(r => `- ${r.title}: ${r.err}`).join('\n');
+    alert(msg);
+  }
+
   // ── MAPS 전송 (사이드바 체크된 리스트들의 캐시 items 일괄 → josa_items + 메타 sync) ──
   async function sendCheckedListsToMaps() {
     if (!selectedSyncIds.size) { alert('전송할 리스트를 사이드바 체크박스로 선택하세요.'); return; }
@@ -1271,6 +1318,7 @@
     document.getElementById('msCheckAll')?.addEventListener('change', onMsCheckAllChange);
     document.getElementById('btnSyncToMaps')?.addEventListener('click', syncSelectedPresetsToMaps);
     document.getElementById('btnSendToMaps')?.addEventListener('click', sendCheckedListsToMaps);
+    document.getElementById('btnBatchCrawl')?.addEventListener('click', batchCrawlCheckedPresets);
     document.getElementById('btnMapsConfig')?.addEventListener('click', promptMapsAdminKey);
     document.getElementById('btnUploadMaps')?.addEventListener('click', uploadSelectedItemsToMaps);
     // 결과 테이블 헤더 [전체] 체크박스 (사진 옆) — 모든 행 체크박스 토글
@@ -1649,7 +1697,7 @@
       if (applied) msg += ` · 추가필터 후 ${filtered.length}건`;
       if (skipped.length) {
         msg += ` · 미지원 필터 무시: ${skipped.join(', ')}`;
-        alert(`아래 필터 종류는 매핑이 없어 무시됐습니다:\n\n${skipped.join(', ')}\n\n[필터 종류 관리]에서 정확한 이름으로 변경하세요.\n\n지원 목록:\n${Object.keys(FILTER_FIELDS).join(', ')}`);
+        if (!__batchCrawlActive__) alert(`아래 필터 종류는 매핑이 없어 무시됐습니다:\n\n${skipped.join(', ')}\n\n[필터 종류 관리]에서 정확한 이름으로 변경하세요.\n\n지원 목록:\n${Object.keys(FILTER_FIELDS).join(', ')}`);
       }
       setStatus(msg, !!data.cancelled || skipped.length > 0);
     } catch (e) {
