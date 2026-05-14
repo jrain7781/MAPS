@@ -7540,6 +7540,36 @@ function bulkUpsertJosaItems(payload) {
   // 보존 컬럼 (사용자 룰 - 상태/조사자/메모 보존)
   var PRESERVE_FIELDS = ['josa_status','josaja','requested_at','accepted_at','finalized_at','reject_reason','memo'];
 
+  // ── 사진 영구화: 옥션원은 CloudFront signed URL(24h 만료) → 받은 직후 base64 로 변환 후 시트 보관 ──
+  // 셀 한도 50K char ≒ 35KB 바이트 이내 이미지만 변환. 초과/실패 시 원본 URL 유지(만료 위험 감수).
+  var imgFetchTargets = [];  // [{idx, url}]
+  items.forEach(function(it, idx) {
+    var u = String(it && it.img_url || '').trim();
+    if (u && u.indexOf('http') === 0 && u.indexOf('data:') !== 0) {
+      imgFetchTargets.push({ idx: idx, url: u });
+    }
+  });
+  if (imgFetchTargets.length) {
+    try {
+      var requests = imgFetchTargets.map(function(t) {
+        return { url: t.url, headers: { 'Referer': 'https://www.auction1.co.kr/', 'User-Agent': 'Mozilla/5.0' }, muteHttpExceptions: true, followRedirects: true };
+      });
+      var responses = UrlFetchApp.fetchAll(requests);
+      responses.forEach(function(resp, ri) {
+        try {
+          if (resp.getResponseCode() !== 200) return;
+          var blob = resp.getBlob();
+          var bytes = blob.getBytes();
+          if (bytes.length > 35000) return; // 35KB 초과 → skip (원본 URL 유지)
+          var mime = blob.getContentType() || 'image/jpeg';
+          items[imgFetchTargets[ri].idx].img_url = 'data:' + mime + ';base64,' + Utilities.base64Encode(bytes);
+        } catch (e) { Logger.log('[bulkUpsert img] resp ' + ri + ' err: ' + e); }
+      });
+    } catch (e) {
+      Logger.log('[bulkUpsert] img fetchAll err: ' + e);
+    }
+  }
+
   var added = 0, updated = 0, failed = 0;
 
   items.forEach(function(item) {
