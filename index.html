@@ -49,6 +49,47 @@
             }
         }
         /* MAPS 조사물건관리 v2 — 매니저 옥션원 그리드 스타일 재현 */
+        /* JM 사이드 트리 (auction1 매니저 동일 구조 — jmt- prefix) */
+        #jmt-list { list-style: none; }
+        .jmt-card { display:block; margin:6px 4px; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; background:#fff; list-style:none; position:relative; }
+        .jmt-card-head { display:flex; align-items:center; gap:6px; padding:8px 10px; background:#eef2ff; border-bottom:1px solid #d1d5db; cursor:pointer; user-select:none; }
+        .jmt-card-head:hover { background:#e0e7ff; }
+        .jmt-card .drag-handle { width:14px; text-align:center; color:#94a3b8; font-size:11px; cursor:grab; user-select:none; flex-shrink:0; }
+        .jmt-card .drag-handle:hover { color:#4b5563; }
+        .jmt-card-check, .jmt-branch-check { margin:0; flex-shrink:0; }
+        .jmt-card-title { flex:0 0 auto; font-weight:700; color:#1e293b; font-size:13px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
+        .jmt-card-body { padding:2px 0; list-style:none; margin:0; }
+        .jmt-card-body.collapsed { display:none; }
+        .jmt-branch { display:flex; align-items:center; gap:6px; padding:5px 6px; cursor:pointer; user-select:none; font-size:13px; color:#374151; font-weight:600; position:relative; }
+        .jmt-branch:hover { background:#f3f4f6; }
+        .jmt-branch .drag-handle { width:14px; text-align:center; color:#94a3b8; font-size:11px; cursor:grab; flex-shrink:0; }
+        .jmt-branch-label { flex:0 0 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
+        .jmt-item { display:flex; align-items:center; gap:6px; padding:1px 8px; cursor:default; font-size:12px; min-height:22px; position:relative; }
+        .jmt-item:hover { background:#eef2ff; }
+        .jmt-item.active { color:#1d4ed8; font-weight:700; }
+        .jmt-item.deleted .jmt-name { color:#dc2626; }
+        .jmt-item .drag-handle { width:14px; text-align:center; color:#94a3b8; font-size:11px; cursor:grab; flex-shrink:0; }
+        .jmt-row-chk { margin:0; flex-shrink:0; }
+        .jmt-name { flex:0 0 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; color:#1f2937; font-size:13px; max-width:130px; }
+        /* 카운트: (총·분류필요·진행중·폐기) */
+        .jmt-counts { display:flex; gap:3px; align-items:center; flex-shrink:0; margin-left:auto; font-size:12px; font-weight:600; }
+        .jmt-cnt-total   { color:#1f2937; }
+        .jmt-cnt-bunryu  { color:#6b7280; }
+        .jmt-cnt-jin     { color:#1e40af; }
+        .jmt-cnt-pye     { color:#dc2626; }
+        .jmt-counts .sep { color:#cbd5e1; }
+        /* 2단계 branch + 직속 leaf 사이 간격 */
+        .jmt-card-body .jmt-branch[data-depth="1"],
+        .jmt-card-body .jmt-item[data-depth="1"] { margin-top:7px; }
+        .jmt-card-body .jmt-branch[data-depth="1"]:first-child,
+        .jmt-card-body .jmt-item[data-depth="1"]:first-child { margin-top:3px; }
+        /* 드래그/드롭 */
+        .jmt-card.dragging, .jmt-branch.dragging, .jmt-item.dragging { opacity:0.4; }
+        .jmt-card.drop-above::before, .jmt-branch.drop-above::before, .jmt-item.drop-above::before { content:''; position:absolute; left:4px; right:4px; top:-2px; height:3px; background:#2563eb; border-radius:2px; z-index:20; pointer-events:none; }
+        .jmt-card.drop-below::after,  .jmt-branch.drop-below::after,  .jmt-item.drop-below::after  { content:''; position:absolute; left:4px; right:4px; bottom:-2px; height:3px; background:#2563eb; border-radius:2px; z-index:20; pointer-events:none; }
+        /* leaf 우측 ✕ */
+        .jmt-item .jmt-del { color:#9ca3af; padding:0 4px; cursor:pointer; font-size:11px; }
+        .jmt-item .jmt-del:hover { color:#dc2626; }
         #jm-grid { border-collapse: collapse; font-size: 13px; table-layout: fixed; }
         #jm-grid td { overflow: hidden; }
         .jm-th { background: #dbe2ec; border: 1px solid #b9c2d4; padding: 8px 6px; text-align: center; font-weight: 700; color: #1f2b46; position: sticky; top: 0; z-index: 5; }
@@ -1738,27 +1779,20 @@
 
                 <!-- 본문 = [좌측 트리] [메인 영역] -->
                 <div class="flex flex-1 overflow-hidden">
-                    <!-- 좌측 사이드 트리: 크롤링리스트 (활성 + 빈리스트 분할) -->
-                    <aside class="w-64 border-r bg-gray-50 text-sm flex-shrink-0 flex flex-col">
-                        <div class="jm-side-header flex items-center justify-between px-3 border-b bg-gray-50">
+                    <!-- 좌측 사이드 트리: 크롤링리스트 (auction1 매니저 동일 구조) -->
+                    <aside class="w-72 border-r bg-gray-50 text-sm flex-shrink-0 flex flex-col" id="jmtAside">
+                        <div class="jm-side-header flex items-center justify-between px-3 py-2 border-b bg-gray-50">
                             <span class="font-semibold text-gray-700">크롤링리스트</span>
-                            <label class="flex items-center gap-1 cursor-pointer text-xs">
-                                <input type="checkbox" id="jm-tree-all" class="rounded" onchange="onJmTreeAllChange(this)">
-                                <span>전체</span>
-                            </label>
-                        </div>
-                        <!-- 상단: 물건 있는 리스트 -->
-                        <ul id="jm-tree-list" class="space-y-1 px-3 py-2 overflow-y-auto" style="flex:1 1 0; min-height:60px;"></ul>
-                        <!-- splitter (드래그로 상/하 비율 조정, localStorage 저장) -->
-                        <div id="jm-tree-splitter" title="드래그로 상/하 비율 조정"></div>
-                        <!-- 하단: 물건 없는 리스트 (접힘 가능) -->
-                        <div id="jm-tree-empty-wrap" class="flex flex-col" style="flex:0 0 30%; min-height:40px; overflow:hidden;">
-                            <div class="px-3 py-1 text-xs bg-gray-100 border-y text-gray-600 font-semibold flex items-center justify-between flex-shrink-0">
-                                <span>빈 리스트 <span id="jm-tree-empty-count" class="text-gray-400">(0)</span></span>
-                                <button type="button" id="jm-tree-empty-toggle" class="text-gray-500 hover:text-gray-800" title="접기/펴기">▼</button>
+                            <div class="flex items-center gap-2">
+                                <label class="flex items-center gap-1 cursor-pointer text-xs">
+                                    <input type="checkbox" id="jm-tree-all" class="rounded" onchange="onJmTreeAllChange(this)">
+                                    <span>전체</span>
+                                </label>
+                                <button type="button" id="jmtBtnDeleteSelected" onclick="onJmtDeleteSelected()"
+                                    class="text-xs px-2 py-1 rounded bg-red-100 hover:bg-red-600 hover:text-white text-red-700 font-bold border border-red-300 transition">🗑 선택 삭제</button>
                             </div>
-                            <ul id="jm-tree-list-empty" class="space-y-1 px-3 py-2 flex-1 overflow-y-auto text-gray-500"></ul>
                         </div>
+                        <ul id="jmt-list" class="flex-1 overflow-y-auto p-2 m-0 list-none"></ul>
                     </aside>
 
                     <!-- 메인 영역 -->

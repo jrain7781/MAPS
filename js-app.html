@@ -23446,103 +23446,323 @@ MJ 이정우 팀장
         sel.value = current;
     }
 
-    function _jmRealItemCount(presetId) {
-        var n = 0;
-        (jmItems || []).forEach(function (it) {
-            var ids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); });
-            if (ids.indexOf(presetId) !== -1) n++;
-        });
-        return n;
+    // ── 사이드 트리 (auction1 매니저와 동일 구조) ─────────────────────────
+    var JMT_ORDER_KEY = 'jm_preset_order_v1';
+    var JMT_COLLAPSED_KEY = 'jm_tree_collapsed_v1';
+    function _jmtLoadOrder()    { try { return JSON.parse(localStorage.getItem(JMT_ORDER_KEY) || '[]'); } catch (_) { return []; } }
+    function _jmtSaveOrder(a)   { try { localStorage.setItem(JMT_ORDER_KEY, JSON.stringify(a)); } catch (_) {} }
+    function _jmtLoadCollapsed(){ try { return new Set(JSON.parse(localStorage.getItem(JMT_COLLAPSED_KEY) || '[]')); } catch (_) { return new Set(); } }
+    function _jmtSaveCollapsed(s){ try { localStorage.setItem(JMT_COLLAPSED_KEY, JSON.stringify(Array.from(s))); } catch (_) {} }
+    function _jmtOrderedPresets() {
+        var order = _jmtLoadOrder();
+        var byId = new Map(jmPresets.map(function (p) { return [p.preset_id, p]; }));
+        var out = [];
+        order.forEach(function (id) { if (byId.has(id)) { out.push(byId.get(id)); byId.delete(id); } });
+        jmPresets.forEach(function (p) { if (byId.has(p.preset_id)) out.push(p); });
+        return out;
     }
-    function _jmRenderTreeLi(p) {
+    function _jmtBuildTree(ordered) {
+        var root = { label: '', path: '', children: new Map(), presets: [] };
+        ordered.forEach(function (p) {
+            var parts = String(p.preset_title || '(제목없음)').split('-').map(function (s) { return s.trim(); }).filter(Boolean);
+            if (!parts.length) parts.push('(제목없음)');
+            var node = root, path = '';
+            for (var i = 0; i < parts.length; i++) {
+                var part = parts[i];
+                path = path ? (path + '/' + part) : part;
+                if (!node.children.has(part)) node.children.set(part, { label: part, path: path, children: new Map(), presets: [] });
+                node = node.children.get(part);
+                if (i === parts.length - 1) node.presets.push(p);
+            }
+        });
+        return root;
+    }
+    function _jmtCollectIds(node) {
+        var ids = node.presets.map(function (p) { return p.preset_id; });
+        node.children.forEach(function (c) { ids.push.apply(ids, _jmtCollectIds(c)); });
+        return ids;
+    }
+    function _jmtFindNode(root, path) {
+        if (!path) return root;
+        var parts = String(path).split('/');
+        var node = root;
+        for (var i = 0; i < parts.length; i++) { if (!node.children.has(parts[i])) return null; node = node.children.get(parts[i]); }
+        return node;
+    }
+    function _jmtBranchCheckState(ids) {
+        if (!ids.length) return 'none';
+        var n = 0;
+        ids.forEach(function (id) { if (jmSelectedPresetIds.has(id)) n++; });
+        return n === 0 ? 'none' : (n === ids.length ? 'all' : 'some');
+    }
+    // 서브트리 내 jmItems 카운트 — (총, 분류필요, 진행중, 폐기)
+    function _jmtSubtreeCounts(node) {
+        var idsSet = new Set(_jmtCollectIds(node));
+        var total = 0, bunryu = 0, jin = 0, pye = 0;
+        (jmItems || []).forEach(function (it) {
+            var pids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); });
+            if (!pids.some(function (id) { return idsSet.has(id); })) return;
+            total++;
+            var s = String(it.josa_status || '분류필요');
+            if (s === '분류필요') bunryu++;
+            else if (s === '폐기') pye++;
+            else if (s === '조사요청' || s === '조사접수' || s === '조사확정' || s === '조사불가') jin++;
+            else bunryu++;  // 알 수 없는 상태는 분류필요로
+        });
+        return { total: total, bunryu: bunryu, jin: jin, pye: pye };
+    }
+    function _jmtCountsHtml(c) {
+        return '<span class="jmt-counts">' +
+               '<span class="jmt-cnt-total">' + c.total + '</span>' +
+               '<span class="sep">·</span>' +
+               '<span class="jmt-cnt-bunryu" title="분류필요">' + c.bunryu + '</span>' +
+               '<span class="sep">·</span>' +
+               '<span class="jmt-cnt-jin" title="진행중(요청/접수/확정/불가)">' + c.jin + '</span>' +
+               '<span class="sep">·</span>' +
+               '<span class="jmt-cnt-pye" title="폐기">' + c.pye + '</span>' +
+               '</span>';
+    }
+    function _jmtRenderLeaf(p, depth, isLast) {
         var checked = jmSelectedPresetIds.has(p.preset_id) ? 'checked' : '';
         var deleted = (p.is_active === 'N') || p.deleted_in_manager_at;
-        var labelCls = 'flex items-center gap-1 cursor-pointer group ' + (deleted ? 'text-red-600' : 'text-gray-700');
-        var badge = deleted ? '<span class="text-[10px] bg-red-100 text-red-700 px-1 rounded">삭제됨</span>' : '';
-        var cnt = '<span class="text-[10px] text-gray-400">(' + p._realCount + ')</span>';
-        var delBtn = '<button type="button" onclick="onJmDeletePreset(\'' + escAttr(p.preset_id) + '\', event)" class="text-gray-400 hover:text-red-600 px-1 ml-1" title="이 리스트 삭제 (MAPS josa_presets 시트에서 행 제거)">✕</button>';
-        return '<li><label class="' + labelCls + '">' +
-               '<input type="checkbox" class="jm-tree-cb rounded" data-id="' + escAttr(p.preset_id) + '" ' + checked + '>' +
-               '<span class="truncate flex-1" title="' + escAttr(p.preset_title || '') + '">' + escHtml(p.preset_title || '(제목없음)') + '</span>' +
-               badge + cnt + delBtn +
-               '</label></li>';
+        // leaf 카운트 = 이 preset 의 items 만 (subtree 와 동일 셈)
+        var fakeNode = { presets: [p], children: new Map() };
+        var c = _jmtSubtreeCounts(fakeNode);
+        // 라벨 = 마지막 hyphen 토큰
+        var parts = String(p.preset_title || '').split('-').map(function (s) { return s.trim(); }).filter(Boolean);
+        var label = parts.length ? parts[parts.length - 1] : (p.preset_title || '(제목없음)');
+        var delBtn = '<button type="button" class="jmt-del" onclick="event.stopPropagation(); onJmDeletePreset(\'' + escAttr(p.preset_id) + '\', event)" title="이 리스트 삭제">✕</button>';
+        return '<li class="jmt-item' + (deleted ? ' deleted' : '') + '" data-id="' + escAttr(p.preset_id) + '" data-kind="leaf" data-depth="' + depth + '" draggable="true" style="padding-left:' + (depth * 16 + 8) + 'px">' +
+               '<span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>' +
+               '<input type="checkbox" class="jmt-row-chk" data-id="' + escAttr(p.preset_id) + '" ' + checked + '>' +
+               '<span class="jmt-name" title="' + escAttr(p.preset_title || '') + '">' + escHtml(label) + (deleted ? ' <span class="text-[10px] text-red-600">[삭제]</span>' : '') + '</span>' +
+               _jmtCountsHtml(c) +
+               delBtn +
+               '</li>';
+    }
+    function _jmtRenderChildren(node, depth, collapsed) {
+        var html = '';
+        var entries = [];
+        node.presets.forEach(function (p) { entries.push({ kind: 'leaf', preset: p }); });
+        node.children.forEach(function (c) { entries.push({ kind: 'child', child: c }); });
+        entries.forEach(function (entry, idx) {
+            var isLast = (idx === entries.length - 1);
+            if (entry.kind === 'leaf') { html += _jmtRenderLeaf(entry.preset, depth, isLast); return; }
+            var child = entry.child;
+            var simple = (child.children.size === 0 && child.presets.length === 1);
+            if (simple) { html += _jmtRenderLeaf(child.presets[0], depth, isLast); return; }
+            var ids = _jmtCollectIds(child);
+            var cs = _jmtBranchCheckState(ids);
+            var isCollapsed = collapsed.has(child.path);
+            var c = _jmtSubtreeCounts(child);
+            html += '<li class="jmt-branch' + (isCollapsed ? ' collapsed' : '') + '" data-path="' + escAttr(child.path) + '" data-ids="' + ids.join(',') + '" data-kind="branch" data-depth="' + depth + '" draggable="true" style="padding-left:' + (depth * 16 + 8) + 'px">' +
+                    '<span class="drag-handle">⋮⋮</span>' +
+                    '<input type="checkbox" class="jmt-branch-check" ' + (cs === 'all' ? 'checked' : '') + ' title="이 그룹 전체 선택/해제">' +
+                    '<span class="jmt-branch-label">' + escHtml(child.label) + '</span>' +
+                    _jmtCountsHtml(c) +
+                    '</li>';
+            if (!isCollapsed) html += _jmtRenderChildren(child, depth + 1, collapsed);
+        });
+        return html;
+    }
+    function _jmtRenderTopCard(top, collapsed) {
+        var ids = _jmtCollectIds(top);
+        var cs = _jmtBranchCheckState(ids);
+        var isCollapsed = collapsed.has(top.path);
+        var c = _jmtSubtreeCounts(top);
+        var body = '';
+        if (!isCollapsed) body = _jmtRenderChildren(top, 1, collapsed);
+        return '<li class="jmt-card" data-path="' + escAttr(top.path) + '" data-ids="' + ids.join(',') + '" data-kind="card" draggable="true">' +
+               '<div class="jmt-card-head" data-path="' + escAttr(top.path) + '" data-ids="' + ids.join(',') + '">' +
+               '<span class="drag-handle">⋮⋮</span>' +
+               '<input type="checkbox" class="jmt-card-check" ' + (cs === 'all' ? 'checked' : '') + ' title="이 카드 전체 선택/해제">' +
+               '<span class="jmt-card-title">' + escHtml(top.label) + '</span>' +
+               _jmtCountsHtml(c) +
+               '</div>' +
+               '<ul class="jmt-card-body' + (isCollapsed ? ' collapsed' : '') + '">' + body + '</ul>' +
+               '</li>';
+    }
+    function _jmtReorderById(draggedId, targetId, before) {
+        var order = _jmtLoadOrder();
+        jmPresets.forEach(function (p) { if (order.indexOf(p.preset_id) === -1) order.push(p.preset_id); });
+        order = order.filter(function (id) { return id !== draggedId; });
+        var idx = order.indexOf(targetId);
+        if (idx < 0) order.push(draggedId);
+        else order.splice(before ? idx : idx + 1, 0, draggedId);
+        _jmtSaveOrder(order);
+        renderJosaTree();
+    }
+    function _jmtReorderByPath(draggedPath, targetPath, before) {
+        if (!draggedPath || !targetPath || draggedPath === targetPath) return;
+        var tree = _jmtBuildTree(_jmtOrderedPresets());
+        var dN = _jmtFindNode(tree, draggedPath), tN = _jmtFindNode(tree, targetPath);
+        if (!dN || !tN) return;
+        var dIds = _jmtCollectIds(dN), tIds = _jmtCollectIds(tN);
+        if (!dIds.length || !tIds.length) return;
+        var order = _jmtLoadOrder();
+        jmPresets.forEach(function (p) { if (order.indexOf(p.preset_id) === -1) order.push(p.preset_id); });
+        order = order.filter(function (id) { return dIds.indexOf(id) === -1; });
+        var insertIdx;
+        if (before) insertIdx = order.indexOf(tIds[0]);
+        else {
+            var last = -1; tIds.forEach(function (id) { var i = order.indexOf(id); if (i > last) last = i; });
+            insertIdx = last + 1;
+        }
+        if (insertIdx < 0) order.push.apply(order, dIds);
+        else order.splice.apply(order, [insertIdx, 0].concat(dIds));
+        _jmtSaveOrder(order);
+        renderJosaTree();
+    }
+    function _jmtBindDrag(el, kind) {
+        el.addEventListener('dragstart', function (e) {
+            var key = (kind === 'leaf') ? el.dataset.id : el.dataset.path;
+            try { e.dataTransfer.setData('text/plain', JSON.stringify({ kind: kind, key: key })); } catch (_) {}
+            e.dataTransfer.effectAllowed = 'move';
+            el.classList.add('dragging');
+            e.stopPropagation();
+        });
+        el.addEventListener('dragend', function () { el.classList.remove('dragging'); document.querySelectorAll('.drop-above, .drop-below').forEach(function (n) { n.classList.remove('drop-above', 'drop-below'); }); });
+        el.addEventListener('dragover', function (e) {
+            e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+            var rect = el.getBoundingClientRect();
+            var isAbove = e.clientY < rect.top + rect.height / 2;
+            el.classList.remove('drop-above', 'drop-below');
+            el.classList.add(isAbove ? 'drop-above' : 'drop-below');
+            e.stopPropagation();
+        });
+        el.addEventListener('dragleave', function () { el.classList.remove('drop-above', 'drop-below'); });
+        el.addEventListener('drop', function (e) {
+            e.preventDefault(); e.stopPropagation();
+            var before = el.classList.contains('drop-above');
+            el.classList.remove('drop-above', 'drop-below');
+            var data; try { data = JSON.parse(e.dataTransfer.getData('text/plain') || '{}'); } catch (_) { data = {}; }
+            if (!data.kind || data.kind !== kind) return;
+            if (kind === 'leaf') { if (data.key !== el.dataset.id) _jmtReorderById(data.key, el.dataset.id, before); }
+            else { if (data.key !== el.dataset.path) _jmtReorderByPath(data.key, el.dataset.path, before); }
+        });
     }
     function renderJosaTree() {
-        var listA = document.getElementById('jm-tree-list');
-        var listE = document.getElementById('jm-tree-list-empty');
-        var cntE  = document.getElementById('jm-tree-empty-count');
-        if (!listA) return;
-        // 실제 items 카운트 기반 분할
-        var active = [], empty = [];
-        jmPresets.forEach(function (p) {
-            p._realCount = _jmRealItemCount(p.preset_id);
-            if (p._realCount > 0) active.push(p); else empty.push(p);
+        var list = document.getElementById('jmt-list');
+        if (!list) return;
+        if (!jmPresets.length) { list.innerHTML = '<li class="text-xs text-gray-400 p-3">크롤링 리스트 없음</li>'; syncJmTreeAllState(); return; }
+        var ordered = _jmtOrderedPresets();
+        var tree = _jmtBuildTree(ordered);
+        var collapsed = _jmtLoadCollapsed();
+        var html = '';
+        tree.children.forEach(function (top) { html += _jmtRenderTopCard(top, collapsed); });
+        list.innerHTML = html;
+        // leaf
+        list.querySelectorAll('.jmt-item').forEach(function (el) {
+            _jmtBindDrag(el, 'leaf');
+            // leaf 클릭 시 — MAPS 는 active preset 개념 없음. 체크박스/✕는 stopPropagation.
         });
-        listA.innerHTML = active.map(_jmRenderTreeLi).join('') || '<li class="text-gray-400 text-xs">물건 있는 리스트 없음</li>';
-        if (listE) listE.innerHTML = empty.map(_jmRenderTreeLi).join('') || '<li class="text-gray-400 text-xs">없음</li>';
-        if (cntE)  cntE.textContent = '(' + empty.length + ')';
-        // 체크박스 핸들러 — 양쪽 ul 모두 바인딩
-        [listA, listE].forEach(function (ul) {
-            if (!ul) return;
-            ul.querySelectorAll('.jm-tree-cb').forEach(function (cb) {
-                cb.addEventListener('change', function () {
-                    var id = cb.dataset.id;
-                    if (cb.checked) jmSelectedPresetIds.add(id); else jmSelectedPresetIds.delete(id);
-                    syncJmTreeAllState();
-                    applyJosaFilters();
-                });
+        // leaf 체크박스
+        list.querySelectorAll('.jmt-row-chk').forEach(function (cb) {
+            cb.addEventListener('click', function (e) { e.stopPropagation(); });
+            cb.addEventListener('change', function () {
+                var id = cb.dataset.id;
+                if (cb.checked) jmSelectedPresetIds.add(id); else jmSelectedPresetIds.delete(id);
+                renderJosaTree();  // 부모 indeterminate 갱신
+                applyJosaFilters();
             });
+        });
+        // branch
+        list.querySelectorAll('.jmt-branch').forEach(function (b) {
+            b.addEventListener('click', function (e) {
+                var cl = e.target && e.target.classList;
+                if (cl && (cl.contains('jmt-branch-check') || cl.contains('drag-handle'))) return;
+                var c = _jmtLoadCollapsed();
+                var path = b.dataset.path;
+                if (c.has(path)) c.delete(path); else c.add(path);
+                _jmtSaveCollapsed(c);
+                renderJosaTree();
+            });
+            _jmtBindDrag(b, 'branch');
+        });
+        // branch 체크박스
+        list.querySelectorAll('.jmt-branch-check').forEach(function (cb) {
+            cb.addEventListener('click', function (e) { e.stopPropagation(); });
+            cb.addEventListener('change', function () {
+                var li = cb.closest('.jmt-branch');
+                var ids = String(li.dataset.ids || '').split(',').filter(Boolean);
+                if (cb.checked) ids.forEach(function (id) { jmSelectedPresetIds.add(id); });
+                else ids.forEach(function (id) { jmSelectedPresetIds.delete(id); });
+                renderJosaTree();
+                applyJosaFilters();
+            });
+        });
+        // card 헤더 클릭
+        list.querySelectorAll('.jmt-card-head').forEach(function (h) {
+            h.addEventListener('click', function (e) {
+                var cl = e.target && e.target.classList;
+                if (cl && (cl.contains('jmt-card-check') || cl.contains('drag-handle'))) return;
+                var c = _jmtLoadCollapsed();
+                var path = h.dataset.path;
+                if (c.has(path)) c.delete(path); else c.add(path);
+                _jmtSaveCollapsed(c);
+                renderJosaTree();
+            });
+        });
+        // card 체크박스
+        list.querySelectorAll('.jmt-card-check').forEach(function (cb) {
+            cb.addEventListener('click', function (e) { e.stopPropagation(); });
+            cb.addEventListener('change', function () {
+                var head = cb.closest('.jmt-card-head');
+                var ids = String(head.dataset.ids || '').split(',').filter(Boolean);
+                if (cb.checked) ids.forEach(function (id) { jmSelectedPresetIds.add(id); });
+                else ids.forEach(function (id) { jmSelectedPresetIds.delete(id); });
+                renderJosaTree();
+                applyJosaFilters();
+            });
+        });
+        // card 자체 드래그
+        list.querySelectorAll('.jmt-card').forEach(function (card) { _jmtBindDrag(card, 'card'); });
+        // 부분 선택 indeterminate
+        list.querySelectorAll('.jmt-branch').forEach(function (b) {
+            var cb = b.querySelector('.jmt-branch-check');
+            var ids = String(b.dataset.ids || '').split(',').filter(Boolean);
+            if (cb) cb.indeterminate = (_jmtBranchCheckState(ids) === 'some');
+        });
+        list.querySelectorAll('.jmt-card-head').forEach(function (h) {
+            var cb = h.querySelector('.jmt-card-check');
+            var ids = String(h.dataset.ids || '').split(',').filter(Boolean);
+            if (cb) cb.indeterminate = (_jmtBranchCheckState(ids) === 'some');
         });
         syncJmTreeAllState();
     }
+    // 상단 [선택 삭제] 핸들러
+    function onJmtDeleteSelected() {
+        if (!jmSelectedPresetIds.size) { alert('삭제할 리스트를 체크해주세요.'); return; }
+        var names = [];
+        jmPresets.forEach(function (p) { if (jmSelectedPresetIds.has(p.preset_id)) names.push(p.preset_title || p.preset_id); });
+        if (!confirm('체크된 ' + names.length + '개 리스트를 삭제합니다.\n\n' + names.map(function (n) { return '- ' + n; }).join('\n') + '\n\njosa_presets 시트에서 행 제거됩니다. josa_items 는 유지.\n\n진행할까요?')) return;
+        var ids = Array.from(jmSelectedPresetIds);
+        var done = 0, fail = 0;
+        ids.forEach(function (id) {
+            google.script.run
+                .withSuccessHandler(function (resp) {
+                    if (resp && resp.success) done++; else fail++;
+                    if (done + fail === ids.length) {
+                        if (typeof showStatus === 'function') showStatus('삭제 완료: ' + done + ' / 실패: ' + fail, fail ? 'error' : 'success');
+                        jmSelectedPresetIds.clear();
+                        if (typeof jmLoadAllData === 'function') {
+                            google.script.run.withSuccessHandler(function (d) {
+                                if (d && d.success !== false) {
+                                    jmPresets = d.presets || [];
+                                    jmItems = d.items || [];
+                                    renderJosaTree();
+                                    applyJosaFilters();
+                                }
+                            }).jmLoadAllData();
+                        }
+                    }
+                })
+                .withFailureHandler(function () { fail++; })
+                .deleteJosaPreset(id);
+        });
+    }
 
-    // 사이드 트리 splitter — 드래그로 빈리스트 영역 크기 조정, localStorage 저장
-    (function setupJmTreeSplitter() {
-        var KEY = 'jm_tree_split_ratio';
-        function init() {
-            var splitter = document.getElementById('jm-tree-splitter');
-            var emptyWrap = document.getElementById('jm-tree-empty-wrap');
-            var toggle = document.getElementById('jm-tree-empty-toggle');
-            if (!splitter || !emptyWrap) { setTimeout(init, 200); return; }
-            // 복원
-            try {
-                var saved = localStorage.getItem(KEY);
-                if (saved) emptyWrap.style.flex = '0 0 ' + saved;
-            } catch (e) {}
-            // 드래그
-            var dragging = false, asideEl = null, startY = 0, startBasis = 0;
-            splitter.addEventListener('mousedown', function (e) {
-                dragging = true;
-                splitter.classList.add('dragging');
-                asideEl = splitter.parentElement;
-                startY = e.clientY;
-                startBasis = emptyWrap.getBoundingClientRect().height;
-                document.body.style.userSelect = 'none';
-                e.preventDefault();
-            });
-            document.addEventListener('mousemove', function (e) {
-                if (!dragging) return;
-                var asideH = asideEl ? asideEl.getBoundingClientRect().height : 400;
-                var dy = e.clientY - startY;
-                var newH = Math.max(40, Math.min(asideH - 100, startBasis - dy));
-                emptyWrap.style.flex = '0 0 ' + newH + 'px';
-            });
-            document.addEventListener('mouseup', function () {
-                if (!dragging) return;
-                dragging = false;
-                splitter.classList.remove('dragging');
-                document.body.style.userSelect = '';
-                try { localStorage.setItem(KEY, emptyWrap.style.flex.split(' ').pop() || '30%'); } catch (e) {}
-            });
-            // 접기 토글
-            if (toggle) toggle.addEventListener('click', function () {
-                emptyWrap.classList.toggle('collapsed');
-                toggle.textContent = emptyWrap.classList.contains('collapsed') ? '▶' : '▼';
-            });
-        }
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-        else init();
-    })();
+    // (옛 setupJmTreeSplitter 제거됨 — 새 트리는 splitter 없음)
 
     // ── 리스트(preset) 삭제 — josa_presets 시트에서 제거. josa_items 의 preset_ids 는 유지 ──
     function onJmDeletePreset(presetId, ev) {
