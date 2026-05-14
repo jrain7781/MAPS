@@ -7278,6 +7278,8 @@ function initJosaItemsSheet_() {
   headerRange.setValues([JOSA_ITEMS_HEADERS]);
   headerRange.setFontWeight('bold');
   sheet.setFrozenRows(1);
+  // josa_id (컬럼 A) 서식 강제 텍스트 — Sheets 자동 Number 변환 방지 (안전망)
+  sheet.getRange(1, 1, sheet.getMaxRows(), 1).setNumberFormat('@');
   return sheet;
 }
 
@@ -7350,9 +7352,9 @@ function _josaDedupKey_(item) {
   if (!sakun) return '';
   return sakun + '|' + bd + '|' + ct;
 }
-// 새 josa_id 발급 (items.id 와 동일 패턴: Date.now() ms timestamp + 랜덤 3자리)
+// 새 josa_id 발급 — Sheets Number 자동변환 방지 위해 'J' prefix (16자리 순수숫자 정밀도 손실 차단)
 function _newJosaId_() {
-  return String(Date.now()) + String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+  return 'J' + String(Date.now()) + String(Math.floor(Math.random() * 1000)).padStart(3, '0');
 }
 
 // ────────────────────────────────────────────────────────────
