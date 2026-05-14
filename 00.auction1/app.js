@@ -406,8 +406,8 @@
       const cs = _branchCheckState(ids);
       const checkedAttr = cs === 'all' ? 'checked' : '';
       const sc = _subtreeCounts(child);
-      const directN = child.children.size + child.presets.length;
-      const childCntHtml = `<span class="b-child-count">(${directN})</span>`;
+      const subtreeN = _countSubtreePresets(child);
+      const childCntHtml = `<span class="b-child-count">(${subtreeN})</span>`;
       const summaryHtml = (sc.total > 0)
         ? `<span class="it-count b-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
         : '';
@@ -437,8 +437,8 @@
     if (!isCollapsed) {
       body = _renderTreeChildren(top, 1, collapsed);
     }
-    const directN = top.children.size + top.presets.length;
-    const cardChildCntHtml = `<span class="card-child-count">(${directN})</span>`;
+    const subtreeN = _countSubtreePresets(top);
+    const cardChildCntHtml = `<span class="card-child-count">(${subtreeN})</span>`;
     const cardSummaryHtml = (sc.total > 0)
       ? `<span class="it-count card-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
       : '';
