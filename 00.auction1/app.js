@@ -616,6 +616,21 @@
     const prevText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = 'MAPS 업로드 중…'; }
     try {
+      // 1) 리스트(preset) 메타 sync — josa_presets 시트에 현재 preset 등록/갱신
+      try {
+        const syncResp = await fetch('/api/maps-sync-presets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: adminKey, presets: [{ id: currentPresetId, title: presetTitle }], mode: 'partial' })
+        });
+        const syncData = await syncResp.json();
+        if (!syncData.success) {
+          // sync 실패해도 items 업로드는 진행 (preset 행이 없어도 josa_items 행 자체는 누적됨)
+          console.warn('[MAPS] preset sync 실패 (items 업로드는 계속):', syncData.message || syncData.error);
+        }
+      } catch (e) { console.warn('[MAPS] preset sync 호출 실패:', e); }
+
+      // 2) items 업로드
       const resp = await fetch('/api/maps-upload-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
