@@ -23787,15 +23787,10 @@ MJ 이정우 팀장
             var sakunCls = isMulti ? 'jm-sakun-multi' : 'jm-sakun';
             var sakunTip = isMulti ? ('속한 리스트:\n' + multiList) : (multiList || '');
 
-            // 사진 — img_url 이 이미 data: URI (캐시됨)이면 그대로, 아니면 직접 src + onerror 시 GAS 프록시(Referer:auction1) base64 캐시
-            var imgCell = (function () {
-                if (!it.img_url) return '<span class="text-gray-300">-</span>';
-                var u = String(it.img_url);
-                if (u.indexOf('data:') === 0) {
-                    return '<img src="' + escAttr(u) + '" class="jm-thumb" loading="lazy" onerror="this.style.display=\'none\'">';
-                }
-                return '<img src="' + escAttr(u) + '" class="jm-thumb" loading="lazy" referrerpolicy="no-referrer" data-josa-id="' + escAttr(it.josa_id) + '" onerror="jmRetryImg(this)">';
-            })();
+            // 사진 — @1129 단순 렌더로 복귀. 옥션원 URL 그대로 + referrerpolicy="no-referrer". onerror 시 숨김.
+            var imgCell = it.img_url
+                ? '<img src="' + escAttr(it.img_url) + '" class="jm-thumb" referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'">'
+                : '<span class="text-gray-300">-</span>';
 
             // 사건번호 + 물건종류 + [옥션원] / [조사내용] 버튼 (조사내용은 입찰물건 등록된 경우만)
             var auctionBtn = it.view_url

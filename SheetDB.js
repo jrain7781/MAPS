@@ -7753,9 +7753,56 @@ function deleteJosaPreset(presetId) {
 }
 
 /**
+ * 진단 — josa_items 첫 10행의 img_url 샘플 반환 (사진 안 나올 때 시트 실제 내용 확인용)
+ */
+function diagJosaImgUrls() {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+    if (!sheet) return { error: 'no sheet' };
+    var data = sheet.getDataRange().getValues();
+    if (data.length < 2) return { total: 0 };
+    var headers = data[0];
+    var imgIdx = headers.indexOf('img_url');
+    if (imgIdx < 0) return { error: 'img_url col missing' };
+    var samples = [];
+    for (var i = 1; i < Math.min(11, data.length); i++) {
+      var u = String(data[i][imgIdx] || '');
+      samples.push({ row: i+1, josa_id: String(data[i][0]), len: u.length, prefix: u.substring(0, 120) });
+    }
+    return { total: data.length-1, samples: samples };
+  } catch (e) { return { error: String(e) }; }
+}
+
+/**
+ * 정리 — Drive / googleusercontent / data: URL 로 손상된 img_url 을 빈 문자열로 리셋.
+ * 매니저에서 크롤링 → [MAPS 전송] 하면 BODY_FIELDS 에 의해 fresh auction1 URL 로 자동 복구.
+ */
+function resetJosaDriveImgUrls() {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_JOSA_ITEMS_SHEET_NAME);
+    if (!sheet) return { error: 'no sheet' };
+    var data = sheet.getDataRange().getValues();
+    var headers = data[0];
+    var imgIdx = headers.indexOf('img_url');
+    var cleared = 0, samples = [];
+    for (var i = 1; i < data.length; i++) {
+      var u = String(data[i][imgIdx] || '');
+      if (u && (u.indexOf('drive.google.com') !== -1 ||
+                u.indexOf('googleusercontent.com') !== -1 ||
+                u.indexOf('data:') === 0)) {
+        if (cleared < 3) samples.push(u.substring(0, 100));
+        sheet.getRange(i+1, imgIdx+1).setValue('');
+        cleared++;
+      }
+    }
+    return { success: true, cleared: cleared, sample_cleared: samples };
+  } catch (e) { return { success: false, error: String(e) }; }
+}
+
+/**
  * 옥션원 이미지 프록시 — img_url 을 Referer:auction1 헤더와 함께 fetch,
  * Drive 공유 폴더에 업로드 후 공개 URL 을 josa_items.img_url 에 캐시.
- * Drive thumbnail URL 은 모든 PC/네트워크에서 img src 로 로드 가능.
+ * (현재 비활성 — @1141 client revert 로 사용 안 함. 진단 용도로만 보존)
  */
 function _getOrCreateJosaImageFolder_() {
   var folders = DriveApp.getFoldersByName('josa_images');
