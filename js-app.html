@@ -23702,22 +23702,31 @@ MJ 이정우 팀장
                 return '<button type="button" onclick="openJmStatusMenu(this, \'' + escAttr(it.josa_id) + '\')" class="jm-status-btn ' + (palette[s] || 'bg-gray-200') + '">' + escHtml(s) + '</button>';
             })();
 
-            // 조사자 — input + datalist (자동 검색 + 엔터 저장)
-            var josajaListId = 'jm-josaja-' + it.josa_id;
-            var optionsHtml = (smInvestigators || []).map(function (m) { return '<option value="' + escAttr(m.member_name) + '">'; }).join('');
-            var josajaCell = '<input type="text" list="' + josajaListId + '" value="' + escAttr(it.josaja || '') + '" data-id="' + escAttr(it.josa_id) + '" class="jm-josaja-input" onkeydown="onJmJosajaKeydown(event, this)" onblur="onJmJosajaBlur(this)">' +
-                             '<datalist id="' + josajaListId + '">' + optionsHtml + '</datalist>';
+            // 조사자 — 커스텀 자동완성 (회원명 AC 스타일)
+            var josajaCell = '<input type="text" value="' + escAttr(it.josaja || '') + '" data-id="' + escAttr(it.josa_id) + '" class="jm-josaja-input"' +
+                ' onfocus="onJmJosajaFocus(this); this.select()"' +
+                ' onclick="this.select()"' +
+                ' oninput="onJmJosajaInput(this)"' +
+                ' onkeydown="onJmJosajaKeydown(event, this)"' +
+                ' onblur="onJmJosajaBlur(this); setTimeout(closeJmJosajaAc, 120)">';
 
-            // 비고 — 클릭 시 모달 열기
-            var memoCell = '<div class="jm-memo-cell" onclick="openJmMemoModal(\'' + escAttr(it.josa_id) + '\')" title="클릭해서 편집">' +
-                           (it.memo ? escHtml(it.memo) : '<span class="text-gray-300">+ 메모</span>') +
-                           '</div>';
+            // 메모 — 버튼 (내용 있으면 짧게 truncate, 비어있으면 + 메모)
+            var memoCell = (function () {
+                var hasMemo = !!(it.memo && String(it.memo).trim());
+                var raw = hasMemo ? String(it.memo).trim() : '';
+                var shortText = raw.length > 12 ? raw.slice(0, 12) + '…' : raw;
+                if (hasMemo) {
+                    return '<button type="button" class="jm-memo-btn jm-memo-has" onclick="openJmMemoModal(\'' + escAttr(it.josa_id) + '\')" title="' + escAttr(raw) + '">' + escHtml(shortText) + '</button>';
+                }
+                return '<button type="button" class="jm-memo-btn jm-memo-empty" onclick="openJmMemoModal(\'' + escAttr(it.josa_id) + '\')">+ 메모</button>';
+            })();
 
             return '<tr class="jm-row">' +
                 '<td class="jm-td text-center"><input type="checkbox" class="jm-row-cb rounded" data-id="' + escAttr(it.josa_id) + '"></td>' +
                 '<td class="jm-td text-center">' + statusBtn + '</td>' +
                 '<td class="jm-td text-center">' + josajaCell + '</td>' +
                 '<td class="jm-td text-center">' + imgCell + '</td>' +
+                '<td class="jm-td text-center">' + memoCell + '</td>' +
                 '<td class="jm-td text-center">' + sakunCell + '</td>' +
                 '<td class="jm-td text-center">' + escHtml(it.court || '') + '</td>' +
                 '<td class="jm-td text-center">' + bidCell + '</td>' +
@@ -23725,7 +23734,6 @@ MJ 이정우 팀장
                 '<td class="jm-td text-right">' + priceCell + '</td>' +
                 '<td class="jm-td text-center">' + failCell + '</td>' +
                 '<td class="jm-td text-center">' + escHtml(it.view_count || '') + '</td>' +
-                '<td class="jm-td text-left text-[11px] text-gray-600">' + memoCell + '</td>' +
                 '<td class="jm-td text-center text-[11px] text-gray-500">' + escHtml(fmtRegDate(it.reg_date)) + '</td>' +
                 '</tr>';
         }).join('');
@@ -23795,14 +23803,95 @@ MJ 이정우 팀장
     }
 
     // 조사자 input — 엔터 시 저장, ESC 취소, blur 시 변경되었으면 저장
+    // ── 조사자 자동완성 (회원명 AC 스타일) ─────────────────────────────
+    var JM_JOSAJA_AC = { open: false, items: [], activeIndex: 0, container: null, anchor: null };
+
+    function ensureJmJosajaAcContainer_() {
+        if (JM_JOSAJA_AC.container) return JM_JOSAJA_AC.container;
+        var el = document.createElement('div');
+        el.id = 'jm-josaja-ac';
+        el.className = 'bg-white border border-gray-200 rounded-lg shadow-lg overflow-auto';
+        el.style.position = 'absolute';
+        el.style.zIndex = '99999';
+        el.style.display = 'none';
+        el.addEventListener('mousedown', function (e) { e.preventDefault(); }); // 입력 blur 방지
+        document.body.appendChild(el);
+        JM_JOSAJA_AC.container = el;
+        return el;
+    }
+    function positionJmJosajaAc_() {
+        var st = JM_JOSAJA_AC; if (!st.anchor || !st.container) return;
+        var r = st.anchor.getBoundingClientRect();
+        st.container.style.left = (r.left + window.scrollX) + 'px';
+        st.container.style.top  = (r.bottom + window.scrollY + 2) + 'px';
+        st.container.style.minWidth = Math.max(110, r.width + 20) + 'px';
+        st.container.style.maxWidth = '180px';
+        st.container.style.maxHeight = '240px';
+    }
+    function closeJmJosajaAc() {
+        JM_JOSAJA_AC.open = false; JM_JOSAJA_AC.items = []; JM_JOSAJA_AC.activeIndex = 0; JM_JOSAJA_AC.anchor = null;
+        if (JM_JOSAJA_AC.container) JM_JOSAJA_AC.container.style.display = 'none';
+    }
+    function renderJmJosajaAc_() {
+        var st = JM_JOSAJA_AC; var box = ensureJmJosajaAcContainer_();
+        if (!st.items || !st.items.length) { closeJmJosajaAc(); return; }
+        box.innerHTML = st.items.map(function (name, idx) {
+            var act = idx === st.activeIndex ? ' jm-josaja-ac-active' : '';
+            return '<div class="jm-josaja-ac-item' + act + '" data-name="' + escAttr(name) + '" data-idx="' + idx + '">' + escHtml(name) + '</div>';
+        }).join('');
+        box.style.display = 'block';
+        positionJmJosajaAc_();
+        Array.from(box.querySelectorAll('[data-idx]')).forEach(function (node) {
+            node.addEventListener('mouseenter', function () {
+                JM_JOSAJA_AC.activeIndex = parseInt(node.dataset.idx, 10) || 0;
+                Array.from(box.children).forEach(function (c, i) { c.classList.toggle('jm-josaja-ac-active', i === JM_JOSAJA_AC.activeIndex); });
+            });
+            node.addEventListener('mousedown', function (e) {
+                e.preventDefault();
+                var name = node.dataset.name || '';
+                var input = JM_JOSAJA_AC.anchor;
+                if (input) { input.value = name; onJmJosajaBlur(input); }
+                closeJmJosajaAc();
+            });
+        });
+        var actEl = box.querySelector('.jm-josaja-ac-active');
+        if (actEl) actEl.scrollIntoView({ block: 'nearest' });
+    }
+    function onJmJosajaFocus(input) {
+        JM_JOSAJA_AC.anchor = input;
+        JM_JOSAJA_AC.items = (smInvestigators || []).map(function (m) { return m.member_name; });
+        JM_JOSAJA_AC.activeIndex = 0; JM_JOSAJA_AC.open = true;
+        renderJmJosajaAc_();
+    }
+    function onJmJosajaInput(input) {
+        JM_JOSAJA_AC.anchor = input;
+        var q = String(input.value || '').trim().toLowerCase();
+        var all = (smInvestigators || []).map(function (m) { return m.member_name; });
+        JM_JOSAJA_AC.items = q ? all.filter(function (n) { return String(n).toLowerCase().indexOf(q) !== -1; }) : all;
+        JM_JOSAJA_AC.activeIndex = 0; JM_JOSAJA_AC.open = true;
+        renderJmJosajaAc_();
+    }
     function onJmJosajaKeydown(e, input) {
-        if (e.key === 'Enter') {
+        var st = JM_JOSAJA_AC;
+        if (e.key === 'ArrowDown') {
+            if (st.open && st.items.length) {
+                st.activeIndex = Math.min(st.items.length - 1, st.activeIndex + 1);
+                renderJmJosajaAc_(); e.preventDefault();
+            }
+        } else if (e.key === 'ArrowUp') {
+            if (st.open && st.items.length) {
+                st.activeIndex = Math.max(0, st.activeIndex - 1);
+                renderJmJosajaAc_(); e.preventDefault();
+            }
+        } else if (e.key === 'Enter') {
             e.preventDefault();
+            if (st.open && st.items.length) { input.value = st.items[st.activeIndex] || input.value; }
+            closeJmJosajaAc();
             input.blur();
         } else if (e.key === 'Escape') {
-            // 원래 값 복원
             var it = jmItems.find(function (x) { return x.josa_id === input.dataset.id; });
             input.value = (it && it.josaja) || '';
+            closeJmJosajaAc();
             input.blur();
         }
     }
