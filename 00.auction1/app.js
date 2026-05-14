@@ -1229,7 +1229,6 @@
 
   // ── 이벤트 바인딩 ───────────────────────────────────────
   function bind() {
-    document.getElementById('btnNewTop').addEventListener('click', newPreset);
     document.getElementById('btnNewMain').addEventListener('click', newPreset);
     // MAPS 동기화
     document.getElementById('msCheckAll')?.addEventListener('change', onMsCheckAllChange);
