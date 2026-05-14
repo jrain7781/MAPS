@@ -135,14 +135,27 @@ select.has-multi-bg {
 .snb_branch .drag-handle { width:14px; text-align:center; color:#94a3b8; font-size:11px; cursor:grab; user-select:none; flex-shrink:0; }
 .snb_branch .drag-handle:hover { color:#4b5563; }
 .snb_branch .b-check { margin:0; flex-shrink:0; }
-.snb_branch .b-icon { font-size:12px; flex-shrink:0; }
+.snb_branch .b-icon { display:none; }  /* 2단계 폴더 아이콘 제거 */
 .snb_branch .b-label { flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* 카드/브랜치 헤더의 카운트 쌍 (직속자식 N) (filtered/total) — 같은 스타일 */
+.b-counts, .card-counts { margin-left:auto; display:flex; gap:4px; align-items:center; flex-shrink:0; }
+.b-child-count, .card-child-count { font-size:11px; color:#6b7280; font-weight:500; }
+.b-summary, .card-summary { font-size:11px; font-weight:500; }
 .snb_branch .b-count { font-size:11px; color:#9ca3af; font-weight:400; flex-shrink:0; }
 /* 드래그 — toggle 과 동일 너비로 alignment 맞춤 */
 .snb_item .drag-handle { cursor:grab; color:#9ca3af; user-select:none; font-size:11px; flex-shrink:0; width:14px; text-align:center; padding:0; }
 .snb_item .drag-handle:hover { color:#4b5563; }
-.snb_item.dragging { opacity:0.4; }
-.snb_item.drag-over { border-top:2px solid #2563eb; }
+.snb_item.dragging, .snb_branch.dragging, .snb_card.dragging { opacity:0.4; }
+/* 드롭 위치 가로 바 — above/below 가시화 */
+.snb_card, .snb_branch, .snb_item { position:relative; }
+.snb_card.drop-above::before, .snb_branch.drop-above::before, .snb_item.drop-above::before {
+  content:''; position:absolute; left:4px; right:4px; top:-2px;
+  height:3px; background:#2563eb; border-radius:2px; z-index:20; pointer-events:none;
+}
+.snb_card.drop-below::after, .snb_branch.drop-below::after, .snb_item.drop-below::after {
+  content:''; position:absolute; left:4px; right:4px; bottom:-2px;
+  height:3px; background:#2563eb; border-radius:2px; z-index:20; pointer-events:none;
+}
 /* 카드 안 행: leaf 더 좁게, branch 사이 간격 확보 */
 .snb_card .card-body .snb_item { padding-top:1px !important; padding-bottom:1px !important; font-size:12px; min-height:22px; }
 .snb_card .card-body .snb_branch { padding-top:5px; padding-bottom:5px; margin-top:7px; }

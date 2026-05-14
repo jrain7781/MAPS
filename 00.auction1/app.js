@@ -409,15 +409,16 @@
       const cs = _branchCheckState(ids);
       const checkedAttr = cs === 'all' ? 'checked' : '';
       const sc = _subtreeCounts(child);
-      const summary = (sc.total > 0)
+      const directN = child.children.size + child.presets.length;
+      const childCntHtml = `<span class="b-child-count">(${directN})</span>`;
+      const summaryHtml = (sc.total > 0)
         ? `<span class="it-count b-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
-        : `<span class="b-count">(${cnt})</span>`;
+        : '';
       html += `<li class="snb_branch${isCollapsed ? ' collapsed' : ''}" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" data-kind="branch" draggable="true" style="padding-left:${depth * 16 + 8}px">
         <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
         <input type="checkbox" class="b-check" ${checkedAttr} title="이 그룹 전체 선택/해제">
-        <span class="b-icon">📁</span>
         <span class="b-label">${escHtml(child.label)}</span>
-        ${summary}
+        <span class="b-counts">${childCntHtml}${summaryHtml}</span>
       </li>`;
       if (!isCollapsed) {
         html += _renderTreeChildren(child, depth + 1, collapsed);
@@ -439,16 +440,18 @@
     if (!isCollapsed) {
       body = _renderTreeChildren(top, 1, collapsed);
     }
-    const cardSummary = (sc.total > 0)
+    const directN = top.children.size + top.presets.length;
+    const cardChildCntHtml = `<span class="card-child-count">(${directN})</span>`;
+    const cardSummaryHtml = (sc.total > 0)
       ? `<span class="it-count card-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
-      : `<span class="card-count">(${cnt})</span>`;
+      : '';
     return `<li class="snb_card" data-path="${escHtml(top.path)}" data-ids="${ids.join(',')}" data-kind="card" draggable="true">
       <div class="card-head" data-path="${escHtml(top.path)}" data-ids="${ids.join(',')}">
         <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
         <input type="checkbox" class="card-check" ${checkedAttr} title="이 카드 전체 선택/해제">
         <span class="card-icon">📁</span>
         <span class="card-title">${escHtml(top.label)}</span>
-        ${cardSummary}
+        <span class="card-counts">${cardChildCntHtml}${cardSummaryHtml}</span>
       </div>
       <ul class="card-body${isCollapsed ? ' collapsed' : ''}">${body}</ul>
     </li>`;
@@ -554,13 +557,13 @@
     });
     syncCheckAllState();
   }
-  function _reorderPresetById(draggedId, targetId) {
+  function _reorderPresetById(draggedId, targetId, before) {
     let order = _loadPresetOrder();
     presets.forEach(p => { if (!order.includes(p.id)) order.push(p.id); });
     order = order.filter(id => id !== draggedId);
     const targetIdx = order.indexOf(targetId);
     if (targetIdx < 0) order.push(draggedId);
-    else order.splice(targetIdx, 0, draggedId);
+    else order.splice(before ? targetIdx : targetIdx + 1, 0, draggedId);
     _savePresetOrder(order);
     renderSidebar();
   }
@@ -576,7 +579,7 @@
     return node;
   }
   // 서브트리 단위 드래그 reorder — draggedPath 의 모든 leaf 들을 targetPath 의 첫 leaf 앞으로 이동
-  function _reorderSubtreeByPath(draggedPath, targetPath) {
+  function _reorderSubtreeByPath(draggedPath, targetPath, before) {
     if (!draggedPath || !targetPath || draggedPath === targetPath) return;
     const ordered = _getOrderedPresets();
     const tree = _buildPresetTree(ordered);
@@ -589,7 +592,15 @@
     let order = _loadPresetOrder();
     presets.forEach(p => { if (!order.includes(p.id)) order.push(p.id); });
     order = order.filter(id => !draggedIds.includes(id));
-    const insertIdx = order.indexOf(targetIds[0]);
+    let insertIdx;
+    if (before) {
+      insertIdx = order.indexOf(targetIds[0]);
+    } else {
+      // 타겟 subtree 의 마지막 id 위치 + 1
+      let lastIdx = -1;
+      targetIds.forEach(id => { const i = order.indexOf(id); if (i > lastIdx) lastIdx = i; });
+      insertIdx = lastIdx + 1;
+    }
     if (insertIdx < 0) order.push(...draggedIds);
     else order.splice(insertIdx, 0, ...draggedIds);
     _savePresetOrder(order);
@@ -604,26 +615,34 @@
       el.classList.add('dragging');
       e.stopPropagation();
     });
-    el.addEventListener('dragend', () => el.classList.remove('dragging'));
+    el.addEventListener('dragend', () => { el.classList.remove('dragging'); _clearDropMarkers(); });
     el.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      el.classList.add('drag-over');
+      // 위/아래 결정 — 마우스 Y 가 중앙 위쪽이면 'above', 아래면 'below'
+      const rect = el.getBoundingClientRect();
+      const isAbove = e.clientY < (rect.top + rect.height / 2);
+      el.classList.remove('drop-above', 'drop-below');
+      el.classList.add(isAbove ? 'drop-above' : 'drop-below');
       e.stopPropagation();
     });
-    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('dragleave', () => { el.classList.remove('drop-above', 'drop-below'); });
     el.addEventListener('drop', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      el.classList.remove('drag-over');
+      const before = el.classList.contains('drop-above');
+      el.classList.remove('drop-above', 'drop-below');
       let data; try { data = JSON.parse(e.dataTransfer.getData('text/plain') || '{}'); } catch (_) { data = {}; }
       if (!data.kind || data.kind !== kind) return;  // same-kind drops only
       if (kind === 'leaf') {
-        if (data.key !== el.dataset.id) _reorderPresetById(data.key, el.dataset.id);
+        if (data.key !== el.dataset.id) _reorderPresetById(data.key, el.dataset.id, before);
       } else {
-        if (data.key !== el.dataset.path) _reorderSubtreeByPath(data.key, el.dataset.path);
+        if (data.key !== el.dataset.path) _reorderSubtreeByPath(data.key, el.dataset.path, before);
       }
     });
+  }
+  function _clearDropMarkers() {
+    document.querySelectorAll('.drop-above, .drop-below').forEach(el => el.classList.remove('drop-above', 'drop-below'));
   }
 
   // 상단 [전체] 체크박스 상태 동기화 (선택 수 ↔ 전체 체크 일치)
