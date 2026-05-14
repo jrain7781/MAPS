@@ -655,13 +655,15 @@
   }
 
   async function syncSelectedPresetsToMaps() {
-    if (!selectedSyncIds.size) { alert('동기화할 크롤링 리스트를 체크해주세요.'); return; }
     const adminKey = getMapsAdminKey();
     if (!adminKey) {
-      alert('MAPS Admin Key가 설정되지 않았습니다. 사이드바 [⚙] 버튼으로 먼저 설정하세요.');
+      alert('MAPS Admin Key가 설정되지 않았습니다. ⚙ 버튼으로 먼저 설정하세요.');
       return;
     }
-    const targets = presets.filter(p => selectedSyncIds.has(p.id)).map(p => ({ id: p.id, title: p.title || '' }));
+    if (!presets.length) { alert('매니저에 리스트가 없습니다.'); return; }
+    // 매니저 전체 preset 송신 (mode=full) — 매니저에 없는 MAPS preset 은 "삭제됨" 마킹
+    const targets = presets.map(p => ({ id: p.id, title: p.title || '' }));
+    if (!confirm(`매니저 전체 ${targets.length}개 리스트를 MAPS 와 정합 동기화합니다.\n\n· 매니저 ↔ MAPS 양쪽에 있는 리스트: 갱신\n· MAPS 에만 있는 리스트(매니저에서 삭제됨): "삭제됨" 빨강 마킹 (실제 삭제는 사용자가 MAPS JM 트리에서 직접)\n\n진행할까요?`)) return;
     const btn = document.getElementById('btnSyncToMaps');
     const prevText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '동기화 중…'; }
@@ -669,14 +671,14 @@
       const resp = await fetch('/api/maps-sync-presets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key: adminKey, presets: targets, mode: 'partial' }),
+        body: JSON.stringify({ api_key: adminKey, presets: targets, mode: 'full' }),
       });
       const data = await resp.json();
       if (!data.success) {
         alert('MAPS 동기화 실패: ' + (data.message || data.error || JSON.stringify(data)));
       } else {
         const msg = `MAPS 동기화 완료 (mode=${data.mode})\n` +
-                    `신규: ${data.added}  |  갱신: ${data.updated}  |  복원: ${data.restored || 0}\n` +
+                    `신규: ${data.added}  |  갱신: ${data.updated}  |  복원: ${data.restored || 0}  |  매니저 삭제 마킹: ${data.marked_deleted || 0}\n` +
                     `총 ${data.total}건 전송`;
         alert(msg);
       }
