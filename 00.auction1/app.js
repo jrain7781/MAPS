@@ -348,7 +348,9 @@
     // leaf 라벨 = 제목의 마지막 hyphen 부분만 (간결)
     const parts = String(p.title || '').split('-').map(s => s.trim()).filter(Boolean);
     const leafLabel = parts.length ? parts[parts.length - 1] : (p.title || '(제목없음)');
-    return `<li class="snb_item${active}" data-id="${p.id}" draggable="true" style="padding-left:${depth * 14 + 4}px">
+    const connector = depth > 0 ? '<span class="tree-connector">└</span>' : '';
+    return `<li class="snb_item${active}" data-id="${p.id}" draggable="true" style="padding-left:${depth * 16 + 4}px">
+      ${connector}
       <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
       <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
       <div class="it-body">
@@ -370,7 +372,9 @@
         const ids = _collectSubtreeIds(child);
         const cs = _branchCheckState(ids);
         const checkedAttr = cs === 'all' ? 'checked' : '';
-        html += `<li class="snb_branch" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" style="padding-left:${depth * 14 + 4}px">
+        const bconn = depth > 0 ? '<span class="tree-connector">└</span>' : '';
+        html += `<li class="snb_branch" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" style="padding-left:${depth * 16 + 4}px">
+          ${bconn}
           <span class="b-toggle">${isCollapsed ? '▶' : '▼'}</span>
           <input type="checkbox" class="b-check" ${checkedAttr} title="이 그룹 전체 선택/해제">
           <span class="b-label">${escHtml(child.label)}</span>
