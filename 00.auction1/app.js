@@ -378,11 +378,8 @@
     return `<li class="snb_item${active}" data-id="${p.id}" data-kind="leaf" draggable="true" style="padding-left:${depth * 16 + 8}px">
       <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
       <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
-      <div class="it-body">
-        <div class="it-title"><span class="it-name" title="${escHtml(p.title || '')}">${escHtml(leafLabel)}</span>${countInline}</div>
-        <div class="it-sub">${subText}</div>
-        ${uploadLine}
-      </div>
+      <span class="it-name" title="${escHtml(p.title || '')}">${escHtml(leafLabel)}</span>
+      <span class="it-counts">${countInline}</span>
     </li>`;
   }
   function _renderTreeChildren(node, depth, collapsed) {
