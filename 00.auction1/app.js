@@ -345,9 +345,10 @@
     });
     return { total, filtered };
   }
-  function _renderLeafLi(p, depth) {
+  function _renderLeafLi(p, depth, isLast) {
     const active = p.id === currentPresetId ? ' active' : '';
     const checked = selectedSyncIds.has(p.id) ? ' checked' : '';
+    const tcLastCls = isLast ? ' tc-last' : '';
     let countInline = '', lastCrawl = '';
     try {
       const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
@@ -375,13 +376,13 @@
     // leaf 라벨 = 제목의 마지막 hyphen 부분만 (간결)
     const parts = String(p.title || '').split('-').map(s => s.trim()).filter(Boolean);
     const leafLabel = parts.length ? parts[parts.length - 1] : (p.title || '(제목없음)');
-    const connector = depth > 0 ? '<span class="tree-connector">└</span>' : '';
-    return `<li class="snb_item${active}" data-id="${p.id}" draggable="true" style="padding-left:${depth * 16 + 4}px">
+    const connector = depth > 0 ? `<span class="tree-connector${tcLastCls}"></span>` : '';
+    return `<li class="snb_item${active}${tcLastCls}" data-id="${p.id}" draggable="true" style="padding-left:${depth * 16 + 4}px">
       ${connector}
       <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
       <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
       <div class="it-body">
-        <div class="it-title"><span class="it-icon">📋</span><span class="it-name" title="${escHtml(p.title || '')}">${escHtml(leafLabel)}</span>${countInline}</div>
+        <div class="it-title"><span class="it-name" title="${escHtml(p.title || '')}">${escHtml(leafLabel)}</span>${countInline}</div>
         <div class="it-sub">${subText}</div>
         ${uploadLine}
       </div>
@@ -389,32 +390,41 @@
   }
   function _renderTreeChildren(node, depth, collapsed) {
     let html = '';
-    node.children.forEach(child => {
+    // 같은 부모 아래 자식들: presets 들과 children 합쳐 한 시퀀스로 (마지막 항목 tc-last)
+    const entries = [];
+    node.presets.forEach(p => entries.push({ kind: 'leaf', preset: p }));
+    node.children.forEach(c => entries.push({ kind: 'child', child: c }));
+    entries.forEach((entry, idx) => {
+      const isLast = (idx === entries.length - 1);
+      if (entry.kind === 'leaf') {
+        html += _renderLeafLi(entry.preset, depth, isLast);
+        return;
+      }
+      const child = entry.child;
       const isSimpleLeaf = (child.children.size === 0 && child.presets.length === 1);
       if (isSimpleLeaf) {
-        html += _renderLeafLi(child.presets[0], depth);
-      } else {
-        const isCollapsed = collapsed.has(child.path);
-        const cnt = _countSubtreePresets(child);
-        const ids = _collectSubtreeIds(child);
-        const cs = _branchCheckState(ids);
-        const checkedAttr = cs === 'all' ? 'checked' : '';
-        const bconn = depth > 0 ? '<span class="tree-connector">└</span>' : '';
-        const sc = _subtreeCounts(child);
-        const summary = (sc.total > 0)
-          ? `<span class="it-count b-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
-          : `<span class="b-count">(${cnt})</span>`;
-        html += `<li class="snb_branch" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" style="padding-left:${depth * 16 + 4}px">
-          ${bconn}
-          <span class="b-toggle">${isCollapsed ? '▶' : '▼'}</span>
-          <input type="checkbox" class="b-check" ${checkedAttr} title="이 그룹 전체 선택/해제">
-          <span class="b-label">${escHtml(child.label)}</span>
-          ${summary}
-        </li>`;
-        if (!isCollapsed) {
-          child.presets.forEach(p => { html += _renderLeafLi(p, depth + 1); });
-          html += _renderTreeChildren(child, depth + 1, collapsed);
-        }
+        html += _renderLeafLi(child.presets[0], depth, isLast);
+        return;
+      }
+      const isCollapsed = collapsed.has(child.path);
+      const cnt = _countSubtreePresets(child);
+      const ids = _collectSubtreeIds(child);
+      const cs = _branchCheckState(ids);
+      const checkedAttr = cs === 'all' ? 'checked' : '';
+      const bconn = depth > 0 ? `<span class="tree-connector${isLast ? ' tc-last' : ''}"></span>` : '';
+      const sc = _subtreeCounts(child);
+      const summary = (sc.total > 0)
+        ? `<span class="it-count b-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
+        : `<span class="b-count">(${cnt})</span>`;
+      html += `<li class="snb_branch${isLast ? ' tc-last' : ''}" data-path="${escHtml(child.path)}" data-ids="${ids.join(',')}" style="padding-left:${depth * 16 + 4}px">
+        ${bconn}
+        <span class="b-toggle">${isCollapsed ? '▶' : '▼'}</span>
+        <input type="checkbox" class="b-check" ${checkedAttr} title="이 그룹 전체 선택/해제">
+        <span class="b-label">${escHtml(child.label)}</span>
+        ${summary}
+      </li>`;
+      if (!isCollapsed) {
+        html += _renderTreeChildren(child, depth + 1, collapsed);
       }
     });
     return html;
@@ -428,11 +438,10 @@
     const cnt = _countSubtreePresets(top);
     const sc = _subtreeCounts(top);
     const isCollapsed = collapsed.has(top.path);
-    // body = top.presets (이 path 에 직접 매칭되는 preset) + children 재귀
+    // body — _renderTreeChildren 가 top.presets + top.children 를 통합 순서로 처리 (isLast 마킹)
     let body = '';
     if (!isCollapsed) {
-      top.presets.forEach(p => { body += _renderLeafLi(p, 1); });
-      body += _renderTreeChildren(top, 1, collapsed);
+      body = _renderTreeChildren(top, 1, collapsed);
     }
     const cardSummary = (sc.total > 0)
       ? `<span class="it-count card-summary">(<span class="cnt-filtered">${sc.filtered}</span>/<span class="cnt-total">${sc.total}</span>)</span>`
