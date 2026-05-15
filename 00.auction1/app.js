@@ -12,7 +12,98 @@
   // localStorage keys
   const LS_PRESETS  = 'auction1_presets_v1';   // [{id, title, formData, customFilters, updatedAt}]
   const LS_FTYPES   = 'auction1_ftypes_v1';    // [{id, name, valueType: 'text'|'number'|'date'}]
-  const LS_CACHE_PFX  = 'auction1_cache_';      // + presetId → {items, ts}
+  const LS_CACHE_PFX  = 'auction1_cache_';      // (구) localStorage 옛 키 — IndexedDB 마이그레이션 후엔 메모리 + IndexedDB 사용
+
+  // ── IndexedDB 캐시 (수백 MB 가능, localStorage 5MB quota 회피) ─────
+  // 메모리 캐시 (sync 접근용) + IndexedDB 백업 (fire-and-forget write)
+  const IDB_NAME = 'auction1_v1';
+  const IDB_STORE = 'cache';   // key=presetId, value={items, ts, lite?}
+  const _memCache = new Map();
+  let _idbPromise = null;
+  function _openIdb() {
+    if (_idbPromise) return _idbPromise;
+    _idbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return _idbPromise;
+  }
+  // 캐시 읽기 (sync, 메모리에서)
+  function cacheGetSync(id) {
+    return _memCache.get(id) || null;
+  }
+  // 캐시 저장 (sync 메모리 + 비동기 IndexedDB write)
+  function cacheSet(id, value) {
+    _memCache.set(id, value);
+    _openIdb().then(db => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, id);
+    }).catch(e => console.warn('[idb] put fail:', id, e));
+    return true;
+  }
+  // 캐시 삭제 (sync 메모리 + 비동기 IndexedDB)
+  function cacheDel(id) {
+    _memCache.delete(id);
+    _openIdb().then(db => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(id);
+    }).catch(e => console.warn('[idb] del fail:', id, e));
+  }
+  // 캐시 키 목록 (sync, 메모리)
+  function cacheKeysSync() {
+    return Array.from(_memCache.keys());
+  }
+  // init 시 IndexedDB 의 모든 캐시를 메모리로 로드 + 옛 localStorage 마이그레이션
+  async function _initCache() {
+    // 1) 옛 localStorage 의 LS_CACHE_PFX 캐시들 → IndexedDB + 메모리 옮긴 후 localStorage 비움
+    const oldKeys = Object.keys(localStorage).filter(k => k.startsWith(LS_CACHE_PFX));
+    for (const k of oldKeys) {
+      try {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        const obj = JSON.parse(raw);
+        const id = k.substring(LS_CACHE_PFX.length);
+        _memCache.set(id, obj);
+        // IndexedDB write (fire-and-forget)
+        _openIdb().then(db => {
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).put(obj, id);
+        }).catch(() => {});
+        // 옛 localStorage 키 비움 (quota 회수)
+        localStorage.removeItem(k);
+      } catch (_) {}
+    }
+    // 2) IndexedDB 의 기존 데이터를 메모리로 로드
+    try {
+      const db = await _openIdb();
+      await new Promise((res, rej) => {
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const req = tx.objectStore(IDB_STORE).openCursor();
+        req.onsuccess = (e) => {
+          const cur = e.target.result;
+          if (cur) {
+            // localStorage 마이그레이션 직후 같은 key 면 덮어쓰기 X (메모리에 이미 최신 있음)
+            if (!_memCache.has(cur.key)) _memCache.set(cur.key, cur.value);
+            cur.continue();
+          } else { res(); }
+        };
+        req.onerror = () => rej(req.error);
+      });
+    } catch (e) { console.warn('[idb] load fail:', e); }
+    // 3) 영구 저장 권한 요청 (Chrome eviction 방지)
+    if (navigator.storage && navigator.storage.persist) {
+      try {
+        const persisted = await navigator.storage.persist();
+        console.log('[idb] persist:', persisted);
+      } catch (_) {}
+    }
+    console.log(`[idb] 메모리 캐시 ${_memCache.size}개 로드 완료`);
+  }
   const LS_UPLOAD_PFX = 'auction1_upload_ts_';   // + presetId → 마지막 MAPS 전송 timestamp(ms)
   const LS_LAST_PRESET = 'auction1_last_preset'; // 마지막 active preset id
   const LS_PRESET_ORDER = 'auction1_preset_order_v1';      // [id1, id2, ...] 사용자 드래그 순서
@@ -323,9 +414,8 @@
     let total = 0, filtered = 0;
     const accFor = (p) => {
       try {
-        const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
-        if (!raw) return;
-        const cache = JSON.parse(raw);
+        const cache = cacheGetSync(p.id);
+        if (!cache) return;
         const items = cache.items || [];
         const rawN = items.length;
         let fN = rawN;
@@ -350,9 +440,8 @@
     const checked = selectedSyncIds.has(p.id) ? ' checked' : '';
     let countInline = '', lastCrawl = '';
     try {
-      const raw = localStorage.getItem(LS_CACHE_PFX + p.id);
-      if (raw) {
-        const cache = JSON.parse(raw);
+      const cache = cacheGetSync(p.id);
+      if (cache) {
         const items = cache.items || [];
         const rawN = items.length;
         let filteredN = rawN;
@@ -1108,7 +1197,7 @@
         const hijackTag = hijackN > 0 ? ` ⚠가로채기${hijackN}회 복구` : '';
         let n = 0;
         try {
-          const cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null');
+          const cache = cacheGetSync(p.id);
           n = (cache && Array.isArray(cache.items)) ? cache.items.length : 0;
         } catch (_) {}
         if (n > 0) {
@@ -1169,7 +1258,7 @@
     const noCache = [];
     for (const p of targets) {
       let cache = null;
-      try { cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null'); } catch (_) {}
+      try { cache = cacheGetSync(p.id); } catch (_) {}
       if (cache && Array.isArray(cache.items) && cache.items.length) {
         // 활성 preset 은 미저장 변경 가능성 — custRows 우선, 그외 저장된 p.customFilters
         const rows = (p.id === currentPresetId) ? custRows : (p.customFilters || []);
@@ -1823,7 +1912,7 @@
     presets = presets.filter(p => p.id !== id);
     savePresets();
     try {
-      localStorage.removeItem(LS_CACHE_PFX + id);
+      cacheDel(id);
       if (localStorage.getItem(LS_LAST_PRESET) === id) localStorage.removeItem(LS_LAST_PRESET);
     } catch (e) {}
     setStatus('삭제 완료');
@@ -2336,75 +2425,13 @@
       const raw = data.items || [];
       const ts = Date.now();
       const { filtered, applied, skipped } = applyAndRender(raw, customFilters, ts);
-      // 결과 캐시 — full → quota 초과 시 lite(텍스트만) → 그래도 안 되면 LRU
+      // 결과 캐시 — IndexedDB (수백 MB ~ GB quota) 라 단순 저장. lite/LRU/minimal 폐기.
+      // base64 이미지 + _html 모두 원본 보존 → MAPS 전송 / 결과 패널 / 사이드바 카운트 다 정상.
       if (currentPresetId) {
-        const key = LS_CACHE_PFX + currentPresetId;
-        const fullPayload = JSON.stringify({ items: raw, ts });
-        // lite 모드에서도 옥션원 색상/줄바꿈 시각화에 필수인 _html 은 보존
-        // (제거 대상: img_html/view_html/bid_html/status_html — 비교적 작은 셀이지만 시각 영향 적음)
-        const KEEP_HTML = new Set(['address_html', 'price_html', 'sakun_html']);
-        const stripHtml = it => {
-          const o = {};
-          for (const k in it) {
-            if (k.endsWith('_html') && !KEEP_HTML.has(k)) continue;
-            o[k] = it[k];
-          }
-          return o;
-        };
-        const litePayload = JSON.stringify({ items: raw.map(stripHtml), ts, lite: true });
-        let saved = false, savedMode = '';
-        const trySave = (payload, mode) => {
-          try { localStorage.setItem(key, payload); saved = true; savedMode = mode; return true; }
-          catch (_) { return false; }
-        };
-        if (!trySave(fullPayload, 'full')) {
-          // full 실패 → 옛 캐시 자기 자신부터 제거하고 lite 시도
-          try { localStorage.removeItem(key); } catch (_) {}
-          if (!trySave(litePayload, 'lite')) {
-            // lite 도 실패 → 단일 모드일 때만 다른 프리셋 캐시 LRU 로 비워서 재시도.
-            // ★ 일괄 모드에선 다른 프리셋 캐시 절대 안 건드림 — 같은 일괄에서 이미 받은 1번/2번 결과가 3번 quota 초과로 날아가는 사고 방지.
-            if (!__batchCrawlActive__) {
-              const others = Object.keys(localStorage)
-                .filter(k => k.startsWith(LS_CACHE_PFX) && k !== key)
-                .map(k => {
-                  let t = 0;
-                  try { t = (JSON.parse(localStorage.getItem(k) || '{}').ts) || 0; } catch (_) {}
-                  return [k, t];
-                })
-                .sort((a, b) => a[1] - b[1]);
-              for (const [k] of others) {
-                localStorage.removeItem(k);
-                if (trySave(litePayload, 'lite')) break;
-              }
-            }
-            // ★ lite 도 실패 → minimal 모드 (텍스트만, _html 전부 제거 + 이미지 url 도 제거)
-            // 604건 같은 큰 결과 케이스 안전망. 캐시 size 약 1/10. 자기 자신만 저장 시도, 다른 프리셋 안 건드림.
-            if (!saved) {
-              const stripMinimal = it => {
-                const o = {};
-                for (const k in it) {
-                  if (k.endsWith('_html')) continue;
-                  if (k === 'img_url') continue;
-                  o[k] = it[k];
-                }
-                return o;
-              };
-              const minimalPayload = JSON.stringify({ items: raw.map(stripMinimal), ts, lite: true, minimal: true });
-              if (!trySave(minimalPayload, 'minimal') && !__batchCrawlActive__) {
-                // 단일 모드만: minimal 도 실패 → 다른 프리셋 다 비우고 마지막 시도
-                Object.keys(localStorage)
-                  .filter(k => k.startsWith(LS_CACHE_PFX) && k !== key)
-                  .forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
-                trySave(minimalPayload, 'minimal');
-              }
-            }
-          }
-        }
+        cacheSet(currentPresetId, { items: raw, ts });
         try { localStorage.setItem(LS_LAST_PRESET, currentPresetId); } catch (_) {}
-        // 메타에 캐시 저장 결과 기록 — batch/단일 loop 의 메시지 분기가 raw_count 와 함께 사용
-        if (window._lastCrawlMeta) window._lastCrawlMeta.cache_saved = saved;
-        if (!saved) console.warn('[cache] save failed even after minimal — raw 만 메모리 보유, 페이지 새로고침 시 사라짐');
-        else console.log(`[cache] saved ${savedMode}`);
+        if (window._lastCrawlMeta) window._lastCrawlMeta.cache_saved = true;
+        console.log(`[idb] saved ${currentPresetId}: ${raw.length} items`);
       }
       let msg = `옥션원 ${raw.length}건 수신`;
       if (data.cancelled) msg = `⏹ 중지됨 — 옥션원 ${raw.length}건까지 받음`;
@@ -2518,7 +2545,7 @@
       ts = Date.now();
     } else {
       let cache;
-      try { cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + currentPresetId) || 'null'); } catch (e) { cache = null; }
+      try { cache = cacheGetSync(currentPresetId); } catch (e) { cache = null; }
       if (!cache || !Array.isArray(cache.items)) { setStatus('캐시 없음 — 먼저 [크롤링 실행] 한 번 필요', true); return; }
       raw = cache.items;
       ts = cache.ts;
@@ -2536,7 +2563,7 @@
   function restoreCachedResult(presetId) {
     if (!presetId) return false;
     let cache;
-    try { cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + presetId) || 'null'); } catch (e) { cache = null; }
+    try { cache = cacheGetSync(presetId); } catch (e) { cache = null; }
     if (!cache || !Array.isArray(cache.items)) return false;
     const preset = presets.find(p => p.id === presetId);
     applyAndRender(cache.items, (preset?.customFilters) || [], cache.ts);
@@ -2897,7 +2924,7 @@
   }
   function _rptCard(p) {
     let cache = null;
-    try { cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null'); } catch (_) {}
+    try { cache = cacheGetSync(p.id); } catch (_) {}
     const items = cache ? (cache.items || []) : [];
     let filteredN = items.length;
     try {
@@ -2936,7 +2963,7 @@
     </article>`;
   }
   function openReportModal() {
-    const lastTs = p => { try { const c = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null'); return (c && c.ts) || p.updatedAt || 0; } catch (_) { return p.updatedAt || 0; } };
+    const lastTs = p => { try { const c = cacheGetSync(p.id); return (c && c.ts) || p.updatedAt || 0; } catch (_) { return p.updatedAt || 0; } };
     const sorted = presets.slice().sort((a, b) => lastTs(b) - lastTs(a));
     document.getElementById('reportGenTs').textContent = _rptDate(Date.now());
     document.getElementById('reportGenCnt').textContent = sorted.length;
@@ -2966,9 +2993,29 @@
   }
 
   // ── 초기화 ───────────────────────────────────────────
-  function init() {
+  // 옛 minimal 모드로 저장된 깨진 캐시 자동 정리 (img_url/_html 빠져 이미지·디자인 깨짐)
+  function _cleanupMinimalCaches() {
+    const removed = [];
+    Object.keys(localStorage).filter(k => k.startsWith(LS_CACHE_PFX)).forEach(k => {
+      try {
+        const c = JSON.parse(localStorage.getItem(k) || '{}');
+        if (c && c.minimal === true) {
+          localStorage.removeItem(k);
+          removed.push(k.substring(LS_CACHE_PFX.length));
+        }
+      } catch (_) {}
+    });
+    if (removed.length) {
+      console.log(`[cleanup] minimal 모드 깨진 캐시 ${removed.length}개 자동 삭제 — 해당 프리셋 다시 [크롤링 실행] 필요:`, removed);
+      try { setStatus(`⚠ minimal 깨진 캐시 ${removed.length}개 삭제됨 — 재크롤링 필요`, true); } catch (_) {}
+    }
+  }
+
+  async function init() {
     fillStaticSelects();
     initSpecialCombo();
+    // ★ IndexedDB 캐시 로드 (옛 localStorage 자동 마이그레이션 + persist 권한 요청)
+    await _initCache();
     renderSidebar();
     bind();
     // 가격 input 클릭 → 프리셋 펼침
