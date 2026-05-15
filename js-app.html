@@ -23980,36 +23980,19 @@ MJ 이정우 팀장
         var m = document.getElementById('jm-selectview-modal');
         if (m) m.style.display = 'none';
     }
-    // 좌측 상세 렌더 — 입찰물건 상세 모달의 [조사탭] 까진 무거우니 1차는 핵심 정보 + [조사내용 모달 열기] 버튼
+    // 좌측 = 옥션원 ca_view.php 페이지를 iframe 으로 직접 띄움 (it.view_url)
     function _jmSvRenderLeft(it) {
         var left = document.getElementById('jm-sv-left');
         if (!left || !it) return;
-        var img = it.img_url
-            ? '<img src="' + escAttr(it.img_url) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" class="jm-sv-detail-img" />'
-            : '<div class="jm-sv-detail-noimg">사진없음</div>';
-        var fmtNum = function (n) { if (!n) return ''; return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+        var url = String(it.view_url || '').trim();
+        if (!url) {
+            left.innerHTML = '<div class="jm-sv-empty">옥션원 view_url 없음 (옛 데이터). 다시 크롤하면 view_url 채워짐.</div>';
+            return;
+        }
+        // iframe 으로 옥션원 ca_view.php 직접 표시. X-Frame-Options 거부 시 빈 화면 가능 — onerror/onload 로 감지.
         left.innerHTML =
-            '<div class="jm-sv-detail-head">' +
-                '<span class="jm-sv-detail-sakun">' + escHtml(it.sakun_no || '') + '</span>' +
-                '<span class="jm-sv-detail-status">' + escHtml(it.josa_status || '분류필요') + '</span>' +
-                '<button type="button" class="jm-sv-detail-open" onclick="openJosaContentModal(\'' + escAttr(it.josa_id) + '\')" title="입찰물건 상세 모달 [조사탭] 열기">📄 조사내용 모달</button>' +
-            '</div>' +
-            '<div class="jm-sv-detail-body">' +
-                '<div class="jm-sv-detail-img-wrap">' + img + '</div>' +
-                '<div class="jm-sv-detail-info">' +
-                    '<div><strong>법원</strong> ' + escHtml(it.court || '') + '</div>' +
-                    '<div><strong>물건종류</strong> ' + escHtml(it.prop_kind || '') + '</div>' +
-                    '<div><strong>매각기일</strong> ' + escHtml(it.bid_date || '') + ' ' + escHtml(it.bid_time || '') + '</div>' +
-                    '<div><strong>소재지</strong><br>' + escHtml(it.address || '').replace(/\n/g, '<br>') + '</div>' +
-                    '<div><strong>감정가</strong> ' + fmtNum(it.kamjungka) + '</div>' +
-                    '<div><strong>최저가</strong> ' + fmtNum(it.low_price) + '</div>' +
-                    '<div><strong>유찰</strong> ' + escHtml(it.fail_count || '0') + '회 (' + escHtml(it.fail_rate || '') + '%)</div>' +
-                    '<div><strong>특수물건</strong> ' + escHtml(it.specials_all || it.specials || '') + '</div>' +
-                    '<div><strong>조회</strong> ' + escHtml(it.view_count || '') + '</div>' +
-                    '<div><strong>조사자</strong> ' + escHtml(it.josaja || '') + '</div>' +
-                    '<div><strong>비고</strong><br>' + escHtml(it.memo || '').replace(/\n/g, '<br>') + '</div>' +
-                '</div>' +
-            '</div>';
+            '<iframe class="jm-sv-iframe" src="' + escAttr(url) + '" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer-when-downgrade"></iframe>' +
+            '<div class="jm-sv-iframe-fallback">옥션원이 cross-origin iframe 거부 시 빈 화면. <a href="' + escAttr(url) + '" target="_blank" rel="noopener">새 창으로 열기</a></div>';
     }
     // 모달 헤더 드래그로 모달 위치 이동
     function _jmSvBindDrag(modal) {
