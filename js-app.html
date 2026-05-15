@@ -23915,7 +23915,128 @@ MJ 이정우 팀장
             var actCls = active ? ' jm-summary-btn-active' : '';
             return '<button type="button" onclick="toggleJmSummaryFilter(\'' + k + '\')" class="jm-summary-btn ' + palette[k] + actCls + '">' + k + ' <strong>' + filteredCounts[k] + '</strong></button>';
         }).join('');
+        // ★ [선택보기] 버튼 — 그리드에 체크된 행을 모달로 (좌측 상세 + 우측 리스트, 드래그 가능, dim 없음)
+        html += '<button type="button" onclick="openJmSelectViewModal()" class="jm-summary-btn bg-yellow-100 text-yellow-800 ml-2" title="체크된 행을 좌측 상세 + 우측 리스트 모달로 보기. 모달은 드래그로 이동 가능, 페이지 동시 사용 가능">📑 선택보기</button>';
         bar.innerHTML = html;
+    }
+
+    // ── [선택보기] 모달 (옥션원 chk_view 와 같은 컨셉, 드래그 + dim 없음 + 좌상우리스트) ──
+    function openJmSelectViewModal() {
+        var checked = Array.from(document.querySelectorAll('#jm-grid-body .jm-row-cb:checked'));
+        if (!checked.length) { alert('체크된 행이 없습니다. 그리드 체크박스로 선택 후 다시 누르세요.'); return; }
+        var ids = checked.map(function (cb) { return cb.dataset.id; });
+        var items = (jmItems || []).filter(function (it) { return ids.indexOf(String(it.josa_id)) >= 0; });
+        if (!items.length) { alert('체크된 행의 데이터를 못 찾았습니다.'); return; }
+        // 모달 한 번만 생성 (재사용)
+        var m = document.getElementById('jm-selectview-modal');
+        if (!m) {
+            m = document.createElement('div');
+            m.id = 'jm-selectview-modal';
+            m.className = 'jm-sv-modal';
+            m.innerHTML =
+                '<div class="jm-sv-head" id="jm-sv-head">' +
+                    '<span class="jm-sv-title">📑 선택보기 — <span id="jm-sv-count">0</span>건</span>' +
+                    '<span class="jm-sv-hint">(헤더 드래그로 이동 · 페이지 동시 사용 가능)</span>' +
+                    '<button type="button" class="jm-sv-x" onclick="closeJmSelectViewModal()" title="닫기">✕</button>' +
+                '</div>' +
+                '<div class="jm-sv-body">' +
+                    '<div class="jm-sv-left" id="jm-sv-left"><div class="jm-sv-empty">우측 리스트에서 항목을 선택하세요.</div></div>' +
+                    '<div class="jm-sv-right" id="jm-sv-right"></div>' +
+                '</div>';
+            document.body.appendChild(m);
+            _jmSvBindDrag(m);
+        }
+        document.getElementById('jm-sv-count').textContent = items.length;
+        // 우측 리스트 렌더
+        var right = document.getElementById('jm-sv-right');
+        right.innerHTML = items.map(function (it, i) {
+            var thumb = it.img_url
+                ? '<img src="' + escAttr(it.img_url) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />'
+                : '<div class="jm-sv-li-noimg">사진없음</div>';
+            return '<div class="jm-sv-li" data-idx="' + i + '" data-id="' + escAttr(it.josa_id) + '">' +
+                '<div class="jm-sv-li-thumb">' + thumb + '</div>' +
+                '<div class="jm-sv-li-meta">' +
+                    '<div class="jm-sv-li-sakun">' + escHtml(it.sakun_no || '') + '</div>' +
+                    '<div class="jm-sv-li-addr">' + escHtml((it.address || '').split('\n')[0]) + '</div>' +
+                    '<div class="jm-sv-li-status">' + escHtml(it.josa_status || '분류필요') + ' · ' + escHtml(it.court || '') + '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+        // 우측 클릭 → 좌측 상세 갱신
+        right.querySelectorAll('.jm-sv-li').forEach(function (li) {
+            li.addEventListener('click', function () {
+                right.querySelectorAll('.jm-sv-li').forEach(function (x) { x.classList.remove('jm-sv-li-active'); });
+                li.classList.add('jm-sv-li-active');
+                var idx = parseInt(li.dataset.idx, 10);
+                _jmSvRenderLeft(items[idx]);
+            });
+        });
+        // 첫 항목 자동 선택
+        var firstLi = right.querySelector('.jm-sv-li');
+        if (firstLi) firstLi.click();
+        m.style.display = 'flex';
+    }
+    function closeJmSelectViewModal() {
+        var m = document.getElementById('jm-selectview-modal');
+        if (m) m.style.display = 'none';
+    }
+    // 좌측 상세 렌더 — 입찰물건 상세 모달의 [조사탭] 까진 무거우니 1차는 핵심 정보 + [조사내용 모달 열기] 버튼
+    function _jmSvRenderLeft(it) {
+        var left = document.getElementById('jm-sv-left');
+        if (!left || !it) return;
+        var img = it.img_url
+            ? '<img src="' + escAttr(it.img_url) + '" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" class="jm-sv-detail-img" />'
+            : '<div class="jm-sv-detail-noimg">사진없음</div>';
+        var fmtNum = function (n) { if (!n) return ''; return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+        left.innerHTML =
+            '<div class="jm-sv-detail-head">' +
+                '<span class="jm-sv-detail-sakun">' + escHtml(it.sakun_no || '') + '</span>' +
+                '<span class="jm-sv-detail-status">' + escHtml(it.josa_status || '분류필요') + '</span>' +
+                '<button type="button" class="jm-sv-detail-open" onclick="openJosaContentModal(\'' + escAttr(it.josa_id) + '\')" title="입찰물건 상세 모달 [조사탭] 열기">📄 조사내용 모달</button>' +
+            '</div>' +
+            '<div class="jm-sv-detail-body">' +
+                '<div class="jm-sv-detail-img-wrap">' + img + '</div>' +
+                '<div class="jm-sv-detail-info">' +
+                    '<div><strong>법원</strong> ' + escHtml(it.court || '') + '</div>' +
+                    '<div><strong>물건종류</strong> ' + escHtml(it.prop_kind || '') + '</div>' +
+                    '<div><strong>매각기일</strong> ' + escHtml(it.bid_date || '') + ' ' + escHtml(it.bid_time || '') + '</div>' +
+                    '<div><strong>소재지</strong><br>' + escHtml(it.address || '').replace(/\n/g, '<br>') + '</div>' +
+                    '<div><strong>감정가</strong> ' + fmtNum(it.kamjungka) + '</div>' +
+                    '<div><strong>최저가</strong> ' + fmtNum(it.low_price) + '</div>' +
+                    '<div><strong>유찰</strong> ' + escHtml(it.fail_count || '0') + '회 (' + escHtml(it.fail_rate || '') + '%)</div>' +
+                    '<div><strong>특수물건</strong> ' + escHtml(it.specials_all || it.specials || '') + '</div>' +
+                    '<div><strong>조회</strong> ' + escHtml(it.view_count || '') + '</div>' +
+                    '<div><strong>조사자</strong> ' + escHtml(it.josaja || '') + '</div>' +
+                    '<div><strong>비고</strong><br>' + escHtml(it.memo || '').replace(/\n/g, '<br>') + '</div>' +
+                '</div>' +
+            '</div>';
+    }
+    // 모달 헤더 드래그로 모달 위치 이동
+    function _jmSvBindDrag(modal) {
+        var head = modal.querySelector('.jm-sv-head');
+        if (!head) return;
+        var dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+        head.addEventListener('mousedown', function (e) {
+            // 닫기 버튼 클릭은 드래그 X
+            if (e.target.classList && e.target.classList.contains('jm-sv-x')) return;
+            dragging = true;
+            startX = e.clientX; startY = e.clientY;
+            var r = modal.getBoundingClientRect();
+            startLeft = r.left; startTop = r.top;
+            // 드래그 시작 시 transform 제거 → left/top 으로 이동
+            modal.style.transform = 'none';
+            modal.style.left = startLeft + 'px';
+            modal.style.top = startTop + 'px';
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', function (e) {
+            if (!dragging) return;
+            var dx = e.clientX - startX;
+            var dy = e.clientY - startY;
+            modal.style.left = (startLeft + dx) + 'px';
+            modal.style.top = (startTop + dy) + 'px';
+        });
+        document.addEventListener('mouseup', function () { dragging = false; });
     }
     function toggleJmSummaryFilter(status) {
         if (!status) {
