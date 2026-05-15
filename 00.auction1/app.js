@@ -658,13 +658,245 @@
   function getMapsAdminKey() { try { return localStorage.getItem(LS_MAPS_KEY) || ''; } catch (e) { return ''; } }
   function setMapsAdminKey(k) { try { localStorage.setItem(LS_MAPS_KEY, k || ''); } catch (e) {} }
 
-  function promptMapsAdminKey() {
-    const cur = getMapsAdminKey();
-    const masked = cur ? cur.substring(0, 4) + '…' + cur.substring(cur.length - 3) : '(미설정)';
-    const next = prompt(`MAPS Admin Key 입력\n(현재: ${masked})\n\n비우고 확인하면 저장된 값을 삭제합니다.`, cur);
-    if (next === null) return; // 취소
-    setMapsAdminKey(next.trim());
-    alert(next.trim() ? 'Admin Key 저장됨' : 'Admin Key 삭제됨');
+  // ── 옥션원 계정 (3슬롯, 활성 1개 선택) ──────────────────
+  const LS_ACCOUNTS = 'auction1_accounts_v1';
+  const LS_ACTIVE_ACCOUNT = 'auction1_active_account_v1';
+  const DEFAULT_ACCOUNTS = [
+    { id: 'mjgold', pw: '28471298', label: '계정 1' },
+    { id: '',       pw: '',          label: '계정 2' },
+    { id: '',       pw: '',          label: '계정 3' },
+  ];
+  function getAccounts() {
+    try {
+      const raw = localStorage.getItem(LS_ACCOUNTS);
+      if (!raw) return DEFAULT_ACCOUNTS.map(a => ({ ...a }));
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return DEFAULT_ACCOUNTS.map(a => ({ ...a }));
+      const out = arr.slice(0, 3).map((a, i) => ({
+        id: String((a && a.id) || ''),
+        pw: String((a && a.pw) || ''),
+        label: String((a && a.label) || `계정 ${i + 1}`),
+      }));
+      while (out.length < 3) out.push({ id: '', pw: '', label: `계정 ${out.length + 1}` });
+      return out;
+    } catch (_) { return DEFAULT_ACCOUNTS.map(a => ({ ...a })); }
+  }
+  function setAccounts(arr) {
+    try { localStorage.setItem(LS_ACCOUNTS, JSON.stringify(arr)); } catch (_) {}
+  }
+  function getActiveAccountIdx() {
+    try {
+      const v = Number(localStorage.getItem(LS_ACTIVE_ACCOUNT));
+      return (Number.isFinite(v) && v >= 0 && v < 3) ? v : 0;
+    } catch (_) { return 0; }
+  }
+  function setActiveAccountIdx(i) {
+    try { localStorage.setItem(LS_ACTIVE_ACCOUNT, String(i)); } catch (_) {}
+  }
+  function getActiveAccount() {
+    const accs = getAccounts();
+    const i = getActiveAccountIdx();
+    return accs[i] || accs[0] || { id: '', pw: '', label: '계정 1' };
+  }
+  function getActiveAccountLabel() {
+    const a = getActiveAccount();
+    return a.id ? `${a.label} · ${a.id}` : `${a.label || '계정'} (미설정)`;
+  }
+  // 계정별 검증 결과 (성공/실패 + 검증일시) — 활성 계정 변경/PW 수정해도 보존
+  const LS_ACCOUNT_VERIFY = 'auction1_account_verify_v1';
+  function getAllAccountVerify() {
+    try { return JSON.parse(localStorage.getItem(LS_ACCOUNT_VERIFY) || '{}') || {}; }
+    catch (_) { return {}; }
+  }
+  function getAccountVerify(idx) {
+    const v = getAllAccountVerify()[String(idx)];
+    return (v && typeof v === 'object') ? v : null;
+  }
+  function setAccountVerify(idx, result) {
+    const all = getAllAccountVerify();
+    all[String(idx)] = {
+      ok: !!result.ok,
+      ts: Date.now(),
+      reason: String(result.reason || ''),
+    };
+    try { localStorage.setItem(LS_ACCOUNT_VERIFY, JSON.stringify(all)); } catch (_) {}
+  }
+  function _fmtVerifyTs(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${mm}/${dd} ${hh}:${mi}`;
+  }
+  function _renderVerifyBadge(v) {
+    if (!v) return '<span class="vr vr-busy" style="opacity:0.6;">미검증</span>';
+    const ts = _fmtVerifyTs(v.ts);
+    const reason = (v.reason || '').replace(/"/g, '&quot;');
+    return v.ok
+      ? `<span class="vr vr-ok" title="${reason}">✓ 성공 · ${ts}</span>`
+      : `<span class="vr vr-fail" title="${reason}">✗ 실패 · ${ts}</span>`;
+  }
+  function renderAccountSlots() {
+    const host = document.getElementById('accountSlots');
+    if (!host) return;
+    const accs = getAccounts();
+    const activeIdx = Number(document.getElementById('setActiveAccount')?.value || 0);
+    host.innerHTML = accs.map((a, i) => `
+      <div class="account-slot${i === activeIdx ? ' active' : ''}" data-idx="${i}">
+        <div class="account-slot-head">
+          <span>${escHtml(a.label || ('계정 ' + (i + 1)))}</span>
+          <span class="account-verify-result" id="accVerifyResult${i}">${_renderVerifyBadge(getAccountVerify(i))}</span>
+          <button type="button" class="btn_box_sss btn_white btn-verify" data-idx="${i}" title="이 ID/PW 로 옥션원에 실제 로그인 시도">검증하기</button>
+          ${i === activeIdx ? '<span class="badge-active">● 활성</span>' : ''}
+        </div>
+        <div class="account-slot-row">
+          <label>ID</label>
+          <input type="text" id="setAcc${i}Id" value="${escAttr(a.id)}" placeholder="옥션원 ID" autocomplete="off" />
+        </div>
+        <div class="account-slot-row">
+          <label>PW</label>
+          <input type="password" id="setAcc${i}Pw" value="${escAttr(a.pw)}" placeholder="비밀번호" autocomplete="off" />
+          <button type="button" class="btn-toggle-pw" data-target="setAcc${i}Pw">👁</button>
+        </div>
+      </div>
+    `).join('');
+    host.querySelectorAll('.btn-toggle-pw').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = document.getElementById(btn.dataset.target);
+        if (!t) return;
+        t.type = (t.type === 'password') ? 'text' : 'password';
+      });
+    });
+    host.querySelectorAll('.btn-verify').forEach(btn => {
+      btn.addEventListener('click', () => verifyAccountInModal(Number(btn.dataset.idx)));
+    });
+  }
+
+  async function verifyAccountInModal(i) {
+    const id = (document.getElementById(`setAcc${i}Id`)?.value || '').trim();
+    const pw = (document.getElementById(`setAcc${i}Pw`)?.value || '');
+    const resEl = document.getElementById(`accVerifyResult${i}`);
+    const btn = document.querySelector(`.btn-verify[data-idx="${i}"]`);
+    if (!resEl) return;
+    if (!id || !pw) {
+      resEl.innerHTML = '<span class="vr vr-fail">✗ ID/PW 입력 필요</span>';
+      return;
+    }
+    resEl.innerHTML = '<span class="vr vr-busy">검증 중... (옥션원 로그인 시도)</span>';
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch('/api/verify-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, pw })
+      });
+      const data = await r.json();
+      // 결과 + 검증일시 저장 — 모달 닫아도 보존, 일괄 크롤 모달 헤더에서도 사용
+      setAccountVerify(i, { ok: !!data.success, reason: data.reason });
+      resEl.innerHTML = _renderVerifyBadge(getAccountVerify(i));
+    } catch (e) {
+      setAccountVerify(i, { ok: false, reason: '서버 오류 — ' + (e.message || e) });
+      resEl.innerHTML = _renderVerifyBadge(getAccountVerify(i));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // ── 크롤링 설정 (설정 모달) ─────────────────────────────
+  const LS_CRAWL_SETTINGS = 'auction1_crawl_settings_v1';
+  const DEFAULT_CRAWL_SETTINGS = {
+    useSessionReuse: true,    // login_if_needed force=False — 30분 TTL 활용
+    verifyLogin: true,        // 로그인 후 로그아웃 표시 elem 확인
+    retryEnabled: true,       // 0건+비로그인 감지 시 재시도
+    retryCount: 2,
+    retryBackoffSec: [5, 15], // 길이=retryCount, 부족하면 마지막 값 반복
+    batchIntervalSec: 3,      // 일괄 크롤 매 프리셋 사이 대기 (초)
+  };
+  function getCrawlSettings() {
+    try {
+      const raw = localStorage.getItem(LS_CRAWL_SETTINGS);
+      if (!raw) return { ...DEFAULT_CRAWL_SETTINGS };
+      const v = JSON.parse(raw);
+      // 누락 키는 기본값으로 보정
+      return { ...DEFAULT_CRAWL_SETTINGS, ...v };
+    } catch (_) { return { ...DEFAULT_CRAWL_SETTINGS }; }
+  }
+  function setCrawlSettings(s) {
+    try { localStorage.setItem(LS_CRAWL_SETTINGS, JSON.stringify(s)); } catch (_) {}
+  }
+  function _parseBackoffStr(s) {
+    return String(s || '').split(',')
+      .map(x => Number(String(x).trim()))
+      .filter(n => Number.isFinite(n) && n >= 0);
+  }
+  function openSettingsModal() {
+    const s = getCrawlSettings();
+    const m = document.getElementById('settingsModal');
+    if (!m) return;
+    document.getElementById('setMapsKey').value = getMapsAdminKey();
+    // 옥션원 계정
+    document.getElementById('setActiveAccount').value = String(getActiveAccountIdx());
+    renderAccountSlots();
+    // 크롤링 설정
+    document.getElementById('setUseSessionReuse').checked = !!s.useSessionReuse;
+    document.getElementById('setVerifyLogin').checked = !!s.verifyLogin;
+    document.getElementById('setRetryEnabled').checked = !!s.retryEnabled;
+    document.getElementById('setRetryCount').value = Number(s.retryCount) || 0;
+    document.getElementById('setRetryBackoff').value = (s.retryBackoffSec || []).join(', ');
+    document.getElementById('setBatchInterval').value = Number(s.batchIntervalSec) || 0;
+    m.classList.remove('hidden');
+  }
+  function closeSettingsModal() {
+    document.getElementById('settingsModal')?.classList.add('hidden');
+  }
+  function saveSettingsModal() {
+    const newKey = (document.getElementById('setMapsKey').value || '').trim();
+    setMapsAdminKey(newKey);
+    // 옥션원 계정 3슬롯 수집 + 활성 인덱스
+    const accs = [];
+    for (let i = 0; i < 3; i++) {
+      accs.push({
+        id: (document.getElementById(`setAcc${i}Id`)?.value || '').trim(),
+        pw: (document.getElementById(`setAcc${i}Pw`)?.value || ''),
+        label: `계정 ${i + 1}`,
+      });
+    }
+    setAccounts(accs);
+    setActiveAccountIdx(Number(document.getElementById('setActiveAccount').value) || 0);
+    // 크롤링 설정
+    const s = {
+      useSessionReuse: document.getElementById('setUseSessionReuse').checked,
+      verifyLogin:     document.getElementById('setVerifyLogin').checked,
+      retryEnabled:    document.getElementById('setRetryEnabled').checked,
+      retryCount:      Math.max(0, Number(document.getElementById('setRetryCount').value) || 0),
+      retryBackoffSec: _parseBackoffStr(document.getElementById('setRetryBackoff').value),
+      batchIntervalSec: Math.max(0, Number(document.getElementById('setBatchInterval').value) || 0),
+    };
+    setCrawlSettings(s);
+    // 모달 유지 — 사용자가 PW 저장 후 바로 [검증하기] 누를 수 있게. 닫기는 [✕]/[취소]/[닫기] 로만.
+    // 활성 슬롯 강조도 갱신 (활성 계정 dropdown 변경 후 저장한 경우)
+    renderAccountSlots();
+    // inline 토스트 (head 안에 잠깐 뜨고 사라짐)
+    const toast = document.getElementById('settingsSaveToast');
+    if (toast) {
+      toast.textContent = `✓ 저장됨 · 활성: ${getActiveAccountLabel()}`;
+      toast.classList.add('show');
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+    setStatus(`설정 저장됨 — 활성 계정: ${getActiveAccountLabel()}`);
+  }
+  function resetSettingsModal() {
+    if (!confirm('권장값으로 되돌릴까요? (저장 버튼 누르기 전엔 적용 안 됨)')) return;
+    const s = { ...DEFAULT_CRAWL_SETTINGS };
+    document.getElementById('setUseSessionReuse').checked = s.useSessionReuse;
+    document.getElementById('setVerifyLogin').checked = s.verifyLogin;
+    document.getElementById('setRetryEnabled').checked = s.retryEnabled;
+    document.getElementById('setRetryCount').value = s.retryCount;
+    document.getElementById('setRetryBackoff').value = s.retryBackoffSec.join(', ');
+    document.getElementById('setBatchInterval').value = s.batchIntervalSec;
   }
 
   function onMsCheckAllChange(e) {
@@ -786,12 +1018,14 @@
   let __batchCrawlActive__ = false;
 
   // ── 일괄 크롤링 모달 헬퍼 ──
-  function openBatchModal(targets) {
+  function openBatchModal(targets, customTitle) {
     const m = document.getElementById('batchCrawlModal');
     if (!m) return;
     const list = document.getElementById('batchModalList');
     const prog = document.getElementById('batchModalProgress');
     const close = document.getElementById('batchModalClose');
+    const titleEl = m.querySelector('.batch-modal-title');
+    if (titleEl) titleEl.textContent = customTitle || '🔄 일괄 크롤링 진행';
     list.innerHTML = targets.map((p, i) =>
       '<div class="b-item" id="b-item-' + i + '">' +
         '<span class="b-icon">⏳</span>' +
@@ -800,6 +1034,20 @@
       '</div>'
     ).join('');
     prog.textContent = '0 / ' + targets.length;
+    // 진행 모달 헤더에 활성 계정 + 검증여부/일시 표시 (PW 는 절대 표시 안 함)
+    const accSpan = document.getElementById('batchModalAccount');
+    if (accSpan) {
+      const v = getAccountVerify(getActiveAccountIdx());
+      let tag = '';
+      if (v) {
+        tag = v.ok
+          ? ` · <span class="vr vr-ok">✓ 검증 ${_fmtVerifyTs(v.ts)}</span>`
+          : ` · <span class="vr vr-fail" title="${(v.reason||'').replace(/"/g,'&quot;')}">✗ 검증실패 ${_fmtVerifyTs(v.ts)}</span>`;
+      } else {
+        tag = ' · <span class="vr vr-busy" style="opacity:0.7;">⚠ 미검증</span>';
+      }
+      accSpan.innerHTML = '🔑 ' + escHtml(getActiveAccountLabel()) + tag;
+    }
     close.disabled = true;
     close.onclick = closeBatchModal;
     m.classList.remove('hidden');
@@ -850,28 +1098,54 @@
       try {
         loadPreset(p.id);
         await runCrawl();
+        // 직전 크롤의 가로채기/캐시 정보 (runCrawl 이 마지막 응답을 _lastCrawlMeta 로 보관)
+        const meta = window._lastCrawlMeta || {};
+        const hijackN = Number(meta.hijack_count) || 0;
+        const hijackDetected = !!meta.hijack_detected;
+        const rawCount = Number(meta.raw_count) || 0;
+        const cacheSaved = !!meta.cache_saved;
+        // 성공 케이스의 꼬리표: retry 로 복구된 경우만
+        const hijackTag = hijackN > 0 ? ` ⚠가로채기${hijackN}회 복구` : '';
         let n = 0;
         try {
           const cache = JSON.parse(localStorage.getItem(LS_CACHE_PFX + p.id) || 'null');
           n = (cache && Array.isArray(cache.items)) ? cache.items.length : 0;
         } catch (_) {}
         if (n > 0) {
-          updateBatchItem(i, 'b-done', '✓', n + '건 캐시 완료');
-          results.push({ title: p.title || p.id, ok: true, count: n });
+          updateBatchItem(i, 'b-done', '✓', n + '건 캐시 완료' + hijackTag);
+          results.push({ title: p.title || p.id, ok: true, count: n, hijack: hijackN });
+        } else if (rawCount > 0 && !cacheSaved) {
+          // ★ 옥션원에선 정상 받았는데 frontend localStorage quota 초과로 캐시 저장 실패
+          // "0건" 으로 잘못 표시하지 말고 정확히 안내
+          updateBatchItem(i, 'b-warning', '✓', rawCount + '건 받음 (⚠ 캐시 저장 실패: 결과 너무 큼. 새로고침 시 사라짐. MAPS 전송은 가능)' + hijackTag);
+          results.push({ title: p.title || p.id, ok: true, count: rawCount, warn: true, cacheFailed: true });
         } else {
-          // 0건 — 로그인 실패 / 검색 매칭 0 / 기타 — 경고로 표시
-          updateBatchItem(i, 'b-warning', '⚠', '0건 — 로그인 실패 가능. 단일 [크롤링 실행] 으로 재시도 권장');
-          results.push({ title: p.title || p.id, ok: false, count: 0, warn: true });
+          // 0건 — 원인 4분기 (PW 오류가 가장 명확하므로 최우선)
+          let warnMsg;
+          if (meta.auth_error) {
+            warnMsg = `🚨 0건 — PW 오류 자동 감지: "${meta.auth_error_reason || '인증 거부'}". 활성 계정 검증결과 자동 ✗ 갱신됨. ⚙ 에서 PW 수정 + 재검증 필요`;
+          } else if (hijackN > 0) {
+            warnMsg = `🚨 0건 — 가로채기 ${hijackN}회 복구 시도했으나 실패. ⚙ [검증하기] 로 ID/PW 확인 + 단일 재시도 권장`;
+          } else if (hijackDetected) {
+            warnMsg = `🚨 0건 — 옥션원 비로그인 감지 (PW 오류 또는 세션 가로채기). ⚙ [검증하기] 로 확인 권장 (재시도 OFF 라 자동 복구 없음)`;
+          } else {
+            warnMsg = '0건 — 옥션원에 검색결과 자체가 0건이거나 옥션원 응답 이상. 단일 [크롤링 실행] 으로 재확인 권장';
+          }
+          updateBatchItem(i, 'b-warning', '⚠', warnMsg);
+          results.push({ title: p.title || p.id, ok: false, count: 0, warn: true, hijack: hijackN, hijackDetected, authError: !!meta.auth_error });
         }
       } catch (e) {
         const errMsg = (e && e.message) || String(e);
         updateBatchItem(i, 'b-fail', '✗', errMsg.length > 60 ? errMsg.substring(0, 60) + '…' : errMsg);
         results.push({ title: p.title || p.id, ok: false, err: errMsg });
       }
+      // ★ 현재 i 의 옵저버 즉시 해제 — leftover setStatus 가 직전 i 박스를 'b-running' 으로 되돌리는 사고 방지
+      __batchStatusObserver__ = null;
       updateBatchProgress(i + 1, targets.length);
-      // 다음 리스트 처리 전 짧은 대기 — 옥션원 측 rate-limit / 세션 안정화
+      // 다음 리스트 처리 전 짧은 대기 — 설정 모달의 batchIntervalSec 사용 (테스트=1, 야간=3)
       if (i < targets.length - 1) {
-        await new Promise(r => setTimeout(r, 1500));
+        const waitMs = Math.max(0, (Number(getCrawlSettings().batchIntervalSec) || 0) * 1000);
+        if (waitMs > 0) await new Promise(r => setTimeout(r, waitMs));
       }
     }
 
@@ -1683,7 +1957,12 @@
     document.getElementById('btnSyncToMaps')?.addEventListener('click', syncSelectedPresetsToMaps);
     document.getElementById('btnSendToMaps')?.addEventListener('click', sendCheckedListsToMaps);
     document.getElementById('btnBatchCrawl')?.addEventListener('click', batchCrawlCheckedPresets);
-    document.getElementById('btnMapsConfig')?.addEventListener('click', promptMapsAdminKey);
+    document.getElementById('btnMapsConfig')?.addEventListener('click', openSettingsModal);
+    document.getElementById('settingsModalSave')?.addEventListener('click', saveSettingsModal);
+    document.getElementById('settingsModalCancel')?.addEventListener('click', closeSettingsModal);
+    document.getElementById('settingsModalX')?.addEventListener('click', closeSettingsModal);
+    document.getElementById('settingsModalReset')?.addEventListener('click', resetSettingsModal);
+    document.getElementById('setActiveAccount')?.addEventListener('change', renderAccountSlots);
     document.getElementById('btnUploadMaps')?.addEventListener('click', uploadSelectedItemsToMaps);
     // 결과 테이블 헤더 [전체] 체크박스 (사진 옆) — 모든 행 체크박스 토글
     document.getElementById('resColCheckAll')?.addEventListener('change', (e) => {
@@ -1951,26 +2230,37 @@
   let _progressTimer = null;
   function startProgressPolling() {
     stopProgressPolling();
-    _progressTimer = setInterval(async () => {
+    const myTimer = setInterval(async () => {
+      // ★ leftover 가드: clearInterval 후에도 in-flight fetch 가 응답 받으면 호출됨 → 다음 batch iteration 의 박스를 옛 옵저버로 덮는 사고 방지
       try {
         const r = await fetch('/api/progress');
+        if (_progressTimer !== myTimer) return;
         if (!r.ok) return;
         const p = await r.json();
+        // ★ 가로채기/세션누락 감지 시 prefix 강조 — retry 발동 vs 미발동(retry OFF) 분기
+        const hijackN = Number(p.hijack_count) || 0;
+        let hijackPrefix = '';
+        if (hijackN > 0) {
+          hijackPrefix = `⚠ 가로채기 — 재로그인 ${hijackN}회 · `;
+        } else if (p.hijack_detected) {
+          hijackPrefix = `⚠ 비로그인 감지 (재시도 OFF) · `;
+        }
         let msg;
-        if (p.stage === 'login')        msg = '옥션원 로그인 중...';
-        else if (p.stage === 'search')  msg = '옥션원 검색 중...';
+        if (p.stage === 'login')        msg = hijackPrefix + (hijackN > 0 ? '재로그인 중...' : '옥션원 로그인 중...');
+        else if (p.stage === 'search')  msg = hijackPrefix + '옥션원 검색 중...';
         else if (p.stage === 'paging')  {
-          msg = `페이지 ${p.pages_done} 진행 중 · ${p.current}` +
+          msg = hijackPrefix + `페이지 ${p.pages_done} 진행 중 · ${p.current}` +
                 (p.total ? ` / ${p.total}건` : '건');
         } else if (p.stage === 'cancelled') msg = `⏹ 중지 처리 중... (${p.current}건 까지)`;
-        else                            msg = '크롤링 진행 중...';
-        setStatus(msg);
+        else                            msg = hijackPrefix + '크롤링 진행 중...';
+        setStatus(msg, hijackN > 0);
         // 상단 [전체] 카운트 미리보기
         const elAll = document.getElementById('resCountAll');
         if (elAll && p.total) elAll.textContent = `${p.current}/${p.total}`;
         else if (elAll) elAll.textContent = p.current || 0;
       } catch (e) { /* 일시 실패 무시 */ }
     }, 1000);
+    _progressTimer = myTimer;
   }
   function stopProgressPolling() {
     if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
@@ -2000,15 +2290,49 @@
     setResultCounts(0, 0, 0);  // 전체/필터링 카운트 모두 리셋 (이전 크롤 잔재 표시 방지)
     setStatus('크롤링 실행 중... (중지하려면 [⏹ 중지])');
     setCrawlRunning(true);
+    // ★ 단일 크롤 모드 (일괄이 아닐 때) — 일괄 크롤 모달을 1개 박스로 재사용해서 진행/가로채기/PW오류 알림 표시
+    const isSingle = !__batchCrawlActive__;
+    if (isSingle) {
+      const _pTitle = title || (currentPresetId ? '(' + currentPresetId + ')' : '단일 크롤');
+      openBatchModal([{ title: _pTitle, id: currentPresetId || 'single' }], '🔄 크롤링 진행');
+      __batchStatusObserver__ = function (msg) {
+        if (typeof msg === 'string' && msg) updateBatchItem(0, 'b-running', '🔄', msg.length > 100 ? msg.substring(0, 100) + '…' : msg);
+      };
+    }
     startProgressPolling();
     try {
+      const _acc = getActiveAccount();
       const r = await fetch('/api/crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title, formData: formData, customFilters: customFilters })
+        body: JSON.stringify({
+          title: title, formData: formData, customFilters: customFilters,
+          settings: getCrawlSettings(),
+          account: { id: _acc.id, pw: _acc.pw, label: _acc.label },
+        })
       });
       const data = await r.json();
       if (!data.success) throw new Error(data.error || '백엔드 오류');
+      // 가로채기/PW오류 등 응답 메타 (batch loop 가 결과 표시에 사용)
+      // raw_count 추가 — 옥션원 응답이 너무 커서 캐시 저장 실패해도 batch loop 가 "0건" 으로 잘못 표시 안 하게
+      window._lastCrawlMeta = {
+        hijack_count: data.hijack_count || 0,
+        hijack_detected: !!data.hijack_detected,
+        cancelled: !!data.cancelled,
+        auth_error: !!data.auth_error,
+        auth_error_reason: data.auth_error_reason || '',
+        raw_count: (data.items && data.items.length) || 0,
+        cache_saved: false,  // 아래 캐시 저장 단계에서 갱신
+      };
+      // ★ PW 오류 자동 감지 — 활성 계정의 검증 결과를 자동으로 "✗ 실패" 로 업데이트 + 일시 갱신
+      // 사용자가 별도로 [검증하기] 안 눌러도, 누가 옥션원 PW 바꾸면 즉시 검증 실패로 마킹됨
+      if (data.auth_error) {
+        const _activeIdx = getActiveAccountIdx();
+        setAccountVerify(_activeIdx, {
+          ok: false,
+          reason: '🚨 크롤링 중 자동 감지 — ' + (data.auth_error_reason || 'PW 오류'),
+        });
+      }
       const raw = data.items || [];
       const ts = Date.now();
       const { filtered, applied, skipped } = applyAndRender(raw, customFilters, ts);
@@ -2037,24 +2361,50 @@
           // full 실패 → 옛 캐시 자기 자신부터 제거하고 lite 시도
           try { localStorage.removeItem(key); } catch (_) {}
           if (!trySave(litePayload, 'lite')) {
-            // lite 도 실패 → 다른 프리셋 캐시 LRU 제거 후 lite 재시도
-            const others = Object.keys(localStorage)
-              .filter(k => k.startsWith(LS_CACHE_PFX) && k !== key)
-              .map(k => {
-                let t = 0;
-                try { t = (JSON.parse(localStorage.getItem(k) || '{}').ts) || 0; } catch (_) {}
-                return [k, t];
-              })
-              .sort((a, b) => a[1] - b[1]);
-            for (const [k] of others) {
-              localStorage.removeItem(k);
-              if (trySave(litePayload, 'lite')) break;
+            // lite 도 실패 → 단일 모드일 때만 다른 프리셋 캐시 LRU 로 비워서 재시도.
+            // ★ 일괄 모드에선 다른 프리셋 캐시 절대 안 건드림 — 같은 일괄에서 이미 받은 1번/2번 결과가 3번 quota 초과로 날아가는 사고 방지.
+            if (!__batchCrawlActive__) {
+              const others = Object.keys(localStorage)
+                .filter(k => k.startsWith(LS_CACHE_PFX) && k !== key)
+                .map(k => {
+                  let t = 0;
+                  try { t = (JSON.parse(localStorage.getItem(k) || '{}').ts) || 0; } catch (_) {}
+                  return [k, t];
+                })
+                .sort((a, b) => a[1] - b[1]);
+              for (const [k] of others) {
+                localStorage.removeItem(k);
+                if (trySave(litePayload, 'lite')) break;
+              }
+            }
+            // ★ lite 도 실패 → minimal 모드 (텍스트만, _html 전부 제거 + 이미지 url 도 제거)
+            // 604건 같은 큰 결과 케이스 안전망. 캐시 size 약 1/10. 자기 자신만 저장 시도, 다른 프리셋 안 건드림.
+            if (!saved) {
+              const stripMinimal = it => {
+                const o = {};
+                for (const k in it) {
+                  if (k.endsWith('_html')) continue;
+                  if (k === 'img_url') continue;
+                  o[k] = it[k];
+                }
+                return o;
+              };
+              const minimalPayload = JSON.stringify({ items: raw.map(stripMinimal), ts, lite: true, minimal: true });
+              if (!trySave(minimalPayload, 'minimal') && !__batchCrawlActive__) {
+                // 단일 모드만: minimal 도 실패 → 다른 프리셋 다 비우고 마지막 시도
+                Object.keys(localStorage)
+                  .filter(k => k.startsWith(LS_CACHE_PFX) && k !== key)
+                  .forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+                trySave(minimalPayload, 'minimal');
+              }
             }
           }
         }
         try { localStorage.setItem(LS_LAST_PRESET, currentPresetId); } catch (_) {}
-        if (!saved) console.warn('[cache] save failed even as lite:', litePayload.length, 'bytes');
-        else console.log(`[cache] saved ${savedMode}: ${(saved && savedMode==='full' ? fullPayload : litePayload).length} bytes`);
+        // 메타에 캐시 저장 결과 기록 — batch/단일 loop 의 메시지 분기가 raw_count 와 함께 사용
+        if (window._lastCrawlMeta) window._lastCrawlMeta.cache_saved = saved;
+        if (!saved) console.warn('[cache] save failed even after minimal — raw 만 메모리 보유, 페이지 새로고침 시 사라짐');
+        else console.log(`[cache] saved ${savedMode}`);
       }
       let msg = `옥션원 ${raw.length}건 수신`;
       if (data.cancelled) msg = `⏹ 중지됨 — 옥션원 ${raw.length}건까지 받음`;
@@ -2064,12 +2414,48 @@
         if (!__batchCrawlActive__) alert(`아래 필터 종류는 매핑이 없어 무시됐습니다:\n\n${skipped.join(', ')}\n\n[필터 종류 관리]에서 정확한 이름으로 변경하세요.\n\n지원 목록:\n${Object.keys(FILTER_FIELDS).join(', ')}`);
       }
       setStatus(msg, !!data.cancelled || skipped.length > 0);
+      // 단일 모드 결과 박스 표시 — 가로채기/PW오류/N건/캐시저장실패 분기
+      if (isSingle) {
+        const _meta = window._lastCrawlMeta || {};
+        const _hN = Number(_meta.hijack_count) || 0;
+        const _hD = !!_meta.hijack_detected;
+        const _cacheSaved = !!_meta.cache_saved;
+        let _cls, _icon, _sub;
+        if (raw.length > 0) {
+          _cls = 'b-done'; _icon = '✓';
+          const _cacheTag = !_cacheSaved ? ' (⚠ 캐시 저장 실패: 결과 너무 큼)' : '';
+          _sub = raw.length + '건 수신' + (applied ? ' · 추가필터 후 ' + filtered.length + '건' : '') + (_hN > 0 ? ' ⚠가로채기' + _hN + '회 복구' : '') + _cacheTag + (data.cancelled ? ' (중지됨)' : '');
+        } else if (_meta.auth_error) {
+          _cls = 'b-warning'; _icon = '⚠';
+          _sub = '🚨 0건 — PW 오류 자동 감지: "' + (_meta.auth_error_reason || '인증 거부') + '". 활성 계정 검증결과 자동 ✗ 갱신됨. ⚙ 에서 PW 수정 + 재검증 필요';
+        } else if (_hN > 0) {
+          _cls = 'b-warning'; _icon = '⚠';
+          _sub = '🚨 0건 — 가로채기 ' + _hN + '회 복구 시도했으나 실패. ⚙ [검증하기] 로 ID/PW 확인 권장';
+        } else if (_hD) {
+          _cls = 'b-warning'; _icon = '⚠';
+          _sub = '🚨 0건 — 옥션원 비로그인 감지 (PW 오류 또는 세션 가로채기). ⚙ [검증하기] 로 확인 권장';
+        } else {
+          _cls = 'b-warning'; _icon = '⚠';
+          _sub = '0건 — 옥션원에 검색결과 자체가 0건이거나 옥션원 응답 이상';
+        }
+        updateBatchItem(0, _cls, _icon, _sub);
+        updateBatchProgress(1, 1);
+      }
     } catch (e) {
       resBody.innerHTML = `<tr><td colspan="8" class="center" style="padding:40px 0;color:#dc2626;">크롤링 실패: ${escHtml(String(e.message || e))}<br><span class="muted small">crawler.py 가 실행 중인지 확인 (python crawler.py)</span></td></tr>`;
       setStatus('크롤링 실패', true);
+      if (isSingle) {
+        updateBatchItem(0, 'b-fail', '✗', '크롤링 실패: ' + String(e.message || e));
+        updateBatchProgress(1, 1);
+      }
     } finally {
       stopProgressPolling();
       setCrawlRunning(false);
+      // 단일 모드 — 옵저버 해제 + 닫기 활성화
+      if (isSingle) {
+        __batchStatusObserver__ = null;
+        finishBatchModal();
+      }
       // 사이드바 캐시 표시 갱신
       renderSidebar();
     }

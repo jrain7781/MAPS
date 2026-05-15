@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="auction1-css/input_box.css">
 <link rel="stylesheet" href="auction1-css/tooltip.css">
 <!-- 추가 (사이드바·추가필터 섹션 등 옥션원에 없는 부분 한정) -->
-<link rel="stylesheet" href="overlay.css?v=59">
+<link rel="stylesheet" href="overlay.css?v=60">
 <link rel="stylesheet" href="report.css?v=6">
 </head>
 <body>
@@ -26,15 +26,88 @@
 
 <div id="appLayout">
 
+  <!-- 설정 모달 (⚙ 버튼) — MAPS Admin Key + 크롤링 설정 -->
+  <div id="settingsModal" class="batch-modal hidden">
+    <div class="batch-modal-card settings-card">
+      <div class="batch-modal-head">
+        <span class="batch-modal-title">⚙ 설정</span>
+        <div class="settings-actions">
+          <span id="settingsSaveToast" class="settings-toast"></span>
+          <button type="button" id="settingsModalReset" class="btn_box_sss btn_white" title="권장값으로 되돌리기">권장값</button>
+          <button type="button" id="settingsModalCancel" class="btn_box_sss btn_white">취소</button>
+          <button type="button" id="settingsModalSave" class="btn_box_sss btn_blue bold">저장</button>
+          <button type="button" id="settingsModalX" class="btn_box_sss btn_white" title="닫기">✕</button>
+        </div>
+      </div>
+      <div class="settings-body">
+        <!-- MAPS 연동 -->
+        <div class="settings-section">
+          <div class="settings-section-title">MAPS 연동</div>
+          <label class="settings-row">
+            <span class="settings-label">Admin Key</span>
+            <input type="text" id="setMapsKey" class="settings-input" placeholder="GAS 웹앱 admin key" autocomplete="off" />
+          </label>
+        </div>
+        <!-- 옥션원 계정 (3슬롯) -->
+        <div class="settings-section">
+          <div class="settings-section-title">옥션원 계정 (최대 3개, 선택해서 사용)</div>
+          <label class="settings-row">
+            <span class="settings-label">활성 계정</span>
+            <select id="setActiveAccount" class="settings-input">
+              <option value="0">계정 1</option>
+              <option value="1">계정 2</option>
+              <option value="2">계정 3</option>
+            </select>
+            <em class="settings-hint">크롤링 시 이 계정으로 로그인</em>
+          </label>
+          <div id="accountSlots"></div>
+        </div>
+        <!-- 크롤링 설정 -->
+        <div class="settings-section">
+          <div class="settings-section-title">크롤링 설정</div>
+          <label class="settings-row settings-check">
+            <input type="checkbox" id="setUseSessionReuse" />
+            <span>세션 재사용 (1회 로그인 후 30분 유지) <em class="settings-hint">- 권장 ON. 매 크롤마다 강제 재로그인 안 함</em></span>
+          </label>
+          <label class="settings-row settings-check">
+            <input type="checkbox" id="setVerifyLogin" />
+            <span>로그인 성공 검증 강화 <em class="settings-hint">- 권장 ON. 로그아웃 표시 elem 확인</em></span>
+          </label>
+          <label class="settings-row settings-check">
+            <input type="checkbox" id="setRetryEnabled" />
+            <span>재시도 활성화 (0건 + 비로그인 감지 시) <em class="settings-hint">- 야간 자동에 권장 ON</em></span>
+          </label>
+          <label class="settings-row">
+            <span class="settings-label">재시도 횟수</span>
+            <input type="number" id="setRetryCount" class="settings-input num" min="0" max="10" />
+            <em class="settings-hint">권장 2</em>
+          </label>
+          <label class="settings-row">
+            <span class="settings-label">백오프 (초, 콤마)</span>
+            <input type="text" id="setRetryBackoff" class="settings-input" placeholder="예: 5, 15" />
+            <em class="settings-hint">횟수만큼 — 부족하면 마지막 값 반복</em>
+          </label>
+          <label class="settings-row">
+            <span class="settings-label">일괄 간격 (초)</span>
+            <input type="number" id="setBatchInterval" class="settings-input num" min="0" max="60" step="0.5" />
+            <em class="settings-hint">테스트=1, 야간=3</em>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 일괄 크롤링 진행 모달 -->
   <div id="batchCrawlModal" class="batch-modal hidden">
     <div class="batch-modal-card">
       <div class="batch-modal-head">
         <span class="batch-modal-title">🔄 일괄 크롤링 진행</span>
+        <span id="batchModalAccount" class="batch-modal-account" title="크롤링에 사용 중인 옥션원 계정"></span>
         <span id="batchModalProgress" class="batch-modal-progress">0 / 0</span>
       </div>
       <div id="batchModalList" class="batch-modal-list"></div>
       <div class="batch-modal-foot">
+        <button type="button" id="batchModalStop" class="btn_box_sss btn_red bold" title="진행 중인 크롤링 즉시 중지 + 다음 리스트도 진행 안 함">⏹ 중지</button>
         <button type="button" id="batchModalClose" class="btn_box_sss btn_white bold" disabled>닫기</button>
       </div>
     </div>
@@ -450,6 +523,6 @@
 </div>
 
 <script src="data.js?v=51"></script>
-<script src="app.js?v=71"></script>
+<script src="app.js?v=75"></script>
 </body>
 </html>

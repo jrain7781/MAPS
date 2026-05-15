@@ -86,10 +86,10 @@ def _gas_post(payload: dict, timeout: float = 60.0) -> dict:
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# stdout 버퍼링 비활성 (디버그 로그 즉시 보이게)
+# stdout 버퍼링 비활성 + utf-8 강제 (Windows 콘솔 cp949 가 한글/유니코드 못 찍어 print 실패 → 예외 → 크롤 실패 막기 위함)
 try:
-    sys.stdout.reconfigure(line_buffering=True)
-    sys.stderr.reconfigure(line_buffering=True)
+    sys.stdout.reconfigure(line_buffering=True, encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(line_buffering=True, encoding='utf-8', errors='replace')
 except Exception:
     pass
 
@@ -105,8 +105,22 @@ from selenium.common.exceptions import (
 )
 from webdriver_manager.chrome import ChromeDriverManager
 
-# ── 로그인 정보 (00.imageup/01.i.py 의 ACCOUNTS 와 동일) ────────
+# ── 로그인 정보 (기본 fallback — 프론트엔드 설정 모달의 활성 계정이 우선) ────────
 ACCOUNT = {"id": "mjgold", "pw": "28471298"}
+
+def _resolve_account(account):
+    """account dict 가 유효(id/pw 둘 다 있음)면 그것 사용, 아니면 기본 ACCOUNT.
+    return: {id, pw, label}
+    """
+    if isinstance(account, dict):
+        aid = str(account.get("id") or "").strip()
+        apw = str(account.get("pw") or "")
+        if aid and apw:
+            return {"id": aid, "pw": apw, "label": str(account.get("label") or aid)}
+    return {"id": ACCOUNT["id"], "pw": ACCOUNT["pw"], "label": ACCOUNT["id"] + " (기본)"}
+
+def _esc_js(s):
+    return str(s).replace("\\", "\\\\").replace("'", "\\'")
 
 # ── 우리 폼 → 옥션원 폼 필드명 매핑 ──────────────────────────────
 FIELD_MAP = {
@@ -157,6 +171,31 @@ _last_login_at = 0.0
 LOGIN_TTL_SEC = 30 * 60  # 30분 — 옥션원 세션 안에서 재로그인 안 하고 빠르게 처리
 _cancel_event = threading.Event()  # 크롤링 페이지 순회 중간 중지 신호
 
+# 크롤링 동작 설정 (프론트엔드 설정 모달에서 보내옴 — 누락 시 안전한 기본값)
+DEFAULT_SETTINGS = {
+    "useSessionReuse": True,    # True 면 login_if_needed force=False (TTL 30분 활용). False 면 매번 강제 재로그인 (기존 동작)
+    "verifyLogin":     True,    # 로그인 후 사용자 표시 elem 확인 — 실패 시 _last_login_at 리셋해서 다음 호출에서 재로그인
+    "retryEnabled":    True,    # 0건 + 비로그인 감지 시 백오프 재시도 활성
+    "retryCount":      2,
+    "retryBackoffSec": [5, 15], # 부족하면 마지막 값 반복
+}
+
+def _coerce_settings(s):
+    out = dict(DEFAULT_SETTINGS)
+    if isinstance(s, dict):
+        for k in out.keys():
+            if k in s and s[k] is not None:
+                out[k] = s[k]
+    # 타입 정규화
+    try: out["retryCount"] = max(0, int(out["retryCount"]))
+    except: out["retryCount"] = 0
+    if not isinstance(out["retryBackoffSec"], list):
+        out["retryBackoffSec"] = list(DEFAULT_SETTINGS["retryBackoffSec"])
+    out["retryBackoffSec"] = [max(0, int(x)) for x in out["retryBackoffSec"] if isinstance(x, (int, float))]
+    if not out["retryBackoffSec"]:
+        out["retryBackoffSec"] = [5]
+    return out
+
 # 크롤링 진행상황 (프론트 폴링용)
 _progress = {
     "running": False,
@@ -166,6 +205,13 @@ _progress = {
     "started_at": 0.0,
     "cancelled": False,
     "stage": "",           # 'login' | 'search' | 'paging' | 'done' | 'cancelled' | 'fail'
+    # 세션 가로채기 / 비로그인 감지 추적
+    "hijack_count": 0,           # 현재 크롤에서 감지된 가로채기/세션누락 횟수 (= retry 발동 횟수)
+    "hijack_detected": False,    # 한 번이라도 발동했는지
+    "hijack_reason": "",         # 마지막 감지 사유 ('session_hijacked')
+    # 자격 증명 오류 (PW 변경/오타 등) — 옥션원이 alert 으로 띄움
+    "auth_error": False,
+    "auth_error_reason": "",
 }
 
 def _get_total_record(d):
@@ -257,17 +303,87 @@ def _drain_alerts(d, max_iter: int = 3, tag: str = "") -> list:
     return seen
 
 
-def login_if_needed(force: bool = False):
+def _is_unauth_after_search(d) -> tuple:
+    """검색 submit 후 비로그인/PW오류 상태인지 multi-signal 검사.
+    return: (unauth: bool, reason: str) — reason 은 'cert_redirect' | 'login_modal' | 'login_class' | 'no_user_ssid' | 'ca_title_stuck' | ''
+    """
+    try:
+        cur = (d.current_url or "").lower()
+    except Exception:
+        cur = ""
+    # 정상: 결과 페이지 ca_list.php
+    if "ca_list" in cur:
+        return (False, "")
+    # cert.php redirect — PW 오류 강한 신호
+    if "/member/cert.php" in cur:
+        return (True, "cert_redirect")
+    # ca_title.php 그대로 머무름 또는 login_box 로 갔으면 검색 자체 못 함 → 비로그인
+    # selenium DOM 으로 확정 신호 다단계 검사 (Chrome MCP 로 직접 확인한 selector 들)
+    try:
+        # 1) section_login_on class — 옥션원 비로그인 wrapper (Chrome MCP 로 확인)
+        if d.find_elements(By.CSS_SELECTOR, ".section_login_on"):
+            return (True, "login_class")
+    except Exception:
+        pass
+    try:
+        # 2) "로그인 후 이용" 텍스트 (visible 안 보일 수도 있지만 DOM 엔 존재)
+        if d.find_elements(By.XPATH, "//*[contains(text(),'로그인 후 이용')]"):
+            return (True, "login_modal")
+    except Exception:
+        pass
+    try:
+        # 3) user_ssid JS 변수 — 옥션원 인증된 세션이면 truthy
+        has_ssid = bool(d.execute_script("return (typeof user_ssid !== 'undefined') && !!user_ssid;"))
+        if not has_ssid:
+            return (True, "no_user_ssid")
+    except Exception:
+        pass
+    # ca_title 에 머무름 = search 안 먹음 = 비로그인 (위에서 못 잡았어도)
+    if "ca_title" in cur:
+        return (True, "ca_title_stuck")
+    return (False, "")
+
+
+def _verify_logged_in(d) -> bool:
+    """로그인 표시 elem 확인 — 옥션원의 user_ssid 변수 또는 로그아웃 링크 존재 여부.
+    fallback 보수적: 못 찾으면 False 반환 (=재로그인 트리거). 단 client_id input 자체가 안 보이면 페이지가 로그인 폼이 아니므로 통과시킴(기존 동작 호환)."""
+    try:
+        # user_ssid 가 있으면 옥션원 입장에서 인증된 세션
+        has_user_ssid = bool(d.execute_script("return (typeof user_ssid !== 'undefined') && !!user_ssid;"))
+    except Exception:
+        has_user_ssid = False
+    if has_user_ssid:
+        return True
+    try:
+        # 로그아웃 / mypage / 마이페이지 링크 등
+        if d.find_elements(By.XPATH, "//a[contains(@href,'logout') or contains(@href,'mypage') or contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'logout') or contains(text(),'로그아웃') or contains(text(),'마이페이지')]"):
+            return True
+    except Exception:
+        pass
+    try:
+        # 로그인 폼이 보이면 명백히 비로그인
+        if d.find_elements(By.ID, "client_id"):
+            return False
+    except Exception:
+        pass
+    # 옥션원 페이지에 따라 표시 elem 이 다를 수 있음 → 둘 다 못 찾고 client_id 도 없으면 알 수 없음 → 통과 (기존 동작 호환)
+    return True
+
+
+def login_if_needed(force: bool = False, verify_login: bool = True, account=None):
     """TTL(30분) 내에는 로그인 skip — 첫 요청만 느리고 이후 매 요청은 즉시.
     force=True 또는 TTL 만료 시 옥션원 로그인 페이지로 가서 재로그인.
+    verify_login=True 면 로그인 후 사용자 표시 elem 확인 — 실패 시 _last_login_at 리셋.
+    account=None 이면 기본 ACCOUNT, dict 면 그 계정 사용.
     """
     global _last_login_at
+    creds = _resolve_account(account)
     if not force and (time.time() - _last_login_at) < LOGIN_TTL_SEC:
         return
     d = get_driver()
     # 시작 전 잔여 알럿 정리 (이전 작업의 잔재일 수 있음)
     _drain_alerts(d, tag="pre")
-    print(f"[login] (re)login → {URL_LOGIN}")
+    print(f"[login] (re)login → {URL_LOGIN} (account={creds['label']})")
     # 페이지 이동 자체가 알럿을 띄울 수 있으므로 UnexpectedAlertPresent 안전 처리
     try:
         d.get(URL_LOGIN)
@@ -284,13 +400,15 @@ def login_if_needed(force: bool = False):
         print("[login] client_id input not found (이미 로그인 상태?). 그대로 진행")
         _last_login_at = time.time()
         return
+    _id_js = _esc_js(creds["id"])
+    _pw_js = _esc_js(creds["pw"])
     d.execute_script(
         f"""
-        document.getElementById('client_id').value = '{ACCOUNT['id']}';
+        document.getElementById('client_id').value = '{_id_js}';
         var dummy = document.getElementById('pw_Dummy');
         var real = document.getElementById('passwd');
         if (dummy) dummy.style.display = 'none';
-        if (real) {{ real.style.display = 'block'; real.value = '{ACCOUNT['pw']}'; }}
+        if (real) {{ real.style.display = 'block'; real.value = '{_pw_js}'; }}
         """
     )
     try:
@@ -312,8 +430,11 @@ def login_if_needed(force: bool = False):
         for t in seen:
             if "동시 접속" in t or "동시접속" in t:
                 print("[login] 동시접속 alert → accept 로 우리 세션이 우선권 확보")
-            elif "비밀번호" in t or "아이디" in t:
-                print(f"[login][WARN] 자격 증명 오류 가능: {t!r}")
+            elif ("비밀번호" in t) or ("아이디" in t) or ("일치하지" in t) or ("잘못" in t) or ("다시 입력" in t) or ("다시 확인" in t):
+                # ★ 자격 증명 오류 — 프론트가 자동으로 검증 결과 업데이트 가능하도록 _progress 에 마킹
+                print(f"[login][AUTH_ERROR] 자격 증명 거부 (account={creds['label']}): {t!r}")
+                _progress["auth_error"] = True
+                _progress["auth_error_reason"] = t
             elif "로그인" in t and "이용" in t:
                 # 비로그인 상태 안내 — 단순 accept 후 진행
                 pass
@@ -339,6 +460,33 @@ def login_if_needed(force: bool = False):
         _drain_alerts(d, tag="post-cur")
         cur = "(alert handled)"
     print(f"[login] done, current_url={cur}")
+    # ★ submit 후 URL 검사 — PW 오류 시 옥션원이 보이는 패턴 (Claude-in-Chrome 직접 테스트로 확인):
+    #   - login_box.php 그대로  → 로그인 실패 (단순 redirect 안 됨)
+    #   - /member/cert.php       → 옥션원 인증페이지 redirect (PW 오류 시 옥션원 정책)
+    cur_l = (cur or "").lower()
+    url_unauth_hint = ""
+    if "/member/cert.php" in cur_l:
+        url_unauth_hint = "auction1 cert.php redirect (PW 오류 강한 신호)"
+    elif "login_box" in cur_l or "login.php" in cur_l:
+        url_unauth_hint = "login 페이지 그대로 (로그인 실패)"
+    url_still_login = bool(url_unauth_hint)
+    if verify_login or url_still_login:
+        ok = _verify_logged_in(d)
+        if not ok or url_still_login:
+            print(f"[login][verify] 실패 — _last_login_at 리셋 (hint={url_unauth_hint!r}, verify_ok={ok})")
+            _last_login_at = 0.0
+            # PW 오류 의심 마킹 — 프론트가 자동으로 활성 계정 검증 결과 ✗ 갱신
+            _progress["auth_error"] = True
+            if "cert.php" in cur_l:
+                _progress["auth_error_reason"] = (
+                    f"🚨 PW 오류 의심 — 옥션원이 인증페이지(/member/cert.php)로 redirect (account={creds['label']})"
+                )
+            else:
+                _progress["auth_error_reason"] = (
+                    f"로그인 실패 (PW 오류 또는 옥션원 응답 이상) — account={creds['label']}"
+                )
+        else:
+            print("[login][verify] OK")
 
 
 def fill_form(d, form_data: dict):
@@ -660,13 +808,103 @@ def _next_page_link(d, visited: set):
     return candidates[0]
 
 
-def crawl(form_data: dict, custom_filters: list | None = None):
+def verify_account(account: dict) -> dict:
+    """ID/PW 단발 검증 — 옥션원에 실제 로그인 시도해서 성공/실패 반환.
+    메인 driver + _lock 사용 (일괄 크롤 중이면 대기). 검증 후 _last_login_at 리셋해서 다음 크롤이 활성 계정으로 새로 로그인하도록 한다.
+    return: {success: bool, reason: str}
+    """
+    global _last_login_at
+    if not isinstance(account, dict):
+        return {"success": False, "reason": "account payload 형식 오류"}
+    aid = str(account.get("id") or "").strip()
+    apw = str(account.get("pw") or "")
+    if not aid or not apw:
+        return {"success": False, "reason": "ID/PW 누락"}
+    with _lock:
+        d = get_driver()
+        _drain_alerts(d, tag="verify-pre")
+        try:
+            d.get(URL_LOGIN)
+        except UnexpectedAlertPresentException:
+            _drain_alerts(d, tag="verify-nav")
+            try: d.get(URL_LOGIN)
+            except Exception: pass
+        _drain_alerts(d, tag="verify-after-nav")
+        # 로그인 폼 대기
+        try:
+            WebDriverWait(d, 15).until(EC.presence_of_element_located((By.ID, "client_id")))
+        except UnexpectedAlertPresentException:
+            _drain_alerts(d, tag="verify-form-wait")
+        except Exception:
+            # 옥션원이 메인으로 redirect 한 경우 = 이미 로그인됨. 검증 elem 으로 판정.
+            ok = _verify_logged_in(d)
+            _last_login_at = 0.0
+            return {"success": ok, "reason": "이미 로그인 상태로 판정" if ok else "로그인 폼 못 찾음 (페이지 응답 이상)"}
+        # ID/PW 입력
+        _id_js = _esc_js(aid)
+        _pw_js = _esc_js(apw)
+        d.execute_script(
+            f"""
+            document.getElementById('client_id').value = '{_id_js}';
+            var dummy = document.getElementById('pw_Dummy');
+            var real = document.getElementById('passwd');
+            if (dummy) dummy.style.display = 'none';
+            if (real) {{ real.style.display = 'block'; real.value = '{_pw_js}'; }}
+            """
+        )
+        # 제출
+        try:
+            d.find_element(
+                By.XPATH,
+                "//div[@id='login_btn_area']//a | //input[@type='image' and contains(@src, 'login')]",
+            ).click()
+        except UnexpectedAlertPresentException:
+            _drain_alerts(d, tag="verify-submit-click")
+        except Exception:
+            try:
+                d.find_element(By.ID, "passwd").send_keys(Keys.RETURN)
+            except UnexpectedAlertPresentException:
+                _drain_alerts(d, tag="verify-submit-enter")
+        # 옥션원 alert 검사 (잘못된 비번/동시접속/만료 등)
+        seen = _drain_alerts(d, tag="verify-post-submit")
+        for t in seen:
+            if "비밀번호" in t or "아이디" in t or ("확인" in t and "다시" in t) or "잘못" in t or "일치하지" in t:
+                _last_login_at = 0.0
+                return {"success": False, "reason": f"인증 거부 — {t}"}
+            # 동시접속 alert 은 PW 가 정확함을 의미 (다른 곳에서 로그인 중) → accept 후 우리가 차지 → 성공
+            if "동시 접속" in t or "동시접속" in t:
+                print(f"[verify] 동시접속 alert (=PW 정확) — 우리 세션 우선권 확보")
+        # 로그인 후 페이지 안정화 대기
+        try:
+            WebDriverWait(d, 8).until(
+                lambda dr: "login_box" not in dr.current_url or not dr.find_elements(By.ID, "client_id")
+            )
+        except Exception:
+            pass
+        time.sleep(0.8)
+        _drain_alerts(d, tag="verify-post-wait")
+        ok = _verify_logged_in(d)
+        _last_login_at = 0.0  # 다음 크롤은 활성 계정으로 다시 로그인하도록 TTL 리셋
+        try: cur = d.current_url
+        except Exception: cur = ""
+        if ok:
+            return {"success": True, "reason": f"로그인 성공 ({cur or 'URL 미상'})"}
+        else:
+            return {"success": False, "reason": "로그인 폼이 그대로 — PW 오류 가능 (또는 옥션원 응답 이상)"}
+
+
+def crawl(form_data: dict, custom_filters: list | None = None, settings: dict | None = None, account: dict | None = None):
+    s = _coerce_settings(settings)
+    creds = _resolve_account(account)
+    print(f"[crawl] settings={s} account={creds['label']}")
     # 새 크롤링 시작 — 이전 cancel 신호 초기화
     _cancel_event.clear()
     _progress.update({
         "running": True, "current": 0, "total": 0,
         "pages_done": 0, "started_at": time.time(),
         "cancelled": False, "stage": "login",
+        "hijack_count": 0, "hijack_detected": False, "hijack_reason": "",
+        "auth_error": False, "auth_error_reason": "",
     })
     with _lock:
         print(f"\n[crawl] formData={form_data}")
@@ -678,6 +916,24 @@ def crawl(form_data: dict, custom_filters: list | None = None):
                 _drain_alerts(d2, tag="search-nav")
                 d2.get(URL_SEARCH)
             _drain_alerts(d2, tag="search-after-nav")
+            # ★ 검색 폼 진입 후 user_ssid 사전 검증 — driver 가 떠있어도 옥션원 세션 끊겼을 수 있음
+            # 비로그인이면 force 재로그인 후 다시 ca_title.php 진입. (검색 부터 지르지 않음)
+            try:
+                has_ssid = bool(d2.execute_script("return (typeof user_ssid !== 'undefined') && !!user_ssid;"))
+            except Exception:
+                has_ssid = False
+            if not has_ssid:
+                print(f"[crawl] 🔒 검색 폼 user_ssid 없음 — 비로그인 상태. force 재로그인 후 재검색 (account={creds['label']})")
+                _progress["stage"] = "login"
+                login_if_needed(force=True, verify_login=bool(s["verifyLogin"]), account=account)
+                _progress["stage"] = "search"
+                try:
+                    d2.get(URL_SEARCH)
+                except UnexpectedAlertPresentException:
+                    _drain_alerts(d2, tag="search-nav-relogin")
+                    try: d2.get(URL_SEARCH)
+                    except Exception: pass
+                _drain_alerts(d2, tag="search-after-relogin")
             try:
                 WebDriverWait(d2, 15).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "table.tbl_fmSrch"))
@@ -696,21 +952,54 @@ def crawl(form_data: dict, custom_filters: list | None = None):
             except UnexpectedAlertPresentException:
                 _drain_alerts(d2, tag="search-post-submit")
             return d2, parse_results(d2)
-        # 사용자 요구: 크롤링 시 매번 강제 로그인 — 사건상세 모달 fetch 등으로 driver 가 다른 페이지에 있더라도 안전
+        # 1차 로그인: 세션 재사용 ON 이면 TTL 활용 (force=False), OFF 면 매번 강제 로그인 (옛 동작)
         _progress["stage"] = "login"
-        login_if_needed(force=True)
+        use_force = not bool(s["useSessionReuse"])
+        login_if_needed(force=use_force, verify_login=bool(s["verifyLogin"]), account=account)
         _progress["stage"] = "search"
         d, items = _do_search()
-        # 그래도 비로그인 모달 등이 보이면 1회 재시도
-        try:
-            still_login = not items and _looks_like_login(d.page_source or "")
-        except UnexpectedAlertPresentException:
-            _drain_alerts(d, tag="retry-check")
-            still_login = True
-        if still_login:
-            print("[crawl] still not logged in — retry")
-            time.sleep(1)
-            login_if_needed(force=True)
+        # 0건 + 비로그인 모달 감지 시 백오프 재시도 (설정에 따라 N회)
+        retry_count = int(s["retryCount"]) if bool(s["retryEnabled"]) else 0
+        backoffs = list(s["retryBackoffSec"])
+        # ★ retry 와 무관하게 1차 0건 + 비로그인 multi-signal 감지는 항상 마킹
+        if not items:
+            try:
+                unauth, reason = _is_unauth_after_search(d)
+                if unauth:
+                    _progress["hijack_detected"] = True
+                    _progress["hijack_reason"] = reason
+                    if reason == "cert_redirect":
+                        # cert.php redirect = PW 오류 강한 신호 — auth_error 도 마킹
+                        _progress["auth_error"] = True
+                        _progress["auth_error_reason"] = (
+                            f"🚨 PW 오류 의심 — 옥션원이 검색 후 인증페이지(/member/cert.php)로 redirect (account={creds['label']})"
+                        )
+                    suffix = "" if retry_count > 0 else " — retry OFF 라 자동 복구 없음"
+                    print(f"[crawl] ⚠ 비로그인/PW오류 감지 ({reason}, account={creds['label']}){suffix}")
+            except UnexpectedAlertPresentException:
+                _drain_alerts(d, tag="hijack-precheck")
+        for attempt in range(retry_count):
+            try:
+                if items:
+                    still_login = False
+                else:
+                    unauth, _r = _is_unauth_after_search(d)
+                    still_login = unauth
+            except UnexpectedAlertPresentException:
+                _drain_alerts(d, tag=f"retry{attempt}-check")
+                still_login = True
+            if not still_login:
+                break
+            wait = backoffs[attempt] if attempt < len(backoffs) else backoffs[-1]
+            # ★ 세션 가로채기 / 누락 감지 — 프론트 폴링이 알아채도록 _progress 갱신
+            _progress["hijack_count"] = attempt + 1
+            _progress["hijack_detected"] = True
+            _progress["hijack_reason"] = "session_hijacked"
+            print(f"[crawl] ⚠ 세션 가로채기/누락 감지 — retry {attempt+1}/{retry_count}, {wait}s 대기 후 재로그인 (account={creds['label']})")
+            _progress["stage"] = "login"
+            time.sleep(wait)
+            login_if_needed(force=True, verify_login=bool(s["verifyLogin"]), account=account)  # 재시도 시는 항상 강제
+            _progress["stage"] = "search"
             d, items = _do_search()
         # 첫 페이지 결과 progress 반영 + 옥션원 전체 건수 추출
         _progress["pages_done"] = 1
@@ -821,6 +1110,20 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(_progress, ensure_ascii=False).encode("utf-8"))
             return
+        # 디버그 — 옥션원 cookies 강제 삭제 (자체 검증 시 옛 세션 끊김 시뮬용)
+        # _last_login_at 은 유지 → 케이스 2-B (TTL 살아있는데 옥션원 세션만 끊김) 정확히 시뮬
+        if self.path.startswith("/api/_debug_clear_cookies"):
+            try:
+                d = get_driver()
+                d.delete_all_cookies()
+                msg = '{"ok":true,"cookies_cleared":true,"last_login_at_kept":true}'
+            except Exception as e:
+                msg = '{"ok":false,"error":' + json.dumps(str(e)) + '}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(msg.encode("utf-8"))
+            return
         # 크롤링 중지 신호: 진행 중인 페이지 순회 다음 iteration 에서 break
         if self.path.startswith("/api/cancel"):
             _cancel_event.set()
@@ -836,6 +1139,26 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path in ("/api/maps-sync-presets", "/api/maps-upload-items", "/api/maps-gas"):
             self._handle_maps_proxy()
             return
+        # 계정 검증 — 설정 모달의 [검증하기] 버튼
+        if self.path == "/api/verify-account":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+                payload = json.loads(raw or "{}")
+                result = verify_account(payload)
+                body = json.dumps(result, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as e:
+                traceback.print_exc()
+                err = {"success": False, "reason": f"서버 오류: {e}"}
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps(err, ensure_ascii=False).encode("utf-8"))
+            return
         if self.path != "/api/crawl":
             self.send_response(404)
             self.end_headers()
@@ -846,9 +1169,20 @@ class Handler(SimpleHTTPRequestHandler):
             payload = json.loads(raw or "{}")
             form_data = payload.get("formData") or {}
             custom_filters = payload.get("customFilters") or []
-            items = crawl(form_data, custom_filters)
+            settings = payload.get("settings") or {}
+            account = payload.get("account") or None
+            items = crawl(form_data, custom_filters, settings, account)
             cancelled = bool(getattr(crawl, "last_cancelled", False))
-            body = json.dumps({"success": True, "count": len(items), "items": items, "cancelled": cancelled}, ensure_ascii=False)
+            body = json.dumps({
+                "success": True,
+                "count": len(items),
+                "items": items,
+                "cancelled": cancelled,
+                "hijack_count": int(_progress.get("hijack_count") or 0),
+                "hijack_detected": bool(_progress.get("hijack_detected")),
+                "auth_error": bool(_progress.get("auth_error")),
+                "auth_error_reason": str(_progress.get("auth_error_reason") or ""),
+            }, ensure_ascii=False)
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
