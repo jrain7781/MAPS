@@ -602,6 +602,7 @@ function handleTelegramWebhook_(update) {
             (jcKam ? '• 감정가: ' + jcKam + '\n' : '') +
             (jcLow ? '• 최저입찰가: ' + jcLow + '\n' : '') +
             (jcBid ? '• 입찰일: ' + jcBid + '\n' : '') +
+            (jcVu ? '\n🔴 <a href="' + jcVu + '">옥션원 가기</a>\n' : '') +
             '\n결과를 선택하거나 아래 버튼을 이용하세요.';
           var jcMember = (typeof getMemberByTelegramChatId === 'function') ? getMemberByTelegramChatId(chatId) : null;
           var jcBase = PropertiesService.getScriptProperties().getProperty('WEBAPP_BASE_URL') || '';
@@ -609,7 +610,6 @@ function handleTelegramWebhook_(update) {
             { text: '조사확정', callback_data: 'MJ|JFIX|' + jmId },
             { text: '조사불가', callback_data: 'MJ|JNG|' + jmId }
           ]];
-          if (jcVu) jcKb.push([{ text: '🔴 옥션원 가기', url: jcVu }]);
           if (jcMember && jcMember.member_token && jcBase) {
             jcKb.push([{ text: '📋 내 조사물건 보기', web_app: { url: jcBase + '?view=josa&t=' + encodeURIComponent(jcMember.member_token) } }]);
           }
@@ -629,13 +629,13 @@ function handleTelegramWebhook_(update) {
           var jfMember = (typeof getMemberByTelegramChatId === 'function') ? getMemberByTelegramChatId(chatId) : null;
           var jfBase = PropertiesService.getScriptProperties().getProperty('WEBAPP_BASE_URL') || '';
           var jfRows = [];
-          if (jfVu) jfRows.push([{ text: '🔴 옥션원 가기', url: jfVu }]);
           if (jfMember && jfMember.member_token && jfBase) {
             jfRows.push([{ text: '📋 내 조사물건 보기', web_app: { url: jfBase + '?view=josa&t=' + encodeURIComponent(jfMember.member_token) } }]);
           }
           var jfKb = jfRows.length ? { inline_keyboard: jfRows } : null;
           telegramSendMessage(chatId,
             '✅ <b>조사확정</b> 되었습니다.' + (jfSk ? ' (사건번호: <b>' + jfSk + '</b>)' : '') + '\n\n' +
+            (jfVu ? '🔴 <a href="' + jfVu + '">옥션원 가기</a>\n\n' : '') +
             '24시간 내에 조사 내용을 옥션원에 등록 부탁드립니다.', jfKb);
         } else {
           // 조사불가

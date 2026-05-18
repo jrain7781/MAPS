@@ -395,6 +395,26 @@
         console.log('[MemberView]', IS_MEMBER_VIEW, 'isMobile:', IS_MOBILE, APP_CTX);
     } catch (e) { }
 
+    // 메뉴 조기 노출 — 부트스트랩(느림) 기다리지 말고 DOM 준비되면 즉시 회원/조사 메뉴 표시
+    function _earlyMenuReveal_() {
+        if (!IS_MEMBER_VIEW) return;
+        try {
+            document.querySelectorAll('nav button').forEach(function (el) {
+                var keep = el.classList.contains('member-only-menu') || el.classList.contains('josa-only-menu');
+                if (keep) { el.classList.remove('content-hidden'); el.style.removeProperty('display'); }
+                else { el.classList.add('content-hidden'); el.style.setProperty('display', 'none', 'important'); }
+            });
+            // 조사 메뉴: view=josa 면 즉시 노출(서버 불필요). 겸직 gubun 판정은 부트스트랩에서 보강.
+            if (APP_CTX.view !== 'josa') {
+                document.querySelectorAll('.josa-only-menu').forEach(function (el) {
+                    el.classList.add('content-hidden'); el.style.setProperty('display', 'none', 'important');
+                });
+            }
+        } catch (e) { }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _earlyMenuReveal_);
+    else _earlyMenuReveal_();
+
     function applyMemberViewUiGuards_() {
         if (!IS_MEMBER_VIEW) return;
 
@@ -605,14 +625,55 @@
     }
     function renderJosaMonthly() {
         var lab = document.getElementById('josaMonthLabel');
+        var el = document.getElementById('josaMonthlyBody');
+        if (!el) return;
         var base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + (__JOSA.monthOff || 0));
         var yy = base.getFullYear(), mm = base.getMonth() + 1;
         if (lab) lab.textContent = yy + '.' + (mm < 10 ? '0' + mm : mm);
-        var key = String(yy).slice(2) + (mm < 10 ? '0' + mm : '' + mm);
-        var list = (__JOSA.items || []).filter(function (it) { return String(it.bid_date || '').slice(0, 4) === key; });
-        _josaRenderInto('josaMonthlyBody', list);
+        var ymKey = String(yy).slice(2) + (mm < 10 ? '0' + mm : '' + mm);  // YYMM
+        var monthItems = (__JOSA.items || []).filter(function (it) {
+            return String(it.bid_date || '').slice(0, 4) === ymKey && __JOSA.filter[String(it.josa_status || '')];
+        });
+        var byDay = {};
+        monthItems.forEach(function (it) { var d = String(it.bid_date || '').slice(4, 6); if (d) (byDay[d] = byDay[d] || []).push(it); });
+        var firstDow = new Date(yy, mm - 1, 1).getDay();
+        var dim = new Date(yy, mm, 0).getDate();
+        var cells = [];
+        for (var i = 0; i < firstDow; i++) cells.push('');
+        for (var dn = 1; dn <= dim; dn++) cells.push(dn);
+        while (cells.length % 7 !== 0) cells.push('');
+        var sel = __JOSA.monthSelDay || '';
+        var h = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:10px">';
+        h += '<div style="display:grid;grid-template-columns:repeat(7,1fr);background:#f1f5f9;font-size:11px;color:#64748b;text-align:center">' +
+            ['일', '월', '화', '수', '목', '금', '토'].map(function (w, i) { return '<div style="padding:6px 0;' + (i === 0 ? 'color:#dc2626' : i === 6 ? 'color:#2563eb' : '') + '">' + w + '</div>'; }).join('') + '</div>';
+        h += '<div style="display:grid;grid-template-columns:repeat(7,1fr)">';
+        cells.forEach(function (c, i) {
+            var dow = i % 7;
+            if (c === '') { h += '<div style="min-height:48px;border-top:1px solid #f1f5f9;background:#fafafa"></div>'; return; }
+            var dd = (c < 10 ? '0' + c : '' + c);
+            var its = byDay[dd] || [];
+            var on = (sel === dd);
+            var dots = '';
+            if (its.length) {
+                var seen = {};
+                its.forEach(function (it) { var s = String(it.josa_status || ''); if (seen[s]) return; seen[s] = 1; var col = _josaStColor(s); dots += '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + col[0] + ';margin:0 1px"></span>'; });
+            }
+            h += '<div onclick="josaPickDay(\'' + dd + '\')" style="min-height:48px;border-top:1px solid #f1f5f9;' + (dow !== 6 ? 'border-right:1px solid #f1f5f9;' : '') + 'padding:4px 0;text-align:center;cursor:pointer;' + (on ? 'background:#dbeafe;' : 'background:#fff;') + '">' +
+                '<div style="font-size:11px;' + (dow === 0 ? 'color:#dc2626' : dow === 6 ? 'color:#2563eb' : 'color:#334155') + ';font-weight:' + (on ? '800' : '600') + '">' + c + '</div>' +
+                (its.length ? '<div style="margin-top:2px;line-height:1">' + dots + '</div><div style="font-size:10px;color:#64748b">' + its.length + '건</div>' : '') +
+                '</div>';
+        });
+        h += '</div></div><div id="josaMonthlyList"></div>';
+        el.innerHTML = h;
+        var listForCards = sel ? (byDay[sel] || []) : monthItems;
+        var lc = document.getElementById('josaMonthlyList');
+        if (lc) {
+            if (!listForCards.length) lc.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:13px">' + (sel ? sel + '일 ' : '') + '해당 조사물건 없음</div>';
+            else { listForCards.sort(function (a, b) { return String(a.bid_date || '').localeCompare(String(b.bid_date || '')); }); lc.innerHTML = listForCards.map(_josaCard).join(''); }
+        }
     }
-    function josaMonthShift(d) { __JOSA.monthOff = (__JOSA.monthOff || 0) + d; renderJosaMonthly(); }
+    function josaPickDay(dd) { __JOSA.monthSelDay = (__JOSA.monthSelDay === dd ? '' : dd); renderJosaMonthly(); }
+    function josaMonthShift(d) { __JOSA.monthOff = (__JOSA.monthOff || 0) + d; __JOSA.monthSelDay = ''; renderJosaMonthly(); }
     function josaToggleFilter(btn, which) {
         var st = btn.getAttribute('data-st');
         __JOSA.filter[st] = !__JOSA.filter[st];
