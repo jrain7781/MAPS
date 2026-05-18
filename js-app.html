@@ -558,6 +558,23 @@
         var M = { '조사요청': ['#bfdbfe', '#1e40af'], '조사접수': ['#c7d2fe', '#3730a3'], '조사확정': ['#bbf7d0', '#166534'], '조사완료': ['#99f6e4', '#115e59'], '조사불가': ['#fecaca', '#991b1b'] };
         return M[s] || ['#e5e7eb', '#374151'];
     }
+    // 상단 필터버튼: 상태색 동기화 + 개수 + on/off
+    function _josaPaintFilterBtns(tabId, arr) {
+        var root = document.getElementById(tabId);
+        if (!root) return;
+        var LBL = { '조사요청': '요청', '조사접수': '접수', '조사확정': '확정', '조사완료': '완료' };
+        var cnt = {};
+        (arr || []).forEach(function (it) { var s = String(it.josa_status || ''); cnt[s] = (cnt[s] || 0) + 1; });
+        Array.prototype.forEach.call(root.querySelectorAll('.josa-fbtn'), function (b) {
+            var s = b.getAttribute('data-st');
+            var col = _josaStColor(s);
+            b.style.background = col[0]; b.style.color = col[1]; b.style.borderColor = col[0];
+            b.textContent = (LBL[s] || s) + ' ' + (cnt[s] || 0);
+            var on = !!__JOSA.filter[s];
+            b.style.opacity = on ? '1' : '0.35';
+            b.style.filter = on ? 'none' : 'grayscale(0.6)';
+        });
+    }
     function _josaCard(it) {
         var st = String(it.josa_status || '');
         var reveal = (st !== '조사요청');   // 확인(조사접수) 시점부터 사건번호 공개
@@ -566,12 +583,14 @@
         var addr = String(it.address || '').split('\n')[0];
         var bd = String(it.bid_date || '');
         if (/^\d{6}$/.test(bd)) bd = bd.slice(0, 2) + '.' + bd.slice(2, 4) + '.' + bd.slice(4, 6);
+        // 카드 액션 버튼: 라벨=현재상태, 색=상태색, 모양=상단 필터버튼과 동일(pill)
         var btns = '';
-        if (st === '조사접수') {
-            btns = '<button type="button" class="josa-actbtn" onclick="josaOpenActionModal(\'' + escAttr(it.josa_id) + '\',\'접수\')">조사접수</button>';
-        } else if (st === '조사확정') {
-            btns = '<button type="button" class="josa-actbtn" onclick="josaOpenActionModal(\'' + escAttr(it.josa_id) + '\',\'확정\')">결과입력</button>';
+        var bcol = _josaStColor(st);
+        function _ab(stage) {
+            return '<button type="button" class="josa-actbtn" style="background:' + bcol[0] + ';color:' + bcol[1] + ';border-color:' + bcol[0] + '" onclick="josaOpenActionModal(\'' + escAttr(it.josa_id) + '\',\'' + stage + '\')">' + escHtml(st) + '</button>';
         }
+        if (st === '조사요청' || st === '조사접수') btns = _ab('접수');   // → 조사확정/조사불가
+        else if (st === '조사확정') btns = _ab('확정');                  // → 조사완료/조사불가
         // 자체 인라인 스타일 카드 (입찰카드와 동일 톤, .ic CSS 비의존 — 안 보임 방지)
         return '<div data-jid="' + escAttr(it.josa_id) + '" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:8px">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
@@ -607,7 +626,7 @@
         var el = document.getElementById('josaListBody');
         if (el && force) el.innerHTML = '<div class="p-8 text-center text-gray-400 text-sm">불러오는 중…</div>';
         if (!APP_CTX.token || typeof google === 'undefined' || !google.script || !google.script.run) {
-            _josaRenderInto('josaListBody', __JOSA.items); return;
+            _josaRenderInto('josaListBody', __JOSA.items); _josaPaintFilterBtns('JosaList', __JOSA.items); return;
         }
         google.script.run
             .withSuccessHandler(function (resp) {
@@ -615,6 +634,7 @@
                 var dg = document.getElementById('josaListDiag');
                 if (dg) dg.textContent = '조사자: ' + (resp && resp.member_name || '?') + ' · gubun: ' + (resp && resp.gubun || '?') + ' · 배정 ' + __JOSA.items.length + '건' + (resp && resp.success === false ? ' · ' + (resp.message || '오류') : '');
                 _josaRenderInto('josaListBody', __JOSA.items);
+                _josaPaintFilterBtns('JosaList', __JOSA.items);
             })
             .withFailureHandler(function (err) {
                 var dg = document.getElementById('josaListDiag');
@@ -631,9 +651,9 @@
         var yy = base.getFullYear(), mm = base.getMonth() + 1;
         if (lab) lab.textContent = yy + '.' + (mm < 10 ? '0' + mm : mm);
         var ymKey = String(yy).slice(2) + (mm < 10 ? '0' + mm : '' + mm);  // YYMM
-        var monthItems = (__JOSA.items || []).filter(function (it) {
-            return String(it.bid_date || '').slice(0, 4) === ymKey && __JOSA.filter[String(it.josa_status || '')];
-        });
+        var monthAll = (__JOSA.items || []).filter(function (it) { return String(it.bid_date || '').slice(0, 4) === ymKey; });
+        _josaPaintFilterBtns('JosaMonthly', monthAll);
+        var monthItems = monthAll.filter(function (it) { return __JOSA.filter[String(it.josa_status || '')]; });
         var byDay = {};
         monthItems.forEach(function (it) { var d = String(it.bid_date || '').slice(4, 6); if (d) (byDay[d] = byDay[d] || []).push(it); });
         var firstDow = new Date(yy, mm - 1, 1).getDay();
