@@ -595,6 +595,7 @@
         }
         if (st === '조사요청' || st === '조사접수') btns = _ab('접수');   // → 조사확정/조사불가
         else if (st === '조사확정') btns = _ab('확정');                  // → 조사완료/조사불가
+        else if (st === '조사완료') btns = '<button type="button" class="josa-actbtn" style="background:' + bcol[0] + ';color:' + bcol[1] + ';cursor:default" disabled>' + escHtml(st) + '</button>';
         // 자체 인라인 스타일 카드 (입찰카드와 동일 톤, .ic CSS 비의존 — 안 보임 방지)
         return '<div data-jid="' + escAttr(it.josa_id) + '" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:8px">' +
             '<div style="margin-bottom:8px">' +
@@ -679,11 +680,11 @@
             var dots = '';
             if (its.length) {
                 var seen = {};
-                its.forEach(function (it) { var s = String(it.josa_status || ''); if (seen[s]) return; seen[s] = 1; var col = _josaStColor(s); dots += '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + col[0] + ';margin:0 1px"></span>'; });
+                its.forEach(function (it) { var s = String(it.josa_status || ''); if (seen[s]) return; seen[s] = 1; var col = _josaStColor(s); dots += '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + col[0] + ';border:1px solid ' + col[1] + ';box-sizing:border-box;margin:0 2px"></span>'; });
             }
             h += '<div onclick="josaPickDay(\'' + dd + '\')" style="min-height:48px;border-top:1px solid #f1f5f9;' + (dow !== 6 ? 'border-right:1px solid #f1f5f9;' : '') + 'padding:4px 0;text-align:center;cursor:pointer;' + (on ? 'background:#dbeafe;' : 'background:#fff;') + '">' +
                 '<div style="font-size:11px;' + (dow === 0 ? 'color:#dc2626' : dow === 6 ? 'color:#2563eb' : 'color:#334155') + ';font-weight:' + (on ? '800' : '600') + '">' + c + '</div>' +
-                (its.length ? '<div style="margin-top:2px;line-height:1">' + dots + '</div><div style="font-size:10px;color:#64748b">' + its.length + '건</div>' : '') +
+                (its.length ? '<div style="margin-top:3px;line-height:1">' + dots + '</div>' : '') +
                 '</div>';
         });
         h += '</div></div><div id="josaMonthlyList"></div>';
