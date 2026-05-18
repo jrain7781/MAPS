@@ -7520,12 +7520,17 @@ function getJosaItemsByToken(token) {
     if (!mem || !mem.member_token) return { success: false, message: '유효하지 않은 토큰', items: [] };
     var name = String(mem.name || mem.member_name || '').trim();
     if (!name) return { success: false, message: '회원명 없음', items: [] };
+    var gubun = '';
+    try {
+      var full = (typeof getMemberById_ === 'function') ? getMemberById_(mem.member_id) : null;
+      gubun = full ? String(full.gubun || '') : '';
+    } catch (e0) { gubun = ''; }
     var VISIBLE = { '조사요청': 1, '조사접수': 1, '조사확정': 1, '조사완료': 1 };
     var all = (typeof readAllJosaItems === 'function') ? readAllJosaItems() : [];
     var items = all.filter(function (r) {
       return String(r.josaja || '').trim() === name && VISIBLE[String(r.josa_status || '').trim()];
     });
-    return { success: true, member_name: name, items: items };
+    return { success: true, member_name: name, gubun: gubun, items: items };
   } catch (e) {
     return { success: false, message: String(e && e.message || e), items: [] };
   }

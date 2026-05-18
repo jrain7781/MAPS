@@ -171,6 +171,13 @@
                          display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
                          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .jm-status-btn:hover { filter: brightness(0.92); }
+        /* 조사자 웹뷰 필터/액션 버튼 */
+        .josa-fbtn { border: 1px solid #2f6fd8; background: #2f6fd8; color: #fff; border-radius: 999px;
+                     padding: 5px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .josa-fbtn:hover { filter: brightness(0.95); }
+        .josa-actbtn { border: 0; background: #2563eb; color: #fff; border-radius: 6px;
+                       padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
+        .josa-actbtn:hover { background: #1d4ed8; }
         /* 상단 상태 요약 — 동일 폭 클릭 가능 버튼 (해당 상태만 필터) */
         #jm-status-summary { display: flex; gap: 6px; align-items: center; }
         .jm-summary-btn {
@@ -346,10 +353,17 @@
                 입찰리스트</button>
             <button id="menu-MemberDashboard" onclick="navigateTo('MemberDashboard')"
                 class="py-4 px-6 text-base text-left text-gray-700 hover:bg-gray-100 transition duration-150 content-hidden member-only-menu">📊
-                월별조회</button>
+                입찰월별조회</button>
             <button id="menu-MemberCancelHistory" onclick="navigateTo('MemberCancelHistory')"
                 class="py-4 px-6 text-base text-left text-gray-700 hover:bg-gray-100 transition duration-150 content-hidden member-only-menu">📋
                 물건이력</button>
+            <!-- 조사자 전용 메뉴 (기본 숨김, gubun 조사자 또는 view=josa 일 때 표시) -->
+            <button id="menu-JosaList" onclick="navigateTo('JosaList')"
+                class="py-4 px-6 text-base text-left text-gray-700 hover:bg-gray-100 transition duration-150 content-hidden josa-only-menu">🔎
+                물건리스트</button>
+            <button id="menu-JosaMonthly" onclick="navigateTo('JosaMonthly')"
+                class="py-4 px-6 text-base text-left text-gray-700 hover:bg-gray-100 transition duration-150 content-hidden josa-only-menu">🗓️
+                조사월별리스트</button>
         </nav>
 
         <div class="flex-1 overflow-y-auto pb-0">
@@ -845,6 +859,40 @@
                             </table>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- 조사자: 물건리스트 -->
+            <div id="JosaList" class="tab-content h-full p-0 overflow-y-auto content-hidden">
+                <div class="member-dashboard-v2">
+                    <div class="top-bar">
+                        <div class="top-bar-inner" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 10px" id="josaFilterBar">
+                            <button type="button" class="josa-fbtn" data-st="조사요청" onclick="josaToggleFilter(this,'list')">요청</button>
+                            <button type="button" class="josa-fbtn" data-st="조사접수" onclick="josaToggleFilter(this,'list')">접수</button>
+                            <button type="button" class="josa-fbtn" data-st="조사확정" onclick="josaToggleFilter(this,'list')">확정</button>
+                            <button type="button" class="josa-fbtn" data-st="조사완료" onclick="josaToggleFilter(this,'list')">완료</button>
+                            <button type="button" onclick="loadAndRenderJosaList(true)" style="margin-left:auto;border:1px solid #c3ccd6;background:#fff;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer">새로고침</button>
+                        </div>
+                    </div>
+                    <div class="lb-body" id="josaListBody" style="padding:8px"><div class="p-8 text-center text-gray-400 text-sm">물건리스트 메뉴를 클릭하면 불러옵니다.</div></div>
+                </div>
+            </div>
+            <!-- 조사자: 조사월별리스트 -->
+            <div id="JosaMonthly" class="tab-content h-full p-0 overflow-y-auto content-hidden">
+                <div class="member-dashboard-v2">
+                    <div class="top-bar">
+                        <div class="top-bar-inner" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 10px">
+                            <button type="button" onclick="josaMonthShift(-1)" style="border:1px solid #c3ccd6;background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">◀</button>
+                            <span id="josaMonthLabel" style="font-size:13px;font-weight:700;color:#334155;min-width:84px;text-align:center"></span>
+                            <button type="button" onclick="josaMonthShift(1)" style="border:1px solid #c3ccd6;background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">▶</button>
+                            <span style="width:8px"></span>
+                            <button type="button" class="josa-fbtn" data-st="조사요청" onclick="josaToggleFilter(this,'month')">요청</button>
+                            <button type="button" class="josa-fbtn" data-st="조사접수" onclick="josaToggleFilter(this,'month')">접수</button>
+                            <button type="button" class="josa-fbtn" data-st="조사확정" onclick="josaToggleFilter(this,'month')">확정</button>
+                            <button type="button" class="josa-fbtn" data-st="조사완료" onclick="josaToggleFilter(this,'month')">완료</button>
+                        </div>
+                    </div>
+                    <div class="lb-body" id="josaMonthlyBody" style="padding:8px"></div>
                 </div>
             </div>
 

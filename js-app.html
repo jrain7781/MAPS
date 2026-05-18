@@ -439,7 +439,7 @@
         if (fsBtn) fsBtn.classList.add('content-hidden');
 
         // 회원에게 허용되지 않는 탭 숨김 (MemberDashboard + MemberItemList + MemberCancelHistory만 허용)
-        const allowedTabs = ['MemberDashboard', 'MemberItemList', 'MemberCancelHistory'];
+        const allowedTabs = ['MemberDashboard', 'MemberItemList', 'MemberCancelHistory', 'JosaList', 'JosaMonthly'];
         document.querySelectorAll('.tab-content').forEach(content => {
             if (content && !allowedTabs.includes(content.id)) {
                 content.classList.add('content-hidden');
@@ -498,12 +498,153 @@
         // 입찰리스트를 기본 탭으로 설정 (회원 최초 화면)
         setTimeout(() => {
             if (IS_MEMBER_VIEW) {
-                loadAndRenderMemberItemList(true);
+                _josaBootstrap();
             } else {
                 navigateTo('MemberItemList');
             }
             initNoticeState();
         }, 100);
+    }
+
+    // ── 조사자 웹뷰 부트스트랩 (gubun 으로 회원/조사자 메뉴 결정) ──
+    var __JOSA = { items: [], member: '', monthOff: 0, filter: { '조사요청': 1, '조사접수': 1, '조사확정': 1, '조사완료': 1 } };
+    function _josaShowMenus(showJosa, showMember) {
+        document.querySelectorAll('.josa-only-menu').forEach(function (el) {
+            if (showJosa) { el.classList.remove('content-hidden'); el.style.removeProperty('display'); }
+            else { el.classList.add('content-hidden'); el.style.setProperty('display', 'none', 'important'); }
+        });
+        if (showMember === false) {
+            document.querySelectorAll('.member-only-menu').forEach(function (el) {
+                el.classList.add('content-hidden'); el.style.setProperty('display', 'none', 'important');
+            });
+        }
+    }
+    function _josaBootstrap() {
+        if (!APP_CTX.token || typeof google === 'undefined' || !google.script || !google.script.run) {
+            loadAndRenderMemberItemList(true); return;
+        }
+        google.script.run
+            .withSuccessHandler(function (resp) {
+                var g = String(resp && resp.gubun || '');
+                __JOSA.items = (resp && resp.items) || [];
+                __JOSA.member = (resp && resp.member_name) || '';
+                var isJosa = (APP_CTX.view === 'josa') || /조사자/.test(g);
+                var isMember = /회원/.test(g) || !g;   // gubun 미상 → 회원으로 간주(기존 회원 회귀 방지)
+                _josaShowMenus(isJosa, isMember);
+                if (APP_CTX.view === 'josa' || (isJosa && !isMember)) {
+                    navigateTo('JosaList');
+                } else {
+                    loadAndRenderMemberItemList(true);
+                }
+            })
+            .withFailureHandler(function () { loadAndRenderMemberItemList(true); })
+            .getJosaItemsByToken(APP_CTX.token);
+    }
+    function _josaNum(n) { if (n === 0 || n === '0') return '0'; if (!n) return ''; return String(n).replace(/[^\d.-]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+    function _josaStColor(s) {
+        var M = { '조사요청': ['#bfdbfe', '#1e40af'], '조사접수': ['#c7d2fe', '#3730a3'], '조사확정': ['#bbf7d0', '#166534'], '조사완료': ['#99f6e4', '#115e59'], '조사불가': ['#fecaca', '#991b1b'] };
+        return M[s] || ['#e5e7eb', '#374151'];
+    }
+    function _josaCard(it) {
+        var st = String(it.josa_status || '');
+        var reveal = (st === '조사확정' || st === '조사완료');
+        var sk = reveal ? (it.sakun_no || '') : '🔒 조사확정 시 공개';
+        var c = _josaStColor(st);
+        var addr = String(it.address || '').split('\n')[0];
+        var bd = String(it.bid_date || '');
+        if (/^\d{6}$/.test(bd)) bd = bd.slice(0, 2) + '.' + bd.slice(2, 4) + '.' + bd.slice(4, 6);
+        var btns = '';
+        if (st === '조사접수') {
+            btns = '<button type="button" class="josa-actbtn" onclick="josaOpenActionModal(\'' + escAttr(it.josa_id) + '\',\'접수\')">조사접수</button>';
+        } else if (st === '조사확정') {
+            btns = '<button type="button" class="josa-actbtn" onclick="josaOpenActionModal(\'' + escAttr(it.josa_id) + '\',\'확정\')">결과입력</button>';
+        }
+        return '<div class="ic sr" data-jid="' + escAttr(it.josa_id) + '" style="margin-bottom:8px">' +
+            '<div class="ic-header"><div class="ic-date-badge" style="background:#eef2ff;color:#3730a3">' + escHtml(bd || '-') + '</div>' +
+            (it.view_url && reveal ? '<a class="view-btn-header" href="' + escAttr(it.view_url) + '" target="_blank" rel="noopener">옥션원</a>' : '<span></span>') + '</div>' +
+            '<div class="ic-body"><div class="ic-l">' +
+            '<div class="ic-sakun">' + escHtml(sk) + '</div>' +
+            '<div class="ic-court-label">' + escHtml(it.court || '') + ' / ' + escHtml(it.prop_kind || '') + '</div>' +
+            '<div class="ic-court-label">' + escHtml(addr) + '</div>' +
+            '<div class="ic-price">감정 ' + _josaNum(it.kamjungka) + ' / 최저 ' + _josaNum(it.low_price) + '</div>' +
+            '</div><div class="ic-r" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">' +
+            '<span class="badge" style="background:' + c[0] + ';color:' + c[1] + ';padding:3px 10px;border-radius:9px;font-size:12px;font-weight:700">' + escHtml(st) + '</span>' +
+            btns +
+            '</div></div></div>';
+    }
+    function _josaRenderInto(containerId, list) {
+        var el = document.getElementById(containerId);
+        if (!el) return;
+        var fl = list.filter(function (it) { return __JOSA.filter[String(it.josa_status || '')]; });
+        if (!fl.length) { el.innerHTML = '<div class="p-8 text-center text-gray-400 text-sm">표시할 조사물건이 없습니다.</div>'; return; }
+        fl.sort(function (a, b) { return String(b.bid_date || '').localeCompare(String(a.bid_date || '')); });
+        el.innerHTML = fl.map(_josaCard).join('');
+    }
+    function loadAndRenderJosaList(force) {
+        var el = document.getElementById('josaListBody');
+        if (el && force) el.innerHTML = '<div class="p-8 text-center text-gray-400 text-sm">불러오는 중…</div>';
+        if (!APP_CTX.token || typeof google === 'undefined' || !google.script || !google.script.run) {
+            _josaRenderInto('josaListBody', __JOSA.items); return;
+        }
+        google.script.run
+            .withSuccessHandler(function (resp) {
+                __JOSA.items = (resp && resp.items) || [];
+                _josaRenderInto('josaListBody', __JOSA.items);
+            })
+            .withFailureHandler(function () { _josaRenderInto('josaListBody', __JOSA.items); })
+            .getJosaItemsByToken(APP_CTX.token);
+    }
+    function renderJosaMonthly() {
+        var lab = document.getElementById('josaMonthLabel');
+        var base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + (__JOSA.monthOff || 0));
+        var yy = base.getFullYear(), mm = base.getMonth() + 1;
+        if (lab) lab.textContent = yy + '.' + (mm < 10 ? '0' + mm : mm);
+        var key = String(yy).slice(2) + (mm < 10 ? '0' + mm : '' + mm);
+        var list = (__JOSA.items || []).filter(function (it) { return String(it.bid_date || '').slice(0, 4) === key; });
+        _josaRenderInto('josaMonthlyBody', list);
+    }
+    function josaMonthShift(d) { __JOSA.monthOff = (__JOSA.monthOff || 0) + d; renderJosaMonthly(); }
+    function josaToggleFilter(btn, which) {
+        var st = btn.getAttribute('data-st');
+        __JOSA.filter[st] = !__JOSA.filter[st];
+        btn.style.opacity = __JOSA.filter[st] ? '1' : '0.4';
+        if (which === 'month') renderJosaMonthly(); else _josaRenderInto('josaListBody', __JOSA.items);
+    }
+    function josaOpenActionModal(josaId, stage) {
+        var doc = document;
+        var old = doc.getElementById('josa-act-modal'); if (old) old.remove();
+        var opts = (stage === '접수') ? ['조사확정', '조사불가'] : ['조사완료', '조사불가'];
+        var ov = doc.createElement('div');
+        ov.id = 'josa-act-modal';
+        ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
+        ov.innerHTML = '<div style="background:#fff;border-radius:10px;padding:20px;width:280px;max-width:88vw;box-shadow:0 16px 48px rgba(0,0,0,.3)">' +
+            '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:14px;text-align:center">조사 결과 선택</div>' +
+            opts.map(function (o) {
+                var c = _josaStColor(o);
+                return '<button type="button" class="josa-mbtn" data-st="' + escAttr(o) + '" style="display:block;width:100%;margin-bottom:8px;padding:10px;border:0;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:' + c[0] + ';color:' + c[1] + '">' + escHtml(o) + '</button>';
+            }).join('') +
+            '<button type="button" id="josaMCancel" style="display:block;width:100%;margin-top:4px;padding:8px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;font-size:12px;cursor:pointer">취소</button>' +
+            '</div>';
+        doc.body.appendChild(ov);
+        function close() { ov.remove(); }
+        ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+        doc.getElementById('josaMCancel').addEventListener('click', close);
+        Array.prototype.forEach.call(ov.querySelectorAll('.josa-mbtn'), function (b) {
+            b.addEventListener('click', function () {
+                var ns = b.getAttribute('data-st');
+                b.textContent = '처리중…';
+                if (typeof google === 'undefined' || !google.script || !google.script.run) { alert('업데이트 불가'); return; }
+                google.script.run
+                    .withSuccessHandler(function (resp) {
+                        close();
+                        if (ns === '조사불가') alert('조사불가 처리되었습니다.');
+                        loadAndRenderJosaList(true);
+                        if (document.getElementById('JosaMonthly') && !document.getElementById('JosaMonthly').classList.contains('content-hidden')) renderJosaMonthly();
+                    })
+                    .withFailureHandler(function (err) { alert('실패: ' + (err && err.message || err)); close(); })
+                    .updateJosaField(josaId, 'josa_status', ns);
+            });
+        });
     }
 
     // =============================================================================
@@ -638,10 +779,12 @@
         var splash = document.getElementById('app-loading');
         if (splash) splash.style.display = 'none';
 
-        // 회원 전용 링크에서는 입찰리스트 + 월별조회 + 취소이력만 허용
-        if (IS_MEMBER_VIEW && !['MemberItemList', 'MemberDashboard', 'MemberCancelHistory'].includes(tabId)) {
-            tabId = 'MemberItemList';
+        // 회원 전용 링크 허용 탭 (+ 조사자 전용 탭)
+        if (IS_MEMBER_VIEW && !['MemberItemList', 'MemberDashboard', 'MemberCancelHistory', 'JosaList', 'JosaMonthly'].includes(tabId)) {
+            tabId = (APP_CTX.view === 'josa') ? 'JosaList' : 'MemberItemList';
         }
+        if (tabId === 'JosaList') { try { loadAndRenderJosaList(); } catch (e) {} }
+        if (tabId === 'JosaMonthly') { try { renderJosaMonthly(); } catch (e) {} }
 
         // 1. 사이드바 처리
         const sidebar = document.getElementById('mainSidebar');
