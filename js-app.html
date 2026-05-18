@@ -23906,6 +23906,21 @@ MJ 이정우 팀장
         '조사완료': ['#99f6e4', '#115e59'], '폐기': ['#fecaca', '#991b1b']
     };
 
+    // 상태/조사자 변경 시 재정렬·재렌더 없이 그 행만 제자리 갱신
+    function _jmUpdateGridRow(josaId) {
+        var it = (jmItems || []).find(function (x) { return String(x.josa_id) === String(josaId); });
+        if (!it) return;
+        var sel = (window.CSS && CSS.escape) ? CSS.escape(String(josaId)) : String(josaId);
+        var btn = document.querySelector('.jm-status-btn[data-id="' + sel + '"]');
+        if (btn) {
+            var s = it.josa_status || '분류필요';
+            btn.textContent = s;
+            btn.className = 'jm-status-btn ' + (JM_STATUS_PAL[s] || 'bg-gray-200');
+        }
+        var inp = document.querySelector('.jm-josaja-input[data-id="' + sel + '"]');
+        if (inp && document.activeElement !== inp && inp.value !== (it.josaja || '')) inp.value = it.josaja || '';
+    }
+
     function renderJmStatusSummary(filtered) {
         var bar = document.getElementById('jm-status-summary');
         if (!bar) return;
@@ -23945,7 +23960,7 @@ MJ 이정우 팀장
     var _jmSvLW = null, _jmSvDet = null;
     var JM_SV_ICON_FILE = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#9aa3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
     var JM_SV_ICON_CHK  = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-    var JM_SV_CSS = "*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}.jm-sv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#f7f9fc;border-bottom:1px solid #e2e8f0;flex-shrink:0}.jm-sv-finish{padding:5px 14px;background:#2f6fd8;color:#fff;border:0;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-finish:hover{background:#245fc0}.jm-sv-nav{display:flex;gap:6px}.jm-sv-navbtn{padding:4px 10px;background:#fff;color:#2f6fd8;border:1px solid #c3ccd6;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-navbtn:hover{background:#eef4fc}.jm-sv-subbar{display:flex;align-items:center;gap:6px;padding:5px 10px;background:#fff7ed;border-bottom:1px solid #fed7aa;flex-shrink:0;font-size:11px;color:#9a3412;user-select:none}.jm-sv-colhead{display:flex;align-items:flex-end;gap:8px;padding:6px 10px;border-bottom:2px solid #d8dee6;color:#6b7280;font-size:11px;line-height:1.3;flex-shrink:0;background:#fbfcfe;text-align:center}.jm-sv-list{flex:1;overflow-y:auto}.jm-sv-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #eef0f2;cursor:pointer}.jm-sv-row:hover{background:#f3f8fe}.jm-sv-row-on{background:#e8f1fb}.jm-sv-ico{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.jm-sv-c1{flex:1;min-width:0;text-align:left}.jm-sv-c2{width:92px;flex-shrink:0;text-align:right}.jm-sv-c3{width:52px;flex-shrink:0;text-align:right}.jm-sv-st{width:72px;flex-shrink:0;text-align:center}.jm-sv-stbadge{display:inline-block;padding:2px 7px;border-radius:9px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap}.jm-sv-jcell{width:64px;flex-shrink:0}.jm-sv-jin{width:100%;font-size:11px;padding:2px 3px;border:1px solid #d1d5db;border-radius:3px;text-align:center}.jm-sv-jin:focus{outline:none;border-color:#2f6fd8;background:#fffbeb}.jm-sv-stmenu{position:fixed;z-index:99999;display:flex;flex-direction:column;gap:3px;background:#fff;padding:5px;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.2)}.jm-sv-stmenu button{border:0;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}.jm-sv-sakun{font-size:12.5px;font-weight:700;color:#1f2937;line-height:1.25}.jm-sv-mul{color:#c2410c;font-weight:700}.jm-sv-kind{font-size:11px;color:#1d6fb8;margin-top:1px}.jm-sv-kam{font-size:12px;font-weight:600;color:#1f2937;line-height:1.25}.jm-sv-low{font-size:12px;color:#1d6fb8;margin-top:1px}.jm-sv-fc{font-size:11.5px;color:#1f2937;line-height:1.25}.jm-sv-fr{font-size:11px;color:#d35400;margin-top:1px}";
+    var JM_SV_CSS = "*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}.jm-sv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#f7f9fc;border-bottom:1px solid #e2e8f0;flex-shrink:0}.jm-sv-finish{padding:5px 14px;background:#2f6fd8;color:#fff;border:0;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-finish:hover{background:#245fc0}.jm-sv-nav{display:flex;gap:6px}.jm-sv-navbtn{padding:4px 10px;background:#fff;color:#2f6fd8;border:1px solid #c3ccd6;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-navbtn:hover{background:#eef4fc}.jm-sv-subbar{display:flex;align-items:center;gap:6px;padding:5px 10px;background:#fff7ed;border-bottom:1px solid #fed7aa;flex-shrink:0;font-size:11px;color:#9a3412;user-select:none}.jm-sv-colhead{display:flex;align-items:flex-end;gap:8px;padding:6px 10px;border-bottom:2px solid #d8dee6;color:#6b7280;font-size:11px;line-height:1.3;flex-shrink:0;background:#fbfcfe;text-align:center}.jm-sv-list{flex:1;overflow-y:auto}.jm-sv-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #eef0f2;cursor:pointer}.jm-sv-row:hover{background:#f3f8fe}.jm-sv-row-on{background:#e8f1fb}.jm-sv-ico{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.jm-sv-c1{flex:1;min-width:0;text-align:left}.jm-sv-c2{width:92px;flex-shrink:0;text-align:right}.jm-sv-c3{width:52px;flex-shrink:0;text-align:right}.jm-sv-st{width:88px;flex-shrink:0;text-align:center}.jm-sv-stbadge{display:inline-block;min-width:66px;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;text-align:center}.jm-sv-jcell{width:64px;flex-shrink:0}.jm-sv-jin{width:100%;font-size:11px;padding:2px 3px;border:1px solid #d1d5db;border-radius:3px;text-align:center}.jm-sv-jin:focus{outline:none;border-color:#2f6fd8;background:#fffbeb}.jm-sv-stmenu{position:fixed;z-index:99999;display:flex;flex-direction:column;gap:3px;background:#fff;padding:5px;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.2)}.jm-sv-stmenu button{border:0;min-width:66px;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;text-align:center}.jm-sv-sakun{font-size:12.5px;font-weight:700;color:#1f2937;line-height:1.25}.jm-sv-mul{color:#c2410c;font-weight:700}.jm-sv-kind{font-size:11px;color:#1d6fb8;margin-top:1px}.jm-sv-kam{font-size:12px;font-weight:600;color:#1f2937;line-height:1.25}.jm-sv-low{font-size:12px;color:#1d6fb8;margin-top:1px}.jm-sv-fc{font-size:11.5px;color:#1f2937;line-height:1.25}.jm-sv-fr{font-size:11px;color:#d35400;margin-top:1px}";
 
     function _jmSvNum(n) {
         if (n === 0 || n === '0') return '0';
@@ -24001,7 +24016,7 @@ MJ 이정우 팀장
     }
     function _jmSvStatusCommit(idx, ns) {
         var it = _jmSvItems[idx]; if (!it) return;
-        _jmSaveField(it.josa_id, 'josa_status', ns, function () { if (typeof applyJosaFilters === 'function') applyJosaFilters(); });
+        _jmSaveField(it.josa_id, 'josa_status', ns, function () { _jmUpdateGridRow(it.josa_id); });
         it.josa_status = ns;
         _jmSvRefreshRow(idx);
         if (ns === '조사요청' && _jmSvLW && !_jmSvLW.closed) {
@@ -24013,11 +24028,11 @@ MJ 이정우 팀장
         var it = _jmSvItems[idx]; if (!it) return;
         val = String(val || '').trim();
         if (val === (it.josaja || '')) return;
-        _jmSaveField(it.josa_id, 'josaja', val, function () { if (typeof applyJosaFilters === 'function') applyJosaFilters(); });
+        _jmSaveField(it.josa_id, 'josaja', val, function () { _jmUpdateGridRow(it.josa_id); });
         it.josaja = val;
         // 조사자 신규 입력 → 자동 조사예정 (분류필요/미지정에서만)
         if (val && (!it.josa_status || it.josa_status === '분류필요')) {
-            _jmSaveField(it.josa_id, 'josa_status', '조사예정', function () { if (typeof applyJosaFilters === 'function') applyJosaFilters(); });
+            _jmSaveField(it.josa_id, 'josa_status', '조사예정', function () { _jmUpdateGridRow(it.josa_id); });
             it.josa_status = '조사예정';
             _jmSvRefreshRow(idx);
         }
@@ -24253,7 +24268,7 @@ MJ 이정우 팀장
             // 상태 — 버튼 형식 (클릭 시 prompt → 변경 → GAS 저장)
             var statusBtn = (function () {
                 var s = it.josa_status || '분류필요';
-                return '<button type="button" onclick="openJmStatusMenu(this, \'' + escAttr(it.josa_id) + '\')" class="jm-status-btn ' + (JM_STATUS_PAL[s] || 'bg-gray-200') + '">' + escHtml(s) + '</button>';
+                return '<button type="button" data-id="' + escAttr(it.josa_id) + '" onclick="openJmStatusMenu(this, \'' + escAttr(it.josa_id) + '\')" class="jm-status-btn ' + (JM_STATUS_PAL[s] || 'bg-gray-200') + '">' + escHtml(s) + '</button>';
             })();
 
             // 조사자 — 커스텀 자동완성 (회원명 AC 스타일)
@@ -24344,14 +24359,7 @@ MJ 이정우 팀장
                 menu.remove();
                 if (newStatus === cur) return;
                 _jmSaveField(josaId, 'josa_status', newStatus, function (resp) {
-                    applyJosaFilters();
-                    // 폐기로 변경 시 — 폐기 제외 체크 때문에 화면에서 사라지므로 명확한 toast
-                    if (newStatus === '폐기') {
-                        var excl = document.getElementById('jm-exclude-polye');
-                        if (excl && excl.checked) {
-                            if (typeof showStatus === 'function') showStatus('✓ 폐기로 변경됨 — \'폐기 제외\' 체크 때문에 목록에서 숨김', 'success');
-                        }
-                    }
+                    _jmUpdateGridRow(josaId);   // 재정렬 없이 그 자리 갱신
                     // 조사요청 → 그 행 조사자 입력칸 포커스 + 자동완성 펼침
                     if (newStatus === '조사요청') {
                         setTimeout(function () {
@@ -24483,7 +24491,7 @@ MJ 이정우 팀장
         _jmSaveField(josaId, 'josaja', newVal);
         // 조사자 신규 입력 시 → 자동 '조사예정' (분류필요/미지정에서만 승격, 다운그레이드 안 함)
         if (newVal && (!it || !it.josa_status || it.josa_status === '분류필요')) {
-            _jmSaveField(josaId, 'josa_status', '조사예정', function () { applyJosaFilters(); });
+            _jmSaveField(josaId, 'josa_status', '조사예정', function () { _jmUpdateGridRow(josaId); });
         }
     }
 
