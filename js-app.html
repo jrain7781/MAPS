@@ -23920,71 +23920,78 @@ MJ 이정우 팀장
         bar.innerHTML = html;
     }
 
-    // ── [선택보기] 옥션원 일괄보기 리스트 미러 — 리스트 전용 패널 + 상세는 별도 옥션원 창 ──
-    // 상세 = 옥션원 ca_view 실제 페이지를 별도 창('_auction')으로. 사건 이동 시 같은 창 URL 만 교체.
-    var JM_SV_TOP = 50, JM_SV_H = 900, JM_SV_W = 360;          // 리스트 패널 (상세창과 세로 한덩어리)
-    var JM_SV_DET_L = 60, JM_SV_DET_T = 50, JM_SV_DET_W = 900, JM_SV_DET_H = 900;
-    var JM_SV_L = JM_SV_DET_L + JM_SV_DET_W;                    // 상세창 바로 오른쪽에 도킹
-    var _jmSvItems = [], _jmSvIdx = -1, _jmSvWin = null;
-    var _jmSvSide = 'left';   // 'left' = 상세창이 리스트 왼쪽 / 'right' = 오른쪽
+    // ── [선택보기] 리스트 = 독립 브라우저 창 / 상세 = 옥션원 ca_view 별도 창 ──
+    // MAPS(GAS) 는 sandbox iframe 이라 in-page 모달은 창 밖으로 못 나가고 좌표도 어긋남.
+    // → 리스트를 별도 실제 창으로 띄움. 그 창의 정확한 screenX/Y/outer 로 상세창을 옆에 도킹.
+    // 옥션원은 cross-origin 이라 moveTo 불가 → 위치 바뀌면 close 후 재오픈으로 재도킹.
+    var JM_SV_DET_W = 900;
+    var _jmSvItems = [], _jmSvIdx = -1, _jmSvSide = 'left';
+    var _jmSvLW = null, _jmSvDet = null, _jmSvPoll = null;
+    var _jmSvLastL = null, _jmSvLastT = null, _jmSvPX = null, _jmSvPY = null;
     var JM_SV_ICON_FILE = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#9aa3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
     var JM_SV_ICON_CHK  = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+    var JM_SV_CSS = "*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}.jm-sv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#f7f9fc;border-bottom:1px solid #e2e8f0;flex-shrink:0}.jm-sv-finish{padding:5px 14px;background:#2f6fd8;color:#fff;border:0;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-finish:hover{background:#245fc0}.jm-sv-nav{display:flex;gap:6px}.jm-sv-navbtn{padding:4px 10px;background:#fff;color:#2f6fd8;border:1px solid #c3ccd6;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-navbtn:hover{background:#eef4fc}.jm-sv-subbar{display:flex;align-items:center;gap:6px;padding:5px 10px;background:#fbfcfe;border-bottom:1px solid #eef0f2;flex-shrink:0;font-size:11px;color:#6b7280;user-select:none}.jm-sv-hint{margin-left:auto;color:#94a3b8}.jm-sv-seg{display:flex}.jm-sv-segbtn{padding:3px 12px;background:#fff;color:#475569;border:1px solid #c3ccd6;cursor:pointer;font-size:11px;font-weight:600}.jm-sv-segbtn:first-child{border-radius:4px 0 0 4px}.jm-sv-segbtn:last-child{border-radius:0 4px 4px 0;border-left:0}.jm-sv-segbtn:hover{background:#eef4fc}.jm-sv-segbtn-on{background:#2f6fd8;color:#fff;border-color:#2f6fd8}.jm-sv-colhead{display:flex;align-items:flex-end;gap:8px;padding:6px 10px;border-bottom:2px solid #d8dee6;color:#6b7280;font-size:11px;line-height:1.3;flex-shrink:0;background:#fbfcfe;text-align:center}.jm-sv-list{flex:1;overflow-y:auto}.jm-sv-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #eef0f2;cursor:pointer}.jm-sv-row:hover{background:#f3f8fe}.jm-sv-row-on{background:#e8f1fb}.jm-sv-ico{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.jm-sv-c1{flex:1;min-width:0;text-align:left}.jm-sv-c2{width:104px;flex-shrink:0;text-align:right}.jm-sv-c3{width:60px;flex-shrink:0;text-align:right}.jm-sv-sakun{font-size:12.5px;font-weight:700;color:#1f2937;line-height:1.25}.jm-sv-mul{color:#c2410c;font-weight:700}.jm-sv-kind{font-size:11px;color:#1d6fb8;margin-top:1px}.jm-sv-kam{font-size:12px;font-weight:600;color:#1f2937;line-height:1.25}.jm-sv-low{font-size:12px;color:#1d6fb8;margin-top:1px}.jm-sv-fc{font-size:11.5px;color:#1f2937;line-height:1.25}.jm-sv-fr{font-size:11px;color:#d35400;margin-top:1px}";
 
     function _jmSvNum(n) {
         if (n === 0 || n === '0') return '0';
         if (!n) return '';
         return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
-    function _jmSvOpenDetail(it) {
-        var url = String(it && it.view_url || '').trim();
-        if (!url) { alert('옥션원 view_url 없음 (옛 데이터 — 다시 크롤하면 채워집니다).'); return; }
-        var feat = 'width=' + JM_SV_DET_W + ',height=' + JM_SV_DET_H +
-                   ',left=' + JM_SV_DET_L + ',top=' + JM_SV_DET_T + ',resizable=yes,scrollbars=yes';
-        if (_jmSvWin && !_jmSvWin.closed) {
-            try { _jmSvWin.location.href = url; _jmSvWin.focus(); }
-            catch (e) { _jmSvWin = window.open(url, '_auction', feat); }
-        } else {
-            _jmSvWin = window.open(url, '_auction', feat);
-        }
-        setTimeout(_jmSvDock, 90);   // 새 창은 잠시 후 준비됨 → 도킹
+    // 리스트 창 화면좌표 기준 상세창 배치 사각형 (좌/우, 세로 한덩어리)
+    function _jmSvRect() {
+        var w = JM_SV_DET_W;
+        var lx = _jmSvLW.screenX, ly = _jmSvLW.screenY;
+        var lw = _jmSvLW.outerWidth, lh = _jmSvLW.outerHeight;
+        var L = (_jmSvSide === 'right') ? (lx + lw) : (lx - w);
+        return { l: Math.round(L), t: Math.round(ly), w: w, h: Math.round(lh) };
     }
-    // 상세창을 리스트 패널 옆(좌/우)으로 회수·정렬. 사건 이동 시마다 자동 호출.
-    function _jmSvDock() {
-        if (!_jmSvWin || _jmSvWin.closed) return;
-        var m = document.getElementById('jm-selectview-modal');
-        if (!m) return;
-        var r = m.getBoundingClientRect();
-        // 브라우저 창의 화면상 위치 + 상단 크롬 높이 보정 (수평은 좌측 크롬 거의 없음)
-        var baseX = (window.screenX != null ? window.screenX : window.screenLeft) || 0;
-        var baseY = (window.screenY != null ? window.screenY : window.screenTop) || 0;
-        var chromeTop = Math.max(0, (window.outerHeight || 0) - (window.innerHeight || 0));
-        var panelX = baseX + r.left;
-        var panelY = baseY + chromeTop + r.top;
-        var dx = (_jmSvSide === 'right') ? (panelX + r.width) : (panelX - JM_SV_DET_W);
-        try {
-            _jmSvWin.resizeTo(JM_SV_DET_W, JM_SV_DET_H);
-            _jmSvWin.moveTo(Math.round(dx), Math.round(panelY));
-        } catch (e) {}
+    function _jmSvOpenDetail(url) {
+        if (!url) { alert('옥션원 view_url 없음 (옛 데이터 — 다시 크롤하면 채워집니다).'); return; }
+        var R = _jmSvRect();
+        var moved = (R.l !== _jmSvLastL || R.t !== _jmSvLastT);
+        if (_jmSvDet && !_jmSvDet.closed && !moved) {
+            try { _jmSvDet.location.href = url; _jmSvDet.focus(); return; } catch (e) {}
+        }
+        if (_jmSvDet && !_jmSvDet.closed) { try { _jmSvDet.close(); } catch (e) {} }
+        _jmSvDet = window.open(url, 'jm_sv_detail',
+            'width=' + R.w + ',height=' + R.h + ',left=' + R.l + ',top=' + R.t + ',resizable=yes,scrollbars=yes');
+        _jmSvLastL = R.l; _jmSvLastT = R.t;
     }
     function _jmSvPaint() {
-        var list = document.getElementById('jm-sv-list');
-        if (!list) return;
-        Array.prototype.forEach.call(list.querySelectorAll('.jm-sv-row'), function (r, i) {
-            var act = (i === _jmSvIdx);
-            r.classList.toggle('jm-sv-row-active', act);
+        if (!_jmSvLW || _jmSvLW.closed) return;
+        var rows = _jmSvLW.document.querySelectorAll('.jm-sv-row');
+        Array.prototype.forEach.call(rows, function (r, i) {
+            var a = (i === _jmSvIdx);
+            r.className = a ? 'jm-sv-row jm-sv-row-on' : 'jm-sv-row';
             var ico = r.querySelector('.jm-sv-ico');
-            if (ico) ico.innerHTML = act ? JM_SV_ICON_CHK : JM_SV_ICON_FILE;
-            if (act) r.scrollIntoView({ block: 'nearest' });
+            if (ico) ico.innerHTML = a ? JM_SV_ICON_CHK : JM_SV_ICON_FILE;
+            if (a && r.scrollIntoView) r.scrollIntoView({ block: 'nearest' });
         });
     }
-    function _jmSvSelect(idx) {
-        if (idx < 0 || idx >= _jmSvItems.length) return;
-        _jmSvIdx = idx;
+    function _jmSvSelect(i) {
+        if (i < 0 || i >= _jmSvItems.length) return;
+        _jmSvIdx = i;
         _jmSvPaint();
-        _jmSvOpenDetail(_jmSvItems[idx]);
+        _jmSvOpenDetail(_jmSvItems[i].view_url);
     }
     function _jmSvPrev() { _jmSvSelect(_jmSvIdx - 1); }
     function _jmSvNext() { _jmSvSelect(_jmSvIdx + 1); }
+    function _jmSvSetSide(s) {
+        _jmSvSide = s;
+        if (_jmSvLW && !_jmSvLW.closed) {
+            var dd = _jmSvLW.document;
+            var bl = dd.getElementById('jmsvSL'), br = dd.getElementById('jmsvSR');
+            if (bl) bl.className = 'jm-sv-segbtn' + (s === 'left' ? ' jm-sv-segbtn-on' : '');
+            if (br) br.className = 'jm-sv-segbtn' + (s === 'right' ? ' jm-sv-segbtn-on' : '');
+        }
+        _jmSvLastL = null; _jmSvLastT = null;   // 강제 재도킹
+        if (_jmSvIdx >= 0 && _jmSvItems[_jmSvIdx]) _jmSvOpenDetail(_jmSvItems[_jmSvIdx].view_url);
+    }
+    function _jmSvFinish() {
+        if (_jmSvPoll) { clearInterval(_jmSvPoll); _jmSvPoll = null; }
+        try { if (_jmSvDet && !_jmSvDet.closed) _jmSvDet.close(); } catch (e) {}
+        try { if (_jmSvLW && !_jmSvLW.closed) _jmSvLW.close(); } catch (e) {}
+    }
 
     function openJmSelectViewModal() {
         var checked = Array.from(document.querySelectorAll('#jm-grid-body .jm-row-cb:checked'));
@@ -23992,66 +23999,26 @@ MJ 이정우 팀장
         var ids = checked.map(function (cb) { return cb.dataset.id; });
         var items = (jmItems || []).filter(function (it) { return ids.indexOf(String(it.josa_id)) >= 0; });
         if (!items.length) { alert('체크된 행의 데이터를 못 찾았습니다.'); return; }
-        _jmSvItems = items; _jmSvIdx = -1;
+        _jmSvItems = items; _jmSvIdx = -1; _jmSvSide = 'left';
+        _jmSvLastL = null; _jmSvLastT = null; _jmSvPX = null; _jmSvPY = null;
 
-        var m = document.getElementById('jm-selectview-modal');
-        if (!m) {
-            m = document.createElement('div');
-            m.id = 'jm-selectview-modal';
-            m.className = 'jm-sv-modal';
-            m.tabIndex = -1;
-            m.innerHTML =
-                '<div class="jm-sv-head" id="jm-sv-head">' +
-                    '<button type="button" class="jm-sv-finish" onclick="closeJmSelectViewModal()">일괄보기 마침</button>' +
-                    '<div class="jm-sv-nav">' +
-                        '<button type="button" class="jm-sv-navbtn" id="jm-sv-prev">◀ 이전</button>' +
-                        '<button type="button" class="jm-sv-navbtn" id="jm-sv-next">다음 ▶</button>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="jm-sv-subbar">' +
-                    '<span class="jm-sv-subbar-label">상세창 위치</span>' +
-                    '<div class="jm-sv-seg">' +
-                        '<button type="button" class="jm-sv-segbtn" id="jm-sv-side-left">◀ 좌</button>' +
-                        '<button type="button" class="jm-sv-segbtn" id="jm-sv-side-right">우 ▶</button>' +
-                    '</div>' +
-                '</div>' +
-                '<div class="jm-sv-colhead">' +
-                    '<div class="jm-sv-ico"></div>' +
-                    '<div class="jm-sv-c1" style="text-align:left">사건번호<br>물건종류</div>' +
-                    '<div class="jm-sv-c2">감정가<br>최저입찰가</div>' +
-                    '<div class="jm-sv-c3">진행<br>상태</div>' +
-                '</div>' +
-                '<div class="jm-sv-list" id="jm-sv-list"></div>';
-            document.body.appendChild(m);
-            _jmSvBindDrag(m);
-            m.querySelector('#jm-sv-prev').addEventListener('click', _jmSvPrev);
-            m.querySelector('#jm-sv-next').addEventListener('click', _jmSvNext);
-            var _bL = m.querySelector('#jm-sv-side-left');
-            var _bR = m.querySelector('#jm-sv-side-right');
-            function _jmSvSetSide(side) {
-                _jmSvSide = side;
-                _bL.classList.toggle('jm-sv-segbtn-on', side === 'left');
-                _bR.classList.toggle('jm-sv-segbtn-on', side === 'right');
-                _jmSvDock();
-            }
-            _bL.addEventListener('click', function () { _jmSvSetSide('left'); });
-            _bR.addEventListener('click', function () { _jmSvSetSide('right'); });
-            _jmSvSetSide(_jmSvSide);   // 초기 활성 표시 (기본 좌)
-            m.addEventListener('keydown', function (e) {
-                if (e.key === 'ArrowDown') { e.preventDefault(); _jmSvNext(); }
-                else if (e.key === 'ArrowUp') { e.preventDefault(); _jmSvPrev(); }
-                else if (e.key === 'Escape') { closeJmSelectViewModal(); }
-            });
-        }
-        // 패널 위치/크기 — 상세창과 세로 한덩어리 (상세창 오른쪽에 도킹)
-        m.style.transform = 'none';
-        m.style.left = JM_SV_L + 'px';
-        m.style.top = JM_SV_TOP + 'px';
-        m.style.width = JM_SV_W + 'px';
-        m.style.height = JM_SV_H + 'px';
+        var W = 440, H = 900;
+        var L = Math.max(0, (((window.screen && screen.availWidth) || 1280) - W - 20)), T = 40;
+        if (_jmSvLW && !_jmSvLW.closed) { try { _jmSvLW.close(); } catch (e) {} }
+        _jmSvLW = window.open('', 'jm_sv_list',
+            'width=' + W + ',height=' + H + ',left=' + L + ',top=' + T + ',resizable=yes,scrollbars=yes');
+        if (!_jmSvLW) { alert('팝업이 차단되었습니다. 이 사이트 팝업 허용 후 [선택보기]를 다시 누르세요.'); return; }
 
-        var list = document.getElementById('jm-sv-list');
-        list.innerHTML = items.map(function (it, i) {
+        var d = _jmSvLW.document;
+        d.open();
+        d.write('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>');
+        d.close();
+        d.title = '선택보기 — 옥션원 일괄보기';
+        var st = d.createElement('style');
+        st.textContent = JM_SV_CSS;
+        d.head.appendChild(st);
+
+        var rowsHtml = items.map(function (it, i) {
             var sk = String(it.sakun_no || '');
             var mm = sk.match(/^([\s\S]*?)(\(\d+\))\s*$/);
             var skHtml = mm
@@ -24060,57 +24027,80 @@ MJ 이정우 팀장
             var fc = it.fail_count ? ('유찰 ' + escHtml(it.fail_count) + '회') : '신건';
             var fr = it.fail_rate ? ('(' + escHtml(it.fail_rate) + '%)') : '';
             return '<div class="jm-sv-row" data-idx="' + i + '">' +
-                '<div class="jm-sv-ico">' + JM_SV_ICON_FILE + '</div>' +
-                '<div class="jm-sv-c1">' +
-                    '<div class="jm-sv-sakun">' + skHtml + '</div>' +
-                    '<div class="jm-sv-kind">' + escHtml(it.prop_kind || '') + '</div>' +
-                '</div>' +
-                '<div class="jm-sv-c2">' +
-                    '<div class="jm-sv-kam">' + _jmSvNum(it.kamjungka) + '</div>' +
-                    '<div class="jm-sv-low">' + _jmSvNum(it.low_price) + '</div>' +
-                '</div>' +
-                '<div class="jm-sv-c3">' +
-                    '<div class="jm-sv-fc">' + fc + '</div>' +
-                    '<div class="jm-sv-fr">' + fr + '</div>' +
-                '</div>' +
+                '<div class="jm-sv-ico"></div>' +
+                '<div class="jm-sv-c1"><div class="jm-sv-sakun">' + skHtml + '</div>' +
+                    '<div class="jm-sv-kind">' + escHtml(it.prop_kind || '') + '</div></div>' +
+                '<div class="jm-sv-c2"><div class="jm-sv-kam">' + _jmSvNum(it.kamjungka) + '</div>' +
+                    '<div class="jm-sv-low">' + _jmSvNum(it.low_price) + '</div></div>' +
+                '<div class="jm-sv-c3"><div class="jm-sv-fc">' + fc + '</div>' +
+                    '<div class="jm-sv-fr">' + fr + '</div></div>' +
             '</div>';
         }).join('');
-        Array.prototype.forEach.call(list.querySelectorAll('.jm-sv-row'), function (row) {
-            row.addEventListener('click', function () {
-                _jmSvSelect(parseInt(row.dataset.idx, 10));
-            });
+        d.body.innerHTML =
+            '<div class="jm-sv-head">' +
+                '<button type="button" class="jm-sv-finish" id="jmsvFin">일괄보기 마침</button>' +
+                '<div class="jm-sv-nav">' +
+                    '<button type="button" class="jm-sv-navbtn" id="jmsvPrev">◀ 이전</button>' +
+                    '<button type="button" class="jm-sv-navbtn" id="jmsvNext">다음 ▶</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="jm-sv-subbar">' +
+                '<span>상세창 위치</span>' +
+                '<div class="jm-sv-seg">' +
+                    '<button type="button" class="jm-sv-segbtn" id="jmsvSL">◀ 좌</button>' +
+                    '<button type="button" class="jm-sv-segbtn" id="jmsvSR">우 ▶</button>' +
+                '</div>' +
+                '<span class="jm-sv-hint">행 클릭 시 옆에 상세창</span>' +
+            '</div>' +
+            '<div class="jm-sv-colhead">' +
+                '<div class="jm-sv-ico"></div>' +
+                '<div class="jm-sv-c1">사건번호<br>물건종류</div>' +
+                '<div class="jm-sv-c2">감정가<br>최저입찰가</div>' +
+                '<div class="jm-sv-c3">진행<br>상태</div>' +
+            '</div>' +
+            '<div class="jm-sv-list">' + rowsHtml + '</div>';
+
+        Array.prototype.forEach.call(d.querySelectorAll('.jm-sv-row'), function (row) {
+            row.addEventListener('click', function () { _jmSvSelect(parseInt(row.getAttribute('data-idx'), 10)); });
+        });
+        d.getElementById('jmsvPrev').addEventListener('click', function () { _jmSvPrev(); });
+        d.getElementById('jmsvNext').addEventListener('click', function () { _jmSvNext(); });
+        d.getElementById('jmsvSL').addEventListener('click', function () { _jmSvSetSide('left'); });
+        d.getElementById('jmsvSR').addEventListener('click', function () { _jmSvSetSide('right'); });
+        d.getElementById('jmsvFin').addEventListener('click', function () { _jmSvFinish(); });
+        d.addEventListener('keydown', function (e) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); _jmSvNext(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); _jmSvPrev(); }
+            else if (e.key === 'Escape') { _jmSvFinish(); }
+        });
+        _jmSvLW.addEventListener('unload', function () {
+            try { if (_jmSvDet && !_jmSvDet.closed) _jmSvDet.close(); } catch (e) {}
         });
 
-        m.style.display = 'flex';
-        m.focus();
-        _jmSvSelect(0);   // 첫 항목 자동 선택 → 상세창 오픈 (이 클릭이 사용자 제스처라 팝업 허용)
-    }
-    function closeJmSelectViewModal() {
-        var m = document.getElementById('jm-selectview-modal');
-        if (m) m.style.display = 'none';
-    }
-    // 모달 헤더 드래그로 패널 위치 이동 (버튼 클릭은 드래그 제외)
-    function _jmSvBindDrag(modal) {
-        var head = modal.querySelector('.jm-sv-head');
-        if (!head) return;
-        var dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
-        head.addEventListener('mousedown', function (e) {
-            if (e.target.closest && e.target.closest('button')) return;
-            dragging = true;
-            startX = e.clientX; startY = e.clientY;
-            var r = modal.getBoundingClientRect();
-            startLeft = r.left; startTop = r.top;
-            modal.style.transform = 'none';
-            modal.style.left = startLeft + 'px';
-            modal.style.top = startTop + 'px';
-            e.preventDefault();
-        });
-        document.addEventListener('mousemove', function (e) {
-            if (!dragging) return;
-            modal.style.left = (startLeft + e.clientX - startX) + 'px';
-            modal.style.top = (startTop + e.clientY - startY) + 'px';
-        });
-        document.addEventListener('mouseup', function () { dragging = false; });
+        d.getElementById('jmsvSL').className = 'jm-sv-segbtn jm-sv-segbtn-on';
+        _jmSvIdx = 0; _jmSvPaint();   // 첫 행 하이라이트만 (상세창은 첫 클릭 때 — 팝업차단 회피)
+
+        if (_jmSvPoll) { clearInterval(_jmSvPoll); }
+        _jmSvPoll = setInterval(function () {
+            if (!_jmSvLW || _jmSvLW.closed) {
+                clearInterval(_jmSvPoll); _jmSvPoll = null;
+                try { if (_jmSvDet && !_jmSvDet.closed) _jmSvDet.close(); } catch (e) {}
+                return;
+            }
+            if (!_jmSvDet || _jmSvDet.closed || _jmSvIdx < 0) return;
+            var x = _jmSvLW.screenX, y = _jmSvLW.screenY;
+            var settled = (x === _jmSvPX && y === _jmSvPY);
+            _jmSvPX = x; _jmSvPY = y;
+            if (!settled) return;   // 이동 중엔 대기, 멈추면 옆으로 회수
+            var R = _jmSvRect();
+            if (R.l !== _jmSvLastL || R.t !== _jmSvLastT) {
+                try { _jmSvDet.close(); } catch (e) {}
+                _jmSvDet = window.open(_jmSvItems[_jmSvIdx].view_url, 'jm_sv_detail',
+                    'width=' + R.w + ',height=' + R.h + ',left=' + R.l + ',top=' + R.t + ',resizable=yes,scrollbars=yes');
+                _jmSvLastL = R.l; _jmSvLastT = R.t;
+            }
+        }, 500);
+        _jmSvLW.focus();
     }
     function toggleJmSummaryFilter(status) {
         if (!status) {
