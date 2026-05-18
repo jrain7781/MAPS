@@ -7518,13 +7518,12 @@ function getJosaItemsByToken(token) {
   try {
     var mem = (typeof getMemberByToken === 'function') ? getMemberByToken(token) : null;
     if (!mem || !mem.member_token) return { success: false, message: '유효하지 않은 토큰', items: [] };
-    var name = String(mem.name || mem.member_name || '').trim();
-    if (!name) return { success: false, message: '회원명 없음', items: [] };
-    var gubun = '';
-    try {
-      var full = (typeof getMemberById_ === 'function') ? getMemberById_(mem.member_id) : null;
-      gubun = full ? String(full.gubun || '') : '';
-    } catch (e0) { gubun = ''; }
+    // getMemberByToken 의 name 은 비어있음(헤더가 member_name) → 전체 회원행에서 정확히 추출
+    var full = null;
+    try { full = (typeof getMemberById_ === 'function') ? getMemberById_(mem.member_id) : null; } catch (e0) { full = null; }
+    var name = String((full && (full.member_name || full.name)) || mem.member_name || mem.name || '').trim();
+    var gubun = full ? String(full.gubun || '') : '';
+    if (!name) return { success: false, message: '회원명 없음(member_id=' + (mem.member_id || '?') + ')', items: [] };
     var VISIBLE = { '조사요청': 1, '조사접수': 1, '조사확정': 1, '조사완료': 1 };
     var all = (typeof readAllJosaItems === 'function') ? readAllJosaItems() : [];
     var items = all.filter(function (r) {
