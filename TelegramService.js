@@ -591,15 +591,18 @@ function handleTelegramWebhook_(update) {
           if (/^\d{6}$/.test(jcBid)) jcBid = '20' + jcBid.slice(0, 2) + '-' + jcBid.slice(2, 4) + '-' + jcBid.slice(4, 6);
           var jcKam = jcItem ? jcN(jcItem.kamjungka) : '';
           var jcLow = jcItem ? jcN(jcItem.low_price) : '';
+          var jcSk = jcItem ? String(jcItem.sakun_no || '') : '';
+          var jcVu = jcItem ? String(jcItem.view_url || '') : '';
           var jcText = '✅ 조사요청을 확인했습니다. (상태: <b>조사접수</b>)\n\n' +
             '📋 <b>조사물건</b>\n' +
-            '• 사건번호: 🔒 <i>조사확정 시 공개</i>\n' +
+            '• 사건번호: <b>' + (jcSk || '(확인 필요)') + '</b>\n' +
             (jcItem && jcItem.court ? '• 법원: ' + jcItem.court + '\n' : '') +
             (jcItem && jcItem.prop_kind ? '• 물건종류: ' + jcItem.prop_kind + '\n' : '') +
             (jcItem && jcItem.address ? '• 주소: ' + String(jcItem.address).split('\n')[0] + '\n' : '') +
             (jcKam ? '• 감정가: ' + jcKam + '\n' : '') +
             (jcLow ? '• 최저입찰가: ' + jcLow + '\n' : '') +
             (jcBid ? '• 입찰일: ' + jcBid + '\n' : '') +
+            (jcVu ? '• 옥션원: ' + jcVu + '\n' : '') +
             '\n결과를 선택하거나 아래에서 내 조사물건을 확인하세요.';
           var jcMember = (typeof getMemberByTelegramChatId === 'function') ? getMemberByTelegramChatId(chatId) : null;
           var jcBase = PropertiesService.getScriptProperties().getProperty('WEBAPP_BASE_URL') || '';
@@ -622,11 +625,15 @@ function handleTelegramWebhook_(update) {
             }
           } catch (e3) { }
           var jfSk = jfItem ? String(jfItem.sakun_no || '') : '';
-          var jfVu = jfItem ? String(jfItem.view_url || '') : '';
+          var jfMember = (typeof getMemberByTelegramChatId === 'function') ? getMemberByTelegramChatId(chatId) : null;
+          var jfBase = PropertiesService.getScriptProperties().getProperty('WEBAPP_BASE_URL') || '';
+          var jfKb = null;
+          if (jfMember && jfMember.member_token && jfBase) {
+            jfKb = { inline_keyboard: [[{ text: '📋 내 조사물건 보기', web_app: { url: jfBase + '?view=josa&t=' + encodeURIComponent(jfMember.member_token) } }]] };
+          }
           telegramSendMessage(chatId,
-            '✅ <b>조사확정</b> 처리되었습니다. (MAPS 반영)\n\n' +
-            '• 사건번호: <b>' + (jfSk || '(확인 필요)') + '</b>\n' +
-            (jfVu ? '• 옥션원: ' + jfVu + '\n' : ''));
+            '✅ <b>조사확정</b> 되었습니다.' + (jfSk ? ' (사건번호: <b>' + jfSk + '</b>)' : '') + '\n\n' +
+            '24시간 내에 조사 내용을 옥션원에 등록 부탁드립니다.', jfKb);
         } else {
           // 조사불가
           if (typeof updateJosaField === 'function') updateJosaField(jmId, 'josa_status', '조사불가');

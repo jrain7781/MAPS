@@ -544,8 +544,8 @@
     }
     function _josaCard(it) {
         var st = String(it.josa_status || '');
-        var reveal = (st === '조사확정' || st === '조사완료');
-        var sk = reveal ? (it.sakun_no || '') : '🔒 조사확정 시 공개';
+        var reveal = (st !== '조사요청');   // 확인(조사접수) 시점부터 사건번호 공개
+        var sk = reveal ? (it.sakun_no || '') : '🔒 확인 시 공개';
         var c = _josaStColor(st);
         var addr = String(it.address || '').split('\n')[0];
         var bd = String(it.bid_date || '');
@@ -596,9 +596,15 @@
         google.script.run
             .withSuccessHandler(function (resp) {
                 __JOSA.items = (resp && resp.items) || [];
+                var dg = document.getElementById('josaListDiag');
+                if (dg) dg.textContent = '조사자: ' + (resp && resp.member_name || '?') + ' · gubun: ' + (resp && resp.gubun || '?') + ' · 배정 ' + __JOSA.items.length + '건' + (resp && resp.success === false ? ' · ' + (resp.message || '오류') : '');
                 _josaRenderInto('josaListBody', __JOSA.items);
             })
-            .withFailureHandler(function () { _josaRenderInto('josaListBody', __JOSA.items); })
+            .withFailureHandler(function (err) {
+                var dg = document.getElementById('josaListDiag');
+                if (dg) dg.textContent = '조회 실패: ' + (err && err.message || err);
+                _josaRenderInto('josaListBody', __JOSA.items);
+            })
             .getJosaItemsByToken(APP_CTX.token);
     }
     function renderJosaMonthly() {
