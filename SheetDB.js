@@ -7513,6 +7513,24 @@ function readAllJosaItems() {
   }).filter(function(r) { return r.josa_id; });
 }
 
+// 조사자 토큰 → 본인(josaja) 조사물건 목록 (조사 웹뷰용). 조사불가 등은 제외.
+function getJosaItemsByToken(token) {
+  try {
+    var mem = (typeof getMemberByToken === 'function') ? getMemberByToken(token) : null;
+    if (!mem || !mem.member_token) return { success: false, message: '유효하지 않은 토큰', items: [] };
+    var name = String(mem.name || mem.member_name || '').trim();
+    if (!name) return { success: false, message: '회원명 없음', items: [] };
+    var VISIBLE = { '조사요청': 1, '조사접수': 1, '조사확정': 1, '조사완료': 1 };
+    var all = (typeof readAllJosaItems === 'function') ? readAllJosaItems() : [];
+    var items = all.filter(function (r) {
+      return String(r.josaja || '').trim() === name && VISIBLE[String(r.josa_status || '').trim()];
+    });
+    return { success: true, member_name: name, items: items };
+  } catch (e) {
+    return { success: false, message: String(e && e.message || e), items: [] };
+  }
+}
+
 /**
  * 크롤링 결과 일괄 upsert
  * payload: { preset_id, preset_title, items: [...] }

@@ -571,30 +571,46 @@ function handleTelegramWebhook_(update) {
       return;
     }
 
-    // === 조사요청(JM/josa_items) 수락/보류 ===
-    // 수락(예) → 조사접수 + 사건번호/옥션원 공개,  보류(아니오) → 조사예정 (조사자 유지)
-    if (action === 'JITEM_YES' || action === 'JITEM_NO') {
+    // === 조사요청(JM/josa_items) — 확인하기/조사확정/조사불가 ===
+    if (action === 'JCONF' || action === 'JFIX' || action === 'JNG') {
       var jmId = itemId;
-      var isYes = (action === 'JITEM_YES');
-      try { telegramAnswerCallbackQuery_(cqId, (isYes ? '수락' : '보류') + ' 처리합니다.', false); } catch (e) { }
+      try { telegramAnswerCallbackQuery_(cqId, '처리합니다.', false); } catch (e) { }
       try {
-        if (typeof updateJosaField === 'function') updateJosaField(jmId, 'josa_status', isYes ? '조사접수' : '조사예정');
-        if (isYes) {
-          var jiItem = null;
+        if (action === 'JCONF') {
+          // 확인하기 → 조사접수 + Msg2(조사확정/조사불가/내 조사물건 보기)
+          if (typeof updateJosaField === 'function') updateJosaField(jmId, 'josa_status', '조사접수');
+          var jcMember = (typeof getMemberByTelegramChatId === 'function') ? getMemberByTelegramChatId(chatId) : null;
+          var jcBase = PropertiesService.getScriptProperties().getProperty('WEBAPP_BASE_URL') || '';
+          var jcKb = [[
+            { text: '조사확정', callback_data: 'MJ|JFIX|' + jmId },
+            { text: '조사불가', callback_data: 'MJ|JNG|' + jmId }
+          ]];
+          if (jcMember && jcMember.member_token && jcBase) {
+            jcKb.push([{ text: '📋 내 조사물건 보기', web_app: { url: jcBase + '?view=josa&t=' + encodeURIComponent(jcMember.member_token) } }]);
+          }
+          telegramSendMessage(chatId,
+            '✅ 조사요청을 확인했습니다. (상태: <b>조사접수</b>)\n결과를 선택하거나 아래에서 내 조사물건을 확인하세요.',
+            { inline_keyboard: jcKb });
+        } else if (action === 'JFIX') {
+          // 조사확정 → 사건번호 공개
+          if (typeof updateJosaField === 'function') updateJosaField(jmId, 'josa_status', '조사확정');
+          var jfItem = null;
           try {
-            var jiAll = (typeof readAllJosaItems === 'function') ? readAllJosaItems() : [];
-            for (var jiQ = 0; jiQ < jiAll.length; jiQ++) {
-              if (String(jiAll[jiQ].josa_id) === String(jmId)) { jiItem = jiAll[jiQ]; break; }
+            var jfAll = (typeof readAllJosaItems === 'function') ? readAllJosaItems() : [];
+            for (var jfQ = 0; jfQ < jfAll.length; jfQ++) {
+              if (String(jfAll[jfQ].josa_id) === String(jmId)) { jfItem = jfAll[jfQ]; break; }
             }
           } catch (e3) { }
-          var jiSk = jiItem ? String(jiItem.sakun_no || '') : '';
-          var jiVu = jiItem ? String(jiItem.view_url || '') : '';
-          var jiMsg = '✅ 조사요청을 <b>수락</b>하셨습니다. (상태: <b>조사접수</b>)\n\n' +
-            '• 사건번호: <b>' + (jiSk || '(확인 필요)') + '</b>\n' +
-            (jiVu ? '• 옥션원(물건카드): ' + jiVu + '\n' : '');
-          telegramSendMessage(chatId, jiMsg);
+          var jfSk = jfItem ? String(jfItem.sakun_no || '') : '';
+          var jfVu = jfItem ? String(jfItem.view_url || '') : '';
+          telegramSendMessage(chatId,
+            '✅ <b>조사확정</b> 처리되었습니다. (MAPS 반영)\n\n' +
+            '• 사건번호: <b>' + (jfSk || '(확인 필요)') + '</b>\n' +
+            (jfVu ? '• 옥션원: ' + jfVu + '\n' : ''));
         } else {
-          telegramSendMessage(chatId, '↩️ 보류 처리되었습니다.\nMAPS 상태: <b>조사예정</b>');
+          // 조사불가
+          if (typeof updateJosaField === 'function') updateJosaField(jmId, 'josa_status', '조사불가');
+          telegramSendMessage(chatId, '❌ <b>조사불가</b> 처리되었습니다. (MAPS 반영)');
         }
       } catch (e) {
         try { telegramSendMessage(chatId, '처리 오류: ' + (e.message || '')); } catch (e2) { }
@@ -1121,30 +1137,12 @@ function sendJosaItemRequestTelegram(payload) {
     if (!chatId) return { success: false, message: josaja + ' 텔레그램 chat_id 없음' };
     if (String(m.telegram_enabled || '').toUpperCase() === 'N') return { success: false, message: josaja + ' 텔레그램 비활성' };
 
-    function fnum(v) { v = String(v == null ? '' : v).replace(/[^\d.-]/g, ''); if (!v) return ''; var n = Number(v); return isNaN(n) ? String(v) : n.toLocaleString('ko-KR'); }
-    var sakun = String(payload.sakun_no || '');
-    var court = String(payload.court || '');
-    var kind = String(payload.prop_kind || '');
-    var addr = String(payload.address || '');
-    var kam = fnum(payload.kamjungka);
-    var low = fnum(payload.low_price);
-    var bid = String(payload.bid_date || '');
-    if (/^\d{6}$/.test(bid)) bid = '20' + bid.slice(0, 2) + '-' + bid.slice(2, 4) + '-' + bid.slice(4, 6);
-
-    // 사건번호 / 옥션원 링크는 가림 — 수락 시 공개 (링크는 사건번호를 그대로 노출하므로 함께 가림)
-    var text = '📋 <b>조사요청 물건입니다.</b>\n\n' +
-      '• 사건번호: 🔒 <i>수락 시 공개</i>\n' +
-      (court ? '• 법원: ' + court + '\n' : '') +
-      (kind ? '• 물건종류: ' + kind + '\n' : '') +
-      (addr ? '• 주소: ' + addr + '\n' : '') +
-      (kam ? '• 감정가: ' + kam + '\n' : '') +
-      (low ? '• 최저입찰가: ' + low + '\n' : '') +
-      (bid ? '• 입찰일: ' + bid + '\n' : '') +
-      '\n조사 요청을 수락하시겠습니까?';
+    // 최초 메시지는 간단히 (사건번호/물건정보 비공개). 상세는 확인 후 웹뷰에서.
+    var text = '📋 <b>조사요청이 도착했습니다.</b>\n조사 가능 여부를 선택해 주세요.';
     var replyMarkup = {
       inline_keyboard: [[
-        { text: '예', callback_data: 'MJ|JITEM_YES|' + josaId },
-        { text: '아니오', callback_data: 'MJ|JITEM_NO|' + josaId }
+        { text: '확인하기', callback_data: 'MJ|JCONF|' + josaId },
+        { text: '조사불가', callback_data: 'MJ|JNG|' + josaId }
       ]]
     };
     telegramSendMessage(chatId, text, replyMarkup);
