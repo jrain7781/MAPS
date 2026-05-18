@@ -23921,41 +23921,31 @@ MJ 이정우 팀장
     }
 
     // ── [선택보기] 리스트 = 독립 브라우저 창 / 상세 = 옥션원 ca_view 별도 창 ──
-    // MAPS(GAS) 는 sandbox iframe 이라 in-page 모달은 창 밖으로 못 나가고 좌표도 어긋남.
-    // → 리스트를 별도 실제 창으로 띄움. 그 창의 정확한 screenX/Y/outer 로 상세창을 옆에 도킹.
-    // 옥션원은 cross-origin 이라 moveTo 불가 → 위치 바뀌면 close 후 재오픈으로 재도킹.
-    var JM_SV_DET_W = 900;
-    var _jmSvItems = [], _jmSvIdx = -1, _jmSvSide = 'left';
-    var _jmSvLW = null, _jmSvDet = null, _jmSvPoll = null;
-    var _jmSvLastL = null, _jmSvLastT = null, _jmSvPX = null, _jmSvPY = null;
+    // GAS sandbox + cross-origin + window.open 의 모니터 클램프 때문에 상세창을
+    // 프로그램으로 모니터 넘겨 도킹 불가. → 상세창은 한 번만 열고 위치는 사용자가
+    // (리스트 옆/원하는 모니터에) 직접 배치. 이후 사건 이동은 내용(URL)만 교체.
+    // 크기는 입찰물건관리 상세탭 [옥션원] 버튼 모달과 동일: 896 x 900.
+    var JM_SV_DET_W = 896, JM_SV_DET_H = 900, JM_SV_DET_L = 100, JM_SV_DET_T = 50;
+    var _jmSvItems = [], _jmSvIdx = -1;
+    var _jmSvLW = null, _jmSvDet = null;
     var JM_SV_ICON_FILE = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#9aa3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
     var JM_SV_ICON_CHK  = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-    var JM_SV_CSS = "*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}.jm-sv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#f7f9fc;border-bottom:1px solid #e2e8f0;flex-shrink:0}.jm-sv-finish{padding:5px 14px;background:#2f6fd8;color:#fff;border:0;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-finish:hover{background:#245fc0}.jm-sv-nav{display:flex;gap:6px}.jm-sv-navbtn{padding:4px 10px;background:#fff;color:#2f6fd8;border:1px solid #c3ccd6;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-navbtn:hover{background:#eef4fc}.jm-sv-subbar{display:flex;align-items:center;gap:6px;padding:5px 10px;background:#fbfcfe;border-bottom:1px solid #eef0f2;flex-shrink:0;font-size:11px;color:#6b7280;user-select:none}.jm-sv-hint{margin-left:auto;color:#94a3b8}.jm-sv-seg{display:flex}.jm-sv-segbtn{padding:3px 12px;background:#fff;color:#475569;border:1px solid #c3ccd6;cursor:pointer;font-size:11px;font-weight:600}.jm-sv-segbtn:first-child{border-radius:4px 0 0 4px}.jm-sv-segbtn:last-child{border-radius:0 4px 4px 0;border-left:0}.jm-sv-segbtn:hover{background:#eef4fc}.jm-sv-segbtn-on{background:#2f6fd8;color:#fff;border-color:#2f6fd8}.jm-sv-colhead{display:flex;align-items:flex-end;gap:8px;padding:6px 10px;border-bottom:2px solid #d8dee6;color:#6b7280;font-size:11px;line-height:1.3;flex-shrink:0;background:#fbfcfe;text-align:center}.jm-sv-list{flex:1;overflow-y:auto}.jm-sv-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #eef0f2;cursor:pointer}.jm-sv-row:hover{background:#f3f8fe}.jm-sv-row-on{background:#e8f1fb}.jm-sv-ico{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.jm-sv-c1{flex:1;min-width:0;text-align:left}.jm-sv-c2{width:104px;flex-shrink:0;text-align:right}.jm-sv-c3{width:60px;flex-shrink:0;text-align:right}.jm-sv-sakun{font-size:12.5px;font-weight:700;color:#1f2937;line-height:1.25}.jm-sv-mul{color:#c2410c;font-weight:700}.jm-sv-kind{font-size:11px;color:#1d6fb8;margin-top:1px}.jm-sv-kam{font-size:12px;font-weight:600;color:#1f2937;line-height:1.25}.jm-sv-low{font-size:12px;color:#1d6fb8;margin-top:1px}.jm-sv-fc{font-size:11.5px;color:#1f2937;line-height:1.25}.jm-sv-fr{font-size:11px;color:#d35400;margin-top:1px}";
+    var JM_SV_CSS = "*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}.jm-sv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#f7f9fc;border-bottom:1px solid #e2e8f0;flex-shrink:0}.jm-sv-finish{padding:5px 14px;background:#2f6fd8;color:#fff;border:0;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-finish:hover{background:#245fc0}.jm-sv-nav{display:flex;gap:6px}.jm-sv-navbtn{padding:4px 10px;background:#fff;color:#2f6fd8;border:1px solid #c3ccd6;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-navbtn:hover{background:#eef4fc}.jm-sv-subbar{display:flex;align-items:center;gap:6px;padding:5px 10px;background:#fff7ed;border-bottom:1px solid #fed7aa;flex-shrink:0;font-size:11px;color:#9a3412;user-select:none}.jm-sv-colhead{display:flex;align-items:flex-end;gap:8px;padding:6px 10px;border-bottom:2px solid #d8dee6;color:#6b7280;font-size:11px;line-height:1.3;flex-shrink:0;background:#fbfcfe;text-align:center}.jm-sv-list{flex:1;overflow-y:auto}.jm-sv-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #eef0f2;cursor:pointer}.jm-sv-row:hover{background:#f3f8fe}.jm-sv-row-on{background:#e8f1fb}.jm-sv-ico{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.jm-sv-c1{flex:1;min-width:0;text-align:left}.jm-sv-c2{width:104px;flex-shrink:0;text-align:right}.jm-sv-c3{width:60px;flex-shrink:0;text-align:right}.jm-sv-sakun{font-size:12.5px;font-weight:700;color:#1f2937;line-height:1.25}.jm-sv-mul{color:#c2410c;font-weight:700}.jm-sv-kind{font-size:11px;color:#1d6fb8;margin-top:1px}.jm-sv-kam{font-size:12px;font-weight:600;color:#1f2937;line-height:1.25}.jm-sv-low{font-size:12px;color:#1d6fb8;margin-top:1px}.jm-sv-fc{font-size:11.5px;color:#1f2937;line-height:1.25}.jm-sv-fr{font-size:11px;color:#d35400;margin-top:1px}";
 
     function _jmSvNum(n) {
         if (n === 0 || n === '0') return '0';
         if (!n) return '';
         return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
-    // 리스트 창 화면좌표 기준 상세창 배치 사각형 (좌/우, 세로 한덩어리)
-    function _jmSvRect() {
-        var w = JM_SV_DET_W;
-        var lx = _jmSvLW.screenX, ly = _jmSvLW.screenY;
-        var lw = _jmSvLW.outerWidth, lh = _jmSvLW.outerHeight;
-        var L = (_jmSvSide === 'right') ? (lx + lw) : (lx - w);
-        return { l: Math.round(L), t: Math.round(ly), w: w, h: Math.round(lh) };
-    }
+    // 상세창: 처음 한 번만 연다(고정 크기). 이후엔 URL 만 교체 — 사용자가 둔 위치/모니터 유지.
     function _jmSvOpenDetail(url) {
         if (!url) { alert('옥션원 view_url 없음 (옛 데이터 — 다시 크롤하면 채워집니다).'); return; }
-        var R = _jmSvRect();
-        var moved = (R.l !== _jmSvLastL || R.t !== _jmSvLastT);
-        if (_jmSvDet && !_jmSvDet.closed && !moved) {
+        if (_jmSvDet && !_jmSvDet.closed) {
             try { _jmSvDet.location.href = url; _jmSvDet.focus(); return; } catch (e) {}
         }
-        if (_jmSvDet && !_jmSvDet.closed) { try { _jmSvDet.close(); } catch (e) {} }
         _jmSvDet = window.open(url, 'jm_sv_detail',
-            'width=' + R.w + ',height=' + R.h + ',left=' + R.l + ',top=' + R.t + ',resizable=yes,scrollbars=yes');
-        _jmSvLastL = R.l; _jmSvLastT = R.t;
+            'width=' + JM_SV_DET_W + ',height=' + JM_SV_DET_H +
+            ',left=' + JM_SV_DET_L + ',top=' + JM_SV_DET_T + ',resizable=yes,scrollbars=yes');
     }
     function _jmSvPaint() {
         if (!_jmSvLW || _jmSvLW.closed) return;
@@ -23976,19 +23966,7 @@ MJ 이정우 팀장
     }
     function _jmSvPrev() { _jmSvSelect(_jmSvIdx - 1); }
     function _jmSvNext() { _jmSvSelect(_jmSvIdx + 1); }
-    function _jmSvSetSide(s) {
-        _jmSvSide = s;
-        if (_jmSvLW && !_jmSvLW.closed) {
-            var dd = _jmSvLW.document;
-            var bl = dd.getElementById('jmsvSL'), br = dd.getElementById('jmsvSR');
-            if (bl) bl.className = 'jm-sv-segbtn' + (s === 'left' ? ' jm-sv-segbtn-on' : '');
-            if (br) br.className = 'jm-sv-segbtn' + (s === 'right' ? ' jm-sv-segbtn-on' : '');
-        }
-        _jmSvLastL = null; _jmSvLastT = null;   // 강제 재도킹
-        if (_jmSvIdx >= 0 && _jmSvItems[_jmSvIdx]) _jmSvOpenDetail(_jmSvItems[_jmSvIdx].view_url);
-    }
     function _jmSvFinish() {
-        if (_jmSvPoll) { clearInterval(_jmSvPoll); _jmSvPoll = null; }
         try { if (_jmSvDet && !_jmSvDet.closed) _jmSvDet.close(); } catch (e) {}
         try { if (_jmSvLW && !_jmSvLW.closed) _jmSvLW.close(); } catch (e) {}
     }
@@ -23999,11 +23977,11 @@ MJ 이정우 팀장
         var ids = checked.map(function (cb) { return cb.dataset.id; });
         var items = (jmItems || []).filter(function (it) { return ids.indexOf(String(it.josa_id)) >= 0; });
         if (!items.length) { alert('체크된 행의 데이터를 못 찾았습니다.'); return; }
-        _jmSvItems = items; _jmSvIdx = -1; _jmSvSide = 'left';
-        _jmSvLastL = null; _jmSvLastT = null; _jmSvPX = null; _jmSvPY = null;
+        _jmSvItems = items; _jmSvIdx = -1;
 
-        var W = 440, H = 900;
-        var L = Math.max(0, (((window.screen && screen.availWidth) || 1280) - W - 20)), T = 40;
+        // 리스트 창 높이 = 상세창 높이(900). 상세창 오른쪽에 붙여서 시작.
+        var W = 460, H = JM_SV_DET_H;
+        var L = JM_SV_DET_L + JM_SV_DET_W, T = JM_SV_DET_T;
         if (_jmSvLW && !_jmSvLW.closed) { try { _jmSvLW.close(); } catch (e) {} }
         _jmSvLW = window.open('', 'jm_sv_list',
             'width=' + W + ',height=' + H + ',left=' + L + ',top=' + T + ',resizable=yes,scrollbars=yes');
@@ -24044,14 +24022,7 @@ MJ 이정우 팀장
                     '<button type="button" class="jm-sv-navbtn" id="jmsvNext">다음 ▶</button>' +
                 '</div>' +
             '</div>' +
-            '<div class="jm-sv-subbar">' +
-                '<span>상세창 위치</span>' +
-                '<div class="jm-sv-seg">' +
-                    '<button type="button" class="jm-sv-segbtn" id="jmsvSL">◀ 좌</button>' +
-                    '<button type="button" class="jm-sv-segbtn" id="jmsvSR">우 ▶</button>' +
-                '</div>' +
-                '<span class="jm-sv-hint">행 클릭 시 옆에 상세창</span>' +
-            '</div>' +
+            '<div class="jm-sv-subbar">상세창을 원하는 모니터/위치로 한 번 끌어두면 그 자리에서 계속 갱신됩니다.</div>' +
             '<div class="jm-sv-colhead">' +
                 '<div class="jm-sv-ico"></div>' +
                 '<div class="jm-sv-c1">사건번호<br>물건종류</div>' +
@@ -24065,8 +24036,6 @@ MJ 이정우 팀장
         });
         d.getElementById('jmsvPrev').addEventListener('click', function () { _jmSvPrev(); });
         d.getElementById('jmsvNext').addEventListener('click', function () { _jmSvNext(); });
-        d.getElementById('jmsvSL').addEventListener('click', function () { _jmSvSetSide('left'); });
-        d.getElementById('jmsvSR').addEventListener('click', function () { _jmSvSetSide('right'); });
         d.getElementById('jmsvFin').addEventListener('click', function () { _jmSvFinish(); });
         d.addEventListener('keydown', function (e) {
             if (e.key === 'ArrowDown') { e.preventDefault(); _jmSvNext(); }
@@ -24077,29 +24046,7 @@ MJ 이정우 팀장
             try { if (_jmSvDet && !_jmSvDet.closed) _jmSvDet.close(); } catch (e) {}
         });
 
-        d.getElementById('jmsvSL').className = 'jm-sv-segbtn jm-sv-segbtn-on';
-        _jmSvIdx = 0; _jmSvPaint();   // 첫 행 하이라이트만 (상세창은 첫 클릭 때 — 팝업차단 회피)
-
-        if (_jmSvPoll) { clearInterval(_jmSvPoll); }
-        _jmSvPoll = setInterval(function () {
-            if (!_jmSvLW || _jmSvLW.closed) {
-                clearInterval(_jmSvPoll); _jmSvPoll = null;
-                try { if (_jmSvDet && !_jmSvDet.closed) _jmSvDet.close(); } catch (e) {}
-                return;
-            }
-            if (!_jmSvDet || _jmSvDet.closed || _jmSvIdx < 0) return;
-            var x = _jmSvLW.screenX, y = _jmSvLW.screenY;
-            var settled = (x === _jmSvPX && y === _jmSvPY);
-            _jmSvPX = x; _jmSvPY = y;
-            if (!settled) return;   // 이동 중엔 대기, 멈추면 옆으로 회수
-            var R = _jmSvRect();
-            if (R.l !== _jmSvLastL || R.t !== _jmSvLastT) {
-                try { _jmSvDet.close(); } catch (e) {}
-                _jmSvDet = window.open(_jmSvItems[_jmSvIdx].view_url, 'jm_sv_detail',
-                    'width=' + R.w + ',height=' + R.h + ',left=' + R.l + ',top=' + R.t + ',resizable=yes,scrollbars=yes');
-                _jmSvLastL = R.l; _jmSvLastT = R.t;
-            }
-        }, 500);
+        _jmSvSelect(0);   // 첫 행 자동 선택 + 상세창 동시 오픈 (선택보기 클릭 제스처라 팝업 허용)
         _jmSvLW.focus();
     }
     function toggleJmSummaryFilter(status) {
