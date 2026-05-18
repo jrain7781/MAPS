@@ -23921,6 +23921,112 @@ MJ 이정우 팀장
         if (inp && document.activeElement !== inp && inp.value !== (it.josaja || '')) inp.value = it.josaja || '';
     }
 
+    // ── 조사요청 텔레그램 전송 ──
+    function _jmTgPayload(it, josaja) {
+        return {
+            josa_id: it.josa_id, josaja: String(josaja || it.josaja || '').trim(),
+            sakun_no: it.sakun_no || '', court: it.court || '', prop_kind: it.prop_kind || '',
+            address: String(it.address || '').split('\n')[0], kamjungka: it.kamjungka || '',
+            low_price: it.low_price || '', bid_date: it.bid_date || '', view_url: it.view_url || ''
+        };
+    }
+    function openJmTelegramSendModalFromGrid() {
+        var checked = Array.from(document.querySelectorAll('#jm-grid-body .jm-row-cb:checked'));
+        if (!checked.length) { alert('체크된 행이 없습니다. 전송할 행을 체크하세요.'); return; }
+        var idset = checked.map(function (cb) { return String(cb.dataset.id); });
+        var items = (jmItems || []).filter(function (it) { return idset.indexOf(String(it.josa_id)) >= 0; });
+        openJmTelegramSendModal(items, document);
+    }
+    // items = 보낼 jmItems 배열, doc = 모달을 띄울 document(그리드=document / 리스트창=_jmSvLW.document)
+    function openJmTelegramSendModal(items, doc) {
+        doc = doc || document;
+        if (!items || !items.length) { alert('전송할 항목이 없습니다.'); return; }
+        var old = doc.getElementById('jm-tg-modal'); if (old) old.remove();
+        var invs = (typeof smInvestigators !== 'undefined' && Array.isArray(smInvestigators) ? smInvestigators : [])
+            .map(function (m) { return m.member_name; }).filter(Boolean);
+        var ov = doc.createElement('div');
+        ov.id = 'jm-tg-modal';
+        ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif';
+        var rows = items.map(function (it, i) {
+            var addr = escHtml(String(it.address || '').split('\n')[0]);
+            var noJ = !String(it.josaja || '').trim();
+            return '<tr data-i="' + i + '">' +
+                '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;font-size:12px;font-weight:700;white-space:nowrap">' + escHtml(it.sakun_no || '') + '</td>' +
+                '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;font-size:11px;color:#475569;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + addr + '</td>' +
+                '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2"><input class="jm-tg-j" data-i="' + i + '" list="jmTgInv" value="' + escAttr(it.josaja || '') + '" placeholder="조사자" style="width:96px;font-size:11px;padding:3px 4px;border:1px solid ' + (noJ ? '#f59e0b' : '#d1d5db') + ';border-radius:3px"></td>' +
+                '<td class="jm-tg-st" data-i="' + i + '" style="padding:5px 6px;border-bottom:1px solid #eef0f2;font-size:11px;color:#94a3b8;white-space:nowrap">대기</td>' +
+            '</tr>';
+        }).join('');
+        ov.innerHTML =
+            '<div style="background:#fff;border-radius:8px;width:680px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.3)">' +
+                '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">' +
+                    '<strong style="font-size:14px;color:#1e3a8a">✈ 조사요청 텔레그램 전송 — ' + items.length + '건</strong>' +
+                    '<button id="jmTgX" style="border:1px solid #cbd5e1;background:#fff;border-radius:4px;padding:3px 10px;cursor:pointer">✕</button>' +
+                '</div>' +
+                '<div style="padding:8px 16px;background:#fff7ed;border-bottom:1px solid #fed7aa;font-size:11.5px;color:#9a3412">조사자 없는 건은 입력 후 전송하세요. 빈 건은 전송에서 제외됩니다.</div>' +
+                '<div style="padding:8px 16px;border-bottom:1px solid #eef0f2;display:flex;align-items:center;gap:8px;font-size:12px">' +
+                    '<span>전체 조사자 일괄지정:</span>' +
+                    '<select id="jmTgAllSel" style="font-size:12px;padding:3px 6px;border:1px solid #cbd5e1;border-radius:4px"><option value="">(선택)</option>' +
+                    invs.map(function (n) { return '<option value="' + escAttr(n) + '">' + escHtml(n) + '</option>'; }).join('') + '</select>' +
+                    '<button id="jmTgAllBtn" style="border:1px solid #2f6fd8;background:#2f6fd8;color:#fff;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px">전체적용(덮어쓰기)</button>' +
+                '</div>' +
+                '<div style="flex:1;overflow:auto;padding:4px 12px">' +
+                    '<table style="width:100%;border-collapse:collapse"><tbody>' + rows + '</tbody></table>' +
+                    '<datalist id="jmTgInv">' + invs.map(function (n) { return '<option value="' + escAttr(n) + '">'; }).join('') + '</datalist>' +
+                '</div>' +
+                '<div style="padding:10px 16px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px">' +
+                    '<span id="jmTgMsg" style="margin-right:auto;font-size:12px;color:#64748b;align-self:center"></span>' +
+                    '<button id="jmTgCancel" style="border:1px solid #cbd5e1;background:#fff;border-radius:4px;padding:6px 14px;cursor:pointer">닫기</button>' +
+                    '<button id="jmTgSend" style="border:0;background:#2563eb;color:#fff;border-radius:4px;padding:6px 16px;cursor:pointer;font-weight:600">전송</button>' +
+                '</div>' +
+            '</div>';
+        (doc.body || doc.documentElement).appendChild(ov);
+        function close() { ov.remove(); }
+        ov.querySelector('#jmTgX').addEventListener('click', close);
+        ov.querySelector('#jmTgCancel').addEventListener('click', close);
+        ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+        ov.querySelector('#jmTgAllBtn').addEventListener('click', function () {
+            var v = ov.querySelector('#jmTgAllSel').value;
+            if (!v) { alert('조사자를 선택하세요.'); return; }
+            Array.prototype.forEach.call(ov.querySelectorAll('.jm-tg-j'), function (inp) { inp.value = v; inp.style.borderColor = '#d1d5db'; });
+        });
+        ov.querySelector('#jmTgSend').addEventListener('click', function () {
+            if (typeof google === 'undefined' || !google.script || !google.script.run) { alert('전송 불가: google.script.run 없음'); return; }
+            var total = 0, done = 0, ok = 0;
+            Array.prototype.forEach.call(ov.querySelectorAll('tr[data-i]'), function (tr) {
+                var i = parseInt(tr.getAttribute('data-i'), 10);
+                var it = items[i];
+                var inp = ov.querySelector('.jm-tg-j[data-i="' + i + '"]');
+                var stc = ov.querySelector('.jm-tg-st[data-i="' + i + '"]');
+                var name = String(inp.value || '').trim();
+                if (!name) { if (stc) { stc.textContent = '제외(조사자 없음)'; stc.style.color = '#f59e0b'; } return; }
+                total++;
+                if (name !== String(it.josaja || '').trim()) { _jmSaveField(it.josa_id, 'josaja', name); it.josaja = name; }
+                _jmSaveField(it.josa_id, 'josa_status', '조사요청'); it.josa_status = '조사요청';
+                _jmUpdateGridRow(it.josa_id);
+                if (typeof _jmSvItems !== 'undefined' && _jmSvItems && _jmSvItems.length) {
+                    var k = _jmSvItems.indexOf(it);
+                    if (k >= 0 && typeof _jmSvRefreshRow === 'function') _jmSvRefreshRow(k);
+                }
+                if (stc) { stc.textContent = '전송중…'; stc.style.color = '#64748b'; }
+                google.script.run
+                    .withSuccessHandler(function (resp) {
+                        done++;
+                        if (resp && resp.success) { ok++; if (stc) { stc.textContent = '✓ 전송됨'; stc.style.color = '#16a34a'; } }
+                        else { if (stc) { stc.textContent = '✗ ' + (resp && resp.message || '실패'); stc.style.color = '#dc2626'; } }
+                        ov.querySelector('#jmTgMsg').textContent = '완료 ' + done + '/' + total + ' (성공 ' + ok + ')';
+                    })
+                    .withFailureHandler(function (err) {
+                        done++;
+                        if (stc) { stc.textContent = '✗ ' + (err && err.message || err); stc.style.color = '#dc2626'; }
+                        ov.querySelector('#jmTgMsg').textContent = '완료 ' + done + '/' + total + ' (성공 ' + ok + ')';
+                    })
+                    .sendJosaItemRequestTelegram(_jmTgPayload(it, name));
+            });
+            ov.querySelector('#jmTgMsg').textContent = total ? ('전송중… 0/' + total) : '전송 대상 없음 (조사자 미입력)';
+        });
+    }
+
     function renderJmStatusSummary(filtered) {
         var bar = document.getElementById('jm-status-summary');
         if (!bar) return;
@@ -23947,6 +24053,7 @@ MJ 이정우 팀장
         }).join('');
         // ★ [선택보기] 버튼 — 그리드에 체크된 행을 모달로 (좌측 상세 + 우측 리스트, 드래그 가능, dim 없음)
         html += '<button type="button" onclick="openJmSelectViewModal()" class="jm-summary-btn bg-yellow-100 text-yellow-800 ml-2" title="체크된 행을 좌측 상세 + 우측 리스트 모달로 보기. 모달은 드래그로 이동 가능, 페이지 동시 사용 가능">📑 선택보기</button>';
+        html += '<button type="button" onclick="openJmTelegramSendModalFromGrid()" class="jm-summary-btn bg-sky-100 text-sky-800 ml-1" title="체크된 행을 조사요청 텔레그램으로 전송. 조사자 없으면 입력/일괄지정 후 전송">✈ 조사요청전송</button>';
         bar.innerHTML = html;
     }
 
@@ -24121,6 +24228,7 @@ MJ 이정우 팀장
             '<div class="jm-sv-head">' +
                 '<button type="button" class="jm-sv-finish" id="jmsvFin">일괄보기 마침</button>' +
                 '<div class="jm-sv-nav">' +
+                    '<button type="button" class="jm-sv-navbtn" id="jmsvTg" style="background:#2563eb;color:#fff;border-color:#2563eb">✈ 조사요청전송</button>' +
                     '<button type="button" class="jm-sv-navbtn" id="jmsvPrev">◀ 이전</button>' +
                     '<button type="button" class="jm-sv-navbtn" id="jmsvNext">다음 ▶</button>' +
                 '</div>' +
@@ -24157,6 +24265,7 @@ MJ 이정우 팀장
         d.getElementById('jmsvPrev').addEventListener('click', function () { _jmSvPrev(); });
         d.getElementById('jmsvNext').addEventListener('click', function () { _jmSvNext(); });
         d.getElementById('jmsvFin').addEventListener('click', function () { _jmSvFinish(); });
+        d.getElementById('jmsvTg').addEventListener('click', function () { openJmTelegramSendModal(_jmSvItems, _jmSvLW.document); });
         d.addEventListener('keydown', function (e) {
             if (e.key === 'ArrowDown') { e.preventDefault(); _jmSvNext(); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); _jmSvPrev(); }
