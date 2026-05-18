@@ -572,15 +572,30 @@ function handleTelegramWebhook_(update) {
     }
 
     // === 조사요청(JM/josa_items) 수락/보류 ===
+    // 수락(예) → 조사접수 + 사건번호/옥션원 공개,  보류(아니오) → 조사예정 (조사자 유지)
     if (action === 'JITEM_YES' || action === 'JITEM_NO') {
       var jmId = itemId;
-      var newSt = (action === 'JITEM_YES') ? '조사요청' : '조사예정';
-      try { telegramAnswerCallbackQuery_(cqId, (action === 'JITEM_YES' ? '수락' : '보류') + ' 처리합니다.', false); } catch (e) { }
+      var isYes = (action === 'JITEM_YES');
+      try { telegramAnswerCallbackQuery_(cqId, (isYes ? '수락' : '보류') + ' 처리합니다.', false); } catch (e) { }
       try {
-        if (typeof updateJosaField === 'function') updateJosaField(jmId, 'josa_status', newSt);
-        telegramSendMessage(chatId, (action === 'JITEM_YES'
-          ? '✅ 조사요청을 수락하셨습니다.\nMAPS 상태: <b>조사요청</b>'
-          : '↩️ 보류 처리되었습니다.\nMAPS 상태: <b>조사예정</b>'));
+        if (typeof updateJosaField === 'function') updateJosaField(jmId, 'josa_status', isYes ? '조사접수' : '조사예정');
+        if (isYes) {
+          var jiItem = null;
+          try {
+            var jiAll = (typeof readAllJosaItems === 'function') ? readAllJosaItems() : [];
+            for (var jiQ = 0; jiQ < jiAll.length; jiQ++) {
+              if (String(jiAll[jiQ].josa_id) === String(jmId)) { jiItem = jiAll[jiQ]; break; }
+            }
+          } catch (e3) { }
+          var jiSk = jiItem ? String(jiItem.sakun_no || '') : '';
+          var jiVu = jiItem ? String(jiItem.view_url || '') : '';
+          var jiMsg = '✅ 조사요청을 <b>수락</b>하셨습니다. (상태: <b>조사접수</b>)\n\n' +
+            '• 사건번호: <b>' + (jiSk || '(확인 필요)') + '</b>\n' +
+            (jiVu ? '• 옥션원(물건카드): ' + jiVu + '\n' : '');
+          telegramSendMessage(chatId, jiMsg);
+        } else {
+          telegramSendMessage(chatId, '↩️ 보류 처리되었습니다.\nMAPS 상태: <b>조사예정</b>');
+        }
       } catch (e) {
         try { telegramSendMessage(chatId, '처리 오류: ' + (e.message || '')); } catch (e2) { }
       }
@@ -1115,17 +1130,16 @@ function sendJosaItemRequestTelegram(payload) {
     var low = fnum(payload.low_price);
     var bid = String(payload.bid_date || '');
     if (/^\d{6}$/.test(bid)) bid = '20' + bid.slice(0, 2) + '-' + bid.slice(2, 4) + '-' + bid.slice(4, 6);
-    var vurl = String(payload.view_url || '');
 
+    // 사건번호 / 옥션원 링크는 가림 — 수락 시 공개 (링크는 사건번호를 그대로 노출하므로 함께 가림)
     var text = '📋 <b>조사요청 물건입니다.</b>\n\n' +
-      '• 사건번호: ' + sakun + '\n' +
+      '• 사건번호: 🔒 <i>수락 시 공개</i>\n' +
       (court ? '• 법원: ' + court + '\n' : '') +
       (kind ? '• 물건종류: ' + kind + '\n' : '') +
       (addr ? '• 주소: ' + addr + '\n' : '') +
       (kam ? '• 감정가: ' + kam + '\n' : '') +
       (low ? '• 최저입찰가: ' + low + '\n' : '') +
       (bid ? '• 입찰일: ' + bid + '\n' : '') +
-      (vurl ? '• 옥션원: ' + vurl + '\n' : '') +
       '\n조사 요청을 수락하시겠습니까?';
     var replyMarkup = {
       inline_keyboard: [[
