@@ -505,16 +505,13 @@
 
     // ── 조사자 웹뷰 부트스트랩 (gubun 으로 회원/조사자 메뉴 결정) ──
     var __JOSA = { items: [], member: '', monthOff: 0, filter: { '조사요청': 1, '조사접수': 1, '조사확정': 1, '조사완료': 1 } };
-    function _josaShowMenus(showJosa, showMember) {
+    function _josaShowMenus(showJosa) {
+        // 회원 메뉴(입찰리스트 등)는 항상 노출 — 조사자+회원 겸직 시 입찰 메뉴 안 보이던 문제 수정.
+        // 조사자면 조사 메뉴를 추가로 노출.
         document.querySelectorAll('.josa-only-menu').forEach(function (el) {
             if (showJosa) { el.classList.remove('content-hidden'); el.style.removeProperty('display'); }
             else { el.classList.add('content-hidden'); el.style.setProperty('display', 'none', 'important'); }
         });
-        if (showMember === false) {
-            document.querySelectorAll('.member-only-menu').forEach(function (el) {
-                el.classList.add('content-hidden'); el.style.setProperty('display', 'none', 'important');
-            });
-        }
     }
     function _josaBootstrap() {
         if (!APP_CTX.token || typeof google === 'undefined' || !google.script || !google.script.run) {
@@ -526,9 +523,8 @@
                 __JOSA.items = (resp && resp.items) || [];
                 __JOSA.member = (resp && resp.member_name) || '';
                 var isJosa = (APP_CTX.view === 'josa') || /조사자/.test(g);
-                var isMember = /회원/.test(g) || !g;   // gubun 미상 → 회원으로 간주(기존 회원 회귀 방지)
-                _josaShowMenus(isJosa, isMember);
-                if (APP_CTX.view === 'josa' || (isJosa && !isMember)) {
+                _josaShowMenus(isJosa);   // 회원 메뉴는 항상, 조사자면 조사 메뉴 추가
+                if (APP_CTX.view === 'josa') {
                     navigateTo('JosaList');
                 } else {
                     loadAndRenderMemberItemList(true);
@@ -24178,6 +24174,7 @@ MJ 이정우 팀장
                 if (!name) { if (stc) { stc.textContent = '제외(조사자 없음)'; stc.style.color = '#f59e0b'; } return; }
                 total++;
                 if (name !== String(it.josaja || '').trim()) { _jmSaveField(it.josa_id, 'josaja', name); it.josaja = name; }
+                _jmSaveField(it.josa_id, 'josaja_id', _jmMemberIdByName(name));
                 _jmSaveField(it.josa_id, 'josa_status', '조사요청'); it.josa_status = '조사요청';
                 _jmUpdateGridRow(it.josa_id);
                 if (typeof _jmSvItems !== 'undefined' && _jmSvItems && _jmSvItems.length) {
@@ -24312,6 +24309,7 @@ MJ 이정우 팀장
         val = String(val || '').trim();
         if (val === (it.josaja || '')) return;
         _jmSaveField(it.josa_id, 'josaja', val, function () { _jmUpdateGridRow(it.josa_id); });
+        _jmSaveField(it.josa_id, 'josaja_id', _jmMemberIdByName(val));
         it.josaja = val;
         // 조사자 신규 입력 → 자동 조사예정 (분류필요/미지정에서만)
         if (val && (!it.josa_status || it.josa_status === '분류필요')) {
@@ -24759,6 +24757,16 @@ MJ 이정우 팀장
             input.blur();
         }
     }
+    // 조사자 이름 → member_id (동명이인 키 매칭용). 없으면 ''(레거시 이름 폴백)
+    function _jmMemberIdByName(nm) {
+        nm = String(nm || '').trim();
+        if (!nm) return '';
+        var arr = (typeof smInvestigators !== 'undefined' && Array.isArray(smInvestigators)) ? smInvestigators : [];
+        for (var i = 0; i < arr.length; i++) {
+            if (String(arr[i].member_name || '').trim() === nm) return String(arr[i].member_id || '');
+        }
+        return '';
+    }
     function onJmJosajaBlur(input) {
         var josaId = input.dataset.id;
         var newVal = String(input.value || '').trim();
@@ -24774,6 +24782,7 @@ MJ 이정우 팀장
             }
         }
         _jmSaveField(josaId, 'josaja', newVal);
+        _jmSaveField(josaId, 'josaja_id', _jmMemberIdByName(newVal));   // 키(동명이인 안전)
         // 조사자 신규 입력 시 → 자동 '조사예정' (분류필요/미지정에서만 승격, 다운그레이드 안 함)
         if (newVal && (!it || !it.josa_status || it.josa_status === '분류필요')) {
             _jmSaveField(josaId, 'josa_status', '조사예정', function () { _jmUpdateGridRow(josaId); });

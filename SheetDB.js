@@ -7275,7 +7275,8 @@ const JOSA_ITEMS_HEADERS = [
   'reject_reason',          // 일정불가/조사불가/기타텍스트
   'memo',                   // 사용자 비고
   'reg_date',               // YYYY-MM-DD HH:mm:ss 초단위
-  'update_date'             // 최종 갱신 시각
+  'update_date',            // 최종 갱신 시각
+  'josaja_id'               // 조사자 member_id (동명이인 대비 — 키 매칭은 이것 우선)
 ];
 
 function initJosaItemsSheet_() {
@@ -7524,12 +7525,16 @@ function getJosaItemsByToken(token) {
     var name = String((full && (full.member_name || full.name)) || mem.member_name || mem.name || '').trim();
     var gubun = full ? String(full.gubun || '') : '';
     if (!name) return { success: false, message: '회원명 없음(member_id=' + (mem.member_id || '?') + ')', items: [] };
+    var mid = String(mem.member_id || '').trim();
     var VISIBLE = { '조사요청': 1, '조사접수': 1, '조사확정': 1, '조사완료': 1 };
     var all = (typeof readAllJosaItems === 'function') ? readAllJosaItems() : [];
     var items = all.filter(function (r) {
-      return String(r.josaja || '').trim() === name && VISIBLE[String(r.josa_status || '').trim()];
+      if (!VISIBLE[String(r.josa_status || '').trim()]) return false;
+      var jid = String(r.josaja_id || '').trim();
+      if (jid) return jid === mid;                                  // id 우선(동명이인 안전)
+      return String(r.josaja || '').trim() === name && !!name;      // 레거시(미기록) 행만 이름 폴백
     });
-    return { success: true, member_name: name, gubun: gubun, items: items };
+    return { success: true, member_id: mid, member_name: name, gubun: gubun, items: items };
   } catch (e) {
     return { success: false, message: String(e && e.message || e), items: [] };
   }
