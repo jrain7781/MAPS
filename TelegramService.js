@@ -577,8 +577,30 @@ function handleTelegramWebhook_(update) {
       try { telegramAnswerCallbackQuery_(cqId, '처리합니다.', false); } catch (e) { }
       try {
         if (action === 'JCONF') {
-          // 확인하기 → 조사접수 + Msg2(조사확정/조사불가/내 조사물건 보기)
+          // 확인하기 → 조사접수 + Msg2(물건내용[사건번호 가림] + 조사확정/조사불가/내 조사물건 보기)
           if (typeof updateJosaField === 'function') updateJosaField(jmId, 'josa_status', '조사접수');
+          var jcItem = null;
+          try {
+            var jcAll = (typeof readAllJosaItems === 'function') ? readAllJosaItems() : [];
+            for (var jcQ = 0; jcQ < jcAll.length; jcQ++) {
+              if (String(jcAll[jcQ].josa_id) === String(jmId)) { jcItem = jcAll[jcQ]; break; }
+            }
+          } catch (e4) { }
+          function jcN(v) { v = String(v == null ? '' : v).replace(/[^\d.-]/g, ''); if (!v) return ''; var n = Number(v); return isNaN(n) ? '' : n.toLocaleString('ko-KR'); }
+          var jcBid = jcItem ? String(jcItem.bid_date || '') : '';
+          if (/^\d{6}$/.test(jcBid)) jcBid = '20' + jcBid.slice(0, 2) + '-' + jcBid.slice(2, 4) + '-' + jcBid.slice(4, 6);
+          var jcKam = jcItem ? jcN(jcItem.kamjungka) : '';
+          var jcLow = jcItem ? jcN(jcItem.low_price) : '';
+          var jcText = '✅ 조사요청을 확인했습니다. (상태: <b>조사접수</b>)\n\n' +
+            '📋 <b>조사물건</b>\n' +
+            '• 사건번호: 🔒 <i>조사확정 시 공개</i>\n' +
+            (jcItem && jcItem.court ? '• 법원: ' + jcItem.court + '\n' : '') +
+            (jcItem && jcItem.prop_kind ? '• 물건종류: ' + jcItem.prop_kind + '\n' : '') +
+            (jcItem && jcItem.address ? '• 주소: ' + String(jcItem.address).split('\n')[0] + '\n' : '') +
+            (jcKam ? '• 감정가: ' + jcKam + '\n' : '') +
+            (jcLow ? '• 최저입찰가: ' + jcLow + '\n' : '') +
+            (jcBid ? '• 입찰일: ' + jcBid + '\n' : '') +
+            '\n결과를 선택하거나 아래에서 내 조사물건을 확인하세요.';
           var jcMember = (typeof getMemberByTelegramChatId === 'function') ? getMemberByTelegramChatId(chatId) : null;
           var jcBase = PropertiesService.getScriptProperties().getProperty('WEBAPP_BASE_URL') || '';
           var jcKb = [[
@@ -588,9 +610,7 @@ function handleTelegramWebhook_(update) {
           if (jcMember && jcMember.member_token && jcBase) {
             jcKb.push([{ text: '📋 내 조사물건 보기', web_app: { url: jcBase + '?view=josa&t=' + encodeURIComponent(jcMember.member_token) } }]);
           }
-          telegramSendMessage(chatId,
-            '✅ 조사요청을 확인했습니다. (상태: <b>조사접수</b>)\n결과를 선택하거나 아래에서 내 조사물건을 확인하세요.',
-            { inline_keyboard: jcKb });
+          telegramSendMessage(chatId, jcText, { inline_keyboard: jcKb });
         } else if (action === 'JFIX') {
           // 조사확정 → 사건번호 공개
           if (typeof updateJosaField === 'function') updateJosaField(jmId, 'josa_status', '조사확정');

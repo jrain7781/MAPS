@@ -417,14 +417,11 @@
         const closeBtn = document.getElementById('btn-close-webapp');
         if (closeBtn) closeBtn.classList.remove('content-hidden');
 
-        // 사이드바: 관리자 메뉴 숨기고 회원 메뉴만 표시
-        const adminMenuIds = ['menu-Dashboard', 'menu-BiddingSchedule', 'menu-ItemManagement', 'menu-MemberManagement', 'menu-ClassManagement', 'menu-ClassSchedule', 'menu-Preferences'];
-        adminMenuIds.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.classList.add('content-hidden');
-                el.style.setProperty('display', 'none', 'important');
-            }
+        // 사이드바: 회원/조사자 전용 메뉴만 남기고 나머지(관리자 — 조사물건관리 포함) 전부 숨김
+        document.querySelectorAll('nav button').forEach(el => {
+            if (el.classList.contains('member-only-menu') || el.classList.contains('josa-only-menu')) return;
+            el.classList.add('content-hidden');
+            el.style.setProperty('display', 'none', 'important');
         });
 
         // 회원 전용 메뉴 표시
@@ -559,24 +556,34 @@
         } else if (st === '조사확정') {
             btns = '<button type="button" class="josa-actbtn" onclick="josaOpenActionModal(\'' + escAttr(it.josa_id) + '\',\'확정\')">결과입력</button>';
         }
-        return '<div class="ic sr" data-jid="' + escAttr(it.josa_id) + '" style="margin-bottom:8px">' +
-            '<div class="ic-header"><div class="ic-date-badge" style="background:#eef2ff;color:#3730a3">' + escHtml(bd || '-') + '</div>' +
-            (it.view_url && reveal ? '<a class="view-btn-header" href="' + escAttr(it.view_url) + '" target="_blank" rel="noopener">옥션원</a>' : '<span></span>') + '</div>' +
-            '<div class="ic-body"><div class="ic-l">' +
-            '<div class="ic-sakun">' + escHtml(sk) + '</div>' +
-            '<div class="ic-court-label">' + escHtml(it.court || '') + ' / ' + escHtml(it.prop_kind || '') + '</div>' +
-            '<div class="ic-court-label">' + escHtml(addr) + '</div>' +
-            '<div class="ic-price">감정 ' + _josaNum(it.kamjungka) + ' / 최저 ' + _josaNum(it.low_price) + '</div>' +
-            '</div><div class="ic-r" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">' +
-            '<span class="badge" style="background:' + c[0] + ';color:' + c[1] + ';padding:3px 10px;border-radius:9px;font-size:12px;font-weight:700">' + escHtml(st) + '</span>' +
-            btns +
-            '</div></div></div>';
+        // 자체 인라인 스타일 카드 (입찰카드와 동일 톤, .ic CSS 비의존 — 안 보임 방지)
+        return '<div data-jid="' + escAttr(it.josa_id) + '" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:8px">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+                '<span style="background:#eef2ff;color:#3730a3;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px">' + escHtml(bd || '-') + '</span>' +
+                '<span style="background:' + c[0] + ';color:' + c[1] + ';padding:3px 10px;border-radius:9px;font-size:12px;font-weight:700">' + escHtml(st) + '</span>' +
+            '</div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px">' +
+                '<div style="min-width:0;flex:1">' +
+                    '<div style="font-size:15px;font-weight:800;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(sk) + '</div>' +
+                    '<div style="font-size:12px;color:#64748b;margin-top:2px">' + escHtml(it.court || '') + (it.prop_kind ? ' / ' + escHtml(it.prop_kind) : '') + '</div>' +
+                    '<div style="font-size:12px;color:#475569;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(addr) + '</div>' +
+                    '<div style="font-size:12px;color:#0f766e;margin-top:3px">감정 ' + _josaNum(it.kamjungka) + ' / 최저 ' + _josaNum(it.low_price) + (bd ? ' · 입찰 ' + escHtml(bd) : '') + '</div>' +
+                    (it.view_url && reveal ? '<a href="' + escAttr(it.view_url) + '" target="_blank" rel="noopener" style="font-size:12px;color:#2563eb;text-decoration:underline">옥션원 보기</a>' : '') +
+                '</div>' +
+                (btns ? '<div style="flex-shrink:0">' + btns + '</div>' : '') +
+            '</div>' +
+        '</div>';
     }
     function _josaRenderInto(containerId, list) {
         var el = document.getElementById(containerId);
         if (!el) return;
+        list = list || [];
         var fl = list.filter(function (it) { return __JOSA.filter[String(it.josa_status || '')]; });
-        if (!fl.length) { el.innerHTML = '<div class="p-8 text-center text-gray-400 text-sm">표시할 조사물건이 없습니다.</div>'; return; }
+        if (!fl.length) {
+            el.innerHTML = '<div class="p-8 text-center text-gray-400 text-sm">표시할 조사물건이 없습니다.' +
+                (list.length ? ' (전체 ' + list.length + '건, 필터 통과 0건 — 상단 버튼 확인)' : ' (배정된 물건 없음 — 조사자명/상태 확인)') + '</div>';
+            return;
+        }
         fl.sort(function (a, b) { return String(b.bid_date || '').localeCompare(String(a.bid_date || '')); });
         el.innerHTML = fl.map(_josaCard).join('');
     }
