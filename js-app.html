@@ -555,8 +555,13 @@
     }
     function _josaNum(n) { if (n === 0 || n === '0') return '0'; if (!n) return ''; return String(n).replace(/[^\d.-]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
     function _josaStColor(s) {
-        var M = { '조사요청': ['#bfdbfe', '#1e40af'], '조사접수': ['#c7d2fe', '#3730a3'], '조사확정': ['#bbf7d0', '#166534'], '조사완료': ['#99f6e4', '#115e59'], '조사불가': ['#fecaca', '#991b1b'] };
-        return M[s] || ['#e5e7eb', '#374151'];
+        var M = {
+            '분류필요': ['#64748b', '#ffffff'], '조사예정': ['#fde68a', '#92400e'],
+            '조사요청': ['#d1d5db', '#374151'], '조사접수': ['#6366f1', '#ffffff'],
+            '조사확정': ['#bbf7d0', '#166534'], '조사완료': ['#0f766e', '#ffffff'],
+            '조사불가': ['#fecaca', '#991b1b'], '폐기': ['#b91c1c', '#ffffff']
+        };
+        return M[s] || ['#d1d5db', '#374151'];
     }
     // 상단 필터버튼: 상태색 동기화 + 개수 + on/off
     function _josaPaintFilterBtns(tabId, arr) {
@@ -568,7 +573,7 @@
         Array.prototype.forEach.call(root.querySelectorAll('.josa-fbtn'), function (b) {
             var s = b.getAttribute('data-st');
             var col = _josaStColor(s);
-            b.style.background = col[0]; b.style.color = col[1]; b.style.borderColor = col[0];
+            b.style.background = col[0]; b.style.color = col[1];   // 테두리는 currentColor(=글자색)
             b.textContent = (LBL[s] || s) + ' ' + (cnt[s] || 0);
             var on = !!__JOSA.filter[s];
             b.style.opacity = on ? '1' : '0.35';
@@ -579,7 +584,6 @@
         var st = String(it.josa_status || '');
         var reveal = (st !== '조사요청');   // 확인(조사접수) 시점부터 사건번호 공개
         var sk = reveal ? (it.sakun_no || '') : '🔒 확인 시 공개';
-        var c = _josaStColor(st);
         var addr = String(it.address || '').split('\n')[0];
         var bd = String(it.bid_date || '');
         if (/^\d{6}$/.test(bd)) bd = bd.slice(0, 2) + '.' + bd.slice(2, 4) + '.' + bd.slice(4, 6);
@@ -587,15 +591,14 @@
         var btns = '';
         var bcol = _josaStColor(st);
         function _ab(stage) {
-            return '<button type="button" class="josa-actbtn" style="background:' + bcol[0] + ';color:' + bcol[1] + ';border-color:' + bcol[0] + '" onclick="josaOpenActionModal(\'' + escAttr(it.josa_id) + '\',\'' + stage + '\')">' + escHtml(st) + '</button>';
+            return '<button type="button" class="josa-actbtn" style="background:' + bcol[0] + ';color:' + bcol[1] + '" onclick="josaOpenActionModal(\'' + escAttr(it.josa_id) + '\',\'' + stage + '\')">' + escHtml(st) + '</button>';
         }
         if (st === '조사요청' || st === '조사접수') btns = _ab('접수');   // → 조사확정/조사불가
         else if (st === '조사확정') btns = _ab('확정');                  // → 조사완료/조사불가
         // 자체 인라인 스타일 카드 (입찰카드와 동일 톤, .ic CSS 비의존 — 안 보임 방지)
         return '<div data-jid="' + escAttr(it.josa_id) + '" style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:8px">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+            '<div style="margin-bottom:8px">' +
                 '<span style="background:#eef2ff;color:#3730a3;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px">' + escHtml(bd || '-') + '</span>' +
-                '<span style="background:' + c[0] + ';color:' + c[1] + ';padding:3px 10px;border-radius:9px;font-size:12px;font-weight:700">' + escHtml(st) + '</span>' +
             '</div>' +
             '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px">' +
                 '<div style="min-width:0;flex:1">' +
