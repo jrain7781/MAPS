@@ -1911,8 +1911,9 @@
                 {
                     const _r = resolveTeacherDisplay_(item.m_name_id);
                     cell.textContent = _r.display;
-                    if (_r.color) {
-                        cell.style.color = _r.color;
+                    const _rc = _r.color || (_r.isTeacher ? '#dc2626' : '');
+                    if (_rc) {
+                        cell.style.color = _rc;
                         cell.style.fontWeight = '600';
                     } else {
                         cell.style.color = '';
@@ -12668,12 +12669,12 @@ MJ 이정우 팀장
         const isTeacher = (m) => String(m.gubun || '').split(',').map(s => s.trim()).includes('강사');
         let m = members.find(x => isTeacher(x) && String(x.teacher_nickname || '').trim() === v);
         if (!m) m = members.find(x => isTeacher(x) && String(x.member_name || '').trim() === v);
-        if (!m) return { display: v, color: '' };
+        if (!m) return { display: v, color: '', isTeacher: false };
         const nickname = String(m.teacher_nickname || '').trim();
         const name = String(m.member_name || '').trim();
         const display = nickname || name || v;
         const color = String(m.teacher_color || '').trim();
-        return { display, color };
+        return { display, color, isTeacher: true };
     }
 
     // member_id로 강사 룩업 (수업관리 teacher_id 기반 표시용)
@@ -12696,13 +12697,19 @@ MJ 이정우 팀장
     function populateMNameIdDropdowns_() {
         const members = Array.isArray(allMembersNewData) ? allMembersNewData : [];
         const teachers = members.filter(m => String(m.gubun || '').split(',').map(s => s.trim()).includes('강사'));
+        const colorByLabel = {};
         const labels = teachers.map(m => {
             const nickname = String(m.teacher_nickname || '').trim();
             const name = String(m.member_name || '').trim();
-            return nickname || name;
+            const label = nickname || name;
+            if (label && !(label in colorByLabel)) {
+                const tc = String(m.teacher_color || '').trim();
+                colorByLabel[label] = /^#[0-9a-fA-F]{6}$/.test(tc) ? tc : '#dc2626';
+            }
+            return label;
         }).filter(Boolean);
         const uniq = [...new Set(labels)];
-        const optHtml = uniq.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
+        const optHtml = uniq.map(l => `<option value="${escapeHtml(l)}" style="color:${colorByLabel[l]};font-weight:600">${escapeHtml(l)}</option>`).join('');
         ['form-m-name-id', 'modal-form-m-name-id'].forEach(id => {
             const sel = document.getElementById(id);
             if (!sel) return;

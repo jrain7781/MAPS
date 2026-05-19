@@ -455,10 +455,10 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
   const actualSavedChuchenState = shouldResetChuchen ? '' : newChuchenState;
 
   if (shouldResetChuchen) {
-    // 4키 모두 클리어 (수업회차 케이스 포함) — 다른 회원 추천 시 새로 등록되도록
+    // chuchen_state/date + bid_datetime_2만 클리어. class_d1_id(S)는 보존
+    // — 상태/회원명이 바뀌어도 회차 연결 유지. class_d1_id는 수업관리 물건탭 등록/추가/제거에서만 변경
     newRowValues[16] = ''; // Q: chuchen_state
     newRowValues[17] = ''; // R: chuchen_date
-    newRowValues[18] = ''; // S: class_d1_id
     newRowValues[19] = ''; // T: bid_datetime_2
   } else if (isFromRecommendToOther) {
     // 추천 → 상품/미정/입찰/취소/검증: chuchen_state/date + bid_datetime_2 클리어, class_d1_id만 보존
@@ -622,10 +622,10 @@ function updateBulkStatus(ids, newStatus) {
       sheet.getRange(rowNum, 5).setValue(newStatusVal); // E: stu_member
 
       if (stuChanged) {
-        // 4키 모두 클리어 (수업회차 포함) — 다른 회원 추천 시 새로 등록되도록
+        // chuchen_state/date + bid_datetime_2만 클리어. class_d1_id(S)는 보존
+        // — 상태가 바뀌어도 회차 연결 유지. class_d1_id는 수업관리 물건탭 등록/추가/제거에서만 변경
         sheet.getRange(rowNum, 17).setValue(''); // Q: chuchen_state
         sheet.getRange(rowNum, 18).setValue(''); // R: chuchen_date
-        sheet.getRange(rowNum, 19).setValue(''); // S: class_d1_id
         sheet.getRange(rowNum, 20).setValue(''); // T: bid_datetime_2
       }
       updatedCount++;
@@ -5732,7 +5732,7 @@ function autoExpireRecommended() {
             sheet.getRange(realRow, 5).setValue('미정');     // E: stu_member
             sheet.getRange(realRow, 17).setValue('');         // Q: chuchen_state
             sheet.getRange(realRow, 18).setValue('');         // R: chuchen_date
-            sheet.getRange(realRow, 19).setValue('');         // S: class_d1_id
+            // S(class_d1_id)는 보존: 만료돼도 수업관리 회차 물건탭에 미정으로 유지. class_d1_id는 물건탭 등록/추가/제거에서만 변경
             sheet.getRange(realRow, 20).setValue('');         // T: bid_datetime_2
             writeItemHistory_({
               action: 'AUTO_EXPIRE',
@@ -5774,7 +5774,7 @@ function autoExpireRecommended() {
           sheet.getRange(realRow, 5).setValue('미정');
           sheet.getRange(realRow, 17).setValue(''); // Q
           sheet.getRange(realRow, 18).setValue(''); // R
-          sheet.getRange(realRow, 19).setValue(''); // S: class_d1_id
+          // S(class_d1_id)는 보존: 만료돼도 수업관리 회차 물건탭에 미정으로 유지
           sheet.getRange(realRow, 20).setValue(''); // T: bid_datetime_2
           writeItemHistory_({
             action: 'AUTO_EXPIRE',
