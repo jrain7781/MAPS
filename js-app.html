@@ -23818,11 +23818,11 @@ MJ 이정우 팀장
         // 라벨 = 마지막 hyphen 토큰
         var parts = String(p.preset_title || '').split('-').map(function (s) { return s.trim(); }).filter(Boolean);
         var label = parts.length ? parts[parts.length - 1] : (p.preset_title || '(제목없음)');
-        var ind = depth * 13;
-        return '<li class="jmt-item' + (deleted ? ' deleted' : '') + (jmSelectedPresetIds.has(p.preset_id) ? ' sel-on' : '') + '" data-id="' + escAttr(p.preset_id) + '" data-kind="leaf" data-depth="' + depth + '" draggable="true">' +
+        var ind = 8 + depth * 14;   // 단계별 단차 → 체크박스가 들여쓰기됨
+        return '<li class="jmt-item' + (deleted ? ' deleted' : '') + (jmSelectedPresetIds.has(p.preset_id) ? ' sel-on' : '') + '" data-id="' + escAttr(p.preset_id) + '" data-kind="leaf" data-depth="' + depth + '" draggable="true" style="padding-left:' + ind + 'px">' +
                '<span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>' +
                '<input type="checkbox" class="jmt-row-chk" data-id="' + escAttr(p.preset_id) + '" ' + checked + '>' +
-               '<span class="jmt-name" style="padding-left:' + ind + 'px" title="' + escAttr(p.preset_title || '') + '">' + escHtml(label) + (deleted ? ' <span class="text-[10px] text-red-600">[삭제]</span>' : '') + '</span>' +
+               '<span class="jmt-name" title="' + escAttr(p.preset_title || '') + '">' + escHtml(label) + (deleted ? ' <span class="text-[10px] text-red-600">[삭제]</span>' : '') + '</span>' +
                _jmtCountsHtml(c) +
                '</li>';
     }
@@ -23841,11 +23841,11 @@ MJ 이정우 팀장
             var cs = _jmtBranchCheckState(ids);
             var isCollapsed = collapsed.has(child.path);
             var c = _jmtSubtreeCounts(child);
-            var bInd = depth * 13;
-            html += '<li class="jmt-branch' + (isCollapsed ? ' collapsed' : '') + (cs !== 'none' ? ' sel-on' : '') + '" data-path="' + escAttr(child.path) + '" data-ids="' + ids.join(',') + '" data-kind="branch" data-depth="' + depth + '" draggable="true">' +
+            var bInd = 8 + depth * 14;   // 단계별 단차 → 체크박스가 들여쓰기됨
+            html += '<li class="jmt-branch' + (isCollapsed ? ' collapsed' : '') + (cs !== 'none' ? ' sel-on' : '') + '" data-path="' + escAttr(child.path) + '" data-ids="' + ids.join(',') + '" data-kind="branch" data-depth="' + depth + '" draggable="true" style="padding-left:' + bInd + 'px">' +
                     '<span class="drag-handle">⋮⋮</span>' +
                     '<input type="checkbox" class="jmt-branch-check" ' + (cs === 'all' ? 'checked' : '') + ' title="이 그룹 전체 선택/해제">' +
-                    '<span class="jmt-branch-label" style="padding-left:' + bInd + 'px">' + escHtml(child.label) + '</span>' +
+                    '<span class="jmt-branch-label">' + escHtml(child.label) + '</span>' +
                     _jmtKidcHtml(child.children.size + child.presets.length) +
                     _jmtCountsHtml(c) +
                     '</li>';
