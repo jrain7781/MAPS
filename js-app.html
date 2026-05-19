@@ -24220,15 +24220,26 @@ MJ 이정우 팀장
             var thead = document.querySelector('#JosaManagement #jm-grid thead');
             var hdr = aside.querySelector('.jm-side-header');
             var tb = document.getElementById('jmt-topbar');
-            if (!fb || !ss || !thead || !hdr || !tb) return;
-            var fbH = fb.offsetHeight, ssH = ss.offsetHeight, thH = thead.offsetHeight;
-            if (fbH <= 0 || ssH <= 0) return;
-            // 좌측 헤더(셀렉트행) = 우측 필터바 높이  → 카운팅바 시작 = 그리드 요약줄 시작
-            hdr.style.minHeight = fbH + 'px';
+            if (!fb || !ss || !hdr || !tb) return;
+            var fbH = fb.offsetHeight; if (fbH <= 0) return;
+            // 1) 좌측 셀렉트행 = 우측 필터바 높이 → 카운팅바 top = 그리드 요약줄 top
             hdr.style.boxSizing = 'border-box';
-            // 카운팅바 = 그리드 요약줄 + thead 높이  → 첫 카드(허그포기)가 그리드 첫 행과 정렬
-            tb.style.minHeight = (ssH + thH) + 'px';
+            hdr.style.minHeight = fbH + 'px';
             tb.style.boxSizing = 'border-box';
+            var ssH = ss.offsetHeight, thH = thead ? thead.offsetHeight : 0;
+            tb.style.minHeight = (ssH + thH) + 'px';
+            // 2) 첫 카드 top 을 그리드 첫 데이터 행 top 에 정확히 맞춤 (ul 패딩/카드 마진 보정)
+            requestAnimationFrame(function () {
+                try {
+                    var c = document.querySelector('#jmt-list .jmt-card-head');
+                    var g = document.querySelector('#jm-grid-body tr');
+                    if (!c || !g) return;
+                    var delta = Math.round(g.getBoundingClientRect().top - c.getBoundingClientRect().top);
+                    if (!delta) return;
+                    var cur = parseFloat(getComputedStyle(tb).minHeight) || tb.offsetHeight;
+                    tb.style.minHeight = Math.max(0, cur + delta) + 'px';
+                } catch (_) {}
+            });
         } catch (_) {}
     }
 
