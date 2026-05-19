@@ -23821,7 +23821,7 @@ MJ 이정우 팀장
         bar.innerHTML =
             '<input type="checkbox" id="jm-tree-all"' + _ck + ' title="전체 선택/해제 + 모두 펼침/접기"' +
             ' onchange="onJmTreeAllChange(this)" style="width:13px;height:13px;flex-shrink:0;margin-right:6px;accent-color:#4f46e5">' +
-            '<span class="jmt-hlead" style="cursor:pointer" title="클릭: 전체 열기+선택 / 다시 클릭: 전체 닫기+해제" onclick="onJmCrawlTitleClick()">크롤링리스트</span>' +
+            '<span class="jmt-hlead" style="cursor:pointer" title="클릭: 전체 열기+선택 / 다시 클릭: 전체 닫기+해제" onclick="onJmCrawlTitleClick()">전체</span>' +
             '<span class="jmt-rb">' +
             hc('total', '전체', c.total, 'nc-all') +
             hc('bunryu', '미분류', c.bunryu, 'nc-bun') +
@@ -24202,49 +24202,26 @@ MJ 이정우 팀장
         onJmTreeAllChange(cb);
     }
 
-    // 좌측 셀렉트행 = 우측 필터바 높이 → 카운팅바 top = 그리드 요약줄 top (이건 자동 유지)
-    // 카운팅바 아래 ~ 리스트 사이 높이는 사용자가 #jmtVResizer 로 직접 드래그 조절
+    // 카운팅바를 우측 그리드 제목(thead)과 위·아래 동일 Y 로 정렬
+    //  - 좌측 셀렉트행 minHeight = 필터바+요약줄 높이  → 카운팅바 윗선 = thead 윗선
+    //  - 카운팅바 높이 = thead 높이                    → 카운팅바 아랫선 = thead 아랫선
     function syncJmtHeaderAlign_() {
         try {
             var aside = document.getElementById('jmtAside'); if (!aside) return;
             var fb = document.querySelector('#JosaManagement .jm-filter-bar');
+            var ss = document.getElementById('jm-status-summary');
+            var th = document.querySelector('#JosaManagement #jm-grid thead');
             var hdr = aside.querySelector('.jm-side-header');
-            if (!fb || !hdr) return;
-            var fbH = fb.offsetHeight; if (fbH <= 0) return;
+            var tb = document.getElementById('jmt-topbar');
+            if (!fb || !ss || !th || !hdr || !tb) return;
+            var fbH = fb.offsetHeight, ssH = ss.offsetHeight, thH = th.offsetHeight;
+            if (fbH <= 0 || ssH <= 0 || thH <= 0) return;
             hdr.style.boxSizing = 'border-box';
-            hdr.style.minHeight = fbH + 'px';
+            hdr.style.minHeight = (fbH + ssH) + 'px';
+            tb.style.boxSizing = 'border-box';
+            tb.style.height = thH + 'px';
+            tb.style.minHeight = thH + 'px';
         } catch (_) {}
-    }
-    // 리스트 제목(헤더) 높이 — 세로 드래그 + localStorage 저장/복원
-    var JMT_HDR_H_KEY = 'jmt_hdr_h_v1';
-    function _jmtApplyHdrH(h) { document.documentElement.style.setProperty('--jmt-hdr-h', h + 'px'); }
-    function setupJmtVResizer_() {
-        try {
-            var saved = parseInt(localStorage.getItem(JMT_HDR_H_KEY) || '', 10);
-            if (!isNaN(saved) && saved >= 0 && saved <= 800) _jmtApplyHdrH(saved);
-        } catch (_) {}
-        var rz = document.getElementById('jmtVResizer');
-        var sp = document.getElementById('jmtHdrSpacer');
-        if (!rz || !sp || rz.dataset.bound) return;
-        rz.dataset.bound = '1';
-        var dragging = false, startY = 0, startH = 0;
-        rz.addEventListener('mousedown', function (e) {
-            dragging = true; startY = e.clientY; startH = sp.getBoundingClientRect().height;
-            rz.classList.add('dragging'); document.body.style.userSelect = 'none'; e.preventDefault();
-        });
-        document.addEventListener('mousemove', function (e) {
-            if (!dragging) return;
-            var h = Math.max(0, Math.min(800, startH + (e.clientY - startY)));
-            _jmtApplyHdrH(Math.round(h));
-        });
-        document.addEventListener('mouseup', function () {
-            if (!dragging) return;
-            dragging = false; rz.classList.remove('dragging'); document.body.style.userSelect = '';
-            try {
-                var h = Math.round(sp.getBoundingClientRect().height);
-                localStorage.setItem(JMT_HDR_H_KEY, String(h));
-            } catch (_) {}
-        });
     }
 
     // 리스트 ↔ 그리드 드래그 구분선 — 폭 localStorage 저장/복원
@@ -24257,7 +24234,6 @@ MJ 이정우 팀장
             var saved = parseInt(localStorage.getItem(JMT_ASIDE_W_KEY) || '', 10);
             if (!isNaN(saved) && saved >= 280 && saved <= 1000) _jmtApplyAsideW(saved);
         } catch (_) {}
-        setupJmtVResizer_();
         if (!window.__jmtResizeBound) {
             window.__jmtResizeBound = 1;
             window.addEventListener('resize', function () { requestAnimationFrame(syncJmtHeaderAlign_); });
