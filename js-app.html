@@ -24202,9 +24202,11 @@ MJ 이정우 팀장
         onJmTreeAllChange(cb);
     }
 
-    // 카운팅바를 우측 그리드 제목(thead)과 위·아래 동일 Y 로 정렬
-    //  - 좌측 셀렉트행 minHeight = 필터바+요약줄 높이  → 카운팅바 윗선 = thead 윗선
-    //  - 카운팅바 높이 = thead 높이                    → 카운팅바 아랫선 = thead 아랫선
+    // 좌측을 우측 그리드와 줄별로 동일 Y 정렬:
+    //  - aside paddingTop = 필터바 높이      → 조회항목 윗선 = 선택보기(요약줄) 윗선
+    //  - 조회항목(jm-side-header) 높이 = 요약줄 높이 → 아랫선도 일치
+    //  - 카운팅바 높이 = thead 높이          → 카운팅바 = 그리드 제목줄
+    //  - 그 아래 리스트 = 그리드 첫 데이터행
     function syncJmtHeaderAlign_() {
         try {
             var aside = document.getElementById('jmtAside'); if (!aside) return;
@@ -24216,8 +24218,11 @@ MJ 이정우 팀장
             if (!fb || !ss || !th || !hdr || !tb) return;
             var fbH = fb.offsetHeight, ssH = ss.offsetHeight, thH = th.offsetHeight;
             if (fbH <= 0 || ssH <= 0 || thH <= 0) return;
+            aside.style.boxSizing = 'border-box';
+            aside.style.paddingTop = fbH + 'px';
             hdr.style.boxSizing = 'border-box';
-            hdr.style.minHeight = (fbH + ssH) + 'px';
+            hdr.style.height = ssH + 'px';
+            hdr.style.minHeight = ssH + 'px';
             tb.style.boxSizing = 'border-box';
             tb.style.height = thH + 'px';
             tb.style.minHeight = thH + 'px';
@@ -24506,34 +24511,33 @@ MJ 이정우 팀장
     function renderJmStatusSummary(filtered) {
         var bar = document.getElementById('jm-status-summary');
         if (!bar) return;
+        // 카운팅 = 그리드에 실제 표시되는 filtered 기준 (좌측 리스트 전체 아님)
         var counts = {}; JM_STATUS_ALL.forEach(function (k) { counts[k] = 0; });
-        // 폐기 카운트는 폐기제외 필터를 무시한 전체에서 산정
-        (jmItems || []).forEach(function (it) {
-            var ids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); });
-            var inTree = ids.some(function (id) { return jmSelectedPresetIds.has(id); });
-            if (!inTree) return;
-            var s = it.josa_status;
-            if (counts[s] !== undefined) counts[s]++;
-        });
-        // 단, 필터된 결과 카운트도 함께 표시 (filtered = 화면 표시 기준)
-        var filteredCounts = {}; JM_STATUS_ALL.forEach(function (k) { filteredCounts[k] = 0; });
-        filtered.forEach(function (it) { var s = it.josa_status; if (filteredCounts[s] !== undefined) filteredCounts[s]++; });
-        // 전체 = 선택 트리 내 모든 상태 합(폐기 포함). 총 → 전체
-        var grand = 0; JM_STATUS_ALL.forEach(function (k) { grand += counts[k]; });
-        function txt(onclick, active, label, val, ml) {
-            return '<span onclick="' + onclick + '" title="클릭: 이 상태만 그리드" style="cursor:pointer;color:#1f2937;font-weight:' +
-                   (active ? '800' : '600') + ';' + (active ? 'text-decoration:underline;' : '') +
-                   (ml ? 'margin-left:' + ml + ';' : '') + '">' + label +
-                   ' <strong style="color:#0f172a">' + val + '</strong></span>';
+        filtered.forEach(function (it) { var s = it.josa_status; if (counts[s] !== undefined) counts[s]++; });
+        var grand = filtered.length;
+        // 한 상태 = 그 상태색 글자 + 색 밑줄 (활성 시 굵게)
+        function seg(k, ml) {
+            var active = JM_FILTER_STATUS.has(k);
+            var col = (JM_STATUS_HEX[k] && JM_STATUS_HEX[k][0]) || '#374151';
+            return '<span onclick="toggleJmSummaryFilter(\'' + k + '\')" title="클릭: 이 상태만 그리드"' +
+                   ' style="cursor:pointer;color:' + col + ';font-weight:' + (active ? '800' : '700') +
+                   ';text-decoration:underline;text-decoration-color:' + col + ';text-underline-offset:3px' +
+                   (ml ? ';margin-left:' + ml : '') + '">' + k + ' <strong style="color:' + col + '">' + counts[k] + '</strong></span>';
         }
-        // 선택보기 / 조사요청전송 — 버튼으로 복원 + 맨 앞
-        var html = '<button type="button" onclick="openJmSelectViewModal()" title="체크된 행을 좌측 상세 + 우측 리스트 모달로 보기" class="jm-summary-act" style="background:#fde68a;color:#92400e">📑 선택보기</button>';
-        html += '<button type="button" onclick="openJmTelegramSendModalFromGrid()" title="체크된 행을 조사요청 텔레그램으로 전송" class="jm-summary-act" style="background:#bae6fd;color:#075985;margin-left:6px">✈ 조사요청전송</button>';
+        // 선택보기 / 조사요청전송 — 버튼, 테두리 진하게 같은 톤
+        var html = '<button type="button" onclick="openJmSelectViewModal()" title="체크된 행을 좌측 상세 + 우측 리스트 모달로 보기" class="jm-summary-act" style="background:#fde68a;color:#92400e;border:1px solid #b45309">📑 선택보기</button>';
+        html += '<button type="button" onclick="openJmTelegramSendModalFromGrid()" title="체크된 행을 조사요청 텔레그램으로 전송" class="jm-summary-act" style="background:#bae6fd;color:#075985;border:1px solid #0369a1;margin-left:6px">✈ 조사요청전송</button>';
         html += '<span style="display:inline-block;width:14px"></span>';
-        html += txt("toggleJmSummaryFilter('')", JM_FILTER_STATUS.size === 0, '전체', grand, '');
-        html += Object.keys(counts).map(function (k) {
-            return txt("toggleJmSummaryFilter('" + k + "')", JM_FILTER_STATUS.has(k), k, counts[k], '12px');
-        }).join('');
+        // 전체
+        html += '<span onclick="toggleJmSummaryFilter(\'\')" title="필터 해제(그리드 전체)" style="cursor:pointer;color:#0f172a;font-weight:' +
+                (JM_FILTER_STATUS.size === 0 ? '800' : '700') + ';text-decoration:underline;text-underline-offset:3px">전체 <strong>' + grand + '</strong></span>';
+        html += seg('미분류', '12px');
+        // 조사예정~조사불가 = 한 묶음(연한 배경 버튼 모양)
+        var midKeys = ['조사예정', '조사요청', '조사접수', '조사확정', '조사불가'];
+        html += '<span style="display:inline-flex;align-items:center;gap:10px;margin-left:12px;padding:3px 10px;border-radius:6px;background:#eef2ff;border:1px solid #c7d2fe">' +
+                midKeys.map(function (k) { return seg(k, ''); }).join('') + '</span>';
+        html += seg('조사완료', '12px');
+        html += seg('폐기', '12px');
         bar.innerHTML = html;
         if (typeof syncJmtHeaderAlign_ === 'function') requestAnimationFrame(syncJmtHeaderAlign_);
     }
@@ -24815,15 +24819,16 @@ MJ 이정우 팀장
             var auctionBtn = it.view_url
                 ? '<button type="button" onclick="window.open(\'' + escAttr(it.view_url) + '\',\'_auction\',\'width=896,height=900,left=100,top=50,resizable=yes,scrollbars=yes\')" class="jm-cell-btn jm-btn-auction">옥션원</button>'
                 : '';
-            // 조사내용 버튼: allBiddingData 에 sakun_no 매칭되는 입찰물건이 있을 때만 표시
-            var hasBidding = false;
+            // 조사내용 버튼: 매칭 입찰물건(items)에 이미지가 등록된 경우에만 표시 (옥션원 옆, 동일 크기)
+            var hasBidImg = false;
             try {
                 if (typeof allBiddingData !== 'undefined' && Array.isArray(allBiddingData) && it.sakun_no) {
                     var sk = String(it.sakun_no).trim();
-                    hasBidding = allBiddingData.some(function (d) { return String(d.sakun_no || '').trim() === sk; });
+                    var bdRec = allBiddingData.find(function (d) { return String(d.sakun_no || '').trim() === sk; });
+                    hasBidImg = !!(bdRec && (String(bdRec.image_id || '').trim() || String(bdRec.image_ids || '').trim()));
                 }
             } catch (e) {}
-            var josaBtn = hasBidding
+            var josaBtn = hasBidImg
                 ? '<button type="button" onclick="openJosaContentModal(\'' + escAttr(it.josa_id) + '\')" class="jm-cell-btn jm-btn-josa">조사내용</button>'
                 : '';
             var sakunCell = '<div class="' + sakunCls + '" title="' + escAttr(sakunTip) + '">' + escHtml(it.sakun_no || '') + '</div>' +
@@ -24883,9 +24888,9 @@ MJ 이정우 팀장
 
             return '<tr class="jm-row">' +
                 '<td class="jm-td text-center"><input type="checkbox" class="jm-row-cb rounded" data-id="' + escAttr(it.josa_id) + '"></td>' +
-                '<td class="jm-td text-center"><div class="jm-status-cell-stack">' + statusBtn + memoCell + '</div></td>' +
+                '<td class="jm-td text-center">' + statusBtn + '</td>' +
                 '<td class="jm-td text-center">' + josajaCell + '</td>' +
-                '<td class="jm-td text-center">' + imgCell + '</td>' +
+                '<td class="jm-td text-center"><div class="jm-photo-cell">' + imgCell + memoCell + '</div></td>' +
                 '<td class="jm-td text-center">' + sakunCell + '</td>' +
                 '<td class="jm-td text-center">' + escHtml(it.court || '') + '</td>' +
                 '<td class="jm-td text-center">' + bidCell + '</td>' +
