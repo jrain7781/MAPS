@@ -7267,7 +7267,7 @@ const JOSA_ITEMS_HEADERS = [
   'img_url',                // 대표 이미지 URL
   'preset_ids',             // 콤마 구분 다중값 (어느 크롤링리스트들에 속하는지)
   'preset_titles_cached',   // 캐시 (표시용, 콤마 구분)
-  'josa_status',            // 분류필요/조사요청/조사접수/조사확정/조사불가/폐기
+  'josa_status',            // 미분류/조사요청/조사접수/조사확정/조사불가/폐기
   'josaja',                 // 조사자명 (members.member_name)
   'requested_at',           // 조사요청 시각
   'accepted_at',            // 조사접수 시각 (텔레그램 [접수] 클릭)
@@ -7510,6 +7510,8 @@ function readAllJosaItems() {
       }
       obj[h] = _josaSafeStr_(val);
     });
+    // 레거시 정규화: 시트에 저장된 옛 '분류필요' → '미분류' (읽을 때만, 시트 비파괴)
+    if (obj.josa_status === '분류필요') obj.josa_status = '미분류';
     return obj;
   }).filter(function(r) { return r.josa_id; });
 }
@@ -7644,7 +7646,7 @@ function bulkUpsertJosaItems(payload) {
         josa_id: _newJosaId_(),
         preset_ids: presetId,
         preset_titles_cached: presetTitle,
-        josa_status: '분류필요',
+        josa_status: '미분류',
         reg_date: now,
         update_date: now
       };

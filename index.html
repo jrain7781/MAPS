@@ -49,59 +49,79 @@
             }
         }
         /* MAPS 조사물건관리 v2 — 매니저 옥션원 그리드 스타일 재현 */
-        /* JM 사이드 트리 (auction1 매니저 동일 구조 — jmt- prefix) */
+        /* ===== JM 사이드 트리 v5 (jmt- prefix) ===== */
+        #jmtAside { width: var(--jmt-aside-w, 470px); flex: 0 0 auto; }
         #jmt-list { list-style: none; }
-        .jmt-card { display:block; margin:6px 4px; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; background:#fff; list-style:none; position:relative; }
-        .jmt-card-head { display:flex; align-items:center; gap:6px; padding:8px 10px; background:#eef2ff; border-bottom:1px solid #d1d5db; cursor:pointer; user-select:none; }
-        .jmt-card-head:hover { background:#e0e7ff; }
-        .jmt-card .drag-handle { width:14px; text-align:center; color:#94a3b8; font-size:11px; cursor:grab; user-select:none; flex-shrink:0; }
-        .jmt-card .drag-handle:hover { color:#4b5563; }
-        .jmt-card-check, .jmt-branch-check { margin:0; flex-shrink:0; }
-        .jmt-card-title { flex:0 0 auto; font-weight:700; color:#1e293b; font-size:13px; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px; }
-        .jmt-card-body { padding:2px 0; list-style:none; margin:0; }
+        /* 공통 우측 숫자 블록: 5컬럼 동일폭, 우측 고정 (제목 길이 무관 칼정렬) */
+        .jmt-rb { margin-left:auto; display:flex; align-items:center; flex-shrink:0; }
+        .jmt-nc { width:42px; text-align:right; padding-right:7px; flex-shrink:0;
+                  font-size:13px; font-variant-numeric:tabular-nums; }
+        .nc-all { font-weight:800; color:#0f172a; }
+        .nc-bun { color:#1f2937; font-weight:800; }
+        .nc-jin { color:#4f46e5; font-weight:700; }
+        .nc-done{ color:#0f766e; font-weight:700; }
+        .nc-pye { color:#dc2626; font-weight:700; }
+        .jmt-nc.z { color:#cbd5e1 !important; font-weight:600 !important; }
+        /* 하위개수 동그라미 — 제목 칸(고정폭) 바로 옆 → 같은 세로선 정렬 */
+        .jmt-kidc { width:22px; height:22px; border-radius:50%; display:flex; align-items:center;
+                    justify-content:center; font-size:11px; font-weight:800; flex-shrink:0;
+                    background:#e0e7ff; color:#4338ca; }
+        .jmt-kidc.empty { background:transparent; }
+        /* 제목 칸 고정폭(140px, border-box) → 들여쓰기는 칸 안쪽 padding 으로만 */
+        .jmt-card-title, .jmt-branch-label, .jmt-name {
+            flex:0 0 124px; box-sizing:border-box; min-width:0; white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; font-size:13px; }
+
+        .jmt-card { display:block; margin:7px 5px; border:1px solid #e6eaf0; border-radius:10px;
+                    overflow:hidden; background:#fff; list-style:none; position:relative; }
+        .jmt-card-head { display:flex; align-items:center; gap:8px; padding:9px 11px; cursor:pointer;
+                         user-select:none; color:#fff; background:linear-gradient(90deg,#5b63ea,#7c83ef); }
+        .jmt-card-head .drag-handle { width:12px; text-align:center; color:rgba(255,255,255,.65);
+                                      font-size:11px; cursor:grab; flex-shrink:0; opacity:0; transition:opacity .12s; }
+        .jmt-card-head:hover .drag-handle { opacity:1; }
+        .jmt-card-check, .jmt-branch-check, .jmt-row-chk { margin:0; flex-shrink:0; width:15px; height:15px; accent-color:#4f46e5; }
+        .jmt-card-head .jmt-card-check { accent-color:#fff; }
+        .jmt-card-title { font-weight:800; font-size:14px; color:#fff; }
+        .jmt-card-head .jmt-kidc { background:#fff; color:#4f46e5; }
+        .jmt-card-head .jmt-nc { color:#fff; font-size:15px; font-weight:800; }
+        .jmt-card-head .jmt-nc.z { color:rgba(255,255,255,.5) !important; }
+        .jmt-card-body { padding:3px 0 5px; list-style:none; margin:0; }
         .jmt-card-body.collapsed { display:none; }
-        .jmt-branch { display:flex; align-items:center; gap:6px; padding:5px 6px; cursor:pointer; user-select:none; font-size:13px; color:#374151; font-weight:600; position:relative; }
-        .jmt-branch:hover { background:#f3f4f6; }
-        .jmt-branch .drag-handle { width:14px; text-align:center; color:#94a3b8; font-size:11px; cursor:grab; flex-shrink:0; }
-        .jmt-branch-label { flex:0 0 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; }
-        .jmt-item { display:flex; align-items:center; gap:6px; padding:1px 8px; cursor:default; font-size:12px; min-height:22px; position:relative; }
-        .jmt-item:hover { background:#eef2ff; }
-        .jmt-item.active { color:#1d4ed8; font-weight:700; }
+
+        .jmt-branch, .jmt-item { display:flex; align-items:center; gap:8px; padding:7px 11px;
+                                 cursor:pointer; user-select:none; position:relative; background:#fff; }
+        .jmt-branch:hover, .jmt-item:hover { background:#f6f8fb; }
+        .jmt-branch.sel-on, .jmt-item.sel-on { background:#eef0fe; }
+        .jmt-branch .drag-handle, .jmt-item .drag-handle { width:12px; text-align:center;
+                                 color:#cbd5e1; font-size:11px; cursor:grab; flex-shrink:0;
+                                 opacity:0; transition:opacity .12s; }
+        .jmt-branch:hover .drag-handle, .jmt-item:hover .drag-handle { opacity:1; }
+        .jmt-branch-label { color:#334155; font-weight:700; }
+        .jmt-name { color:#475569; font-weight:600; }
         .jmt-item.deleted .jmt-name { color:#dc2626; }
-        .jmt-item .drag-handle { width:14px; text-align:center; color:#94a3b8; font-size:11px; cursor:grab; flex-shrink:0; }
-        .jmt-row-chk { margin:0; flex-shrink:0; }
-        .jmt-name { flex:0 0 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; color:#1f2937; font-size:13px; max-width:130px; }
-        /* 카운트: (전체·분류필요·조사중·조사완료·폐기) */
-        .jmt-counts { display:flex; gap:3px; align-items:center; flex-shrink:0; margin-left:auto; font-size:12px; font-weight:600; }
-        .jmt-cnt-total   { color:#1f2937; }
-        .jmt-cnt-bunryu  { color:#6b7280; }
-        .jmt-cnt-jin     { color:#1e40af; }
-        .jmt-cnt-done    { color:#0f766e; }
-        .jmt-cnt-pye     { color:#dc2626; }
-        .jmt-counts .sep { color:#cbd5e1; }
-        .jmt-kidcount { font-size:11px; color:#94a3b8; font-weight:600; margin-left:4px; flex-shrink:0; }
-        /* 상단 전체 카운팅 바 */
-        .jmt-topbar { display:flex; flex-wrap:wrap; gap:4px; padding:6px 8px; border-bottom:1px solid #e5e7eb; background:#fff; }
-        .jmt-tb { font-size:11px; font-weight:700; padding:3px 7px; border-radius:5px; border:1px solid #d1d5db; background:#f8fafc; color:#475569; cursor:pointer; transition:all .12s; }
-        .jmt-tb:hover { background:#eef2ff; }
-        .jmt-tb b { font-weight:800; margin-left:3px; }
-        .jmt-tb.tb-bunryu { color:#6b7280; }
-        .jmt-tb.tb-jin    { color:#1e40af; }
-        .jmt-tb.tb-done   { color:#0f766e; }
-        .jmt-tb.tb-pye    { color:#dc2626; }
-        .jmt-tb.on { background:#1e293b; color:#fff; border-color:#1e293b; }
-        /* 2단계 branch + 직속 leaf 사이 간격 */
-        .jmt-card-body .jmt-branch[data-depth="1"],
-        .jmt-card-body .jmt-item[data-depth="1"] { margin-top:7px; }
-        .jmt-card-body .jmt-branch[data-depth="1"]:first-child,
-        .jmt-card-body .jmt-item[data-depth="1"]:first-child { margin-top:3px; }
+
+        /* 상단 합계 = 컬럼 헤더 겸용 (sticky), rblock 과 같은 컬럼폭 */
+        .jmt-topbar { display:flex; align-items:flex-end; padding:9px 11px; background:#eef1f6;
+                      border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:3; }
+        .jmt-hlead { flex:1; font-size:11px; font-weight:700; color:#64748b; align-self:center; }
+        .jmt-hc { width:42px; padding-right:7px; display:flex; flex-direction:column; align-items:flex-end;
+                  gap:1px; cursor:pointer; border-radius:5px; }
+        .jmt-hc i { font-size:10px; font-weight:700; font-style:normal; line-height:1.05; color:#64748b; }
+        .jmt-hc b { font-size:15px; font-weight:800; font-variant-numeric:tabular-nums; color:#0f172a; }
+        .jmt-hc.nc-jin i, .jmt-hc.nc-jin b { color:#4f46e5; }
+        .jmt-hc.nc-done i, .jmt-hc.nc-done b { color:#0f766e; }
+        .jmt-hc.nc-pye i, .jmt-hc.nc-pye b { color:#dc2626; }
+        .jmt-hc.on { background:#1e293b; }
+        .jmt-hc.on i, .jmt-hc.on b { color:#fff !important; }
+
         /* 드래그/드롭 */
         .jmt-card.dragging, .jmt-branch.dragging, .jmt-item.dragging { opacity:0.4; }
         .jmt-card.drop-above::before, .jmt-branch.drop-above::before, .jmt-item.drop-above::before { content:''; position:absolute; left:4px; right:4px; top:-2px; height:3px; background:#2563eb; border-radius:2px; z-index:20; pointer-events:none; }
         .jmt-card.drop-below::after,  .jmt-branch.drop-below::after,  .jmt-item.drop-below::after  { content:''; position:absolute; left:4px; right:4px; bottom:-2px; height:3px; background:#2563eb; border-radius:2px; z-index:20; pointer-events:none; }
-        /* leaf 우측 ✕ */
-        .jmt-item .jmt-del { color:#9ca3af; padding:0 4px; cursor:pointer; font-size:11px; }
-        .jmt-item .jmt-del:hover { color:#dc2626; }
+        /* 리스트 ↔ 그리드 드래그 구분선 */
+        #jmtSplitter { flex:0 0 6px; cursor:col-resize; background:#e5e7eb;
+                       border-left:1px solid #d1d5db; border-right:1px solid #d1d5db; }
+        #jmtSplitter:hover, #jmtSplitter.dragging { background:#a5b4fc; }
         #jm-grid { border-collapse: collapse; font-size: 13px; table-layout: fixed; }
         #jm-grid td { overflow: hidden; }
         .jm-th { background: #dbe2ec; border: 1px solid #b9c2d4; padding: 8px 6px; text-align: center; font-weight: 700; color: #1f2b46; position: sticky; top: 0; z-index: 5; }
@@ -130,7 +150,7 @@
         /* 매각기일 — 7워킹데이 이내 빨강 강조 */
         .jm-bid-urgent { color: #dc2626 !important; font-weight: 700; }
         .jm-bid-weekday { color: #1f2937; font-weight: 600; margin-right: 2px; }
-        /* 상태 셀 stacking — 분류필요(위) + 메모(아래), 셀 세로 가운데, 컬럼 폭 변경 시 동일 비율 축소 */
+        /* 상태 셀 stacking — 미분류(위) + 메모(아래), 셀 세로 가운데, 컬럼 폭 변경 시 동일 비율 축소 */
         .jm-status-cell-stack {
             display: flex; flex-direction: column; gap: 5px;
             width: 100%; align-items: stretch; justify-content: center;
@@ -1847,19 +1867,19 @@
                     <!-- 좌측 사이드 트리: 크롤링리스트 (auction1 매니저 동일 구조) -->
                     <aside class="w-72 border-r bg-gray-50 text-sm flex-shrink-0 flex flex-col" id="jmtAside">
                         <div class="jm-side-header flex items-center justify-between px-3 py-2 border-b bg-gray-50">
-                            <div class="flex items-center gap-2">
-                                <label class="flex items-center gap-1 cursor-pointer text-xs" title="전체 선택/해제 + 모든 단계 펼침/접기">
-                                    <input type="checkbox" id="jm-tree-all" class="rounded" onchange="onJmTreeAllChange(this)">
-                                    <span>전체</span>
-                                </label>
-                                <span class="font-semibold text-gray-700">크롤링리스트</span>
-                            </div>
+                            <span class="font-semibold text-gray-700 cursor-pointer select-none hover:text-indigo-700 transition"
+                                title="클릭: 전체 선택 + 모든 단계 펼침 / 다시 클릭: 전체 해제 + 모두 접기"
+                                onclick="onJmCrawlTitleClick()">크롤링리스트</span>
+                            <input type="checkbox" id="jm-tree-all" class="hidden" onchange="onJmTreeAllChange(this)">
                             <button type="button" id="jmtBtnDeleteSelected" onclick="onJmtDeleteSelected()"
                                 class="text-xs px-2 py-1 rounded bg-red-100 hover:bg-red-600 hover:text-white text-red-700 font-bold border border-red-300 transition">🗑 선택 삭제</button>
                         </div>
                         <div id="jmt-topbar" class="jmt-topbar"></div>
                         <ul id="jmt-list" class="flex-1 overflow-y-auto p-2 m-0 list-none"></ul>
                     </aside>
+
+                    <!-- 리스트 ↔ 그리드 드래그 구분선 (폭 저장) -->
+                    <div id="jmtSplitter" title="드래그해서 리스트 폭 조절"></div>
 
                     <!-- 메인 영역 -->
                     <main class="flex-1 overflow-hidden flex flex-col min-w-0">

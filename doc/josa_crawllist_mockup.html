@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<!--
+  조사물건관리 크롤링리스트 — 디자인 3 확정안 v5 (정적, 가짜 데이터)
+  핵심: 제목 칸을 고정폭(150px)으로 → 하위개수 동그라미가 제목 길이/단계와 무관하게
+        "같은 세로선"에 칼정렬. 숫자 5컬럼은 우측 고정 정렬 유지.
+-->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>크롤링리스트 디자인 3 v5</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Malgun Gothic','맑은 고딕',system-ui,sans-serif; background: #e9edf2; padding: 24px; color: #1f2937; }
+  .col { width: 624px; }
+  .col > h2 { font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 4px; padding-left: 4px; }
+  .col > .sub { font-size: 11px; color: #64748b; margin-bottom: 10px; padding-left: 4px; line-height: 1.5; }
+  .panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
+           box-shadow: 0 2px 10px rgba(15,23,42,.05); overflow: hidden; }
+
+  .cb { flex-shrink: 0; accent-color: #4f46e5; cursor: pointer; width:15px; height:15px; }
+  .grip { width:12px; color: #cbd5e1; font-size: 11px; cursor: grab; flex-shrink: 0;
+          opacity: 0; transition: opacity .12s; }
+  .row:hover .grip { opacity: 1; }
+
+  /* ===== 우측 숫자 블록: 5컬럼 동일폭, 우측 고정 ===== */
+  .rblock { margin-left: auto; display: flex; align-items: center; flex-shrink: 0; }
+  .numcell { width: 60px; text-align: right; padding-right: 12px; flex-shrink: 0;
+             font-size: 15px; font-variant-numeric: tabular-nums; }
+
+  /* ★ 제목 칸 고정폭 → 그 끝(=같은 x)에 동그라미. 제목 길이·단계 무관 칼정렬 */
+  .nm { flex: 0 0 150px; min-width: 0; white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; }
+  .kidc { width: 23px; height: 23px; border-radius: 50%; display: flex;
+          align-items: center; justify-content: center; font-size: 12px; font-weight: 800;
+          background: #4f46e5; color: #fff; box-shadow: 0 1px 3px rgba(79,70,229,.4); flex-shrink: 0; }
+  .kidc.empty { background: transparent; box-shadow: none; }   /* 배지 없는 행도 자리 유지 */
+
+  /* ===== 상단 바 ===== */
+  .topbar { display: flex; align-items: flex-end; padding: 11px 14px;
+            background: #eef1f6; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 3; }
+  .tb-left { flex: 1; display: flex; align-items: center; gap: 10px; align-self: center; }
+  .p-title { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: 15px;
+             color: #0f172a; cursor: pointer; user-select: none; }
+  .p-title:hover { color: #4f46e5; }
+  .p-title .chev { font-size: 12px; color: #94a3b8; transform: rotate(90deg); }
+  .btn-del { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 7px;
+             color: #b91c1c; background: #fee2e2; border: 1px solid #fecaca; cursor: pointer; }
+  .btn-del:hover { background: #b91c1c; color: #fff; }
+  .topbar .numcell { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .topbar .numcell i { font-size: 10.5px; font-weight: 700; font-style: normal; line-height: 1.1; color: #64748b; }
+  .topbar .numcell b { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .h-all  i{color:#334155;} .h-all  b{color:#0f172a;}
+  .h-bun  i{color:#334155;} .h-bun  b{color:#1f2937;}
+  .h-jin  i{color:#4f46e5;} .h-jin  b{color:#4f46e5;}
+  .h-done i{color:#0f766e;} .h-done b{color:#0f766e;}
+  .h-pye  i{color:#dc2626;} .h-pye  b{color:#dc2626;}
+
+  /* ===== 트리 ===== */
+  .tree { padding: 9px; max-height: 580px; overflow-y: auto; }
+  .card { border-radius: 11px; margin-bottom: 9px; overflow: hidden; border: 1px solid #e6eaf0; }
+  .row { display: flex; align-items: center; gap: 9px; padding: 10px 12px; cursor: pointer;
+         user-select: none; position: relative; }
+  /* 단계 들여쓰기는 "제목 칸 안쪽" padding 으로만 → 칸 오른쪽 끝(=동그라미 x) 고정 */
+  .row.card-head .nm { padding-left: 0; }
+  .row.branch    .nm { padding-left: 18px; }
+  .row.leaf      .nm { padding-left: 36px; }
+
+  /* 1단계 카드 헤더 */
+  .row.card-head { color: #fff; background: linear-gradient(90deg,#5b63ea,#7c83ef); }
+  .row.card-head .grip { color: rgba(255,255,255,.7); }
+  .row.card-head .cb { accent-color: #fff; }
+  .card-head .nm { font-size: 14.5px; font-weight: 800; }
+  .card-head .kidc { background: #fff; color: #4f46e5; box-shadow: none; }
+  .card-head .numcell { color: #fff; font-size: 16px; font-weight: 800; }
+  .card-head .numcell.z { color: rgba(255,255,255,.5); }
+
+  .row.branch, .row.leaf { background: #fff; }
+  .row.branch:hover, .row.leaf:hover { background: #f6f8fb; }
+  .row.sel.branch, .row.sel.leaf { background: #eef0fe; }
+  .row.sel.branch::before, .row.sel.leaf::before {
+      content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:#4f46e5; }
+  .branch .nm { font-size: 13px; color: #334155; font-weight: 700; }
+  .leaf .nm   { font-size: 13px; color: #475569; font-weight: 600; }
+  .branch .kidc { background: #e0e7ff; color: #4338ca; box-shadow: none; }
+
+  .n-all { font-weight: 800; color: #0f172a; }
+  .n-bun { color: #1f2937; font-weight: 800; }
+  .n-jin { color: #4f46e5; font-weight: 700; }
+  .n-done{ color: #0f766e; font-weight: 700; }
+  .n-pye { color: #dc2626; font-weight: 700; }
+  .z { color: #cbd5e1 !important; font-weight: 600 !important; }
+</style>
+</head>
+<body>
+
+<div class="col">
+  <h2>디자인 3 확정안 v5</h2>
+  <div class="sub">제목 칸 고정폭(150px) → 하위개수 동그라미가 단계/제목길이 무관 같은 세로선 칼정렬 · 숫자 우측 고정 정렬</div>
+
+  <div class="panel">
+    <div class="topbar">
+      <div class="tb-left">
+        <div class="p-title" title="클릭: 전체 선택+모두 펼침 / 다시 클릭: 해제+접기">
+          <span class="chev">▶</span><span>크롤링리스트</span>
+        </div>
+        <button class="btn-del">🗑 선택삭제</button>
+      </div>
+      <div class="rblock">
+        <span class="numcell h-all"><i>전체</i><b>170</b></span>
+        <span class="numcell h-bun"><i>미분류</i><b>145</b></span>
+        <span class="numcell h-jin"><i>진행중</i><b>13</b></span>
+        <span class="numcell h-done"><i>완료</i><b>2</b></span>
+        <span class="numcell h-pye"><i>폐기</i><b>10</b></span>
+      </div>
+    </div>
+
+    <div class="tree">
+      <div class="card">
+        <div class="row card-head">
+          <span class="grip">⠿</span><input type="checkbox" class="cb" checked>
+          <span class="nm">허그포기</span><span class="kidc">3</span>
+          <span class="rblock">
+            <span class="numcell">106</span><span class="numcell">93</span><span class="numcell">5</span><span class="numcell z">0</span><span class="numcell">8</span>
+          </span>
+        </div>
+        <div>
+          <div class="row branch sel">
+            <span class="grip">⠿</span><input type="checkbox" class="cb" checked><span class="nm">빌라</span><span class="kidc">3</span>
+            <span class="rblock"><span class="numcell n-all">55</span><span class="numcell n-bun">46</span><span class="numcell n-jin">1</span><span class="numcell n-done z">0</span><span class="numcell n-pye">8</span></span>
+          </div>
+          <div class="row leaf sel">
+            <span class="grip">⠿</span><input type="checkbox" class="cb" checked><span class="nm">지방</span><span class="kidc empty"></span>
+            <span class="rblock"><span class="numcell n-all">2</span><span class="numcell n-bun">2</span><span class="numcell n-jin z">0</span><span class="numcell n-done z">0</span><span class="numcell n-pye z">0</span></span>
+          </div>
+          <div class="row leaf sel">
+            <span class="grip">⠿</span><input type="checkbox" class="cb" checked><span class="nm">서울</span><span class="kidc empty"></span>
+            <span class="rblock"><span class="numcell n-all">13</span><span class="numcell n-bun">11</span><span class="numcell n-jin z">0</span><span class="numcell n-done z">0</span><span class="numcell n-pye">2</span></span>
+          </div>
+          <div class="row leaf sel">
+            <span class="grip">⠿</span><input type="checkbox" class="cb" checked><span class="nm">수도권</span><span class="kidc empty"></span>
+            <span class="rblock"><span class="numcell n-all">40</span><span class="numcell n-bun">40</span><span class="numcell n-jin z">0</span><span class="numcell n-done z">0</span><span class="numcell n-pye z">0</span></span>
+          </div>
+          <div class="row branch">
+            <span class="grip">⠿</span><input type="checkbox" class="cb"><span class="nm">오피</span><span class="kidc">2</span>
+            <span class="rblock"><span class="numcell n-all">22</span><span class="numcell n-bun">22</span><span class="numcell n-jin z">0</span><span class="numcell n-done z">0</span><span class="numcell n-pye z">0</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row card-head">
+          <span class="grip">⠿</span><input type="checkbox" class="cb">
+          <span class="nm">재매각</span><span class="kidc">1</span>
+          <span class="rblock"><span class="numcell">66</span><span class="numcell">54</span><span class="numcell">8</span><span class="numcell">2</span><span class="numcell">2</span></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row card-head">
+          <span class="grip">⠿</span><input type="checkbox" class="cb">
+          <span class="nm">반값경매</span><span class="kidc">1</span>
+          <span class="rblock"><span class="numcell z">0</span><span class="numcell z">0</span><span class="numcell z">0</span><span class="numcell z">0</span><span class="numcell z">0</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
