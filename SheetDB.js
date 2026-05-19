@@ -7731,17 +7731,17 @@ function _jmSakunKey_(s) {
   var y = m[1]; if (y.length >= 4) y = y.slice(2); else if (y.length === 1) y = '0' + y;
   return y + '타경' + m[2];
 }
-// items 시트에서 image_id 있는 사건번호 Set (조사내용 버튼 노출 판단용)
-function _jmItemsWithImageSet_() {
-  var set = {};
+// items 시트: 사건번호(정규화) → image_id 맵 (조사내용 모달 이미지용)
+function _jmItemsImageMap_() {
+  var map = {};
   try {
     var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
-    if (!sh) return set;
+    if (!sh) return map;
     var lr = sh.getLastRow();
-    if (lr < 2) return set;
+    if (lr < 2) return map;
     var skCol = ITEM_HEADERS.indexOf('sakun_no') + 1;
     var imgCol = ITEM_HEADERS.indexOf('image_id') + 1;
-    if (skCol < 1 || imgCol < 1) return set;
+    if (skCol < 1 || imgCol < 1) return map;
     var lo = Math.min(skCol, imgCol), hi = Math.max(skCol, imgCol);
     var vals = sh.getRange(2, lo, lr - 1, hi - lo + 1).getValues();
     var sRel = skCol - lo, iRel = imgCol - lo;
@@ -7749,17 +7749,19 @@ function _jmItemsWithImageSet_() {
       var img = String(vals[r][iRel] || '').trim();
       if (!img) continue;
       var k = _jmSakunKey_(vals[r][sRel]);
-      if (k) set[k] = true;
+      if (k && !map[k]) map[k] = img;
     }
   } catch (e) {}
-  return set;
+  return map;
 }
 function jmLoadAllData() {
   try {
     var items = readAllJosaItems();
-    var imgSet = _jmItemsWithImageSet_();
+    var imgMap = _jmItemsImageMap_();
     items.forEach(function (it) {
-      it.bid_img = !!imgSet[_jmSakunKey_(it.sakun_no)];
+      var iid = imgMap[_jmSakunKey_(it.sakun_no)] || '';
+      it.bid_img_id = iid;
+      it.bid_img = !!iid;
     });
     return {
       success: true,

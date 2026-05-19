@@ -25140,31 +25140,37 @@ MJ 이정우 팀장
 
     // 조사내용 보기 — 입찰물건 상세 모달 [조사탭] 으로 전환
     // 사용자 사양: "입찰물건보기 조사탭내용 모달로 띄움" — sakun_no 매칭으로 기존 패턴 재사용
+    // 조사내용 = 자체 모달 (일괄프린트 형식: 헤더 + 이미지). 락 없음. bid_img_id 로 바로 표시
     function openJosaContentModal(itemKey) {
         var it = jmItems.find(function (x) { return x.josa_id === itemKey; });
         if (!it) { showStatus('항목 없음', 'error'); return; }
-        var sakun = String(it.sakun_no || '').trim();
-        if (!sakun) { showStatus('사건번호 없음', 'error'); return; }
-
-        if (typeof allBiddingData === 'undefined' || !Array.isArray(allBiddingData) || !allBiddingData.length) {
-            alert('입찰물건 데이터가 아직 로드되지 않았습니다.\n좌측 [입찰물건관리] 메뉴를 한 번 열어 데이터를 로드한 후 다시 시도해주세요.');
-            return;
-        }
-        var bidItem = allBiddingData.find(function (d) {
-            return String(d.sakun_no || '').trim() === sakun;
-        });
-        if (!bidItem) {
-            alert('MAPS 입찰물건에 미등록된 사건입니다.\n사건번호: ' + sakun + '\n\n입찰물건으로 등록되면 조사내용을 확인할 수 있습니다.');
-            return;
-        }
-        if (typeof openDetailModal === 'function') {
-            openDetailModal(bidItem);
-            setTimeout(function () {
-                if (typeof switchModalTab === 'function') switchModalTab('investigation');
-            }, 100);
-        } else {
-            alert('openDetailModal 함수를 찾을 수 없습니다 (기존 입찰물건 상세 모달).');
-        }
+        var imgId = String(it.bid_img_id || '').trim();
+        var old = document.getElementById('jm-josa-content-modal');
+        if (old) old.remove();
+        var line1 = [it.sakun_no, it.court, it.bid_date, it.prop_kind]
+            .map(function (v) { return String(v || '').trim(); }).filter(Boolean).join('  /  ');
+        var line2 = String(it.address || '').split('\n')[0];
+        var imgUrl = imgId ? ('https://drive.google.com/thumbnail?sz=w1400&id=' + encodeURIComponent(imgId)) : '';
+        var body = imgId
+            ? '<img src="' + escAttr(imgUrl) + '" referrerpolicy="no-referrer" style="max-width:100%;height:auto;display:block;margin:0 auto;border:1px solid #e5e7eb" ' +
+              'onerror="this.style.display=\'none\';this.insertAdjacentHTML(\'afterend\',\'<p style=\\\'padding:40px;text-align:center;color:#9ca3af\\\'>이미지를 불러올 수 없습니다</p>\')">'
+            : '<p style="padding:60px 20px;text-align:center;color:#9ca3af;font-size:14px">등록된 조사이미지가 없습니다</p>';
+        var ov = document.createElement('div');
+        ov.id = 'jm-josa-content-modal';
+        ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:24px';
+        ov.innerHTML =
+            '<div style="background:#fff;border-radius:10px;max-width:1000px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.3)">' +
+              '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid #e5e7eb;background:#f8fafc">' +
+                '<div style="min-width:0">' +
+                  '<div style="font-weight:800;font-size:14px;color:#1f2937">' + escHtml(line1 || '조사내용') + '</div>' +
+                  (line2 ? '<div style="font-size:12px;color:#64748b;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(line2) + '</div>' : '') +
+                '</div>' +
+                '<button type="button" onclick="document.getElementById(\'jm-josa-content-modal\').remove()" style="flex-shrink:0;border:0;background:#ef4444;color:#fff;font-weight:700;padding:6px 14px;border-radius:6px;cursor:pointer">닫기</button>' +
+              '</div>' +
+              '<div style="flex:1;overflow:auto;padding:14px;background:#fff">' + body + '</div>' +
+            '</div>';
+        ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+        document.body.appendChild(ov);
     }
 
     // ── 이미지 onerror 시 GAS 프록시(Referer 우회) 호출 → base64 캐시 ──

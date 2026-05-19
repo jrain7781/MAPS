@@ -157,9 +157,11 @@
             display: flex; flex-direction: column; gap: 5px;
             width: 100%; align-items: stretch; justify-content: center;
         }
-        /* 사진 셀: 사진 + 메모 세로, 가로폭 동일 */
-        .jm-photo-cell { display:flex; flex-direction:column; gap:5px; align-items:center; width:90px; margin:0 auto; }
-        .jm-photo-cell .jm-thumb { width:100%; max-width:100%; max-height:60px; height:auto; }
+        /* 사진 셀: 사진은 원본 비율 유지, 메모 박스를 사진 폭에 맞춤 */
+        .jm-photo-cell { display:flex; flex-direction:column; gap:5px; align-items:stretch;
+                         width:fit-content; min-width:64px; max-width:90px; margin:0 auto; }
+        .jm-photo-cell .jm-thumb { display:block; width:auto; height:auto;
+                                   max-width:80px; max-height:50px; margin:0 auto; }
         .jm-photo-cell .jm-memo-btn { width:100%; }
         /* 사건번호 셀 안 옥션원/조사내용 버튼 — 가로 길이 동일 */
         .jm-cell-btns { margin-top: 6px; display: flex; gap: 4px; justify-content: center; }
@@ -1862,13 +1864,11 @@
 
             <!-- ================================ 조사물건관리 v2 (JosaManagement) ================================ -->
             <div id="JosaManagement" class="tab-content h-full flex flex-col content-hidden bg-white overflow-hidden">
-                <div class="px-4 py-2 border-b bg-gray-50 flex-shrink-0">
-                    <h2 class="text-lg font-bold text-gray-800">조사리스트</h2>
-                </div>
                 <!-- 본문 = [좌측 트리] [메인 영역] -->
                 <div class="flex flex-1 overflow-hidden">
                     <!-- 좌측 사이드 트리: 크롤링리스트 (auction1 매니저 동일 구조) -->
-                    <aside class="w-72 border-r bg-gray-50 text-sm flex-shrink-0 flex flex-col" id="jmtAside">
+                    <aside class="w-72 border-r bg-gray-50 text-sm flex-shrink-0 flex flex-col" id="jmtAside" style="position:relative">
+                        <div id="jmtTitle" style="position:absolute;top:0;left:0;right:0;display:flex;align-items:center;padding:0 14px;font-size:17px;font-weight:800;color:#1f2937;">조사리스트</div>
                         <div class="jm-side-header flex items-center gap-2 px-2 py-1 border-b bg-gray-50">
                             <input type="text" id="jmtTitleSearch" autocomplete="off"
                                 placeholder="크롤링리스트 (입력 시 자동 검색)"
@@ -1920,7 +1920,7 @@
                             <button type="button" onclick="resetJosaFilters()"
                                 class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 rounded jm-filter-reset jm-fbtn">초기화</button>
                             <button type="button" onclick="loadJosaData(true)"
-                                class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 rounded jm-filter-reset jm-fbtn font-bold">↻ 새로고침</button>
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-2 rounded jm-filter-reset jm-fbtn font-bold" style="border-color:#1d4ed8">↻ 새로고침</button>
                         </div>
 
                         <!-- 상태별 썸머리 -->
