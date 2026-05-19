@@ -23958,8 +23958,15 @@ MJ 이정우 팀장
         if (!list) return;
         if (!jmPresets.length) { list.innerHTML = '<li class="text-xs text-gray-400 p-3">크롤링 리스트 없음</li>'; syncJmTreeAllState(); return; }
         var ordered = _jmtOrderedPresets();
+        var q = (typeof jmtTreeQuery === 'string') ? jmtTreeQuery : '';
+        if (q) {
+            ordered = ordered.filter(function (p) {
+                return String(p.preset_title || '').toLowerCase().indexOf(q) !== -1;
+            });
+            if (!ordered.length) { list.innerHTML = '<li class="text-xs text-gray-400 p-3">검색 결과 없음</li>'; syncJmTreeAllState(); return; }
+        }
         var tree = _jmtBuildTree(ordered);
-        var collapsed = _jmtLoadCollapsed();
+        var collapsed = q ? new Set() : _jmtLoadCollapsed();   // 검색 중엔 전부 펼침
         var html = '';
         tree.children.forEach(function (top) { html += _jmtRenderTopCard(top, collapsed); });
         list.innerHTML = html;
@@ -24079,36 +24086,20 @@ MJ 이정우 팀장
                 applyJosaFilters();
             });
         });
-        _jmtPopulateTitleSearch();
         syncJmTreeAllState();
         renderJmtTopBar();
         requestAnimationFrame(syncJmtHeaderAlign_);
     }
-    // 헤더 "제목 조회" select 옵션 = 최상위 카드 라벨. 선택 시 그 리스트 전체 선택 + 자동 필터
-    function _jmtPopulateTitleSearch() {
-        var sel = document.getElementById('jmtTitleSearch');
-        if (!sel) return;
-        var tree = _jmtBuildTree(_jmtOrderedPresets());
-        var cur = sel.value;
-        var opts = '<option value="" style="color:#9ca3af">크롤링리스트</option>';
-        tree.children.forEach(function (top) {
-            opts += '<option value="' + escAttr(top.path) + '">' + escHtml(top.label) + '</option>';
-        });
-        sel.innerHTML = opts;
-        if (cur) sel.value = cur;
-    }
-    function onJmtTitleSearch(path) {
-        if (!path) return;
-        var tree = _jmtBuildTree(_jmtOrderedPresets());
-        var node = _jmtFindNode(tree, path);
-        if (!node) return;
-        var ids = _jmtCollectIds(node);
-        jmSelectedPresetIds = new Set(ids);       // 선택 시 그 리스트 전체 선택
-        var col = _jmtLoadCollapsed(); col.delete(path); _jmtSaveCollapsed(col);   // 펼침
-        JM_FILTER_STATUS.clear();
-        if (typeof updateJmMultiLabel === 'function') updateJmMultiLabel('status');
-        renderJosaTree();
-        applyJosaFilters();                       // 자동 검색
+    // 헤더 "리스트 조회" 입력 — 타이핑하면 아래 크롤링리스트가 실시간 검색/필터
+    var jmtTreeQuery = '';
+    var _jmtSearchT = null;
+    function onJmtTitleSearch(v) {
+        jmtTreeQuery = String(v || '').trim().toLowerCase();
+        clearTimeout(_jmtSearchT);
+        _jmtSearchT = setTimeout(function () {
+            renderJosaTree();
+            applyJosaFilters();
+        }, 250);
     }
     // 상단 [선택 삭제] 핸들러
     function onJmtDeleteSelected() {
@@ -24211,44 +24202,49 @@ MJ 이정우 팀장
         onJmTreeAllChange(cb);
     }
 
-    // 메모(편집) 영역 — 카운팅바와 리스트 사이. 자동저장 + 그 공간으로 리스트를 그리드 첫 행에 정렬
-    var JMT_MEMO_KEY = 'jmt_memo_v1';
-    var _jmtMemoT = null;
-    function _jmtLoadMemo() {
-        var el = document.getElementById('jmtMemo');
-        if (!el) return;
-        try { el.value = localStorage.getItem(JMT_MEMO_KEY) || ''; } catch (_) {}
-    }
-    function onJmtMemoInput() {
-        clearTimeout(_jmtMemoT);
-        _jmtMemoT = setTimeout(function () {
-            try { localStorage.setItem(JMT_MEMO_KEY, document.getElementById('jmtMemo').value || ''); } catch (_) {}
-        }, 400);
-    }
-    // 좌측 셀렉트행=필터바 높이 → 카운팅바 top=그리드 요약줄 top.
-    // 카운팅바와 리스트 사이 메모영역 높이를 보정 → 첫 카드 top=그리드 첫 행 top
+    // 좌측 셀렉트행 = 우측 필터바 높이 → 카운팅바 top = 그리드 요약줄 top (이건 자동 유지)
+    // 카운팅바 아래 ~ 리스트 사이 높이는 사용자가 #jmtVResizer 로 직접 드래그 조절
     function syncJmtHeaderAlign_() {
         try {
             var aside = document.getElementById('jmtAside'); if (!aside) return;
             var fb = document.querySelector('#JosaManagement .jm-filter-bar');
             var hdr = aside.querySelector('.jm-side-header');
-            var mw = document.getElementById('jmtMemoWrap');
-            if (!fb || !hdr || !mw) return;
+            if (!fb || !hdr) return;
             var fbH = fb.offsetHeight; if (fbH <= 0) return;
             hdr.style.boxSizing = 'border-box';
             hdr.style.minHeight = fbH + 'px';
-            requestAnimationFrame(function () {
-                try {
-                    var c = document.querySelector('#jmt-list .jmt-card-head');
-                    var g = document.querySelector('#jm-grid-body tr');
-                    if (!c || !g) return;
-                    var delta = Math.round(g.getBoundingClientRect().top - c.getBoundingClientRect().top);
-                    if (!delta) return;
-                    var curH = mw.getBoundingClientRect().height;
-                    mw.style.height = Math.max(54, Math.round(curH + delta)) + 'px';
-                } catch (_) {}
-            });
         } catch (_) {}
+    }
+    // 리스트 제목(헤더) 높이 — 세로 드래그 + localStorage 저장/복원
+    var JMT_HDR_H_KEY = 'jmt_hdr_h_v1';
+    function _jmtApplyHdrH(h) { document.documentElement.style.setProperty('--jmt-hdr-h', h + 'px'); }
+    function setupJmtVResizer_() {
+        try {
+            var saved = parseInt(localStorage.getItem(JMT_HDR_H_KEY) || '', 10);
+            if (!isNaN(saved) && saved >= 0 && saved <= 800) _jmtApplyHdrH(saved);
+        } catch (_) {}
+        var rz = document.getElementById('jmtVResizer');
+        var sp = document.getElementById('jmtHdrSpacer');
+        if (!rz || !sp || rz.dataset.bound) return;
+        rz.dataset.bound = '1';
+        var dragging = false, startY = 0, startH = 0;
+        rz.addEventListener('mousedown', function (e) {
+            dragging = true; startY = e.clientY; startH = sp.getBoundingClientRect().height;
+            rz.classList.add('dragging'); document.body.style.userSelect = 'none'; e.preventDefault();
+        });
+        document.addEventListener('mousemove', function (e) {
+            if (!dragging) return;
+            var h = Math.max(0, Math.min(800, startH + (e.clientY - startY)));
+            _jmtApplyHdrH(Math.round(h));
+        });
+        document.addEventListener('mouseup', function () {
+            if (!dragging) return;
+            dragging = false; rz.classList.remove('dragging'); document.body.style.userSelect = '';
+            try {
+                var h = Math.round(sp.getBoundingClientRect().height);
+                localStorage.setItem(JMT_HDR_H_KEY, String(h));
+            } catch (_) {}
+        });
     }
 
     // 리스트 ↔ 그리드 드래그 구분선 — 폭 localStorage 저장/복원
@@ -24261,7 +24257,7 @@ MJ 이정우 팀장
             var saved = parseInt(localStorage.getItem(JMT_ASIDE_W_KEY) || '', 10);
             if (!isNaN(saved) && saved >= 280 && saved <= 1000) _jmtApplyAsideW(saved);
         } catch (_) {}
-        _jmtLoadMemo();
+        setupJmtVResizer_();
         if (!window.__jmtResizeBound) {
             window.__jmtResizeBound = 1;
             window.addEventListener('resize', function () { requestAnimationFrame(syncJmtHeaderAlign_); });
