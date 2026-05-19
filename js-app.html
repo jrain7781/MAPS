@@ -24211,24 +24211,32 @@ MJ 이정우 팀장
         onJmTreeAllChange(cb);
     }
 
-    // 리스트 헤더 높이를 그리드 헤더(필터바+요약+thead)에 맞춰 → 허그포기 행이 그리드 첫 행과 정렬
+    // 메모(편집) 영역 — 카운팅바와 리스트 사이. 자동저장 + 그 공간으로 리스트를 그리드 첫 행에 정렬
+    var JMT_MEMO_KEY = 'jmt_memo_v1';
+    var _jmtMemoT = null;
+    function _jmtLoadMemo() {
+        var el = document.getElementById('jmtMemo');
+        if (!el) return;
+        try { el.value = localStorage.getItem(JMT_MEMO_KEY) || ''; } catch (_) {}
+    }
+    function onJmtMemoInput() {
+        clearTimeout(_jmtMemoT);
+        _jmtMemoT = setTimeout(function () {
+            try { localStorage.setItem(JMT_MEMO_KEY, document.getElementById('jmtMemo').value || ''); } catch (_) {}
+        }, 400);
+    }
+    // 좌측 셀렉트행=필터바 높이 → 카운팅바 top=그리드 요약줄 top.
+    // 카운팅바와 리스트 사이 메모영역 높이를 보정 → 첫 카드 top=그리드 첫 행 top
     function syncJmtHeaderAlign_() {
         try {
             var aside = document.getElementById('jmtAside'); if (!aside) return;
             var fb = document.querySelector('#JosaManagement .jm-filter-bar');
-            var ss = document.getElementById('jm-status-summary');
-            var thead = document.querySelector('#JosaManagement #jm-grid thead');
             var hdr = aside.querySelector('.jm-side-header');
-            var tb = document.getElementById('jmt-topbar');
-            if (!fb || !ss || !hdr || !tb) return;
+            var mw = document.getElementById('jmtMemoWrap');
+            if (!fb || !hdr || !mw) return;
             var fbH = fb.offsetHeight; if (fbH <= 0) return;
-            // 1) 좌측 셀렉트행 = 우측 필터바 높이 → 카운팅바 top = 그리드 요약줄 top
             hdr.style.boxSizing = 'border-box';
             hdr.style.minHeight = fbH + 'px';
-            tb.style.boxSizing = 'border-box';
-            var ssH = ss.offsetHeight, thH = thead ? thead.offsetHeight : 0;
-            tb.style.minHeight = (ssH + thH) + 'px';
-            // 2) 첫 카드 top 을 그리드 첫 데이터 행 top 에 정확히 맞춤 (ul 패딩/카드 마진 보정)
             requestAnimationFrame(function () {
                 try {
                     var c = document.querySelector('#jmt-list .jmt-card-head');
@@ -24236,8 +24244,8 @@ MJ 이정우 팀장
                     if (!c || !g) return;
                     var delta = Math.round(g.getBoundingClientRect().top - c.getBoundingClientRect().top);
                     if (!delta) return;
-                    var cur = parseFloat(getComputedStyle(tb).minHeight) || tb.offsetHeight;
-                    tb.style.minHeight = Math.max(0, cur + delta) + 'px';
+                    var curH = mw.getBoundingClientRect().height;
+                    mw.style.height = Math.max(54, Math.round(curH + delta)) + 'px';
                 } catch (_) {}
             });
         } catch (_) {}
@@ -24253,6 +24261,7 @@ MJ 이정우 팀장
             var saved = parseInt(localStorage.getItem(JMT_ASIDE_W_KEY) || '', 10);
             if (!isNaN(saved) && saved >= 280 && saved <= 1000) _jmtApplyAsideW(saved);
         } catch (_) {}
+        _jmtLoadMemo();
         if (!window.__jmtResizeBound) {
             window.__jmtResizeBound = 1;
             window.addEventListener('resize', function () { requestAnimationFrame(syncJmtHeaderAlign_); });
