@@ -23739,10 +23739,11 @@ MJ 이정우 팀장
         ids.forEach(function (id) { if (jmSelectedPresetIds.has(id)) n++; });
         return n === 0 ? 'none' : (n === ids.length ? 'all' : 'some');
     }
-    // 서브트리 내 jmItems 카운트 — (총, 분류필요, 진행중, 폐기)
+    // 서브트리 내 jmItems 카운트 — (전체, 분류필요, 조사중, 조사완료, 폐기)
+    // 조사중 = 조사예정·조사요청·조사접수·조사확정·조사불가
     function _jmtSubtreeCounts(node) {
         var idsSet = new Set(_jmtCollectIds(node));
-        var total = 0, bunryu = 0, jin = 0, pye = 0;
+        var total = 0, bunryu = 0, jin = 0, done = 0, pye = 0;
         (jmItems || []).forEach(function (it) {
             var pids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); });
             if (!pids.some(function (id) { return idsSet.has(id); })) return;
@@ -23750,21 +23751,63 @@ MJ 이정우 팀장
             var s = String(it.josa_status || '분류필요');
             if (s === '분류필요') bunryu++;
             else if (s === '폐기') pye++;
-            else if (s === '조사요청' || s === '조사접수' || s === '조사확정' || s === '조사불가') jin++;
+            else if (s === '조사완료') done++;
+            else if (s === '조사예정' || s === '조사요청' || s === '조사접수' || s === '조사확정' || s === '조사불가') jin++;
             else bunryu++;  // 알 수 없는 상태는 분류필요로
         });
-        return { total: total, bunryu: bunryu, jin: jin, pye: pye };
+        return { total: total, bunryu: bunryu, jin: jin, done: done, pye: pye };
     }
     function _jmtCountsHtml(c) {
         return '<span class="jmt-counts">' +
-               '<span class="jmt-cnt-total">' + c.total + '</span>' +
+               '<span class="jmt-cnt-total" title="전체">' + c.total + '</span>' +
                '<span class="sep">·</span>' +
                '<span class="jmt-cnt-bunryu" title="분류필요">' + c.bunryu + '</span>' +
                '<span class="sep">·</span>' +
-               '<span class="jmt-cnt-jin" title="진행중(요청/접수/확정/불가)">' + c.jin + '</span>' +
+               '<span class="jmt-cnt-jin" title="조사중(예정/요청/접수/확정/불가)">' + c.jin + '</span>' +
+               '<span class="sep">·</span>' +
+               '<span class="jmt-cnt-done" title="조사완료">' + c.done + '</span>' +
                '<span class="sep">·</span>' +
                '<span class="jmt-cnt-pye" title="폐기">' + c.pye + '</span>' +
                '</span>';
+    }
+    // 상단 전체 카운팅 바: 카테고리→상태집합 매핑 (조사중=5개 상태)
+    var JMT_CNT_CATS = {
+        total:  null,
+        bunryu: ['분류필요'],
+        jin:    ['조사예정', '조사요청', '조사접수', '조사확정', '조사불가'],
+        done:   ['조사완료'],
+        pye:    ['폐기']
+    };
+    function _jmtCountCatActive(cat) {
+        var arr = JMT_CNT_CATS[cat];
+        if (!arr) return JM_FILTER_STATUS.size === 0;
+        if (JM_FILTER_STATUS.size !== arr.length) return false;
+        return arr.every(function (s) { return JM_FILTER_STATUS.has(s); });
+    }
+    function jmtCountFilter(cat) {
+        JM_FILTER_STATUS.clear();
+        var arr = JMT_CNT_CATS[cat];
+        if (arr) arr.forEach(function (s) { JM_FILTER_STATUS.add(s); });
+        // 폐기 카운트 클릭 시 '폐기 제외' 필터 자동 해제 (안 그러면 0건)
+        if (cat === 'pye') { var ep = document.getElementById('jm-exclude-polye'); if (ep && ep.checked) ep.checked = false; }
+        if (typeof updateJmMultiLabel === 'function') updateJmMultiLabel('status');
+        applyJosaFilters();
+        renderJmtTopBar();
+    }
+    function renderJmtTopBar() {
+        var bar = document.getElementById('jmt-topbar');
+        if (!bar) return;
+        var c = _jmtSubtreeCounts(_jmtBuildTree(_jmtOrderedPresets()));
+        function chip(cat, label, val, cls) {
+            return '<button type="button" class="jmt-tb ' + cls + (_jmtCountCatActive(cat) ? ' on' : '') +
+                   '" onclick="jmtCountFilter(\'' + cat + '\')">' + label + ' <b>' + val + '</b></button>';
+        }
+        bar.innerHTML =
+            chip('total', '전체', c.total, 'tb-total') +
+            chip('bunryu', '분류필요', c.bunryu, 'tb-bunryu') +
+            chip('jin', '조사중', c.jin, 'tb-jin') +
+            chip('done', '조사완료', c.done, 'tb-done') +
+            chip('pye', '폐기', c.pye, 'tb-pye');
     }
     function _jmtRenderLeaf(p, depth, isLast) {
         var checked = jmSelectedPresetIds.has(p.preset_id) ? 'checked' : '';
@@ -23775,13 +23818,11 @@ MJ 이정우 팀장
         // 라벨 = 마지막 hyphen 토큰
         var parts = String(p.preset_title || '').split('-').map(function (s) { return s.trim(); }).filter(Boolean);
         var label = parts.length ? parts[parts.length - 1] : (p.preset_title || '(제목없음)');
-        var delBtn = '<button type="button" class="jmt-del" onclick="event.stopPropagation(); onJmDeletePreset(\'' + escAttr(p.preset_id) + '\', event)" title="이 리스트 삭제">✕</button>';
         return '<li class="jmt-item' + (deleted ? ' deleted' : '') + '" data-id="' + escAttr(p.preset_id) + '" data-kind="leaf" data-depth="' + depth + '" draggable="true" style="padding-left:' + (depth * 16 + 8) + 'px">' +
                '<span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>' +
                '<input type="checkbox" class="jmt-row-chk" data-id="' + escAttr(p.preset_id) + '" ' + checked + '>' +
                '<span class="jmt-name" title="' + escAttr(p.preset_title || '') + '">' + escHtml(label) + (deleted ? ' <span class="text-[10px] text-red-600">[삭제]</span>' : '') + '</span>' +
                _jmtCountsHtml(c) +
-               delBtn +
                '</li>';
     }
     function _jmtRenderChildren(node, depth, collapsed) {
@@ -23803,6 +23844,7 @@ MJ 이정우 팀장
                     '<span class="drag-handle">⋮⋮</span>' +
                     '<input type="checkbox" class="jmt-branch-check" ' + (cs === 'all' ? 'checked' : '') + ' title="이 그룹 전체 선택/해제">' +
                     '<span class="jmt-branch-label">' + escHtml(child.label) + '</span>' +
+                    '<span class="jmt-kidcount" title="하위 단계 개수">(' + (child.children.size + child.presets.length) + ')</span>' +
                     _jmtCountsHtml(c) +
                     '</li>';
             if (!isCollapsed) html += _jmtRenderChildren(child, depth + 1, collapsed);
@@ -23821,6 +23863,7 @@ MJ 이정우 팀장
                '<span class="drag-handle">⋮⋮</span>' +
                '<input type="checkbox" class="jmt-card-check" ' + (cs === 'all' ? 'checked' : '') + ' title="이 카드 전체 선택/해제">' +
                '<span class="jmt-card-title">' + escHtml(top.label) + '</span>' +
+               '<span class="jmt-kidcount" title="하위 단계 개수">(' + (top.children.size + top.presets.length) + ')</span>' +
                _jmtCountsHtml(c) +
                '</div>' +
                '<ul class="jmt-card-body' + (isCollapsed ? ' collapsed' : '') + '">' + body + '</ul>' +
@@ -23898,7 +23941,15 @@ MJ 이정우 팀장
         // leaf
         list.querySelectorAll('.jmt-item').forEach(function (el) {
             _jmtBindDrag(el, 'leaf');
-            // leaf 클릭 시 — MAPS 는 active preset 개념 없음. 체크박스/✕는 stopPropagation.
+            // leaf 행(체크박스/드래그핸들 외) 클릭 → 선택 토글 + 그리드 반영 (체크박스 직접 클릭은 개별 동작 유지)
+            el.addEventListener('click', function (e) {
+                var cl = e.target && e.target.classList;
+                if (cl && (cl.contains('jmt-row-chk') || cl.contains('drag-handle'))) return;
+                var id = el.dataset.id;
+                if (jmSelectedPresetIds.has(id)) jmSelectedPresetIds.delete(id); else jmSelectedPresetIds.add(id);
+                renderJosaTree();
+                applyJosaFilters();
+            });
         });
         // leaf 체크박스
         list.querySelectorAll('.jmt-row-chk').forEach(function (cb) {
@@ -23919,7 +23970,12 @@ MJ 이정우 팀장
                 var path = b.dataset.path;
                 if (c.has(path)) c.delete(path); else c.add(path);
                 _jmtSaveCollapsed(c);
+                // 행 클릭 시 체크박스도 연동: 전체선택 상태면 해제, 아니면 선택
+                var ids = String(b.dataset.ids || '').split(',').filter(Boolean);
+                if (_jmtBranchCheckState(ids) === 'all') ids.forEach(function (id) { jmSelectedPresetIds.delete(id); });
+                else ids.forEach(function (id) { jmSelectedPresetIds.add(id); });
                 renderJosaTree();
+                applyJosaFilters();
             });
             _jmtBindDrag(b, 'branch');
         });
@@ -23944,7 +24000,12 @@ MJ 이정우 팀장
                 var path = h.dataset.path;
                 if (c.has(path)) c.delete(path); else c.add(path);
                 _jmtSaveCollapsed(c);
+                // 행 클릭 시 체크박스도 연동: 전체선택 상태면 해제, 아니면 선택
+                var ids = String(h.dataset.ids || '').split(',').filter(Boolean);
+                if (_jmtBranchCheckState(ids) === 'all') ids.forEach(function (id) { jmSelectedPresetIds.delete(id); });
+                else ids.forEach(function (id) { jmSelectedPresetIds.add(id); });
                 renderJosaTree();
+                applyJosaFilters();
             });
         });
         // card 체크박스
@@ -23973,6 +24034,7 @@ MJ 이정우 팀장
             if (cb) cb.indeterminate = (_jmtBranchCheckState(ids) === 'some');
         });
         syncJmTreeAllState();
+        renderJmtTopBar();
     }
     // 상단 [선택 삭제] 핸들러
     function onJmtDeleteSelected() {
@@ -24051,10 +24113,30 @@ MJ 이정우 팀장
         else { all.checked = false; all.indeterminate = true; }
     }
 
+    // 트리 내 접기 토글 대상(카드+브랜치) 전체 경로 수집
+    function _jmtAllCollapsePaths() {
+        var tree = _jmtBuildTree(_jmtOrderedPresets());
+        var paths = [];
+        tree.children.forEach(function (top) {
+            paths.push(top.path);
+            (function walk(n) {
+                n.children.forEach(function (c) {
+                    var simple = (c.children.size === 0 && c.presets.length === 1);
+                    if (!simple) { paths.push(c.path); walk(c); }
+                });
+            })(top);
+        });
+        return paths;
+    }
     function onJmTreeAllChange(el) {
         var checked = !!el.checked;
         jmSelectedPresetIds = new Set();
-        if (checked) jmPresets.forEach(function (p) { jmSelectedPresetIds.add(p.preset_id); });
+        if (checked) {
+            jmPresets.forEach(function (p) { jmSelectedPresetIds.add(p.preset_id); });
+            _jmtSaveCollapsed(new Set());                 // 모든 단계 펼침
+        } else {
+            _jmtSaveCollapsed(new Set(_jmtAllCollapsePaths())); // 모든 단계 접기
+        }
         renderJosaTree();
         applyJosaFilters();
     }
