@@ -23800,7 +23800,11 @@ MJ 이정우 팀장
                    '" title="클릭: 그리드 이 상태만 필터" onclick="jmtCountFilter(\'' + cat + '\')">' +
                    '<i>' + label + '</i><b>' + val + '</b></span>';
         }
+        var _tot = jmPresets.length, _sel = jmSelectedPresetIds.size;
+        var _ck = (_sel > 0 && _sel === _tot) ? ' checked' : '';
         bar.innerHTML =
+            '<input type="checkbox" id="jm-tree-all"' + _ck + ' title="전체 선택/해제 + 모두 펼침/접기"' +
+            ' onchange="onJmTreeAllChange(this)" style="width:13px;height:13px;flex-shrink:0;margin-right:6px;accent-color:#4f46e5">' +
             '<span class="jmt-hlead">크롤링리스트</span>' +
             '<span class="jmt-rb">' +
             hc('total', '전체', c.total, 'nc-all') +
@@ -23809,6 +23813,8 @@ MJ 이정우 팀장
             hc('done', '완료', c.done, 'nc-done') +
             hc('pye', '폐기', c.pye, 'nc-pye') +
             '</span>';
+        var _allcb = document.getElementById('jm-tree-all');
+        if (_allcb) _allcb.indeterminate = (_sel > 0 && _sel < _tot);
     }
     function _jmtRenderLeaf(p, depth, isLast) {
         var checked = jmSelectedPresetIds.has(p.preset_id) ? 'checked' : '';
@@ -24056,6 +24062,7 @@ MJ 이정우 팀장
         _jmtPopulateTitleSearch();
         syncJmTreeAllState();
         renderJmtTopBar();
+        requestAnimationFrame(syncJmtHeaderAlign_);
     }
     // 헤더 "제목 조회" select 옵션 = 최상위 카드 라벨. 선택 시 그 리스트 전체 선택 + 자동 필터
     function _jmtPopulateTitleSearch() {
@@ -24184,6 +24191,25 @@ MJ 이정우 팀장
         onJmTreeAllChange(cb);
     }
 
+    // 리스트 헤더 높이를 그리드 헤더(필터바+요약+thead)에 맞춰 → 허그포기 행이 그리드 첫 행과 정렬
+    function syncJmtHeaderAlign_() {
+        try {
+            var aside = document.getElementById('jmtAside'); if (!aside) return;
+            var fb = document.querySelector('#JosaManagement .jm-filter-bar');
+            var ss = document.getElementById('jm-status-summary');
+            var thead = document.querySelector('#JosaManagement #jm-grid thead');
+            var hdr = aside.querySelector('.jm-side-header');
+            var tb = document.getElementById('jmt-topbar');
+            if (!fb || !ss || !thead || !hdr || !tb) return;
+            var target = fb.offsetHeight + ss.offsetHeight + thead.offsetHeight;
+            if (target <= 0) return;
+            tb.style.paddingBottom = '';
+            var cur = hdr.offsetHeight + tb.offsetHeight;
+            var pad = target - cur;
+            if (pad > 0) tb.style.paddingBottom = pad + 'px';
+        } catch (_) {}
+    }
+
     // 리스트 ↔ 그리드 드래그 구분선 — 폭 localStorage 저장/복원
     var JMT_ASIDE_W_KEY = 'jmt_aside_w_v1';
     function _jmtApplyAsideW(w) {
@@ -24194,6 +24220,10 @@ MJ 이정우 팀장
             var saved = parseInt(localStorage.getItem(JMT_ASIDE_W_KEY) || '', 10);
             if (!isNaN(saved) && saved >= 280 && saved <= 1000) _jmtApplyAsideW(saved);
         } catch (_) {}
+        if (!window.__jmtResizeBound) {
+            window.__jmtResizeBound = 1;
+            window.addEventListener('resize', function () { requestAnimationFrame(syncJmtHeaderAlign_); });
+        }
         var sp = document.getElementById('jmtSplitter');
         var aside = document.getElementById('jmtAside');
         if (!sp || !aside || sp.dataset.bound) return;
@@ -24474,18 +24504,24 @@ MJ 이정우 팀장
         // 단, 필터된 결과 카운트도 함께 표시 (filtered = 화면 표시 기준)
         var filteredCounts = {}; JM_STATUS_ALL.forEach(function (k) { filteredCounts[k] = 0; });
         filtered.forEach(function (it) { var s = it.josa_status; if (filteredCounts[s] !== undefined) filteredCounts[s]++; });
-        var totalActive = (JM_FILTER_STATUS.size === 0);
-        var totalCls = totalActive ? ' jm-summary-btn-active' : '';
-        var html = '<button type="button" onclick="toggleJmSummaryFilter(\'\')" class="jm-summary-btn bg-white text-gray-700' + totalCls + '">총 <strong>' + filtered.length + '</strong></button>';
-        html += Object.keys(filteredCounts).map(function (k) {
-            var active = JM_FILTER_STATUS.has(k);
-            var actCls = active ? ' jm-summary-btn-active' : '';
-            return '<button type="button" onclick="toggleJmSummaryFilter(\'' + k + '\')" class="jm-summary-btn' + actCls + '" style="' + _jmStStyle(k) + '">' + k + ' <strong>' + filteredCounts[k] + '</strong></button>';
+        // 전체 = 선택 트리 내 모든 상태 합(폐기 포함). 총 → 전체
+        var grand = 0; JM_STATUS_ALL.forEach(function (k) { grand += counts[k]; });
+        function txt(onclick, active, color, label, val, ml) {
+            return '<span onclick="' + onclick + '" title="클릭: 이 상태만 그리드" style="cursor:pointer;font-weight:' +
+                   (active ? '800' : '600') + ';' + (color ? 'color:' + color + ';' : '') +
+                   (active ? 'text-decoration:underline;' : '') + (ml ? 'margin-left:' + ml + ';' : '') +
+                   '">' + label + ' <strong>' + val + '</strong></span>';
+        }
+        var html = txt("toggleJmSummaryFilter('')", JM_FILTER_STATUS.size === 0, '#0f172a', '전체', grand, '');
+        html += Object.keys(counts).map(function (k) {
+            return txt("toggleJmSummaryFilter('" + k + "')", JM_FILTER_STATUS.has(k),
+                       (JM_STATUS_HEX[k] && JM_STATUS_HEX[k][0]) || '#374151', k, counts[k], '10px');
         }).join('');
-        // ★ [선택보기] 버튼 — 그리드에 체크된 행을 모달로 (좌측 상세 + 우측 리스트, 드래그 가능, dim 없음)
-        html += '<button type="button" onclick="openJmSelectViewModal()" class="jm-summary-btn bg-yellow-100 text-yellow-800 ml-2" title="체크된 행을 좌측 상세 + 우측 리스트 모달로 보기. 모달은 드래그로 이동 가능, 페이지 동시 사용 가능">📑 선택보기</button>';
-        html += '<button type="button" onclick="openJmTelegramSendModalFromGrid()" class="jm-summary-btn bg-sky-100 text-sky-800 ml-1" title="체크된 행을 조사요청 텔레그램으로 전송. 조사자 없으면 입력/일괄지정 후 전송">✈ 조사요청전송</button>';
+        // 선택보기 / 조사요청전송 — 버튼 모양 없이 글자 안내
+        html += '<span onclick="openJmSelectViewModal()" title="체크된 행을 좌측 상세 + 우측 리스트 모달로 보기" style="cursor:pointer;font-weight:700;color:#b45309;margin-left:16px">📑 선택보기</span>';
+        html += '<span onclick="openJmTelegramSendModalFromGrid()" title="체크된 행을 조사요청 텔레그램으로 전송" style="cursor:pointer;font-weight:700;color:#0369a1;margin-left:12px">✈ 조사요청전송</span>';
         bar.innerHTML = html;
+        if (typeof syncJmtHeaderAlign_ === 'function') requestAnimationFrame(syncJmtHeaderAlign_);
     }
 
     // ── [선택보기] 리스트 = 독립 브라우저 창 / 상세 = 옥션원 ca_view 별도 창 ──
