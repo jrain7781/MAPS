@@ -7723,13 +7723,49 @@ function _updateJosaPresetUploadStat_(presetId, presetTitle) {
  * [JM] MAPS 새 화면 초기 데이터 일괄 로드 (google.script.run 단일 호출용)
  * 3개 따로 호출 시 chained call 문제가 생길 수 있어 단일 wrapper 로 묶음.
  */
+// 사건번호 정규화: "2023타경6542" / "23타경6542" / 공백 → "23타경6542" 통일
+function _jmSakunKey_(s) {
+  s = String(s || '').trim();
+  var m = s.match(/(\d{2,4})\s*타경\s*0*(\d+)/);
+  if (!m) return s.replace(/\s+/g, '');
+  var y = m[1]; if (y.length >= 4) y = y.slice(2); else if (y.length === 1) y = '0' + y;
+  return y + '타경' + m[2];
+}
+// items 시트에서 image_id 있는 사건번호 Set (조사내용 버튼 노출 판단용)
+function _jmItemsWithImageSet_() {
+  var set = {};
+  try {
+    var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sh) return set;
+    var lr = sh.getLastRow();
+    if (lr < 2) return set;
+    var skCol = ITEM_HEADERS.indexOf('sakun_no') + 1;
+    var imgCol = ITEM_HEADERS.indexOf('image_id') + 1;
+    if (skCol < 1 || imgCol < 1) return set;
+    var lo = Math.min(skCol, imgCol), hi = Math.max(skCol, imgCol);
+    var vals = sh.getRange(2, lo, lr - 1, hi - lo + 1).getValues();
+    var sRel = skCol - lo, iRel = imgCol - lo;
+    for (var r = 0; r < vals.length; r++) {
+      var img = String(vals[r][iRel] || '').trim();
+      if (!img) continue;
+      var k = _jmSakunKey_(vals[r][sRel]);
+      if (k) set[k] = true;
+    }
+  } catch (e) {}
+  return set;
+}
 function jmLoadAllData() {
   try {
+    var items = readAllJosaItems();
+    var imgSet = _jmItemsWithImageSet_();
+    items.forEach(function (it) {
+      it.bid_img = !!imgSet[_jmSakunKey_(it.sakun_no)];
+    });
     return {
       success: true,
       investigators: getInvestigators(),
       presets: readAllJosaPresets(),
-      items: readAllJosaItems()
+      items: items
     };
   } catch (e) {
     return { success: false, error: String(e), stack: e && e.stack ? String(e.stack).substring(0, 500) : '' };

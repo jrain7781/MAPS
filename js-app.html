@@ -24516,13 +24516,14 @@ MJ 이정우 팀장
         filtered.forEach(function (it) { var s = it.josa_status; if (counts[s] !== undefined) counts[s]++; });
         var grand = filtered.length;
         // 한 상태 = 그 상태색 글자 + 색 밑줄 (활성 시 굵게)
-        function seg(k, ml) {
+        function seg(k, ml, blackText) {
             var active = JM_FILTER_STATUS.has(k);
             var col = (JM_STATUS_HEX[k] && JM_STATUS_HEX[k][0]) || '#374151';
+            var txtCol = blackText ? '#111827' : col;
             return '<span onclick="toggleJmSummaryFilter(\'' + k + '\')" title="클릭: 이 상태만 그리드"' +
-                   ' style="cursor:pointer;color:' + col + ';font-weight:' + (active ? '800' : '700') +
-                   ';text-decoration:underline;text-decoration-color:' + col + ';text-underline-offset:3px' +
-                   (ml ? ';margin-left:' + ml : '') + '">' + k + ' <strong style="color:' + col + '">' + counts[k] + '</strong></span>';
+                   ' style="cursor:pointer;color:' + txtCol + ';font-weight:' + (active ? '800' : '700') +
+                   ';text-decoration:underline;text-decoration-color:' + col + ';text-decoration-thickness:2.5px;text-underline-offset:3px' +
+                   (ml ? ';margin-left:' + ml : '') + '">' + k + ' <strong style="color:' + txtCol + '">' + counts[k] + '</strong></span>';
         }
         // 선택보기 / 조사요청전송 — 버튼, 테두리 진하게 같은 톤
         var html = '<button type="button" onclick="openJmSelectViewModal()" title="체크된 행을 좌측 상세 + 우측 리스트 모달로 보기" class="jm-summary-act" style="background:#fde68a;color:#92400e;border:1px solid #b45309">📑 선택보기</button>';
@@ -24535,7 +24536,7 @@ MJ 이정우 팀장
         // 조사예정~조사불가 = 한 묶음(연한 배경 버튼 모양)
         var midKeys = ['조사예정', '조사요청', '조사접수', '조사확정', '조사불가'];
         html += '<span style="display:inline-flex;align-items:center;gap:10px;margin-left:12px;padding:3px 10px;border-radius:6px;background:#eef2ff;border:1px solid #c7d2fe">' +
-                midKeys.map(function (k) { return seg(k, ''); }).join('') + '</span>';
+                midKeys.map(function (k) { return seg(k, '', true); }).join('') + '</span>';
         html += seg('조사완료', '12px');
         html += seg('폐기', '12px');
         bar.innerHTML = html;
@@ -24819,16 +24820,8 @@ MJ 이정우 팀장
             var auctionBtn = it.view_url
                 ? '<button type="button" onclick="window.open(\'' + escAttr(it.view_url) + '\',\'_auction\',\'width=896,height=900,left=100,top=50,resizable=yes,scrollbars=yes\')" class="jm-cell-btn jm-btn-auction">옥션원</button>'
                 : '';
-            // 조사내용 버튼: 매칭 입찰물건(items)에 이미지가 등록된 경우에만 표시 (옥션원 옆, 동일 크기)
-            var hasBidImg = false;
-            try {
-                if (typeof allBiddingData !== 'undefined' && Array.isArray(allBiddingData) && it.sakun_no) {
-                    var sk = String(it.sakun_no).trim();
-                    var bdRec = allBiddingData.find(function (d) { return String(d.sakun_no || '').trim() === sk; });
-                    hasBidImg = !!(bdRec && (String(bdRec.image_id || '').trim() || String(bdRec.image_ids || '').trim()));
-                }
-            } catch (e) {}
-            var josaBtn = hasBidImg
+            // 조사내용 버튼: 백엔드가 내려준 bid_img(=items 시트에 해당 사건 이미지 있음) 일 때만
+            var josaBtn = it.bid_img
                 ? '<button type="button" onclick="openJosaContentModal(\'' + escAttr(it.josa_id) + '\')" class="jm-cell-btn jm-btn-josa">조사내용</button>'
                 : '';
             var sakunCell = '<div class="' + sakunCls + '" title="' + escAttr(sakunTip) + '">' + escHtml(it.sakun_no || '') + '</div>' +
