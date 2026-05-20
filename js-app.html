@@ -1810,7 +1810,7 @@
             if (allBiddingData.length > 0) {
                 let msg = "검색어와 일치하는 데이터가 없습니다.";
                 if (dashboardFilter.active) msg = "해당 필터 조건에 맞는 데이터가 없습니다.";
-                dataTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500">${msg}</td></tr>`;
+                dataTableBody.innerHTML = `<tr><td colspan="12" class="p-4 text-center text-gray-500">${msg}</td></tr>`;
             } else {
                 if (noDataMessage) noDataMessage.classList.remove('content-hidden');
             }
@@ -1922,10 +1922,9 @@
                 }
                 cell.className = 'item-col-manager text-center';
                 cell = row.insertCell(10);
+                const _bpNum = parseInt(String(item.bidprice || 0).replace(/,/g, ''), 10) || 0;
                 {
-                    const bp = item.bidprice || 0;
-                    const bpNum = parseInt(String(bp).replace(/,/g, ''), 10);
-                    cell.textContent = (bpNum > 0) ? new Intl.NumberFormat('ko-KR').format(bpNum) + '원' : '';
+                    cell.textContent = (_bpNum > 0) ? new Intl.NumberFormat('ko-KR').format(_bpNum) + '원' : '';
                     // 전달완료/확인완료 외엔 붉은색 (신규/빈값/기타)
                     // .item-list-table .item-col-bidprice CSS가 text-red-600 클래스를 덮어쓰므로 inline style 사용
                     const bidState = String(item.bid_state || '').trim();
@@ -1933,15 +1932,31 @@
                     cell.className = 'item-col-bidprice bidprice-cell';
                     cell.style.color = isDelivered ? '' : '#dc2626';
                 }
+                // [NEW] 최저가 대비 율 컬럼
+                cell = row.insertCell(11);
+                {
+                    const lowNum = parseInt(String(item.lowest_price || 0).replace(/,/g, ''), 10) || 0;
+                    if (_bpNum > 0 && lowNum > 0) {
+                        const pct = Math.round(_bpNum / lowNum * 100);
+                        cell.textContent = pct + '%';
+                        cell.style.color = pct >= 130 ? '#dc2626' : '#2563eb';
+                        cell.style.fontWeight = '700';
+                    } else {
+                        cell.textContent = '';
+                        cell.style.color = '';
+                        cell.style.fontWeight = '';
+                    }
+                    cell.className = 'item-col-bidratio text-center';
+                }
 
                 // 전송 컬럼이 있다면 제거 (즉시 실행)
                 const existingActionCells = row.querySelectorAll('.item-col-action');
                 existingActionCells.forEach(c => c.remove());
 
-                // 혹시 모를 추가 셀 제거 (12번째 셀 이상) - 안전하게
-                while (row.cells && row.cells.length > 11) {
+                // 혹시 모를 추가 셀 제거 (13번째 셀 이상) - 안전하게
+                while (row.cells && row.cells.length > 12) {
                     try {
-                        row.deleteCell(11);
+                        row.deleteCell(12);
                     } catch (e) {
                         break;
                     }
@@ -4756,6 +4771,9 @@
             const price = data.bidprice;
             if (formBidPrice) formBidPrice.value = (price == 0 || price === '0') ? '' : new Intl.NumberFormat('ko-KR').format(price);
 
+            // [NEW] 보증금/최저가 표시 + 비율 계산
+            applyBidPriceMeta_('detail', data);
+
             // [NEW] 입찰가 상태(신규/전송됨) 버튼 초기화
             const currentBidState = data.bid_state || '신규'; // 기본값 신규
             setDetailBidState(currentBidState);
@@ -6078,6 +6096,9 @@
         const price = data.bidprice;
         if (modalFormBidPrice) modalFormBidPrice.value = (price == 0 || price === '0') ? '' : new Intl.NumberFormat('ko-KR').format(price);
 
+        // [NEW] 보증금/최저가 표시 + 비율 계산
+        applyBidPriceMeta_('modal', data);
+
         const savedBidState = data.bid_state || '';
         window._prevModalBidState = savedBidState; // 이중 전송 방지용: 원래 상태 기억
         setBidState(savedBidState);
@@ -7236,7 +7257,7 @@ MJ 이정우 팀장
     function loadData(forceRefresh = false) {
         if (typeof google === 'undefined' || !google.script || !google.script.run) {
             if (dataTableBody) {
-                dataTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-red-500 font-bold">⚠️ 오류: 이 코드는 구글 앱스 스크립트 환경이 아닙니다.</td></tr>`;
+                dataTableBody.innerHTML = `<tr><td colspan="12" class="p-4 text-center text-red-500 font-bold">⚠️ 오류: 이 코드는 구글 앱스 스크립트 환경이 아닙니다.</td></tr>`;
             }
             return;
         }
@@ -7265,7 +7286,7 @@ MJ 이정우 팀장
                 toggleLoading(false);
                 showStatus(`데이터 로드 실패: ${error.message}`, 'error');
                 if (dataTableBody) {
-                    dataTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-red-500">데이터 로드 중 오류가 발생했습니다.</td></tr>`;
+                    dataTableBody.innerHTML = `<tr><td colspan="12" class="p-4 text-center text-red-500">데이터 로드 중 오류가 발생했습니다.</td></tr>`;
                 }
             });
 
@@ -11737,7 +11758,7 @@ MJ 이정우 팀장
         // 로딩 메시지 row의 colspan이 깨졌을 수 있어 보정
         const firstRowTd = document.querySelector('#dataTableBody tr td[colspan]');
         if (firstRowTd) {
-            firstRowTd.setAttribute('colspan', '11');
+            firstRowTd.setAttribute('colspan', '12');
         }
     }
 
@@ -12749,6 +12770,37 @@ MJ 이정우 팀장
             populateD1ItemsManagerCheckboxes_();
         }
     }
+
+    // ── 보증금/최저가/입찰비율 표시 헬퍼 ──────────────────────────
+    // scope: 'detail' (입찰물건관리 상세) | 'modal' (입찰일정 모달)
+    function applyBidPriceMeta_(scope, data) {
+        const prefix = scope === 'modal' ? 'modal-' : 'detail-';
+        const dep = parseInt(String(data && data.deposit || 0).replace(/[^0-9]/g, ''), 10) || 0;
+        const low = parseInt(String(data && data.lowest_price || 0).replace(/[^0-9]/g, ''), 10) || 0;
+        const depEl = document.getElementById(prefix + 'deposit');
+        const lowEl = document.getElementById(prefix + 'lowest-price');
+        if (depEl) depEl.textContent = dep > 0 ? new Intl.NumberFormat('ko-KR').format(dep) + ' 원' : '';
+        if (lowEl) lowEl.textContent = low > 0 ? new Intl.NumberFormat('ko-KR').format(low) + ' 원' : '';
+        // 데이터 캐싱 (input oninput 에서 사용)
+        const bpInput = document.getElementById(scope === 'modal' ? 'modal-form-bidprice' : 'form-bidprice');
+        if (bpInput) bpInput.dataset.lowestPrice = String(low);
+        // 비율 즉시 계산
+        updateBidRatio_(scope);
+    }
+
+    function updateBidRatio_(scope) {
+        const ratioEl = document.getElementById((scope === 'modal' ? 'modal-' : 'detail-') + 'bid-ratio');
+        if (!ratioEl) return;
+        const bpInput = document.getElementById(scope === 'modal' ? 'modal-form-bidprice' : 'form-bidprice');
+        const low = parseInt(bpInput && bpInput.dataset.lowestPrice || '0', 10) || 0;
+        const bp = parseInt(String(bpInput && bpInput.value || '').replace(/[^0-9]/g, ''), 10) || 0;
+        if (!low || !bp) { ratioEl.textContent = ''; ratioEl.style.color = ''; return; }
+        const pct = Math.round(bp / low * 100);
+        ratioEl.textContent = '(' + pct + '%)';
+        ratioEl.style.color = pct >= 130 ? '#dc2626' : '#2563eb';
+    }
+    function updateBidRatioDetail_() { updateBidRatio_('detail'); }
+    function updateBidRatioModal_()  { updateBidRatio_('modal'); }
 
     // 수업관리 물건탭 - 담당 필터 체크박스 동적 생성
     // members 시트 gubun에 '강사' 포함된 멤버만, teacher_nickname || member_name 라벨, teacher_color 적용

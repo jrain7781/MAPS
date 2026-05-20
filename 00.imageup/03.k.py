@@ -27,10 +27,21 @@ LIST_FOLDER_NAME = "건별 캡쳐 리스트"
 LIST_FOLDER = os.path.join(SCRIPT_DIR, LIST_FOLDER_NAME)
 
 ACCOUNTS = [
-   {"id": "mjgold",   "pw": "28471298",   "manager": "대표님"},
-    {"id": "mjjang1",  "pw": "28471298",   "manager": "대표님"},
+   {"id": "mjgold",   "pw": "28471299",   "manager": "대표님"},
+    {"id": "mjjang1",  "pw": "28471297",   "manager": "대표님"},
    # {"id": "jjhsm81",  "pw": "marlboro81!", "manager": "전부쌤"}
 ]
+# [MJ 매니저 통합] 환경변수로 ACCOUNTS override
+import json as _mj_json
+_mj_env_acc = os.environ.get("MJ_IMAGEUP_ACCOUNTS_JSON")
+if _mj_env_acc:
+    try:
+        _mj_loaded = _mj_json.loads(_mj_env_acc)
+        if isinstance(_mj_loaded, list) and _mj_loaded:
+            ACCOUNTS = _mj_loaded
+            print(f"[MJ] ACCOUNTS env override: {len(ACCOUNTS)}개")
+    except Exception as _e:
+        print(f"[MJ] ACCOUNTS env parse 실패: {_e}")
 BASE_SAVE_DIR = r"G:\내 드라이브\MAPS\mapsimage"
 
 # 법원 관할 매칭: 재미나이 정리 스크립트 기반 (court_jurisdiction 모듈 사용)
@@ -41,6 +52,49 @@ SELECTOR_PW_DUMMY = "pw_Dummy"
 SELECTOR_PW_REAL = "passwd"
 SELECTOR_LOGIN_BTN = "//div[@id='login_btn_area']//a | //input[@type='image' and contains(@src, 'login')]"
 SKIP_KEYWORDS = ["나의 분류관리", "엑셀저장", "매각기일 변경공지", "정렬/보기", "검색"]
+
+# 옥션원 detail 페이지에서 보증금 추출 (관심물건 row 텍스트에 보증금이 없으므로)
+_DEPOSIT_CACHE = {}
+def fetch_deposit_from_detail(driver, product_id, type_prefix):
+    if not product_id:
+        return ""
+    cache_key = f"{type_prefix}:{product_id}"
+    if cache_key in _DEPOSIT_CACHE:
+        return _DEPOSIT_CACHE[cache_key]
+    if type_prefix == "공매":
+        url = f"https://www.auction1.co.kr/pubauct/view.php?product_id={product_id}"
+    else:
+        url = f"https://www.auction1.co.kr/auction/ca_view.php?product_id={product_id}"
+    try:
+        driver.set_script_timeout(15)
+        html = driver.execute_async_script(
+            "const url=arguments[0],cb=arguments[arguments.length-1];"
+            "fetch(url,{credentials:'include'})"
+            ".then(r=>r.arrayBuffer())"
+            ".then(buf=>new TextDecoder('euc-kr').decode(buf))"
+            ".then(t=>cb(t))"
+            ".catch(e=>cb('FETCH_ERR:'+(e&&e.message||e)));",
+            url
+        ) or ""
+        if html.startswith("FETCH_ERR"):
+            print(f"      [보증금 fetch 실패] pid={product_id}: {html[:200]}")
+            _DEPOSIT_CACHE[cache_key] = ""
+            return ""
+        patterns = [
+            r'(?:입찰\s*)?보증금?[\s\S]{0,400}?([0-9][\d,]{4,})\s*원?',
+            r'매수신청보증[\s\S]{0,400}?([0-9][\d,]{4,})\s*원?',
+            r'보\s*증\s*금[\s\S]{0,400}?([0-9][\d,]{4,})',
+        ]
+        for pat in patterns:
+            m = re.search(pat, html)
+            if m:
+                val = m.group(1).replace(",", "")
+                _DEPOSIT_CACHE[cache_key] = val
+                return val
+    except Exception as e:
+        print(f"      [보증금 detail fetch 오류] pid={product_id}: {e}")
+    _DEPOSIT_CACHE[cache_key] = ""
+    return ""
 
 
 def remove_popups_css(driver):
@@ -447,7 +501,22 @@ def process_list_page_capture_all(driver, save_dir, type_prefix, suffix="", mana
             safe_court = re.sub(r'[_]', "-", court_name)
             safe_court = re.sub(r'[\\/*?:"<>|]', "", safe_court)
             pid_suffix = f"_{product_id}" if product_id else ""
-            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}_{manager}{pid_suffix}.png"
+            # 보증금/최저가 추출 (콤마 제거, 라벨은 파일명에 안 붙임)
+            _m_dep = re.search(r'(?:입찰\s*)?보증(?:금)?\s*[:\s]*([0-9][\d,]*)', full_text)
+            _m_low = re.search(r'최저(?:매각가|가)?\s*[:\s]*([0-9][\d,]*)', full_text)
+            _dep = _m_dep.group(1).replace(",", "") if _m_dep else ""
+            _low = _m_low.group(1).replace(",", "") if _m_low else ""
+            # row 텍스트에 보증금 없으면 detail 페이지 fetch 로 추출
+            if not _dep and product_id:
+                _dep = fetch_deposit_from_detail(driver, product_id, type_prefix)
+                if _dep:
+                    print(f"    ✓ 보증금 detail 추출: {_dep}")
+                else:
+                    print(f"    ⚠ 보증금 detail 추출 실패 (product_id={product_id}, type={type_prefix})")
+            # 빈 값이어도 _ 는 항상 붙여서 위치 보존 (보증 자리/최저가 자리 명확히)
+            _dep_suffix = f"_{_dep}"
+            _low_suffix = f"_{_low}"
+            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}_{manager}{pid_suffix}{_dep_suffix}{_low_suffix}.png"
             file_path = os.path.join(save_dir, filename)
             
             if capture_combined_element(driver, header_element, item, file_path):
@@ -581,6 +650,22 @@ def run_macro(account, list_filepath):
 if __name__ == "__main__":
     import sys
     list_path = None
+    # [MJ 매니저 통합] env CASES JSON 우선 — UI에서 직접 입력한 사건번호 리스트
+    _mj_env_cases = os.environ.get("MJ_IMAGEUP_CASES_JSON")
+    if _mj_env_cases:
+        try:
+            _mj_cases = _mj_json.loads(_mj_env_cases)
+            if isinstance(_mj_cases, list) and _mj_cases:
+                # 임시 리스트 파일 생성 (LIST_FOLDER 내, MJ_TEMP_ prefix)
+                os.makedirs(LIST_FOLDER, exist_ok=True)
+                _mj_temp = os.path.join(LIST_FOLDER, datetime.datetime.now().strftime("%Y%m%d%H%M%S") + ".txt")
+                with open(_mj_temp, "w", encoding="utf-8") as _f:
+                    for _ln in _mj_cases:
+                        _f.write(str(_ln).strip() + "\n")
+                list_path = _mj_temp
+                print(f"[MJ] CASES env 사용: {len(_mj_cases)}건 → {_mj_temp}")
+        except Exception as _e:
+            print(f"[MJ] CASES env parse 실패: {_e}")
     if len(sys.argv) >= 2:
         list_path = sys.argv[1].strip()
     if not list_path or not os.path.isfile(list_path):

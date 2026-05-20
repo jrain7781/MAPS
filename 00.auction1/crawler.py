@@ -1096,6 +1096,13 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        # MJ 확장 라우터 (imageup / files / kakao)
+        try:
+            import mj_extensions as _mjx
+            if _mjx.handle_get(self):
+                return
+        except Exception as _e:
+            traceback.print_exc()
         # ping: 백엔드 살아있는지 빠른 감지용
         if self.path.startswith("/health"):
             self.send_response(200)
@@ -1135,6 +1142,13 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        # MJ 확장 라우터 (imageup / kakao)
+        try:
+            import mj_extensions as _mjx
+            if _mjx.handle_post(self):
+                return
+        except Exception as _e:
+            traceback.print_exc()
         # MAPS GAS 중계 엔드포인트 (매니저 JS → 이 서버 → GAS)
         if self.path in ("/api/maps-sync-presets", "/api/maps-upload-items", "/api/maps-gas"):
             self._handle_maps_proxy()

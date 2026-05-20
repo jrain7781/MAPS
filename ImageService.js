@@ -769,9 +769,21 @@ function syncImages(batchLimit = 100) {
         let name = nameWithoutExt;
         let auctionId = "";
         let regMember = "대표님";
+        let deposit = "";
+        let lowestPrice = "";
+
+        // [신규 형식] split 길이 7 이상: 사건_날짜_법원_매니저_pid_보증_최저
+        // [옛 형식] split 길이 5: 사건_날짜_법원_매니저_pid
+        // 길이로 판별 (매니저 영문/숫자/한글 무관, 보증/최저 빈 문자열도 OK)
+        let parts = name.split('_');
+        if (parts.length >= 7) {
+          lowestPrice = parts.pop().trim();
+          deposit = parts.pop().trim();
+          name = parts.join('_');
+        }
 
         // 1. 상품 ID 추출
-        let parts = name.split('_');
+        parts = name.split('_');
         if (parts.length > 3) {
           const lastPart = parts[parts.length - 1].trim();
           if (/^\d{4,12}$/.test(lastPart)) {
@@ -848,6 +860,9 @@ function syncImages(batchLimit = 100) {
           // [기존 물건 매칭] - 이미지/옥션ID 항상 업데이트 (충돌 여부 무관, 상태/담당자 유지)
           sheet.getRange(matchedRowIndex, 13).setValue(imageCode);
           if (auctionId) sheet.getRange(matchedRowIndex, 16).setValue(auctionId);
+          // 보증금(V=22), 최저가(W=23) — 파일명에 값 있을 때만 갱신
+          if (deposit) sheet.getRange(matchedRowIndex, 22).setValue(Number(deposit) || deposit);
+          if (lowestPrice) sheet.getRange(matchedRowIndex, 23).setValue(Number(lowestPrice) || lowestPrice);
           if (!isConflict) matchCount++;
         } else {
           // [신규 물건 등록]
@@ -859,6 +874,10 @@ function syncImages(batchLimit = 100) {
             newId, inDate, sakunNo, court, "상품", regMember, "", 0, "", regDate, "System", "신규", imageCode, "", "", auctionId
           ];
           sheet.appendRow(newRow);
+          // 신규 row 의 V/W 컬럼에 보증금/최저가 채움
+          const newRowIdx = sheet.getLastRow();
+          if (deposit) sheet.getRange(newRowIdx, 22).setValue(Number(deposit) || deposit);
+          if (lowestPrice) sheet.getRange(newRowIdx, 23).setValue(Number(lowestPrice) || lowestPrice);
           batchNewItems.set(cacheKey, { id: newId, uploader: regMember });
           newCount++;
         }

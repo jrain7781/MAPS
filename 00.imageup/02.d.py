@@ -22,6 +22,17 @@ ACCOUNTS = [
     {"id": "mjjang1",  "pw": "28471298",    "manager": "대표님"},
 #    {"id": "jjhsm81",  "pw": "marlboro81!!", "manager": "전부쌤"}
 ]
+# [MJ 매니저 통합] 환경변수로 ACCOUNTS override
+import json as _mj_json
+_mj_env_acc = os.environ.get("MJ_IMAGEUP_ACCOUNTS_JSON")
+if _mj_env_acc:
+    try:
+        _mj_loaded = _mj_json.loads(_mj_env_acc)
+        if isinstance(_mj_loaded, list) and _mj_loaded:
+            ACCOUNTS = _mj_loaded
+            print(f"[MJ] ACCOUNTS env override: {len(ACCOUNTS)}개")
+    except Exception as _e:
+        print(f"[MJ] ACCOUNTS env parse 실패: {_e}")
 
 # 저장 경로: 구글 드라이브 (웹 등록과 동일하게 유지)
 BASE_SAVE_DIR = r"G:\내 드라이브\MAPS\mapsimage"
@@ -37,6 +48,49 @@ SELECTOR_PW_REAL = "passwd"
 SELECTOR_LOGIN_BTN = "//div[@id='login_btn_area']//a | //input[@type='image' and contains(@src, 'login')]"
 SELECTOR_RADIO_GONGMAE = '//*[@id="itype2"]'
 SELECTOR_SEARCH_BTN = '//*[@id="btnSrch"]'
+
+# 옥션원 detail 페이지에서 보증금 추출 (관심물건 row 텍스트에 보증금이 없으므로)
+_DEPOSIT_CACHE = {}
+def fetch_deposit_from_detail(driver, product_id, type_prefix):
+    if not product_id:
+        return ""
+    cache_key = f"{type_prefix}:{product_id}"
+    if cache_key in _DEPOSIT_CACHE:
+        return _DEPOSIT_CACHE[cache_key]
+    if type_prefix == "공매":
+        url = f"https://www.auction1.co.kr/pubauct/view.php?product_id={product_id}"
+    else:
+        url = f"https://www.auction1.co.kr/auction/ca_view.php?product_id={product_id}"
+    try:
+        driver.set_script_timeout(15)
+        html = driver.execute_async_script(
+            "const url=arguments[0],cb=arguments[arguments.length-1];"
+            "fetch(url,{credentials:'include'})"
+            ".then(r=>r.arrayBuffer())"
+            ".then(buf=>new TextDecoder('euc-kr').decode(buf))"
+            ".then(t=>cb(t))"
+            ".catch(e=>cb('FETCH_ERR:'+(e&&e.message||e)));",
+            url
+        ) or ""
+        if html.startswith("FETCH_ERR"):
+            print(f"      [보증금 fetch 실패] pid={product_id}: {html[:200]}")
+            _DEPOSIT_CACHE[cache_key] = ""
+            return ""
+        patterns = [
+            r'(?:입찰\s*)?보증금?[\s\S]{0,400}?([0-9][\d,]{4,})\s*원?',
+            r'매수신청보증[\s\S]{0,400}?([0-9][\d,]{4,})\s*원?',
+            r'보\s*증\s*금[\s\S]{0,400}?([0-9][\d,]{4,})',
+        ]
+        for pat in patterns:
+            m = re.search(pat, html)
+            if m:
+                val = m.group(1).replace(",", "")
+                _DEPOSIT_CACHE[cache_key] = val
+                return val
+    except Exception as e:
+        print(f"      [보증금 detail fetch 오류] pid={product_id}: {e}")
+    _DEPOSIT_CACHE[cache_key] = ""
+    return ""
 
 SKIP_KEYWORDS = ["나의 분류관리", "엑셀저장", "매각기일 변경공지", "정렬/보기", "검색"]
 
@@ -85,12 +139,14 @@ def wait_for_ajax(driver, timeout=15):
 
 def apply_list_scale_and_search(driver):
     """개수: 20(#list_scale=20), 검색(#btnSrch) 클릭. 정렬은 건드리지 않음."""
-    # list_scale: JS 직접 설정 + change 이벤트 발생
+    # list_scale: JS 직접 설정 + change 이벤트 발생 (env MJ_IMAGEUP_LIMIT 우선)
+    _mj_limit = os.environ.get("MJ_IMAGEUP_LIMIT", "").strip() or "20"
     try:
-        driver.execute_script("""
+        driver.execute_script(f"""
             var s = document.getElementById('list_scale');
-            if(s) { s.value = '20'; s.dispatchEvent(new Event('change', {bubbles:true})); }
+            if(s) {{ s.value = '{_mj_limit}'; s.dispatchEvent(new Event('change', {{bubbles:true}})); }}
         """)
+        print(f"    ✓ list_scale 설정: {_mj_limit}")
         time.sleep(0.3)
     except:
         pass
@@ -417,7 +473,22 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
             safe_sakun = re.sub(r'[\\/*?:"<>|]', "", sakun_no)
             safe_court = re.sub(r'[\\/*?:"<>|]', "", court_name)
             pid_suffix = f"_{product_id}" if product_id else ""
-            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}_{manager}{pid_suffix}.png"
+            # 보증금/최저가 추출 (콤마 제거, 라벨은 파일명에 안 붙임)
+            _m_dep = re.search(r'(?:입찰\s*)?보증(?:금)?\s*[:\s]*([0-9][\d,]*)', full_text)
+            _m_low = re.search(r'최저(?:매각가|가)?\s*[:\s]*([0-9][\d,]*)', full_text)
+            _dep = _m_dep.group(1).replace(",", "") if _m_dep else ""
+            _low = _m_low.group(1).replace(",", "") if _m_low else ""
+            # row 텍스트에 보증금 없으면 detail 페이지 fetch 로 추출
+            if not _dep and product_id:
+                _dep = fetch_deposit_from_detail(driver, product_id, type_prefix)
+                if _dep:
+                    print(f"    ✓ 보증금 detail 추출: {_dep}")
+                else:
+                    print(f"    ⚠ 보증금 detail 추출 실패 (product_id={product_id}, type={type_prefix})")
+            # 빈 값이어도 _ 는 항상 붙여서 위치 보존 (보증 자리/최저가 자리 명확히)
+            _dep_suffix = f"_{_dep}"
+            _low_suffix = f"_{_low}"
+            filename = f"{safe_sakun}_{bid_date_str}_{safe_court}_{manager}{pid_suffix}{_dep_suffix}{_low_suffix}.png"
             file_path = os.path.join(save_dir, filename)
 
             if capture_combined_element(driver, header_element, item, file_path):
