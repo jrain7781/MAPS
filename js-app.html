@@ -12710,7 +12710,7 @@ MJ 이정우 팀장
         }).filter(Boolean);
         const uniq = [...new Set(labels)];
         const optHtml = uniq.map(l => `<option value="${escapeHtml(l)}" style="color:${colorByLabel[l]};font-weight:600">${escapeHtml(l)}</option>`).join('');
-        ['form-m-name-id', 'modal-form-m-name-id'].forEach(id => {
+        ['form-m-name-id', 'modal-form-m-name-id', 'd1new-m-name-id'].forEach(id => {
             const sel = document.getElementById(id);
             if (!sel) return;
             const cur = sel.value;
@@ -12718,6 +12718,43 @@ MJ 이정우 팀장
             // 기존 선택값 보존 (옵션에 있으면). 없으면 빈값 또는 첫 옵션.
             if (cur && uniq.includes(cur)) sel.value = cur;
         });
+        // 수업관리 물건탭 담당 필터 체크박스 (조회용) 동기화
+        if (typeof populateD1ItemsManagerCheckboxes_ === 'function') {
+            populateD1ItemsManagerCheckboxes_();
+        }
+    }
+
+    // 수업관리 물건탭 - 담당 필터 체크박스 동적 생성
+    // members 시트 gubun에 '강사' 포함된 멤버만, teacher_nickname || member_name 라벨, teacher_color 적용
+    function populateD1ItemsManagerCheckboxes_() {
+        const dd = document.getElementById('d1items-manager-dropdown');
+        if (!dd) return;
+        const members = Array.isArray(allMembersNewData) ? allMembersNewData : [];
+        const teachers = members.filter(m => String(m.gubun || '').split(',').map(s => s.trim()).includes('강사'));
+        const colorByLabel = {};
+        teachers.forEach(m => {
+            const nickname = String(m.teacher_nickname || '').trim();
+            const name = String(m.member_name || '').trim();
+            const label = nickname || name;
+            if (label && !(label in colorByLabel)) {
+                const tc = String(m.teacher_color || '').trim();
+                colorByLabel[label] = /^#[0-9a-fA-F]{6}$/.test(tc) ? tc : '#dc2626';
+            }
+        });
+        const uniq = Object.keys(colorByLabel);
+        // 기존 체크 상태 보존
+        const prevChecked = new Set(Array.from(dd.querySelectorAll('input[name="d1items-manager-cb"]:checked')).map(el => el.value));
+        const allCb = dd.querySelector('#d1items-manager-all');
+        const allChecked = allCb ? allCb.checked : true;
+        // 재구성: 전체 체크박스 + 강사별 체크박스
+        let html = `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-sm"><input type="checkbox" id="d1items-manager-all" value="All" ${allChecked ? 'checked' : ''} onchange="d1ItemsManagerAll_(this); applyD1ItemsFilters_()" class="rounded"> 전체</label>`;
+        uniq.forEach(label => {
+            const color = colorByLabel[label];
+            const styAttr = color ? ` style="color:${escapeHtml(color)};font-weight:600"` : '';
+            const checked = prevChecked.has(label) ? 'checked' : '';
+            html += `<label class="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1 text-sm"${styAttr}><input type="checkbox" name="d1items-manager-cb" value="${escapeHtml(label)}" ${checked} onchange="d1ItemsManagerOther_(this); applyD1ItemsFilters_()" class="rounded"> ${escapeHtml(label)}</label>`;
+        });
+        dd.innerHTML = html;
     }
 
     let allClassD1Data = [];
