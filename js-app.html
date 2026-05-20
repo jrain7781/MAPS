@@ -3601,7 +3601,10 @@
             const nick = String(m.teacher_nickname || '').trim();
             const name = String(m.member_name || '').trim();
             const label = nick || name;
-            if (label) colorByLabel[label] = String(m.teacher_color || '').trim();
+            if (label && !(label in colorByLabel)) {
+                const tc = String(m.teacher_color || '').trim();
+                colorByLabel[label] = /^#[0-9a-fA-F]{6}$/.test(tc) ? tc : '#dc2626';
+            }
         });
         // items raw 중 매핑 안 되는 값은 그대로 옵션 추가 (옛 데이터 호환)
         (allBiddingData || []).forEach(item => {
@@ -3609,7 +3612,8 @@
             if (!v || v === '개인') return;
             const r = resolveTeacherDisplay_(v);
             if (r.display && !(r.display in colorByLabel)) {
-                colorByLabel[r.display] = r.color || '';
+                const tc = String(r.color || '').trim();
+                colorByLabel[r.display] = /^#[0-9a-fA-F]{6}$/.test(tc) ? tc : '#dc2626';
             }
         });
         const sortedLabels = Object.keys(colorByLabel).sort();
@@ -9126,6 +9130,16 @@ MJ 이정우 팀장
                 if (typeof updateMemberDatalist === 'function') {
                     updateMemberDatalist();
                 }
+                // teacher_color 변경 시 즉시 반영: allMembersNewData 재로드 후 모든 색상 갱신
+                try {
+                    google.script.run
+                        .withSuccessHandler(d => {
+                            allMembersNewData = d || [];
+                            if (typeof populateMNameIdDropdowns_ === 'function') populateMNameIdDropdowns_();
+                            if (typeof updateDashboardFilterOptions === 'function') updateDashboardFilterOptions();
+                        })
+                        .readAllMembersNew();
+                } catch (e) {}
             })
             .withFailureHandler(error => {
                 console.error('회원 데이터 로드 실패:', error);
@@ -12710,6 +12724,13 @@ MJ 이정우 팀장
         }).filter(Boolean);
         const uniq = [...new Set(labels)];
         const optHtml = uniq.map(l => `<option value="${escapeHtml(l)}" style="color:${colorByLabel[l]};font-weight:600">${escapeHtml(l)}</option>`).join('');
+        // 선택된 옵션 색상을 select 텍스트 컬러에도 반영
+        const applyColor = (sel) => {
+            const opt = sel.options[sel.selectedIndex];
+            const c = opt ? (colorByLabel[opt.value] || opt.style.color || '') : '';
+            sel.style.color = c || '';
+            sel.style.fontWeight = c ? '600' : '';
+        };
         ['form-m-name-id', 'modal-form-m-name-id', 'd1new-m-name-id'].forEach(id => {
             const sel = document.getElementById(id);
             if (!sel) return;
@@ -12717,6 +12738,11 @@ MJ 이정우 팀장
             sel.innerHTML = optHtml;
             // 기존 선택값 보존 (옵션에 있으면). 없으면 빈값 또는 첫 옵션.
             if (cur && uniq.includes(cur)) sel.value = cur;
+            applyColor(sel);
+            if (!sel.dataset.mnColorBound) {
+                sel.dataset.mnColorBound = '1';
+                sel.addEventListener('change', () => applyColor(sel));
+            }
         });
         // 수업관리 물건탭 담당 필터 체크박스 (조회용) 동기화
         if (typeof populateD1ItemsManagerCheckboxes_ === 'function') {
@@ -14856,8 +14882,15 @@ ${token}
             const resizeHandleHtml = isFirstSessionTh
                 ? `<div class="d1sess-resize-handle" onmousedown="d1SessColResizeStart_(event)" title="드래그하여 모든 회차 폭 조정"></div>`
                 : '';
+            // 강사 배지 (닉네임/이름 첫 글자 + teacher_color)
+            const _tInfo = (typeof resolveTeacherById_ === 'function') ? resolveTeacherById_(d.teacher_id) : { display: '', color: '' };
+            const _tFirst = _tInfo.display ? Array.from(_tInfo.display)[0] : '';
+            const _tColor = (_tInfo.color && /^#[0-9a-fA-F]{6}$/.test(_tInfo.color)) ? _tInfo.color : '#dc2626';
+            const teacherBadgeHtml = _tFirst
+                ? `<span class="inline-flex items-center justify-center text-white font-bold ml-0.5" style="background-color:${_tColor};width:17px;height:17px;border-radius:50%;font-size:9px;line-height:1;vertical-align:middle" title="${escapeHtml(_tInfo.display)}">${escapeHtml(_tFirst)}</span>`
+                : '';
             sessionColHeaders += `<th class="d1-sess-th px-1 py-1 text-center cursor-pointer ${upcomingThClass}" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px;position:relative" onclick="sortSummaryBySession_(${d.class_loop})">
-                <div class="text-[11px] font-bold ${isUpcoming ? 'text-red-600' : (isHoliday ? 'text-gray-700' : 'text-blue-600')}">${d.class_loop}회</div>
+                <div class="text-[11px] font-bold ${isUpcoming ? 'text-red-600' : (isHoliday ? 'text-gray-700' : 'text-blue-600')}" style="display:inline-flex;align-items:center;justify-content:center;gap:1px">${d.class_loop}회${teacherBadgeHtml}</div>
                 <div class="text-[9px] font-semibold ${isUpcoming ? 'text-red-400' : (isHoliday ? 'text-gray-600' : 'text-blue-500')} whitespace-nowrap">${dateDisp} ${dayDisp}</div>
                 ${resizeHandleHtml}
             </th>`;
