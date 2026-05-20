@@ -14,7 +14,7 @@ const MEMBER_CLASS_DETAILS_SHEET_NAME_DB = 'member_class_details';
 
 // - m_name2: "선택된 명의 표시값" (예: "(MJ) 한한한") — 화면 복원/리스트 표시에 사용
 // - auction_id: "옥션 고유번호 (7자리)"
-const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'reg_date', 'reg_member', 'bid_state', 'image_id', 'note', 'm_name2', 'auction_id', 'chuchen_state', 'chuchen_date', 'class_d1_id', 'bid_datetime_2', 'items_youngdo'];
+const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'reg_date', 'reg_member', 'bid_state', 'image_id', 'note', 'm_name2', 'auction_id', 'chuchen_state', 'chuchen_date', 'class_d1_id', 'bid_datetime_2', 'items_youngdo', 'deposit', 'lowest_price'];
 // chuchen_state:  Q열(idx 16) - '신규'|'전달완료'
 // chuchen_date:   R열(idx 17) - 최근 전달 일시 (ISO string)
 // class_d1_id:    S열(idx 18) - 수업 회차 ID (수업 물건 연결용)
@@ -214,6 +214,10 @@ function readAllData() {
     }
     // [추가] 21번째 열(20번 인덱스, U열) items_youngdo (물건용도) 매핑
     rowData['items_youngdo'] = (row.length > 20) ? String(row[20] || '').trim() : '';
+    // [추가] 22번째 열(21번 인덱스, V열) deposit (보증금) 매핑
+    rowData['deposit'] = (row.length > 21) ? (row[21] || '') : '';
+    // [추가] 23번째 열(22번 인덱스, W열) lowest_price (최저가) 매핑
+    rowData['lowest_price'] = (row.length > 22) ? (row[22] || '') : '';
 
     // [추가] item_images 테이블에 이미지가 있는지 확인
     rowData['has_images'] = itemsWithImages.has(String(row[0]).trim());
