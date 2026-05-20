@@ -51,7 +51,7 @@ SELECTOR_SEARCH_BTN = '//*[@id="btnSrch"]'
 
 # 옥션원 detail 페이지에서 보증금 추출 (관심물건 row 텍스트에 보증금이 없으므로)
 _DEPOSIT_CACHE = {}
-def fetch_deposit_from_detail(driver, product_id, type_prefix):
+def fetch_deposit_from_detail(driver, product_id, type_prefix, _low_for_check=""):
     if not product_id:
         return ""
     cache_key = f"{type_prefix}:{product_id}"
@@ -77,16 +77,32 @@ def fetch_deposit_from_detail(driver, product_id, type_prefix):
             _DEPOSIT_CACHE[cache_key] = ""
             return ""
         patterns = [
-            r'(?:입찰\s*)?보증금?[\s\S]{0,400}?([0-9][\d,]{4,})\s*원?',
-            r'매수신청보증[\s\S]{0,400}?([0-9][\d,]{4,})\s*원?',
-            r'보\s*증\s*금[\s\S]{0,400}?([0-9][\d,]{4,})',
+            r'보\s*증\s*금[\s\S]{0,300}?\(\s*\d{1,3}(?:\.\d+)?\s*%\s*\)[\s\S]{0,50}?([1-9][\d,]{4,})',
+            r'보\s*증\s*금\s*</(?:th|td)>\s*<(?:th|td)[^>]*>[\s\S]{0,200}?([1-9][\d,]{4,})',
         ]
+        candidate = ""
         for pat in patterns:
             m = re.search(pat, html)
             if m:
-                val = m.group(1).replace(",", "")
-                _DEPOSIT_CACHE[cache_key] = val
-                return val
+                candidate = m.group(1).replace(",", "")
+                break
+        if candidate and _low_for_check:
+            try:
+                dep_num = int(candidate); low_num = int(_low_for_check)
+                if low_num > 0:
+                    ratio = dep_num / low_num
+                    if 0.05 <= ratio <= 0.35:
+                        _DEPOSIT_CACHE[cache_key] = candidate
+                        return candidate
+                    else:
+                        print(f"      ⚠ 보증금 sanity check 실패: {candidate} (최저가 {_low_for_check}의 {ratio*100:.1f}%)")
+                        _DEPOSIT_CACHE[cache_key] = ""
+                        return ""
+            except Exception:
+                pass
+        if candidate:
+            _DEPOSIT_CACHE[cache_key] = candidate
+            return candidate
     except Exception as e:
         print(f"      [보증금 detail fetch 오류] pid={product_id}: {e}")
     _DEPOSIT_CACHE[cache_key] = ""
@@ -480,7 +496,7 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
             _low = _m_low.group(1).replace(",", "") if _m_low else ""
             # row 텍스트에 보증금 없으면 detail 페이지 fetch 로 추출
             if not _dep and product_id:
-                _dep = fetch_deposit_from_detail(driver, product_id, type_prefix)
+                _dep = fetch_deposit_from_detail(driver, product_id, type_prefix, _low)
                 if _dep:
                     print(f"    ✓ 보증금 detail 추출: {_dep}")
                 else:

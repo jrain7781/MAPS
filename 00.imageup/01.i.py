@@ -51,7 +51,7 @@ SELECTOR_SEARCH_BTN = '//*[@id="btnSrch"]'
 
 # 옥션원 detail 페이지에서 보증금 추출 (관심물건 row 텍스트에 보증금이 없으므로)
 _DEPOSIT_CACHE = {}
-def fetch_deposit_from_detail(driver, product_id, type_prefix):
+def fetch_deposit_from_detail(driver, product_id, type_prefix, _low_for_check=""):
     if not product_id:
         return ""
     cache_key = f"{type_prefix}:{product_id}"
@@ -78,26 +78,66 @@ def fetch_deposit_from_detail(driver, product_id, type_prefix):
             return ""
         print(f"      [디버그] pid={product_id} HTML 길이: {len(html)}")
         # 보증금 여러 표현 시도
+        # 옥션원 detail 헤더 표: "보 증 금  (10%) 102,214,000원" 형태
+        # (NN%) 패턴 필수 → 등기부현황의 "채권액합계" 같은 % 없는 큰 수 매칭 방지
+        # 위험 패턴(폴백) 제거. 매칭 안되면 빈값 (잘못된 값보다 안전)
         patterns = [
-            r'(?:입찰\s*)?보증금?[\s\S]{0,400}?([0-9][\d,]{4,})\s*원?',
-            r'매수신청보증[\s\S]{0,400}?([0-9][\d,]{4,})\s*원?',
-            r'보\s*증\s*금[\s\S]{0,400}?([0-9][\d,]{4,})',
+            # 1순위: 보증금 라벨 + (XX%) + 숫자 (HTML 태그 사이 끼어있어도 OK)
+            r'보\s*증\s*금[\s\S]{0,300}?\(\s*\d{1,3}(?:\.\d+)?\s*%\s*\)[\s\S]{0,50}?([1-9][\d,]{4,})',
+            # 2순위: <th>보증금</th><td>...</td> 인접 셀 안의 숫자
+            r'보\s*증\s*금\s*</(?:th|td)>\s*<(?:th|td)[^>]*>[\s\S]{0,200}?([1-9][\d,]{4,})',
         ]
+        candidate = ""
         for pat in patterns:
             m = re.search(pat, html)
             if m:
-                val = m.group(1).replace(",", "")
-                _DEPOSIT_CACHE[cache_key] = val
-                return val
-        # 매칭 안 됨 → 보증금 단어 위치 출력 (디버그)
-        idx = html.find("보증금")
-        if idx >= 0:
-            snippet = html[max(0, idx - 50):idx + 400]
-            print(f"      [디버그] '보증금' 발견 @ {idx}, 주변 텍스트:")
+                candidate = m.group(1).replace(",", "")
+                break
+        # Sanity check: 최저가의 5~30% 범위 안에 있어야 정상 (보증금 보통 10%, 재경매 20%)
+        if candidate and _low_for_check:
+            try:
+                dep_num = int(candidate)
+                low_num = int(_low_for_check)
+                if low_num > 0:
+                    ratio = dep_num / low_num
+                    if 0.05 <= ratio <= 0.35:
+                        _DEPOSIT_CACHE[cache_key] = candidate
+                        return candidate
+                    else:
+                        print(f"      ⚠ 보증금 sanity check 실패: {candidate} (최저가 {_low_for_check}의 {ratio*100:.1f}%, 5~35% 벗어남)")
+                        _DEPOSIT_CACHE[cache_key] = ""
+                        return ""
+            except Exception:
+                pass
+        if candidate:
+            _DEPOSIT_CACHE[cache_key] = candidate
+            return candidate
+        # 매칭 안 됨 → 모든 '보증금' 위치 + JS 변수 정의 추적 (사용자 요청 디버그)
+        print(f"      [디버그] 매칭 실패 — pid={product_id}")
+        all_positions = [m.start() for m in re.finditer(r'보\s*증\s*금', html)]
+        print(f"      [디버그] '보증금' 모든 위치 ({len(all_positions)}개): {all_positions[:8]}")
+        for i, pos in enumerate(all_positions[:6]):
+            snippet = html[max(0, pos - 40):pos + 200]
+            print(f"      [디버그] ▼ '보증금' #{i+1} @ {pos}:")
             print(f"      {snippet!r}")
-        else:
-            print(f"      [디버그] '보증금' 단어 자체가 HTML 에 없음. HTML 앞 800자:")
-            print(f"      {html[:800]!r}")
+        # JS 변수 정의 검색 (court_bomoney, bomoney, deposit, court_보증금 등)
+        js_var_patterns = [
+            r'(?:var\s+|let\s+|const\s+|window\.)?(court_bomoney|bomoney|deposit|court_deposit|guarantee|min_money|bo_money|min_price)\s*=\s*[\'"]?([^\'",;<>\n]+)[\'"]?',
+            r'(?:var\s+|let\s+|const\s+|window\.)?(\w*boMoney\w*|\w*Deposit\w*|\w*Guarantee\w*)\s*=\s*[\'"]?([^\'",;<>\n]+)[\'"]?',
+        ]
+        found_js = False
+        for pat in js_var_patterns:
+            for m in list(re.finditer(pat, html))[:5]:
+                found_js = True
+                print(f"      [디버그] JS 변수: {m.group(1)} = {m.group(2)!r} @ {m.start()}")
+        if not found_js:
+            print(f"      [디버그] JS 변수 (bomoney/deposit/guarantee 류) 발견 없음")
+        # (XX%) 패턴 위치 모두 (보증금/최저가는 보통 % 표시 있음)
+        pct_positions = list(re.finditer(r'\(\s*\d{1,3}(?:\.\d+)?\s*%\s*\)\s*([1-9][\d,]{4,})', html))
+        print(f"      [디버그] (%) + 큰숫자 패턴 위치 ({len(pct_positions)}개):")
+        for i, m in enumerate(pct_positions[:5]):
+            pos = m.start()
+            print(f"      [디버그] ▼ (%) #{i+1} @ {pos}: {html[max(0,pos-40):pos+120]!r}")
     except Exception as e:
         print(f"      [보증금 detail fetch 오류] pid={product_id}: {e}")
     _DEPOSIT_CACHE[cache_key] = ""
@@ -497,7 +537,7 @@ def process_list_page(driver, save_dir, type_prefix, manager=""):
             _low = _m_low.group(1).replace(",", "") if _m_low else ""
             # row 텍스트에 보증금 없으면 detail 페이지 fetch 로 추출
             if not _dep and product_id:
-                _dep = fetch_deposit_from_detail(driver, product_id, type_prefix)
+                _dep = fetch_deposit_from_detail(driver, product_id, type_prefix, _low)
                 if _dep:
                     print(f"    ✓ 보증금 detail 추출: {_dep}")
                 else:

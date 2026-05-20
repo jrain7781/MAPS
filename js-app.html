@@ -4923,7 +4923,16 @@
         if (tab === 'history') renderItemSubHistory();
         if (tab === 'info') renderItemSubInfo('main');
         if (tab === 'message') {
+            // 수수료 input 복원 (localStorage)
+            const feeEl = document.getElementById('item-message-fee');
+            if (feeEl) {
+                try {
+                    const saved = localStorage.getItem('mj_message_fee_item');
+                    if (saved != null) feeEl.value = saved;
+                } catch(e) {}
+            }
             renderKakaoTemplateTabs(currentDetailItem ? currentDetailItem.member_id : null, 'item');
+            if (typeof _updateMessageMetaDisplay_ === 'function') _updateMessageMetaDisplay_('item');
         }
     }
 
@@ -6357,18 +6366,53 @@ MJ 이정우 팀장
     let _kakaoAutoEnter = false;
     let _kakaoCtx = null;      // 현재 편집 중인 context
 
-    function _parseKakaoTpl(content, data) {
+    function _parseKakaoTpl(content, data, extra) {
         if (!content || !data) return content || '';
+        extra = extra || {};
         let s = content;
         let dateStr = String(data['in-date'] || '').trim();
         if (dateStr.length === 6) dateStr = `20${dateStr.slice(0, 2)}년 ${dateStr.slice(2, 4)}월 ${dateStr.slice(4, 6)}일`;
-        let price = (data.bidprice == 0 || data.bidprice === '0') ? '0' : new Intl.NumberFormat('ko-KR').format(data.bidprice);
+        const fmt = n => (n == null || n === '' || isNaN(n)) ? '' : new Intl.NumberFormat('ko-KR').format(n);
+        let price = (data.bidprice == 0 || data.bidprice === '0') ? '0' : fmt(data.bidprice);
+        const depNum = parseInt(String(data.deposit || 0).replace(/[^0-9]/g, ''), 10) || 0;
+        const lowNum = parseInt(String(data.lowest_price || 0).replace(/[^0-9]/g, ''), 10) || 0;
+        const feeNum = parseInt(String(extra.fee || 0).replace(/[^0-9]/g, ''), 10) || 0;
+        const totalNum = depNum + feeNum;
         s = s.replace(/\{\{이름\}\}/g, data.m_name || '');
         s = s.replace(/\{\{입찰일자\}\}/g, dateStr);
         s = s.replace(/\{\{사건번호\}\}/g, data.sakun_no || '');
         s = s.replace(/\{\{법원\}\}/g, data.court || '');
         s = s.replace(/\{\{입찰가\}\}/g, price);
+        s = s.replace(/\{\{보증금\}\}/g, fmt(depNum));
+        s = s.replace(/\{\{최저가\}\}/g, fmt(lowNum));
+        s = s.replace(/\{\{수수료\}\}/g, fmt(feeNum));
+        s = s.replace(/\{\{총금액\}\}/g, fmt(totalNum));
         return s;
+    }
+
+    // 메세지 탭 수수료 입력 변경 → 텍스트 영역 + 보증금/총금액 표시 재계산
+    function _onMessageFeeChange_(ctx) {
+        // 마지막 입력값 localStorage 기억
+        const feeEl = document.getElementById(ctx + '-message-fee');
+        if (feeEl) {
+            try { localStorage.setItem('mj_message_fee_' + ctx, feeEl.value); } catch(e) {}
+        }
+        _updateKakaoTextarea(ctx);
+        _updateMessageMetaDisplay_(ctx);
+    }
+
+    function _updateMessageMetaDisplay_(ctx) {
+        const data = ctx === 'item' ? currentDetailItem : currentModalItemData;
+        const depEl = document.getElementById(ctx + '-message-deposit-display');
+        const totEl = document.getElementById(ctx + '-message-total-display');
+        const feeEl = document.getElementById(ctx + '-message-fee');
+        if (!depEl || !totEl) return;
+        const depNum = parseInt(String(data && data.deposit || 0).replace(/[^0-9]/g, ''), 10) || 0;
+        const feeNum = parseInt(String(feeEl && feeEl.value || 0).replace(/[^0-9]/g, ''), 10) || 0;
+        const totalNum = depNum + feeNum;
+        const fmt = n => n > 0 ? new Intl.NumberFormat('ko-KR').format(n) + ' 원' : '-';
+        depEl.textContent = fmt(depNum);
+        totEl.textContent = fmt(totalNum);
     }
 
     function renderKakaoTemplateTabs(memberId, ctx) {
@@ -6458,7 +6502,12 @@ MJ 이정우 팀장
         } else {
             data = ctx === 'item' ? currentDetailItem : currentModalItemData;
         }
-        ta.value = tpl && data ? _parseKakaoTpl(tpl.content, data) : '';
+        // 수수료 input 값 같이 전달 (메세지 탭에 input 있을 때만)
+        const feeEl = document.getElementById(ctx + '-message-fee');
+        const extra = feeEl ? { fee: feeEl.value } : {};
+        ta.value = tpl && data ? _parseKakaoTpl(tpl.content, data, extra) : '';
+        // 보증금/총금액 표시 영역도 갱신
+        if (ctx === 'item') _updateMessageMetaDisplay_(ctx);
     }
 
     function _renderKakaoNameField(memberId, ctx) {
