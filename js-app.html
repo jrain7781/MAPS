@@ -24667,27 +24667,40 @@ MJ 이정우 팀장
             }).join('');
         }
 
+        // 저장된 모달 크기/사이드 폭 (사용자가 드래그로 조절 → localStorage)
+        var _jmTgSize = (function () {
+            try { return JSON.parse(localStorage.getItem('jm_tg_size_v1') || '{}'); } catch (e) { return {}; }
+        })();
+        var _winRef = doc.defaultView || window;
+        var _vw = (_winRef && _winRef.innerWidth)  || 1280;
+        var _vh = (_winRef && _winRef.innerHeight) || 800;
+        var _initW    = Math.min(Math.max(_jmTgSize.w    || 1180, 600), _vw - 20);
+        var _initH    = Math.min(Math.max(_jmTgSize.h    || 700,  360), _vh - 20);
+        var _initSide = Math.min(Math.max(_jmTgSize.side || 180,  120), 400);
+
         var ov = doc.createElement('div');
         ov.id = 'jm-tg-modal';
         ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif';
         ov.innerHTML =
-            '<div style="background:#fff;border-radius:8px;width:1180px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.3)">' +
+            '<div id="jmTgCard" style="background:#fff;border-radius:8px;width:' + _initW + 'px;height:' + _initH + 'px;max-width:98vw;max-height:96vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.3);resize:both;overflow:hidden;min-width:600px;min-height:360px">' +
                 // 헤더
-                '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">' +
+                '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
                     '<strong style="font-size:14px;color:#1e3a8a">📋 일괄변경 / 전송 — ' + sorted.length + '건</strong>' +
                     '<button id="jmTgX" style="border:1px solid #cbd5e1;background:#fff;border-radius:4px;padding:3px 10px;cursor:pointer">✕</button>' +
                 '</div>' +
                 // 안내문
-                '<div style="padding:8px 16px;background:#fff7ed;border-bottom:1px solid #fed7aa;font-size:11.5px;color:#9a3412">' +
-                    '왼쪽 상태 항목을 클릭하면 오른쪽이 그 상태 행으로 바뀝니다. 조사예정 상태에서 체크된 행만 텔레그램 전송됩니다(전송 후 → 조사요청).' +
+                '<div style="padding:8px 16px;background:#fff7ed;border-bottom:1px solid #fed7aa;font-size:11.5px;color:#9a3412;flex-shrink:0">' +
+                    '왼쪽 상태 항목을 클릭하면 오른쪽이 그 상태 행으로 바뀝니다. 조사예정 상태에서 체크된 행만 텔레그램 전송됩니다(전송 후 → 조사요청). 카드 오른쪽-아래 모서리/사이드 경계선을 드래그해 크기 조절(저장됨).' +
                 '</div>' +
                 // 좌우 분할
                 '<div style="flex:1;display:flex;overflow:hidden;min-height:0">' +
                     // 왼쪽 사이드 패널
-                    '<aside id="jmTgSide" style="width:180px;flex-shrink:0;border-right:1px solid #e2e8f0;background:#f8fafc;padding:6px;overflow-y:auto">' +
+                    '<aside id="jmTgSide" style="width:' + _initSide + 'px;flex-shrink:0;border-right:1px solid #e2e8f0;background:#f8fafc;padding:6px;overflow-y:auto">' +
                         '<div style="font-size:11px;font-weight:700;color:#334155;padding:4px 4px 6px">상태별 선택</div>' +
                         sidePanelHtml() +
                     '</aside>' +
+                    // 사이드↔메인 splitter (드래그로 사이드 폭 조절)
+                    '<div id="jmTgSplit" title="드래그해서 사이드 폭 조절" style="width:6px;flex-shrink:0;cursor:col-resize;background:#e5e7eb;border-left:1px solid #d1d5db;border-right:1px solid #d1d5db"></div>' +
                     // 오른쪽 메인
                     '<main style="flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden">' +
                         // 오른쪽 actionbar (조사자 일괄변경 + 일괄적용/전송)
@@ -24724,6 +24737,60 @@ MJ 이정우 팀장
         ov.querySelector('#jmTgX').addEventListener('click', close);
         ov.querySelector('#jmTgCancel').addEventListener('click', close);
         ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+
+        // 카드 리사이즈(resize:both) — ResizeObserver 로 변경 감지 + debounce 저장
+        var _jmTgCard = ov.querySelector('#jmTgCard');
+        var _jmTgSide_el = ov.querySelector('#jmTgSide');
+        var _saveSize = (function () {
+            var t = null;
+            return function () {
+                if (t) clearTimeout(t);
+                t = setTimeout(function () {
+                    try {
+                        var w    = _jmTgCard ? Math.round(_jmTgCard.offsetWidth) : 0;
+                        var h    = _jmTgCard ? Math.round(_jmTgCard.offsetHeight) : 0;
+                        var side = _jmTgSide_el ? Math.round(_jmTgSide_el.offsetWidth) : 0;
+                        if (w && h && side) {
+                            localStorage.setItem('jm_tg_size_v1', JSON.stringify({ w: w, h: h, side: side }));
+                        }
+                    } catch (e) {}
+                }, 250);
+            };
+        })();
+        try {
+            var _RO = (_winRef && _winRef.ResizeObserver) || window.ResizeObserver;
+            if (_RO && _jmTgCard) {
+                var _ro = new _RO(function () { _saveSize(); });
+                _ro.observe(_jmTgCard);
+            }
+        } catch (e) {}
+
+        // 사이드↔메인 splitter — 드래그로 사이드 폭 조절 (저장은 ResizeObserver 가 처리하지 못하므로 별도)
+        (function () {
+            var sp = ov.querySelector('#jmTgSplit');
+            if (!sp || !_jmTgSide_el) return;
+            var dragging = false, startX = 0, startW = 0;
+            sp.addEventListener('mousedown', function (e) {
+                dragging = true;
+                startX = e.clientX;
+                startW = _jmTgSide_el.offsetWidth;
+                sp.style.background = '#a5b4fc';
+                doc.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+            doc.addEventListener('mousemove', function (e) {
+                if (!dragging) return;
+                var w = Math.max(120, Math.min(400, startW + (e.clientX - startX)));
+                _jmTgSide_el.style.width = w + 'px';
+            });
+            doc.addEventListener('mouseup', function () {
+                if (!dragging) return;
+                dragging = false;
+                sp.style.background = '#e5e7eb';
+                doc.body.style.userSelect = '';
+                _saveSize();
+            });
+        })();
 
         // ── 상태 그룹별 행 보임/숨김 + UI 상태 ──
         function _recountSide() {
@@ -25323,9 +25390,8 @@ MJ 이정우 팀장
         d.getElementById('jmsvNext').addEventListener('click', function () { _jmSvNext(); });
         d.getElementById('jmsvFin').addEventListener('click', function () { _jmSvFinish(); });
         d.getElementById('jmsvTg').addEventListener('click', function () {
-            // 일괄전송 모달은 항상 메인 윈도우에 띄움(선택보기 팝업창 폭에 갇히지 않게)
-            try { window.focus(); } catch (e) {}
-            openJmTelegramSendModal(_jmSvItems, document);
+            // 선택보기 팝업창 위에 띄움. 모달 크기/사이드폭은 사용자가 조절+저장 가능
+            openJmTelegramSendModal(_jmSvItems, _jmSvLW.document);
         });
         d.addEventListener('keydown', function (e) {
             if (e.key === 'ArrowDown') { e.preventDefault(); _jmSvNext(); }
