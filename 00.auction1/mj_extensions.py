@@ -156,26 +156,42 @@ def imageup_start(which: str, accounts: list, limit=None, cases=None):
 
     run_id = uuid.uuid4().hex[:12]
     env = os.environ.copy()
-    # .py 가 env 로 ACCOUNTS 를 받을 수 있도록 (.py 사이드에서 처리)
-    env["MJ_IMAGEUP_ACCOUNTS_JSON"] = json.dumps(use_accounts, ensure_ascii=False)
+    # 한글 env vars 는 Python 3.14 + Windows console init 충돌 위험 → ASCII escape
+    env["MJ_IMAGEUP_ACCOUNTS_JSON"] = json.dumps(use_accounts, ensure_ascii=True)
     if limit is not None:
         env["MJ_IMAGEUP_LIMIT"] = str(int(limit))
     if cases:
-        env["MJ_IMAGEUP_CASES_JSON"] = json.dumps(list(cases), ensure_ascii=False)
+        env["MJ_IMAGEUP_CASES_JSON"] = json.dumps(list(cases), ensure_ascii=True)
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
 
     try:
-        proc = subprocess.Popen(
-            [sys.executable, "-u", script_path],
-            cwd=os.path.dirname(script_path),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            env=env,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-        )
+        # Python 3.14 prerelease 의 console init 버그 회피: cmd.exe 통해 우회
+        # shell=True 면 cmd.exe wrapping → STATUS_DLL_INIT_FAILED 회피
+        if sys.platform == "win32":
+            cmd = f'"{sys.executable}" -u "{script_path}"'
+            proc = subprocess.Popen(
+                cmd,
+                cwd=os.path.dirname(script_path),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=env,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                shell=True,
+            )
+        else:
+            proc = subprocess.Popen(
+                [sys.executable, "-u", script_path],
+                cwd=os.path.dirname(script_path),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=env,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
     except Exception as e:
         return None, "subprocess 시작 실패: " + str(e)
 
