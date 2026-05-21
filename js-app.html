@@ -24623,7 +24623,15 @@ MJ 이정우 팀장
         var doc = tgWin.document;
         doc.open();
         doc.write('<!doctype html><html><head><meta charset="utf-8"><title>일괄변경 / 전송</title>' +
-                  '<style>*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}</style>' +
+                  '<style>' +
+                    '*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}' +
+                    'body{font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}' +
+                    // 상태 뱃지 — 선택보기 모달과 동일 스타일 (pill, currentColor 테두리)
+                    '.jm-tg-stbadge{display:flex;align-items:center;justify-content:center;width:100%;min-width:0;height:26px;padding:0 4px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;border:1px solid currentColor;box-sizing:border-box;line-height:1}' +
+                    // 상태 드롭다운 메뉴
+                    '.jm-tg-stmenu{position:fixed;z-index:99999;display:flex;flex-direction:column;gap:3px;background:#fff;padding:5px;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.2);box-sizing:border-box}' +
+                    '.jm-tg-stmenu button{border:1px solid currentColor;width:100%;box-sizing:border-box;border-radius:4px;padding:3px 4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}' +
+                  '</style>' +
                   '</head><body></body></html>');
         doc.close();
         // 원본 배열 변형 방지 + 안정 정렬
@@ -24642,13 +24650,6 @@ MJ 이정우 팀장
         });
         var groupOrder = Object.keys(groups).sort(function (a, b) { return _jmTgStatusOrder(a) - _jmTgStatusOrder(b); });
 
-        function statusSelOptions(cur) {
-            return JM_STATUS_SEL.map(function (s) {
-                return '<option value="' + escAttr(s) + '"' + (s === cur ? ' selected' : '') + '>' + escHtml(s) + '</option>';
-            }).join('');
-        }
-        // (group input 은 텍스트 input + datalist 로 자동완성 — select 박스 X)
-        function jossSelOptions() { return ''; /* deprecated, retained for backward compat */ }
         function rowHtml(it, i) {
             var s = it.josa_status || '미분류';
             var c = JM_STATUS_HEX[s] || JM_STATUS_HEX['미분류'];
@@ -24656,8 +24657,7 @@ MJ 이정우 팀장
             return '<tr data-i="' + i + '" data-id="' + escAttr(it.josa_id) + '" data-status="' + escAttr(s) + '">' +
                 '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;text-align:center"><input type="checkbox" class="jm-tg-cb" data-i="' + i + '" ' + (willSend ? 'checked' : '') + ' style="cursor:pointer"></td>' +
                 '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;text-align:center">' +
-                    '<select class="jm-tg-stsel" data-i="' + i + '" style="font-size:11px;padding:3px 4px;border:1px solid ' + c[1] + ';border-radius:4px;background:' + c[0] + ';color:' + c[1] + ';font-weight:700;cursor:pointer;min-width:80px">' +
-                    statusSelOptions(s) + '</select>' +
+                    '<span class="jm-tg-stbadge" data-i="' + i + '" style="background:' + c[0] + ';color:' + c[1] + ';border-color:' + c[1] + '">' + escHtml(s) + '</span>' +
                 '</td>' +
                 '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;font-size:12px;font-weight:700;white-space:nowrap;color:#1f2937">' + escHtml(_jmTgSakunFmt(it.sakun_no)) + '</td>' +
                 '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;text-align:center">' +
@@ -24798,8 +24798,9 @@ MJ 이정우 팀장
         // ── 상태 그룹별 행 보임/숨김 + UI 상태 ──
         function _recountSide() {
             var nc = {};
-            Array.prototype.forEach.call(ov.querySelectorAll('.jm-tg-stsel'), function (sel) {
-                var s = sel.value; nc[s] = (nc[s] || 0) + 1;
+            Array.prototype.forEach.call(ov.querySelectorAll('tr[data-i]'), function (tr) {
+                var s = tr.getAttribute('data-status') || '미분류';
+                nc[s] = (nc[s] || 0) + 1;
             });
             Array.prototype.forEach.call(ov.querySelectorAll('.jm-tg-sidecount'), function (sp) {
                 var s = sp.getAttribute('data-s');
@@ -24842,11 +24843,18 @@ MJ 이정우 팀장
         }
 
         function _rowStatusUI(i) {
-            var sel = ov.querySelector('.jm-tg-stsel[data-i="' + i + '"]');
-            if (!sel) return;
-            var s = sel.value;
+            var tr = ov.querySelector('tr[data-i="' + i + '"]');
+            if (!tr) return;
+            // sorted[i].josa_status 가 진실. data-status 동기화
+            var it = sorted[i];
+            var s = (it && it.josa_status) || tr.getAttribute('data-status') || '미분류';
+            tr.setAttribute('data-status', s);
             var c = JM_STATUS_HEX[s] || JM_STATUS_HEX['미분류'];
-            sel.style.background = c[0]; sel.style.color = c[1]; sel.style.borderColor = c[1];
+            var bd = ov.querySelector('.jm-tg-stbadge[data-i="' + i + '"]');
+            if (bd) {
+                bd.textContent = s;
+                bd.style.background = c[0]; bd.style.color = c[1]; bd.style.borderColor = c[1];
+            }
             var cb = ov.querySelector('.jm-tg-cb[data-i="' + i + '"]');
             var stc = ov.querySelector('.jm-tg-st[data-i="' + i + '"]');
             // 조사예정 = 전송대상 → 자동 체크 + '대기'
@@ -24858,12 +24866,55 @@ MJ 이정우 팀장
                 else if (s === '조사요청')  { stc.textContent = '전송됨'; stc.style.color = '#16a34a'; }
                 else                         { stc.textContent = '제외';   stc.style.color = '#94a3b8'; }
             }
-            // 행의 data-status 갱신 + 활성 그룹과 다르면 숨김
-            var tr = ov.querySelector('tr[data-i="' + i + '"]');
-            if (tr) {
-                tr.setAttribute('data-status', s);
-                tr.style.display = (s === activeStatus) ? '' : 'none';
+            // 활성 그룹과 다르면 숨김
+            tr.style.display = (s === activeStatus) ? '' : 'none';
+        }
+
+        // 상태 변경 공통 처리 — 시트/메모리/UI/사이드 카운트 + 활성그룹 외 행 숨김
+        function _jmTgStatusCommit(i, ns) {
+            var it = sorted[i]; if (!it) return;
+            _jmSaveField(it.josa_id, 'josa_status', ns, function () { _jmUpdateGridRow(it.josa_id); });
+            it.josa_status = ns;
+            _rowStatusUI(i);
+            _recountSide();
+            _syncAllCb();
+        }
+        // 상태 뱃지 클릭 → 드롭다운 메뉴 (선택보기 모달과 동일 동작; 같은 뱃지 재클릭=토글 닫기)
+        function _jmTgStatusMenu(badge, idx) {
+            var prev = doc.querySelector('.jm-tg-stmenu');
+            if (prev) {
+                var same = prev.getAttribute('data-anchor-idx') === String(idx);
+                prev.remove();
+                if (same) return;
             }
+            var it = sorted[idx]; if (!it) return;
+            var cur = it.josa_status || '미분류';
+            var opts = JM_STATUS_SEL.filter(function (s) { return s !== cur; });
+            var menu = doc.createElement('div');
+            menu.className = 'jm-tg-stmenu';
+            menu.setAttribute('data-anchor-idx', String(idx));
+            menu.innerHTML = opts.map(function (s) {
+                var c = JM_STATUS_HEX[s] || JM_STATUS_HEX['미분류'];
+                return '<button type="button" data-s="' + escAttr(s) + '" style="background:' + c[0] + ';color:' + c[1] + '">' + escHtml(s) + '</button>';
+            }).join('');
+            var r = badge.getBoundingClientRect();
+            menu.style.left  = r.left + 'px';
+            menu.style.top   = (r.bottom + 2) + 'px';
+            menu.style.width = r.width + 'px';
+            doc.body.appendChild(menu);
+            Array.prototype.forEach.call(menu.querySelectorAll('button'), function (b) {
+                b.addEventListener('click', function (ev) {
+                    ev.stopPropagation();
+                    var ns = b.getAttribute('data-s');
+                    menu.remove();
+                    _jmTgStatusCommit(idx, ns);
+                });
+            });
+            setTimeout(function () {
+                doc.addEventListener('click', function oc(e) {
+                    if (!menu.contains(e.target) && e.target !== badge) { menu.remove(); doc.removeEventListener('click', oc); }
+                });
+            }, 0);
         }
 
         // 사이드 항목 클릭 → 활성 상태 변경
@@ -24871,17 +24922,11 @@ MJ 이정우 팀장
             it.addEventListener('click', function () { activateStatus(it.getAttribute('data-s')); });
         });
 
-        // 상태 셀렉트 변경 (행 내) → 메모리/시트 반영 + 색상 & 사이드 카운트 갱신
-        Array.prototype.forEach.call(ov.querySelectorAll('.jm-tg-stsel'), function (sel) {
-            sel.addEventListener('change', function () {
-                var i = parseInt(sel.getAttribute('data-i'), 10);
-                var it = sorted[i]; if (!it) return;
-                var ns = sel.value;
-                _jmSaveField(it.josa_id, 'josa_status', ns, function () { _jmUpdateGridRow(it.josa_id); });
-                it.josa_status = ns;
-                _rowStatusUI(i);
-                _recountSide();
-                _syncAllCb();
+        // 상태 뱃지 클릭 → 드롭다운 메뉴
+        Array.prototype.forEach.call(ov.querySelectorAll('.jm-tg-stbadge'), function (bd) {
+            bd.addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                _jmTgStatusMenu(bd, parseInt(bd.getAttribute('data-i'), 10));
             });
         });
         // 조사자 input — click/focus 전체선택, blur 저장 + 자동 조사예정 승격
@@ -24903,13 +24948,7 @@ MJ 이정우 팀장
                     it.josa_status !== '폐기' && it.josa_status !== '조사접수' &&
                     it.josa_status !== '조사확정' && it.josa_status !== '조사완료' &&
                     it.josa_status !== '조사불가') {
-                    _jmSaveField(it.josa_id, 'josa_status', '조사예정');
-                    it.josa_status = '조사예정';
-                    var stsel = ov.querySelector('.jm-tg-stsel[data-i="' + i + '"]');
-                    if (stsel) { stsel.value = '조사예정'; _rowStatusUI(i); }
-                    _jmUpdateGridRow(it.josa_id);
-                    _recountSide();
-                    _syncAllCb();
+                    _jmTgStatusCommit(i, '조사예정');
                 }
             });
         });
@@ -24962,11 +25001,7 @@ MJ 이정우 팀장
                 }
                 changed++;
                 if (canPromote) {
-                    _jmSaveField(it.josa_id, 'josa_status', '조사예정');
-                    it.josa_status = '조사예정';
-                    var stsel = ov.querySelector('.jm-tg-stsel[data-i="' + i + '"]');
-                    if (stsel) { stsel.value = '조사예정'; _rowStatusUI(i); }   // _rowStatusUI 가 data-status 갱신 + 숨김 처리
-                    _jmUpdateGridRow(it.josa_id);
+                    _jmTgStatusCommit(i, '조사예정');
                     promoted++;
                 }
             });
@@ -24989,11 +25024,11 @@ MJ 이정우 팀장
                 var cb = ov.querySelector('.jm-tg-cb[data-i="' + i + '"]');
                 var inp = ov.querySelector('.jm-tg-j[data-i="' + i + '"]');
                 var stc = ov.querySelector('.jm-tg-st[data-i="' + i + '"]');
-                var sel = ov.querySelector('.jm-tg-stsel[data-i="' + i + '"]');
-                if (!cb || !cb.checked) { if (stc && sel && sel.value === '조사예정') { stc.textContent = '미체크'; stc.style.color = '#94a3b8'; } return; }
-                if (!sel || sel.value !== '조사예정') {
+                var curStatus = it.josa_status || tr.getAttribute('data-status') || '미분류';
+                if (!cb || !cb.checked) { if (stc && curStatus === '조사예정') { stc.textContent = '미체크'; stc.style.color = '#94a3b8'; } return; }
+                if (curStatus !== '조사예정') {
                     if (stc) {
-                        if (sel && sel.value === '조사요청') { stc.textContent = '이미 전송됨'; stc.style.color = '#16a34a'; }
+                        if (curStatus === '조사요청') { stc.textContent = '이미 전송됨'; stc.style.color = '#16a34a'; }
                         else { stc.textContent = '제외'; stc.style.color = '#94a3b8'; }
                     }
                     return;
@@ -25031,16 +25066,9 @@ MJ 이정우 팀장
                         done++;
                         if (resp && resp.success) {
                             ok++;
-                            // 전송 성공 → 조사예정 → 조사요청 자동 승격 (시트/메모리/UI)
-                            _jmSaveField(it.josa_id, 'josa_status', '조사요청');
-                            it.josa_status = '조사요청';
-                            var stsel = ov.querySelector('.jm-tg-stsel[data-i="' + ti + '"]');
-                            if (stsel) { stsel.value = '조사요청'; }
-                            _rowStatusUI(ti);   // 셀렉트 색/체크/전송상태 갱신 + data-status + 활성그룹 외 숨김
+                            // 전송 성공 → 조사예정 → 조사요청 자동 승격 (시트/메모리/UI/사이드카운트)
+                            _jmTgStatusCommit(ti, '조사요청');
                             if (stc) { stc.textContent = '✓ 전송됨'; stc.style.color = '#16a34a'; }
-                            _jmUpdateGridRow(it.josa_id);
-                            _recountSide();
-                            _syncAllCb();
                             if (typeof _jmSvItems !== 'undefined' && _jmSvItems && _jmSvItems.length) {
                                 var k2 = _jmSvItems.indexOf(it);
                                 if (k2 >= 0 && typeof _jmSvRefreshRow === 'function') _jmSvRefreshRow(k2);
