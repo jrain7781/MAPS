@@ -23805,6 +23805,24 @@ MJ 이정우 팀장
         var t0 = Date.now();
         if (summary) summary.textContent = '[1] loadJosaData 진입';
 
+        // 빈 영역(트리/카운팅바/요약/그리드) → 로딩 placeholder 로 통일 (첫 진입 깜빡임 제거)
+        var _tl = document.getElementById('jmt-list');
+        if (_tl && !_tl.querySelector('.jmt-card')) {
+            _tl.innerHTML = '<li style="padding:24px 12px;text-align:center;color:#94a3b8;font-size:12px;list-style:none">조사 리스트 불러오는 중…</li>';
+        }
+        var _tb = document.getElementById('jmt-topbar');
+        if (_tb && !_tb.children.length) {
+            _tb.innerHTML = '<span style="font-size:11px;color:#94a3b8">불러오는 중…</span>';
+        }
+        var _ss = document.getElementById('jm-status-summary');
+        if (_ss && !_ss.children.length) {
+            _ss.innerHTML = '<span style="font-size:11.5px;color:#94a3b8">조사 데이터 불러오는 중…</span>';
+        }
+        var _gb = document.getElementById('jm-grid-body');
+        if (_gb && !_gb.querySelector('tr.jm-row')) {
+            _gb.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:60px 0;font-size:13px">조사 데이터 불러오는 중…</td></tr>';
+        }
+
         if (typeof google === 'undefined') { if (summary) summary.textContent = '[ERR] google === undefined'; return; }
         if (!google.script) { if (summary) summary.textContent = '[ERR] google.script === undefined'; return; }
         if (!google.script.run) { if (summary) summary.textContent = '[ERR] google.script.run === undefined'; return; }
@@ -24653,7 +24671,7 @@ MJ 이정우 팀장
         ov.id = 'jm-tg-modal';
         ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif';
         ov.innerHTML =
-            '<div style="background:#fff;border-radius:8px;width:920px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.3)">' +
+            '<div style="background:#fff;border-radius:8px;width:1180px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.3)">' +
                 // 헤더
                 '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between">' +
                     '<strong style="font-size:14px;color:#1e3a8a">📋 일괄변경 / 전송 — ' + sorted.length + '건</strong>' +
