@@ -24080,6 +24080,7 @@ MJ 이정우 팀장
                '<span class="drag-handle">⋮⋮</span>' +
                '<input type="checkbox" class="jmt-card-check" ' + (cs === 'all' ? 'checked' : '') + ' title="이 카드 전체 선택/해제">' +
                '<span class="jmt-card-title">' + escHtml(top.label) + '</span>' +
+               _jmtKidcHtml(ids.length) +
                _jmtCountsHtml(c) +
                '</div>' +
                '<ul class="jmt-card-body' + (isCollapsed ? ' collapsed' : '') + '">' + body + '</ul>' +
@@ -24255,6 +24256,17 @@ MJ 이정우 팀장
             var cb = h.querySelector('.jmt-card-check');
             var ids = String(h.dataset.ids || '').split(',').filter(Boolean);
             if (cb) cb.indeterminate = (_jmtBranchCheckState(ids) === 'some');
+        });
+        // 각 숫자에 active 표시: 그 row 의 ids 가 현재 jmSelectedPresetIds 와 동일 + 카테고리도 일치하면 .on
+        list.querySelectorAll('.jmt-nc').forEach(function (ncEl) {
+            var row = ncEl.closest('.jmt-card-head, .jmt-branch, .jmt-item');
+            if (!row) return;
+            var ids = row.dataset.ids
+                ? String(row.dataset.ids).split(',').filter(Boolean)
+                : (row.dataset.id ? [row.dataset.id] : []);
+            if (!ids.length) return;
+            var sameIds = (jmSelectedPresetIds.size === ids.length) && ids.every(function (id) { return jmSelectedPresetIds.has(id); });
+            if (sameIds && _jmtCountCatActive(ncEl.dataset.cat)) ncEl.classList.add('on');
         });
         // 각 숫자 클릭 → 그 노드 + 그 상태(전체/미분류/진행중/완료/폐기)만 그리드에 반영
         list.querySelectorAll('.jmt-nc').forEach(function (ncEl) {
@@ -25672,17 +25684,16 @@ MJ 이정우 팀장
                 var newStatus = b.dataset.status;
                 menu.remove();
                 if (newStatus === cur) return;
-                _jmSaveField(josaId, 'josa_status', newStatus, function (resp) {
-                    _jmUpdateGridRow(josaId);   // 재정렬 없이 그 자리 갱신
-                    // 조사예정 = 조사자 배정 단계 → 그 행 조사자 입력칸 포커스 + 자동완성 펼침
-                    if (newStatus === '조사예정') {
-                        setTimeout(function () {
-                            var sel = (window.CSS && CSS.escape) ? CSS.escape(josaId) : josaId;
-                            var inp = document.querySelector('.jm-josaja-input[data-id="' + sel + '"]');
-                            if (inp) { inp.focus(); if (inp.select) inp.select(); }
-                        }, 0);
-                    }
-                });
+                // 즉시 UI 갱신 (_jmSaveField 내부에서 메모리 즉시 반영 후 GAS 비동기 저장).
+                // 콜백 안에서 갱신하면 GAS 응답 대기로 지연되는 문제 해결.
+                _jmSaveField(josaId, 'josa_status', newStatus);
+                _jmUpdateGridRow(josaId);
+                // 조사예정 = 조사자 배정 단계 → 즉시 조사자 input 포커스 + AC 펼침
+                if (newStatus === '조사예정') {
+                    var selId = (window.CSS && CSS.escape) ? CSS.escape(josaId) : josaId;
+                    var inp = document.querySelector('.jm-josaja-input[data-id="' + selId + '"]');
+                    if (inp) { inp.focus(); if (inp.select) inp.select(); }
+                }
             });
         });
 
