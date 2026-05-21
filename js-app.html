@@ -24709,7 +24709,7 @@ MJ 이정우 팀장
                 _rowStatusUI(i);
             });
         });
-        // 조사자 input — click/focus 전체선택, blur 저장
+        // 조사자 input — click/focus 전체선택, blur 저장 + 자동 조사요청 승격(폐기는 보존)
         Array.prototype.forEach.call(ov.querySelectorAll('.jm-tg-j'), function (inp) {
             inp.addEventListener('focus', function () { inp.select(); });
             inp.addEventListener('click', function () { inp.select(); });
@@ -24721,6 +24721,14 @@ MJ 이정우 팀장
                     _jmSaveField(it.josa_id, 'josaja', newVal);
                     _jmSaveField(it.josa_id, 'josaja_id', _jmMemberIdByName(newVal));
                     it.josaja = newVal;
+                    _jmUpdateGridRow(it.josa_id);
+                }
+                // 조사자 입력 시 → 상태값 무관 자동 조사요청 (단, 폐기는 보존)
+                if (newVal && it.josa_status !== '조사요청' && it.josa_status !== '폐기') {
+                    _jmSaveField(it.josa_id, 'josa_status', '조사요청');
+                    it.josa_status = '조사요청';
+                    var stsel = ov.querySelector('.jm-tg-stsel[data-i="' + i + '"]');
+                    if (stsel) { stsel.value = '조사요청'; _rowStatusUI(i); }
                     _jmUpdateGridRow(it.josa_id);
                 }
             });
@@ -24760,6 +24768,14 @@ MJ 이정우 팀장
                         _jmSaveField(it.josa_id, 'josaja', name);
                         _jmSaveField(it.josa_id, 'josaja_id', _jmMemberIdByName(name));
                         it.josaja = name;
+                        _jmUpdateGridRow(it.josa_id);
+                    }
+                    // 조사자 일괄지정 시 → 자동 조사요청 (폐기 그룹은 자기 보존)
+                    if (s !== '폐기' && s !== '조사요청') {
+                        _jmSaveField(it.josa_id, 'josa_status', '조사요청');
+                        it.josa_status = '조사요청';
+                        sel.value = '조사요청';
+                        _rowStatusUI(i);
                         _jmUpdateGridRow(it.josa_id);
                     }
                 });
@@ -24909,7 +24925,9 @@ MJ 이정우 팀장
         try { if (_jmSvDet && !_jmSvDet.closed) _jmSvDet.close(); } catch (e) {}
         try { if (_jmSvLW && !_jmSvLW.closed) _jmSvLW.close(); } catch (e) {}
     }
-    // 모달 행의 상태 뱃지/조사자 입력 갱신
+    // 모달 행의 상태 뱃지 갱신.
+    // ⚠ 조사자 input 값은 여기서 동기화하지 않음 — 사용자가 비워둔/입력중인 값을 상태 변경 때마다
+    //   it.josaja(과거값)으로 덮어쓰면 "폐기 눌렀더니 조사자가 자동으로 들어감" 현상 발생.
     function _jmSvRefreshRow(idx) {
         if (!_jmSvLW || _jmSvLW.closed) return;
         var it = _jmSvItems[idx]; if (!it) return;
@@ -24918,10 +24936,9 @@ MJ 이정우 팀장
         if (b) {
             var s = it.josa_status || '미분류';
             var c = JM_STATUS_HEX[s] || JM_STATUS_HEX['미분류'];
-            b.textContent = s; b.style.background = c[0]; b.style.color = c[1];
+            b.textContent = s;
+            b.style.background = c[0]; b.style.color = c[1]; b.style.borderColor = c[1];
         }
-        var jn = dd.querySelector('.jm-sv-jin[data-idx="' + idx + '"]');
-        if (jn && jn.value !== (it.josaja || '')) jn.value = it.josaja || '';
     }
     function _jmSvStatusCommit(idx, ns) {
         var it = _jmSvItems[idx]; if (!it) return;
@@ -24935,6 +24952,9 @@ MJ 이정우 팀장
                 if (inp.select) inp.select();
                 _jmSvOpenAc(inp);
             }
+        } else {
+            // 조사요청 외 상태(폐기/조사완료 등)로 변경 시엔 AC 메뉴 즉시 닫음
+            _jmSvCloseAc();
         }
     }
     // 선택보기 팝업창 안 — 조사자 자동완성 (회원 조사자 목록, 팝업 document 내에서 자체 운영)
