@@ -556,8 +556,8 @@
     function _josaNum(n) { if (n === 0 || n === '0') return '0'; if (!n) return ''; return String(n).replace(/[^\d.-]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
     function _josaStColor(s) {
         var M = {
-            '미분류': ['#64748b', '#ffffff'],
-            '조사요청': ['#fde68a', '#92400e'], '조사접수': ['#6366f1', '#ffffff'],
+            '미분류': ['#64748b', '#ffffff'], '조사예정': ['#fde68a', '#92400e'],
+            '조사요청': ['#d1d5db', '#374151'], '조사접수': ['#6366f1', '#ffffff'],
             '조사확정': ['#bbf7d0', '#166534'], '조사완료': ['#0f766e', '#ffffff'],
             '조사불가': ['#fecaca', '#991b1b'], '폐기': ['#b91c1c', '#ffffff']
         };
@@ -23914,7 +23914,7 @@ MJ 이정우 팀장
         return n === 0 ? 'none' : (n === ids.length ? 'all' : 'some');
     }
     // 서브트리 내 jmItems 카운트 — (전체, 미분류, 조사중, 조사완료, 폐기)
-    // 조사중 = 조사요청·조사접수·조사확정·조사불가
+    // 조사중 = 조사예정·조사요청·조사접수·조사확정·조사불가
     function _jmtSubtreeCounts(node) {
         var idsSet = new Set(_jmtCollectIds(node));
         var total = 0, bunryu = 0, jin = 0, done = 0, pye = 0;
@@ -23926,7 +23926,7 @@ MJ 이정우 팀장
             if (s === '미분류') bunryu++;
             else if (s === '폐기') pye++;
             else if (s === '조사완료') done++;
-            else if (s === '조사요청' || s === '조사접수' || s === '조사확정' || s === '조사불가') jin++;
+            else if (s === '조사예정' || s === '조사요청' || s === '조사접수' || s === '조사확정' || s === '조사불가') jin++;
             else bunryu++;  // 알 수 없는 상태는 미분류로
         });
         return { total: total, bunryu: bunryu, jin: jin, done: done, pye: pye };
@@ -23944,7 +23944,7 @@ MJ 이정우 팀장
     var JMT_CNT_CATS = {
         total:  null,
         bunryu: ['미분류'],
-        jin:    ['조사요청', '조사접수', '조사확정', '조사불가'],
+        jin:    ['조사예정', '조사요청', '조사접수', '조사확정', '조사불가'],
         done:   ['조사완료'],
         pye:    ['폐기']
     };
@@ -23975,7 +23975,7 @@ MJ 이정우 팀장
             if (s === '미분류') bunryu++;
             else if (s === '폐기') pye++;
             else if (s === '조사완료') done++;
-            else if (s === '조사요청' || s === '조사접수' || s === '조사확정' || s === '조사불가') jin++;
+            else if (s === '조사예정' || s === '조사요청' || s === '조사접수' || s === '조사확정' || s === '조사불가') jin++;
             else bunryu++;
         });
         return { total: total, bunryu: bunryu, jin: jin, done: done, pye: pye };
@@ -24530,13 +24530,15 @@ MJ 이정우 팀장
         renderJmStatusSummary(filtered);
     }
 
-    // ── 조사 상태 enum (이미지1 워크플로우) — 한 곳에서 관리, 모든 사용처가 참조 ──
-    var JM_STATUS_ALL = ['미분류', '조사요청', '조사접수', '조사확정', '조사불가', '조사완료', '폐기'];
-    var JM_STATUS_SEL = ['미분류', '조사요청', '폐기'];   // 수동 선택 가능 (나머지는 시스템/조사자)
+    // ── 조사 상태 enum — 한 곳에서 관리, 모든 사용처가 참조 ──
+    // 조사예정: 조사자 배정됨 + 텔레그램 전송 전 (일괄전송 모달의 전송 대상)
+    // 조사요청: 텔레그램 전송 완료 + 조사자 응답 대기
+    var JM_STATUS_ALL = ['미분류', '조사예정', '조사요청', '조사접수', '조사확정', '조사불가', '조사완료', '폐기'];
+    var JM_STATUS_SEL = ['미분류', '조사예정', '폐기'];   // 수동 선택 가능. 조사요청은 텔레그램 전송 결과로만 부여
     // 전 화면 통일 팔레트 [배경, 글자] (조사 웹뷰 _josaStColor 와 동일)
     var JM_STATUS_HEX = {
-        '미분류': ['#64748b', '#ffffff'],
-        '조사요청': ['#fde68a', '#92400e'], '조사접수': ['#6366f1', '#ffffff'],
+        '미분류': ['#64748b', '#ffffff'], '조사예정': ['#fde68a', '#92400e'],
+        '조사요청': ['#d1d5db', '#374151'], '조사접수': ['#6366f1', '#ffffff'],
         '조사확정': ['#bbf7d0', '#166534'], '조사완료': ['#0f766e', '#ffffff'],
         '조사불가': ['#fecaca', '#991b1b'], '폐기': ['#b91c1c', '#ffffff']
     };
@@ -24575,8 +24577,8 @@ MJ 이정우 팀장
     }
     // 사건번호 표기: 25타경… → 2025타경… (시각 표시 전용, 데이터는 원본 유지)
     function _jmTgSakunFmt(s) { return String(s || '').replace(/^(\d{2})타경/, '20$1타경'); }
-    // 정렬 우선순위: 조사요청(전송대상) → 미분류 → 폐기 → 기타
-    var _JM_TG_ORDER = { '조사요청': 0, '미분류': 1, '폐기': 2, '조사접수': 3, '조사확정': 4, '조사불가': 5, '조사완료': 6 };
+    // 정렬 우선순위: 조사예정(전송대상) → 미분류(분류대상) → 조사요청(이미전송) → 폐기 → 기타
+    var _JM_TG_ORDER = { '조사예정': 0, '미분류': 1, '조사요청': 2, '폐기': 3, '조사접수': 4, '조사확정': 5, '조사불가': 6, '조사완료': 7 };
     function _jmTgStatusOrder(s) { var v = _JM_TG_ORDER[s]; return (v === undefined) ? 99 : v; }
     // items = 대상 jmItems, doc = 모달을 띄울 document(그리드=document / 리스트창=_jmSvLW.document)
     function openJmTelegramSendModal(items, doc) {
@@ -24611,7 +24613,7 @@ MJ 이정우 팀장
         function rowHtml(it, i) {
             var s = it.josa_status || '미분류';
             var c = JM_STATUS_HEX[s] || JM_STATUS_HEX['미분류'];
-            var willSend = (s === '조사요청');
+            var willSend = (s === '조사예정');   // 조사예정 = 전송대상 (전송 시 조사요청으로 승격)
             return '<tr data-i="' + i + '" data-id="' + escAttr(it.josa_id) + '">' +
                 '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;text-align:center"><input type="checkbox" class="jm-tg-cb" data-i="' + i + '" ' + (willSend ? 'checked' : '') + ' style="cursor:pointer"></td>' +
                 '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;text-align:center">' +
@@ -24635,7 +24637,7 @@ MJ 이정우 팀장
             return groupOrder.map(function (s) {
                 var c = JM_STATUS_HEX[s] || JM_STATUS_HEX['미분류'];
                 var cnt = groups[s].length;
-                var note = (s === '조사요청') ? '(전송대상)' : (s === '폐기' ? '(전송 제외)' : '');
+                var note = (s === '조사예정') ? '(전송대상)' : (s === '조사요청' ? '(이미 전송됨)' : (s === '폐기' ? '(전송 제외)' : ''));
                 return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0">' +
                     '<span style="display:inline-block;padding:4px 10px;border-radius:4px;border:1px solid ' + c[1] + ';background:' + c[0] + ';color:' + c[1] + ';font-size:11px;font-weight:700;min-width:80px;text-align:center">' + escHtml(s) + '</span>' +
                     '<span style="font-size:12px;color:#475569;min-width:42px">' + cnt + '건</span>' +
@@ -24656,7 +24658,7 @@ MJ 이정우 팀장
                     '<button id="jmTgX" style="border:1px solid #cbd5e1;background:#fff;border-radius:4px;padding:3px 10px;cursor:pointer">✕</button>' +
                 '</div>' +
                 '<div style="padding:8px 16px;background:#fff7ed;border-bottom:1px solid #fed7aa;font-size:11.5px;color:#9a3412">' +
-                    '체크된 행 중 상태가 <strong>조사요청</strong> 인 건만 텔레그램 전송됩니다. 상태/조사자는 행에서 직접, 또는 아래 상태별 일괄변경으로 바꿀 수 있습니다.' +
+                    '체크된 행 중 상태가 <strong>조사예정</strong> 인 건만 텔레그램 전송됩니다(전송 후 → 조사요청). 상태/조사자는 행에서 직접, 또는 아래 상태별 일괄변경으로 바꿀 수 있습니다.' +
                 '</div>' +
                 '<div style="padding:10px 16px;border-bottom:1px solid #eef0f2;background:#f8fafc">' +
                     '<div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:6px">상태별 조사자 일괄변경</div>' +
@@ -24694,9 +24696,15 @@ MJ 이정우 팀장
             sel.style.background = c[0]; sel.style.color = c[1]; sel.style.borderColor = c[1];
             var cb = ov.querySelector('.jm-tg-cb[data-i="' + i + '"]');
             var stc = ov.querySelector('.jm-tg-st[data-i="' + i + '"]');
-            // 상태 = 조사요청 = 전송대상 → 자동 체크 + '대기', 아니면 자동 해제 + '제외'
-            if (cb) cb.checked = (s === '조사요청');
-            if (stc) { stc.textContent = (s === '조사요청') ? '대기' : '제외'; stc.style.color = (s === '조사요청') ? '#64748b' : '#94a3b8'; }
+            // 조사예정 = 전송대상 → 자동 체크 + '대기'
+            // 조사요청 = 이미 전송됨 → 해제 + '전송됨'
+            // 그 외 = 해제 + '제외'
+            if (cb) cb.checked = (s === '조사예정');
+            if (stc) {
+                if (s === '조사예정')       { stc.textContent = '대기';   stc.style.color = '#64748b'; }
+                else if (s === '조사요청')  { stc.textContent = '전송됨'; stc.style.color = '#16a34a'; }
+                else                         { stc.textContent = '제외';   stc.style.color = '#94a3b8'; }
+            }
         }
         // 상태 셀렉트 변경 → 메모리/시트 반영 + 색상 & 전송대상 표시 갱신
         Array.prototype.forEach.call(ov.querySelectorAll('.jm-tg-stsel'), function (sel) {
@@ -24723,12 +24731,15 @@ MJ 이정우 팀장
                     it.josaja = newVal;
                     _jmUpdateGridRow(it.josa_id);
                 }
-                // 조사자 입력 시 → 상태값 무관 자동 조사요청 (단, 폐기는 보존)
-                if (newVal && it.josa_status !== '조사요청' && it.josa_status !== '폐기') {
-                    _jmSaveField(it.josa_id, 'josa_status', '조사요청');
-                    it.josa_status = '조사요청';
+                // 조사자 입력 시 → 자동 조사예정 (전송대상). 단 폐기/조사요청(이미전송)/조사완료 후속 상태는 보존
+                if (newVal && it.josa_status !== '조사예정' && it.josa_status !== '조사요청' &&
+                    it.josa_status !== '폐기' && it.josa_status !== '조사접수' &&
+                    it.josa_status !== '조사확정' && it.josa_status !== '조사완료' &&
+                    it.josa_status !== '조사불가') {
+                    _jmSaveField(it.josa_id, 'josa_status', '조사예정');
+                    it.josa_status = '조사예정';
                     var stsel = ov.querySelector('.jm-tg-stsel[data-i="' + i + '"]');
-                    if (stsel) { stsel.value = '조사요청'; _rowStatusUI(i); }
+                    if (stsel) { stsel.value = '조사예정'; _rowStatusUI(i); }
                     _jmUpdateGridRow(it.josa_id);
                 }
             });
@@ -24770,18 +24781,19 @@ MJ 이정우 팀장
                         it.josaja = name;
                         _jmUpdateGridRow(it.josa_id);
                     }
-                    // 조사자 일괄지정 시 → 자동 조사요청 (폐기 그룹은 자기 보존)
-                    if (s !== '폐기' && s !== '조사요청') {
-                        _jmSaveField(it.josa_id, 'josa_status', '조사요청');
-                        it.josa_status = '조사요청';
-                        sel.value = '조사요청';
+                    // 조사자 일괄지정 시 → 자동 조사예정 (미분류 그룹 등). 폐기/조사요청(이미전송)/조사완료 후속 상태는 보존
+                    if (s !== '폐기' && s !== '조사예정' && s !== '조사요청' &&
+                        s !== '조사접수' && s !== '조사확정' && s !== '조사완료' && s !== '조사불가') {
+                        _jmSaveField(it.josa_id, 'josa_status', '조사예정');
+                        it.josa_status = '조사예정';
+                        sel.value = '조사예정';
                         _rowStatusUI(i);
                         _jmUpdateGridRow(it.josa_id);
                     }
                 });
             });
         });
-        // 전송: 체크된 행 중 상태=조사요청 + 조사자 비어있지 않은 건만
+        // 전송: 체크된 행 중 상태=조사예정 + 조사자 비어있지 않은 건만 (전송 후 → 조사요청 자동 승격)
         ov.querySelector('#jmTgSend').addEventListener('click', function () {
             if (typeof google === 'undefined' || !google.script || !google.script.run) { alert('전송 불가: google.script.run 없음'); return; }
             var targets = [];
@@ -24792,17 +24804,23 @@ MJ 이정우 팀장
                 var inp = ov.querySelector('.jm-tg-j[data-i="' + i + '"]');
                 var stc = ov.querySelector('.jm-tg-st[data-i="' + i + '"]');
                 var sel = ov.querySelector('.jm-tg-stsel[data-i="' + i + '"]');
-                if (!cb || !cb.checked) { if (stc && sel && sel.value === '조사요청') { stc.textContent = '미체크'; stc.style.color = '#94a3b8'; } return; }
-                if (!sel || sel.value !== '조사요청') { if (stc) { stc.textContent = '제외'; stc.style.color = '#94a3b8'; } return; }
+                if (!cb || !cb.checked) { if (stc && sel && sel.value === '조사예정') { stc.textContent = '미체크'; stc.style.color = '#94a3b8'; } return; }
+                if (!sel || sel.value !== '조사예정') {
+                    if (stc) {
+                        if (sel && sel.value === '조사요청') { stc.textContent = '이미 전송됨'; stc.style.color = '#16a34a'; }
+                        else { stc.textContent = '제외'; stc.style.color = '#94a3b8'; }
+                    }
+                    return;
+                }
                 var name = String((inp && inp.value) || '').trim();
                 if (!name) { if (stc) { stc.textContent = '조사자 비어있음'; stc.style.color = '#f59e0b'; } return; }
                 targets.push({ i: i, it: it, name: name, stc: stc });
             });
             if (!targets.length) {
-                ov.querySelector('#jmTgMsg').textContent = '전송 대상 없음 (조사요청 + 체크 + 조사자 입력 필요)';
+                ov.querySelector('#jmTgMsg').textContent = '전송 대상 없음 (조사예정 + 체크 + 조사자 입력 필요)';
                 return;
             }
-            if (!confirm('체크된 조사요청 ' + targets.length + '건을 텔레그램으로 전송할까요?')) return;
+            if (!confirm('체크된 조사예정 ' + targets.length + '건을 텔레그램으로 전송할까요?\n(전송 후 상태 → 조사요청)')) return;
             var total = targets.length, done = 0, ok = 0, finished = false;
             function _jmTgProgress() {
                 var msg = ov.querySelector('#jmTgMsg');
@@ -24813,7 +24831,7 @@ MJ 이정우 팀장
                 setTimeout(close, 1200);
             }
             targets.forEach(function (t) {
-                var it = t.it, name = t.name, stc = t.stc;
+                var it = t.it, name = t.name, stc = t.stc, ti = t.i;
                 if (name !== String(it.josaja || '').trim()) { _jmSaveField(it.josa_id, 'josaja', name); it.josaja = name; }
                 _jmSaveField(it.josa_id, 'josaja_id', _jmMemberIdByName(name));
                 _jmUpdateGridRow(it.josa_id);
@@ -24825,7 +24843,21 @@ MJ 이정우 팀장
                 google.script.run
                     .withSuccessHandler(function (resp) {
                         done++;
-                        if (resp && resp.success) { ok++; if (stc) { stc.textContent = '✓ 전송됨'; stc.style.color = '#16a34a'; } }
+                        if (resp && resp.success) {
+                            ok++;
+                            // 전송 성공 → 조사예정 → 조사요청 자동 승격 (시트/메모리/UI)
+                            _jmSaveField(it.josa_id, 'josa_status', '조사요청');
+                            it.josa_status = '조사요청';
+                            var stsel = ov.querySelector('.jm-tg-stsel[data-i="' + ti + '"]');
+                            if (stsel) { stsel.value = '조사요청'; }
+                            _rowStatusUI(ti);   // 셀렉트 색/체크/전송상태 갱신
+                            if (stc) { stc.textContent = '✓ 전송됨'; stc.style.color = '#16a34a'; }
+                            _jmUpdateGridRow(it.josa_id);
+                            if (typeof _jmSvItems !== 'undefined' && _jmSvItems && _jmSvItems.length) {
+                                var k2 = _jmSvItems.indexOf(it);
+                                if (k2 >= 0 && typeof _jmSvRefreshRow === 'function') _jmSvRefreshRow(k2);
+                            }
+                        }
                         else { if (stc) { stc.textContent = '✗ ' + (resp && resp.message || '실패'); stc.style.color = '#dc2626'; } }
                         _jmTgProgress();
                     })
@@ -24865,8 +24897,8 @@ MJ 이정우 팀장
         html += '<span onclick="toggleJmSummaryFilter(\'\')" title="필터 해제(그리드 전체)" style="cursor:pointer;color:#0f172a;font-weight:' +
                 (JM_FILTER_STATUS.size === 0 ? '800' : '700') + ';text-decoration:underline;text-underline-offset:3px">전체 <strong>' + grand + '</strong></span>';
         html += seg('미분류', '12px');
-        // 조사요청~조사불가 = 한 묶음(연한 배경 버튼 모양)
-        var midKeys = ['조사요청', '조사접수', '조사확정', '조사불가'];
+        // 조사예정~조사불가 = 한 묶음(연한 배경 버튼 모양)
+        var midKeys = ['조사예정', '조사요청', '조사접수', '조사확정', '조사불가'];
         html += '<span style="display:inline-flex;align-items:center;gap:10px;margin-left:12px;padding:3px 10px;border-radius:6px;background:#eef2ff;border:1px solid #c7d2fe">' +
                 midKeys.map(function (k) { return seg(k, '', true); }).join('') + '</span>';
         html += seg('조사완료', '12px');
@@ -24945,7 +24977,8 @@ MJ 이정우 팀장
         _jmSaveField(it.josa_id, 'josa_status', ns, function () { _jmUpdateGridRow(it.josa_id); });
         it.josa_status = ns;
         _jmSvRefreshRow(idx);
-        if (ns === '조사요청' && _jmSvLW && !_jmSvLW.closed) {
+        // 조사예정 = 조사자 배정 단계 → 조사자 input 포커스 + AC 자동 오픈
+        if (ns === '조사예정' && _jmSvLW && !_jmSvLW.closed) {
             var inp = _jmSvLW.document.querySelector('.jm-sv-jin[data-idx="' + idx + '"]');
             if (inp) {
                 inp.focus();
@@ -24953,7 +24986,7 @@ MJ 이정우 팀장
                 _jmSvOpenAc(inp);
             }
         } else {
-            // 조사요청 외 상태(폐기/조사완료 등)로 변경 시엔 AC 메뉴 즉시 닫음
+            // 그 외 상태로 변경 시엔 AC 메뉴 즉시 닫음
             _jmSvCloseAc();
         }
     }
@@ -25034,10 +25067,10 @@ MJ 이정우 팀장
         _jmSaveField(it.josa_id, 'josaja', val, function () { _jmUpdateGridRow(it.josa_id); });
         _jmSaveField(it.josa_id, 'josaja_id', _jmMemberIdByName(val));
         it.josaja = val;
-        // 조사자 신규 입력 → 자동 조사요청 (미분류/미지정에서만)
+        // 조사자 신규 입력 → 자동 조사예정 (미분류/미지정에서만). 텔레그램 전송 시 조사요청으로 승격됨.
         if (val && (!it.josa_status || it.josa_status === '미분류')) {
-            _jmSaveField(it.josa_id, 'josa_status', '조사요청', function () { _jmUpdateGridRow(it.josa_id); });
-            it.josa_status = '조사요청';
+            _jmSaveField(it.josa_id, 'josa_status', '조사예정', function () { _jmUpdateGridRow(it.josa_id); });
+            it.josa_status = '조사예정';
             _jmSvRefreshRow(idx);
         }
     }
@@ -25422,8 +25455,8 @@ MJ 이정우 팀장
                 if (newStatus === cur) return;
                 _jmSaveField(josaId, 'josa_status', newStatus, function (resp) {
                     _jmUpdateGridRow(josaId);   // 재정렬 없이 그 자리 갱신
-                    // 조사요청 → 그 행 조사자 입력칸 포커스 + 자동완성 펼침
-                    if (newStatus === '조사요청') {
+                    // 조사예정 = 조사자 배정 단계 → 그 행 조사자 입력칸 포커스 + 자동완성 펼침
+                    if (newStatus === '조사예정') {
                         setTimeout(function () {
                             var sel = (window.CSS && CSS.escape) ? CSS.escape(josaId) : josaId;
                             var inp = document.querySelector('.jm-josaja-input[data-id="' + sel + '"]');
@@ -25562,9 +25595,9 @@ MJ 이정우 팀장
         }
         _jmSaveField(josaId, 'josaja', newVal);
         _jmSaveField(josaId, 'josaja_id', _jmMemberIdByName(newVal));   // 키(동명이인 안전)
-        // 조사자 신규 입력 시 → 자동 '조사요청' (미분류/미지정에서만 승격, 다운그레이드 안 함)
+        // 조사자 신규 입력 시 → 자동 '조사예정' (미분류/미지정에서만 승격, 다운그레이드 안 함)
         if (newVal && (!it || !it.josa_status || it.josa_status === '미분류')) {
-            _jmSaveField(josaId, 'josa_status', '조사요청', function () { _jmUpdateGridRow(josaId); });
+            _jmSaveField(josaId, 'josa_status', '조사예정', function () { _jmUpdateGridRow(josaId); });
         }
     }
 

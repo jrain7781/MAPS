@@ -7516,8 +7516,6 @@ function readAllJosaItems() {
     });
     // 레거시 정규화: 시트에 저장된 옛 '분류필요' → '미분류' (읽을 때만, 시트 비파괴)
     if (obj.josa_status === '분류필요') obj.josa_status = '미분류';
-    // 레거시 정규화: '조사예정' enum 폐지 (조사요청이 그 자리를 흡수, 색상도 조사요청에 이식)
-    if (obj.josa_status === '조사예정') obj.josa_status = '조사요청';
     return obj;
   }).filter(function(r) { return r.josa_id; });
 }
