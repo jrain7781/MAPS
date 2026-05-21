@@ -6028,6 +6028,53 @@
         showForm('edit', data);
     }
 
+    // 입찰물건관리 그리드 화살표 ↑↓ 이동 — 현재 활성 탭(상세/조사) 유지하며 행만 교체
+    // (한 번만 설치, dataTableBody 변수가 위에서 const 로 선언됨)
+    (function () {
+        if (window.__itemArrowReady) return;
+        window.__itemArrowReady = true;
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+            var tag = (e.target && e.target.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+            var pane = document.getElementById('ItemManagement');
+            if (!pane || pane.classList.contains('content-hidden')) return;
+            // 모달 떠있으면 무시 (modal-overlay, fixed inset-0 ... 류)
+            if (document.querySelector('.modal-overlay:not(.content-hidden)')) return;
+            if (!dataTableBody) return;
+            var rows = Array.prototype.filter.call(dataTableBody.querySelectorAll('tr[data-id]'), function (tr) { return tr.offsetParent !== null; });
+            if (!rows.length) return;
+            var curIdx = (typeof activeRow !== 'undefined') ? rows.indexOf(activeRow) : -1;
+            var dir = (e.key === 'ArrowDown') ? 1 : -1;
+            var nextIdx = (curIdx < 0) ? (dir > 0 ? 0 : rows.length - 1) : curIdx + dir;
+            if (nextIdx < 0 || nextIdx >= rows.length) return;
+            e.preventDefault();
+            var nextRow = rows[nextIdx];
+            var id = nextRow.dataset.id;
+            var item = (typeof allBiddingData !== 'undefined' && allBiddingData)
+                ? allBiddingData.find(function (i) { return String(i.id) === String(id); })
+                : null;
+            if (!item) return;
+            selectItem(nextRow, item);     // 우측 상세 폼 갱신 (탭 전환은 showForm 'edit' 모드에서 안 함 — 상세/조사 그대로 유지)
+            // 조사이미지 — 행에 이미지 있으면 항상 갱신, 조사탭이 활성이면 사용자가 즉시 봄
+            var imageIdsString = nextRow.getAttribute('data-images') || '';
+            var ids = imageIdsString ? imageIdsString.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+            if (typeof renderInvestigationImagesFromIds === 'function') {
+                if (ids.length) {
+                    renderInvestigationImagesFromIds(ids);
+                } else {
+                    var listEl = document.getElementById('investigationImageList');
+                    var placeholderEl = document.getElementById('investigationPlaceholder');
+                    var footerEl = document.getElementById('investigationImageIdsFooter');
+                    if (listEl) { listEl.innerHTML = ''; listEl.classList.add('content-hidden'); }
+                    if (placeholderEl) { placeholderEl.textContent = '등록된 이미지 없음'; placeholderEl.classList.remove('content-hidden'); }
+                    if (footerEl) footerEl.textContent = '';
+                }
+            }
+            try { nextRow.scrollIntoView({ block: 'nearest' }); } catch (_) {}
+        });
+    })();
+
     let currentModalItemData = null;
     let currentModalHistoryData = null; // [최적화 Phase 3] 히스토리 데이터 사전 로딩용
 
