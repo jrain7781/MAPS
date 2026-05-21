@@ -24162,18 +24162,9 @@ MJ 이정우 팀장
         var html = '';
         tree.children.forEach(function (top) { html += _jmtRenderTopCard(top, collapsed); });
         list.innerHTML = html;
-        // leaf
+        // leaf — 클릭은 무동작 (체크/펼침 모두 별도 컨트롤로). 드래그만 활성
         list.querySelectorAll('.jmt-item').forEach(function (el) {
             _jmtBindDrag(el, 'leaf');
-            // leaf 행(체크박스/드래그핸들 외) 클릭 → 선택 토글 + 그리드 반영 (체크박스 직접 클릭은 개별 동작 유지)
-            el.addEventListener('click', function (e) {
-                var cl = e.target && e.target.classList;
-                if (cl && (cl.contains('jmt-row-chk') || cl.contains('drag-handle'))) return;
-                var id = el.dataset.id;
-                if (jmSelectedPresetIds.has(id)) jmSelectedPresetIds.delete(id); else jmSelectedPresetIds.add(id);
-                renderJosaTree();
-                applyJosaFilters();
-            });
         });
         // leaf 체크박스
         list.querySelectorAll('.jmt-row-chk').forEach(function (cb) {
@@ -24185,7 +24176,7 @@ MJ 이정우 팀장
                 applyJosaFilters();
             });
         });
-        // branch
+        // branch — 클릭 = 접힘/펼침 토글만. 체크는 체크박스만으로 관리
         list.querySelectorAll('.jmt-branch').forEach(function (b) {
             b.addEventListener('click', function (e) {
                 var cl = e.target && e.target.classList;
@@ -24194,12 +24185,7 @@ MJ 이정우 팀장
                 var path = b.dataset.path;
                 if (c.has(path)) c.delete(path); else c.add(path);
                 _jmtSaveCollapsed(c);
-                // 행 클릭 시 체크박스도 연동: 전체선택 상태면 해제, 아니면 선택
-                var ids = String(b.dataset.ids || '').split(',').filter(Boolean);
-                if (_jmtBranchCheckState(ids) === 'all') ids.forEach(function (id) { jmSelectedPresetIds.delete(id); });
-                else ids.forEach(function (id) { jmSelectedPresetIds.add(id); });
                 renderJosaTree();
-                applyJosaFilters();
             });
             _jmtBindDrag(b, 'branch');
         });
@@ -24215,7 +24201,7 @@ MJ 이정우 팀장
                 applyJosaFilters();
             });
         });
-        // card 헤더 클릭
+        // card 헤더 클릭 = 접힘/펼침 토글만. 체크는 체크박스만으로 관리
         list.querySelectorAll('.jmt-card-head').forEach(function (h) {
             h.addEventListener('click', function (e) {
                 var cl = e.target && e.target.classList;
@@ -24224,12 +24210,7 @@ MJ 이정우 팀장
                 var path = h.dataset.path;
                 if (c.has(path)) c.delete(path); else c.add(path);
                 _jmtSaveCollapsed(c);
-                // 행 클릭 시 체크박스도 연동: 전체선택 상태면 해제, 아니면 선택
-                var ids = String(h.dataset.ids || '').split(',').filter(Boolean);
-                if (_jmtBranchCheckState(ids) === 'all') ids.forEach(function (id) { jmSelectedPresetIds.delete(id); });
-                else ids.forEach(function (id) { jmSelectedPresetIds.add(id); });
                 renderJosaTree();
-                applyJosaFilters();
             });
         });
         // card 체크박스
@@ -24396,13 +24377,19 @@ MJ 이정우 팀장
         });
         return paths;
     }
-    // "크롤링리스트" 제목 클릭 = (구) 전체 체크박스 토글
+    // "전체" 제목 클릭 = 모든 카드의 접힘 상태 토글 (체크는 건드리지 않음 — 체크박스만 사용)
     function onJmCrawlTitleClick() {
-        var cb = document.getElementById('jm-tree-all');
-        if (!cb) return;
-        cb.checked = !cb.checked;
-        cb.indeterminate = false;
-        onJmTreeAllChange(cb);
+        var collapsed = _jmtLoadCollapsed();
+        // 현재 카드 path 목록 (1단계만)
+        var paths = [];
+        var tree = _jmtBuildTree(_jmtOrderedPresets());
+        tree.children.forEach(function (top) { paths.push(top.path); });
+        // 하나라도 접혀있으면 전부 펼침, 모두 펼침이면 전부 접음
+        var anyCollapsed = paths.some(function (p) { return collapsed.has(p); });
+        if (anyCollapsed) paths.forEach(function (p) { collapsed.delete(p); });
+        else              paths.forEach(function (p) { collapsed.add(p); });
+        _jmtSaveCollapsed(collapsed);
+        renderJosaTree();
     }
 
     // 좌측을 우측 그리드와 줄별로 동일 Y 정렬:
@@ -25555,7 +25542,7 @@ MJ 이정우 팀장
 
             // 사건번호 + 물건종류 + [옥션원] / [조사내용] 버튼 (조사내용은 입찰물건 등록된 경우만)
             var auctionBtn = it.view_url
-                ? '<button type="button" onclick="window.open(\'' + escAttr(it.view_url) + '\',\'_auction\',\'width=896,height=900,left=100,top=50,resizable=yes,scrollbars=yes\')" class="jm-cell-btn jm-btn-auction">옥션원</button>'
+                ? '<button type="button" onclick="openJmAuctionDetail(\'' + escAttr(it.josa_id) + '\',\'' + escAttr(it.view_url) + '\')" class="jm-cell-btn jm-btn-auction">옥션원</button>'
                 : '';
             // 조사내용 버튼: 백엔드가 내려준 bid_img(=items 시트에 해당 사건 이미지 있음) 일 때만
             var josaBtn = it.bid_img
@@ -25632,6 +25619,54 @@ MJ 이정우 팀장
                 '</tr>';
         }).join('');
     }
+
+    // 그리드 옥션원 상세창 — 같은 윈도우 reuse + 활성 행 추적 + 화살표 ↑↓ 이동
+    var _jmAuctionWin = null;
+    var _jmActiveJosaId = null;
+    function _jmMarkActiveRow(josaId) {
+        _jmActiveJosaId = String(josaId || '');
+        document.querySelectorAll('#jm-grid-body tr.jm-row').forEach(function (tr) {
+            var cb = tr.querySelector('.jm-row-cb');
+            tr.classList.toggle('jm-row-active', !!cb && cb.dataset.id === _jmActiveJosaId);
+        });
+    }
+    function openJmAuctionDetail(josaId, url) {
+        _jmMarkActiveRow(josaId);
+        if (!url) return;
+        try {
+            if (_jmAuctionWin && !_jmAuctionWin.closed) {
+                _jmAuctionWin.location.href = url;
+                _jmAuctionWin.focus();
+                return;
+            }
+        } catch (e) {}
+        _jmAuctionWin = window.open(url, 'jm_auction_detail',
+            'width=896,height=900,left=100,top=50,resizable=yes,scrollbars=yes');
+    }
+    // 화살표 ↑↓ — 상세창이 열려있고 JM 탭 활성일 때만 visible 행 사이 이동
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+        if (!_jmAuctionWin || _jmAuctionWin.closed) return;
+        var tag = (e.target && e.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+        var jm = document.getElementById('JosaManagement');
+        if (!jm || jm.classList.contains('content-hidden')) return;
+        var rows = Array.prototype.slice.call(document.querySelectorAll('#jm-grid-body tr.jm-row'));
+        if (!rows.length) return;
+        var curIdx = rows.findIndex(function (tr) { var cb = tr.querySelector('.jm-row-cb'); return cb && cb.dataset.id === _jmActiveJosaId; });
+        var dir = (e.key === 'ArrowDown') ? 1 : -1;
+        var nextIdx = (curIdx < 0) ? (dir > 0 ? 0 : rows.length - 1) : curIdx + dir;
+        if (nextIdx < 0 || nextIdx >= rows.length) return;
+        e.preventDefault();
+        var nextTr = rows[nextIdx];
+        var cb2 = nextTr.querySelector('.jm-row-cb');
+        if (!cb2) return;
+        var nextId = cb2.dataset.id;
+        var it = (jmItems || []).find(function (x) { return String(x.josa_id) === String(nextId); });
+        if (!it) return;
+        openJmAuctionDetail(nextId, it.view_url || '');
+        try { nextTr.scrollIntoView({ block: 'nearest' }); } catch (_) {}
+    });
 
     // 공통: 필드 1개 GAS 저장 (메모리 즉시 반영 + 서버 비동기)
     function _jmSaveField(josaId, field, value, onDone) {
