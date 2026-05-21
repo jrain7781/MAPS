@@ -24591,20 +24591,41 @@ MJ 이정우 팀장
         if (!checked.length) { alert('체크된 행이 없습니다. 전송할 행을 체크하세요.'); return; }
         var idset = checked.map(function (cb) { return String(cb.dataset.id); });
         var items = (jmItems || []).filter(function (it) { return idset.indexOf(String(it.josa_id)) >= 0; });
-        openJmTelegramSendModal(items, document);
+        openJmTelegramSendModal(items);
     }
     // 사건번호 표기: 25타경… → 2025타경… (시각 표시 전용, 데이터는 원본 유지)
     function _jmTgSakunFmt(s) { return String(s || '').replace(/^(\d{2})타경/, '20$1타경'); }
     // 정렬 우선순위: 조사예정(전송대상) → 미분류(분류대상) → 조사요청(이미전송) → 폐기 → 기타
     var _JM_TG_ORDER = { '조사예정': 0, '미분류': 1, '조사요청': 2, '폐기': 3, '조사접수': 4, '조사확정': 5, '조사불가': 6, '조사완료': 7 };
     function _jmTgStatusOrder(s) { var v = _JM_TG_ORDER[s]; return (v === undefined) ? 99 : v; }
-    // items = 대상 jmItems, doc = 모달을 띄울 document(그리드=document / 리스트창=_jmSvLW.document)
-    function openJmTelegramSendModal(items, doc) {
-        doc = doc || document;
+    // items = 대상 jmItems. 일괄전송 모달은 별도 popup window 로 띄움 (어느 모달 안에도 갇히지 않음).
+    // 윈도우 크기/위치/사이드폭은 localStorage('jm_tg_win_v1') 에 저장+복원.
+    var _jmTgWinRef = null;
+    function openJmTelegramSendModal(items) {
         if (!items || !items.length) { alert('대상 항목이 없습니다.'); return; }
-        var old = doc.getElementById('jm-tg-modal'); if (old) old.remove();
         var invs = (typeof smInvestigators !== 'undefined' && Array.isArray(smInvestigators) ? smInvestigators : [])
             .map(function (m) { return m.member_name; }).filter(Boolean);
+        // 저장된 윈도우 크기/위치/사이드 폭 복원
+        var _saved = (function () {
+            try { return JSON.parse(localStorage.getItem('jm_tg_win_v1') || '{}'); } catch (e) { return {}; }
+        })();
+        var _winW = Math.max(_saved.w    || 1200, 600);
+        var _winH = Math.max(_saved.h    || 800,  400);
+        var _winL = (_saved.left != null) ? _saved.left : 80;
+        var _winT = (_saved.top  != null) ? _saved.top  : 60;
+        var _initSide = Math.min(Math.max(_saved.side || 200, 120), 500);
+        // 기존 일괄전송 윈도우가 떠있으면 닫고 새로 띄움
+        if (_jmTgWinRef && !_jmTgWinRef.closed) { try { _jmTgWinRef.close(); } catch (e) {} }
+        var tgWin = window.open('', 'jm_tg_modal',
+            'width=' + _winW + ',height=' + _winH + ',left=' + _winL + ',top=' + _winT + ',resizable=yes,scrollbars=yes');
+        if (!tgWin) { alert('팝업이 차단되었습니다. 이 사이트 팝업 허용 후 다시 [조사요청전송]을 누르세요.'); return; }
+        _jmTgWinRef = tgWin;
+        var doc = tgWin.document;
+        doc.open();
+        doc.write('<!doctype html><html><head><meta charset="utf-8"><title>일괄변경 / 전송</title>' +
+                  '<style>*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}</style>' +
+                  '</head><body></body></html>');
+        doc.close();
         // 원본 배열 변형 방지 + 안정 정렬
         var sorted = items.slice().sort(function (a, b) {
             var oa = _jmTgStatusOrder(a.josa_status || '미분류');
@@ -24667,30 +24688,18 @@ MJ 이정우 팀장
             }).join('');
         }
 
-        // 저장된 모달 크기/사이드 폭 (사용자가 드래그로 조절 → localStorage)
-        var _jmTgSize = (function () {
-            try { return JSON.parse(localStorage.getItem('jm_tg_size_v1') || '{}'); } catch (e) { return {}; }
-        })();
-        var _winRef = doc.defaultView || window;
-        var _vw = (_winRef && _winRef.innerWidth)  || 1280;
-        var _vh = (_winRef && _winRef.innerHeight) || 800;
-        var _initW    = Math.min(Math.max(_jmTgSize.w    || 1180, 600), _vw - 20);
-        var _initH    = Math.min(Math.max(_jmTgSize.h    || 700,  360), _vh - 20);
-        var _initSide = Math.min(Math.max(_jmTgSize.side || 180,  120), 400);
-
-        var ov = doc.createElement('div');
+        // body 자체가 카드 — 헤더/안내/좌우분할/푸터를 body 에 직접 그림 (popup window 가 카드 역할)
+        var ov = doc.body;
         ov.id = 'jm-tg-modal';
-        ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif';
         ov.innerHTML =
-            '<div id="jmTgCard" style="background:#fff;border-radius:8px;width:' + _initW + 'px;height:' + _initH + 'px;max-width:98vw;max-height:96vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,.3);resize:both;overflow:hidden;min-width:600px;min-height:360px">' +
                 // 헤더
-                '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">' +
+                '<div style="padding:10px 14px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:#fff">' +
                     '<strong style="font-size:14px;color:#1e3a8a">📋 일괄변경 / 전송 — ' + sorted.length + '건</strong>' +
                     '<button id="jmTgX" style="border:1px solid #cbd5e1;background:#fff;border-radius:4px;padding:3px 10px;cursor:pointer">✕</button>' +
                 '</div>' +
                 // 안내문
-                '<div style="padding:8px 16px;background:#fff7ed;border-bottom:1px solid #fed7aa;font-size:11.5px;color:#9a3412;flex-shrink:0">' +
-                    '왼쪽 상태 항목을 클릭하면 오른쪽이 그 상태 행으로 바뀝니다. 조사예정 상태에서 체크된 행만 텔레그램 전송됩니다(전송 후 → 조사요청). 카드 오른쪽-아래 모서리/사이드 경계선을 드래그해 크기 조절(저장됨).' +
+                '<div style="padding:8px 14px;background:#fff7ed;border-bottom:1px solid #fed7aa;font-size:11.5px;color:#9a3412;flex-shrink:0">' +
+                    '왼쪽 상태 항목을 클릭하면 오른쪽이 그 상태 행으로 바뀝니다. 조사예정 상태에서 체크된 행만 텔레그램 전송됩니다(전송 후 → 조사요청). 창 크기는 모서리 드래그, 사이드 폭은 가운데 경계선 드래그 — 모두 저장됩니다.' +
                 '</div>' +
                 // 좌우 분할
                 '<div style="flex:1;display:flex;overflow:hidden;min-height:0">' +
@@ -24706,20 +24715,20 @@ MJ 이정우 팀장
                         // 오른쪽 actionbar (조사자 일괄변경 + 일괄적용/전송)
                         '<div style="padding:8px 12px;border-bottom:1px solid #e2e8f0;background:#fafbfc;display:flex;align-items:center;gap:6px;flex-wrap:nowrap">' +
                             '<span style="font-size:11.5px;color:#334155;font-weight:700;white-space:nowrap">조사자:</span>' +
-                            '<input id="jmTgBulkJ" list="jmTgInv" placeholder="이름" autocomplete="off" style="width:90px;min-width:60px;font-size:12px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:4px;box-sizing:border-box">' +
-                            '<button id="jmTgBulkApply" style="border:1px solid #2f6fd8;background:#2f6fd8;color:#fff;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0">체크 행 적용</button>' +
+                            '<input id="jmTgBulkJ" list="jmTgInv" placeholder="이름" autocomplete="off" style="width:120px;min-width:80px;font-size:12px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:4px;box-sizing:border-box">' +
+                            '<button id="jmTgBulkApply" style="border:1px solid #2f6fd8;background:#2f6fd8;color:#fff;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0">체크 행 적용</button>' +
                             '<span style="flex:1;min-width:4px"></span>' +
-                            '<button id="jmTgSend" style="border:0;background:#2563eb;color:#fff;border-radius:4px;padding:6px 12px;cursor:pointer;font-weight:700;white-space:nowrap;flex-shrink:0;font-size:12.5px">📋 일괄적용/전송</button>' +
+                            '<button id="jmTgSend" style="border:0;background:#2563eb;color:#fff;border-radius:4px;padding:6px 16px;cursor:pointer;font-weight:700;white-space:nowrap;flex-shrink:0;font-size:12.5px">📋 일괄적용/전송</button>' +
                         '</div>' +
                         // 그리드
                         '<div style="flex:1;overflow:auto;padding:4px 10px">' +
                             '<table style="width:100%;border-collapse:collapse">' +
                                 '<thead><tr style="background:#f1f5f9">' +
                                     '<th style="padding:6px 4px;font-size:11px;color:#475569;text-align:center;width:32px"><input type="checkbox" id="jmTgAllCb" style="cursor:pointer"></th>' +
-                                    '<th style="padding:6px 4px;font-size:11px;color:#475569;text-align:center;width:84px">상태</th>' +
+                                    '<th style="padding:6px 4px;font-size:11px;color:#475569;text-align:center;width:88px">상태</th>' +
                                     '<th style="padding:6px 4px;font-size:11px;color:#475569;text-align:left">사건번호</th>' +
-                                    '<th style="padding:6px 4px;font-size:11px;color:#475569;text-align:center;width:94px">조사자</th>' +
-                                    '<th style="padding:6px 4px;font-size:11px;color:#475569;text-align:center;width:74px">전송상태</th>' +
+                                    '<th style="padding:6px 4px;font-size:11px;color:#475569;text-align:center;width:110px">조사자</th>' +
+                                    '<th style="padding:6px 4px;font-size:11px;color:#475569;text-align:center;width:80px">전송상태</th>' +
                                 '</tr></thead>' +
                                 '<tbody>' + rows + '</tbody></table>' +
                             '<datalist id="jmTgInv">' + invs.map(function (n) { return '<option value="' + escAttr(n) + '">'; }).join('') + '</datalist>' +
@@ -24727,45 +24736,39 @@ MJ 이정우 팀장
                     '</main>' +
                 '</div>' +
                 // 푸터
-                '<div style="padding:10px 16px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px">' +
+                '<div style="padding:8px 14px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;background:#fff">' +
                     '<span id="jmTgMsg" style="margin-right:auto;font-size:12px;color:#64748b;align-self:center"></span>' +
                     '<button id="jmTgCancel" style="border:1px solid #cbd5e1;background:#fff;border-radius:4px;padding:6px 14px;cursor:pointer">닫기</button>' +
-                '</div>' +
-            '</div>';
-        (doc.body || doc.documentElement).appendChild(ov);
-        function close() { ov.remove(); }
+                '</div>';
+        function close() { try { tgWin.close(); } catch (e) {} }
         ov.querySelector('#jmTgX').addEventListener('click', close);
         ov.querySelector('#jmTgCancel').addEventListener('click', close);
-        ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
 
-        // 카드 리사이즈(resize:both) — ResizeObserver 로 변경 감지 + debounce 저장
-        var _jmTgCard = ov.querySelector('#jmTgCard');
+        // 창 크기/위치/사이드 폭 저장 (resize/beforeunload)
         var _jmTgSide_el = ov.querySelector('#jmTgSide');
-        var _saveSize = (function () {
+        var _saveWin = (function () {
             var t = null;
             return function () {
                 if (t) clearTimeout(t);
                 t = setTimeout(function () {
                     try {
-                        var w    = _jmTgCard ? Math.round(_jmTgCard.offsetWidth) : 0;
-                        var h    = _jmTgCard ? Math.round(_jmTgCard.offsetHeight) : 0;
-                        var side = _jmTgSide_el ? Math.round(_jmTgSide_el.offsetWidth) : 0;
-                        if (w && h && side) {
-                            localStorage.setItem('jm_tg_size_v1', JSON.stringify({ w: w, h: h, side: side }));
-                        }
+                        var side = _jmTgSide_el ? _jmTgSide_el.offsetWidth : _initSide;
+                        var data = {
+                            w:    tgWin.outerWidth  || tgWin.innerWidth  || _winW,
+                            h:    tgWin.outerHeight || tgWin.innerHeight || _winH,
+                            left: tgWin.screenX,
+                            top:  tgWin.screenY,
+                            side: Math.round(side)
+                        };
+                        localStorage.setItem('jm_tg_win_v1', JSON.stringify(data));
                     } catch (e) {}
                 }, 250);
             };
         })();
-        try {
-            var _RO = (_winRef && _winRef.ResizeObserver) || window.ResizeObserver;
-            if (_RO && _jmTgCard) {
-                var _ro = new _RO(function () { _saveSize(); });
-                _ro.observe(_jmTgCard);
-            }
-        } catch (e) {}
+        tgWin.addEventListener('resize', _saveWin);
+        tgWin.addEventListener('beforeunload', _saveWin);
 
-        // 사이드↔메인 splitter — 드래그로 사이드 폭 조절 (저장은 ResizeObserver 가 처리하지 못하므로 별도)
+        // 사이드↔메인 splitter — 드래그로 사이드 폭 조절 + 저장
         (function () {
             var sp = ov.querySelector('#jmTgSplit');
             if (!sp || !_jmTgSide_el) return;
@@ -24780,7 +24783,7 @@ MJ 이정우 팀장
             });
             doc.addEventListener('mousemove', function (e) {
                 if (!dragging) return;
-                var w = Math.max(120, Math.min(400, startW + (e.clientX - startX)));
+                var w = Math.max(120, Math.min(500, startW + (e.clientX - startX)));
                 _jmTgSide_el.style.width = w + 'px';
             });
             doc.addEventListener('mouseup', function () {
@@ -24788,7 +24791,7 @@ MJ 이정우 팀장
                 dragging = false;
                 sp.style.background = '#e5e7eb';
                 doc.body.style.userSelect = '';
-                _saveSize();
+                _saveWin();
             });
         })();
 
@@ -25390,8 +25393,8 @@ MJ 이정우 팀장
         d.getElementById('jmsvNext').addEventListener('click', function () { _jmSvNext(); });
         d.getElementById('jmsvFin').addEventListener('click', function () { _jmSvFinish(); });
         d.getElementById('jmsvTg').addEventListener('click', function () {
-            // 선택보기 팝업창 위에 띄움. 모달 크기/사이드폭은 사용자가 조절+저장 가능
-            openJmTelegramSendModal(_jmSvItems, _jmSvLW.document);
+            // 일괄전송은 별도 popup window 로 띄움 (어느 모달에도 갇히지 않음)
+            openJmTelegramSendModal(_jmSvItems);
         });
         d.addEventListener('keydown', function (e) {
             if (e.key === 'ArrowDown') { e.preventDefault(); _jmSvNext(); }
