@@ -24606,10 +24606,8 @@ MJ 이정우 팀장
                 return '<option value="' + escAttr(s) + '"' + (s === cur ? ' selected' : '') + '>' + escHtml(s) + '</option>';
             }).join('');
         }
-        function jossSelOptions() {
-            return '<option value="">(조사자 선택)</option>' +
-                invs.map(function (n) { return '<option value="' + escAttr(n) + '">' + escHtml(n) + '</option>'; }).join('');
-        }
+        // (group input 은 텍스트 input + datalist 로 자동완성 — select 박스 X)
+        function jossSelOptions() { return ''; /* deprecated, retained for backward compat */ }
         function rowHtml(it, i) {
             var s = it.josa_status || '미분류';
             var c = JM_STATUS_HEX[s] || JM_STATUS_HEX['미분류'];
@@ -24622,7 +24620,7 @@ MJ 이정우 팀장
                 '</td>' +
                 '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;font-size:12px;font-weight:700;white-space:nowrap;color:#1f2937">' + escHtml(_jmTgSakunFmt(it.sakun_no)) + '</td>' +
                 '<td style="padding:5px 6px;border-bottom:1px solid #eef0f2;text-align:center">' +
-                    '<input class="jm-tg-j" data-i="' + i + '" list="jmTgInv" value="' + escAttr(it.josaja || '') + '" placeholder="조사자" style="width:96px;font-size:11px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;text-align:center;box-sizing:border-box">' +
+                    '<input class="jm-tg-j" data-i="' + i + '" list="jmTgInv" value="' + escAttr(it.josaja || '') + '" placeholder="조사자" autocomplete="off" style="width:88px;font-size:11px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;text-align:center;box-sizing:border-box">' +
                 '</td>' +
                 '<td class="jm-tg-st" data-i="' + i + '" style="padding:5px 6px;border-bottom:1px solid #eef0f2;font-size:11px;color:#94a3b8;white-space:nowrap;text-align:center">' +
                     (willSend ? '대기' : '제외') +
@@ -24639,11 +24637,11 @@ MJ 이정우 팀장
                 var cnt = groups[s].length;
                 var note = (s === '조사요청') ? '(전송대상)' : (s === '폐기' ? '(전송 제외)' : '');
                 return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0">' +
-                    '<span style="display:inline-block;padding:3px 10px;border-radius:4px;border:1px solid ' + c[1] + ';background:' + c[0] + ';color:' + c[1] + ';font-size:11px;font-weight:700;min-width:80px;text-align:center">' + escHtml(s) + '</span>' +
-                    '<span style="font-size:12px;color:#475569;min-width:48px">' + cnt + '건</span>' +
-                    '<select class="jm-tg-gsel" data-s="' + escAttr(s) + '" style="font-size:12px;padding:3px 6px;border:1px solid #cbd5e1;border-radius:4px;min-width:130px">' + jossSelOptions() + '</select>' +
-                    '<button type="button" class="jm-tg-gapply" data-s="' + escAttr(s) + '" style="border:1px solid #2f6fd8;background:#2f6fd8;color:#fff;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:600">이 상태 일괄적용</button>' +
-                    (note ? '<span style="font-size:11px;color:#94a3b8;margin-left:4px">' + note + '</span>' : '') +
+                    '<span style="display:inline-block;padding:4px 10px;border-radius:4px;border:1px solid ' + c[1] + ';background:' + c[0] + ';color:' + c[1] + ';font-size:11px;font-weight:700;min-width:80px;text-align:center">' + escHtml(s) + '</span>' +
+                    '<span style="font-size:12px;color:#475569;min-width:42px">' + cnt + '건</span>' +
+                    '<input class="jm-tg-gsel" data-s="' + escAttr(s) + '" list="jmTgInv" placeholder="조사자 입력" autocomplete="off" style="font-size:12px;padding:4px 8px;border:1px solid #cbd5e1;border-radius:4px;width:120px;box-sizing:border-box">' +
+                    '<button type="button" class="jm-tg-gapply" data-s="' + escAttr(s) + '" style="border:1px solid #2f6fd8;background:#2f6fd8;color:#fff;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap">일괄적용</button>' +
+                    (note ? '<span style="font-size:11px;color:#94a3b8;margin-left:4px;white-space:nowrap">' + note + '</span>' : '') +
                     '</div>';
             }).join('');
         }
@@ -24670,8 +24668,8 @@ MJ 이정우 팀장
                             '<th style="padding:6px;font-size:11px;color:#475569;text-align:center;width:36px"><input type="checkbox" id="jmTgAllCb" style="cursor:pointer"></th>' +
                             '<th style="padding:6px;font-size:11px;color:#475569;text-align:center;width:96px">상태</th>' +
                             '<th style="padding:6px;font-size:11px;color:#475569;text-align:left">사건번호</th>' +
-                            '<th style="padding:6px;font-size:11px;color:#475569;text-align:center;width:120px">조사자</th>' +
-                            '<th style="padding:6px;font-size:11px;color:#475569;text-align:center;width:100px">전송상태</th>' +
+                            '<th style="padding:6px;font-size:11px;color:#475569;text-align:center;width:110px">조사자</th>' +
+                            '<th style="padding:6px;font-size:11px;color:#475569;text-align:center;width:90px">전송상태</th>' +
                         '</tr></thead>' +
                         '<tbody>' + rows + '</tbody></table>' +
                     '<datalist id="jmTgInv">' + invs.map(function (n) { return '<option value="' + escAttr(n) + '">'; }).join('') + '</datalist>' +
@@ -24679,7 +24677,7 @@ MJ 이정우 팀장
                 '<div style="padding:10px 16px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:8px">' +
                     '<span id="jmTgMsg" style="margin-right:auto;font-size:12px;color:#64748b;align-self:center"></span>' +
                     '<button id="jmTgCancel" style="border:1px solid #cbd5e1;background:#fff;border-radius:4px;padding:6px 14px;cursor:pointer">닫기</button>' +
-                    '<button id="jmTgSend" style="border:0;background:#2563eb;color:#fff;border-radius:4px;padding:6px 16px;cursor:pointer;font-weight:700">✈ 조사요청 건 일괄전송</button>' +
+                    '<button id="jmTgSend" style="border:0;background:#2563eb;color:#fff;border-radius:4px;padding:6px 18px;cursor:pointer;font-weight:700">📋 일괄적용/전송</button>' +
                 '</div>' +
             '</div>';
         (doc.body || doc.documentElement).appendChild(ov);
@@ -24727,6 +24725,19 @@ MJ 이정우 팀장
                 }
             });
         });
+        // 그룹 일괄변경 input — click/focus 전체선택, Enter = 일괄적용 트리거
+        Array.prototype.forEach.call(ov.querySelectorAll('.jm-tg-gsel'), function (gin) {
+            gin.addEventListener('focus', function () { gin.select(); });
+            gin.addEventListener('click', function () { gin.select(); });
+            gin.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    var s = gin.getAttribute('data-s');
+                    var ap = ov.querySelector('.jm-tg-gapply[data-s="' + s + '"]');
+                    if (ap) ap.click();
+                }
+            });
+        });
         // 전체 체크박스
         var allCb = ov.querySelector('#jmTgAllCb');
         if (allCb) allCb.addEventListener('change', function () {
@@ -24737,8 +24748,8 @@ MJ 이정우 팀장
             btn.addEventListener('click', function () {
                 var s = btn.getAttribute('data-s');
                 var gsel = ov.querySelector('.jm-tg-gsel[data-s="' + s + '"]');
-                var name = gsel ? gsel.value : '';
-                if (!name) { alert('조사자를 선택하세요.'); return; }
+                var name = String((gsel && gsel.value) || '').trim();
+                if (!name) { alert('조사자를 입력하세요.'); if (gsel) gsel.focus(); return; }
                 Array.prototype.forEach.call(ov.querySelectorAll('.jm-tg-stsel'), function (sel) {
                     if (sel.value !== s) return;
                     var i = parseInt(sel.getAttribute('data-i'), 10);
@@ -24858,7 +24869,7 @@ MJ 이정우 팀장
     var _jmSvLW = null, _jmSvDet = null;
     var JM_SV_ICON_FILE = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#9aa3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
     var JM_SV_ICON_CHK  = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-    var JM_SV_CSS = "*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}.jm-sv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#f7f9fc;border-bottom:1px solid #e2e8f0;flex-shrink:0}.jm-sv-finish{padding:5px 14px;background:#2f6fd8;color:#fff;border:0;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-finish:hover{background:#245fc0}.jm-sv-nav{display:flex;gap:6px}.jm-sv-navbtn{padding:4px 10px;background:#fff;color:#2f6fd8;border:1px solid #c3ccd6;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-navbtn:hover{background:#eef4fc}.jm-sv-subbar{display:flex;align-items:center;gap:6px;padding:5px 10px;background:#fff7ed;border-bottom:1px solid #fed7aa;flex-shrink:0;font-size:11px;color:#9a3412;user-select:none}.jm-sv-colhead{display:flex;align-items:flex-end;gap:6px;padding:6px 8px;border-bottom:2px solid #d8dee6;color:#6b7280;font-size:11px;line-height:1.3;flex-shrink:0;background:#fbfcfe;text-align:center}.jm-sv-list{flex:1;overflow-y:auto}.jm-sv-row{display:flex;align-items:center;gap:6px;padding:7px 8px;border-bottom:1px solid #eef0f2;cursor:pointer}.jm-sv-row:hover{background:#f3f8fe}.jm-sv-row-on{background:#e8f1fb}.jm-sv-ico{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.jm-sv-c1{flex:1;min-width:0;text-align:left}.jm-sv-c2{width:88px;flex-shrink:0;text-align:right}.jm-sv-c3{width:48px;flex-shrink:0;text-align:right}.jm-sv-st{width:78px;flex-shrink:0;text-align:center}.jm-sv-stbadge{display:inline-block;width:100%;min-width:0;padding:4px 6px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;text-align:center;border:1px solid currentColor}.jm-sv-jcell{width:78px;flex-shrink:0;position:relative}.jm-sv-jin{width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;text-align:center}.jm-sv-jin:focus{outline:none;border-color:#2f6fd8;background:#fffbeb}.jm-sv-acmenu{position:absolute;left:0;top:100%;z-index:99998;width:100%;min-width:100px;max-height:200px;overflow-y:auto;background:#fff;border:1px solid #c7d2fe;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.16)}.jm-sv-acitem{padding:5px 8px;font-size:11px;color:#1f2937;cursor:pointer;text-align:left;white-space:nowrap}.jm-sv-acitem.on,.jm-sv-acitem:hover{background:#eef2ff;color:#3730a3;font-weight:600}.jm-sv-stmenu{position:fixed;z-index:99999;display:flex;flex-direction:column;gap:3px;background:#fff;padding:5px;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.2)}.jm-sv-stmenu button{border:0;min-width:66px;border-radius:4px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;text-align:center}.jm-sv-sakun{font-size:12.5px;font-weight:700;color:#1f2937;line-height:1.25}.jm-sv-mul{color:#c2410c;font-weight:700}.jm-sv-kind{font-size:11px;color:#1d6fb8;margin-top:1px}.jm-sv-kam{font-size:12px;font-weight:600;color:#1f2937;line-height:1.25}.jm-sv-low{font-size:12px;color:#1d6fb8;margin-top:1px}.jm-sv-fc{font-size:11.5px;color:#1f2937;line-height:1.25}.jm-sv-fr{font-size:11px;color:#d35400;margin-top:1px}";
+    var JM_SV_CSS = "*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;background:#fff;display:flex;flex-direction:column;overflow:hidden}.jm-sv-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#f7f9fc;border-bottom:1px solid #e2e8f0;flex-shrink:0}.jm-sv-finish{padding:5px 14px;background:#2f6fd8;color:#fff;border:0;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-finish:hover{background:#245fc0}.jm-sv-nav{display:flex;gap:6px}.jm-sv-navbtn{padding:4px 10px;background:#fff;color:#2f6fd8;border:1px solid #c3ccd6;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}.jm-sv-navbtn:hover{background:#eef4fc}.jm-sv-subbar{display:flex;align-items:center;gap:6px;padding:5px 10px;background:#fff7ed;border-bottom:1px solid #fed7aa;flex-shrink:0;font-size:11px;color:#9a3412;user-select:none}.jm-sv-colhead{display:flex;align-items:flex-end;gap:6px;padding:6px 8px;border-bottom:2px solid #d8dee6;color:#6b7280;font-size:11px;line-height:1.3;flex-shrink:0;background:#fbfcfe;text-align:center;font-weight:700}.jm-sv-colhead>div{text-align:center!important}.jm-sv-list{flex:1;overflow-y:auto}.jm-sv-row{display:flex;align-items:center;gap:6px;padding:7px 8px;border-bottom:1px solid #eef0f2;cursor:pointer}.jm-sv-row:hover{background:#f3f8fe}.jm-sv-row-on{background:#e8f1fb}.jm-sv-ico{width:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center}.jm-sv-c1{flex:1;min-width:0;text-align:center}.jm-sv-c2{width:var(--jmsv-c2-w,90px);flex-shrink:0;text-align:right}.jm-sv-c3{width:var(--jmsv-c3-w,50px);flex-shrink:0;text-align:right}.jm-sv-st{width:var(--jmsv-st-w,96px);flex-shrink:0;text-align:center;position:relative}.jm-sv-stbadge{display:block;width:100%;min-width:0;padding:3px 4px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;border:1px solid currentColor;box-sizing:border-box}.jm-sv-jcell{width:var(--jmsv-j-w,96px);flex-shrink:0;position:relative}.jm-sv-jin{width:100%;box-sizing:border-box;font-size:11px;padding:3px 4px;border:1px solid #d1d5db;border-radius:4px;text-align:center;font-weight:600}.jm-sv-jin:focus{outline:none;border-color:#2f6fd8;background:#fffbeb}.jm-sv-acmenu{position:absolute;left:0;top:100%;z-index:99998;width:100%;min-width:100px;max-height:200px;overflow-y:auto;background:#fff;border:1px solid #c7d2fe;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.16)}.jm-sv-acitem{padding:5px 8px;font-size:11px;color:#1f2937;cursor:pointer;text-align:left;white-space:nowrap}.jm-sv-acitem.on,.jm-sv-acitem:hover{background:#eef2ff;color:#3730a3;font-weight:600}.jm-sv-stmenu{position:fixed;z-index:99999;display:flex;flex-direction:column;gap:3px;background:#fff;padding:5px;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.2);box-sizing:border-box}.jm-sv-stmenu button{border:1px solid currentColor;width:100%;box-sizing:border-box;border-radius:4px;padding:3px 4px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}.jm-sv-resizer{position:absolute;top:0;bottom:0;right:-3px;width:6px;cursor:col-resize;z-index:5;user-select:none}.jm-sv-resizer:hover,.jm-sv-resizer.dragging{background:#a5b4fc}.jm-sv-sakun{font-size:12.5px;font-weight:700;color:#1f2937;line-height:1.25;text-align:center}.jm-sv-mul{color:#c2410c;font-weight:700}.jm-sv-kind{font-size:11px;color:#1d6fb8;margin-top:1px;text-align:center}.jm-sv-kam{font-size:12px;font-weight:600;color:#1f2937;line-height:1.25}.jm-sv-low{font-size:12px;color:#1d6fb8;margin-top:1px}.jm-sv-fc{font-size:11.5px;color:#1f2937;line-height:1.25}.jm-sv-fr{font-size:11px;color:#d35400;margin-top:1px}";
 
     function _jmSvNum(n) {
         if (n === 0 || n === '0') return '0';
@@ -25013,12 +25024,18 @@ MJ 이정우 팀장
     function _jmSvStatusMenu(badge, idx) {
         if (!_jmSvLW || _jmSvLW.closed) return;
         var dd = _jmSvLW.document;
-        var prev = dd.querySelector('.jm-sv-stmenu'); if (prev) prev.remove();
+        var prev = dd.querySelector('.jm-sv-stmenu');
+        if (prev) {
+            var sameAnchor = prev.getAttribute('data-anchor-idx') === String(idx);
+            prev.remove();
+            if (sameAnchor) return; // 같은 badge 재클릭 = 토글 닫기
+        }
         var it = _jmSvItems[idx]; if (!it) return;
         var cur = it.josa_status || '미분류';
         var opts = JM_STATUS_SEL.filter(function (s) { return s !== cur; });
         var menu = dd.createElement('div');
         menu.className = 'jm-sv-stmenu';
+        menu.setAttribute('data-anchor-idx', String(idx));
         menu.innerHTML = opts.map(function (s) {
             var c = JM_STATUS_HEX[s] || JM_STATUS_HEX['미분류'];
             return '<button type="button" data-s="' + escAttr(s) + '" style="background:' + c[0] + ';color:' + c[1] + '">' + escHtml(s) + '</button>';
@@ -25026,7 +25043,7 @@ MJ 이정우 팀장
         var r = badge.getBoundingClientRect();
         menu.style.left = r.left + 'px';
         menu.style.top = (r.bottom + 2) + 'px';
-        menu.style.minWidth = Math.max(r.width, 60) + 'px';
+        menu.style.width = r.width + 'px';   // 그리드처럼 badge 폭과 동일 → 옵션 버튼도 같이 늘어남
         dd.body.appendChild(menu);
         Array.prototype.forEach.call(menu.querySelectorAll('button'), function (b) {
             b.addEventListener('click', function (ev) {
@@ -25038,7 +25055,7 @@ MJ 이정우 팀장
         });
         setTimeout(function () {
             dd.addEventListener('click', function oc(e) {
-                if (!menu.contains(e.target)) { menu.remove(); dd.removeEventListener('click', oc); }
+                if (!menu.contains(e.target) && e.target !== badge) { menu.remove(); dd.removeEventListener('click', oc); }
             });
         }, 0);
     }
@@ -25067,9 +25084,12 @@ MJ 이정우 팀장
         var st = d.createElement('style');
         st.textContent = JM_SV_CSS;
         d.head.appendChild(st);
+        // 저장된 컬럼 폭 복원 (localStorage 공유 — 부모창과 동일 origin)
+        _jmSvApplyColWidths(d, _jmSvLoadColWidths());
 
         var rowsHtml = items.map(function (it, i) {
-            var sk = String(it.sakun_no || '');
+            // 사건번호 2자리(예: 25타경) → 2025타경 풀표기 (시각 전용, 원본은 it.sakun_no 그대로)
+            var sk = String(it.sakun_no || '').replace(/^(\d{2})타경/, '20$1타경');
             var mm = sk.match(/^([\s\S]*?)(\(\d+\))\s*$/);
             var skHtml = mm
                 ? escHtml(mm[1].trim()) + ' <span class="jm-sv-mul">' + escHtml(mm[2]) + '</span>'
@@ -25103,7 +25123,7 @@ MJ 이정우 팀장
             '<div class="jm-sv-colhead">' +
                 '<div class="jm-sv-ico"></div>' +
                 '<div class="jm-sv-st">상태</div>' +
-                '<div class="jm-sv-jcell" style="text-align:center">조사자</div>' +
+                '<div class="jm-sv-jcell">조사자</div>' +
                 '<div class="jm-sv-c1">사건번호<br>물건종류</div>' +
                 '<div class="jm-sv-c2">감정가<br>최저입찰가</div>' +
                 '<div class="jm-sv-c3">진행<br>상태</div>' +
@@ -25140,9 +25160,63 @@ MJ 이정우 팀장
         _jmSvLW.addEventListener('unload', function () {
             try { if (_jmSvDet && !_jmSvDet.closed) _jmSvDet.close(); } catch (e) {}
         });
+        _jmSvSetupResizers(d);   // 컬럼 가로폭 드래그 리사이즈 + 저장
 
         _jmSvSelect(0);   // 첫 행 자동 선택 + 상세창 동시 오픈 (선택보기 클릭 제스처라 팝업 허용)
         _jmSvLW.focus();
+    }
+    // 선택보기 컬럼 가로폭 — localStorage 저장/복원 (key 단일 객체)
+    var JM_SV_COL_KEY = 'jm_sv_col_w_v1';
+    function _jmSvLoadColWidths() {
+        try { var raw = localStorage.getItem(JM_SV_COL_KEY); return raw ? JSON.parse(raw) : null; }
+        catch (e) { return null; }
+    }
+    function _jmSvSaveColWidths(w) {
+        try { localStorage.setItem(JM_SV_COL_KEY, JSON.stringify(w || {})); } catch (e) {}
+    }
+    function _jmSvApplyColWidths(d, w) {
+        if (!w) return;
+        var s = d.documentElement.style;
+        if (w.st)  s.setProperty('--jmsv-st-w', w.st + 'px');
+        if (w.j)   s.setProperty('--jmsv-j-w',  w.j  + 'px');
+        if (w.c2)  s.setProperty('--jmsv-c2-w', w.c2 + 'px');
+        if (w.c3)  s.setProperty('--jmsv-c3-w', w.c3 + 'px');
+    }
+    function _jmSvSetupResizers(d) {
+        var defs = [
+            { cls: 'jm-sv-st',    cssVar: '--jmsv-st-w', defW: 96, key: 'st' },
+            { cls: 'jm-sv-jcell', cssVar: '--jmsv-j-w',  defW: 96, key: 'j'  },
+            { cls: 'jm-sv-c2',    cssVar: '--jmsv-c2-w', defW: 90, key: 'c2' },
+            { cls: 'jm-sv-c3',    cssVar: '--jmsv-c3-w', defW: 50, key: 'c3' }
+        ];
+        var saved = _jmSvLoadColWidths() || {};
+        defs.forEach(function (df) {
+            var head = d.querySelector('.jm-sv-colhead > .' + df.cls);
+            if (!head) return;
+            head.style.position = 'relative';
+            var rs = d.createElement('div');
+            rs.className = 'jm-sv-resizer';
+            head.appendChild(rs);
+            var dragging = false, startX = 0, startW = 0;
+            rs.addEventListener('mousedown', function (e) {
+                dragging = true; startX = e.clientX;
+                startW = head.getBoundingClientRect().width || df.defW;
+                rs.classList.add('dragging');
+                e.preventDefault(); e.stopPropagation();
+            });
+            d.addEventListener('mousemove', function (e) {
+                if (!dragging) return;
+                var w = Math.max(40, Math.min(400, startW + (e.clientX - startX)));
+                d.documentElement.style.setProperty(df.cssVar, w + 'px');
+            });
+            d.addEventListener('mouseup', function () {
+                if (!dragging) return;
+                dragging = false; rs.classList.remove('dragging');
+                var w = head.getBoundingClientRect().width || df.defW;
+                saved[df.key] = Math.round(w);
+                _jmSvSaveColWidths(saved);
+            });
+        });
     }
     function toggleJmSummaryFilter(status) {
         if (!status) {
