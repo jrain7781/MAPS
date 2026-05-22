@@ -4517,6 +4517,7 @@ function getAutoApprovalStats(testMode) {
         // 텔레그램(tele) / 수작업(web) 분리 카운팅 → 표시: "합계 (tele, web)"
         recommend_tele: [],      // 11번: TELEGRAM_SENT note='card'
         recommend_web: [],       // 9번: FIELD_CHANGE chuchen_state→전달완료
+        recommend_read: [],      // 추천확인(읽음): CHUCHEN_CONFIRMED — T 안에 표시, 전체합계 미포함
         bid_approved_tele: [],   // 17번: REQUEST_BID APPROVED
         bid_approved_web: [],    // 8번: FIELD_CHANGE stu_member→입찰
         bid_pending_tele: [],    // 18번: REQUEST_CANCEL_CHUCHEN APPROVED
@@ -4593,6 +4594,8 @@ function getAutoApprovalStats(testMode) {
     } else if (action === 'FIELD_CHANGE' && fieldName === 'chuchen_state' && toVal === '전달완료'
       && triggerType !== 'web-telegram') {
       addId(ds.recommend_web, itemId);                                           // 9번 (수작업만)
+    } else if (action === 'CHUCHEN_CONFIRMED') {
+      addId(ds.recommend_read, itemId);                                          // 추천확인(읽음) — 전체합계 미포함
 
       // ── 추천물건-입찰확정 ─────────────────────────────────────────────
     } else if (action === 'REQUEST_BID' && status === 'APPROVED') {
@@ -4650,7 +4653,7 @@ function getAutoApprovalStats(testMode) {
     var stat = mergeIds(s.status_tele, s.status_web);
     return {
       date: s.date,
-      recommend: rec.length, recommend_tele: s.recommend_tele.length, recommend_web: s.recommend_web.length, recommend_ids: rec, recommend_tele_ids: s.recommend_tele, recommend_web_ids: s.recommend_web,
+      recommend: rec.length, recommend_tele: s.recommend_tele.length, recommend_web: s.recommend_web.length, recommend_read: s.recommend_read.length, recommend_ids: rec, recommend_tele_ids: s.recommend_tele, recommend_web_ids: s.recommend_web, recommend_read_ids: s.recommend_read,
       bid_approved: bapr.length, bid_approved_tele: s.bid_approved_tele.length, bid_approved_web: s.bid_approved_web.length, bid_approved_ids: bapr, bid_approved_tele_ids: s.bid_approved_tele, bid_approved_web_ids: s.bid_approved_web,
       bid_pending: bpnd.length, bid_pending_tele: s.bid_pending_tele.length, bid_pending_web: s.bid_pending_web.length, bid_pending_sys: s.bid_pending_sys.length, bid_pending_ids: bpnd, bid_pending_tele_ids: s.bid_pending_tele, bid_pending_web_ids: s.bid_pending_web, bid_pending_sys_ids: s.bid_pending_sys,
       cancel_approved: capr.length, cancel_approved_tele: s.cancel_approved_tele.length, cancel_approved_web: s.cancel_approved_web.length, cancel_approved_ids: capr, cancel_approved_tele_ids: s.cancel_approved_tele, cancel_approved_web_ids: s.cancel_approved_web,

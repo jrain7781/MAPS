@@ -4331,7 +4331,7 @@
             try { var p = s.split('/'); var dt = new Date(2000 + parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)); return s + ' (' + DAYS_KO[dt.getDay()] + ')'; } catch (e) { return s; }
         };
         // "합계 (텔레, 수작업[, 만료])" 형식 셀 렌더링 - 합계/각 항목 개별 클릭 가능
-        var mkCell = function (row, baseField, color, rowIdx) {
+        var mkCell = function (row, baseField, color, rowIdx, teleNestedField) {
             var total = row[baseField] || 0;
             if (!total) return '<td class="py-1.5 px-1 text-center text-gray-200 text-xs">-</td>';
             var tele = row[baseField + '_tele'] || 0;
@@ -4343,7 +4343,12 @@
             };
             var sub = '';
             if (tele > 0 || web > 0 || sys > 0) {
-                var parts = mkSub(tele, baseField + '_tele_ids') + ', ' + mkSub(web, baseField + '_web_ids');
+                var teleStr = mkSub(tele, baseField + '_tele_ids');
+                // T 안에 추천확인(읽음) 건수 중첩 표시 — 전체 합계엔 미포함
+                if (teleNestedField && (row[teleNestedField] || 0) > 0) {
+                    teleStr += '<span class="text-green-600">(' + mkSub(row[teleNestedField], teleNestedField + '_ids') + ')</span>';
+                }
+                var parts = teleStr + ', ' + mkSub(web, baseField + '_web_ids');
                 if (sys > 0) parts += ', ' + mkSub(sys, baseField + '_sys_ids');
                 sub = '<span class="font-normal text-gray-400"> (' + parts + ')</span>';
             }
@@ -4354,7 +4359,7 @@
         stats.forEach(function (row, i) {
             tbodyHtml += '<tr class="border-b border-gray-100 hover:bg-gray-50">'
                 + '<td class="py-1.5 px-2 whitespace-nowrap text-xs border-r bg-gray-50 font-bold text-gray-700 text-center">' + fmtDateDay(row.date) + '</td>'
-                + mkCell(row, 'recommend', 'text-gray-700', i)
+                + mkCell(row, 'recommend', 'text-gray-700', i, 'recommend_read')
                 + mkCell(row, 'bid_approved', 'text-indigo-600', i)
                 + mkCell(row, 'bid_pending', 'text-orange-500', i)
                 + mkCell(row, 'cancel_approved', 'text-gray-500', i)
