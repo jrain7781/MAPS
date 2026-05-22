@@ -408,7 +408,7 @@
   function refreshKakaoStatus() {
     fetch('/api/kakao/status').then(r => r.json()).then(j => {
       const el = document.getElementById('kakaoStatus');
-      if (j.running) { el.textContent = '● 실행중 (PID ' + j.pid + ')'; el.className = 'mjcap-status running'; }
+      if (j.running) { el.textContent = j.pid ? ('● 실행중 (PID ' + j.pid + ')') : '● 실행중 (포트 8000)'; el.className = 'mjcap-status running'; }
       else { el.textContent = '○ 중지됨'; el.className = 'mjcap-status'; }
     }).catch(() => {
       document.getElementById('kakaoStatus').textContent = '확인 실패';

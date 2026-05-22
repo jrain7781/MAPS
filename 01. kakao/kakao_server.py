@@ -17,6 +17,10 @@ class KakaoHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        # HTTPS(GAS 웹앱) 페이지 → http://127.0.0.1 요청 시 Chrome Private Network
+        # Access 사전요청을 통과시키기 위해 필요. 없으면 fetch 가 차단되어
+        # "서버 실행 안 됨" 처럼 보임.
+        self.send_header('Access-Control-Allow-Private-Network', 'true')
         self.end_headers()
 
     def do_POST(self):

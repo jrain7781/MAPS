@@ -10,7 +10,7 @@ mj_extensions.py — 옥션원 매니저 확장 모듈
 모든 데이터 저장: 00.imageup/imageup_config.json
 """
 from __future__ import annotations
-import os, sys, json, time, uuid, threading, subprocess, mimetypes
+import os, sys, json, time, uuid, threading, subprocess, mimetypes, socket
 import urllib.parse
 
 # 메인 매니저 폴더 (= crawler.py 위치)
@@ -420,20 +420,33 @@ def serve_file_to(handler, root: str, rel: str):
 # ============================================================
 # 3) 카카오 서버 독립 프로세스 관리
 # ============================================================
+_KAKAO_PORT = 8000
+_KAKAO_ERR_LOG = os.path.join(_DIR_KAKAO, "kakao_server_error.log")
 _kakao_state = {"proc": None, "pid": None}
 
 
+def _kakao_port_listening() -> bool:
+    """포트 8000 이 실제로 LISTEN 중인지 = 서버 살아있음의 진짜 기준."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(0.4)
+    try:
+        return s.connect_ex(("127.0.0.1", _KAKAO_PORT)) == 0
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
 def kakao_status() -> dict:
+    # 진짜 기준은 포트 LISTEN 여부 (매니저 재시작 후에도, 독립 프로세스도 감지)
+    listening = _kakao_port_listening()
     p = _kakao_state["proc"]
-    if p is None:
-        return {"running": False, "pid": None}
-    if p.poll() is None:
-        return {"running": True, "pid": _kakao_state["pid"]}
-    return {"running": False, "pid": None}
+    pid = _kakao_state["pid"] if (p is not None and p.poll() is None) else None
+    return {"running": listening, "pid": pid}
 
 
 def kakao_start() -> dict:
-    if kakao_status()["running"]:
+    if _kakao_port_listening():
         return {"ok": True, "pid": _kakao_state["pid"], "msg": "이미 실행중"}
     script = os.path.join(_DIR_KAKAO, "kakao_server.py")
     if not os.path.exists(script):
@@ -442,30 +455,60 @@ def kakao_start() -> dict:
     if sys.platform == "win32":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
     try:
+        errf = open(_KAKAO_ERR_LOG, "w", encoding="utf-8")
         proc = subprocess.Popen(
             [sys.executable, script],
             cwd=os.path.dirname(script),
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=errf,
             stdin=subprocess.DEVNULL,
             creationflags=flags,
             close_fds=True,
         )
         _kakao_state["proc"] = proc
         _kakao_state["pid"] = proc.pid
-        return {"ok": True, "pid": proc.pid}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+    # pyautogui import 등으로 기동이 느리므로 포트가 뜰 때까지 최대 ~8초 대기
+    deadline = time.time() + 8.0
+    while time.time() < deadline:
+        if _kakao_port_listening():
+            return {"ok": True, "pid": proc.pid}
+        if proc.poll() is not None:  # 기동 중 죽음 → stderr 회수
+            break
+        time.sleep(0.25)
+
+    # 여기 도달 = 포트 안 뜸. 죽었으면 에러 로그 첨부
+    err = ""
+    try:
+        errf.flush()
+        with open(_KAKAO_ERR_LOG, "r", encoding="utf-8", errors="replace") as f:
+            err = f.read().strip()
+    except Exception:
+        pass
+    if proc.poll() is not None:
+        msg = "카카오 서버가 기동 직후 종료됨 (exit %s)" % proc.returncode
+    else:
+        msg = "카카오 서버 프로세스는 살아있으나 %s 포트 응답 없음" % _KAKAO_PORT
+    if err:
+        msg += " — " + err.splitlines()[-1][:300]
+    return {"ok": False, "error": msg}
 
 
 def kakao_stop() -> dict:
-    if not kakao_status()["running"]:
-        return {"ok": True, "msg": "이미 중지됨"}
-    try:
-        _kakao_state["proc"].terminate()
-        return {"ok": True}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    p = _kakao_state["proc"]
+    if p is not None and p.poll() is None:
+        try:
+            p.terminate()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+    # 이 매니저가 띄운 핸들이 없는데 포트는 열려있음 = 다른(이전) 프로세스 소유
+    if _kakao_port_listening():
+        return {"ok": False,
+                "error": "다른 프로세스가 8000 포트를 점유 중입니다. 해당 콘솔/작업관리자에서 종료하세요."}
+    return {"ok": True, "msg": "이미 중지됨"}
 
 
 # ============================================================
