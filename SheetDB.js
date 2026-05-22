@@ -149,8 +149,8 @@ function readAllData() {
 
   // [핵심 수정] 물리적인 열 개수를 확인하여 에러 방지
   const maxCols = sheet.getMaxColumns();
-  // 필요한 열(12개)과 실제 열 중 작은 값까지만 읽음
-  const colsToRead = Math.min(maxCols, ITEM_HEADERS.length);
+  // 필요한 열까지만 읽음 (+2: chuchen_read(X=24)/chuchen_read_date(Y=25)는 ITEM_HEADERS 외 추가 컬럼)
+  const colsToRead = Math.min(maxCols, ITEM_HEADERS.length + 2);
 
   if (colsToRead < 1) return [];
 

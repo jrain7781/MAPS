@@ -394,6 +394,7 @@ function handleTelegramWebhook_(update) {
                 .createTextFinder(String(itemId)).matchEntireCell(true).findNext();
               if (_found) {
                 var _rn = _found.getRow();
+                if (typeof ensureColumnExists === 'function') ensureColumnExists(_sh, 25); // X/Y열 물리적 확보
                 _sh.getRange(_rn, 24).setValue('읽음');
                 _sh.getRange(_rn, 25).setValue(new Date().toISOString());
                 SpreadsheetApp.flush();
@@ -1130,6 +1131,7 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
             const _nowIso = new Date().toISOString();
             itemsSheet.getRange(rowNum, 17).setValue('전달완료'); // Q열: chuchen_state
             itemsSheet.getRange(rowNum, 18).setValue(_nowIso); // R열: chuchen_date
+            if (typeof ensureColumnExists === 'function') ensureColumnExists(itemsSheet, 25); // X/Y열 물리적 확보
             itemsSheet.getRange(rowNum, 24).setValue('미읽음'); // X열: chuchen_read (티저 발송 → 미읽음)
             itemsSheet.getRange(rowNum, 25).setValue('');       // Y열: chuchen_read_date 초기화
             // [4키 룰] 일반 케이스(class_d1_id 비어있음)만 bid_datetime_2 자동 계산
