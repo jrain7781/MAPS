@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>부동산 규제·세금 정리 + 대출 판정기 (2026-05-22 기준)</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e3e6ea; --ink:#1f2933; --sub:#5b6571;
+    --accent:#2563eb; --warn:#b45309; --warnbg:#fff7ed; --danger:#b91c1c;
+    --ok:#047857; --okbg:#ecfdf5; --tagbg:#eff6ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Malgun Gothic","맑은 고딕",-apple-system,Segoe UI,sans-serif;
+    line-height:1.65;font-size:15px;}
+  .wrap{max-width:980px;margin:0 auto;padding:32px 20px 80px;}
+  header.top{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;
+    border-radius:16px;padding:28px 30px;margin-bottom:14px;}
+  header.top h1{margin:0 0 6px;font-size:24px;}
+  header.top .meta{font-size:13px;opacity:.92;}
+  .disclaimer{background:var(--warnbg);border:1px solid #fed7aa;color:var(--warn);
+    border-radius:12px;padding:14px 18px;font-size:13.5px;margin-bottom:26px;}
+  .disclaimer b{color:#92400e;}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:24px 26px;margin-bottom:22px;}
+  h2{font-size:20px;margin:0 0 4px;padding-bottom:10px;border-bottom:2px solid var(--accent);
+    display:flex;align-items:center;gap:10px;}
+  h2 .no{background:var(--accent);color:#fff;width:28px;height:28px;border-radius:8px;
+    display:inline-flex;align-items:center;justify-content:center;font-size:15px;}
+  h2.calc-h{border-bottom-color:#7c3aed;}
+  h2.calc-h .no{background:#7c3aed;}
+  h3{font-size:16px;margin:22px 0 8px;color:#111827;}
+  p{margin:8px 0;}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:center;vertical-align:middle;}
+  th{background:#f1f5f9;font-weight:700;}
+  td.l,th.l{text-align:left;}
+  tr:nth-child(even) td{background:#fafbfc;}
+  .hl{background:#fef2f2;color:var(--danger);font-weight:700;}
+  .dim{color:var(--sub);}
+  ul{margin:8px 0;padding-left:20px;}
+  li{margin:5px 0;}
+  .src{font-size:12px;color:var(--sub);background:var(--tagbg);border-radius:6px;
+    padding:1px 7px;display:inline-block;margin:2px 0;}
+  .src a{color:var(--accent);text-decoration:none;}
+  .src a:hover{text-decoration:underline;}
+  .box{border-radius:10px;padding:14px 16px;margin:14px 0;font-size:14px;}
+  .box.warn{background:var(--warnbg);border:1px solid #fed7aa;}
+  .box.danger{background:#fef2f2;border:1px solid #fecaca;}
+  .box.ok{background:var(--okbg);border:1px solid #a7f3d0;}
+  .box .t{font-weight:700;margin-bottom:4px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:640px){.grid2{grid-template-columns:1fr;}}
+  footer{font-size:12px;color:var(--sub);text-align:center;margin-top:30px;}
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 26px;}
+  .toc a{background:#fff;border:1px solid var(--line);border-radius:8px;
+    padding:7px 13px;font-size:13px;text-decoration:none;color:var(--ink);}
+  .toc a:hover{border-color:var(--accent);color:var(--accent);}
+  .toc a.calc{background:#7c3aed;color:#fff;border-color:#7c3aed;font-weight:700;}
+  /* ===== calculator ===== */
+  .calc{display:grid;gap:14px;margin-top:6px;}
+  .calc .row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;}
+  .calc label.fld{font-weight:700;min-width:118px;display:inline-block;padding-top:6px;}
+  .calc select,.calc input[type=number]{padding:7px 9px;border:1px solid var(--line);
+    border-radius:8px;font-size:14px;font-family:inherit;background:#fff;}
+  .picker select{margin-right:4px;}
+  .owned-row{display:flex;gap:8px;align-items:center;margin:4px 0;flex-wrap:wrap;}
+  .calc .opt{display:inline-flex;align-items:center;gap:4px;padding-top:5px;margin-right:6px;}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 18px;
+    font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+  .btn:hover{filter:brightness(1.08);}
+  .btn.go{background:#7c3aed;font-size:15px;}
+  .btn.sec{background:#e2e8f0;color:#1e293b;}
+  .btn.sm{padding:5px 10px;font-size:12.5px;}
+  input[type=checkbox],input[type=radio]{transform:scale(1.2);margin-right:3px;}
+  .result{border-radius:12px;padding:18px 20px;font-size:14.5px;}
+  .result.ok{background:var(--okbg);border:1px solid #a7f3d0;}
+  .result.amber{background:var(--warnbg);border:1px solid #fed7aa;}
+  .result.danger{background:#fef2f2;border:1px solid #fecaca;}
+  .result .rtitle{font-size:21px;font-weight:800;margin-bottom:6px;}
+  .result.ok .rtitle{color:var(--ok);}
+  .result.amber .rtitle{color:var(--warn);}
+  .result.danger .rtitle{color:var(--danger);}
+  .result ul{margin:12px 0 0;}
+  .datebar{position:sticky;top:0;z-index:20;background:#111827;color:#fff;text-align:center;
+    padding:10px 14px;font-size:13.5px;font-weight:600;margin:-32px -20px 18px;
+    border-radius:0 0 12px 12px;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+  .datebar b{color:#fde68a;}
+  .rednote{color:#b91c1c;font-weight:700;font-size:13px;text-align:center;
+    line-height:1.5;margin:-4px 4px 20px;}
+  .hl-item{background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;
+    border-radius:8px;padding:11px 13px;margin:10px 0;list-style:none;}
+  .tip{position:relative;cursor:help;border-bottom:2px dotted #1d4ed8;color:#1d4ed8;font-weight:800;outline:none;}
+  .tip .iic{font-size:10px;vertical-align:super;margin-left:1px;}
+  .tip .bubble{display:none;position:absolute;left:0;top:140%;z-index:60;width:min(330px,82vw);
+    background:#111827;color:#fff;padding:12px 14px;border-radius:10px;font-size:12.5px;font-weight:400;
+    line-height:1.65;box-shadow:0 8px 24px rgba(0,0,0,.3);white-space:normal;text-align:left;}
+  .tip .bubble b{color:#fde68a;}
+  .tip .bubble::before{content:"";position:absolute;left:16px;top:-7px;border:7px solid transparent;border-bottom-color:#111827;border-top:0;}
+  .tip:hover .bubble,.tip:focus .bubble{display:block;}
+  .rtag{display:inline-block;font-size:12.5px;font-weight:700;padding:3px 11px;border-radius:999px;
+    margin-left:6px;vertical-align:middle;}
+  .rtag.reg{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;}
+  .rtag.sudo{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;}
+  .rtag.jibang{background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;}
+  @media(max-width:640px){
+    .wrap{padding:24px 12px 60px;}
+    .datebar{margin:-24px -12px 16px;font-size:12px;}
+    table{font-size:12.5px;}
+    th,td{padding:6px 7px;}
+    header.top{padding:20px 18px;}
+    header.top h1{font-size:20px;}
+    .calc label.fld{min-width:100%;padding-top:2px;}
+    .calc .row{gap:6px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="datebar">📅 <b>2026년 5월 22일</b> 기준으로 작성된 자료입니다 — 부동산 규제·세법은 자주 바뀌므로 거래 전 최신 정보 재확인 필수</div>
+
+<div class="rednote">⚠ 본 자료는 참고용이며, 모든 투자·거래 판단과 그 결과에 대한 책임은 이용자 본인에게 있습니다.</div>
+
+<header class="top">
+  <h1>부동산 규제 · 경락대출 · 세금 정리 <span style="font-size:15px;background:#7c3aed;padding:3px 10px;border-radius:8px;vertical-align:middle;">+ 대출 판정기</span></h1>
+  <div class="meta">작성 기준일: 2026-05-22 &nbsp;|&nbsp; 작성: Claude 리서치 (웹 출처 기반) &nbsp;|&nbsp; 최신 반영: 2025-10-15 「주택시장 안정화 대책」 + 2026-05-09 양도세 중과 유예 종료</div>
+</header>
+
+<div class="disclaimer">
+  <b>⚠ 읽기 전 필독.</b> 본 문서는 공개 웹자료(정부 보도자료·정책브리핑·법령·언론·세무매체)를 근거로 정리한 <b>참고자료</b>이며, 법률·세무 자문이 아닙니다.
+  하단 <b>대출 판정기</b>는 규칙 기반 <b>추정 도구</b>로, 실제 대출 승인은 DSR(소득)·은행 내규·경매 감정가·권리관계에 따라 달라집니다.
+  부동산 규제·세법은 <b>매우 자주 바뀝니다.</b> <b>실제 거래·신고 직전에 반드시 1차 출처(국토부·국세청·서울시 토지정보시스템)와 은행·세무사로 재확인</b>하세요. 일부 수치는 2차자료에 의존했으며 §4 "불확실·상충 정보"에 명시했습니다.
+</div>
+
+<div class="toc">
+  <a href="#calc" class="calc">🧮 대출 판정기</a>
+  <a href="#s1">① 규제지역 (구단위)</a>
+  <a href="#s2">② 경락대출·주담대</a>
+  <a href="#s3">③ 세금 (취득·양도·종소세)</a>
+  <a href="#s5">④ 불확실·상충 정보</a>
+  <a href="#s6">출처 전체 목록</a>
+</div>
+
+<!-- ============ CALCULATOR ============ -->
+<section id="calc">
+  <h2 class="calc-h"><span class="no">🧮</span> 대출 판정기 — 내 경우 대출 되나?</h2>
+  <p class="dim">구입할 지역과 현재 보유 주택을 입력하면 <b>2026-05 규제 기준</b>으로 대출 가부·예상 LTV·취득세·부가규제를 즉시 계산합니다.</p>
+
+  <div class="calc">
+    <div class="row">
+      <label class="fld">① 구입할 지역</label>
+      <span id="buyPicker"><span class="picker"><select class="p-sido"></select> <select class="p-city" style="display:none"></select> <select class="p-gu" style="display:none"></select></span></span>
+      <span id="buyTag" class="rtag" style="display:none"></span>
+    </div>
+
+    <div class="row">
+      <label class="fld">② 명의</label>
+      <span class="opt"><input type="radio" name="owner" value="ind" checked> 개인</span>
+      <span class="opt"><input type="radio" name="owner" value="biz"> 부동산 매매·임대사업자</span>
+    </div>
+
+    <div class="row">
+      <label class="fld">③ 현재 보유 주택</label>
+      <div>
+        <div id="ownedList"></div>
+        <button class="btn sec sm" type="button" onclick="addOwned()">+ 보유주택 추가</button>
+        <span class="dim">무주택이면 추가하지 마세요 · 한 채당 한 줄. <b>새 대출 가부는 보유 "채수"로 결정</b>되고, 위치는 양도세·처분 판단용입니다.</span>
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="fld">④ 구입 예정가</label>
+      <span><input type="number" id="price" min="0" step="0.5" placeholder="예: 12"> 억원
+      <span class="dim">(선택 — 입력 시 대출 한도 금액까지 계산)</span></span>
+    </div>
+
+    <div class="row">
+      <label class="fld">⑤ 기타</label>
+      <span class="opt"><input type="checkbox" id="firstHome"> 생애최초 구입</span>
+      <span class="opt"><input type="checkbox" id="willSell"> 기존주택 처분 예정(1주택자)</span>
+    </div>
+
+    <div class="row" style="margin-top:4px">
+      <button class="btn go" type="button" onclick="compute()">판정하기 ▶</button>
+    </div>
+  </div>
+
+  <div id="calcResult" style="margin-top:16px"></div>
+  <p class="dim" style="font-size:12px;margin-top:10px">※ 규칙 기반 추정치입니다. 실제 승인은 <b>DSR(본인 소득)·은행 내규·경매 감정가·물건 권리관계</b>에 좌우됩니다. 토지거래허가구역 여부는 아파트 기준이며 거래 전 서울시 토지정보시스템·은행·세무사 확인 필수.</p>
+</section>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="no">1</span> 부동산 규제지역 — 어디가 규제이고, 규제면 어떻게 되나</h2>
+
+  <div class="box danger">
+    <div class="t">가장 큰 변화: 2025-10-15 「주택시장 안정화 대책」(10·15 대책)</div>
+    기존엔 <b>강남·서초·송파·용산 4개구만</b> 규제지역이었으나, 10·15 대책으로 <b>서울 25개 자치구 전역 + 경기 12곳</b>으로 규제지역이 대폭 확대됐습니다. (투기과열지구·조정대상지역 효력 2025-10-16, 토지거래허가구역 효력 2025-10-20)
+    <div class="src">출처: 대한민국 정책브리핑 · <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148950973">korea.kr/148950973</a> · 게시일 2025-10-15</div>
+  </div>
+
+  <h3>1-1. 규제지역 지정 현황 (2026-05 기준)</h3>
+  <table>
+    <tr><th>구분</th><th class="l">지정 범위 (구 단위)</th><th>시행</th></tr>
+    <tr>
+      <td><b>투기과열지구</b></td>
+      <td class="l"><b>서울 25개 자치구 전역</b> + 경기 12곳<br>
+        <span class="dim">(과천 / 광명 / 성남 분당·수정·중원 / 수원 영통·장안·팔달 / 안양 동안 / 용인 수지 / 의왕 / 하남)</span></td>
+      <td>2025-10-16</td>
+    </tr>
+    <tr>
+      <td><b>조정대상지역</b></td>
+      <td class="l">투기과열지구와 <b>동일 범위로 중복 지정</b> (서울 전 자치구 + 경기 12곳)</td>
+      <td>2025-10-16</td>
+    </tr>
+    <tr>
+      <td><b>토지거래<br>허가구역</b></td>
+      <td class="l">① 강남·서초·송파·용산 아파트 (2025-03-24 지정 → <b>2026-12-31까지 연장</b>)<br>
+        ② 10·15 대책: <b>서울 전역 + 경기 12곳 아파트</b> (연립·다세대 일부 포함)</td>
+      <td>① 2025-10-01<br>② 2025-10-20</td>
+    </tr>
+  </table>
+  <div class="src">출처: 대한민국 정책브리핑 <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148950973">korea.kr/148950973</a> (2025-10-15) · 한국세정신문 <a href="https://www.taxtimes.co.kr/news/article.html?no=271870">taxtimes 271870</a> · 한국경제 <a href="https://www.hankyung.com/article/202509179925i">강남3구+용산 토허 연장</a> (2025-09-17) · 경향신문 <a href="https://www.khan.co.kr/article/202510151656001">khan 202510151656001</a> (2025-10-15)</div>
+  <p class="dim">※ 공식 실시간 조회: 서울시 토지정보시스템 <a href="https://land.seoul.go.kr/land/other/appointStatusSeoul.do">land.seoul.go.kr</a> (상시 갱신)</p>
+
+  <h3>1-2. 규제지역이면 실제로 어떻게 되나 (효과)</h3>
+  <table>
+    <tr><th class="l">항목</th><th class="l">규제지역(투기과열·조정) 적용 내용</th></tr>
+    <tr><td class="l"><b>LTV</b></td><td class="l">70% → <b class="hl">40%로 축소</b>. + 주담대 절대한도: 시가 15억↓ 6억 / 15~25억 4억 / 25억↑ 2억</td></tr>
+    <tr><td class="l"><b>자금조달계획서</b></td><td class="l">규제지역 내 <b>3억원 이상</b> 주택 거래 시 제출 의무 (비규제는 6억↑)</td></tr>
+    <tr><td class="l"><b>전매제한</b></td><td class="l">분양권 전매 즉시 제한</td></tr>
+    <tr><td class="l"><b>취득세 중과</b></td><td class="l">2주택 <b>8%</b>, 3주택 이상 <b>12%</b> (§3 참조)</td></tr>
+    <tr><td class="l"><b>1주택 비과세</b></td><td class="l">양도세 비과세에 <b>2년 거주요건 추가</b> (보유 2년 + 거주 2년)</td></tr>
+    <tr><td class="l"><b>토지거래허가</b></td><td class="l">관할 구청 <b>허가 필수 + 2년 실거주 의무</b> → 갭투자·임대 사실상 차단</td></tr>
+    <tr><td class="l"><b>청약</b></td><td class="l">1순위 통장 2년↑, 가점제 비율 상향, 재당첨 제한 최대 10년</td></tr>
+  </table>
+  <div class="src">출처: 경향신문 <a href="https://www.khan.co.kr/article/202510151656001">khan 202510151656001</a> (2025-10-15) · 대한민국 정책브리핑 <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148950973">korea.kr/148950973</a> (2025-10-15)</div>
+  <p class="dim">실증 효과: 강남3구+용산 토허 확대 후 163일간 아파트 매매신고가 직전 동기 대비 <b>42.6% 감소</b> (머니투데이 2025-09-17).</p>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="no">2</span> 경락(경매 낙찰) 대출 — 어디에 몇 채면 대출되나</h2>
+
+  <div class="box danger">
+    <div class="t">결론부터</div>
+    ① 경락잔금대출도 <b>일반 주담대 LTV·DSR 규제를 그대로 적용</b>받습니다(우회수단 아님). &nbsp;
+    ② <b>규제지역에서 다주택자의 주택구입 목적 대출은 LTV 0% — 사실상 신규 대출 불가.</b> &nbsp;
+    ③ <b>매매사업자 명의도 개인보다 유리하지 않음</b>(2025-09-07 대책으로 매매·임대사업자 주택구입 대출 금지).
+  </div>
+
+  <h3>2-1. 지역·주택수별 경락/주담대 가능 여부</h3>
+  <table>
+    <tr><th>지역</th><th>무주택(생애최초 등)</th><th>1주택</th><th>다주택</th></tr>
+    <tr>
+      <td><b>규제지역</b><br><span class="dim">(서울 전역+경기12)</span></td>
+      <td>LTV 40% (+한도 6/4/2억)</td>
+      <td>처분조건부 등 제한</td>
+      <td class="hl">LTV 0% (불가)</td>
+    </tr>
+    <tr>
+      <td><b>비규제지역</b></td>
+      <td>약 70%</td>
+      <td>약 60%</td>
+      <td>약 60%</td>
+    </tr>
+  </table>
+  <p class="dim">※ 단 <b>비규제라도 수도권(서울·경기·인천)은 주담대 절대한도 6억원</b> 적용. 비규제 LTV 70/60% 수치는 2차자료(블로그) 기준 → §4 참조.</p>
+  <div class="src">출처: 대한민국 정책브리핑 <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148950973">korea.kr/148950973</a> (2025-10) · 환경감시일보 <a href="https://www.sisadays.co.kr/news/439386">sisadays 439386</a> (2025-11-03, 경락대출 차단) · cbilder 블로그 <a href="https://www.cbilder.com/2026/02/dsr.html">DSR 정리</a> (2026-02, 2차자료)</div>
+
+  <h3>2-2. 2025~2026 대출규제 흐름 (3연타)</h3>
+  <ul>
+    <li><b>6·27 가계부채 관리방안</b> — 수도권·규제지역 주담대 최대 <b>6억원</b> 제한, 생애최초 LTV 80→70%, 전입의무 6개월. <span class="src">국토부 <a href="https://www.molit.go.kr/USR/NEWS/m_71/dtl.jsp?id=95091036">보도자료</a> 2025-06-27 / 금융위 <a href="https://www.fsc.go.kr/no010107/84834">2025-06-28</a></span></li>
+    <li class="hl-item">📌 <b>9·7 공급대책</b> — <span class="tip" tabindex="0">수도권<span class="iic">ⓘ</span><span class="bubble"><b>수도권 = 서울 + 인천 + 경기 전역</b><br>· 서울 25개 자치구 <b>전부</b><br>· 인천 8개구 + 강화·옹진군<br>· 경기 전 시·군<br>→ 사실상 <b>서울·인천·경기 어디든</b> 사업자 주택구입 대출 금지 (자세히 §2-5)</span></span>·규제지역 부동산 <b>매매·임대사업자 주택구입 대출 금지</b> (시행 <b>2025-09-08</b>, 적용 범위 <a href="#s2">§2-5</a>).</li>
+    <li><b>10·15 안정화 대책</b> — 주담대 한도 가격별 차등(6/4/2억), 규제지역 스트레스금리 1.5→<b>3%</b>, 법인 주택구입 대출까지 금지 확대. <span class="src">국토부 <a href="https://www.molit.go.kr/USR/NEWS/m_71/dtl.jsp?id=95091308">id=95091308</a> 2025-10-15</span></li>
+  </ul>
+
+  <h3>2-3. DSR (총부채원리금상환비율)</h3>
+  <ul>
+    <li>한도: 1금융권 <b>40%</b>, 2금융권 50%.</li>
+    <li><b>스트레스 DSR 3단계</b> 2025-07-01 시행(전 업권·전 가계대출). 규제지역 주담대는 10·15로 스트레스금리 3% 별도 적용.</li>
+  </ul>
+  <div class="src">출처: 금융위 보도자료 <a href="https://www.fsc.go.kr/no010101/84617">fsc 84617</a> (2025) · 정책브리핑 <a href="https://www.korea.kr/multi/visualNewsView.do?newsId=148943522">스트레스DSR 3단계</a> (2025)</div>
+
+  <h3>2-4. 매매사업자 명의는 유리한가? → 아니오</h3>
+  <p>2025-09-07 「주택공급 확대방안」(9·7 대책)으로 <b>수도권·규제지역 내 부동산 매매·임대 사업자의 주택구입 목적 대출이 금지</b>(LTV 0%)됐고(시행 <b>2025-09-08</b>), 10·15에서 일반 법인까지 확대됐습니다. <b>사업자 명의로 경락대출을 우회하는 길은 사실상 막혔습니다.</b></p>
+  <div class="src">출처: 금융위 보도자료 <a href="https://fsc.go.kr/no010101/85253">fsc 85253</a> (9·7 대책) · 국토부 <a href="https://www.molit.go.kr/policy/stable/sta_b_02.jsp">매매·임대사업자 주담대 금지</a> · 뉴스1 <a href="https://www.news1.kr/realestate/general/5909444">경매시장 차단</a> · 대한민국 정책브리핑 <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148950973">korea.kr/148950973</a> (10·15, 법인 확대)</div>
+
+  <h3>2-5. "수도권"이 정확히 어디까지인가 (구 단위)</h3>
+  <div class="box danger">
+    <div class="t">먼저 짚을 점 — "수도권·규제지역"은 합집합</div>
+    9·7 대책 적용 범위는 <b>"수도권 <u>또는</u> 규제지역"</b>입니다. 그런데 <b>「수도권정비계획법」상 수도권 = 서울 + 인천 + 경기 전역</b>이고, 현재 규제지역(서울 전역+경기 12곳)은 <b>전부 수도권 안</b>에 있습니다.
+    → <b>결론: 사실상 서울·인천·경기 전 지역에서 매매·임대사업자 주택구입 대출이 금지</b>됩니다. ("규제지역" 문구는 향후 비수도권에 규제지역이 생길 때를 대비한 표현.)
+    <div class="src">출처: 수도권정비계획법 / 토지이용 용어사전 <a href="https://www.eum.go.kr/web/in/dc/dcDictDet.jsp?termsNo=00291">eum.go.kr</a> · 게시일 미상(법령 현행)</div>
+  </div>
+  <table>
+    <tr><th>광역</th><th class="l">구(군) 단위 — 전역 해당</th></tr>
+    <tr>
+      <td><b>서울특별시</b><br><span class="dim">25개 자치구</span></td>
+      <td class="l">종로·중·용산·성동·광진·동대문·중랑·성북·강북·도봉·노원·은평·서대문·마포·양천·강서·구로·금천·영등포·동작·관악·서초·강남·송파·강동</td>
+    </tr>
+    <tr>
+      <td><b>인천광역시</b><br><span class="dim">8개 자치구+2군</span></td>
+      <td class="l">중·동·미추홀·연수·남동·부평·계양·서구 + <span class="dim">강화군·옹진군</span></td>
+    </tr>
+    <tr>
+      <td><b>경기도</b><br><span class="dim">전 시·군</span><br>(대부분 구 없음)</td>
+      <td class="l">
+        <b>일반구 보유 시:</b> 수원(장안·권선·팔달·영통) / 성남(수정·중원·분당) / 안양(만안·동안) / 안산(상록·단원) / 고양(덕양·일산동·일산서) / 용인(처인·기흥·수지)<br>
+        <b>구 없는 시·군:</b> 의정부·부천·광명·평택·동두천·과천·구리·남양주·오산·시흥·군포·의왕·하남·파주·이천·안성·김포·화성·광주·양주·포천·여주 + <span class="dim">연천·가평·양평군</span>
+      </td>
+    </tr>
+  </table>
+  <p class="dim">※ 예외: 신규 건설 주택을 담보로 최초 취급하는 사업자 대출 등 <b>국토부 장관이 인정하는 경우</b>는 허용. 시행일 <b>2025-09-08</b>.</p>
+  <div class="src">출처: 금융위 보도자료 <a href="https://fsc.go.kr/no010101/85253">fsc 85253</a> · 부동산114 <a href="https://m.r114.com/?_c=research&_m=research_detail&bno=200&gno=7&num=8199">9·7 공급확대방안</a> · 뉴시스 <a href="https://www.newsis.com/view/NISX20251001_0003353176">매매사업자 대출 제한</a> · 게시일 2025-09~10</div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="no">3</span> 세금 — 취득세 / 양도세 / 매매사업자 종합소득세</h2>
+
+  <h3>3-1. 취득세 (유상취득, 주택수·지역별)</h3>
+  <table>
+    <tr><th>주택 수</th><th>조정대상지역</th><th>비조정대상지역</th></tr>
+    <tr><td>1주택</td><td>1~3% (누진)</td><td>1~3% (누진)</td></tr>
+    <tr><td>2주택</td><td class="hl">8% 중과</td><td>1~3% (일반)</td></tr>
+    <tr><td>3주택</td><td class="hl">12% 중과</td><td>8% 중과</td></tr>
+    <tr><td>4주택 이상</td><td class="hl">12% 중과</td><td>12% 중과</td></tr>
+  </table>
+  <ul>
+    <li>위 본세 + 농어촌특별세(85㎡ 초과) + 지방교육세 가산. 예) 2주택 8% → 총 약 9.0%, 3주택 12% → 총 약 13.4% (85㎡ 초과 기준).</li>
+    <li>일시적 2주택은 중과 제외(종전주택 기한 내 처분). 저가주택(수도권 1억↓/비수도권 2억↓)은 주택수·중과 제외.</li>
+    <li><b>2026년 한시 변경</b>: 지방 준공후 미분양 아파트(6억↓·85㎡↓) 취득세 최대 50% 감면 + 중과 제외(1년). 조정대상지역 3억↑ 주택 증여 시 12% 중과.</li>
+  </ul>
+  <div class="src">출처: 택스오피스 <a href="https://taxoffice.co.kr/sub/?cat_no=284">취득세율표</a> (2차자료) · 삼일PwC <a href="https://www.pwc.com/kr/ko/insights/issue-brief/one-point-tax-05.html">원포인트택스</a> · 한국세정신문 <a href="https://www.taxtimes.co.kr/news/article.html?no=273135">2026 개정 273135</a> (2026-01-02)</div>
+
+  <h3>3-2. 양도소득세</h3>
+  <div class="box danger">
+    <div class="t">⚠ 핵심 (오늘 기준 적용 중)</div>
+    다주택자 양도세 중과 한시 유예가 <b>2026-05-09 종료</b>됐습니다. 즉 <b>오늘(2026-05-22)은 중과가 다시 시행 중</b>입니다.
+    조정대상지역 주택 양도 시 <b>2주택 +20%p, 3주택 이상 +30%p</b> 가산.
+    <div class="src">출처: 대한민국 정책브리핑(국세청) <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148963387">korea.kr/148963387</a> · 2026-04-24</div>
+  </div>
+  <ul>
+    <li>경과조치: 강남·서초·송파·용산구는 2026-05-09까지 계약+4개월 내 양도 시 중과 배제. 2025-10-16 신규지정 조정지역은 6개월 기한.</li>
+    <li><b>1세대1주택 비과세</b>: 2년 보유 시 비과세. 단 조정지역 취득분(2017-08-03 이후)은 <b>2년 보유 + 2년 거주</b> 필요. 양도가 12억 초과분은 과세.</li>
+  </ul>
+  <div class="src">출처: 국세청 <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=7707&mi=2308">1세대1주택 비과세</a> · 토스뱅크 <a href="https://www.tossbank.com/articles/transfertax-surcharge">양도세 중과 정리</a></div>
+
+  <h3>3-3. 매매사업자(종합소득세) vs 개인(양도세)</h3>
+  <div class="grid2">
+    <div class="box ok">
+      <div class="t">매매사업자가 유리한 경우</div>
+      <ul style="margin:6px 0">
+        <li><b>단기매매</b>: 개인이면 1년 미만 70% / 2년 미만 60% 단기중과 → 매매업은 <b>6~45% 일반세율</b></li>
+        <li><b>경비처리</b>: 대출이자·인건비·중개수수료 등 사업경비 폭넓게 인정</li>
+      </ul>
+    </div>
+    <div class="box warn">
+      <div class="t">매매사업자 단점·불리</div>
+      <ul style="margin:6px 0">
+        <li><b>비교과세(소득세법 §64)</b>: 중과대상 자산(조정지역 다주택·분양권 등)은 양도세율 적용액과 비교해 <b>큰 금액 납부</b> → 절세효과 상쇄</li>
+        <li><b>건강보험료</b> 산정 소득에 포함 → 부담 증가</li>
+        <li>장기보유특별공제·1주택 비과세 <b>적용 불가</b></li>
+      </ul>
+    </div>
+  </div>
+  <p>매매업 매매차익은 사업소득으로 <b>종합소득세(6~45% 누진)</b> 과세. 다만 <b>비교과세</b> 때문에 "조정지역 다주택" 같은 중과대상에서는 양도세 중과세율과 비교당해 매매업의 이점이 무력화됩니다. 특히 <b>2026-05-09 중과 부활로 비교과세 실효성이 다시 커진</b> 상황입니다.</p>
+  <div class="src">출처: 소득세법 제64조 <a href="https://www.law.go.kr/법령/소득세법/제64조">국가법령정보센터</a> (현행) · 택슬리 <a href="https://taxly.kr/post/1501">매매사업자 비교과세</a> · 주택저널 <a href="http://www.jutek.kr/user/selectBbsColumn.do?BBS_NUM=344&COD03_CODE=c0317">매매업 절세</a> · 홈노크 <a href="https://www.homeknock.co.kr/web-front/community/insight/9386/">건보료</a></div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s5">
+  <h2><span class="no">4</span> 불확실 · 상충 정보 (반드시 재확인할 것)</h2>
+  <ul>
+    <li><b>판정기는 추정 도구</b>: 규칙 기반 단순 계산입니다. DSR(소득)·은행 내규·경매 감정가·권리관계·생애최초 정책대출 등은 반영되지 않으므로 실제 결과와 다를 수 있습니다.</li>
+    <li><b>시행일 혼선</b>: 10·15 대책에서 투기과열·조정·취득세·주담대는 <b>2025-10-16</b>, 토지거래허가구역은 <b>2025-10-20</b>(공고+5일)로 적용일이 다릅니다.</li>
+    <li><b>2026년 1~5월 추가 변동 미확인</b>: 본 자료는 2025-10 대책 + 2026-04-24 양도세 안내 기준. 거래 직전 재확인 필수.</li>
+    <li><b>비규제지역 LTV 70/60%</b>: 정부 1차자료가 아닌 <b>블로그(2차자료)</b> 기준. 지역·은행·물건별로 다를 수 있음.</li>
+    <li><b>취득세 합산 총세율(9.0%/13.4%)</b>: 본세율(1·8·12%)은 다수 출처 일치하나, 농특세·지교세 합산치는 전용면적·과세표준에 따라 달라져 단일 수치로 단정 불가.</li>
+    <li><b>양도세 경과조치 기한</b>: "계약+4개월/6개월" 표현이 출처마다 미세하게 다름(국세청 정책브리핑 기준 채택).</li>
+    <li><b>DSR 한도·지방 스트레스금리 유예</b>: 2025년 발표 기준. 2026년 유예 종료/연장 여부 추가 확인 필요.</li>
+  </ul>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2>출처 전체 목록 (기관 · URL · 게시일)</h2>
+  <ul style="font-size:13.5px;line-height:1.9">
+    <li>대한민국 정책브리핑 — 10·15 주택시장 안정화 대책: <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148950973">korea.kr/148950973</a> · <b>2025-10-15</b></li>
+    <li>대한민국 정책브리핑 — 주담대 한도 차등: <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148950959">korea.kr/148950959</a> · 2025-10</li>
+    <li>대한민국 정책브리핑(국세청) — 양도세 중과 유예 종료(2026-05-09): <a href="https://www.korea.kr/news/policyNewsView.do?newsId=148963387">korea.kr/148963387</a> · <b>2026-04-24</b></li>
+    <li>국토교통부 보도자료 — 6·27 가계부채 방안: <a href="https://www.molit.go.kr/USR/NEWS/m_71/dtl.jsp?id=95091036">molit id=95091036</a> · <b>2025-06-27</b></li>
+    <li>국토교통부 보도자료 — 10·15 대책: <a href="https://www.molit.go.kr/USR/NEWS/m_71/dtl.jsp?id=95091308">molit id=95091308</a> · <b>2025-10-15</b></li>
+    <li>국토교통부 — 매매·임대사업자 주담대 금지(9·7): <a href="https://www.molit.go.kr/policy/stable/sta_b_02.jsp">molit/policy/stable</a></li>
+    <li>금융위원회 — 6·27 시행: <a href="https://www.fsc.go.kr/no010107/84834">fsc 84834</a> · <b>2025-06-28</b></li>
+    <li>금융위원회 — 9·7 매매·임대사업자 대출 제한: <a href="https://fsc.go.kr/no010101/85253">fsc 85253</a> · 2025-09</li>
+    <li>금융위원회 — 스트레스 DSR: <a href="https://www.fsc.go.kr/no010101/84617">fsc 84617</a> · 2025</li>
+    <li>서울시 토지정보시스템 — 규제구역 현황(실시간): <a href="https://land.seoul.go.kr/land/other/appointStatusSeoul.do">land.seoul.go.kr</a> · 상시</li>
+    <li>토지이용 용어사전 — 수도권 정의(서울+인천+경기): <a href="https://www.eum.go.kr/web/in/dc/dcDictDet.jsp?termsNo=00291">eum.go.kr</a></li>
+    <li>국세청 — 1세대1주택 비과세: <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=7707&mi=2308">nts 7707</a> · 게시일 미상</li>
+    <li>국가법령정보센터 — 소득세법 제64조(비교과세): <a href="https://www.law.go.kr/법령/소득세법/제64조">law.go.kr</a> · 현행</li>
+    <li>한국세정신문 — 규제지역 확대: <a href="https://www.taxtimes.co.kr/news/article.html?no=271870">taxtimes 271870</a> · 게시일 미상</li>
+    <li>한국세정신문 — 2026 세제 개정: <a href="https://www.taxtimes.co.kr/news/article.html?no=273135">taxtimes 273135</a> · <b>2026-01-02</b></li>
+    <li>한국경제 — 강남3구+용산 토허 연장(~2026-12-31): <a href="https://www.hankyung.com/article/202509179925i">hankyung 202509179925i</a> · <b>2025-09-17</b></li>
+    <li>경향신문 — 10·15 효과 정리: <a href="https://www.khan.co.kr/article/202510151656001">khan 202510151656001</a> · <b>2025-10-15</b></li>
+    <li>머니투데이 — 토허 거래량 42.6%↓: <a href="https://www.mt.co.kr/estate/2025/09/17/2025091716040920475">mt 2025091716040920475</a> · <b>2025-09-17</b></li>
+    <li>뉴시스 — 매매사업자 대출 제한 영향: <a href="https://www.newsis.com/view/NISX20251001_0003353176">newsis 0003353176</a> · 2025-10</li>
+    <li>뉴스1 — 매매사업자 대출 금지(경매 차단): <a href="https://www.news1.kr/realestate/general/5909444">news1 5909444</a></li>
+    <li>환경감시일보 — 규제지역 경락대출 차단: <a href="https://www.sisadays.co.kr/news/439386">sisadays 439386</a> · <b>2025-11-03</b></li>
+    <li>삼일PwC 원포인트택스 — 취득세: <a href="https://www.pwc.com/kr/ko/insights/issue-brief/one-point-tax-05.html">pwc.com</a> · 게시일 미상</li>
+    <li>택슬리 — 매매사업자 비교과세: <a href="https://taxly.kr/post/1501">taxly.kr/post/1501</a> · 게시일 미상</li>
+    <li>(2차자료) 택스오피스 취득세율표 · cbilder DSR 블로그 · 토스뱅크 아티클 · 주택저널 · 홈노크 — §4 유의사항 참조</li>
+  </ul>
+</section>
+
+<footer>
+  본 문서는 2026-05-22 기준 공개 웹자료를 정리한 참고용 보고서입니다. 판정기는 추정 도구이며, 거래·신고 전 1차 출처 및 전문가(은행·세무사·법무사) 확인 필수.
+</footer>
+
+</div>
+
+<script>
+/* ===== 지역 데이터 ===== */
+var SEOUL_GU=['종로구','중구','용산구','성동구','광진구','동대문구','중랑구','성북구','강북구','도봉구','노원구','은평구','서대문구','마포구','양천구','강서구','구로구','금천구','영등포구','동작구','관악구','서초구','강남구','송파구','강동구'];
+var INCHEON_GU=['중구','동구','미추홀구','연수구','남동구','부평구','계양구','서구','강화군','옹진군'];
+var GG_CITIES={
+  '수원시':['장안구','권선구','팔달구','영통구'],
+  '성남시':['수정구','중원구','분당구'],
+  '안양시':['만안구','동안구'],
+  '안산시':['상록구','단원구'],
+  '고양시':['덕양구','일산동구','일산서구'],
+  '용인시':['처인구','기흥구','수지구'],
+  '의정부시':[], '부천시':[], '광명시':[], '평택시':[], '동두천시':[], '과천시':[],
+  '구리시':[], '남양주시':[], '오산시':[], '시흥시':[], '군포시':[], '의왕시':[], '하남시':[],
+  '파주시':[], '이천시':[], '안성시':[], '김포시':[], '화성시':[], '광주시':[], '양주시':[],
+  '포천시':[], '여주시':[], '연천군':[], '가평군':[], '양평군':[]
+};
+/* 경기 규제지역(투기과열=조정, 10·15) */
+var GG_REG_WHOLE=['과천시','광명시','의왕시','하남시'];
+var GG_REG_GU=['성남시|수정구','성남시|중원구','성남시|분당구','수원시|장안구','수원시|팔달구','수원시|영통구','안양시|동안구','용인시|수지구'];
+
+function classify(sido,city,gu){
+  if(sido==='서울특별시')   return {cat:'REG', toheo:true,  jojeong:true,  name:'서울 '+(gu||'')};
+  if(sido==='인천광역시')   return {cat:'SUDO',toheo:false, jojeong:false, name:'인천 '+(gu||'')};
+  if(sido==='그 외 지방(비수도권)') return {cat:'JIBANG',toheo:false,jojeong:false,name:'지방'};
+  if(sido==='경기도'){
+    var reg=false;
+    if(GG_REG_WHOLE.indexOf(city)>-1) reg=true;
+    else if(GG_REG_GU.indexOf(city+'|'+gu)>-1) reg=true;
+    return {cat: reg?'REG':'SUDO', toheo:reg, jojeong:reg, name:'경기 '+city+(gu?(' '+gu):'')};
+  }
+  return null;
+}
+
+/* ===== 셀렉트 헬퍼 ===== */
+function fill(sel,items,ph){
+  sel.innerHTML='';
+  if(ph!==null){var o=document.createElement('option');o.value='';o.textContent=ph;sel.appendChild(o);}
+  for(var i=0;i<items.length;i++){var op=document.createElement('option');op.value=items[i];op.textContent=items[i];sel.appendChild(op);}
+}
+function tagInfo(reg){ if(!reg) return null; if(reg.cat==='REG') return ['reg','🔴 규제지역']; if(reg.cat==='SUDO') return ['sudo','🔵 수도권 비규제']; return ['jibang','⚪ 지방(비규제)']; }
+function setTag(el,reg){ if(!el) return; var t=tagInfo(reg); if(!t){ el.style.display='none'; el.textContent=''; return; } el.className='rtag '+t[0]; el.textContent=t[1]; el.style.display='inline-block'; }
+function initPicker(root,tagEl){
+  var sido=root.querySelector('.p-sido'), city=root.querySelector('.p-city'), gu=root.querySelector('.p-gu');
+  fill(sido,['서울특별시','인천광역시','경기도','그 외 지방(비수도권)'],'-- 시/도 --');
+  city.style.display='none'; gu.style.display='none';
+  function upd(){ setTag(tagEl, readPicker(root)); }
+  sido.onchange=function(){
+    var v=sido.value; city.style.display='none'; gu.style.display='none';
+    if(v==='서울특별시'){ gu.style.display=''; fill(gu,SEOUL_GU,'-- 구 --'); }
+    else if(v==='인천광역시'){ gu.style.display=''; fill(gu,INCHEON_GU,'-- 구/군 --'); }
+    else if(v==='경기도'){ city.style.display=''; fill(city,Object.keys(GG_CITIES),'-- 시/군 --'); }
+    upd();
+  };
+  city.onchange=function(){
+    var list=GG_CITIES[city.value]||[];
+    if(list.length){ gu.style.display=''; fill(gu,list,'-- 구 --'); } else { gu.style.display='none'; }
+    upd();
+  };
+  gu.onchange=upd;
+  upd();
+}
+function readPicker(root){
+  var sido=root.querySelector('.p-sido').value;
+  var city=root.querySelector('.p-city').value;
+  var gu=root.querySelector('.p-gu').value;
+  if(!sido) return null;
+  if(sido==='경기도' && !city) return null;
+  if(sido==='경기도' && (GG_CITIES[city]||[]).length>0 && !gu) return null;
+  if((sido==='서울특별시'||sido==='인천광역시') && !gu) return null;
+  return classify(sido,city,gu);
+}
+
+/* ===== 보유주택 추가 ===== */
+function pickerHTML(){return '<span class="picker"><select class="p-sido"></select> <select class="p-city" style="display:none"></select> <select class="p-gu" style="display:none"></select></span>';}
+function addOwned(){
+  var wrap=document.getElementById('ownedList');
+  var row=document.createElement('div'); row.className='owned-row';
+  row.innerHTML=pickerHTML()+' <span class="rtag" style="display:none"></span> <button class="btn sec sm" type="button">삭제</button>';
+  wrap.appendChild(row);
+  initPicker(row.querySelector('.picker'), row.querySelector('.rtag'));
+  row.querySelector('button').onclick=function(){ row.remove(); };
+}
+
+/* ===== 계산 로직 ===== */
+function priceBand(p){ if(!p||p<=0) return 6; if(p<=15) return 6; if(p<=25) return 4; return 2; }
+function fmt(n){ return (Math.round(n*100)/100).toString(); }
+function acqTax(jojeong,total){
+  if(jojeong){ if(total<=1) return '1~3% (누진)'; if(total===2) return '8% 중과'; return '12% 중과'; }
+  if(total<=2) return '1~3% (누진)'; if(total===3) return '8% 중과'; return '12% 중과';
+}
+function decide(reg,owned,biz,price,firstHome,willSell,ownedRegCount){
+  var sudokwon = (reg.cat==='REG'||reg.cat==='SUDO');
+  var newTotal = owned+1;
+  var out={details:[]};
+  var catLabel = reg.cat==='REG'?'규제지역 (투기과열·조정대상)':(reg.cat==='SUDO'?'수도권 비규제지역':'지방 (비수도권)');
+  out.details.push(['지역 구분', catLabel+' — '+reg.name]);
+  out.details.push(['주택 수', owned+'채 보유 → 구입 후 '+newTotal+'채']);
+
+  if(biz && sudokwon){
+    out.level='danger'; out.title='🔴 (사업자) 대출 불가';
+    out.reason='9·7 대책: 수도권 내 부동산 매매·임대사업자의 주택구입 목적 대출 금지(LTV 0%). 예외 — 신규 건설 주택 담보 최초취급 등 국토부 장관 인정 시.';
+  } else if(reg.cat==='REG'){
+    if(owned===0){
+      out.level='ok'; out.title='🟢 대출 가능 (무주택)';
+      out.reason='규제지역 무주택자: LTV 40% 적용.';
+      out.details.push(['예상 LTV','40%']);
+      var cap=priceBand(price);
+      if(price>0){ var loan=Math.min(price*0.4,cap); out.details.push(['대출 한도', fmt(loan)+'억 (LTV 40%='+fmt(price*0.4)+'억 vs 가격대 상한 '+cap+'억 중 작은 값)']); }
+      else out.details.push(['대출 한도', cap+'억 (가격대별 상한; 가격 입력 시 정확 계산)']);
+    } else if(owned===1){
+      if(willSell){ out.level='amber'; out.title='🟡 조건부 가능 (1주택·처분조건부)';
+        out.reason='규제지역 1주택자는 원칙 제한되나, 기존주택 처분 약정(처분조건부) 시 신규 주담대 가능. 기한 내 미처분 시 회수.';
+        out.details.push(['예상 LTV','40% (처분조건부)']);
+      } else { out.level='danger'; out.title='🔴 대출 불가 (1주택·처분계획 없음)';
+        out.reason='규제지역에서 기존주택 처분 없이 추가 구입 시 주택구입 목적 주담대 제한. 기존주택 처분 예정이면 ⑤를 체크하세요.';
+      }
+    } else { out.level='danger'; out.title='🔴 대출 불가 (다주택)';
+      out.reason='규제지역 다주택자(2주택 이상)는 주택구입 목적 주담대 LTV 0% — 사실상 신규 대출 불가.';
+    }
+  } else if(reg.cat==='SUDO'){
+    out.level='ok'; out.title='🟢 대출 가능 (수도권 비규제)';
+    var ltv1=(owned===0)?70:60;
+    out.reason='수도권 비규제지역: 무주택 약 70% / 유주택 약 60%. 단 수도권은 주담대 절대한도 6억원.';
+    out.details.push(['예상 LTV','약 '+ltv1+'%']);
+    if(price>0){ var l1=Math.min(price*ltv1/100,6); out.details.push(['대출 한도', fmt(l1)+'억 (LTV='+fmt(price*ltv1/100)+'억 vs 한도 6억 중 작은 값)']); }
+    else out.details.push(['대출 한도','최대 6억 (수도권 상한)']);
+  } else {
+    out.level='ok'; out.title='🟢 대출 가능 (지방)';
+    var ltv2=(owned===0)?70:60;
+    out.reason='지방(비수도권): 무주택 약 70% / 유주택 약 60%. 수도권 6억 한도 미적용.';
+    out.details.push(['예상 LTV','약 '+ltv2+'%']);
+    if(price>0) out.details.push(['대출 한도', fmt(price*ltv2/100)+'억 (LTV 기준)']);
+  }
+
+  out.details.push(['취득세율(예상)', acqTax(reg.jojeong,newTotal)]);
+  if(reg.cat==='REG' && (price===0||price>=3)) out.details.push(['자금조달계획서','필요 (규제지역 3억↑ 거래)']);
+  else if(price>=6) out.details.push(['자금조달계획서','필요 (비규제 6억↑)']);
+  if(reg.toheo) out.details.push(['토지거래허가','아파트는 구청 허가 + 2년 실거주 의무 (갭투자·임대 불가)']);
+  if(reg.jojeong && newTotal>=2) out.details.push(['양도세 주의','조정대상지역 다주택 — 추후 양도 시 중과 (2주택 +20%p·3주택+ +30%p, 2026-05-09 중과 부활)']);
+  if(ownedRegCount>0) out.details.push(['보유주택 양도세','보유 중 규제(조정)지역 '+ownedRegCount+'채 — 추후 양도 시 양도세 중과 대상']);
+  if(firstHome && owned===0) out.details.push(['생애최초','생애최초 우대(LTV 최대 70%)·디딤돌 등 정책대출 별도 확인 가능']);
+  out.details.push(['DSR','본인 연소득 대비 한도(1금융 40%)가 별도로 걸립니다 — 위 한도와 무관하게 추가 제한 가능']);
+  return out;
+}
+
+function render(out){
+  var h='<div class="result '+out.level+'"><div class="rtitle">'+out.title+'</div><div>'+out.reason+'</div><ul>';
+  for(var i=0;i<out.details.length;i++){ h+='<li><b>'+out.details[i][0]+':</b> '+out.details[i][1]+'</li>'; }
+  h+='</ul></div>';
+  document.getElementById('calcResult').innerHTML=h;
+}
+
+function compute(){
+  var reg=readPicker(document.querySelector('#buyPicker .picker'));
+  if(!reg){ document.getElementById('calcResult').innerHTML='<div class="result amber"><div class="rtitle">⚠ 입력 확인</div>구입할 지역을 (구/시·군까지) 선택하세요.</div>'; return; }
+  var owned=0, ownedReg=0, ps=document.querySelectorAll('#ownedList .owned-row .picker');
+  for(var i=0;i<ps.length;i++){ if(ps[i].querySelector('.p-sido').value){ owned++; var rc=readPicker(ps[i]); if(rc&&rc.cat==='REG') ownedReg++; } }
+  var biz=document.querySelector('input[name=owner]:checked').value==='biz';
+  var price=parseFloat(document.getElementById('price').value)||0;
+  var firstHome=document.getElementById('firstHome').checked;
+  var willSell=document.getElementById('willSell').checked;
+  render(decide(reg,owned,biz,price,firstHome,willSell,ownedReg));
+}
+
+window.addEventListener('DOMContentLoaded',function(){ initPicker(document.querySelector('#buyPicker .picker'), document.getElementById('buyTag')); });
+</script>
+</body>
+</html>
