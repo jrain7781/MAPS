@@ -1897,7 +1897,8 @@
                 {
                     const tEnabled = getMemberTelegramEnabled_(item.member_id);
                     const tBidState = String(item.bid_state || '').trim();
-                    const tBadgeClass = (tBidState === '확인완료' || tBidState.includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
+                    const _tChuchenRead = (String(item.stu_member || '').trim() === '추천' && String(item.chuchen_read || '').trim() === '읽음');
+                    const tBadgeClass = (tBidState === '확인완료' || tBidState.includes('확인완료')) ? 'telegram-badge-confirmed' : (_tChuchenRead ? 'telegram-badge-chuchen' : 'telegram-badge');
                     cell.innerHTML = tEnabled === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                 }
                 cell.className = 'item-col-telegram text-center';
@@ -1905,10 +1906,6 @@
                 {
                     const base = String(item.m_name || '').trim();
                     cell.textContent = base;
-                    // [추천 읽음확인] 추천 + 읽음이면 회원명 셀 바탕을 추천색으로 채움
-                    if (String(item.stu_member || '').trim() === '추천' && String(item.chuchen_read || '').trim() === '읽음') {
-                        cell.style.backgroundColor = '#ffbe76';
-                    }
                 }
                 cell.className = 'item-col-member text-center';
                 cell = row.insertCell(9);
@@ -2773,7 +2770,8 @@
                         const mNameValue = bid.m_name || '';
                         const mNameHtml = _buildBidMNameHtml_(bid);
                         const mNameInfoHtml = _buildBidMemberInlineInfo_(bid);
-                        const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
+                        const _tChuchenRead = (String(bid.stu_member || '').trim() === '추천' && String(bid.chuchen_read || '').trim() === '읽음');
+                        const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : (_tChuchenRead ? 'telegram-badge-chuchen' : 'telegram-badge');
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
@@ -3518,7 +3516,8 @@
                         const mNameValue = bid.m_name || '';
                         const mNameHtml = _buildBidMNameHtml_(bid);
                         const mNameInfoHtml = _buildBidMemberInlineInfo_(bid);
-                        const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : 'telegram-badge';
+                        const _tChuchenRead = (String(bid.stu_member || '').trim() === '추천' && String(bid.chuchen_read || '').trim() === '읽음');
+                        const tBadgeClass = (String(bid.bid_state || '').includes('확인완료')) ? 'telegram-badge-confirmed' : (_tChuchenRead ? 'telegram-badge-chuchen' : 'telegram-badge');
                         const tBadgeHtml = getMemberTelegramEnabled_(bid.member_id) === 'Y' ? `<span class="${tBadgeClass}">T</span>` : '';
                         const statusClass = getStatusTagClass(bid.stu_member);
                         const courtButtonClass = 'button-like-content';
@@ -4793,12 +4792,6 @@
             renderSidebarChuchenInfo_(data);
 
             currentDetailItem = data;
-            // [추천 읽음확인] 추천 + 읽음이면 상세 회원명 입력 바탕을 추천색으로 채움
-            try {
-                const _detMn = document.getElementById('form-m-name');
-                if (_detMn) _detMn.style.backgroundColor =
-                    (String(data.stu_member || '').trim() === '추천' && String(data.chuchen_read || '').trim() === '읽음') ? '#ffbe76' : '';
-            } catch (e) { }
             // 물건 선택 시 항상 상세 탭으로 시작
             currentItemDetailTab = 'detail';
             if (typeof switchItemDetailTab === 'function') switchItemDetailTab('detail');
@@ -6129,11 +6122,6 @@
         if (modalFormStuMember) modalFormStuMember.value = data.stu_member || '미정';
         if (modalFormYongdo) modalFormYongdo.value = data.items_youngdo || ''; // 빈값 = 등록전
         if (modalFormMemberId) modalFormMemberId.value = data.member_id || '';
-        // [추천 읽음확인] 추천 + 읽음이면 모달 회원명 입력 바탕을 추천색으로 채움
-        try {
-            if (modalFormMName) modalFormMName.style.backgroundColor =
-                (String(data.stu_member || '').trim() === '추천' && String(data.chuchen_read || '').trim() === '읽음') ? '#ffbe76' : '';
-        } catch (e) { }
         // [수정] items 시트의 m_name 우선순위 적용 (없을 경우에만 회원 DB 참조)
         if (modalFormMName) {
             const mem = data.member_id ? getMemberById_(data.member_id) : null;
@@ -12436,7 +12424,10 @@ MJ 이정우 팀장
 
                 // 상세탭 회원명 옆 T 뱃지
                 const detailBadge = document.getElementById('detail-telegram-badge');
-                if (detailBadge) detailBadge.innerHTML = (telegramEnabled === 'Y') ? '<span class="telegram-badge">T</span>' : '';
+                if (detailBadge) {
+                    const _dCls = (currentDetailItem && String(currentDetailItem.stu_member || '').trim() === '추천' && String(currentDetailItem.chuchen_read || '').trim() === '읽음') ? 'telegram-badge-chuchen' : 'telegram-badge';
+                    detailBadge.innerHTML = (telegramEnabled === 'Y') ? ('<span class="' + _dCls + '">T</span>') : '';
+                }
             } else {
                 const telegramUsername = document.getElementById('modal-telegram-username');
                 const memberTokenDisplay = document.getElementById('modal-member-token-display');
@@ -12451,7 +12442,10 @@ MJ 이정우 팀장
 
                 // 모달 회원명 옆 T 뱃지
                 const modalBadge = document.getElementById('modal-telegram-badge');
-                if (modalBadge) modalBadge.innerHTML = (telegramEnabled === 'Y') ? '<span class="telegram-badge">T</span>' : '';
+                if (modalBadge) {
+                    const _mCls = (currentModalItemData && String(currentModalItemData.stu_member || '').trim() === '추천' && String(currentModalItemData.chuchen_read || '').trim() === '읽음') ? 'telegram-badge-chuchen' : 'telegram-badge';
+                    modalBadge.innerHTML = (telegramEnabled === 'Y') ? ('<span class="' + _mCls + '">T</span>') : '';
+                }
             }
 
             // display-member-id 스팬에 회원 부가정보 인라인 표시 (main 탭, modal 공통)
