@@ -4936,17 +4936,9 @@
         if (tab === 'history') renderItemSubHistory();
         if (tab === 'info') renderItemSubInfo('main');
         if (tab === 'message') {
-            // 수수료 input 복원: localStorage 값 우선, 없거나 빈값이면 기본 110,000
+            // 수수료: 물건번호별 저장 안 함 — 메시지탭 들어올 때마다 항상 기본값 110,000
             const feeEl = document.getElementById('item-message-fee');
-            if (feeEl) {
-                try {
-                    const saved = localStorage.getItem('mj_message_fee_item');
-                    feeEl.value = (saved && String(saved).trim()) ? saved : '110,000';
-                    if (!feeEl.value) feeEl.value = '110,000'; // select에 없는 옛 커스텀값 → 기본 110,000
-                } catch(e) {
-                    if (!feeEl.value) feeEl.value = '110,000';
-                }
-            }
+            if (feeEl) feeEl.value = '110,000';
             renderKakaoTemplateTabs(currentDetailItem ? currentDetailItem.member_id : null, 'item');
             if (typeof _updateMessageMetaDisplay_ === 'function') _updateMessageMetaDisplay_('item');
         }
