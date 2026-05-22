@@ -1761,7 +1761,12 @@
     function renderItemListSummary(data) {
         const bar = document.getElementById('itemListSummaryBar');
         if (!bar) return;
-        if (data.length === 0) { bar.classList.add('content-hidden'); return; }
+        // [요청] 필터 결과 0건이어도 카운팅 행은 항상 유지(숨기지 않음) → 검색 입력 중 레이아웃 흔들림 방지
+        if (data.length === 0) {
+            bar.innerHTML = `<span class="text-gray-600">전체 0건</span>`;
+            bar.classList.remove('content-hidden');
+            return;
+        }
 
         const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '취소'];
         const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '취소': 'text-orange-700' };
