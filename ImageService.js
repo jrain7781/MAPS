@@ -137,6 +137,8 @@ function getSyncStats() {
           const dotIdx = fn.lastIndexOf('.');
           const nameNoExt = dotIdx > -1 ? fn.substring(0, dotIdx) : fn;
           const fparts = nameNoExt.split('_');
+          // [신규 형식] 길이 6 이상: 끝 2개(보증금/최저가) 먼저 제거
+          if (fparts.length >= 6) { fparts.pop(); fparts.pop(); }
           // 끝이 순수 숫자면 옥션ID 제거
           if (fparts.length > 0 && /^\d{4,12}$/.test(fparts[fparts.length - 1])) fparts.pop();
           if (fparts.length > 3) manager = fparts[fparts.length - 1].trim();
@@ -772,11 +774,12 @@ function syncImages(batchLimit = 100) {
         let deposit = "";
         let lowestPrice = "";
 
-        // [신규 형식] split 길이 7 이상: 사건_날짜_법원_매니저_pid_보증_최저
-        // [옛 형식] split 길이 5: 사건_날짜_법원_매니저_pid
-        // 길이로 판별 (매니저 영문/숫자/한글 무관, 보증/최저 빈 문자열도 OK)
+        // [신규 형식] split 길이 6 이상: 사건_날짜_법원_매니저(_pid)_보증_최저
+        //   - pid 있음 → 7개, pid 없음 → 6개 (보증/최저는 항상 붙음, 빈 문자열도 OK)
+        // [옛 형식] split 길이 4~5: 사건_날짜_법원_매니저(_pid)
+        // 길이로 판별 (매니저 영문/숫자/한글 무관)
         let parts = name.split('_');
-        if (parts.length >= 7) {
+        if (parts.length >= 6) {
           lowestPrice = parts.pop().trim();
           deposit = parts.pop().trim();
           name = parts.join('_');
