@@ -218,6 +218,10 @@ function readAllData() {
     rowData['deposit'] = (row.length > 21) ? (row[21] || '') : '';
     // [추가] 23번째 열(22번 인덱스, W열) lowest_price (최저가) 매핑
     rowData['lowest_price'] = (row.length > 22) ? (row[22] || '') : '';
+    // [추가] 24번째 열(23번 인덱스, X열) chuchen_read (추천 읽음여부: '미읽음'|'읽음') 매핑
+    rowData['chuchen_read'] = (row.length > 23) ? String(row[23] || '').trim() : '';
+    // [추가] 25번째 열(24번 인덱스, Y열) chuchen_read_date (추천 확인 일시 ISO) 매핑
+    rowData['chuchen_read_date'] = (row.length > 24) ? (row[24] || '') : '';
 
     // [추가] item_images 테이블에 이미지가 있는지 확인
     rowData['has_images'] = itemsWithImages.has(String(row[0]).trim());

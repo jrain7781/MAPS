@@ -84,6 +84,19 @@ function telegramDeleteMessage_(chatId, messageId) {
   return telegramFetch_('deleteMessage', payload);
 }
 
+// 기존 메시지의 텍스트+버튼을 교체 (티저 → 추천 카드 본문 공개용)
+function telegramEditMessageText_(chatId, messageId, text, replyMarkup) {
+  const payload = {
+    chat_id: chatId,
+    message_id: messageId,
+    text: text,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true
+  };
+  if (replyMarkup) payload.reply_markup = replyMarkup;
+  return telegramFetch_('editMessageText', payload);
+}
+
 /**
  * 텔레그램 webhook URL 설정 (관리자 1회 실행)
  * - WEBAPP_BASE_URL이 별도로 있으면 그 URL을 사용
@@ -349,6 +362,65 @@ function handleTelegramWebhook_(update) {
     // === 입찰 확정/취소: 확인 단계(예/아니오) ===
     // - 기존 메시지의 BID/CANCEL도 호환을 위해 CONFIRM 플로우로 처리
     const messageId = cq.message && cq.message.message_id ? Number(cq.message.message_id) : null;
+
+    // === [추천 읽음확인] '확인하기' 클릭 → 티저를 추천 카드 본문으로 교체 + 읽음 기록 ===
+    if (action === 'CHUCHEN_READ') {
+      try { telegramAnswerCallbackQuery_(cqId, '추천을 확인했습니다.', false); } catch (e) { }
+      try {
+        var _it = (typeof getItemLiteById_ === 'function') ? getItemLiteById_(itemId) : null;
+        if (!_it) { telegramSendMessage(chatId, '⚠️ 물건 정보를 찾을 수 없습니다.'); return; }
+        var _mid = String(_it.member_id || '').trim();
+        var _mem = (_mid && typeof getMemberById_ === 'function') ? getMemberById_(_mid) : null;
+        var _memberObj = {
+          member_id: _mid,
+          member_token: _mem ? String(_mem.member_token || '') : '',
+          telegram_chat_id: chatId
+        };
+        // 본문(추천 카드) 빌드 후 티저 메시지를 교체
+        var _card = telegramBuildItemMessage_(_it, _memberObj, 'card');
+        if (_card && messageId) {
+          telegramEditMessageText_(chatId, messageId, _card.text, _card.replyMarkup);
+        } else if (_card) {
+          telegramSendMessage(chatId, _card.text, _card.replyMarkup);
+        }
+        // 읽음 기록 (X=24 chuchen_read, Y=25 chuchen_read_date)
+        try {
+          var _ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+          var _sh = _ss.getSheetByName(DB_SHEET_NAME);
+          if (_sh) {
+            var _lr = _sh.getLastRow();
+            if (_lr >= 2) {
+              var _found = _sh.getRange(2, 1, _lr - 1, 1)
+                .createTextFinder(String(itemId)).matchEntireCell(true).findNext();
+              if (_found) {
+                var _rn = _found.getRow();
+                _sh.getRange(_rn, 24).setValue('읽음');
+                _sh.getRange(_rn, 25).setValue(new Date().toISOString());
+                SpreadsheetApp.flush();
+              }
+            }
+          }
+        } catch (e) { Logger.log('[CHUCHEN_READ] 읽음 기록 오류: ' + e.message); }
+        // 히스토리 기록 (작업: 추천확인)
+        try {
+          if (typeof writeItemHistory_ === 'function') {
+            writeItemHistory_({
+              action           : 'CHUCHEN_CONFIRMED',
+              item_id          : String(itemId),
+              member_id        : _mid,
+              member_name      : _mem ? String(_mem.member_name || '') : '',
+              chat_id          : chatId,
+              telegram_username: (from.username ? String(from.username).trim() : ''),
+              trigger_type     : 'member-telegram',
+              note             : 'card'
+            });
+          }
+        } catch (e) { Logger.log('[CHUCHEN_READ] 히스토리 기록 오류: ' + e.message); }
+      } catch (e) {
+        Logger.log('[CHUCHEN_READ] 처리 오류: ' + e.message);
+      }
+      return;
+    }
 
     if (action === 'BID' || action === 'BID_CONFIRM') {
       // MAPS 실제 상태 확인: 추천 상태만 입찰확정 가능
@@ -1030,7 +1102,16 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
   if (!msg) {
     return { success: false, message: '현재 물건 상태에서는 해당 메시지를 전송할 수 없습니다. (물건상태: ' + String(item.stu_member || '') + ')' };
   }
-  telegramSendMessage(chatId, msg.text, msg.replyMarkup);
+  // [추천 읽음확인] 'card'(추천)는 본문 대신 티저만 발송 → '확인하기' 클릭 시 editMessageText로 본문 공개
+  var _sendText = msg.text;
+  var _sendMarkup = msg.replyMarkup;
+  if (styleKey === 'card') {
+    _sendText = (typeof getMessageTemplate_ === 'function')
+      ? (getMessageTemplate_('item_card.teaser') || '📩 추천물건이 도착했습니다.')
+      : '📩 추천물건이 도착했습니다.';
+    _sendMarkup = { inline_keyboard: [[{ text: '확인하기', callback_data: 'MJ|CHUCHEN_READ|' + String(itemId) }]] };
+  }
+  telegramSendMessage(chatId, _sendText, _sendMarkup);
 
   // 전송 성공 시 상태 업데이트
   try {
@@ -1049,6 +1130,8 @@ function sendItemToMemberTelegramWithStyle(memberId, itemId, styleKey) {
             const _nowIso = new Date().toISOString();
             itemsSheet.getRange(rowNum, 17).setValue('전달완료'); // Q열: chuchen_state
             itemsSheet.getRange(rowNum, 18).setValue(_nowIso); // R열: chuchen_date
+            itemsSheet.getRange(rowNum, 24).setValue('미읽음'); // X열: chuchen_read (티저 발송 → 미읽음)
+            itemsSheet.getRange(rowNum, 25).setValue('');       // Y열: chuchen_read_date 초기화
             // [4키 룰] 일반 케이스(class_d1_id 비어있음)만 bid_datetime_2 자동 계산
             // 수업회차는 회차 등록 시 이미 채워진 bid_datetime_2 유지
             const _classD1IdCell = itemsSheet.getRange(rowNum, 19).getValue(); // S열: class_d1_id

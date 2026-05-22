@@ -1905,6 +1905,10 @@
                 {
                     const base = String(item.m_name || '').trim();
                     cell.textContent = base;
+                    // [추천 읽음확인] 추천 + 읽음이면 회원명 셀 바탕을 추천색으로 채움
+                    if (String(item.stu_member || '').trim() === '추천' && String(item.chuchen_read || '').trim() === '읽음') {
+                        cell.style.backgroundColor = '#ffbe76';
+                    }
                 }
                 cell.className = 'item-col-member text-center';
                 cell = row.insertCell(9);
@@ -4789,6 +4793,12 @@
             renderSidebarChuchenInfo_(data);
 
             currentDetailItem = data;
+            // [추천 읽음확인] 추천 + 읽음이면 상세 회원명 입력 바탕을 추천색으로 채움
+            try {
+                const _detMn = document.getElementById('form-m-name');
+                if (_detMn) _detMn.style.backgroundColor =
+                    (String(data.stu_member || '').trim() === '추천' && String(data.chuchen_read || '').trim() === '읽음') ? '#ffbe76' : '';
+            } catch (e) { }
             // 물건 선택 시 항상 상세 탭으로 시작
             currentItemDetailTab = 'detail';
             if (typeof switchItemDetailTab === 'function') switchItemDetailTab('detail');
@@ -5117,7 +5127,8 @@
         'EXPIRY_NOTIFY': '만료 예정 알림',
         'AUTO_EXPIRE': '자동 추천 만료',
         'BID_DATE_NOTIFY': '입찰일 알림',
-        'PRICE_CONFIRMED': '입찰가확인'
+        'PRICE_CONFIRMED': '입찰가확인',
+        'CHUCHEN_CONFIRMED': '추천확인'
     };
     // field_name 한국어 라벨
     const HISTORY_FIELD_LABEL = {
@@ -6118,6 +6129,11 @@
         if (modalFormStuMember) modalFormStuMember.value = data.stu_member || '미정';
         if (modalFormYongdo) modalFormYongdo.value = data.items_youngdo || ''; // 빈값 = 등록전
         if (modalFormMemberId) modalFormMemberId.value = data.member_id || '';
+        // [추천 읽음확인] 추천 + 읽음이면 모달 회원명 입력 바탕을 추천색으로 채움
+        try {
+            if (modalFormMName) modalFormMName.style.backgroundColor =
+                (String(data.stu_member || '').trim() === '추천' && String(data.chuchen_read || '').trim() === '읽음') ? '#ffbe76' : '';
+        } catch (e) { }
         // [수정] items 시트의 m_name 우선순위 적용 (없을 경우에만 회원 DB 참조)
         if (modalFormMName) {
             const mem = data.member_id ? getMemberById_(data.member_id) : null;
