@@ -1223,7 +1223,10 @@ class Handler(SimpleHTTPRequestHandler):
             # /api/maps-gas 는 payload.api_action 그대로 사용 (진단용 일반 라우터)
             if self.path in action_map:
                 payload["api_action"] = action_map[self.path]
-            result = _gas_post(payload)
+            # 업로드는 GAS 처리 시간(시트 쓰기 N건) 60s 넘는 사례 있음 — 5분까지 허용.
+            # sync/일반 라우터는 메타만이라 60s 충분.
+            timeout = 300.0 if self.path == "/api/maps-upload-items" else 60.0
+            result = _gas_post(payload, timeout=timeout)
             body = json.dumps(result, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")

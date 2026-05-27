@@ -24345,6 +24345,25 @@ MJ 이정우 팀장
             applyJosaFilters();
         }, 250);
     }
+    // [보고서] — 옥션원 크롤링 매니저 보고서를 새 창으로 띄움.
+    // 매니저는 로컬에서 http://localhost:8765 로 떠 있고 report.html 가 localStorage 기반 카드 렌더링.
+    // 서버 안 떠 있으면 ERR_CONNECTION_REFUSED 가 뜨는데 사용자가 모를 수 있어 미리 ping → 안내.
+    function openAuctionCrawlerReport() {
+        var url = 'http://localhost:8765/report.html';
+        // no-cors HEAD ping — 응답 헤더는 못 읽지만 네트워크 도달 여부는 확인 가능
+        var pinged = false;
+        try {
+            fetch('http://localhost:8765/', { method: 'GET', mode: 'no-cors', cache: 'no-store' })
+                .then(function () { pinged = true; window.open(url, 'auction1Report'); })
+                .catch(function () {
+                    alert('옥션원 크롤링 매니저 서버가 실행되어 있지 않습니다.\n\n파일 탐색기 → 00.auction1 폴더 → [크롤링매니저 실행.bat] 더블클릭 후 다시 시도하세요.');
+                });
+        } catch (e) {
+            // fetch 자체 불가 (구 브라우저 등) → 그냥 열어봄
+            window.open(url, 'auction1Report');
+        }
+    }
+
     // 상단 [선택 삭제] 핸들러
     function onJmtDeleteSelected() {
         if (!jmSelectedPresetIds.size) { alert('삭제할 리스트를 체크해주세요.'); return; }

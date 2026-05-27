@@ -734,12 +734,40 @@
   // 상단 [전체] 체크박스 상태 동기화 (선택 수 ↔ 전체 체크 일치)
   function syncCheckAllState() {
     const all = document.getElementById('msCheckAll');
-    if (!all) return;
-    const total = presets.length;
-    const sel = selectedSyncIds.size;
-    if (sel === 0) { all.checked = false; all.indeterminate = false; }
-    else if (sel === total) { all.checked = true; all.indeterminate = false; }
-    else { all.checked = false; all.indeterminate = true; }
+    if (all) {
+      const total = presets.length;
+      const sel = selectedSyncIds.size;
+      if (sel === 0) { all.checked = false; all.indeterminate = false; }
+      else if (sel === total) { all.checked = true; all.indeterminate = false; }
+      else { all.checked = false; all.indeterminate = true; }
+    }
+    // 사이드바 하단 [선택 합계] 갱신 — 체크된 리스트의 캐시 items 합산
+    try {
+      const elN = document.getElementById('sfSelN');
+      const elF = document.getElementById('sfFiltered');
+      const elT = document.getElementById('sfTotal');
+      if (elN && elF && elT) {
+        let totalSum = 0, filteredSum = 0;
+        const targets = presets.filter(p => selectedSyncIds.has(p.id));
+        targets.forEach(p => {
+          let cache = null;
+          try { cache = cacheGetSync(p.id); } catch (_) {}
+          if (!cache || !Array.isArray(cache.items)) return;
+          const rawN = cache.items.length;
+          let fN = rawN;
+          try {
+            const rows = (p.id === currentPresetId) ? custRows : (p.customFilters || []);
+            const { items: filt } = applyCustomFilters(cache.items, rows);
+            fN = filt.length;
+          } catch (_) {}
+          totalSum += rawN;
+          filteredSum += fN;
+        });
+        elN.textContent = String(targets.length);
+        elF.textContent = filteredSum.toLocaleString('ko-KR');
+        elT.textContent = totalSum.toLocaleString('ko-KR');
+      }
+    } catch (_) {}
   }
 
   // ── MAPS 동기화 ─────────────────────────────────────────
