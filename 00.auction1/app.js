@@ -3021,28 +3021,22 @@
     const opMap = { eq:'=', ne:'≠', gte:'≥', gt:'>', lte:'≤', lt:'<', contains:'포함', ncontains:'미포함', regex:'정규식' };
     return { name, op: opMap[filter.op] || filter.op || '', v: filter.value || '' };
   }
-  // 페어 묶음 — 두 짧은 항목을 한 행에 표시
-  const _RPT_PAIRS = [['물건현황', '유찰횟수'], ['건물면적', '추가주소']];
+  // 자동 분류 — 짧은 항목 2-col 페어, 긴 항목은 카드 아래쪽 full-row
+  const _RPT_SHORT_LEN = 22;
   function _rptGroupPairs(lines) {
     const labelOf = l => l.label || l.k || '';
-    const groups = [];
-    const used = new Set();
-    lines.forEach((line, i) => {
-      if (used.has(i)) return;
-      const lbl = labelOf(line);
-      for (const [a, b] of _RPT_PAIRS) {
-        const partner = (lbl === a) ? b : (lbl === b ? a : null);
-        if (!partner) continue;
-        const j = lines.findIndex((l, idx) => idx !== i && !used.has(idx) && labelOf(l) === partner);
-        if (j >= 0) {
-          groups.push(lbl === a ? [line, lines[j]] : [lines[j], line]);
-          used.add(i); used.add(j);
-          return;
-        }
-      }
-      groups.push([line]);
-      used.add(i);
+    const valOf   = l => l.val || l.v || '';
+    const shorts = [], longs = [];
+    lines.forEach(l => {
+      const total = labelOf(l).length + valOf(l).length;
+      if (total <= _RPT_SHORT_LEN) shorts.push(l); else longs.push(l);
     });
+    const groups = [];
+    for (let i = 0; i < shorts.length; i += 2) {
+      if (i + 1 < shorts.length) groups.push([shorts[i], shorts[i+1]]);
+      else                       groups.push([shorts[i]]);
+    }
+    longs.forEach(l => groups.push([l]));
     return groups;
   }
   function _rptKvCell(line, full) {

@@ -24424,31 +24424,22 @@ MJ 이정우 팀장
         var pad = function (x) { return String(x).padStart(2, '0'); };
         return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
-    // 페어 묶음 — 두 짧은 항목을 한 행에 표시 (매니저측과 동일 로직)
-    var _ARPT_PAIRS = [['물건현황', '유찰횟수'], ['건물면적', '추가주소']];
+    // 자동 분류 — 짧은 항목 2-col 페어, 긴 항목은 카드 아래쪽 full-row (매니저측과 동일 로직)
+    var _ARPT_SHORT_LEN = 22;
     function _arptGroupPairs(lines) {
         var labelOf = function (l) { return l.label || l.k || ''; };
-        var groups = [], used = {};
-        lines.forEach(function (line, i) {
-            if (used[i]) return;
-            var lbl = labelOf(line);
-            for (var k = 0; k < _ARPT_PAIRS.length; k++) {
-                var pair = _ARPT_PAIRS[k];
-                var partner = (lbl === pair[0]) ? pair[1] : (lbl === pair[1] ? pair[0] : null);
-                if (!partner) continue;
-                var j = -1;
-                for (var idx = 0; idx < lines.length; idx++) {
-                    if (idx !== i && !used[idx] && labelOf(lines[idx]) === partner) { j = idx; break; }
-                }
-                if (j >= 0) {
-                    groups.push(lbl === pair[0] ? [line, lines[j]] : [lines[j], line]);
-                    used[i] = true; used[j] = true;
-                    return;
-                }
-            }
-            groups.push([line]);
-            used[i] = true;
+        var valOf   = function (l) { return l.val || l.v || ''; };
+        var shorts = [], longs = [];
+        lines.forEach(function (l) {
+            var total = labelOf(l).length + valOf(l).length;
+            if (total <= _ARPT_SHORT_LEN) shorts.push(l); else longs.push(l);
         });
+        var groups = [];
+        for (var i = 0; i < shorts.length; i += 2) {
+            if (i + 1 < shorts.length) groups.push([shorts[i], shorts[i+1]]);
+            else                       groups.push([shorts[i]]);
+        }
+        longs.forEach(function (l) { groups.push([l]); });
         return groups;
     }
     function _arptKvCell(line, full) {
