@@ -33168,13 +33168,33 @@ MJ 이정우 팀장
               '#prtHead{padding:10px 16px;border-bottom:2px solid #1e3a8a;color:#1e3a8a;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:14px;}' +
               '#prtHead .m{font-size:11px;color:#475569;font-weight:500;}' +
               '#prtHead .btn{padding:5px 14px;border:0;border-radius:5px;background:#1e3a8a;color:#fff;font-weight:700;font-size:12px;cursor:pointer;}' +
-              '#prtGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:10px;align-items:start;}' +
-              '@media print{#prtHead{padding:5px 8px;border-bottom-width:1.5px;}#prtHead .btn{display:none;}@page{size:A4 landscape;margin:7mm;}#prtGrid{padding:0;gap:6px;}}' +
+              '#prtGrid{display:grid;grid-template-columns:repeat(2,1fr);grid-auto-rows:1fr;gap:8px;padding:10px;}' +
+              '#prtGrid .arpt-card{box-sizing:border-box;height:130mm;overflow:hidden;}' +
+              '#prtGrid .arpt-card.arpt-oversized{grid-column:1 / -1;height:auto;overflow:visible;}' +
+              '@media print{' +
+                '@page{size:A4 landscape;margin:6mm;}' +
+                'html,body{height:auto !important;}' +
+                '#prtHead{display:none;}' +
+                '#prtGrid{padding:0;gap:4mm;grid-auto-rows:1fr;}' +
+                '#prtGrid .arpt-card{break-inside:avoid;page-break-inside:avoid;height:96mm;overflow:hidden;}' +
+                '#prtGrid .arpt-card.arpt-oversized{' +
+                  'grid-column:1 / -1;height:auto;overflow:visible;' +
+                  'page-break-before:always;page-break-after:always;' +
+                  'break-before:page;break-after:page;' +
+                '}' +
+              '}' +
             '</style>' +
             '</head><body>' +
             '<div id="prtHead"><span>📊 옥션원 크롤링 보고서</span><span class="m">' + metaText + '</span><button class="btn" onclick="window.print()">🖨 인쇄 / PDF 저장</button></div>' +
             '<div id="prtGrid">' + grid.innerHTML + '</div>' +
-            '<script>window.addEventListener("load",function(){setTimeout(function(){try{window.print();}catch(e){}},250);});<' + '/script>' +
+            '<script>' +
+              'function _markOversized(){' +
+                'var cards=document.querySelectorAll("#prtGrid .arpt-card");' +
+                'cards.forEach(function(c){c.style.height="auto";});' +
+                'cards.forEach(function(c){if(c.scrollHeight>491)c.classList.add("arpt-oversized");c.style.height="";});' +
+              '}' +
+              'window.addEventListener("load",function(){setTimeout(function(){_markOversized();try{window.print();}catch(e){}},300);});' +
+            '<' + '/script>' +
             '</body></html>'
         );
         w.document.open();
@@ -35535,7 +35555,7 @@ MJ 이정우 팀장
       .arpt-kv-grid { display:grid; grid-template-columns:1fr 1fr; column-gap:14px; row-gap:5px; font-size:11.5px; }
       .arpt-kv-cell { display:flex; gap:8px; align-items:baseline; min-width:0; line-height:1.4; }
       .arpt-kv-cell.arpt-full-row { grid-column:1 / -1; }
-      .arpt-kv-cell .arpt-kv-k { color:#6b7280; font-weight:500; white-space:nowrap; flex-shrink:0; min-width:64px; }
+      .arpt-kv-cell .arpt-kv-k { color:#6b7280; font-weight:500; word-break:keep-all; overflow-wrap:anywhere; flex-shrink:0; min-width:64px; max-width:90px; }
       .arpt-kv-cell .arpt-kv-v { color:#111827; font-weight:600; word-break:break-word; overflow-wrap:anywhere; flex:1; min-width:0; }
       /* (legacy) arpt-kv table — 미사용이지만 보존 */
       .arpt-kv { width:100%; border-collapse:collapse; font-size:11.5px; }
@@ -35544,7 +35564,7 @@ MJ 이정우 팀장
       .arpt-kv tr + tr th, .arpt-kv tr + tr td { border-top:1px dashed #f1f5f9; }
       .arpt-cf { width:100%; border-collapse:separate; border-spacing:0 4px; font-size:11.5px; }
       .arpt-cf th, .arpt-cf td { background:#fff8e6; border-top:1px solid #fcd980; border-bottom:1px solid #fcd980; padding:4px 9px; line-height:1.35; }
-      .arpt-cf th.arpt-cf-name { text-align:left; color:#1e40af; font-weight:700; white-space:nowrap; width:1%; border-left:1px solid #fcd980; border-radius:4px 0 0 4px; }
+      .arpt-cf th.arpt-cf-name { text-align:left; color:#1e40af; font-weight:700; word-break:keep-all; overflow-wrap:anywhere; width:1%; border-left:1px solid #fcd980; border-radius:4px 0 0 4px; }
       .arpt-cf td.arpt-cf-op { text-align:center; color:#dc2626; font-weight:800; white-space:nowrap; width:1%; font-family:ui-monospace, monospace; font-size:11px; }
       .arpt-cf td.arpt-cf-val { text-align:left; color:#1f2937; font-weight:600; border-right:1px solid #fcd980; border-radius:0 4px 4px 0; }
       .arpt-empty { color:#94a3b8; font-size:11px; padding:3px 0; font-style:italic; }
