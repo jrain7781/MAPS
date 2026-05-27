@@ -7251,8 +7251,34 @@ const JOSA_PRESETS_HEADERS = [
   'last_upload_at',         // 마지막 크롤링 업로드 시각
   'items_count',            // 현재 속한 물건 수 (캐시)
   'is_active',              // Y/N (매니저에 존재 여부)
-  'deleted_in_manager_at'   // 매니저에서 삭제 감지된 시각 (빨간 카드 표시용)
+  'deleted_in_manager_at',  // 매니저에서 삭제 감지된 시각 (빨간 카드 표시용)
+  // ── 보고서용 추가 (매니저 sync 시 함께 push) ──────────────────
+  'form_data_lines',        // JSON 문자열: [{label, val}, ...] — 검색조건 KV (라벨-친화 변환됨)
+  'custom_filters_lines',   // JSON 문자열: [{name, op, value}, ...] — 추가필터 (typeName resolved)
+  'cache_total',            // 매니저 캐시 raw items.length
+  'cache_filtered',         // 매니저 캐시 추가필터 적용 후 length
+  'cache_ts'                // 매니저 캐시 시각 (ms timestamp 또는 YYYY-MM-DD HH:mm:ss)
 ];
+
+// 시트 헤더가 JOSA_PRESETS_HEADERS 와 다르거나 컬럼 수 부족하면 확장 (스키마 변경 자동 반영)
+function _ensureJosaPresetsHeader_(sheet) {
+  if (sheet.getMaxColumns() < JOSA_PRESETS_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), JOSA_PRESETS_HEADERS.length - sheet.getMaxColumns());
+  }
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) {
+    sheet.getRange(1, 1, 1, JOSA_PRESETS_HEADERS.length).setValues([JOSA_PRESETS_HEADERS]).setFontWeight('bold');
+    return;
+  }
+  var current = sheet.getRange(1, 1, 1, Math.max(lastCol, JOSA_PRESETS_HEADERS.length)).getValues()[0];
+  var match = true;
+  for (var i = 0; i < JOSA_PRESETS_HEADERS.length; i++) {
+    if (String(current[i] || '').trim() !== JOSA_PRESETS_HEADERS[i]) { match = false; break; }
+  }
+  if (!match) {
+    sheet.getRange(1, 1, 1, JOSA_PRESETS_HEADERS.length).setValues([JOSA_PRESETS_HEADERS]).setFontWeight('bold');
+  }
+}
 
 function initJosaPresetsSheet_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -7260,9 +7286,7 @@ function initJosaPresetsSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(DB_JOSA_PRESETS_SHEET_NAME);
   }
-  const headerRange = sheet.getRange(1, 1, 1, JOSA_PRESETS_HEADERS.length);
-  headerRange.setValues([JOSA_PRESETS_HEADERS]);
-  headerRange.setFontWeight('bold');
+  _ensureJosaPresetsHeader_(sheet);
   sheet.setFrozenRows(1);
   return sheet;
 }
@@ -7430,6 +7454,7 @@ function syncJosaPresets(presetList, mode) {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME);
   if (!sheet) { initJosaPresetsSheet_(); sheet = ss.getSheetByName(DB_JOSA_PRESETS_SHEET_NAME); }
+  _ensureJosaPresetsHeader_(sheet);
 
   var now = _josaNowText_();
   var existing = readAllJosaPresets();
@@ -7438,6 +7463,9 @@ function syncJosaPresets(presetList, mode) {
 
   var incomingIds = {};
   var added = 0, updated = 0, marked = 0, restored = 0;
+
+  // 보고서용 새 필드 — 매니저가 안 보내면 prev 보존, 보내면 그 값 (빈 문자열도 명시적 의미)
+  function _pick(p, prev, key) { return (p[key] !== undefined && p[key] !== null) ? String(p[key]) : (prev[key] || ''); }
 
   presetList.forEach(function(p) {
     var id = String(p.id || '').trim();
@@ -7457,7 +7485,12 @@ function syncJosaPresets(presetList, mode) {
         last_upload_at: prev.last_upload_at || '',
         items_count: prev.items_count || '0',
         is_active: 'Y',
-        deleted_in_manager_at: ''
+        deleted_in_manager_at: '',
+        form_data_lines:      _pick(p, prev, 'form_data_lines'),
+        custom_filters_lines: _pick(p, prev, 'custom_filters_lines'),
+        cache_total:          _pick(p, prev, 'cache_total'),
+        cache_filtered:       _pick(p, prev, 'cache_filtered'),
+        cache_ts:             _pick(p, prev, 'cache_ts')
       };
       var rowArr = JOSA_PRESETS_HEADERS.map(function(h) { return rowObj[h]; });
       sheet.getRange(rowNum, 1, 1, JOSA_PRESETS_HEADERS.length).setValues([rowArr]);
@@ -7466,7 +7499,12 @@ function syncJosaPresets(presetList, mode) {
       var rowObj2 = {
         preset_id: id, preset_title: title,
         created_at: now, updated_at: now, last_upload_at: '',
-        items_count: '0', is_active: 'Y', deleted_in_manager_at: ''
+        items_count: '0', is_active: 'Y', deleted_in_manager_at: '',
+        form_data_lines:      String(p.form_data_lines || ''),
+        custom_filters_lines: String(p.custom_filters_lines || ''),
+        cache_total:          String(p.cache_total != null ? p.cache_total : ''),
+        cache_filtered:       String(p.cache_filtered != null ? p.cache_filtered : ''),
+        cache_ts:             String(p.cache_ts || '')
       };
       sheet.appendRow(JOSA_PRESETS_HEADERS.map(function(h) { return rowObj2[h]; }));
       added++;

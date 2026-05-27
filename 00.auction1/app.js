@@ -1023,6 +1023,27 @@
     renderSidebar();
   }
 
+  // [전체] 텍스트 클릭 → 트리 전체 펼치기/접기 토글
+  // (체크박스 자체 click 은 onMsCheckAllChange 가 처리 — 선택/해제만)
+  function toggleAllTreeCollapsed() {
+    try {
+      const ordered = _getOrderedPresets();
+      const tree = _buildPresetTree(ordered);
+      const allPaths = [];
+      (function walk(node) {
+        if (node.path) allPaths.push(node.path);
+        node.children.forEach(c => walk(c));
+      })(tree);
+      const cur = _loadCollapsed();
+      if (cur.size === 0) {
+        _saveCollapsed(new Set(allPaths));      // 모두 펼침 → 모두 접기
+      } else {
+        _saveCollapsed(new Set());              // 일부 접힘 → 모두 펼치기
+      }
+      renderSidebar();
+    } catch (_) {}
+  }
+
   // ── 옥션원 raw 데이터 정제 ───────────────────────────────
   // 사건번호 "24-102685" → "24타경102685"
   function _normSakun(s) {
@@ -1311,9 +1332,9 @@
     const prevText = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '전송 중…'; }
 
-    // 1) 메타데이터 sync (한번에)
+    // 1) 메타데이터 sync (한번에) — 보고서용 라벨/필터/캐시 통계 같이 push
     try {
-      const syncTargets = withItems.map(x => ({ id: x.preset.id, title: x.preset.title || '' }));
+      const syncTargets = withItems.map(x => _buildSyncPresetEntry(x.preset, x));
       const r = await fetch('/api/maps-sync-presets', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_key: adminKey, presets: syncTargets, mode: 'partial' })
@@ -1478,7 +1499,8 @@
     }
     if (!presets.length) { alert('매니저에 리스트가 없습니다.'); return; }
     // 매니저 전체 preset 송신 (mode=full) — 매니저에 없는 MAPS preset 은 "삭제됨" 마킹
-    const targets = presets.map(p => ({ id: p.id, title: p.title || '' }));
+    // 보고서용 라벨/필터/캐시 통계 같이 push
+    const targets = presets.map(p => _buildSyncPresetEntry(p, null));
     if (!confirm(`매니저 전체 ${targets.length}개 리스트를 MAPS 와 정합 동기화합니다.\n\n· 매니저 ↔ MAPS 양쪽에 있는 리스트: 갱신\n· MAPS 에만 있는 리스트(매니저에서 삭제됨): "삭제됨" 빨강 마킹 (실제 삭제는 사용자가 MAPS JM 트리에서 직접)\n\n진행할까요?`)) return;
     const btn = document.getElementById('btnSyncToMaps');
     const prevText = btn ? btn.textContent : '';
@@ -2071,6 +2093,7 @@
     document.getElementById('btnNewMain').addEventListener('click', newPreset);
     // MAPS 동기화
     document.getElementById('msCheckAll')?.addEventListener('change', onMsCheckAllChange);
+    document.getElementById('msToggleAllCollapse')?.addEventListener('click', toggleAllTreeCollapsed);
     document.getElementById('btnSyncToMaps')?.addEventListener('click', syncSelectedPresetsToMaps);
     document.getElementById('btnSendToMaps')?.addEventListener('click', sendCheckedListsToMaps);
     document.getElementById('btnBatchCrawl')?.addEventListener('click', batchCrawlCheckedPresets);
@@ -2932,7 +2955,12 @@
       }
       add('주소', addr);
     }
-    if (Array.isArray(fd._addrTags) && fd._addrTags.length) add('추가주소', fd._addrTags.join(', '));
+    if (Array.isArray(fd._addrTags) && fd._addrTags.length) {
+      const addrText = fd._addrTags
+        .map(a => (a && typeof a === 'object') ? (a.text || '') : String(a || ''))
+        .filter(Boolean).join(', ');
+      if (addrText) add('추가주소', addrText);
+    }
     if (fd.bldName) add('건물명칭', fd.bldName);
     if (fd.lotKind || fd.lotFrom || fd.lotTo) {
       const kind = fd.lotKind === '1' ? '산' : (fd.lotKind === '2' ? '일반' : '');
@@ -2944,6 +2972,49 @@
     if (fd.procType) add('경매절차', fd.procType === '4' ? '임의경매' : (fd.procType === '5' ? '강제경매' : ''));
     return out;
   }
+  // MAPS sync 시 보고서용 라벨-친화 라인 + 캐시 통계 패키징.
+  // cacheInfo 는 sendChecked 의 withItems[i] (rawCount/filteredCount/ts) 또는 null.
+  function _buildSyncPresetEntry(p, cacheInfo) {
+    var fdLines = [];
+    try { fdLines = _rptFormData(p.formData); } catch (_) {}
+    var cfLines = [];
+    try {
+      cfLines = (p.customFilters || []).map(function (c) {
+        var f = _rptFilter(c);
+        return { name: f.name, op: f.op, value: f.v };
+      });
+    } catch (_) {}
+    // 캐시 통계 — cacheInfo 없으면 LS 캐시 직접 조회
+    var rawN = '', filtN = '', ts = '';
+    if (cacheInfo) {
+      rawN = String(cacheInfo.rawCount || 0);
+      filtN = String(cacheInfo.filteredCount || 0);
+      ts = cacheInfo.ts ? String(cacheInfo.ts) : '';
+    } else {
+      try {
+        var cache = cacheGetSync(p.id);
+        if (cache && Array.isArray(cache.items)) {
+          rawN = String(cache.items.length);
+          try {
+            var rows = (p.id === currentPresetId) ? custRows : (p.customFilters || []);
+            var filt = applyCustomFilters(cache.items, rows);
+            filtN = String((filt.items || []).length);
+          } catch (_) { filtN = rawN; }
+          if (cache.ts) ts = String(cache.ts);
+        }
+      } catch (_) {}
+    }
+    return {
+      id: p.id,
+      title: p.title || '',
+      form_data_lines: JSON.stringify(fdLines),
+      custom_filters_lines: JSON.stringify(cfLines),
+      cache_total: rawN,
+      cache_filtered: filtN,
+      cache_ts: ts
+    };
+  }
+
   function _rptFilter(filter) {
     const t = ftypes.find(x => x.id === filter.typeId);
     const name = t ? t.name : '(알 수 없는 종류)';

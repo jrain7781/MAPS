@@ -195,26 +195,19 @@
 
     const fdLines = formatFormData(p.formData);
     const fdHtml = fdLines.length
-      ? fdLines.map(l => `<div class="kv"><span class="k">${esc(l.label)}</span><span class="v">${esc(l.val)}</span></div>`).join('')
+      ? `<table class="kv-table">${
+          fdLines.map(l => `<tr><th>${esc(l.label)}</th><td>${esc(l.val)}</td></tr>`).join('')
+        }</table>`
       : '<div class="empty">설정된 검색조건 없음</div>';
 
     const cfHtml = (p.customFilters || []).length
-      ? (p.customFilters || []).map(c => {
-          const f = formatFilter(c, ftypes);
-          return `<div class="cf-row"><span class="cf-name">${esc(f.name)}</span><span class="cf-op">${esc(f.op)}</span><span class="cf-val">${esc(f.v)}</span></div>`;
-        }).join('')
+      ? `<table class="cf-table">${
+          (p.customFilters || []).map(c => {
+            const f = formatFilter(c, ftypes);
+            return `<tr><th class="cf-name">${esc(f.name)}</th><td class="cf-op">${esc(f.op)}</td><td class="cf-val">${esc(f.v)}</td></tr>`;
+          }).join('')
+        }</table>`
       : '<div class="empty">추가 필터 없음</div>';
-
-    const previewHtml = items.length
-      ? items.slice(0, 5).map(it => {
-          const sakun = (it.sakun_no_text || it.sakun_no || '').replace(/\s+/g, ' ').trim().slice(0, 18);
-          const kind  = (it.prop_kind || '').slice(0, 10);
-          const addr  = (it.address || '').slice(0, 60);
-          const price = parsePriceCell(it.price);
-          const priceStr = price.appraisal ? `${fmtMan(price.appraisal)}` : '';
-          return `<div class="pv-row"><span class="pv-no">${esc(sakun)}</span><span class="pv-kind">${esc(kind)}</span><span class="pv-addr">${esc(addr)}</span><span class="pv-price">${esc(priceStr)}</span></div>`;
-        }).join('')
-      : '<div class="empty">아직 크롤링하지 않음</div>';
 
     const lastTs = cache && cache.ts ? fmtDate(cache.ts) : '—';
     const countBadge = cache
@@ -228,15 +221,11 @@
       </header>
       <section class="rcard-sec">
         <h3>🔍 검색 조건</h3>
-        <div class="kv-list">${fdHtml}</div>
+        ${fdHtml}
       </section>
       <section class="rcard-sec">
         <h3>⚡ 추가 필터 (${(p.customFilters || []).length})</h3>
-        <div class="cf-list">${cfHtml}</div>
-      </section>
-      <section class="rcard-sec">
-        <h3>📦 결과 미리보기 ${items.length ? `(상위 ${Math.min(5, items.length)}건)` : ''}</h3>
-        <div class="pv-list">${previewHtml}</div>
+        ${cfHtml}
       </section>
     </article>`;
   }
@@ -256,21 +245,30 @@
       presets.map(p => renderCard(p, ftypes)).join('')
       || '<div class="empty-state">등록된 크롤링이 없습니다.</div>';
 
-    // 돌아가기/닫기 버튼:
-    //   1) window.opener 가 있으면 닫기 시도 (script-opened tab)
-    //   2) 아니면 history.back, 그것도 안 되면 메인으로 이동
-    const btn = document.getElementById('btnReportClose');
-    if (btn) {
-      btn.addEventListener('click', () => {
-        if (window.opener && !window.opener.closed) {
-          window.close();
-          // close 가 막혔을 경우 폴백 (100ms 뒤에도 살아 있으면 메인으로)
-          setTimeout(() => { if (!window.closed) location.href = 'index.html'; }, 120);
-          return;
-        }
-        if (history.length > 1) { history.back(); return; }
-        location.href = 'index.html';
+    const isInIframe = (window.self !== window.top);
+    if (isInIframe) {
+      // 모달 안 iframe — 자체 헤더는 부모(모달 헤더)와 중복이라 숨김
+      const head = document.getElementById('reportHead');
+      if (head) head.style.display = 'none';
+      document.body.classList.add('report-iframed');
+      // 부모로부터 'print' 메시지 수신 시 자체 window.print() 실행
+      window.addEventListener('message', (e) => {
+        if (e && e.data === 'print') { try { window.focus(); window.print(); } catch (_) {} }
       });
+    } else {
+      // standalone (새 창/탭) — [돌아가기] 동작 부여
+      const btn = document.getElementById('btnReportClose');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          if (window.opener && !window.opener.closed) {
+            window.close();
+            setTimeout(() => { if (!window.closed) location.href = 'index.html'; }, 120);
+            return;
+          }
+          if (history.length > 1) { history.back(); return; }
+          location.href = 'index.html';
+        });
+      }
     }
   }
 

@@ -24070,9 +24070,9 @@ MJ 이정우 팀장
         var _tot = jmPresets.length, _sel = jmSelectedPresetIds.size;
         var _ck = (_sel > 0 && _sel === _tot) ? ' checked' : '';
         bar.innerHTML =
-            '<input type="checkbox" id="jm-tree-all"' + _ck + ' title="전체 선택/해제 + 모두 펼침/접기"' +
+            '<input type="checkbox" id="jm-tree-all"' + _ck + ' title="전체 선택 / 해제"' +
             ' onchange="onJmTreeAllChange(this)" style="width:13px;height:13px;flex-shrink:0;margin-right:6px;accent-color:#4f46e5">' +
-            '<span class="jmt-hlead" style="cursor:default">' +
+            '<span class="jmt-hlead" style="cursor:pointer;padding:1px 4px;border-radius:3px" onclick="onJmTreeToggleCollapseAll()" title="트리 전체 펼치기 / 접기">' +
                 '<span>전체</span>' + _jmtKidcHtml(_tot) +
             '</span>' +
             '<span class="jmt-rb">' +
@@ -24345,23 +24345,93 @@ MJ 이정우 팀장
             applyJosaFilters();
         }, 250);
     }
-    // [보고서] — 옥션원 크롤링 매니저 보고서를 새 창으로 띄움.
-    // 매니저는 로컬에서 http://localhost:8765 로 떠 있고 report.html 가 localStorage 기반 카드 렌더링.
-    // 서버 안 떠 있으면 ERR_CONNECTION_REFUSED 가 뜨는데 사용자가 모를 수 있어 미리 ping → 안내.
+    // [보고서] — josa_presets 시트의 form_data_lines / custom_filters_lines / cache_*
+    // 데이터를 그대로 받아 MAPS 안에서 자체 카드 렌더링. 매니저 서버 안 떠도 OK.
     function openAuctionCrawlerReport() {
-        var url = 'http://localhost:8765/report.html';
-        // no-cors HEAD ping — 응답 헤더는 못 읽지만 네트워크 도달 여부는 확인 가능
-        var pinged = false;
-        try {
-            fetch('http://localhost:8765/', { method: 'GET', mode: 'no-cors', cache: 'no-store' })
-                .then(function () { pinged = true; window.open(url, 'auction1Report'); })
-                .catch(function () {
-                    alert('옥션원 크롤링 매니저 서버가 실행되어 있지 않습니다.\n\n파일 탐색기 → 00.auction1 폴더 → [크롤링매니저 실행.bat] 더블클릭 후 다시 시도하세요.');
-                });
-        } catch (e) {
-            // fetch 자체 불가 (구 브라우저 등) → 그냥 열어봄
-            window.open(url, 'auction1Report');
+        if (typeof jmPresets === 'undefined' || !Array.isArray(jmPresets)) {
+            alert('조사관리 데이터가 아직 로드되지 않았습니다. 다시 시도하세요.');
+            return;
         }
+        var grid = document.getElementById('auctionReportGrid');
+        var meta = document.getElementById('auctionReportMeta');
+        if (!grid) return;
+        var sorted = jmPresets.slice().sort(function (a, b) {
+            var ta = _arptTs(a.cache_ts), tb = _arptTs(b.cache_ts);
+            return tb - ta;
+        });
+        if (meta) meta.textContent = '생성: ' + _arptDate(Date.now()) + ' · 등록된 크롤링 ' + sorted.length + '건';
+        grid.innerHTML = sorted.length
+            ? sorted.map(_renderArptCard).join('')
+            : '<div class="arpt-empty-state">등록된 크롤링이 없습니다.<br>옥션원 매니저에서 [⇆ 리스트 동기화] 또는 [📤 MAPS 전송] 후 다시 시도하세요.</div>';
+        var m = document.getElementById('auctionReportModal');
+        m.style.display = 'block';
+        document.body.classList.add('arpt-open');
+        document.addEventListener('keydown', _onAuctionReportEsc);
+    }
+    function closeAuctionCrawlerReport() {
+        var m = document.getElementById('auctionReportModal');
+        if (!m) return;
+        m.style.display = 'none';
+        document.body.classList.remove('arpt-open');
+        document.removeEventListener('keydown', _onAuctionReportEsc);
+    }
+    function _onAuctionReportEsc(e) { if (e.key === 'Escape') closeAuctionCrawlerReport(); }
+    function printAuctionCrawlerReport() { window.print(); }
+
+    function _arptEsc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function _arptTs(ts) {
+        if (!ts) return 0;
+        if (/^\d+$/.test(String(ts))) return parseInt(ts, 10);
+        var d = new Date(ts);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+    }
+    function _arptDate(ts) {
+        var n = _arptTs(ts);
+        if (!n) return ts ? String(ts) : '—';
+        var d = new Date(n);
+        var pad = function (x) { return String(x).padStart(2, '0'); };
+        return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+    function _renderArptCard(p) {
+        var fdLines = [];
+        try { fdLines = JSON.parse(p.form_data_lines || '[]'); } catch (_) {}
+        var cfLines = [];
+        try { cfLines = JSON.parse(p.custom_filters_lines || '[]'); } catch (_) {}
+        var total    = parseInt(p.cache_total || '0', 10) || 0;
+        var filtered = parseInt(p.cache_filtered || '0', 10) || 0;
+
+        var fdHtml = fdLines.length
+            ? '<table class="arpt-kv">' + fdLines.map(function (l) {
+                return '<tr><th>' + _arptEsc(l.label || l.k || '') + '</th><td>' + _arptEsc(l.val || l.v || '') + '</td></tr>';
+              }).join('') + '</table>'
+            : '<div class="arpt-empty">설정된 검색조건 없음</div>';
+
+        var cfHtml = cfLines.length
+            ? '<table class="arpt-cf">' + cfLines.map(function (c) {
+                return '<tr><th class="arpt-cf-name">' + _arptEsc(c.name) + '</th><td class="arpt-cf-op">' + _arptEsc(c.op) + '</td><td class="arpt-cf-val">' + _arptEsc(c.value || c.v || '') + '</td></tr>';
+              }).join('') + '</table>'
+            : '<div class="arpt-empty">추가 필터 없음</div>';
+
+        var hasCache = (total > 0) || (p.cache_ts && p.cache_ts !== '');
+        var countBadge = hasCache
+            ? '<span class="arpt-badge"><span class="arpt-cnt-filtered">' + filtered + '</span>/<span class="arpt-cnt-total">' + total + '</span></span>'
+            : '<span class="arpt-badge arpt-empty-badge">결과 없음</span>';
+
+        var lastTs = p.cache_ts ? _arptDate(p.cache_ts) : '—';
+        var isDeleted = p.is_active === 'N';
+        var deletedClass = isDeleted ? ' arpt-card-deleted' : '';
+        var deletedTag = isDeleted ? ' <span style="color:#dc2626;font-weight:700;font-size:11px;">[매니저 삭제됨]</span>' : '';
+
+        return '<article class="arpt-card' + deletedClass + '">' +
+            '<header class="arpt-card-head">' +
+                '<div class="arpt-title">📋 ' + _arptEsc(p.preset_title || '(제목 없음)') + deletedTag + countBadge + '</div>' +
+                '<div class="arpt-sub">최근 크롤링: ' + _arptEsc(lastTs) + '</div>' +
+            '</header>' +
+            '<section class="arpt-sec"><h3>🔍 검색 조건</h3>' + fdHtml + '</section>' +
+            '<section class="arpt-sec"><h3>⚡ 추가 필터 (' + cfLines.length + ')</h3>' + cfHtml + '</section>' +
+        '</article>';
     }
 
     // 상단 [선택 삭제] 핸들러
@@ -24544,17 +24614,27 @@ MJ 이정우 팀장
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupJmtSplitter_);
     else setupJmtSplitter_();
+    // 체크박스 click → 전체 선택/해제만 (collapsed 안 건드림)
     function onJmTreeAllChange(el) {
         var checked = !!el.checked;
         jmSelectedPresetIds = new Set();
         if (checked) {
             jmPresets.forEach(function (p) { jmSelectedPresetIds.add(p.preset_id); });
-            _jmtSaveCollapsed(new Set());                 // 모든 단계 펼침
-        } else {
-            _jmtSaveCollapsed(new Set(_jmtAllCollapsePaths())); // 모든 단계 접기
         }
         renderJosaTree();
         applyJosaFilters();
+    }
+    // "전체" 텍스트 click → 트리 전체 펼치기/접기 토글 (선택 상태 안 건드림)
+    function onJmTreeToggleCollapseAll() {
+        try {
+            var cur = _jmtLoadCollapsed();
+            if (cur.size === 0) {
+                _jmtSaveCollapsed(new Set(_jmtAllCollapsePaths()));   // 모두 펼침 → 모두 접기
+            } else {
+                _jmtSaveCollapsed(new Set());                          // 일부 접힘 → 모두 펼치기
+            }
+            renderJosaTree();
+        } catch (_) {}
     }
 
     function onJmGridAllChange(el) {
