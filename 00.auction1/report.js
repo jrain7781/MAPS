@@ -187,6 +187,36 @@
     return items.filter(it => handlers.every(h => cmp(h.fn(it), h.op, h.value)));
   }
 
+  // 페어 묶음 — 두 항목을 한 줄에 같이 보이게 (짧은 항목들 시각 통합)
+  const KV_PAIRS = [['물건현황', '유찰횟수'], ['건물면적', '추가주소']];
+  function _groupKvForPairs(lines) {
+    const labelOf = l => l.label || l.k || '';
+    const groups = [];
+    const used = new Set();
+    lines.forEach((line, i) => {
+      if (used.has(i)) return;
+      const lbl = labelOf(line);
+      for (const [a, b] of KV_PAIRS) {
+        const partner = (lbl === a) ? b : (lbl === b ? a : null);
+        if (!partner) continue;
+        const j = lines.findIndex((l, idx) => idx !== i && !used.has(idx) && labelOf(l) === partner);
+        if (j >= 0) {
+          groups.push(lbl === a ? [line, lines[j]] : [lines[j], line]);
+          used.add(i); used.add(j);
+          return;
+        }
+      }
+      groups.push([line]);
+      used.add(i);
+    });
+    return groups;
+  }
+  function _kvCellHtml(line, full) {
+    const k = esc(line.label || line.k || '');
+    const v = esc(line.val || line.v || '');
+    return `<div class="kv-cell${full ? ' full-row' : ''}"><span class="kv-k">${k}</span><span class="kv-v">${v}</span></div>`;
+  }
+
   // ── 카드 렌더링 ──────────────────────────────────────────
   function renderCard(p, ftypes) {
     const cache = getCache(p.id);
@@ -194,10 +224,11 @@
     const filtered = cache ? applyFilters(items, p.customFilters || [], ftypes) : [];
 
     const fdLines = formatFormData(p.formData);
-    const fdHtml = fdLines.length
-      ? `<table class="kv-table">${
-          fdLines.map(l => `<tr><th>${esc(l.label)}</th><td>${esc(l.val)}</td></tr>`).join('')
-        }</table>`
+    const groups = _groupKvForPairs(fdLines);
+    const fdHtml = groups.length
+      ? `<div class="kv-grid">${
+          groups.map(g => g.length === 2 ? (_kvCellHtml(g[0]) + _kvCellHtml(g[1])) : _kvCellHtml(g[0], true)).join('')
+        }</div>`
       : '<div class="empty">설정된 검색조건 없음</div>';
 
     const cfHtml = (p.customFilters || []).length

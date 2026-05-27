@@ -3021,6 +3021,36 @@
     const opMap = { eq:'=', ne:'≠', gte:'≥', gt:'>', lte:'≤', lt:'<', contains:'포함', ncontains:'미포함', regex:'정규식' };
     return { name, op: opMap[filter.op] || filter.op || '', v: filter.value || '' };
   }
+  // 페어 묶음 — 두 짧은 항목을 한 행에 표시
+  const _RPT_PAIRS = [['물건현황', '유찰횟수'], ['건물면적', '추가주소']];
+  function _rptGroupPairs(lines) {
+    const labelOf = l => l.label || l.k || '';
+    const groups = [];
+    const used = new Set();
+    lines.forEach((line, i) => {
+      if (used.has(i)) return;
+      const lbl = labelOf(line);
+      for (const [a, b] of _RPT_PAIRS) {
+        const partner = (lbl === a) ? b : (lbl === b ? a : null);
+        if (!partner) continue;
+        const j = lines.findIndex((l, idx) => idx !== i && !used.has(idx) && labelOf(l) === partner);
+        if (j >= 0) {
+          groups.push(lbl === a ? [line, lines[j]] : [lines[j], line]);
+          used.add(i); used.add(j);
+          return;
+        }
+      }
+      groups.push([line]);
+      used.add(i);
+    });
+    return groups;
+  }
+  function _rptKvCell(line, full) {
+    const k = _rptEsc(line.label || line.k || '');
+    const v = _rptEsc(line.val || line.v || '');
+    return `<div class="kv-cell${full ? ' full-row' : ''}"><span class="kv-k">${k}</span><span class="kv-v">${v}</span></div>`;
+  }
+
   function _rptCard(p) {
     let cache = null;
     try { cache = cacheGetSync(p.id); } catch (_) {}
@@ -3032,10 +3062,11 @@
     } catch (_) {}
 
     const fdLines = _rptFormData(p.formData);
-    const fdHtml = fdLines.length
-      ? `<table class="kv-table">${
-          fdLines.map(l => `<tr><th>${_rptEsc(l.k)}</th><td>${_rptEsc(l.v)}</td></tr>`).join('')
-        }</table>`
+    const groups = _rptGroupPairs(fdLines);
+    const fdHtml = groups.length
+      ? `<div class="kv-grid">${
+          groups.map(g => g.length === 2 ? (_rptKvCell(g[0]) + _rptKvCell(g[1])) : _rptKvCell(g[0], true)).join('')
+        }</div>`
       : '<div class="empty">설정된 검색조건 없음</div>';
 
     const cfHtml = (p.customFilters || []).length

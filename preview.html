@@ -5603,7 +5603,7 @@
                             <button type="button" id="jmtBtnReport" onclick="openAuctionCrawlerReport()"
                                 title="옥션원 크롤링 매니저 보고서 (localhost:8765 매니저 서버 실행 중이어야 함)"
                                 class="rounded bg-blue-100 hover:bg-blue-600 hover:text-white text-blue-700 font-bold border border-blue-300 transition flex-shrink-0"
-                                style="pointer-events:auto;margin-left:auto;font-size:11px;height:24px;line-height:1;padding:0 8px;display:inline-flex;align-items:center;">📊 보고서</button>
+                                style="pointer-events:auto;margin-left:auto;font-size:11px;height:24px;min-width:80px;line-height:1;padding:0 8px;box-sizing:border-box;border-width:1px;display:inline-flex;align-items:center;justify-content:center;">📊 보고서</button>
                         </div>
                         <div class="jm-side-header flex items-center gap-2 px-2 py-1 border-b bg-gray-50">
                             <input type="text" id="jmtTitleSearch" autocomplete="off"
@@ -5613,7 +5613,7 @@
                                 style="font-size:11px">
                             <button type="button" id="jmtBtnDeleteSelected" onclick="onJmtDeleteSelected()"
                                 class="rounded bg-red-100 hover:bg-red-600 hover:text-white text-red-700 font-bold border border-red-300 transition flex-shrink-0"
-                                style="font-size:11px;height:24px;line-height:1;padding:0 8px;display:inline-flex;align-items:center;">🗑 선택 삭제</button>
+                                style="font-size:11px;height:24px;min-width:80px;line-height:1;padding:0 8px;box-sizing:border-box;border-width:1px;display:inline-flex;align-items:center;justify-content:center;">🗑 선택 삭제</button>
                         </div>
                         <div id="jmt-topbar" class="jmt-topbar"></div>
                         <ul id="jmt-list" class="flex-1 p-2 m-0 list-none"></ul>
@@ -33151,7 +33151,37 @@ MJ 이정우 팀장
         document.removeEventListener('keydown', _onAuctionReportEsc);
     }
     function _onAuctionReportEsc(e) { if (e.key === 'Escape') closeAuctionCrawlerReport(); }
-    function printAuctionCrawlerReport() { window.print(); }
+    // GAS sandbox iframe 안에선 window.print() 가 빈 페이지 — 새 창에 보고서 HTML 작성 후 거기서 인쇄.
+    function printAuctionCrawlerReport() {
+        var grid   = document.getElementById('auctionReportGrid');
+        var meta   = document.getElementById('auctionReportMeta');
+        var styles = document.getElementById('auctionReportStyles');
+        if (!grid || !styles) return;
+        var w = window.open('', 'auctionReportPrint', 'width=1200,height=900');
+        if (!w) { alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.'); return; }
+        var metaText = meta ? meta.textContent : '';
+        var doc = (
+            '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>옥션원 크롤링 보고서</title>' +
+            styles.outerHTML +
+            '<style>' +
+              'body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:#fff;}' +
+              '#prtHead{padding:10px 16px;border-bottom:2px solid #1e3a8a;color:#1e3a8a;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:14px;}' +
+              '#prtHead .m{font-size:11px;color:#475569;font-weight:500;}' +
+              '#prtHead .btn{padding:5px 14px;border:0;border-radius:5px;background:#1e3a8a;color:#fff;font-weight:700;font-size:12px;cursor:pointer;}' +
+              '#prtGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:10px;align-items:start;}' +
+              '@media print{#prtHead{padding:5px 8px;border-bottom-width:1.5px;}#prtHead .btn{display:none;}@page{size:A4 landscape;margin:7mm;}#prtGrid{padding:0;gap:6px;}}' +
+            '</style>' +
+            '</head><body>' +
+            '<div id="prtHead"><span>📊 옥션원 크롤링 보고서</span><span class="m">' + metaText + '</span><button class="btn" onclick="window.print()">🖨 인쇄 / PDF 저장</button></div>' +
+            '<div id="prtGrid">' + grid.innerHTML + '</div>' +
+            '<script>window.addEventListener("load",function(){setTimeout(function(){try{window.print();}catch(e){}},250);});<' + '/script>' +
+            '</body></html>'
+        );
+        w.document.open();
+        w.document.write(doc);
+        w.document.close();
+        w.focus();
+    }
 
     function _arptEsc(s) {
         return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -33169,6 +33199,39 @@ MJ 이정우 팀장
         var pad = function (x) { return String(x).padStart(2, '0'); };
         return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
+    // 페어 묶음 — 두 짧은 항목을 한 행에 표시 (매니저측과 동일 로직)
+    var _ARPT_PAIRS = [['물건현황', '유찰횟수'], ['건물면적', '추가주소']];
+    function _arptGroupPairs(lines) {
+        var labelOf = function (l) { return l.label || l.k || ''; };
+        var groups = [], used = {};
+        lines.forEach(function (line, i) {
+            if (used[i]) return;
+            var lbl = labelOf(line);
+            for (var k = 0; k < _ARPT_PAIRS.length; k++) {
+                var pair = _ARPT_PAIRS[k];
+                var partner = (lbl === pair[0]) ? pair[1] : (lbl === pair[1] ? pair[0] : null);
+                if (!partner) continue;
+                var j = -1;
+                for (var idx = 0; idx < lines.length; idx++) {
+                    if (idx !== i && !used[idx] && labelOf(lines[idx]) === partner) { j = idx; break; }
+                }
+                if (j >= 0) {
+                    groups.push(lbl === pair[0] ? [line, lines[j]] : [lines[j], line]);
+                    used[i] = true; used[j] = true;
+                    return;
+                }
+            }
+            groups.push([line]);
+            used[i] = true;
+        });
+        return groups;
+    }
+    function _arptKvCell(line, full) {
+        var k = _arptEsc(line.label || line.k || '');
+        var v = _arptEsc(line.val || line.v || '');
+        return '<div class="arpt-kv-cell' + (full ? ' arpt-full-row' : '') + '"><span class="arpt-kv-k">' + k + '</span><span class="arpt-kv-v">' + v + '</span></div>';
+    }
+
     function _renderArptCard(p) {
         var fdLines = [];
         try { fdLines = JSON.parse(p.form_data_lines || '[]'); } catch (_) {}
@@ -33177,10 +33240,11 @@ MJ 이정우 팀장
         var total    = parseInt(p.cache_total || '0', 10) || 0;
         var filtered = parseInt(p.cache_filtered || '0', 10) || 0;
 
-        var fdHtml = fdLines.length
-            ? '<table class="arpt-kv">' + fdLines.map(function (l) {
-                return '<tr><th>' + _arptEsc(l.label || l.k || '') + '</th><td>' + _arptEsc(l.val || l.v || '') + '</td></tr>';
-              }).join('') + '</table>'
+        var groups = _arptGroupPairs(fdLines);
+        var fdHtml = groups.length
+            ? '<div class="arpt-kv-grid">' + groups.map(function (g) {
+                return g.length === 2 ? (_arptKvCell(g[0]) + _arptKvCell(g[1])) : _arptKvCell(g[0], true);
+              }).join('') + '</div>'
             : '<div class="arpt-empty">설정된 검색조건 없음</div>';
 
         var cfHtml = cfLines.length
@@ -35476,6 +35540,13 @@ MJ 이정우 팀장
       .arpt-sec { padding:9px 14px 11px; border-top:1px solid #eef2f7; }
       .arpt-sec:first-of-type { border-top:0; }
       .arpt-sec h3 { margin:0 0 5px; font-size:10.5px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.6px; }
+      /* KV 그리드 — 페어(물건현황+유찰횟수 등) 한 줄, 그 외 단독 행 */
+      .arpt-kv-grid { display:grid; grid-template-columns:1fr 1fr; column-gap:14px; row-gap:5px; font-size:11.5px; }
+      .arpt-kv-cell { display:flex; gap:8px; align-items:baseline; min-width:0; line-height:1.4; }
+      .arpt-kv-cell.arpt-full-row { grid-column:1 / -1; }
+      .arpt-kv-cell .arpt-kv-k { color:#6b7280; font-weight:500; white-space:nowrap; flex-shrink:0; }
+      .arpt-kv-cell .arpt-kv-v { color:#111827; font-weight:600; word-break:break-word; overflow-wrap:anywhere; flex:1; min-width:0; }
+      /* (legacy) arpt-kv table — 미사용이지만 보존 */
       .arpt-kv { width:100%; border-collapse:collapse; font-size:11.5px; }
       .arpt-kv th { text-align:left; font-weight:500; color:#6b7280; padding:3px 12px 3px 0; vertical-align:top; white-space:nowrap; width:1%; }
       .arpt-kv td { text-align:left; color:#111827; font-weight:600; padding:3px 0; vertical-align:top; word-break:break-word; line-height:1.4; }
@@ -35519,7 +35590,7 @@ MJ 이정우 팀장
           <button type="button" onclick="printAuctionCrawlerReport()" style="padding:5px 14px;border:0;border-radius:5px;background:#fff;color:#1e3a8a;font-weight:700;font-size:12px;cursor:pointer;">🖨 인쇄 / PDF</button>
           <button type="button" onclick="closeAuctionCrawlerReport()" style="padding:5px 14px;border:0;border-radius:5px;background:#ef4444;color:#fff;font-weight:700;font-size:12px;cursor:pointer;">닫기</button>
         </div>
-        <div id="auctionReportGrid" style="flex:1;overflow-y:auto;padding:16px;display:grid;gap:14px;grid-template-columns:repeat(auto-fill, minmax(310px, 1fr));"></div>
+        <div id="auctionReportGrid" style="flex:1;overflow-y:auto;padding:16px;display:grid;gap:14px;grid-template-columns:repeat(auto-fill, minmax(310px, 1fr));align-items:start;"></div>
       </div>
     </div>
 </body>

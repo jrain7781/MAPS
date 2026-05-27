@@ -65,6 +65,7 @@ body.report-body #reportGrid {
   grid-template-columns:repeat(auto-fill, minmax(310px, 1fr));
   padding:18px 22px 24px;
   max-width:1800px; margin:0 auto;
+  align-items:start;   /* 각 카드 자기 높이만큼만 — stretch 로 인한 빈 영역/잘림 방지 */
 }
 
 .report-grid {
@@ -72,6 +73,7 @@ body.report-body #reportGrid {
   display:grid; gap:14px;
   grid-template-columns:repeat(auto-fill, minmax(310px, 1fr));
   padding:16px 18px 22px;
+  align-items:start;
 }
 
 /* ─── 카드 ─── */
@@ -111,7 +113,28 @@ body.report-body #reportGrid {
   color:#475569; text-transform:uppercase; letter-spacing:.6px;
 }
 
-/* ─── 검색조건 KV ─── */
+/* ─── 검색조건 KV 그리드 — 페어(물건현황+유찰횟수 등) 한 줄, 그 외 단독 행 ─── */
+.kv-grid {
+  display:grid; grid-template-columns:1fr 1fr;
+  column-gap:14px; row-gap:5px;
+  font-size:11.5px;
+}
+.kv-cell {
+  display:flex; gap:8px; align-items:baseline;
+  min-width:0; line-height:1.4;
+}
+.kv-cell.full-row { grid-column:1 / -1; }
+.kv-cell .kv-k {
+  color:var(--rpt-kv-label); font-weight:500;
+  white-space:nowrap; flex-shrink:0;
+}
+.kv-cell .kv-v {
+  color:var(--rpt-kv-value); font-weight:600;
+  word-break:break-word; overflow-wrap:anywhere;
+  flex:1; min-width:0;
+}
+
+/* ─── (legacy) 검색조건 KV table ─── */
 .kv-table { width:100%; border-collapse:collapse; font-size:11.5px; }
 .kv-table th {
   text-align:left; font-weight:500; color:var(--rpt-kv-label);
