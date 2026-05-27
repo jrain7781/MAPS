@@ -26343,9 +26343,58 @@ MJ 이정우 팀장
     }
     function closeJmSuggest() {
         JM_SUGGEST.open = false;
-        ['jm-suggest-addr', 'jm-suggest-prop', 'jm-suggest-special'].forEach(function (id) {
+        ['jm-suggest-addr', 'jm-suggest-prop', 'jm-suggest-special', 'jmt-title-suggest'].forEach(function (id) {
             var el = document.getElementById(id); if (el) el.classList.add('hidden');
         });
+    }
+
+    // 크롤링리스트 검색 — preset_title 기준 자동완성 (특수물건 패턴 mimic)
+    function openJmtTitleSuggest(input) {
+        if (__jmSuggestCloseTimer) { clearTimeout(__jmSuggestCloseTimer); __jmSuggestCloseTimer = null; }
+        JM_SUGGEST.anchor = input;
+        JM_SUGGEST.field = '__presetTitle';
+        JM_SUGGEST.open = true;
+        var q = String(input.value || '').trim().toLowerCase();
+        var seen = {}, list = [];
+        (jmPresets || []).forEach(function (p) {
+            var t = String(p.preset_title || '').trim();
+            if (!t) return;
+            if (q && t.toLowerCase().indexOf(q) === -1) return;
+            if (!seen[t]) { seen[t] = 1; list.push(t); }
+        });
+        JM_SUGGEST.items = list.slice(0, 30);
+        JM_SUGGEST.activeIndex = 0;
+        renderJmtTitleSuggest();
+    }
+    function renderJmtTitleSuggest() {
+        var menu = document.getElementById('jmt-title-suggest');
+        if (!menu) return;
+        if (!JM_SUGGEST.items.length) { menu.classList.add('hidden'); return; }
+        menu.innerHTML = JM_SUGGEST.items.map(function (t, i) {
+            var act = (i === JM_SUGGEST.activeIndex) ? ' active' : '';
+            return '<div class="jm-suggest-item' + act + '" data-idx="' + i + '" onmousedown="event.preventDefault(); selectJmtTitleSuggest(' + i + ')">' + escHtml(t) + '</div>';
+        }).join('');
+        menu.classList.remove('hidden');
+    }
+    function selectJmtTitleSuggest(idx) {
+        var v = JM_SUGGEST.items[idx] || '';
+        if (JM_SUGGEST.anchor) JM_SUGGEST.anchor.value = v;
+        closeJmSuggest();
+        if (typeof onJmtTitleSearch === 'function') onJmtTitleSearch(v);
+    }
+    function onJmtTitleSuggestKeydown(e, input) {
+        if (!JM_SUGGEST.open || JM_SUGGEST.field !== '__presetTitle') return;
+        if (e.key === 'ArrowDown') {
+            JM_SUGGEST.activeIndex = Math.min(JM_SUGGEST.items.length - 1, JM_SUGGEST.activeIndex + 1);
+            renderJmtTitleSuggest(); e.preventDefault();
+        } else if (e.key === 'ArrowUp') {
+            JM_SUGGEST.activeIndex = Math.max(0, JM_SUGGEST.activeIndex - 1);
+            renderJmtTitleSuggest(); e.preventDefault();
+        } else if (e.key === 'Enter') {
+            if (JM_SUGGEST.items.length) { selectJmtTitleSuggest(JM_SUGGEST.activeIndex); e.preventDefault(); }
+        } else if (e.key === 'Escape') {
+            closeJmSuggest();
+        }
     }
     function onJmSuggestKeydown(e, input, field) {
         if (!JM_SUGGEST.open || JM_SUGGEST.field !== field) return;

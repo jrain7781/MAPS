@@ -1929,19 +1929,24 @@
                 <div class="flex flex-1 overflow-hidden">
                     <!-- 좌측 사이드 트리: 크롤링리스트 (auction1 매니저 동일 구조) -->
                     <aside class="w-72 border-r bg-gray-50 text-sm flex-shrink-0 flex flex-col" id="jmtAside" style="position:relative">
-                        <div id="jmtTitle" style="position:absolute;top:0;left:0;right:0;display:flex;align-items:center;padding:0 14px;font-size:19px;font-weight:800;color:#1f2937;pointer-events:none;">
-                            <span>조사리스트</span>
-                            <button type="button" id="jmtBtnReport" onclick="openAuctionCrawlerReport()"
-                                title="옥션원 크롤링 매니저 보고서 (localhost:8765 매니저 서버 실행 중이어야 함)"
-                                class="rounded bg-blue-100 hover:bg-blue-600 hover:text-white text-blue-700 font-bold border border-blue-300 transition flex-shrink-0"
-                                style="pointer-events:auto;margin-left:auto;font-size:11px;height:24px;min-width:80px;line-height:1;padding:0 8px;box-sizing:border-box;border-width:1px;display:inline-flex;align-items:center;justify-content:center;">📊 보고서</button>
-                        </div>
+                        <div id="jmtTitle" style="position:absolute;top:0;left:0;right:0;display:flex;align-items:center;padding:0 14px;font-size:19px;font-weight:800;color:#1f2937;pointer-events:none;">조사리스트</div>
                         <div class="jm-side-header flex items-center gap-2 px-2 py-1 border-b bg-gray-50">
-                            <input type="text" id="jmtTitleSearch" autocomplete="off"
-                                placeholder="크롤링리스트 (입력 시 자동 검색)"
-                                oninput="onJmtTitleSearch(this.value)" onfocus="this.select()"
-                                class="flex-1 min-w-0 border rounded px-2 py-0.5 text-gray-700"
-                                style="font-size:11px">
+                            <div class="jm-multi-wrap" style="flex:1;min-width:0;position:relative">
+                                <input type="text" id="jmtTitleSearch" autocomplete="off"
+                                    placeholder="크롤링리스트 (입력 시 자동 검색)"
+                                    oninput="onJmtTitleSearch(this.value); openJmtTitleSuggest(this)"
+                                    onfocus="this.select(); openJmtTitleSuggest(this)"
+                                    onclick="this.select()"
+                                    onblur="scheduleCloseJmSuggest()"
+                                    onkeydown="onJmtTitleSuggestKeydown(event, this)"
+                                    class="border rounded px-2 py-0.5 text-gray-700"
+                                    style="font-size:11px;width:100%">
+                                <div class="jm-suggest-menu hidden" id="jmt-title-suggest"></div>
+                            </div>
+                            <button type="button" id="jmtBtnReport" onclick="openAuctionCrawlerReport()"
+                                title="옥션원 크롤링 매니저 보고서"
+                                class="rounded bg-blue-100 hover:bg-blue-600 hover:text-white text-blue-700 font-bold border border-blue-300 transition flex-shrink-0"
+                                style="font-size:11px;height:24px;min-width:80px;line-height:1;padding:0 8px;box-sizing:border-box;border-width:1px;display:inline-flex;align-items:center;justify-content:center;">📊 보고서</button>
                             <button type="button" id="jmtBtnDeleteSelected" onclick="onJmtDeleteSelected()"
                                 class="rounded bg-red-100 hover:bg-red-600 hover:text-white text-red-700 font-bold border border-red-300 transition flex-shrink-0"
                                 style="font-size:11px;height:24px;min-width:80px;line-height:1;padding:0 8px;box-sizing:border-box;border-width:1px;display:inline-flex;align-items:center;justify-content:center;">🗑 선택 삭제</button>
