@@ -4641,8 +4641,9 @@ function getAutoApprovalStats(testMode) {
       // ── 변경/취소 안내 ────────────────────────────────────────────────
     } else if (action === 'TELEGRAM_SENT' && note === 'status') {
       addId(ds.status_tele, itemId);                                             // 12번
-    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '취소') {
-      addId(ds.status_web, itemId);                                              // 8번
+    } else if ((action === 'AUCTION_CHANGE_CANCEL') ||
+               (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && (toVal === '폐기' || toVal === '변경/취소'))) {
+      addId(ds.status_web, itemId);                                              // 8번 (폐기=내부결정 / 변경/취소=외부사유 / AUCTION_CHANGE_CANCEL=매니저 자동)
     }
   });
 
@@ -6005,11 +6006,12 @@ function getMemberItemHistory(memberId, months) {
   const CATEGORIES = {
     CHUCHEN: '추천',
     BID: '입찰',
-    CANCEL: '취소',
-    CHANGE: '취소'
+    CANCEL: '폐기',         // 내부 결정 (옛 '취소')
+    CHANGE: '변경/취소'     // 외부 사유 (옥션원/법원)
   };
 
   const CANCEL_ACTIONS = ['AUTO_EXPIRE', 'REQUEST_CANCEL_CHUCHEN', 'REQUEST_CANCEL_BID', 'CANCEL_BID'];
+  const EXTERNAL_CHANGE_ACTIONS = ['AUCTION_CHANGE_CANCEL'];
   const BID_ACTIONS = ['REQUEST_BID', 'BID', 'REQUEST_BID_CONFIRM'];
   const CHUCHEN_ACTIONS = ['CHUCHEN', 'SEND_CHUCHEN'];
 
@@ -6079,10 +6081,10 @@ function getMemberItemHistory(memberId, months) {
       const itemId = String(rowData[4] || '').trim();
 
       let category = '';
-      if (CANCEL_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue === '미정')) category = CATEGORIES.CANCEL;
-      else if (fieldName === 'stu_member' && toValue === '취소') category = CATEGORIES.CHANGE;
+      if (CANCEL_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && (toValue === '미정' || toValue === '폐기'))) category = CATEGORIES.CANCEL;
+      else if (EXTERNAL_CHANGE_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue === '변경/취소')) category = CATEGORIES.CHANGE;
       else if (BID_ACTIONS.indexOf(action) !== -1) category = CATEGORIES.BID;
-      else if (CHUCHEN_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue && toValue !== '미정' && toValue !== '취소')) category = CATEGORIES.CHUCHEN;
+      else if (CHUCHEN_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue && toValue !== '미정' && toValue !== '폐기' && toValue !== '변경/취소')) category = CATEGORIES.CHUCHEN;
 
       if (!category) continue;
 
@@ -6096,7 +6098,7 @@ function getMemberItemHistory(memberId, months) {
       const mm = String(requestedAt.getMonth() + 1).padStart(2, '0');
       const monthKey = yy + '-' + mm;
 
-      if (!monthlyStats[monthKey]) monthlyStats[monthKey] = { month: monthKey, 추천: 0, 입찰: 0, 취소: 0, 변경: 0, total: 0 };
+      if (!monthlyStats[monthKey]) monthlyStats[monthKey] = { month: monthKey, 추천: 0, 입찰: 0, 폐기: 0, '변경/취소': 0, total: 0 };
       monthlyStats[monthKey][category]++;
       monthlyStats[monthKey].total++;
 
@@ -6119,6 +6121,50 @@ function getMemberItemHistory(memberId, months) {
   } catch (e) {
     Logger.log('[getMemberItemHistory] 오류: ' + e.toString());
     return { summary: [], list: [] };
+  }
+}
+
+
+/**
+ * 오늘 변경/취소 처리된 item_id 목록 조회
+ * - telegram_requests 에서 오늘 0시 이후 발생한 이력 중
+ *   action='AUCTION_CHANGE_CANCEL' 또는
+ *   (field_name='stu_member' AND to_value='변경/취소') 인 행의 item_id (중복 제거)
+ * @returns {Array<string>}
+ */
+function getTodayChangeCancelItemIds() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+    if (!reqSheet || reqSheet.getLastRow() < 2) return [];
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const lastRow = reqSheet.getLastRow();
+    const data = reqSheet.getRange(2, 1, lastRow - 1, 16).getValues();
+
+    const itemIds = new Set();
+    data.forEach(row => {
+      const requestedAt = row[1] instanceof Date ? row[1] : new Date(row[1]);
+      if (isNaN(requestedAt.getTime())) return;
+      if (requestedAt < todayStart) return;
+
+      const action = String(row[2] || '').trim();
+      const fieldName = String(row[13] || '').trim();
+      const toValue = String(row[12] || '').trim();
+      const itemId = String(row[4] || '').trim();
+      if (!itemId) return;
+
+      if (action === 'AUCTION_CHANGE_CANCEL' ||
+          (fieldName === 'stu_member' && toValue === '변경/취소')) {
+        itemIds.add(itemId);
+      }
+    });
+    return Array.from(itemIds);
+  } catch (e) {
+    Logger.log('[getTodayChangeCancelItemIds] 오류: ' + e.toString());
+    return [];
   }
 }
 
@@ -7232,7 +7278,98 @@ function handleSearchApiPost_(payload) {
     initSearchSheet_();
     return { success: true, message: 'search 시트 초기화 완료' };
   }
+  if (action === 'uploadChangeCancel') {
+    return uploadChangeCancel(payload.items || []);
+  }
   return { success: false, message: '알 수 없는 API 액션: ' + action };
+}
+
+/**
+ * [변경/취소 일괄 업데이트] 매니저 03.cc.py 결과 표에서 사용자가 체크한 사건들을
+ * items 시트의 stu_member='변경/취소' 로 일괄 변경하고 telegram_requests 히스토리에 기록.
+ *
+ * @param {Array<{sakun_no:string, bid_date?:string, status?:string}>} items
+ * @returns {{success:boolean, updated:number, skipped:number, history:number, errors?:string[]}}
+ */
+function uploadChangeCancel(items) {
+  try {
+    if (!Array.isArray(items) || items.length === 0) {
+      return { success: false, message: '항목이 비어 있습니다.', updated: 0 };
+    }
+    var sakunSet = {};
+    items.forEach(function (it) {
+      var s = String((it && it.sakun_no) || '').trim();
+      if (s) sakunSet[s] = it;
+    });
+    var sakunList = Object.keys(sakunSet);
+    if (sakunList.length === 0) {
+      return { success: false, message: '유효한 사건번호가 없습니다.', updated: 0 };
+    }
+
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'items 시트 없음', updated: 0 };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: 'items 비어있음', updated: 0 };
+
+    var idIdx        = ITEM_HEADERS.indexOf('id');
+    var sakunIdx     = ITEM_HEADERS.indexOf('sakun_no');
+    var stuIdx       = ITEM_HEADERS.indexOf('stu_member');
+    var memberIdIdx  = ITEM_HEADERS.indexOf('member_id');
+    var mNameIdx     = ITEM_HEADERS.indexOf('m_name');
+    if (sakunIdx < 0 || stuIdx < 0) {
+      return { success: false, message: 'items 헤더 컬럼 누락', updated: 0 };
+    }
+
+    var totalCols = ITEM_HEADERS.length;
+    var data = sheet.getRange(2, 1, lastRow - 1, totalCols).getValues();
+
+    var updates = []; // {row, col, val} 단위 (rangeList 로 묶지 않고 batch setValues)
+    var historyEntries = [];
+    var updated = 0;
+    var nowIso = new Date().toISOString();
+
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      var sakun = String(row[sakunIdx] || '').trim();
+      if (!sakun || !sakunSet.hasOwnProperty(sakun)) continue;
+      var currentStu = String(row[stuIdx] || '').trim();
+      if (currentStu === '변경/취소') continue; // 이미 동일 → skip
+      // 변경 — 행 인덱스 = i + 2 (시트는 1-based, 헤더 row 제외)
+      var sheetRowNum = i + 2;
+      sheet.getRange(sheetRowNum, stuIdx + 1).setValue('변경/취소');
+      updated++;
+      historyEntries.push({
+        action: 'AUCTION_CHANGE_CANCEL',
+        item_id: String(row[idIdx] || ''),
+        member_id: String(row[memberIdIdx] || ''),
+        member_name: String(row[mNameIdx] || ''),
+        field_name: 'stu_member',
+        from_value: currentStu,
+        to_value: '변경/취소',
+        note: 'auction1 결과=' + String(sakunSet[sakun].status || ''),
+        trigger_type: 'auction-manager',
+        approved_by: 'manager',
+        status: 'DONE',
+      });
+    }
+
+    SpreadsheetApp.flush();
+
+    if (historyEntries.length > 0 && typeof writeItemHistoryBatch_ === 'function') {
+      writeItemHistoryBatch_(historyEntries);
+    }
+
+    return {
+      success: true,
+      updated: updated,
+      skipped: sakunList.length - updated,
+      history: historyEntries.length,
+      message: updated + '건 변경/취소 처리 완료'
+    };
+  } catch (e) {
+    Logger.log('[uploadChangeCancel] 오류: ' + e.toString());
+    return { success: false, message: String(e), updated: 0 };
+  }
 }
 
 // ============================================================

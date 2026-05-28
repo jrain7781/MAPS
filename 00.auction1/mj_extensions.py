@@ -10,7 +10,7 @@ mj_extensions.py — 옥션원 매니저 확장 모듈
 모든 데이터 저장: 00.imageup/imageup_config.json
 """
 from __future__ import annotations
-import os, sys, json, time, uuid, threading, subprocess, mimetypes, socket
+import os, sys, json, time, uuid, threading, subprocess, mimetypes, socket, shutil
 import urllib.parse
 
 # 메인 매니저 폴더 (= crawler.py 위치)
@@ -19,9 +19,10 @@ _DIR_IMAGEUP = os.path.normpath(os.path.join(_DIR_HERE, "..", "00.imageup"))
 _DIR_KAKAO   = os.path.normpath(os.path.join(_DIR_HERE, "..", "01. kakao"))
 
 _IMAGEUP_SCRIPTS = {
-    "i": os.path.join(_DIR_IMAGEUP, "01.i.py"),
-    "d": os.path.join(_DIR_IMAGEUP, "02.d.py"),
-    "k": os.path.join(_DIR_IMAGEUP, "03.k.py"),
+    "i":  os.path.join(_DIR_IMAGEUP, "01.i.py"),
+    "d":  os.path.join(_DIR_IMAGEUP, "02.d.py"),
+    "k":  os.path.join(_DIR_IMAGEUP, "03.k.py"),
+    "cc": os.path.join(_DIR_IMAGEUP, "03.cc.py"),   # 변경/취소 확인 (옥션원 결과 컬럼 조회, 캡처 없음)
 }
 _IMAGEUP_CONFIG_PATH = os.path.join(_DIR_IMAGEUP, "imageup_config.json")
 
@@ -379,6 +380,60 @@ def folder_fingerprint(root: str, rel: str) -> dict:
     return {"ok": True, "count": count, "max_mtime": max_mtime}
 
 
+def _unique_dest(dst_abs: str) -> str:
+    """대상 경로가 이미 존재하면 ' (1)', ' (2)' ... 를 확장자 앞에 붙여 충돌 회피."""
+    if not os.path.exists(dst_abs):
+        return dst_abs
+    base_dir = os.path.dirname(dst_abs)
+    name, ext = os.path.splitext(os.path.basename(dst_abs))
+    for i in range(1, 1000):
+        cand = os.path.join(base_dir, f"{name} ({i}){ext}")
+        if not os.path.exists(cand):
+            return cand
+    raise RuntimeError("대상 이름 자동 부여 실패 (1000 시도 초과)")
+
+
+def copy_file(src_root: str, src_rel: str, dst_root: str, dst_rel: str = "") -> dict:
+    """파일을 src_root/src_rel 에서 dst_root/dst_rel 로 복사. dst_rel 비어있으면 src_rel 그대로 사용.
+    같은 이름 존재 시 ' (N)' 자동 부여. 폴더 복사는 금지(파일만)."""
+    try:
+        _, src_abs = _resolve_path(src_root, src_rel)
+    except Exception as e:
+        return {"ok": False, "error": "원본 경로 오류: " + str(e)}
+    if not os.path.isfile(src_abs):
+        return {"ok": False, "error": "원본 파일 없음(또는 폴더): " + src_abs}
+    rel_target = (dst_rel or src_rel).replace("\\", "/").lstrip("/")
+    try:
+        dst_base_abs, dst_abs = _resolve_path(dst_root, rel_target)
+    except Exception as e:
+        return {"ok": False, "error": "대상 경로 오류: " + str(e)}
+    try:
+        os.makedirs(os.path.dirname(dst_abs), exist_ok=True)
+        dst_final = _unique_dest(dst_abs)
+        shutil.copy2(src_abs, dst_final)
+        rel_final = os.path.relpath(dst_final, dst_base_abs).replace("\\", "/")
+        return {"ok": True, "dst_rel": rel_final, "dst_abs": dst_final}
+    except Exception as e:
+        return {"ok": False, "error": "복사 실패: " + str(e)}
+
+
+def delete_file(root: str, rel: str) -> dict:
+    """파일 1개 삭제. 안전을 위해 폴더 삭제는 차단."""
+    try:
+        _, abs_path = _resolve_path(root, rel)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    if not os.path.exists(abs_path):
+        return {"ok": False, "error": "대상 없음: " + abs_path}
+    if os.path.isdir(abs_path):
+        return {"ok": False, "error": "폴더 삭제는 매니저에서 차단됨 (탐색기에서 직접 삭제)"}
+    try:
+        os.remove(abs_path)
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": "삭제 실패: " + str(e)}
+
+
 def serve_file_to(handler, root: str, rel: str):
     """파일 본문을 응답으로 직접 전송."""
     try:
@@ -624,6 +679,32 @@ def handle_post(handler) -> bool:
             payload = json.loads(raw or "{}")
             ok = imageup_stop(payload.get("run_id", ""))
             _send_json(handler, 200, {"ok": ok})
+        except Exception as e:
+            _send_json(handler, 500, {"ok": False, "error": str(e)})
+        return True
+
+    # ---- 파일 복사/삭제 ----
+    if path == "/api/files/copy":
+        try:
+            length = int(handler.headers.get("Content-Length", "0"))
+            raw = handler.rfile.read(length).decode("utf-8") if length else "{}"
+            payload = json.loads(raw or "{}")
+            r = copy_file(
+                payload.get("src_root", ""), payload.get("src_rel", ""),
+                payload.get("dst_root", ""), payload.get("dst_rel", ""),
+            )
+            _send_json(handler, 200, r)
+        except Exception as e:
+            _send_json(handler, 500, {"ok": False, "error": str(e)})
+        return True
+
+    if path == "/api/files/delete":
+        try:
+            length = int(handler.headers.get("Content-Length", "0"))
+            raw = handler.rfile.read(length).decode("utf-8") if length else "{}"
+            payload = json.loads(raw or "{}")
+            r = delete_file(payload.get("root", ""), payload.get("rel", ""))
+            _send_json(handler, 200, r)
         except Exception as e:
             _send_json(handler, 500, {"ok": False, "error": str(e)})
         return True
