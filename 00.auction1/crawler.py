@@ -1150,7 +1150,7 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception as _e:
             traceback.print_exc()
         # MAPS GAS 중계 엔드포인트 (매니저 JS → 이 서버 → GAS)
-        if self.path in ("/api/maps-sync-presets", "/api/maps-upload-items", "/api/maps-gas", "/api/maps-changecancel"):
+        if self.path in ("/api/maps-sync-presets", "/api/maps-upload-items", "/api/maps-gas"):
             self._handle_maps_proxy()
             return
         # 계정 검증 — 설정 모달의 [검증하기] 버튼
@@ -1217,16 +1217,15 @@ class Handler(SimpleHTTPRequestHandler):
             raw = self.rfile.read(length).decode("utf-8") if length else "{}"
             payload = json.loads(raw or "{}")
             action_map = {
-                "/api/maps-sync-presets":   "syncJosaPresets",
-                "/api/maps-upload-items":   "uploadJosaItems",
-                "/api/maps-changecancel":   "uploadChangeCancel",
+                "/api/maps-sync-presets":  "syncJosaPresets",
+                "/api/maps-upload-items":  "uploadJosaItems",
             }
             # /api/maps-gas 는 payload.api_action 그대로 사용 (진단용 일반 라우터)
             if self.path in action_map:
                 payload["api_action"] = action_map[self.path]
             # 업로드는 GAS 처리 시간(시트 쓰기 N건) 60s 넘는 사례 있음 — 5분까지 허용.
             # sync/일반 라우터는 메타만이라 60s 충분.
-            timeout = 300.0 if self.path in ("/api/maps-upload-items", "/api/maps-changecancel") else 60.0
+            timeout = 300.0 if self.path == "/api/maps-upload-items" else 60.0
             result = _gas_post(payload, timeout=timeout)
             body = json.dumps(result, ensure_ascii=False).encode("utf-8")
             self.send_response(200)

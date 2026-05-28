@@ -18,13 +18,11 @@
 
   // ========== 물건캡쳐 - 공통 ==========
   const CAP_SPEC = {
-    i:  { script: '01.i.py',  title: '등록일 정렬',     hasLimit: true,  hasCases: false },
-    d:  { script: '02.d.py',  title: '입찰일 정렬',     hasLimit: true,  hasCases: false },
-    k:  { script: '03.k.py',  title: '건별 캡쳐',       hasLimit: false, hasCases: true  },
-    cc: { script: '03.cc.py', title: '변경/취소 확인',  hasLimit: false, hasCases: true, hasResults: true },
+    i: { script: '01.i.py', title: '등록일 정렬',     hasLimit: true,  hasCases: false },
+    d: { script: '02.d.py', title: '입찰일 정렬',     hasLimit: true,  hasCases: false },
+    k: { script: '03.k.py', title: '건별 캡쳐',       hasLimit: false, hasCases: true  },
   };
-  const runState = { i: null, d: null, k: null, cc: null }; // run_id
-  const ccResults = []; // 변경/취소 확인 결과 누적 (실행마다 초기화)
+  const runState = { i: null, d: null, k: null }; // run_id
 
   let captureInitDone = false;
   function initCaptureTabOnce() {
@@ -47,27 +45,6 @@
         }
         limitEl.addEventListener('change', () => {
           try { localStorage.setItem('mj_cap_limit_' + key, limitEl.value); } catch(e) {}
-        });
-      }
-      // 건별(k) 카드의 파일 업로드 입력: 선택 시 텍스트 전체를 textarea에 자동 로드
-      const fileEl = card.querySelector('[data-role="file"]');
-      const casesEl = card.querySelector('[data-role="cases"]');
-      if (fileEl && casesEl) {
-        fileEl.addEventListener('change', () => {
-          const f = fileEl.files && fileEl.files[0];
-          if (!f) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            let text = String(reader.result || '');
-            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // BOM 제거
-            casesEl.value = text;
-            const n = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean).length;
-            log(key, '[파일 로드] ' + f.name + ' — ' + n + '줄', 'log-ok');
-          };
-          reader.onerror = () => log(key, '[파일 읽기 오류] ' + reader.error, 'log-err');
-          reader.readAsText(f, 'utf-8');
-          // 같은 파일 재선택해도 change 발생하도록 input value 초기화
-          setTimeout(() => { try { fileEl.value = ''; } catch(_) {} }, 100);
         });
       }
       loadAccounts(key);
@@ -196,7 +173,6 @@
       payload.cases = lines;
     }
     $log(key).textContent = '';
-    if (key === 'cc') { ccResults.length = 0; renderCcResults(); }
     log(key, '▶ ' + CAP_SPEC[key].script + ' 시작 (활성 계정 ' + accounts.length + '개)', 'log-ok');
     setStatus(key, '실행중', 'running');
     setRunning(key, true);
@@ -261,94 +237,12 @@
       });
   }
   function log(key, line, cls) {
-    // 'cc' 탭은 RESULT|{json} 라인을 가로채 결과표에 추가
-    if (key === 'cc' && typeof line === 'string' && line.startsWith('RESULT|')) {
-      try {
-        const obj = JSON.parse(line.slice(7));
-        ccResults.push(obj);
-        renderCcResults();
-        return;
-      } catch (e) { /* fallthrough → 일반 로그 */ }
-    }
     const el = $log(key);
     const span = document.createElement('span');
     if (cls) span.className = cls;
     span.textContent = line + '\n';
     el.appendChild(span);
     el.scrollTop = el.scrollHeight;
-  }
-
-  // 변경/취소 결과 테이블 렌더
-  function renderCcResults() {
-    const wrap = $card('cc')?.querySelector('[data-role="cc-results"]');
-    if (!wrap) return;
-    if (ccResults.length === 0) { wrap.innerHTML = ''; return; }
-    const rows = ccResults.map((r, i) => {
-      const st = String(r.status || '').trim();
-      const isCC = (st === '변경' || st === '취소');
-      const badge = st
-        ? `<span class="cc-badge ${isCC ? 'cc-bad' : (st === '유찰' ? 'cc-warn' : (st === '매각' ? 'cc-end' : 'cc-ok'))}">${escapeHtml(st)}</span>`
-        : `<span class="cc-badge cc-ok">진행중</span>`;
-      const url = r.view_url ? `<a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">옥션원 열기</a>` : '';
-      return `<tr data-idx="${i}">
-        <td><input type="checkbox" class="cc-cb" ${isCC ? 'checked' : ''}></td>
-        <td>${escapeHtml(r.sakun_no || '')}</td>
-        <td>${escapeHtml(r.bid_date || '')}</td>
-        <td style="text-align:right">${escapeHtml(r.lowest_price || '')}</td>
-        <td style="text-align:center">${badge}</td>
-        <td>${url}</td>
-      </tr>`;
-    }).join('');
-    wrap.innerHTML = `
-      <div class="cc-results-head">
-        <span><b>결과</b> ${ccResults.length}건 · 변경/취소만 체크됨</span>
-        <span class="mjcap-spacer"></span>
-        <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 체크한 건 MAPS로 전송</button>
-      </div>
-      <table class="cc-table"><thead>
-        <tr><th>✓</th><th>사건번호</th><th>매각기일</th><th>최저가</th><th>옥션원 결과</th><th>원본</th></tr>
-      </thead><tbody>${rows}</tbody></table>
-    `;
-    wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
-  }
-
-  function sendCcToMaps() {
-    const card = $card('cc');
-    if (!card) return;
-    const tbody = card.querySelector('[data-role="cc-results"] tbody');
-    if (!tbody) return;
-    const picked = [];
-    tbody.querySelectorAll('tr').forEach(tr => {
-      const cb = tr.querySelector('.cc-cb');
-      if (cb && cb.checked) {
-        const idx = parseInt(tr.dataset.idx, 10);
-        const r = ccResults[idx];
-        if (r) picked.push(r);
-      }
-    });
-    if (picked.length === 0) { alert('체크된 건이 없습니다.'); return; }
-    if (!confirm(`${picked.length}건을 MAPS 로 전송하여 상태를 "변경/취소" 로 업데이트 합니다. 진행할까요?`)) return;
-    const btn = card.querySelector('[data-act="cc-send"]');
-    if (btn) btn.disabled = true;
-    log('cc', `📤 ${picked.length}건 MAPS 전송 중...`, 'log-ok');
-    fetch('/api/maps-changecancel', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items: picked })
-    }).then(r => r.json()).then(j => {
-      if (btn) btn.disabled = false;
-      if (j && (j.success || j.ok)) {
-        const n = j.updated || j.count || picked.length;
-        log('cc', `✅ MAPS 업데이트 완료: ${n}건`, 'log-ok');
-        alert('MAPS 업데이트 완료: ' + n + '건');
-      } else {
-        log('cc', `❌ MAPS 전송 실패: ${j && (j.error || j.message) || '알 수 없음'}`, 'log-err');
-        alert('실패: ' + (j && (j.error || j.message) || '?'));
-      }
-    }).catch(err => {
-      if (btn) btn.disabled = false;
-      log('cc', `❌ MAPS 전송 오류: ${err}`, 'log-err');
-      alert('오류: ' + err);
-    });
   }
   function escapeAttr(s) {
     return String(s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -387,59 +281,8 @@
       el.search.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(state, el); });
       loadDir(state, el);
       allStates.push(state);
-      _paneRegistry[root] = { state, el };
     });
     if (allStates.length) startFolderAutoWatch(allStates);
-    initFolderResizer();
-  }
-
-  // 좌측 파일 리스트 영역 가로 리사이즈 (preview 와의 경계 드래그)
-  function initFolderResizer() {
-    const main = document.querySelector('.mjfb-main');
-    if (!main || main.dataset.resizerInit === '1') return;
-    main.dataset.resizerInit = '1';
-    // 기존 grid 구조: [listcol-stack] [preview] → 가운데에 핸들 삽입해 3컬럼으로
-    const stack = main.querySelector('.mjfb-listcol-stack');
-    const preview = main.querySelector('.mjfb-preview');
-    if (!stack || !preview) return;
-    const handle = document.createElement('div');
-    handle.className = 'mjfb-resizer';
-    handle.title = '드래그하여 좌·우 폭 조절';
-    main.insertBefore(handle, preview);
-
-    // 저장된 폭 복원
-    const saved = parseInt(localStorage.getItem('mjfb_list_w') || '', 10);
-    if (saved && saved >= 200) {
-      main.style.setProperty('--mjfb-list-w', saved + 'px');
-    }
-    // 드래그
-    let dragging = false;
-    handle.addEventListener('mousedown', (e) => {
-      dragging = true;
-      handle.classList.add('dragging');
-      document.body.style.userSelect = 'none';
-      e.preventDefault();
-    });
-    document.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const rect = main.getBoundingClientRect();
-      let w = e.clientX - rect.left;
-      const min = 200;
-      const max = Math.max(min + 50, rect.width - 240); // preview 최소 240 확보
-      if (w < min) w = min;
-      if (w > max) w = max;
-      main.style.setProperty('--mjfb-list-w', w + 'px');
-    });
-    document.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false;
-      handle.classList.remove('dragging');
-      document.body.style.userSelect = '';
-      // 저장
-      const cur = getComputedStyle(main).getPropertyValue('--mjfb-list-w').trim();
-      const px = parseInt(cur, 10);
-      if (px) { try { localStorage.setItem('mjfb_list_w', String(px)); } catch(_) {} }
-    });
   }
 
   function loadDir(state, el) {
@@ -534,83 +377,16 @@
     });
   }
 
-  // 마지막으로 선택된 파일 (복사/삭제 액션 대상)
-  let _selectedFile = null;
-
   function showPreview(state, el, rel, name) {
-    _selectedFile = { root: state.root, rel, name };
     const url = '/api/files/get?root=' + state.root + '&rel=' + encodeURIComponent(rel);
-    const otherRoot = state.root === 'mapsimage' ? 'mapsimagedb' : 'mapsimage';
-    const actions =
-      '<div class="mjfb-actions">' +
-        '<span class="mjfb-actions-src">📁 ' + escapeHtml(state.root) + '</span>' +
-        '<button type="button" class="btn_box_sss btn_blue" data-fb-act="copy" data-dst="' + otherRoot + '">→ ' + otherRoot + ' 복사</button>' +
-        '<button type="button" class="btn_box_sss btn_red" data-fb-act="delete">🗑 삭제</button>' +
-      '</div>';
     if (isImageName(name)) {
       el.preview.innerHTML = '<div class="preview-info"><span><b>' + escapeHtml(name) + '</b></span>' +
         '<span><a href="' + url + '" target="_blank">원본 열기</a></span></div>' +
-        actions +
         '<img src="' + url + '" alt="' + escapeAttr(name) + '">';
     } else {
       el.preview.innerHTML = '<div class="preview-info"><b>' + escapeHtml(name) + '</b></div>' +
-        actions +
         '<a href="' + url + '" target="_blank" class="btn_box_sss btn_blue">파일 다운로드 / 열기</a>';
     }
-  }
-
-  // 복사/삭제 버튼 위임 핸들러 (showPreview 마다 다시 바인딩 안 하도록 위임)
-  document.addEventListener('click', e => {
-    const btn = e.target.closest('[data-fb-act="copy"], [data-fb-act="delete"]');
-    if (!btn) return;
-    if (!_selectedFile) return;
-    const act = btn.dataset.fbAct;
-    if (act === 'copy') {
-      const dstRoot = btn.dataset.dst;
-      btn.disabled = true;
-      fetch('/api/files/copy', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          src_root: _selectedFile.root, src_rel: _selectedFile.rel,
-          dst_root: dstRoot, dst_rel: '',
-        })
-      }).then(r => r.json()).then(j => {
-        btn.disabled = false;
-        if (j.ok) {
-          alert('복사 완료: ' + dstRoot + ' / ' + (j.dst_rel || _selectedFile.name));
-          // 대상 pane 자동 새로고침
-          refreshPaneByRoot(dstRoot);
-        } else {
-          alert('복사 실패: ' + (j.error || '알 수 없음'));
-        }
-      }).catch(err => { btn.disabled = false; alert('복사 오류: ' + err); });
-    } else if (act === 'delete') {
-      if (!confirm('정말 삭제할까요?\n\n' + _selectedFile.root + ' / ' + _selectedFile.rel)) return;
-      btn.disabled = true;
-      fetch('/api/files/delete', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ root: _selectedFile.root, rel: _selectedFile.rel })
-      }).then(r => r.json()).then(j => {
-        btn.disabled = false;
-        if (j.ok) {
-          // 원본 pane 새로고침 + 미리보기 비우기
-          const srcRoot = _selectedFile.root;
-          _selectedFile = null;
-          const preview = document.getElementById('mjfbSharedPreview');
-          if (preview) preview.innerHTML = '<div class="mjfb-empty">파일을 선택하면 미리보기가 표시됩니다.</div>';
-          refreshPaneByRoot(srcRoot);
-        } else {
-          alert('삭제 실패: ' + (j.error || '알 수 없음'));
-        }
-      }).catch(err => { btn.disabled = false; alert('삭제 오류: ' + err); });
-    }
-  });
-
-  // pane 새로고침 (root 기준)
-  let _paneRegistry = {};
-  function refreshPaneByRoot(root) {
-    const entry = _paneRegistry[root];
-    if (entry) loadDir(entry.state, entry.el);
   }
 
   function isImageName(n) { return /\.(jpe?g|png|gif|webp|bmp)$/i.test(n||''); }
