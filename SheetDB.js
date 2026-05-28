@@ -4641,8 +4641,8 @@ function getAutoApprovalStats(testMode) {
       // ── 변경/취소 안내 ────────────────────────────────────────────────
     } else if (action === 'TELEGRAM_SENT' && note === 'status') {
       addId(ds.status_tele, itemId);                                             // 12번
-    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '취소') {
-      addId(ds.status_web, itemId);                                              // 8번
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && (toVal === '취소' || toVal === '폐기' || toVal === '변경')) {
+      addId(ds.status_web, itemId);                                              // 8번 (취소/폐기/변경 = 입찰 불가 안내)
     }
   });
 
@@ -6080,9 +6080,9 @@ function getMemberItemHistory(memberId, months) {
 
       let category = '';
       if (CANCEL_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue === '미정')) category = CATEGORIES.CANCEL;
-      else if (fieldName === 'stu_member' && toValue === '취소') category = CATEGORIES.CHANGE;
+      else if (fieldName === 'stu_member' && (toValue === '취소' || toValue === '폐기' || toValue === '변경')) category = CATEGORIES.CHANGE;
       else if (BID_ACTIONS.indexOf(action) !== -1) category = CATEGORIES.BID;
-      else if (CHUCHEN_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue && toValue !== '미정' && toValue !== '취소')) category = CATEGORIES.CHUCHEN;
+      else if (CHUCHEN_ACTIONS.indexOf(action) !== -1 || (fieldName === 'stu_member' && toValue && toValue !== '미정' && toValue !== '취소' && toValue !== '폐기' && toValue !== '변경')) category = CATEGORIES.CHUCHEN;
 
       if (!category) continue;
 
