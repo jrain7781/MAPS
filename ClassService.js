@@ -335,11 +335,7 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
     cache_.remove('class_batch_counts');
     cache_.remove('all_batch_members');
     cache_.remove('class_member_index');
-    // [임시 디버그] 회차추가 시 어느 경로로 처리됐는지 메시지에 노출
-    var _dbg = opts.batchTimestamp
-        ? '[기존배치 편입 OK] startLoop=' + startLoopNo + ' base=' + sessIdBase.substring(sessIdBase.length - 30)
-        : '[신규배치 생성] startLoop=' + startLoopNo;
-    return { success: true, message: `${newRows.length}개의 회차가 생성되었습니다. ${_dbg}` };
+    return { success: true, message: `${newRows.length}개의 회차가 생성되었습니다.` };
 }
 
 // -----------------------------------------------------------------------------
