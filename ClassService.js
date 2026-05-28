@@ -208,7 +208,6 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
 
     const newRows = [];
 
-    var startLoopNo = parseInt(opts.startLoop) || 1;
     var timeFrom = opts.timeFrom || '';
     var timeTo = opts.timeTo || '';
 
@@ -217,9 +216,43 @@ function generateClassSessions(classId, startDateStr, loopUnit, loopCount, opts)
     endDateObj.setDate(endDateObj.getDate() + ((total - 1) * 7 * unit));
     var startFmt = Utilities.formatDate(startDateObj, Session.getScriptTimeZone(), 'yyyyMMdd');
     var endFmt   = Utilities.formatDate(endDateObj,   Session.getScriptTimeZone(), 'yyyyMMdd');
-    // 배치키(parts[1])에 HHmmss 추가 — 동일 기간 중복 생성 허용 + class_d1_id 충돌 방지
-    var batchStamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss');
-    var sessIdBase = String(classId) + '_' + startFmt + batchStamp + '_' + endFmt;
+
+    // 회차추가(add) 모드: 기존 배치키 재사용 → 동일 수업의 새 회차로 편입 (신규 수업/배치 생성 방지)
+    var sessIdBase;
+    if (opts.batchTimestamp) {
+        sessIdBase = String(opts.batchTimestamp);
+    } else {
+        // 신규생성(create): 배치키(parts[1])에 HHmmss 추가 — 동일 기간 중복 생성 허용 + class_d1_id 충돌 방지
+        var batchStamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss');
+        sessIdBase = String(classId) + '_' + startFmt + batchStamp + '_' + endFmt;
+    }
+
+    // startLoop: 명시값 우선, 없으면 add 모드(batchTimestamp 제공)일 때 기존 배치의 max(class_loop)+1, 그 외 1
+    var startLoopNo;
+    if (opts.startLoop) {
+        startLoopNo = parseInt(opts.startLoop) || 1;
+    } else if (opts.batchTimestamp) {
+        var loopColIdx_ = CLASS_D1_HEADERS.indexOf('class_loop');
+        var d1IdColIdx_ = CLASS_D1_HEADERS.indexOf('class_d1_id');
+        var maxLoop_ = 0;
+        if (sheet.getLastRow() > 1) {
+            var allRows_ = sheet.getRange(2, 1, sheet.getLastRow() - 1, CLASS_D1_HEADERS.length).getValues();
+            allRows_.forEach(function(r) {
+                var id_ = String(r[d1IdColIdx_] || '');
+                if (!id_) return;
+                var u_ = id_.lastIndexOf('_');
+                if (u_ <= 0) return;
+                var base_ = id_.substring(0, u_);
+                if (base_ === sessIdBase) {
+                    var lp_ = parseInt(r[loopColIdx_]) || 0;
+                    if (lp_ > maxLoop_) maxLoop_ = lp_;
+                }
+            });
+        }
+        startLoopNo = maxLoop_ + 1;
+    } else {
+        startLoopNo = 1;
+    }
 
     // 기간 중복 체크 제거 (사용자 요청 — 동일 기간 재생성 허용)
 
