@@ -4416,10 +4416,6 @@ function getTelegramJoinStatsByItem() {
   if (lastRow < 2) return [];
   var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
 
-  // itemId → 현재 stu_member (폐기/불가 안내 텔레그램 귀속용)
-  var itemStatusMap = {};
-  data.forEach(function (r) { var id = String(r[0] || '').trim(); if (id) itemStatusMap[id] = String(r[4] || '').trim(); });
-
   // class_type별로 물건과 회원 집계
   var statMap = {};
   data.forEach(function (row) {
@@ -4556,6 +4552,16 @@ function getAutoApprovalStats(testMode) {
     if (mSheet && mSheet.getLastRow() > 1) {
       var mRows = mSheet.getRange(2, 1, mSheet.getLastRow() - 1, 3).getValues();
       mRows.forEach(function (mr) { if (mr[0]) memberGubunMap[String(mr[0]).trim()] = String(mr[2] || '').trim(); });
+    }
+  } catch (e) { }
+
+  // itemId → 현재 stu_member (폐기/불가 안내 텔레그램 귀속용)
+  var itemStatusMap = {};
+  try {
+    var iSheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (iSheet && iSheet.getLastRow() > 1) {
+      var iRows = iSheet.getRange(2, 1, iSheet.getLastRow() - 1, 5).getValues();
+      iRows.forEach(function (ir) { var id = String(ir[0] || '').trim(); if (id) itemStatusMap[id] = String(ir[4] || '').trim(); });
     }
   } catch (e) { }
 
