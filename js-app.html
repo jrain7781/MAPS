@@ -4819,6 +4819,8 @@
             try { updateMemberTokenInfo('main'); } catch (e) { }
             // 하단 탭 초기화 (항상 비고 탭으로)
             switchItemSubTab('note');
+            // 불가/폐기 사유 필드를 현재 물건값으로 동기화 (상단 수정 버튼 저장 시 stale 방지)
+            if (typeof renderItemSubReason === 'function') renderItemSubReason();
         }
     }
 
@@ -5130,7 +5132,7 @@
 
     // ── 입찰일정 모달 하단 탭 ──────────────────────────────────────
     function switchModalSubTab(tab) {
-        ['note', 'history', 'info'].forEach(t => {
+        ['note', 'history', 'info', 'reason'].forEach(t => {
             const btns = document.querySelectorAll(`.modal-sub-tab-btn`);
             btns.forEach(btn => {
                 const isTarget = btn.getAttribute('onclick') === `switchModalSubTab('${t}')`;
@@ -5145,6 +5147,24 @@
         });
         if (tab === 'history') renderModalSubHistory();
         if (tab === 'info') renderItemSubInfo('modal');
+        if (tab === 'reason') renderModalSubReason();
+    }
+
+    // 입찰일정 모달 — 불가/폐기 사유 채우기/저장
+    function renderModalSubReason() {
+        if (typeof currentModalItemData === 'undefined' || !currentModalItemData) return;
+        const sel = document.getElementById('modal-stu-reason');
+        const det = document.getElementById('modal-stu-reason-detail');
+        const cur = document.getElementById('modal-reason-cur-status');
+        if (cur) cur.textContent = String(currentModalItemData.stu_member || '-');
+        if (sel) sel.value = String(currentModalItemData.stu_reason || '');
+        if (det) det.value = String(currentModalItemData.stu_reason_detail || '');
+    }
+    function saveModalReason() {
+        if (typeof currentModalItemData === 'undefined' || !currentModalItemData || !currentModalItemData.id) { showStatus('선택된 물건이 없습니다.', 'warning'); return; }
+        showStatus('불가/폐기 사유 저장 중...', 'info');
+        saveReasonFieldsFor_(currentModalItemData.id, 'modal-stu-reason', 'modal-stu-reason-detail');
+        setTimeout(function () { showStatus('불가/폐기 사유 저장 완료', 'success'); }, 300);
     }
 
     function renderModalSubNote(data) {
@@ -6229,6 +6249,8 @@
         // 모달 하단 탭: 비고 탭으로 초기화
         switchModalSubTab('note');
         renderModalSubNote(data);
+        // 불가/폐기 사유 필드 현재값 동기화 (모달 수정 버튼 저장 시 stale 방지)
+        if (typeof renderModalSubReason === 'function') renderModalSubReason();
 
         const templateContainer = document.getElementById('template-area-container');
         if (templateContainer) templateContainer.classList.add('hidden');
@@ -7154,6 +7176,8 @@ MJ 이정우 팀장
             })
             // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo)
             .updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo);
+        // [불가/폐기 사유] 모달 사유/상세도 함께 저장 (Z/AA열)
+        saveReasonFieldsFor_(id, 'modal-stu-reason', 'modal-stu-reason-detail');
     }
 
     function handleModalDelete() {
@@ -7366,7 +7390,32 @@ MJ 이정우 팀장
             // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo)
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
                 .updateData(id, processedInDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, panelChuchenState, imageId, regMember, mName2, auctionId, itemsYongdo);
+            // [불가/폐기 사유] 상세탭 사유/상세도 함께 저장 (Z/AA열)
+            saveReasonFieldsFor_(id, 'form-stu-reason', 'form-stu-reason-detail');
         }
+    }
+
+    // 사유/상세 필드 값을 해당 물건에 저장 (수정 버튼/사유탭 공용)
+    function saveReasonFieldsFor_(id, selId, detId) {
+        if (!id) return;
+        if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+        var selEl = document.getElementById(selId);
+        var detEl = document.getElementById(detId);
+        if (!selEl && !detEl) return;
+        var rv = selEl ? selEl.value : '';
+        var dv = detEl ? detEl.value : '';
+        google.script.run
+            .withSuccessHandler(function () {
+                if (typeof allBiddingData !== 'undefined') {
+                    var it = allBiddingData.find(function (x) { return String(x.id) === String(id); });
+                    if (it) { it.stu_reason = rv; it.stu_reason_detail = dv; }
+                }
+                if (currentDetailItem && String(currentDetailItem.id) === String(id)) {
+                    currentDetailItem.stu_reason = rv; currentDetailItem.stu_reason_detail = dv;
+                }
+            })
+            .withFailureHandler(function () { })
+            .saveItemReason(id, rv, dv);
     }
 
     function handleDelete(id) {
