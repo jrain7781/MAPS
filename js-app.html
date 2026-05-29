@@ -1665,6 +1665,16 @@
         }
     }
 
+    // 폐기/불가 물건의 상태값 hover 풍선 텍스트 (사유/상세 있을 때만, 없으면 '')
+    function reasonTooltipText_(item) {
+        if (!item) return '';
+        const st = String(item.stu_member || '').trim();
+        if (st !== '폐기' && st !== '불가') return '';
+        const reason = String(item.stu_reason || '').trim();
+        const detail = String(item.stu_reason_detail || '').trim();
+        return ((reason ? '[' + reason + '] ' : '') + detail).trim();
+    }
+
     // 물건용도 (items_youngdo) — 하드코딩 옵션, 표시 라벨, 태그 클래스, 탭별 허용 규칙
     const YONGDO_OPTIONS = ['플래티넘', '블랙', '실버', '돈클수익', '돈클월세', 'PT, 단투'];
     const YONGDO_PRE_LABEL = '등록전'; // 빈값 표시 라벨
@@ -1899,7 +1909,8 @@
                 cell.className = 'item-col-youngdo text-center';
                 cell = row.insertCell(6);
                 const statusClass = getStatusTagClass(item.stu_member);
-                cell.innerHTML = `<span class="${statusClass}">${item.stu_member}</span>`;
+                const _stuTip = reasonTooltipText_(item);
+                cell.innerHTML = `<span class="${statusClass}"${_stuTip ? ` title="${_stuTip.replace(/"/g, '&quot;')}" style="cursor:help"` : ''}>${item.stu_member}</span>`;
                 cell.className = 'item-col-status text-center';
                 cell = row.insertCell(7);
                 {
@@ -4966,6 +4977,9 @@
         if (cur) cur.textContent = String(currentDetailItem.stu_member || '-');
         if (sel) sel.value = String(currentDetailItem.stu_reason || '');
         if (det) det.value = String(currentDetailItem.stu_reason_detail || '');
+        // 상태값(드롭다운) hover 풍선: 폐기/불가 + 상세 있을 때
+        const stuSel = document.getElementById('form-stu-member');
+        if (stuSel) stuSel.title = reasonTooltipText_(currentDetailItem);
     }
 
     // 불가/폐기 사유 저장 (Z=stu_reason, AA=stu_reason_detail)
@@ -5159,6 +5173,9 @@
         if (cur) cur.textContent = String(currentModalItemData.stu_member || '-');
         if (sel) sel.value = String(currentModalItemData.stu_reason || '');
         if (det) det.value = String(currentModalItemData.stu_reason_detail || '');
+        // 상태값(드롭다운) hover 풍선
+        const stuSel = document.getElementById('modal-form-stu-member');
+        if (stuSel) stuSel.title = reasonTooltipText_(currentModalItemData);
     }
     function saveModalReason() {
         if (typeof currentModalItemData === 'undefined' || !currentModalItemData || !currentModalItemData.id) { showStatus('선택된 물건이 없습니다.', 'warning'); return; }
