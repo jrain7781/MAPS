@@ -21307,7 +21307,7 @@ MJ 이정우 팀장
        ============================================= */
     var mD = new Date(); // 현재 캘린더 월
     var mS = [];         // [수정] 다중 선택을 위해 배열로 변경
-    var fS = ['입찰', '추천', '검증', '취소']; // 활성 필터
+    var fS = ['입찰', '추천', '폐기', '불가']; // 활성 필터 (회원화면: 검증 숨김 / 폐기·불가 표시)
     var tR = 'today';    // 범위: 'today'(오늘부터) 또는 'all'(전체)
 
     // [전역 변수] 오늘 날짜 문자열 (YYMMDD) - rCal과 selD 공용
@@ -21357,7 +21357,7 @@ MJ 이정우 팀장
         else fS.push(f);
 
         // 상단바 버튼 투명도 조절로 선택 상태 표시
-        var btnMap = { '입찰': 'btn-top-bid', '추천': 'btn-top-rec', '검증': 'btn-top-ver', '취소': 'btn-top-chg' };
+        var btnMap = { '입찰': 'btn-top-bid', '추천': 'btn-top-rec', '폐기': 'btn-top-ver', '불가': 'btn-top-chg' };
         if (btnMap[f]) {
             var el = document.getElementById(btnMap[f]);
             if (el) {
@@ -21388,7 +21388,7 @@ MJ 이정우 팀장
 
         // 데이터 요약: 숫자는 오늘부터/전체(tR)에만 반응하고 필터(fS)에는 반응하지 않음
         var counts = {};
-        var counts_month = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
+        var counts_month = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
 
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
@@ -21404,8 +21404,8 @@ MJ 이정우 팀장
                     counts_month[s]++;
                 }
 
-                if (!counts[dt]) counts[dt] = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
-                counts[dt][s]++;
+                if (!counts[dt]) counts[dt] = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
+                if (counts[dt].hasOwnProperty(s)) counts[dt][s]++;
             }
         });
 
@@ -21416,8 +21416,8 @@ MJ 이정우 팀장
                 '(' +
                 '<span class="ms-it bid">입찰 ' + (counts_month['입찰'] || 0) + '</span>' +
                 ' <span class="ms-it rec">추천 ' + (counts_month['추천'] || 0) + '</span>' +
-                ' <span class="ms-it ver">검증 ' + (counts_month['검증'] || 0) + '</span>' +
-                ' <span class="ms-it chg">취소 ' + (counts_month['취소'] || 0) + '</span>' +
+                ' <span class="ms-it" style="color:#dc2626">폐기 ' + (counts_month['폐기'] || 0) + '</span>' +
+                ' <span class="ms-it chg">불가 ' + (counts_month['불가'] || 0) + '</span>' +
                 ')';
         }
 
@@ -21446,16 +21446,16 @@ MJ 이정우 팀장
             var isPastToday = (tR === 'today' && dS < tS);
 
             var items = counts[dS] || {};
-            var has = (items['입찰'] > 0 || items['추천'] > 0 || items['검증'] > 0 || items['취소'] > 0);
+            var has = (items['입찰'] > 0 || items['추천'] > 0 || items['폐기'] > 0 || items['불가'] > 0);
             var isT = (dS === tS);
             var isS = (mS.indexOf(dS) > -1);
 
             // [지시사항] 지표 형태 다변화 및 겹침 로직
             var dotH = '';
             if (!isPastToday) {
-                var sOrder = ['입찰', '추천', '검증', '취소'];
-                var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '검증': '#9333ea', '취소': '#1f2937' };
-                var shapes = { '입찰': '', '추천': 'tri', '검증': 'cir', '취소': 'sq' };
+                var sOrder = ['입찰', '추천', '폐기', '불가'];
+                var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '폐기': '#dc2626', '불가': '#1f2937' };
+                var shapes = { '입찰': '', '추천': 'tri', '폐기': 'cir', '불가': 'sq' };
 
                 var lastS = '';
                 sOrder.forEach(function (s) {
@@ -21503,8 +21503,8 @@ MJ 이정우 팀장
         var nY = String(nM.getFullYear()).slice(-2);
         var nM_s = String(nM.getMonth() + 1).padStart(2, '0');
 
-        var pC = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
-        var nC = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
+        var pC = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
+        var nC = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
 
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
@@ -21518,9 +21518,9 @@ MJ 이정우 팀장
 
         pEl.innerHTML = '';
         nEl.innerHTML = '';
-        var sOrder = ['입찰', '추천', '검증', '취소'];
-        var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '검증': '#9333ea', '취소': '#1f2937' };
-        var shapes = { '입찰': 'cir', '추천': 'tri', '검증': 'cir', '취소': 'sq' };
+        var sOrder = ['입찰', '추천', '폐기', '불가'];
+        var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '폐기': '#dc2626', '불가': '#1f2937' };
+        var shapes = { '입찰': 'cir', '추천': 'tri', '폐기': 'cir', '불가': 'sq' };
 
         sOrder.forEach(function (s) {
             if (pC[s] > 0) {
@@ -21547,10 +21547,10 @@ MJ 이정우 팀장
             return String(it['in-date'] || '').substring(0, 6) === d;
         });
 
-        // 필터링된 데이터 중 실제 '입찰', '추천', '검증', '취소' 상태인 것이 하나라도 있어야 함
+        // 필터링된 데이터 중 실제 '입찰', '추천', '폐기', '불가' 상태인 것이 하나라도 있어야 함
         var hasTrueItems = items.some(function (it) {
             var s = it.stu_member || '';
-            return s === '입찰' || s === '추천' || s === '검증' || s === '취소';
+            return s === '입찰' || s === '추천' || s === '폐기' || s === '불가';
         });
 
         if (!hasTrueItems) {
@@ -21579,7 +21579,7 @@ MJ 이정우 팀장
     // 입찰리스트 (MemberItemList) - 상태 필터 버튼 + 카드 리스트
     // =============================================================================
 
-    var ilFS = ['입찰', '추천', '검증', '취소']; // 입찰리스트 상태 필터 (초기: 전체 켜짐)
+    var ilFS = ['입찰', '추천', '폐기', '불가']; // 입찰리스트 상태 필터 (회원화면: 검증 숨김 / 폐기·불가 표시)
 
     /** 필터 버튼 토글 */
     function ilTogF(f) {
@@ -21587,7 +21587,7 @@ MJ 이정우 팀장
         if (idx > -1) ilFS.splice(idx, 1);
         else ilFS.push(f);
 
-        var btnMap = { '입찰': 'il-btn-bid', '추천': 'il-btn-rec', '검증': 'il-btn-ver', '취소': 'il-btn-chg' };
+        var btnMap = { '입찰': 'il-btn-bid', '추천': 'il-btn-rec', '폐기': 'il-btn-ver', '불가': 'il-btn-chg' };
         if (btnMap[f]) {
             var el = document.getElementById(btnMap[f]);
             if (el) {
@@ -21624,7 +21624,7 @@ MJ 이정우 팀장
         if (!el) return;
 
         // 카운트 계산
-        var counts = { '입찰': 0, '추천': 0, '검증': 0, '취소': 0 };
+        var counts = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
             if (dt < todayYYMMDD) return; // 오늘 이전 날짜 제외
@@ -21639,8 +21639,8 @@ MJ 이정우 팀장
         var chgBtn = document.getElementById('il-btn-chg');
         if (bidBtn) bidBtn.textContent = counts['입찰'] + '입찰';
         if (recBtn) recBtn.textContent = counts['추천'] + '추천';
-        if (verBtn) verBtn.textContent = counts['검증'] + '검증';
-        if (chgBtn) chgBtn.textContent = counts['취소'] + '취소';
+        if (verBtn) verBtn.textContent = counts['폐기'] + '폐기';
+        if (chgBtn) chgBtn.textContent = counts['불가'] + '불가';
 
         // 필터링 (오늘부터 + 상태 필터)
         var filtered = allBiddingData.filter(function (item) {
