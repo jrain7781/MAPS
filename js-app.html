@@ -20887,6 +20887,12 @@ ${token}
             return;
         }
 
+        // 변경/취소 워크플로 — 선택 없이도 동작
+        if (type === 'download_7days') {
+            handleDownload7DaysList();
+            return;
+        }
+
         if (cbs.length === 0) {
             if (typeof showStatus === 'function') showStatus('항목을 먼저 선택해 주세요.', 'warning');
             return;
@@ -20912,6 +20918,61 @@ ${token}
         } else {
             if (typeof showStatus === 'function') showStatus('작업 유형을 선택해 주세요.', 'warning');
         }
+    }
+
+    // [변경/취소 워크플로] 오늘~+7일 입찰건 사건번호를 .txt 로 저장 → 매니저 「변경/취소 확인」 탭 입력용
+    async function handleDownload7DaysList() {
+        // 오늘 ~ 오늘+7일 입찰일자 + 모든 상태 + 강사 전체 사건번호
+        const now = new Date();
+        const toYYMMDDNum = (d) => String(d.getFullYear()).slice(-2) + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+        const startNum = parseInt(toYYMMDDNum(now), 10);
+        const endDate = new Date(now); endDate.setDate(endDate.getDate() + 7);
+        const endNum = parseInt(toYYMMDDNum(endDate), 10);
+
+        if (!Array.isArray(allBiddingData) || allBiddingData.length === 0) {
+            if (typeof showStatus === 'function') showStatus('물건 데이터가 로드되지 않았습니다.', 'warning');
+            return;
+        }
+        const list = allBiddingData
+            .filter(it => {
+                const n = parseInt(String(it['in-date'] || '').replace(/\D/g, ''), 10);
+                return n && n >= startNum && n <= endNum;
+            })
+            .map(it => String(it.sakun_no || '').trim())
+            .filter(Boolean);
+
+        if (list.length === 0) {
+            if (typeof showStatus === 'function') showStatus('오늘부터 7일 이내 입찰 건이 없습니다.', 'warning');
+            return;
+        }
+
+        // 중복 제거 (같은 사건번호가 여러 회원에 걸쳐 있을 수 있음)
+        const uniq = Array.from(new Set(list));
+
+        const filename = toYYMMDDNum(now) + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0') + '.txt';
+        const content = uniq.join('\n');
+
+        if (window.showSaveFilePicker) {
+            try {
+                const fh = await window.showSaveFilePicker({
+                    suggestedName: filename,
+                    types: [{ description: '텍스트 파일', accept: { 'text/plain': ['.txt'] } }]
+                });
+                const w = await fh.createWritable();
+                await w.write(content);
+                await w.close();
+                if (typeof showStatus === 'function') showStatus('파일(' + fh.name + ') 저장 완료. 매니저 「변경/취소 확인」 탭에서 실행하세요. (' + uniq.length + '건)', 'success');
+                return;
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+            }
+        }
+
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+        URL.revokeObjectURL(a.href);
+        if (typeof showStatus === 'function') showStatus('파일(' + filename + ', ' + uniq.length + '건) 다운로드 폴더 저장됨. → C:\\LJW\\01. SYSTEM\\MAPS_TEST\\00.imageup\\변경취소 확인리스트 로 이동 후 매니저에서 실행.', 'success');
     }
 
     function openBulkApplyConfirmModal(items, desc, onConfirm) {
