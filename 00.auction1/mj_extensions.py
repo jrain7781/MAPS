@@ -19,9 +19,10 @@ _DIR_IMAGEUP = os.path.normpath(os.path.join(_DIR_HERE, "..", "00.imageup"))
 _DIR_KAKAO   = os.path.normpath(os.path.join(_DIR_HERE, "..", "01. kakao"))
 
 _IMAGEUP_SCRIPTS = {
-    "i": os.path.join(_DIR_IMAGEUP, "01.i.py"),
-    "d": os.path.join(_DIR_IMAGEUP, "02.d.py"),
-    "k": os.path.join(_DIR_IMAGEUP, "03.k.py"),
+    "i":  os.path.join(_DIR_IMAGEUP, "01.i.py"),
+    "d":  os.path.join(_DIR_IMAGEUP, "02.d.py"),
+    "k":  os.path.join(_DIR_IMAGEUP, "03.k.py"),
+    "cc": os.path.join(_DIR_IMAGEUP, "03.cc.py"),   # 변경/취소 확인 (옥션원 결과 컬럼 조회, 캡처 없음)
 }
 _IMAGEUP_CONFIG_PATH = os.path.join(_DIR_IMAGEUP, "imageup_config.json")
 
@@ -55,14 +56,26 @@ def _save_imageup_config(cfg: dict) -> None:
 
 
 def get_accounts(which: str) -> list:
-    """저장된 계정 반환. 없으면 .py 내부 ACCOUNTS 파싱 fallback."""
+    """저장된 계정 반환. 없으면 .py 내부 ACCOUNTS 파싱 fallback.
+    'cc' 키는 config 에 비어 있을 경우 k → i → d 순으로 fallback (전체 계정 공유)."""
     if which not in _IMAGEUP_SCRIPTS:
         return []
     cfg = _load_imageup_config()
     saved = (cfg.get(which) or {}).get("accounts")
     if saved:
         return saved
-    # fallback: .py에서 ACCOUNTS 변수 파싱 시도
+    # cc 는 다른 스크립트의 계정 공유 (id/pw/manager 동일 master)
+    if which == "cc":
+        for other in ("k", "i", "d"):
+            shared = (cfg.get(other) or {}).get("accounts")
+            if shared:
+                return [dict(a) for a in shared]
+        # config 자체가 비어 있으면 03.k.py 본체 파싱
+        try:
+            return _parse_accounts_from_py(_IMAGEUP_SCRIPTS["k"])
+        except Exception:
+            return []
+    # 일반 fallback: 해당 .py에서 ACCOUNTS 변수 파싱
     try:
         return _parse_accounts_from_py(_IMAGEUP_SCRIPTS[which])
     except Exception:

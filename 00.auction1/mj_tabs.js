@@ -18,11 +18,13 @@
 
   // ========== 물건캡쳐 - 공통 ==========
   const CAP_SPEC = {
-    i: { script: '01.i.py', title: '등록일 정렬',     hasLimit: true,  hasCases: false },
-    d: { script: '02.d.py', title: '입찰일 정렬',     hasLimit: true,  hasCases: false },
-    k: { script: '03.k.py', title: '건별 캡쳐',       hasLimit: false, hasCases: true  },
+    i:  { script: '01.i.py',  title: '등록일 정렬',     hasLimit: true,  hasCases: false },
+    d:  { script: '02.d.py',  title: '입찰일 정렬',     hasLimit: true,  hasCases: false },
+    k:  { script: '03.k.py',  title: '건별 캡쳐',       hasLimit: false, hasCases: true  },
+    cc: { script: '03.cc.py', title: '변경/취소 확인',  hasLimit: false, hasCases: true, hasResults: true },
   };
-  const runState = { i: null, d: null, k: null }; // run_id
+  const runState = { i: null, d: null, k: null, cc: null }; // run_id
+  const ccResults = []; // 변경/취소 확인 결과 누적 (실행마다 초기화)
 
   let captureInitDone = false;
   function initCaptureTabOnce() {
@@ -45,6 +47,27 @@
         }
         limitEl.addEventListener('change', () => {
           try { localStorage.setItem('mj_cap_limit_' + key, limitEl.value); } catch(e) {}
+        });
+      }
+      // 건별(k)/변경취소(cc) 카드의 파일 업로드 입력: 선택 시 텍스트 전체를 textarea에 자동 로드
+      const fileEl = card.querySelector('[data-role="file"]');
+      const casesEl = card.querySelector('[data-role="cases"]');
+      if (fileEl && casesEl) {
+        fileEl.addEventListener('change', () => {
+          const f = fileEl.files && fileEl.files[0];
+          if (!f) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            let text = String(reader.result || '');
+            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // BOM 제거
+            casesEl.value = text;
+            const n = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean).length;
+            log(key, '[파일 로드] ' + f.name + ' — ' + n + '줄', 'log-ok');
+          };
+          reader.onerror = () => log(key, '[파일 읽기 오류] ' + reader.error, 'log-err');
+          reader.readAsText(f, 'utf-8');
+          // 같은 파일 재선택해도 change 발생하도록 input value 초기화
+          setTimeout(() => { try { fileEl.value = ''; } catch(_) {} }, 100);
         });
       }
       loadAccounts(key);
@@ -173,6 +196,7 @@
       payload.cases = lines;
     }
     $log(key).textContent = '';
+    if (key === 'cc') { ccResults.length = 0; renderCcResults(); }
     log(key, '▶ ' + CAP_SPEC[key].script + ' 시작 (활성 계정 ' + accounts.length + '개)', 'log-ok');
     setStatus(key, '실행중', 'running');
     setRunning(key, true);
@@ -237,12 +261,94 @@
       });
   }
   function log(key, line, cls) {
+    // 'cc' 탭은 RESULT|{json} 라인을 가로채 결과표에 추가
+    if (key === 'cc' && typeof line === 'string' && line.startsWith('RESULT|')) {
+      try {
+        const obj = JSON.parse(line.slice(7));
+        ccResults.push(obj);
+        renderCcResults();
+        return;
+      } catch (e) { /* fallthrough → 일반 로그 */ }
+    }
     const el = $log(key);
     const span = document.createElement('span');
     if (cls) span.className = cls;
     span.textContent = line + '\n';
     el.appendChild(span);
     el.scrollTop = el.scrollHeight;
+  }
+
+  // 변경/취소 결과 테이블 렌더
+  function renderCcResults() {
+    const wrap = $card('cc')?.querySelector('[data-role="cc-results"]');
+    if (!wrap) return;
+    if (ccResults.length === 0) { wrap.innerHTML = ''; return; }
+    const rows = ccResults.map((r, i) => {
+      const st = String(r.status || '').trim();
+      const isCC = (st === '변경' || st === '취소');
+      const badge = st
+        ? `<span class="cc-badge ${isCC ? 'cc-bad' : (st === '유찰' ? 'cc-warn' : (st === '매각' ? 'cc-end' : 'cc-ok'))}">${escapeHtml(st)}</span>`
+        : `<span class="cc-badge cc-ok">진행중</span>`;
+      const url = r.view_url ? `<a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">옥션원 열기</a>` : '';
+      return `<tr data-idx="${i}">
+        <td><input type="checkbox" class="cc-cb" ${isCC ? 'checked' : ''}></td>
+        <td>${escapeHtml(r.sakun_no || '')}</td>
+        <td>${escapeHtml(r.bid_date || '')}</td>
+        <td style="text-align:right">${escapeHtml(r.lowest_price || '')}</td>
+        <td style="text-align:center">${badge}</td>
+        <td>${url}</td>
+      </tr>`;
+    }).join('');
+    wrap.innerHTML = `
+      <div class="cc-results-head">
+        <span><b>결과</b> ${ccResults.length}건 · 변경/취소만 체크됨</span>
+        <span class="mjcap-spacer"></span>
+        <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 체크한 건 MAPS로 전송</button>
+      </div>
+      <table class="cc-table"><thead>
+        <tr><th>✓</th><th>사건번호</th><th>매각기일</th><th>최저가</th><th>옥션원 결과</th><th>원본</th></tr>
+      </thead><tbody>${rows}</tbody></table>
+    `;
+    wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
+  }
+
+  function sendCcToMaps() {
+    const card = $card('cc');
+    if (!card) return;
+    const tbody = card.querySelector('[data-role="cc-results"] tbody');
+    if (!tbody) return;
+    const picked = [];
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const cb = tr.querySelector('.cc-cb');
+      if (cb && cb.checked) {
+        const idx = parseInt(tr.dataset.idx, 10);
+        const r = ccResults[idx];
+        if (r) picked.push(r);
+      }
+    });
+    if (picked.length === 0) { alert('체크된 건이 없습니다.'); return; }
+    if (!confirm(`${picked.length}건을 MAPS 로 전송하여 상태를 "변경/취소" 로 업데이트 합니다. 진행할까요?`)) return;
+    const btn = card.querySelector('[data-act="cc-send"]');
+    if (btn) btn.disabled = true;
+    log('cc', `📤 ${picked.length}건 MAPS 전송 중...`, 'log-ok');
+    fetch('/api/maps-changecancel', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items: picked })
+    }).then(r => r.json()).then(j => {
+      if (btn) btn.disabled = false;
+      if (j && (j.success || j.ok)) {
+        const n = j.updated || j.count || picked.length;
+        log('cc', `✅ MAPS 업데이트 완료: ${n}건`, 'log-ok');
+        alert('MAPS 업데이트 완료: ' + n + '건');
+      } else {
+        log('cc', `❌ MAPS 전송 실패: ${j && (j.error || j.message) || '알 수 없음'}`, 'log-err');
+        alert('실패: ' + (j && (j.error || j.message) || '?'));
+      }
+    }).catch(err => {
+      if (btn) btn.disabled = false;
+      log('cc', `❌ MAPS 전송 오류: ${err}`, 'log-err');
+      alert('오류: ' + err);
+    });
   }
   function escapeAttr(s) {
     return String(s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;');

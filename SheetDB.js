@@ -7882,11 +7882,103 @@ function handleJosaApiPost_(payload) {
   var action = String(payload.api_action || '');
   if (action === 'syncJosaPresets') return syncJosaPresets(payload.presets || [], payload.mode);
   if (action === 'uploadJosaItems') return bulkUpsertJosaItems(payload);
+  if (action === 'uploadChangeCancel') return uploadChangeCancel(payload.items || []);
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
   if (action === 'updateJosaField') return updateJosaField(payload.josa_id, payload.field, payload.value);
   return { success: false, message: '알 수 없는 josa API 액션: ' + action };
+}
+
+/**
+ * 매니저 「변경/취소 확인」 결과를 받아 items 의 stu_member 를 업데이트.
+ * items 배열 각 원소: { sakun_no, status('변경'|'취소'|...), bid_date, lowest_price, view_url }
+ * - 같은 sakun_no 의 모든 행을 그 status 값으로 변경 (옥션원 외부사유 = 해당 사건 전체 적용)
+ * - status 가 '변경'/'취소' 가 아닌 건(빈값/유찰/매각/조회실패 등)은 건너뜀
+ * - 현재 stu_member 가 이미 동일 값이면 skip
+ * - 변경 이력을 item_history 에 기록 (writeItemHistoryBatch_ 존재 시)
+ */
+function uploadChangeCancel(items) {
+  try {
+    if (!Array.isArray(items) || items.length === 0) {
+      return { success: false, message: '항목이 비어 있습니다.', updated: 0 };
+    }
+    var VALID = { '변경': true, '취소': true };
+    // sakun_no → status (유효한 변경/취소 건만)
+    var sakunStatus = {};
+    items.forEach(function (it) {
+      var s = String((it && it.sakun_no) || '').trim();
+      var st = String((it && it.status) || '').trim();
+      if (s && VALID[st]) sakunStatus[s] = st;
+    });
+    var sakunList = Object.keys(sakunStatus);
+    if (sakunList.length === 0) {
+      return { success: false, message: "변경·취소 상태인 항목이 없습니다.", updated: 0 };
+    }
+
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'items 시트 없음', updated: 0 };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: 'items 비어있음', updated: 0 };
+
+    var idIdx        = ITEM_HEADERS.indexOf('id');
+    var sakunIdx     = ITEM_HEADERS.indexOf('sakun_no');
+    var stuIdx       = ITEM_HEADERS.indexOf('stu_member');
+    var memberIdIdx  = ITEM_HEADERS.indexOf('member_id');
+    var mNameIdx     = ITEM_HEADERS.indexOf('m_name');
+    if (sakunIdx < 0 || stuIdx < 0) {
+      return { success: false, message: 'items 헤더 컬럼 누락', updated: 0 };
+    }
+
+    var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
+    var historyEntries = [];
+    var matchedCases = {};
+    var updated = 0;
+
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i];
+      var sakun = String(row[sakunIdx] || '').trim();
+      if (!sakun || !sakunStatus.hasOwnProperty(sakun)) continue;
+      var newStu = sakunStatus[sakun];
+      var currentStu = String(row[stuIdx] || '').trim();
+      matchedCases[sakun] = true;
+      if (currentStu === newStu) continue; // 이미 동일 → skip
+      var sheetRowNum = i + 2; // 헤더 제외, 1-based
+      sheet.getRange(sheetRowNum, stuIdx + 1).setValue(newStu);
+      updated++;
+      historyEntries.push({
+        action: 'AUCTION_CHANGE_CANCEL',
+        item_id: String(row[idIdx] || ''),
+        member_id: String(row[memberIdIdx] || ''),
+        member_name: String(row[mNameIdx] || ''),
+        field_name: 'stu_member',
+        from_value: currentStu,
+        to_value: newStu,
+        note: 'auction1 결과=' + newStu,
+        trigger_type: 'auction-manager',
+        approved_by: 'manager',
+        status: 'DONE',
+      });
+    }
+
+    SpreadsheetApp.flush();
+
+    if (historyEntries.length > 0 && typeof writeItemHistoryBatch_ === 'function') {
+      writeItemHistoryBatch_(historyEntries);
+    }
+
+    return {
+      success: true,
+      updated: updated,
+      matched_cases: Object.keys(matchedCases).length,
+      unmatched: sakunList.length - Object.keys(matchedCases).length,
+      history: historyEntries.length,
+      message: updated + '건 상태 업데이트 완료'
+    };
+  } catch (e) {
+    Logger.log('[uploadChangeCancel] 오류: ' + e.toString());
+    return { success: false, message: String(e), updated: 0 };
+  }
 }
 
 /**
