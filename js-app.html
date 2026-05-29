@@ -21050,20 +21050,26 @@ ${token}
             if (typeof showStatus === 'function') showStatus('물건 데이터가 로드되지 않았습니다.', 'warning');
             return;
         }
+        // 불가확인 입력 포맷: item_id | 사건번호 | 입찰일자 | 법원(MAPS명)  (3키 검증 + id 기준 업데이트용)
         const list = allBiddingData
             .filter(it => {
                 const n = parseInt(String(it['in-date'] || '').replace(/\D/g, ''), 10);
                 return n && n >= startNum && n <= endNum;
             })
-            .map(it => String(it.sakun_no || '').trim())
-            .filter(Boolean);
+            .filter(it => String(it.sakun_no || '').trim())
+            .map(it => [
+                String(it.id || '').trim(),
+                String(it.sakun_no || '').trim(),
+                String(it['in-date'] || '').trim(),
+                String(it.court || '').trim()
+            ].join('|'));
 
         if (list.length === 0) {
             if (typeof showStatus === 'function') showStatus('오늘부터 7일 이내 입찰 건이 없습니다.', 'warning');
             return;
         }
 
-        // 중복 제거 (같은 사건번호가 여러 회원에 걸쳐 있을 수 있음)
+        // 중복 제거 (동일 4필드 라인)
         const uniq = Array.from(new Set(list));
 
         const filename = toYYMMDDNum(now) + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0') + '.txt';
