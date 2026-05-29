@@ -21,7 +21,7 @@
     i:  { script: '01.i.py',  title: '등록일 정렬',     hasLimit: true,  hasCases: false },
     d:  { script: '02.d.py',  title: '입찰일 정렬',     hasLimit: true,  hasCases: false },
     k:  { script: '03.k.py',  title: '건별 캡쳐',       hasLimit: false, hasCases: true  },
-    cc: { script: '03.cc.py', title: '변경/취소 확인',  hasLimit: false, hasCases: true, hasResults: true },
+    cc: { script: '03.cc.py', title: '불가확인',  hasLimit: false, hasCases: true, hasResults: true },
   };
   const runState = { i: null, d: null, k: null, cc: null }; // run_id
   const ccResults = []; // 변경/취소 확인 결과 누적 (실행마다 초기화)
