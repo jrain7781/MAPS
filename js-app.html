@@ -1771,8 +1771,8 @@
             return;
         }
 
-        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '취소'];
-        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '취소': 'text-orange-700' };
+        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '폐기', '불가'];
+        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '폐기': 'text-red-600', '불가': 'text-gray-900' };
         const countByStatus = {};
         let missingBidCount = 0;
         data.forEach(item => {
@@ -8408,7 +8408,7 @@ MJ 이정우 팀장
                 } else if (dashboardFilter.type === 'total_status') {
                     return itemDate >= todayYYMMDD && item.stu_member === dashboardFilter.status;
                 } else if (dashboardFilter.type === 'auto_all') {
-                    return itemDate === dashboardFilter.date && ['추천', '입찰', '검증', '취소'].includes(item.stu_member);
+                    return itemDate === dashboardFilter.date && ['추천', '입찰', '검증', '폐기', '불가'].includes(item.stu_member);
                 } else if (dashboardFilter.type === 'bid_state') {
                     return itemDate === dashboardFilter.date && String(item.bid_state || '') === dashboardFilter.status;
                 } else if (dashboardFilter.type === 'all_status') {
@@ -18882,7 +18882,7 @@ ${token}
             const inCart    = d1PickerCart.some(c => String(c.id) === String(it.id));
             const alreadyIn = String(it.class_d1_id||'') === String(selectedClassD1Id||'');
             // 입찰/추천/취소 상태는 다른 회차/회원에서 이미 사용 중 → 신규 회차 등록 금지
-            const lockedStatus = ['입찰','추천','취소'].includes(String(it.stu_member || '').trim());
+            const lockedStatus = ['입찰','추천','폐기','불가'].includes(String(it.stu_member || '').trim());
             // 용도 dim: 현재 종목(CLASS/PT/돈클)에서 허용 안 되는 용도 → 등록 불가
             const _itemYongdo = String(it.items_youngdo || '').trim();
             // 정규화 매칭 (공백/콤마 무시) - PT,단투 vs PT, 단투 등 흡수
@@ -18925,8 +18925,8 @@ ${token}
         const bar = document.getElementById('d1PickerSummaryBar');
         if (!bar) return;
         if (!filtered || filtered.length === 0) { bar.classList.add('hidden'); return; }
-        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '취소'];
-        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '취소': 'text-orange-700' };
+        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '폐기', '불가'];
+        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '폐기': 'text-red-600', '불가': 'text-gray-900' };
         const cnt = {};
         filtered.forEach(it => { const st = it.stu_member||'미정'; cnt[st] = (cnt[st]||0) + 1; });
         let html = `<span class="text-gray-600">전체 ${filtered.length}건</span>`;
@@ -19010,8 +19010,8 @@ ${token}
         const bar = document.getElementById('d1CartSummaryBar');
         if (!bar) return;
         if (d1PickerCart.length === 0) { bar.classList.add('hidden'); return; }
-        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '취소'];
-        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '취소': 'text-orange-700' };
+        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '폐기', '불가'];
+        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '폐기': 'text-red-600', '불가': 'text-gray-900' };
         const cnt = {};
         d1PickerCart.forEach(c => { const st = c.stu_member||'미정'; cnt[st] = (cnt[st]||0) + 1; });
         let html = `<span class="text-gray-600">전체 ${d1PickerCart.length}건</span>`;
@@ -19087,7 +19087,7 @@ ${token}
         dropdown.innerHTML = results.map(it => {
             const alreadyPending = d1PendingItems.some(p => String(p.id) === String(it.id));
             const alreadyIn = String(it.class_d1_id || '') === String(selectedClassD1Id || '');
-            const lockedStatus = ['입찰','추천','취소'].includes(String(it.stu_member || '').trim());
+            const lockedStatus = ['입찰','추천','폐기','불가'].includes(String(it.stu_member || '').trim());
             const disabled = alreadyPending || alreadyIn || lockedStatus;
             const label = alreadyIn ? ' (등록됨)'
                         : alreadyPending ? ' (추가됨)'
@@ -19415,8 +19415,8 @@ ${token}
         const bar = document.getElementById('d1ItemsSummaryBar');
         if (!bar) return;
         if (!data || data.length === 0) { bar.classList.add('content-hidden'); return; }
-        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '취소'];
-        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '취소': 'text-orange-700' };
+        const statusOrder = ['상품', '검증', '미정', '추천', '입찰', '폐기', '불가'];
+        const statusColors = { '상품': 'text-yellow-700', '검증': 'text-purple-700', '미정': 'text-green-700', '추천': 'text-purple-700', '입찰': 'text-blue-700', '폐기': 'text-red-600', '불가': 'text-gray-900' };
         const cnt = {};
         data.forEach(item => { const st = item.stu_member||'미정'; cnt[st] = (cnt[st]||0) + 1; });
         let html = `<span class="text-gray-600">전체 ${data.length}건</span>`;
