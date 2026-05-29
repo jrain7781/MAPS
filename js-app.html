@@ -4930,7 +4930,7 @@
 
     // ── 입찰물건관리 상세 하단 탭 ──────────────────────────────────
     function switchItemSubTab(tab) {
-        ['note', 'history', 'message', 'info'].forEach(t => {
+        ['note', 'history', 'message', 'info', 'reason'].forEach(t => {
             const btns = document.querySelectorAll(`.item-sub-tab-btn`);
             btns.forEach(btn => {
                 const isTarget = btn.getAttribute('onclick') === `switchItemSubTab('${t}')`;
@@ -4952,6 +4952,44 @@
             renderKakaoTemplateTabs(currentDetailItem ? currentDetailItem.member_id : null, 'item');
             if (typeof _updateMessageMetaDisplay_ === 'function') _updateMessageMetaDisplay_('item');
         }
+        if (tab === 'reason') renderItemSubReason();
+    }
+
+    // 불가/폐기 사유 탭 — 현재 물건의 stu_reason/stu_reason_detail 채우기
+    function renderItemSubReason() {
+        if (!currentDetailItem) return;
+        const sel = document.getElementById('form-stu-reason');
+        const det = document.getElementById('form-stu-reason-detail');
+        const cur = document.getElementById('reason-cur-status');
+        if (cur) cur.textContent = String(currentDetailItem.stu_member || '-');
+        if (sel) sel.value = String(currentDetailItem.stu_reason || '');
+        if (det) det.value = String(currentDetailItem.stu_reason_detail || '');
+    }
+
+    // 불가/폐기 사유 저장 (Z=stu_reason, AA=stu_reason_detail)
+    function saveItemReasonFromDetail() {
+        if (!currentDetailItem || !currentDetailItem.id) { showStatus('선택된 물건이 없습니다.', 'warning'); return; }
+        const itemId = currentDetailItem.id;
+        const reason = document.getElementById('form-stu-reason') ? document.getElementById('form-stu-reason').value : '';
+        const detail = document.getElementById('form-stu-reason-detail') ? document.getElementById('form-stu-reason-detail').value : '';
+        if (typeof google === 'undefined' || !google.script || !google.script.run) { showStatus('GAS 환경이 아닙니다.', 'error'); return; }
+        showStatus('불가/폐기 사유 저장 중...', 'info');
+        google.script.run
+            .withSuccessHandler(function (res) {
+                if (res && res.success) {
+                    currentDetailItem.stu_reason = reason;
+                    currentDetailItem.stu_reason_detail = detail;
+                    if (typeof allBiddingData !== 'undefined') {
+                        const it = allBiddingData.find(x => String(x.id) === String(itemId));
+                        if (it) { it.stu_reason = reason; it.stu_reason_detail = detail; }
+                    }
+                    showStatus('불가/폐기 사유 저장 완료', 'success');
+                } else {
+                    showStatus('저장 실패: ' + (res && res.message || '알 수 없음'), 'error');
+                }
+            })
+            .withFailureHandler(function (err) { showStatus('저장 오류: ' + (err && err.message || err), 'error'); })
+            .saveItemReason(itemId, reason, detail);
     }
 
     function renderItemSubHistory() {
