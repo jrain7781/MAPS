@@ -4416,6 +4416,10 @@ function getTelegramJoinStatsByItem() {
   if (lastRow < 2) return [];
   var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
 
+  // itemId → 현재 stu_member (폐기/불가 안내 텔레그램 귀속용)
+  var itemStatusMap = {};
+  data.forEach(function (r) { var id = String(r[0] || '').trim(); if (id) itemStatusMap[id] = String(r[4] || '').trim(); });
+
   // class_type별로 물건과 회원 집계
   var statMap = {};
   data.forEach(function (row) {
@@ -4582,8 +4586,10 @@ function getAutoApprovalStats(testMode) {
         delivered_web: [],       // 3번: FIELD_CHANGE bid_state→전달완료
         confirmed_tele: [],      // 20번: PRICE_CONFIRMED
         confirmed_web: [],       // 3번: FIELD_CHANGE bid_state→확인완료
-        status_tele: [],         // 12번: TELEGRAM_SENT note='status'
-        status_web: []           // 8번: FIELD_CHANGE stu_member→변경
+        discard_tele: [],        // 폐기 안내 발송 (TELEGRAM_SENT note='status', 물건 현재상태=폐기)
+        discard_web: [],         // 폐기 수기 전환 (FIELD_CHANGE stu_member→폐기, 옛 취소 포함)
+        unable_tele: [],         // 불가 안내 발송 (TELEGRAM_SENT note='status', 물건 현재상태=불가)
+        unable_web: []           // 불가 수기 전환 (FIELD_CHANGE stu_member→불가, 옛 변경 포함)
       };
     }
     return dateStats[dateKey];
@@ -4691,11 +4697,16 @@ function getAutoApprovalStats(testMode) {
     } else if (action === 'FIELD_CHANGE' && fieldName === 'bid_state' && toVal === '확인완료') {
       addId(ds.confirmed_web, itemId);                                           // 3번
 
-      // ── 변경/취소 안내 ────────────────────────────────────────────────
+      // ── 폐기/불가 안내 ────────────────────────────────────────────────
     } else if (action === 'TELEGRAM_SENT' && note === 'status') {
-      addId(ds.status_tele, itemId);                                             // 12번
-    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && (toVal === '취소' || toVal === '폐기' || toVal === '변경')) {
-      addId(ds.status_web, itemId);                                              // 8번 (취소/폐기/변경 = 입찰 불가 안내)
+      // 상태안내 텔레그램은 사유 미기록 → 물건 현재 상태(폐기/불가)로 귀속
+      var stCur = itemStatusMap[itemId] || '';
+      if (stCur === '폐기') addId(ds.discard_tele, itemId);                       // 12번
+      else if (stCur === '불가') addId(ds.unable_tele, itemId);
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && (toVal === '폐기' || toVal === '취소')) {
+      addId(ds.discard_web, itemId);                                             // 8번 폐기(옛 취소 포함)
+    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && (toVal === '불가' || toVal === '변경')) {
+      addId(ds.unable_web, itemId);                                              // 8번 불가(옛 변경 포함)
     }
   });
 
@@ -4707,7 +4718,8 @@ function getAutoApprovalStats(testMode) {
     var capr = mergeIds(s.cancel_approved_tele, s.cancel_approved_web);
     var dlvr = mergeIds(s.delivered_tele, s.delivered_web);
     var conf = mergeIds(s.confirmed_tele, s.confirmed_web);
-    var stat = mergeIds(s.status_tele, s.status_web);
+    var disc = mergeIds(s.discard_tele, s.discard_web);
+    var unab = mergeIds(s.unable_tele, s.unable_web);
     // 브레이크다운 상호배타화 (T 우선 > 수기 > 자동만료) → 부분합 = 합계 일치 (합계는 union 그대로)
     var rWeb  = subtract(s.recommend_web, s.recommend_tele);
     var baWeb = subtract(s.bid_approved_web, s.bid_approved_tele);
@@ -4716,7 +4728,8 @@ function getAutoApprovalStats(testMode) {
     var caWeb = subtract(s.cancel_approved_web, s.cancel_approved_tele);
     var dlWeb = subtract(s.delivered_web, s.delivered_tele);
     var cfWeb = subtract(s.confirmed_web, s.confirmed_tele);
-    var stWeb = subtract(s.status_web, s.status_tele);
+    var dscWeb = subtract(s.discard_web, s.discard_tele);
+    var unbWeb = subtract(s.unable_web, s.unable_tele);
     return {
       date: s.date,
       recommend: rec.length, recommend_tele: s.recommend_tele.length, recommend_web: rWeb.length, recommend_read: s.recommend_read.length, recommend_ids: rec, recommend_tele_ids: s.recommend_tele, recommend_web_ids: rWeb, recommend_read_ids: s.recommend_read,
@@ -4725,7 +4738,8 @@ function getAutoApprovalStats(testMode) {
       cancel_approved: capr.length, cancel_approved_tele: s.cancel_approved_tele.length, cancel_approved_web: caWeb.length, cancel_approved_ids: capr, cancel_approved_tele_ids: s.cancel_approved_tele, cancel_approved_web_ids: caWeb,
       delivered: dlvr.length, delivered_tele: s.delivered_tele.length, delivered_web: dlWeb.length, delivered_ids: dlvr, delivered_tele_ids: s.delivered_tele, delivered_web_ids: dlWeb,
       confirmed: conf.length, confirmed_tele: s.confirmed_tele.length, confirmed_web: cfWeb.length, confirmed_ids: conf, confirmed_tele_ids: s.confirmed_tele, confirmed_web_ids: cfWeb,
-      status_notify: stat.length, status_notify_tele: s.status_tele.length, status_notify_web: stWeb.length, status_notify_ids: stat, status_notify_tele_ids: s.status_tele, status_notify_web_ids: stWeb
+      discard_notify: disc.length, discard_notify_tele: s.discard_tele.length, discard_notify_web: dscWeb.length, discard_notify_ids: disc, discard_notify_tele_ids: s.discard_tele, discard_notify_web_ids: dscWeb,
+      unable_notify: unab.length, unable_notify_tele: s.unable_tele.length, unable_notify_web: unbWeb.length, unable_notify_ids: unab, unable_notify_tele_ids: s.unable_tele, unable_notify_web_ids: unbWeb
     };
   });
   result.sort(function (a, b) { return b.date.localeCompare(a.date); });
