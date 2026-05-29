@@ -149,8 +149,8 @@ function readAllData() {
 
   // [핵심 수정] 물리적인 열 개수를 확인하여 에러 방지
   const maxCols = sheet.getMaxColumns();
-  // 필요한 열까지만 읽음 (+2: chuchen_read(X=24)/chuchen_read_date(Y=25)는 ITEM_HEADERS 외 추가 컬럼)
-  const colsToRead = Math.min(maxCols, ITEM_HEADERS.length + 2);
+  // 필요한 열까지만 읽음 (+4: chuchen_read(X=24)/chuchen_read_date(Y=25) + stu_reason(Z=26)/stu_reason_detail(AA=27) 는 ITEM_HEADERS 외 추가 컬럼)
+  const colsToRead = Math.min(maxCols, ITEM_HEADERS.length + 4);
 
   if (colsToRead < 1) return [];
 
@@ -222,12 +222,65 @@ function readAllData() {
     rowData['chuchen_read'] = (row.length > 23) ? String(row[23] || '').trim() : '';
     // [추가] 25번째 열(24번 인덱스, Y열) chuchen_read_date (추천 확인 일시 ISO) 매핑
     rowData['chuchen_read_date'] = (row.length > 24) ? (row[24] || '') : '';
+    // [추가] 26번째 열(25번 인덱스, Z열) stu_reason (불가사유: 변경/취소/기각/취하/정지/연기) 매핑
+    rowData['stu_reason'] = (row.length > 25) ? String(row[25] || '').trim() : '';
+    // [추가] 27번째 열(26번 인덱스, AA열) stu_reason_detail (불가/폐기 사유 상세) 매핑
+    rowData['stu_reason_detail'] = (row.length > 26) ? (row[26] || '') : '';
 
     // [추가] item_images 테이블에 이미지가 있는지 확인
     rowData['has_images'] = itemsWithImages.has(String(row[0]).trim());
 
     return rowData;
   });
+}
+
+/**
+ * stu_reason(Z=26) / stu_reason_detail(AA=27) 컬럼이 물리적으로 존재하도록 보장.
+ * ITEM_HEADERS(1~23) + chuchen_read/date(24,25) 뒤에 append. 기존 열은 절대 건드리지 않음.
+ * 헤더 셀이 비어 있을 때만 라벨 설정(덮어쓰지 않음).
+ */
+function ensureItemReasonColumns_() {
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  if (!sheet) return { success: false, message: 'items 시트 없음' };
+  var maxCols = sheet.getMaxColumns();
+  if (maxCols < 27) {
+    sheet.insertColumnsAfter(maxCols, 27 - maxCols);
+  }
+  var hdr = sheet.getRange(1, 26, 1, 2).getValues()[0];
+  if (!String(hdr[0] || '').trim()) sheet.getRange(1, 26).setValue('stu_reason');
+  if (!String(hdr[1] || '').trim()) sheet.getRange(1, 27).setValue('stu_reason_detail');
+  SpreadsheetApp.flush();
+  return { success: true, maxCols: sheet.getMaxColumns() };
+}
+
+/**
+ * 한 물건의 불가/폐기 사유(stu_reason=Z=26) + 상세(stu_reason_detail=AA=27)만 저장.
+ * id 로 행을 찾아 26/27 열만 기록. 기존 열 무손상.
+ */
+function saveItemReason(itemId, reason, detail) {
+  try {
+    var id = String(itemId || '').trim();
+    if (!id) return { success: false, message: 'id 필요' };
+    ensureItemReasonColumns_();
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'items 시트 없음' };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '데이터 없음' };
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === id) {
+        var rowNum = i + 2;
+        sheet.getRange(rowNum, 26).setValue(String(reason || ''));
+        sheet.getRange(rowNum, 27).setValue(String(detail || ''));
+        SpreadsheetApp.flush();
+        return { success: true, id: id, stu_reason: String(reason || ''), stu_reason_detail: String(detail || '') };
+      }
+    }
+    return { success: false, message: '해당 id 없음: ' + id };
+  } catch (e) {
+    Logger.log('[saveItemReason] ' + e);
+    return { success: false, message: String(e) };
+  }
 }
 
 /**
