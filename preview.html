@@ -29744,7 +29744,7 @@ ${token}
             if (typeof showStatus === 'function') showStatus('물건 데이터가 로드되지 않았습니다.', 'warning');
             return;
         }
-        // 불가확인 입력 포맷: item_id | 사건번호 | 입찰일자 | 법원(MAPS명)  (3키 검증 + id 기준 업데이트용)
+        // 불가확인 입력 포맷: 사건번호 | 입찰일자 | 법원(MAPS명)  (3키 — 옥션 조회 후 일치 검증)
         const list = allBiddingData
             .filter(it => {
                 const n = parseInt(String(it['in-date'] || '').replace(/\D/g, ''), 10);
@@ -29752,7 +29752,6 @@ ${token}
             })
             .filter(it => String(it.sakun_no || '').trim())
             .map(it => [
-                String(it.id || '').trim(),
                 String(it.sakun_no || '').trim(),
                 String(it['in-date'] || '').trim(),
                 String(it.court || '').trim()

@@ -7976,18 +7976,28 @@ function uploadChangeCancel(items) {
     if (!Array.isArray(items) || items.length === 0) {
       return { success: false, message: '항목이 비어 있습니다.', updated: 0 };
     }
-    var VALID = { '변경': true, '취소': true };
-    // sakun_no → status (유효한 변경/취소 건만)
-    var sakunStatus = {};
+    // 3키(사건번호|입찰일자|법원) → {reason(불가사유), detail(상세)} (3키 검증은 cc(03.cc.py)에서 끝냄)
+    var normDate = function (v) { return String(v || '').replace(/[^0-9]/g, ''); };
+    var keyOf = function (sakun, bidDate, court) {
+      return String(sakun || '').trim() + '|' + normDate(bidDate) + '|' + String(court || '').trim();
+    };
+    var byKey = {};
     items.forEach(function (it) {
-      var s = String((it && it.sakun_no) || '').trim();
-      var st = String((it && it.status) || '').trim();
-      if (s && VALID[st]) sakunStatus[s] = st;
+      if (!it) return;
+      var sakun = String(it.sakun_no || '').trim();
+      if (!sakun) return;
+      var k = keyOf(sakun, it.bid_date || it['in-date'] || it.bid_datetime_2, it.court);
+      byKey[k] = {
+        reason: String(it.status || it.reason || it.stu_reason || '').trim(),
+        detail: String(it.detail || it.stu_reason_detail || '').trim()
+      };
     });
-    var sakunList = Object.keys(sakunStatus);
-    if (sakunList.length === 0) {
-      return { success: false, message: "변경·취소 상태인 항목이 없습니다.", updated: 0 };
+    var keyList = Object.keys(byKey);
+    if (keyList.length === 0) {
+      return { success: false, message: '유효한 항목(사건번호)이 없습니다.', updated: 0 };
     }
+
+    if (typeof ensureItemReasonColumns_ === 'function') ensureItemReasonColumns_(); // Z/AA 보장
 
     var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
     if (!sheet) return { success: false, message: 'items 시트 없음', updated: 0 };
@@ -7996,28 +8006,28 @@ function uploadChangeCancel(items) {
 
     var idIdx        = ITEM_HEADERS.indexOf('id');
     var sakunIdx     = ITEM_HEADERS.indexOf('sakun_no');
+    var courtIdx     = ITEM_HEADERS.indexOf('court');
+    var inDateIdx    = ITEM_HEADERS.indexOf('in-date');
     var stuIdx       = ITEM_HEADERS.indexOf('stu_member');
     var memberIdIdx  = ITEM_HEADERS.indexOf('member_id');
     var mNameIdx     = ITEM_HEADERS.indexOf('m_name');
-    if (sakunIdx < 0 || stuIdx < 0) {
-      return { success: false, message: 'items 헤더 컬럼 누락', updated: 0 };
-    }
 
     var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
     var historyEntries = [];
-    var matchedCases = {};
+    var matchedKeys = {};
     var updated = 0;
 
     for (var i = 0; i < data.length; i++) {
       var row = data[i];
-      var sakun = String(row[sakunIdx] || '').trim();
-      if (!sakun || !sakunStatus.hasOwnProperty(sakun)) continue;
-      var newStu = sakunStatus[sakun];
+      var k = keyOf(row[sakunIdx], row[inDateIdx], row[courtIdx]);
+      if (!byKey.hasOwnProperty(k)) continue;
+      matchedKeys[k] = true;
+      var info = byKey[k];
       var currentStu = String(row[stuIdx] || '').trim();
-      matchedCases[sakun] = true;
-      if (currentStu === newStu) continue; // 이미 동일 → skip
       var sheetRowNum = i + 2; // 헤더 제외, 1-based
-      sheet.getRange(sheetRowNum, stuIdx + 1).setValue(newStu);
+      sheet.getRange(sheetRowNum, stuIdx + 1).setValue('불가'); // E: stu_member = 불가
+      sheet.getRange(sheetRowNum, 26).setValue(info.reason);    // Z: stu_reason (불가사유)
+      sheet.getRange(sheetRowNum, 27).setValue(info.detail);    // AA: stu_reason_detail (상세)
       updated++;
       historyEntries.push({
         action: 'AUCTION_CHANGE_CANCEL',
@@ -8026,8 +8036,8 @@ function uploadChangeCancel(items) {
         member_name: String(row[mNameIdx] || ''),
         field_name: 'stu_member',
         from_value: currentStu,
-        to_value: newStu,
-        note: 'auction1 결과=' + newStu,
+        to_value: '불가',
+        note: 'auction1 불가확인 사유=' + info.reason + (info.detail ? (' / ' + info.detail) : ''),
         trigger_type: 'auction-manager',
         approved_by: 'manager',
         status: 'DONE',
@@ -8043,10 +8053,10 @@ function uploadChangeCancel(items) {
     return {
       success: true,
       updated: updated,
-      matched_cases: Object.keys(matchedCases).length,
-      unmatched: sakunList.length - Object.keys(matchedCases).length,
+      matched_keys: Object.keys(matchedKeys).length,
+      unmatched: keyList.length - Object.keys(matchedKeys).length,
       history: historyEntries.length,
-      message: updated + '건 상태 업데이트 완료'
+      message: updated + '건 불가 처리 완료'
     };
   } catch (e) {
     Logger.log('[uploadChangeCancel] 오류: ' + e.toString());

@@ -278,35 +278,47 @@
     el.scrollTop = el.scrollHeight;
   }
 
-  // 변경/취소 결과 테이블 렌더
+  // 불가확인 결과 테이블 렌더 (3키 검증 + 사유)
   function renderCcResults() {
     const wrap = $card('cc')?.querySelector('[data-role="cc-results"]');
     if (!wrap) return;
     if (ccResults.length === 0) { wrap.innerHTML = ''; return; }
     const rows = ccResults.map((r, i) => {
       const st = String(r.status || '').trim();
-      const isCC = (st === '변경' || st === '취소');
+      const isBuga = !!r.is_buga;
+      const km = !!r.key_match;
       const badge = st
-        ? `<span class="cc-badge ${isCC ? 'cc-bad' : (st === '유찰' ? 'cc-warn' : (st === '매각' ? 'cc-end' : 'cc-ok'))}">${escapeHtml(st)}</span>`
+        ? `<span class="cc-badge ${isBuga ? 'cc-bad' : 'cc-ok'}">${escapeHtml(st)}</span>`
         : `<span class="cc-badge cc-ok">진행중</span>`;
-      const url = r.view_url ? `<a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">옥션원 열기</a>` : '';
+      const keyBadge = km
+        ? `<span class="cc-badge cc-end">일치</span>`
+        : `<span class="cc-badge cc-warn">⚠불일치</span>`;
+      // 법원: 기대값 + (불일치 시 옥션변환값 표시)
+      const courtTxt = (r.court_hit === false && r.fetched_court)
+        ? `${escapeHtml(r.court || '')}<span style="color:#dc2626">→${escapeHtml(r.fetched_court)}</span>`
+        : escapeHtml(r.court || '');
+      const dtl = String(r.detail || '');
+      const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 22 ? dtl.slice(0, 22) + '…' : dtl)}</span>` : '';
+      const url = r.view_url ? `<a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">열기</a>` : '';
+      const checkable = isBuga && km; // 불가사유 + 3키일치 만 기본 체크
       return `<tr data-idx="${i}">
-        <td><input type="checkbox" class="cc-cb" ${isCC ? 'checked' : ''}></td>
+        <td><input type="checkbox" class="cc-cb" ${checkable ? 'checked' : ''}></td>
         <td>${escapeHtml(r.sakun_no || '')}</td>
         <td>${escapeHtml(r.bid_date || '')}</td>
-        <td style="text-align:right">${escapeHtml(r.lowest_price || '')}</td>
+        <td style="text-align:center">${courtTxt} ${keyBadge}</td>
         <td style="text-align:center">${badge}</td>
+        <td>${detail}</td>
         <td>${url}</td>
       </tr>`;
     }).join('');
     wrap.innerHTML = `
       <div class="cc-results-head">
-        <span><b>결과</b> ${ccResults.length}건 · 변경/취소만 체크됨</span>
+        <span><b>결과</b> ${ccResults.length}건 · <b>불가사유+3키일치</b> 자동 체크</span>
         <span class="mjcap-spacer"></span>
-        <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 체크한 건 MAPS로 전송</button>
+        <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 체크한 건 MAPS '불가' 처리</button>
       </div>
       <table class="cc-table"><thead>
-        <tr><th>✓</th><th>사건번호</th><th>매각기일</th><th>최저가</th><th>옥션원 결과</th><th>원본</th></tr>
+        <tr><th>✓</th><th>사건번호</th><th>입찰일자</th><th>법원(검증)</th><th>사유</th><th>종결문구</th><th>원본</th></tr>
       </thead><tbody>${rows}</tbody></table>
     `;
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
@@ -327,7 +339,7 @@
       }
     });
     if (picked.length === 0) { alert('체크된 건이 없습니다.'); return; }
-    if (!confirm(`${picked.length}건을 MAPS 로 전송하여 상태를 "변경/취소" 로 업데이트 합니다. 진행할까요?`)) return;
+    if (!confirm(`${picked.length}건을 MAPS 로 전송하여 상태를 "불가"(+사유/상세) 로 업데이트 합니다. 진행할까요?`)) return;
     const btn = card.querySelector('[data-act="cc-send"]');
     if (btn) btn.disabled = true;
     log('cc', `📤 ${picked.length}건 MAPS 전송 중...`, 'log-ok');
