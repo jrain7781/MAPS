@@ -1674,6 +1674,11 @@
         const detail = String(item.stu_reason_detail || '').trim();
         return ((reason ? '[' + reason + '] ' : '') + detail).trim();
     }
+    // 상태배지 span 에 끼울 title 속성 문자열 (없으면 '')
+    function reasonTitleAttr_(item) {
+        const t = reasonTooltipText_(item);
+        return t ? ' title="' + t.replace(/"/g, '&quot;') + '"' : '';
+    }
 
     // 물건용도 (items_youngdo) — 하드코딩 옵션, 표시 라벨, 태그 클래스, 탭별 허용 규칙
     const YONGDO_OPTIONS = ['플래티넘', '블랙', '실버', '돈클수익', '돈클월세', 'PT, 단투'];
@@ -2835,7 +2840,7 @@
                         const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <span class="${yongdoClass} text-[10px] px-1.5 py-0.5 mr-1 align-middle">${yongdoLabel}</span><span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap align-middle" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                              <span class="${yongdoClass} text-[10px] px-1.5 py-0.5 mr-1 align-middle">${yongdoLabel}</span><span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap align-middle"${reasonTitleAttr_(bid)} onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
                               <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
@@ -2852,7 +2857,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${yongdoClass}" style="margin-right:6px;">${yongdoLabel}</span><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
+                              <div class="bid-top-right"><span class="${yongdoClass}" style="margin-right:6px;">${yongdoLabel}</span><span class="${statusClass}"${reasonTitleAttr_(bid)} onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml}</div>
@@ -3074,7 +3079,7 @@
                     const itemHtml = IS_MEMBER_VIEW ? createMemberItemCard(bid) : `
                       <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm" onmouseenter="preloadItemImage('${bid.image_id}')">
                         <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                          <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                          <span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap"${reasonTitleAttr_(bid)} onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
                           <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                         </div>
                         <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
@@ -3090,7 +3095,7 @@
                         <div class="bid-row-top">
                           <div class="bid-top-left">${imgButtonHtml}</div>
                           <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                          <div class="bid-top-right"><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
+                          <div class="bid-top-right"><span class="${statusClass}"${reasonTitleAttr_(bid)} onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                         </div>
                         <div class="bid-card-bottom">
                           <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div></div>
@@ -3566,7 +3571,7 @@
                         const mobileHtml = `
                           <div class="md:hidden mb-2 rounded-xl overflow-hidden border-2 border-green-300 shadow-sm">
                             <div class="px-3 pt-2 pb-1 bg-stone-50 flex items-center cursor-pointer" onclick="openDetailModalById('${bid.id}')">
-                              <span class="${yongdoClass} text-[10px] px-1.5 py-0.5 mr-1 align-middle">${yongdoLabel}</span><span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap align-middle" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
+                              <span class="${yongdoClass} text-[10px] px-1.5 py-0.5 mr-1 align-middle">${yongdoLabel}</span><span class="${statusClass} text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap align-middle"${reasonTitleAttr_(bid)} onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span>
                               <span style="margin-left:6px;">${tBadgeHtml}</span><span class="text-xs ml-1">${mNameHtml}${mNameInfoHtml}</span>
                             </div>
                             <div class="bg-stone-50 border-t border-gray-200 flex cursor-pointer" onclick="openDetailModalById('${bid.id}')">
@@ -3586,7 +3591,7 @@
                             <div class="bid-row-top">
                               <div class="bid-top-left">${imgButtonHtml}</div>
                               <div class="bid-bid-col-resizer" data-bid-section="top" onclick="event.stopPropagation()"></div>
-                              <div class="bid-top-right"><span class="${yongdoClass}" style="margin-right:6px;">${yongdoLabel}</span><span class="${statusClass}" onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
+                              <div class="bid-top-right"><span class="${yongdoClass}" style="margin-right:6px;">${yongdoLabel}</span><span class="${statusClass}"${reasonTitleAttr_(bid)} onclick="event.stopPropagation(); confirmAndSendTelegramForItem_('${bid.member_id || ''}','${bid.id || ''}')">${bid.stu_member || '미정'}</span><span style="margin-left:6px;">${tBadgeHtml}</span><span style="margin-left:4px;">${mNameHtml}${mNameInfoHtml}</span></div>
                             </div>
                             <div class="bid-card-bottom">
                               <div class="bid-bot-left"><div>${dupSakunHtml(bid)}</div>${chuchenDateHtml2}</div>
