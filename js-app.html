@@ -4221,7 +4221,7 @@
         if (statusTableFoot) statusTableFoot.innerHTML = '';
 
         const targetDates = getWorkingDaysFromToday();
-        const statuses = ['상품', '검증', '미정', '추천', '입찰', '폐기', '변경', '취소'];
+        const statuses = ['상품', '검증', '미정', '추천', '입찰', '폐기', '불가'];
         const filterMember = document.getElementById('statusFilterMember') ? document.getElementById('statusFilterMember').value : '';
         const statusStyles = {
             '상품': 'bg-yellow-100 text-yellow-800',
@@ -4230,8 +4230,7 @@
             '추천': 'bg-orange-100 text-orange-800',
             '입찰': 'bg-indigo-100 text-indigo-800',
             '폐기': 'bg-red-100 text-red-700',
-            '변경': 'bg-gray-900 text-white',
-            '취소': 'bg-gray-600 text-white'
+            '불가': 'bg-gray-900 text-white'
         };
         targetDates.forEach((dateObj, index) => {
             const year = String(dateObj.getFullYear()).slice(-2);
@@ -4422,7 +4421,7 @@
 
         const memberData = {};
         const uniqueMembers = new Set();
-        const summaryCounts = { recommend: 0, bid: 0, change: 0 };
+        const summaryCounts = { recommend: 0, bid: 0, verify: 0, discard: 0, unable: 0 };
         allBiddingData.forEach(item => {
             let memberName = item.m_name;
             if (!memberName || memberName.trim() === '' || memberName === '미등록') {
@@ -4433,14 +4432,15 @@
             const status = item.stu_member;
             if (status === '추천') summaryCounts.recommend++;
             else if (status === '입찰') summaryCounts.bid++;
-            else if (status === '취소') summaryCounts.change++;
+            else if (status === '폐기') summaryCounts.discard++;
+            else if (status === '불가') summaryCounts.unable++;
             else if (status === '검증') summaryCounts.verify++;
 
             if (!memberData[memberName]) {
-                memberData[memberName] = { '추천': 0, '입찰': 0, '검증': 0, '취소': 0 };
+                memberData[memberName] = { '추천': 0, '입찰': 0, '검증': 0, '폐기': 0, '불가': 0 };
             }
 
-            if (['추천', '입찰', '검증', '취소'].includes(status)) {
+            if (['추천', '입찰', '검증', '폐기', '불가'].includes(status)) {
                 memberData[memberName][status]++;
             }
         });
@@ -4449,14 +4449,16 @@
           (<span class="summary-item" onclick="filterCalendarByStatus('추천')">추천 ${summaryCounts.recommend}건</span> |
            <span class="summary-item" onclick="filterCalendarByStatus('입찰')">입찰 ${summaryCounts.bid}건</span> |
            <span class="summary-item" onclick="filterCalendarByStatus('검증')">검증 ${summaryCounts.verify}건</span> |
-           <span class="summary-item" onclick="filterCalendarByStatus('취소')">취소 ${summaryCounts.change}건</span>)
+           <span class="summary-item" onclick="filterCalendarByStatus('폐기')">폐기 ${summaryCounts.discard}건</span> |
+           <span class="summary-item" onclick="filterCalendarByStatus('불가')">불가 ${summaryCounts.unable}건</span>)
        `;
         const labels = Object.keys(memberData).sort();
 
         const recommendData = labels.map(name => memberData[name]['추천']);
         const bidData = labels.map(name => memberData[name]['입찰']);
         const verifyData = labels.map(name => memberData[name]['검증']);
-        const changeData = labels.map(name => memberData[name]['취소']);
+        const discardData = labels.map(name => memberData[name]['폐기']);
+        const unableData = labels.map(name => memberData[name]['불가']);
         if (memberBidChartInstance) {
             memberBidChartInstance.destroy();
         }
@@ -4469,7 +4471,8 @@
                     { label: '추천', data: recommendData, backgroundColor: 'rgba(251, 191, 36, 0.8)', stack: 'Stack 0' },
                     { label: '입찰', data: bidData, backgroundColor: 'rgba(79, 70, 229, 0.8)', stack: 'Stack 0' },
                     { label: '검증', data: verifyData, backgroundColor: 'rgba(147, 51, 234, 0.8)', stack: 'Stack 0' },
-                    { label: '취소', data: changeData, backgroundColor: 'rgba(75, 85, 99, 0.8)', stack: 'Stack 0' }
+                    { label: '폐기', data: discardData, backgroundColor: 'rgba(220, 38, 38, 0.8)', stack: 'Stack 0' },
+                    { label: '불가', data: unableData, backgroundColor: 'rgba(31, 41, 55, 0.85)', stack: 'Stack 0' }
                 ]
             },
             options: {
