@@ -375,6 +375,10 @@ def main():
     print(f"🎯 매각확인 시작: {len(cases)}건 (오늘 입찰건)\n")
 
     options = webdriver.ChromeOptions()
+    if os.environ.get("MJ_IMAGEUP_HEADLESS", "1") != "0":
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        print("[MJ] headless 모드 (창 숨김)")
     options.add_argument("--window-size=1400,900")
     options.add_experimental_option("detach", False)
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)

@@ -375,7 +375,9 @@ def process_case(driver, wait, case):
                detail=sentence,
                is_buga=is_buga,
                key_match=key_match,
+               sakun_hit=True,          # 사건번호로 검색해 행을 찾음 = 사건번호 일치
                fetched_court=fetched_court,
+               fetched_date=picked.get("date_txt", ""),
                date_hit=date_hit,
                court_hit=court_hit,
                view_url=view_url)
@@ -418,6 +420,12 @@ def main():
     print(f"🎯 불가확인 시작: {len(cases)}건 (종합검색 → 법원·기일 매칭)\n")
 
     options = webdriver.ChromeOptions()
+    # 화면 숨김(headless): env MJ_IMAGEUP_HEADLESS != '0' 이면 창 안 띄움.
+    # (옥션 로그인 봇감지로 실패하면 MJ_IMAGEUP_HEADLESS=0 으로 창 띄워 사용)
+    if os.environ.get("MJ_IMAGEUP_HEADLESS", "1") != "0":
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        print("[MJ] headless 모드 (창 숨김)")
     options.add_argument("--window-size=1400,900")
     options.add_experimental_option("detach", False)
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)

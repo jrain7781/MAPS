@@ -334,47 +334,61 @@
     });
   }
 
-  // 불가확인 결과 테이블 렌더 (3키 검증 + 사유)
+  // 항목별 일치 표시: ✓(초록)/✗(빨강) + 값
+  function ccKeyCell(value, hit) {
+    const mark = hit
+      ? '<span class="cc-hit ok">✓</span>'
+      : '<span class="cc-hit no">✗</span>';
+    return `${mark} ${escapeHtml(value || '')}`;
+  }
+
+  // 불가확인 결과 테이블 렌더
+  // MAPS 3키(입찰일자·사건번호·법원) 각각 일치 ✓/✗ + 결과·상세 + 업데이트예정 상태.
+  // 불가만 체크박스 강제 체크, 진행중은 미체크.
   function renderCcResults() {
     const wrap = $card('cc')?.querySelector('[data-role="cc-results"]');
     if (!wrap) return;
     if (ccResults.length === 0) { wrap.innerHTML = ''; return; }
     const rows = ccResults.map((r, i) => {
-      const st = String(r.status || '').trim();
       const isBuga = !!r.is_buga;
-      const km = !!r.key_match;
-      const badge = st
-        ? `<span class="cc-badge ${isBuga ? 'cc-bad' : 'cc-ok'}">${escapeHtml(st)}</span>`
-        : `<span class="cc-badge cc-ok">진행중</span>`;
-      const keyBadge = km
-        ? `<span class="cc-badge cc-end">일치</span>`
-        : `<span class="cc-badge cc-warn">⚠불일치</span>`;
-      // 법원: 기대값 + (불일치 시 옥션변환값 표시)
-      const courtTxt = (r.court_hit === false && r.fetched_court)
-        ? `${escapeHtml(r.court || '')}<span style="color:#dc2626">→${escapeHtml(r.fetched_court)}</span>`
-        : escapeHtml(r.court || '');
+      const stateKind = String(r.state_kind || r.status || '').trim() || '진행중';
+      // 항목별 일치
+      const dateHit  = r.date_hit !== false;            // 입찰일자
+      const sakunHit = r.sakun_hit !== false;           // 사건번호(검색키 → 보통 일치)
+      const courtHit = r.court_hit !== false;           // 법원
+      // 결과(진행상태) 배지
+      const resCls = isBuga ? 'cc-bad' : (stateKind === '매각' ? 'cc-end' : 'cc-ok');
+      const resBadge = `<span class="cc-badge ${resCls}">${escapeHtml(stateKind)}</span>`;
+      // 상세(종결문구/사유 문장)
       const dtl = String(r.detail || '');
-      const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 22 ? dtl.slice(0, 22) + '…' : dtl)}</span>` : '';
-      const url = r.view_url ? `<a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">열기</a>` : '';
-      const checkable = isBuga && km; // 불가사유 + 3키일치 만 기본 체크
-      return `<tr data-idx="${i}">
-        <td><input type="checkbox" class="cc-cb" ${checkable ? 'checked' : ''}></td>
-        <td>${escapeHtml(r.sakun_no || '')}</td>
-        <td>${escapeHtml(r.bid_date || '')}</td>
-        <td style="text-align:center">${courtTxt} ${keyBadge}</td>
-        <td style="text-align:center">${badge}</td>
-        <td>${detail}</td>
-        <td>${url}</td>
+      const detail = dtl
+        ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 24 ? dtl.slice(0, 24) + '…' : dtl)}</span>`
+        : '';
+      // 업데이트 예정 상태값: 불가면 "불가 [사유]", 아니면 -
+      const willUpdate = isBuga
+        ? `<b style="color:#b91c1c">불가</b>${r.status ? ` <span class="cc-badge cc-bad">${escapeHtml(r.status)}</span>` : ''}`
+        : '<span style="color:#9ca3af">-</span>';
+      const url = r.view_url ? ` <a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">원본</a>` : '';
+      // 불가만 강제 체크, 진행중은 미체크
+      return `<tr data-idx="${i}" class="${isBuga ? 'cc-row-buga' : ''}">
+        <td style="text-align:center"><input type="checkbox" class="cc-cb" ${isBuga ? 'checked' : ''}></td>
+        <td>${ccKeyCell(r.bid_date, dateHit)}</td>
+        <td>${ccKeyCell(r.sakun_no, sakunHit)}</td>
+        <td>${ccKeyCell(r.court, courtHit)}</td>
+        <td style="text-align:center">${resBadge}</td>
+        <td>${detail}${url}</td>
+        <td>${willUpdate}</td>
       </tr>`;
     }).join('');
+    const bugaCnt = ccResults.filter(r => r.is_buga).length;
     wrap.innerHTML = `
       <div class="cc-results-head">
-        <span><b>결과</b> ${ccResults.length}건 · <b>불가사유+3키일치</b> 자동 체크</span>
+        <span><b>결과</b> ${ccResults.length}건 · <b style="color:#b91c1c">불가 ${bugaCnt}건</b> 자동 체크 (진행중 제외)</span>
         <span class="mjcap-spacer"></span>
         <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 체크한 건 MAPS '불가' 처리</button>
       </div>
       <table class="cc-table"><thead>
-        <tr><th>✓</th><th>사건번호</th><th>입찰일자</th><th>법원(검증)</th><th>사유</th><th>종결문구</th><th>원본</th></tr>
+        <tr><th>✓</th><th>입찰일자</th><th>사건번호</th><th>법원</th><th>결과</th><th>상세</th><th>업데이트 예정</th></tr>
       </thead><tbody>${rows}</tbody></table>
     `;
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
