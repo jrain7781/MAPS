@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 MJ경매 [불가확인]
-- 입력 한 줄 = "사건번호 | 입찰일자 | 법원(MAPS명)" (MAPS '~7일 리스트 다운' 결과).
+- 입력 한 줄 = "사건번호 | 입찰일자 | 법원(MAPS명)" (MAPS '7일 리스트' 결과).
   (env MJ_IMAGEUP_CASES_JSON 또는 「변경취소 확인리스트」 폴더 최신 .txt)
-- 옥션원은 사건번호로만 검색되므로: 사건번호+연도로 검색 → 결과의 주소를 court_jurisdiction 으로
-  MAPS 법원명으로 변환 → (사건번호·입찰일자·법원) 3키 일치 검증 → 일치 시 종결사유/상세 파싱.
-- 결과는 stdout 에 'RESULT|{json}' 한 줄씩 출력 → 매니저 UI 가 파싱해 결과표로 렌더.
-- 이미지 캡처는 하지 않음. Selenium 일반 모드.
-- ⚠ 옥션원 실제 DOM(주소/종결문구/기일) 셀렉터는 로컬 테스트하며 보정 필요.
+- ★ 옥션원 종합검색(ca_title.php) 진입 → 사건번호(년도+번호)로 auction_num_ser() 검색
+  → 결과행들 중 (주소→법원 일치) AND (매각기일 일치) 행 선택 → 진행상태(td5) 판정.
+  (관심물건 inter_list.php 진입 방식 폐기 — 조사물건 크롤러와 동일한 종합검색 경로)
+- 진행상태가 법원 진행불가(변경/취소/취하/정지/연기/기각/각하)면 → 불가, 상세 종결문구 파싱.
+- 결과는 stdout 에 'RESULT|{json}' 한 줄씩 → 매니저 UI 결과표 렌더.
+- 이미지 캡처 없음. Selenium 일반 모드.
 """
-print("📢 MJ경매 [불가확인] (사건번호 검색 → 3키 일치 검증 → 종결사유 파싱)...")
+print("📢 MJ경매 [불가확인] (종합검색 → 법원·기일 매칭 → 불가사유 판정)...")
 
 import os, sys, json, time, re, glob, traceback
 from selenium import webdriver
@@ -17,15 +18,16 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LIST_FOLDER_NAME = "변경취소 확인리스트"
 LIST_FOLDER = os.path.join(SCRIPT_DIR, LIST_FOLDER_NAME)
 A1_BASE = "https://www.auction1.co.kr"
+URL_SEARCH = f"{A1_BASE}/auction/ca_title.php"
 
-# 법원 변환: 옥션 결과 주소 → MAPS 법원명 (crawler.py 와 동일 방식)
+# 법원 변환: 옥션 결과 주소 → MAPS 법원명
 try:
     from court_jurisdiction import find_court as _find_court, _JURISDICTION_MAP
     def addr_to_court(addr_text):
@@ -41,7 +43,7 @@ except Exception as _e:
     def addr_to_court(addr_text):
         return ""
 
-# 계정 — env override (MJ 매니저에서 주입)
+# 계정 (매니저 주입)
 ACCOUNTS = []
 _env_acc = os.environ.get("MJ_IMAGEUP_ACCOUNTS_JSON")
 if _env_acc:
@@ -94,146 +96,62 @@ def read_cases_from_file(filepath):
     return out
 
 
-def norm_date(v):
-    """입찰일자 → 비교용 yymmdd 6자리 숫자. '2026-07-13'/'260713'/'20260713' 모두 처리."""
+# ── 유틸 ────────────────────────────────────────────────────────────────
+def norm_date6(v):
     d = re.sub(r"[^0-9]", "", str(v or ""))
-    if len(d) == 8:   # yyyymmdd
-        return d[2:]
-    if len(d) >= 6:
-        return d[:6]
+    if len(d) >= 8 and d[:2] == "20":
+        d = d[2:]
+    if len(d) > 6:
+        d = d[-6:]
     return d
 
 
+def yymmdd_to_full(d6):
+    d6 = re.sub(r"[^0-9]", "", str(d6 or ""))
+    if len(d6) != 6:
+        return ""
+    return f"20{d6[:2]}-{d6[2:4]}-{d6[4:6]}"
+
+
 def year_of(case):
-    """검색 연도(4자리): 사건번호의 '20XX타경' 우선, 없으면 입찰일자에서."""
-    m = re.search(r"(20\d{2})\s*타경", case.get("sakun_no", "")) or re.search(r"^(20\d{2})", case.get("sakun_no", ""))
+    s = case.get("sakun_no", "")
+    m = re.search(r"(20\d{2})\s*타경", s) or re.search(r"^(20\d{2})", s)
     if m:
         return m.group(1)
-    nd = norm_date(case.get("bid_date"))
+    nd = norm_date6(case.get("bid_date"))
     if len(nd) == 6:
         return "20" + nd[:2]
     return ""
 
 
 def case_num2(sakun):
-    """사건번호에서 일련번호(타경 뒷부분/하이픈 뒷부분)."""
-    m = re.search(r"타경\s*(\d+)", sakun) or re.search(r"-\s*(\d+)", sakun) or re.search(r"(\d{3,})", sakun)
+    m = re.search(r"타경\s*(\d+)", sakun) or re.search(r"-\s*(\d+)\s*$", sakun) or re.search(r"(\d{3,})", sakun)
     return m.group(1) if m else sakun
 
 
-def classify(cases):
-    auc, gng = [], []
-    for c in cases:
-        n = c.get("sakun_no", "")
-        if "타경" in n:
-            auc.append(c)
-        elif n.count("-") >= 2:
-            gng.append(c)
-        else:
-            auc.append(c)
-    return auc, gng
+# 진행상태 분류
+_BUGA_TOKENS = ["변경", "취소", "취하", "정지", "연기", "기각", "각하"]  # 법원 진행불가
+_MAEGAK_TOKENS = ["매각", "낙찰"]
+_ING_TOKENS = ["유찰", "신건", "진행", "예정", "재진행"]
 
 
-# ── 옥션 ───────────────────────────────────────────────────────────────
-def login(driver, account):
-    driver.get(f"{A1_BASE}/common/login_box.php")
-    wait = WebDriverWait(driver, 15)
-    wait.until(EC.presence_of_element_located((By.ID, "client_id")))
-    driver.execute_script(
-        f"""
-        document.getElementById('client_id').value = {json.dumps(account['id'])};
-        var d = document.getElementById('pw_Dummy');
-        var r = document.getElementById('passwd');
-        if(d) d.style.display = 'none';
-        if(r) {{ r.style.display = 'block'; r.value = {json.dumps(account['pw'])}; }}
-        """
-    )
-    try:
-        driver.find_element(By.XPATH, "//div[@id='login_btn_area']//a | //input[@type='image' and contains(@src, 'login')]").click()
-    except Exception:
-        driver.find_element(By.ID, "passwd").send_keys(Keys.RETURN)
-    time.sleep(2)
-
-
-def goto_inter_list(driver):
-    driver.get(f"{A1_BASE}/member/inter_list.php")
-    time.sleep(1.0)
-
-
-def reset_search(driver):
-    try:
-        driver.get(f"{A1_BASE}/member/inter_list.php")
-        time.sleep(0.8)
-    except Exception:
-        pass
-
-
-def search_kauction(driver, wait, case):
-    """경매 검색: 연도(num1) + 번호(num2)."""
-    year = year_of(case)
-    num = case_num2(case["sakun_no"])
-    try:
-        if year:
-            try:
-                Select(wait.until(EC.element_to_be_clickable((By.NAME, "num1")))).select_by_value(year)
-            except Exception:
-                driver.execute_script(
-                    f"var s=document.querySelector('select[name=\"num1\"]'); if(s){{s.value='{year}'; s.dispatchEvent(new Event('change'));}}"
-                )
-            time.sleep(0.3)
-        el = wait.until(EC.presence_of_element_located((By.ID, "num2")))
-        el.clear(); el.send_keys(num); time.sleep(0.2)
-        driver.execute_script("arguments[0].click();", driver.find_element(By.ID, "btnSrch"))
-        time.sleep(2.0)
-        return True
-    except Exception as e:
-        print(f"    ⚠ 경매 검색 오류: {e}")
-        return False
-
-
-def search_gongmae(driver, wait, case):
-    try:
-        driver.execute_script("if(document.querySelector('#itype2')) document.querySelector('#itype2').click();")
-        time.sleep(0.6)
-        el = wait.until(EC.presence_of_element_located((By.ID, "pnum")))
-        el.clear(); el.send_keys(case["sakun_no"]); time.sleep(0.2)
-        driver.execute_script("arguments[0].click();", wait.until(EC.element_to_be_clickable((By.ID, "btnSrch"))))
-        time.sleep(2.0)
-        return True
-    except Exception as e:
-        print(f"    ⚠ 공매 검색 오류: {e}")
-        return False
-
-
-def find_first_row(driver):
-    cands = driver.find_elements(By.XPATH, "//div[starts-with(@id,'tr_')] | //tr[starts-with(@id,'tr_')]")
-    for c in cands:
-        try:
-            if c.is_displayed() and c.size.get("height", 0) >= 50 and "감정가" in (c.text or ""):
-                return c
-        except Exception:
-            continue
-    return None
-
-
-def extract_product_id(driver, row_el):
-    try:
-        pid = driver.execute_script(
-            "var el=arguments[0];var cb=el.querySelector('input[type=checkbox][value]');"
-            "if(cb)return cb.value;var opt=el.querySelector('[opt]');if(opt)return opt.getAttribute('opt');return '';",
-            row_el)
-        return (pid or "").strip()
-    except Exception:
-        return ""
-
-
-_STATUS_TOKENS = ["취하", "취소", "변경", "정지", "연기", "기각", "각하", "유찰", "매각", "낙찰", "신건"]
-# 불가(법원 진행불가) 로 간주할 사유
-_BUGA_TOKENS = ["변경", "취소", "취하", "정지", "연기", "기각", "각하"]
+def classify_state(state_text):
+    t = state_text or ""
+    # 불가 토큰 우선 (매각/유찰보다 먼저 — '허가취소' 등도 불가로)
+    for tok in _BUGA_TOKENS:
+        if tok in t:
+            return "불가", tok
+    for tok in _MAEGAK_TOKENS:
+        if tok in t:
+            return "매각", tok
+    for tok in _ING_TOKENS:
+        if tok in t:
+            return "진행", tok
+    return "기타", t.strip().replace("\n", " ")[:20]
 
 
 def parse_jongryo(detail_text):
-    """종결문구에서 사유 추출. '본사건은 ○○(으)로 경매절차가 종결되었습니다' → (사유, 문장)."""
+    """상세 종결문구에서 사유/문장. '본사건은 ○○(으)로 경매절차가 종결되었습니다'."""
     if not detail_text:
         return "", ""
     m = re.search(r"본사건은\s*(.+?)\s*\(?으?\)?로\s*경매절차가\s*종결", detail_text)
@@ -247,89 +165,185 @@ def parse_jongryo(detail_text):
     return "", ""
 
 
-def scan_token(text, tokens):
-    for tok in tokens:
-        if tok in (text or ""):
-            return tok
-    return ""
-
-
-def scan_address(text):
-    """결과/상세 텍스트에서 소재지(주소) 한 줄 추출."""
-    if not text:
-        return ""
-    m = re.search(r"(?:소재지|주소)\s*[:：]?\s*([^\n]+)", text)
-    if m:
-        return m.group(1).strip()
-    # fallback: 시/도로 시작하는 줄
-    for ln in text.splitlines():
-        if re.match(r"^\s*(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)", ln.strip()):
-            return ln.strip()
-    return ""
-
-
-def open_detail_text(driver, pid, is_gongmae):
-    """상세(view) 페이지 열어 body 텍스트 반환 (주소/종결문구/기일 파싱용)."""
-    if not pid:
-        return "", ""
-    url = (f"{A1_BASE}/pubauct/view.php?product_id={pid}" if is_gongmae
-           else f"{A1_BASE}/auction/ca_view.php?product_id={pid}")
+# ── 옥션 ───────────────────────────────────────────────────────────────
+def login(driver, account):
+    driver.get(f"{A1_BASE}/common/login_box.php")
+    wait = WebDriverWait(driver, 15)
+    wait.until(EC.presence_of_element_located((By.ID, "client_id")))
+    driver.execute_script(
+        """
+        document.getElementById('client_id').value = arguments[0];
+        var d = document.getElementById('pw_Dummy');
+        var r = document.getElementById('passwd');
+        if(d) d.style.display = 'none';
+        if(r) { r.style.display = 'block'; r.value = arguments[1]; }
+        """,
+        account["id"], account["pw"],
+    )
     try:
-        driver.get(url)
-        time.sleep(1.5)
-        body = driver.find_element(By.TAG_NAME, "body").text or ""
-        return body, url
+        driver.find_element(By.XPATH, "//div[@id='login_btn_area']//a | //input[@type='image' and contains(@src, 'login')]").click()
+    except Exception:
+        driver.find_element(By.ID, "passwd").send_keys(Keys.RETURN)
+    time.sleep(2)
+
+
+def search_case(driver, wait, case):
+    """종합검색(ca_title.php) 진입 → 사건번호(년도+번호)로 auction_num_ser()."""
+    year = year_of(case)
+    num = case_num2(case["sakun_no"])
+    try:
+        driver.get(URL_SEARCH)
+        wait.until(EC.presence_of_element_located((By.ID, "num2_Top")))
+        driver.execute_script(
+            """
+            var n1=document.getElementById('num1_Top'), n2=document.getElementById('num2_Top');
+            if(n1 && arguments[0]) n1.value=arguments[0];
+            if(n2) n2.value=arguments[1];
+            try{ auction_num_ser(); }catch(e){}
+            """,
+            year, num,
+        )
+        try:
+            WebDriverWait(driver, 20).until(lambda d: "ca_list" in d.current_url)
+        except Exception:
+            pass
+        time.sleep(1.2)
+        return True
+    except Exception as e:
+        print(f"    ⚠ 검색 오류: {e}")
+        return False
+
+
+def parse_result_rows(driver):
+    out = []
+    cbs = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox][value]")
+    for cb in cbs:
+        try:
+            val = (cb.get_attribute("value") or "").strip()
+            if not re.match(r"^\d{4,}$", val):
+                continue
+            tr = cb.find_element(By.XPATH, "./ancestor::tr[1]")
+            tds = tr.find_elements(By.TAG_NAME, "td")
+            if len(tds) < 8:
+                continue
+            line_num = ""
+            try:
+                ln = tds[0].find_element(By.CSS_SELECTOR, "input[name='line_num']")
+                line_num = (ln.get_attribute("value") or "").strip()
+            except Exception:
+                pass
+            date_txt = (tds[6].text or "").strip()
+            out.append({
+                "pid": val,
+                "line_num": line_num,
+                "sakun": (tds[2].text or "").strip(),
+                "addr": (tds[3].text or "").strip(),
+                "state": (tds[5].text or "").strip(),
+                "date6": norm_date6(date_txt),
+                "date_txt": date_txt.replace("\n", " "),
+            })
+        except Exception:
+            continue
+    return out
+
+
+def build_view_url(driver, pid, line_num, line_tnum):
+    try:
+        ssid = driver.execute_script("return (typeof user_ssid!=='undefined')?String(user_ssid):'';") or ""
+    except Exception:
+        ssid = ""
+    parts = [f"product_id={pid}"]
+    if line_num:
+        parts.append(f"line_num={line_num}")
+    if line_tnum:
+        parts.append(f"line_tnum={line_tnum}")
+    if ssid:
+        parts.append(f"user_ssid={ssid}")
+    parts.append("person_hide=0")
+    return f"{A1_BASE}/auction/ca_view.php?" + "&".join(parts)
+
+
+def open_detail_text(driver, view_url):
+    try:
+        driver.get(view_url)
+        time.sleep(1.4)
+        return driver.find_element(By.TAG_NAME, "body").text or ""
     except Exception as e:
         print(f"    ⚠ 상세 열기 오류: {e}")
-        return "", url
+        return ""
 
 
-def verify_and_emit(driver, case, is_gongmae):
-    row = find_first_row(driver)
-    if not row:
-        rec = dict(case, status="조회실패", key_match=False, detail="", view_url="", fetched_court="", fetched_date="")
-        print(f"RESULT|{json.dumps(rec, ensure_ascii=False)}")
-        print("    ⚠ 결과 없음")
-        return
-    row_txt = row.text or ""
-    pid = extract_product_id(driver, row)
-    detail_txt, view_url = open_detail_text(driver, pid, is_gongmae)
-    full_txt = (row_txt + "\n" + detail_txt).strip()
-
-    # 종결사유 우선, 없으면 결과 토큰
-    reason, sentence = parse_jongryo(detail_txt)
-    if not reason:
-        reason = scan_token(full_txt, _STATUS_TOKENS)
-    # 법원/주소 변환
-    addr = scan_address(full_txt)
-    fetched_court = addr_to_court(addr)
-    # 기일(입찰일자) — 페이지에 expected 기일이 존재하는지
-    exp_date = norm_date(case.get("bid_date"))
-    date_hit = bool(exp_date) and (exp_date in re.sub(r"[^0-9]", "", full_txt) or
-                                   any(norm_date(d) == exp_date for d in re.findall(r"20\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2}", full_txt)))
-
+def process_case(driver, wait, case):
     exp_court = (case.get("court") or "").strip()
-    court_hit = bool(exp_court) and bool(fetched_court) and (fetched_court == exp_court)
-
-    key_match = bool(exp_date == "" or date_hit) and bool(exp_court == "" or court_hit)
-
-    is_buga = reason in _BUGA_TOKENS
-    rec = {
+    exp_d6 = norm_date6(case.get("bid_date"))
+    base = {
         "sakun_no": case.get("sakun_no", ""),
         "bid_date": case.get("bid_date", ""),
         "court": exp_court,
-        "status": reason,           # 불가사유 (변경/취소/취하/...) — 진행중이면 ''
-        "detail": sentence,         # 종결문구 원문
-        "is_buga": is_buga,
-        "key_match": key_match,
-        "fetched_court": fetched_court,
-        "date_hit": date_hit,
-        "court_hit": court_hit,
-        "view_url": view_url,
     }
+
+    if not search_case(driver, wait, case):
+        print(f"RESULT|{json.dumps(dict(base, status='', is_buga=False, key_match=False, detail='', view_url='', fetched_court='', date_hit=False, court_hit=False), ensure_ascii=False)}")
+        return
+
+    rows = parse_result_rows(driver)
+    if not rows:
+        print(f"RESULT|{json.dumps(dict(base, status='조회없음', is_buga=False, key_match=False, detail='', view_url='', fetched_court='', date_hit=False, court_hit=False), ensure_ascii=False)}")
+        print("    ⚠ 결과 행 없음")
+        return
+
+    line_tnum = len(rows)
+    # (법원 일치) AND (매각기일 일치) 행 선택
+    picked = None
+    for r in rows:
+        fc = addr_to_court(r["addr"])
+        r["_fc"] = fc
+        r["_court_hit"] = bool(exp_court) and (fc == exp_court)
+        r["_date_hit"] = bool(exp_d6) and (r["date6"] == exp_d6)
+        if r["_court_hit"] and r["_date_hit"]:
+            picked = r
+            break
+    if not picked:
+        for r in rows:
+            if r["_date_hit"]:
+                picked = r
+                break
+    if not picked:
+        picked = rows[0]
+
+    state_kind, tok = classify_state(picked["state"])
+    fetched_court = picked.get("_fc", "")
+    court_hit = picked.get("_court_hit", False)
+    date_hit = picked.get("_date_hit", False)
+    key_match = court_hit and date_hit
+
+    reason = ""
+    sentence = ""
+    view_url = ""
+    if state_kind == "불가":
+        reason = tok
+        view_url = build_view_url(driver, picked["pid"], picked["line_num"], line_tnum)
+        detail_txt = open_detail_text(driver, view_url)
+        jr, js = parse_jongryo(detail_txt)
+        if jr:
+            reason = jr
+        sentence = js
+
+    is_buga = (state_kind == "불가")
+    rec = dict(base,
+               status=reason if is_buga else (state_kind if state_kind in ("매각",) else ""),
+               state_kind=state_kind,
+               state_raw=picked["state"].replace("\n", " "),
+               detail=sentence,
+               is_buga=is_buga,
+               key_match=key_match,
+               fetched_court=fetched_court,
+               date_hit=date_hit,
+               court_hit=court_hit,
+               view_url=view_url)
     print(f"RESULT|{json.dumps(rec, ensure_ascii=False)}")
     flag = "✅" if key_match else "⚠키불일치"
-    print(f"    → {flag} 사유:{reason or '진행중'} / 법원:{fetched_court}({'=' if court_hit else '≠'}{exp_court}) / 기일일치:{date_hit}")
+    print(f"    → {flag} 상태:{state_kind}/{reason or tok} 법원:{fetched_court}({'=' if court_hit else '≠'}{exp_court}) 기일일치:{date_hit}")
 
 
 def main():
@@ -362,9 +376,8 @@ def main():
         sys.exit(1)
 
     acc = ACCOUNTS[0]
-    auc, gng = classify(cases)
     print(f"🔐 로그인 계정: {acc.get('id')}")
-    print(f"🎯 조회 시작: 경매 {len(auc)}건 / 공매 {len(gng)}건 (3키 검증)\n")
+    print(f"🎯 불가확인 시작: {len(cases)}건 (종합검색 → 법원·기일 매칭)\n")
 
     options = webdriver.ChromeOptions()
     options.add_argument("--window-size=1400,900")
@@ -373,25 +386,14 @@ def main():
     wait = WebDriverWait(driver, 15)
     try:
         login(driver, acc)
-        goto_inter_list(driver)
-        for i, case in enumerate(auc, 1):
-            print(f"[경매 {i}/{len(auc)}] {case['sakun_no']} | {case.get('bid_date')} | {case.get('court')}")
-            reset_search(driver)
-            if search_kauction(driver, wait, case):
-                verify_and_emit(driver, case, is_gongmae=False)
-            else:
-                print(f"RESULT|{json.dumps(dict(case, status='검색실패', key_match=False, detail='', view_url=''), ensure_ascii=False)}")
-            time.sleep(1.8)
-        if gng:
-            print("\n▶ 공매 전환")
-            reset_search(driver)
-            for i, case in enumerate(gng, 1):
-                print(f"[공매 {i}/{len(gng)}] {case['sakun_no']}")
-                if search_gongmae(driver, wait, case):
-                    verify_and_emit(driver, case, is_gongmae=True)
-                else:
-                    print(f"RESULT|{json.dumps(dict(case, status='검색실패', key_match=False, detail='', view_url=''), ensure_ascii=False)}")
-                time.sleep(1.8)
+        for i, case in enumerate(cases, 1):
+            print(f"[불가확인 {i}/{len(cases)}] {case['sakun_no']} | {case.get('bid_date')} | {case.get('court')}")
+            try:
+                process_case(driver, wait, case)
+            except Exception as e:
+                print(f"    ❌ 처리 오류: {e}")
+                print(f"RESULT|{json.dumps(dict(case, status='오류', is_buga=False, key_match=False, detail='', view_url=''), ensure_ascii=False)}")
+            time.sleep(1.6)
         print(f"\n✅ 완료: 총 {len(cases)}건 조회")
     except Exception as e:
         traceback.print_exc()
