@@ -501,20 +501,26 @@
         maeCell = `<b style="color:${col}">${fmtWon(r.maegak_price)}</b>`;
       }
       const stu = String(r.stu_member || '');
+      // 매수인: 회원이름과 같으면(=우리 회원 낙찰) 파란색
+      const mNm = String(r.m_name || '').trim(), buyer = String(r.buyer || '').trim();
+      const buyerCell = buyer ? `<span${(mNm && mNm === buyer) ? ' style="color:#2563eb;font-weight:700"' : ''}>${escapeHtml(buyer)}</span>` : '';
+      // 비고: 불가 처리 시 MAPS 에 들어갈 사유/상세(취하/변경 등). MAPS note 아님
+      const noteVal = isBuga ? [r.status, r.detail].filter(Boolean).join(' / ') : '';
+      const noteCell = noteVal ? `<span title="${escapeAttr(noteVal)}">${escapeHtml(noteVal.length > 12 ? noteVal.slice(0, 12) + '…' : noteVal)}</span>` : '';
       return `<tr data-idx="${i}" class="${isBuga ? 'cc-row-buga' : ''}">
         <td style="text-align:center"><input type="checkbox" class="cc-cb" ${isBuga ? 'checked' : ''}></td>
         <td>${keyCell(r.bid_date, r.date_hit !== false)}</td>
         <td>${keyCell(r.sakun_no, r.sakun_hit !== false)}</td>
         <td>${keyCell(r.court, r.court_hit !== false)}</td>
         <td>${escapeHtml(r.m_name || '')}</td>
-        <td>${escapeHtml(r.buyer || '')}</td>
+        <td>${buyerCell}</td>
         <td style="text-align:right">${fmtWon(r.bidprice)}</td>
         <td style="text-align:right">${maeCell}</td>
         <td style="text-align:center">${resBadge}</td>
         <td>${detail}${url}</td>
         <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok">${escapeHtml(stu)}</span>` : ''}</td>
         <td>${willUpdate}</td>
-        <td class="cc-note" title="${escapeAttr(r.note || '')}">${escapeHtml(String(r.note || '').length > 10 ? String(r.note).slice(0, 10) + '…' : (r.note || ''))}</td>
+        <td class="cc-note">${noteCell}</td>
       </tr>`;
     }).join('');
     const doneCnt = merged.filter(r => !r._pending).length;

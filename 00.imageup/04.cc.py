@@ -375,7 +375,6 @@ def process_case(driver, wait, case):
         "stu_member": case.get("stu_member", ""),  # 현재 MAPS 물건상태
         "bidprice": case.get("bidprice", ""),       # 우리 입찰가(없을 수도)
         "m_name": case.get("m_name", ""),           # 회원명
-        "note": case.get("note", ""),               # 비고
     }
 
     if not search_case(driver, wait, case, use_date=True):
