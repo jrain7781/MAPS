@@ -339,11 +339,21 @@
     setCcDates(p.f, p.t);
     loadProgressList();
   }
-  // 상태값 드롭다운 (MAPS 상태값, 기본 입찰)
+  // 상태값 다중 선택 (체크박스, 기본 입찰만 체크) — 아래 줄에 펼쳐서
+  const CC_STATUSES = ['입찰', '추천', '상품', '검증', '미정', '폐기', '불가', '매각'];
   function renderCcStatusSelect() {
-    const sel = $card('cc')?.querySelector('[data-role="cc-status"]'); if (!sel) return;
-    const STATUSES = ['입찰', '추천', '상품', '검증', '미정', '폐기', '불가', '매각'];
-    sel.innerHTML = STATUSES.map(s => `<option value="${s}"${s === '입찰' ? ' selected' : ''}>${s}</option>`).join('');
+    const box = $card('cc')?.querySelector('[data-role="cc-status"]'); if (!box) return;
+    box.innerHTML = CC_STATUSES.map(s =>
+      `<label class="${s === '입찰' ? 'on' : ''}"><input type="checkbox" class="cc-st-cb" value="${s}"${s === '입찰' ? ' checked' : ''}> ${s}</label>`
+    ).join('');
+    box.querySelectorAll('.cc-st-cb').forEach(cb => cb.addEventListener('change', () => {
+      cb.closest('label').classList.toggle('on', cb.checked);
+    }));
+  }
+  function getCcStatuses() {
+    const box = $card('cc')?.querySelector('[data-role="cc-status"]');
+    if (!box) return [];
+    return Array.from(box.querySelectorAll('.cc-st-cb:checked')).map(cb => cb.value);
   }
 
   // 즐겨찾기 관리 모달
@@ -380,17 +390,18 @@
     const card = $card('cc'); if (!card) return;
     const from6 = ymdToYYMMDD(card.querySelector('[data-role="cc-from"]')?.value);
     const to6 = ymdToYYMMDD(card.querySelector('[data-role="cc-to"]')?.value);
+    const statuses = getCcStatuses();
     const btn = card.querySelector('[data-act="cc-load"]');
     if (btn) btn.disabled = true;
-    log('cc', `📥 MAPS 입찰건 불러오는 중... (${from6}~${to6})`, 'log-ok');
+    log('cc', `📥 MAPS 입찰건 불러오는 중... (${from6}~${to6}, 상태 ${statuses.join('/') || '전체'})`, 'log-ok');
     fetch('/api/maps-gas', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, api_action: 'getProgressList', from: from6, to: to6 })
+      body: JSON.stringify({ api_key: apiKey, api_action: 'getProgressList', from: from6, to: to6, statuses: statuses })
     }).then(r => r.json()).then(j => {
       if (btn) btn.disabled = false;
       if (j && j.success && Array.isArray(j.cases)) {
         ccCases = j.cases;
-        ccResults.length = 0; renderCcResults();
+        ccResults.length = 0; renderCcResults();   // 불러온 리스트 즉시 표시(실행 전)
         const info = card.querySelector('[data-role="cc-loaded"]');
         if (info) info.textContent = `불러옴 ${ccCases.length}건 (${from6}~${to6}) — ▶ 실행으로 옥션 조회`;
         log('cc', `✅ ${ccCases.length}건 불러옴 (${from6}~${to6})`, 'log-ok');
@@ -422,58 +433,65 @@
   function ccStateKind(r) { return String(r.state_kind || r.status || '').trim() || (r.status === '조회없음' ? '조회없음' : '진행중'); }
 
   const _won = (v) => parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10) || 0;
-  // 헤더 클릭 정렬
+  function ccKeyOf(o) { return (o && o.item_id && String(o.item_id)) || (String(o.sakun_no || '') + '|' + String(o.bid_date || '') + '|' + String(o.court || '')); }
+  // 불러온 리스트(ccCases) + 옥션 결과(ccResults) 병합 — 실행 전엔 리스트만, 실행 후 결과 채움
+  function ccMergedRows() {
+    const byKey = {}; ccResults.forEach(r => { byKey[ccKeyOf(r)] = r; });
+    const base = ccCases.length ? ccCases : ccResults;
+    return base.map(c => { const r = byKey[ccKeyOf(c)]; return Object.assign({ _pending: !r }, c, r || {}); });
+  }
+  // 헤더 클릭 정렬 (병합 기준 base=ccCases 정렬)
   function sortCc(key) {
     if (ccSort.key === key) ccSort.dir = -ccSort.dir; else { ccSort.key = key; ccSort.dir = 1; }
-    const val = (r) => {
-      switch (key) {
-        case 'bid_date': return String(r.bid_date || '');
-        case 'sakun_no': return String(r.sakun_no || '');
-        case 'court': return String(r.court || '');
-        case 'm_name': return String(r.m_name || '');
-        case 'buyer': return String(r.buyer || '');
-        case 'bidprice': return _won(r.bidprice);
-        case 'maegak': return _won(r.maegak_price);
-        case 'stu': return String(r.stu_member || '');
-        case 'result': return ccStateKind(r);
-        default: return '';
-      }
-    };
-    ccResults.sort((a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * ccSort.dir; });
+    const byKey = {}; ccResults.forEach(r => { byKey[ccKeyOf(r)] = r; });
+    const m = (c) => Object.assign({}, c, byKey[ccKeyOf(c)] || {});
+    const val = (c0) => { const r = m(c0); switch (key) {
+      case 'bid_date': return String(r.bid_date || '');
+      case 'sakun_no': return String(r.sakun_no || '');
+      case 'court': return String(r.court || '');
+      case 'm_name': return String(r.m_name || '');
+      case 'buyer': return String(r.buyer || '');
+      case 'bidprice': return _won(r.bidprice);
+      case 'maegak': return _won(r.maegak_price);
+      case 'stu': return String(r.stu_member || '');
+      case 'result': return ccStateKind(r);
+      default: return ''; } };
+    const base = ccCases.length ? ccCases : ccResults;
+    base.sort((a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * ccSort.dir; });
     renderCcResults();
   }
 
-  // 진행사항 결과 테이블 — 3키 ✓/✗ + 회원·매수인·입찰가·매각가(일치 파랑/불일치 빨강)
-  // + 결과·상세·현재상태·업데이트예정. 불가만 강제 체크. 헤더 클릭 정렬.
+  // 진행사항 결과 테이블 — 불러오면 즉시 리스트 표시, 실행 시 결과 채움.
+  // 3키 ✓/✗ + 회원·매수인·입찰가·매각가(일치 파랑/불일치 빨강) + 결과·상세·현재상태·업데이트예정.
   function renderCcResults() {
     const wrap = $card('cc')?.querySelector('[data-role="cc-results"]');
     if (!wrap) return;
-    if (ccResults.length === 0) { wrap.innerHTML = ''; return; }
+    const merged = ccMergedRows();
+    if (merged.length === 0) { wrap.innerHTML = ''; return; }
     const arrow = (k) => ccSort.key === k ? (ccSort.dir > 0 ? ' ▲' : ' ▼') : '';
-    const rows = ccResults.map((r, i) => {
+    const rows = merged.map((r, i) => {
+      const pending = !!r._pending;
       const isBuga = !!r.is_buga;
-      const stateKind = ccStateKind(r);
-      const dateHit  = r.date_hit !== false;
-      const sakunHit = r.sakun_hit !== false;
-      const courtHit = r.court_hit !== false;
-      const resCls = isBuga ? 'cc-bad' : (stateKind === '매각' ? 'cc-end' : (stateKind === '조회없음' || stateKind === '오류' ? 'cc-warn' : 'cc-ok'));
+      const stateKind = pending ? '대기' : ccStateKind(r);
+      // 실행 전(pending)엔 ✓/✗ 대신 무표시
+      const keyCell = (v, hit) => pending ? escapeHtml(v || '') : ccKeyCell(v, hit);
+      const resCls = pending ? 'cc-pend' : (isBuga ? 'cc-bad' : (stateKind === '매각' ? 'cc-end' : (stateKind === '조회없음' || stateKind === '오류' ? 'cc-warn' : 'cc-ok')));
       const resBadge = `<span class="cc-badge ${resCls}">${escapeHtml(stateKind)}</span>`;
       const dtl = String(r.detail || '');
       const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 20 ? dtl.slice(0, 20) + '…' : dtl)}</span>` : '';
       const url = r.view_url ? ` <a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">원본</a>` : '';
       const willUpdate = isBuga
         ? `<b style="color:#b91c1c">불가</b>${r.status ? ` <span class="cc-badge cc-bad">${escapeHtml(r.status)}</span>` : ''}`
-        : (stateKind === '매각' ? '<span class="cc-badge cc-end">매각</span>' : '<span style="color:#9ca3af">-</span>');
-      // 매각가: 우리입찰가와 일치=파랑(낙찰), 불일치=빨강(패찰). 둘 중 하나 없으면 무색.
+        : (!pending && stateKind === '매각' ? '<span class="cc-badge cc-end">매각</span>' : '<span style="color:#9ca3af">-</span>');
       const bid = _won(r.bidprice), mae = _won(r.maegak_price);
       let maeCell = mae ? fmtWon(r.maegak_price) : '';
       if (mae && bid) maeCell = `<b style="color:${bid === mae ? '#2563eb' : '#dc2626'}">${fmtWon(r.maegak_price)}</b>`;
       const stu = String(r.stu_member || '');
       return `<tr data-idx="${i}" class="${isBuga ? 'cc-row-buga' : ''}">
         <td style="text-align:center"><input type="checkbox" class="cc-cb" ${isBuga ? 'checked' : ''}></td>
-        <td>${ccKeyCell(r.bid_date, dateHit)}</td>
-        <td>${ccKeyCell(r.sakun_no, sakunHit)}</td>
-        <td>${ccKeyCell(r.court, courtHit)}</td>
+        <td>${keyCell(r.bid_date, r.date_hit !== false)}</td>
+        <td>${keyCell(r.sakun_no, r.sakun_hit !== false)}</td>
+        <td>${keyCell(r.court, r.court_hit !== false)}</td>
         <td>${escapeHtml(r.m_name || '')}</td>
         <td>${escapeHtml(r.buyer || '')}</td>
         <td style="text-align:right">${fmtWon(r.bidprice)}</td>
@@ -484,11 +502,12 @@
         <td>${willUpdate}</td>
       </tr>`;
     }).join('');
-    const bugaCnt = ccResults.filter(r => r.is_buga).length;
-    const maegakCnt = ccResults.filter(r => ccStateKind(r) === '매각').length;
+    const doneCnt = merged.filter(r => !r._pending).length;
+    const bugaCnt = merged.filter(r => r.is_buga).length;
+    const maegakCnt = merged.filter(r => !r._pending && ccStateKind(r) === '매각').length;
     wrap.innerHTML = `
       <div class="cc-results-head">
-        <span><b>결과</b> ${ccResults.length}건 · <b style="color:#b91c1c">불가 ${bugaCnt}</b> · 매각 ${maegakCnt} · <span style="color:#9ca3af">불가만 자동체크</span></span>
+        <span><b>${merged.length}건</b> (조회완료 ${doneCnt}) · <b style="color:#b91c1c">불가 ${bugaCnt}</b> · 매각 ${maegakCnt} · <span style="color:#9ca3af">불가만 자동체크</span></span>
         <span class="mjcap-spacer"></span>
         <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 체크한 건 MAPS '불가' 처리</button>
       </div>
@@ -520,13 +539,14 @@
     if (!card) return;
     const tbody = card.querySelector('[data-role="cc-results"] tbody');
     if (!tbody) return;
+    const merged = ccMergedRows();
     const picked = [];
     tbody.querySelectorAll('tr').forEach(tr => {
       const cb = tr.querySelector('.cc-cb');
       if (cb && cb.checked) {
         const idx = parseInt(tr.dataset.idx, 10);
-        const r = ccResults[idx];
-        if (r) picked.push(r);
+        const r = merged[idx];
+        if (r && r.is_buga) picked.push(r);   // 불가 확정 건만 전송
       }
     });
     if (picked.length === 0) { alert('체크된 건이 없습니다.'); return; }

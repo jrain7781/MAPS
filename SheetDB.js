@@ -7958,7 +7958,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'uploadChangeCancel') return uploadChangeCancel(payload.items || []);
   if (action === 'get7DaysBugaList')   return get7DaysBugaList();
   if (action === 'getTodayMaegakList') return getTodayMaegakList();
-  if (action === 'getProgressList')    return getProgressList(payload.from, payload.to);
+  if (action === 'getProgressList')    return getProgressList(payload.from, payload.to, payload.statuses);
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
@@ -8197,10 +8197,16 @@ function getTodayMaegakList() {
  * @param {string} to6   YYMMDD
  * @return {{success, cases:[{item_id,sakun_no,bid_date,court,bidprice,m_name}], count, from, to}}
  */
-function getProgressList(from6, to6) {
+function getProgressList(from6, to6, statuses) {
   try {
     var tz = Session.getScriptTimeZone();
     var today = Utilities.formatDate(new Date(), tz, 'yyMMdd');
+    // 상태 필터(다중) — 비어있으면 전체
+    var statusSet = null;
+    if (Array.isArray(statuses) && statuses.length) {
+      statusSet = {};
+      statuses.forEach(function (s) { statusSet[String(s || '').trim()] = true; });
+    }
     var clean6 = function (v, dflt) {
       var d = String(v == null ? '' : v).replace(/[^0-9]/g, '');
       if (d.length >= 8 && d.slice(0, 2) === '20') d = d.slice(2);
@@ -8233,6 +8239,8 @@ function getProgressList(from6, to6) {
       var d6 = norm6(values[i][inDateIdx]);
       var n = parseInt(d6, 10);
       if (!n || n < fromN || n > toN) continue;
+      var stu = String(values[i][stuIdx] == null ? '' : values[i][stuIdx]).trim();
+      if (statusSet && !statusSet[stu]) continue;  // 상태 다중 필터
       var sakun = String(values[i][sakunIdx] == null ? '' : values[i][sakunIdx]).trim();
       if (!sakun) continue;
       var court = String(values[i][courtIdx] == null ? '' : values[i][courtIdx]).trim();
@@ -8244,7 +8252,7 @@ function getProgressList(from6, to6) {
         sakun_no: sakun,
         bid_date: d6,
         court: court,
-        stu_member: String(values[i][stuIdx] == null ? '' : values[i][stuIdx]).trim(),
+        stu_member: stu,
         bidprice: String(values[i][bidIdx] == null ? '' : values[i][bidIdx]).trim(),
         m_name: String(values[i][mNameIdx] == null ? '' : values[i][mNameIdx]).trim()
       });
