@@ -304,6 +304,30 @@ def search_case(driver, wait, case, use_date=True):
         return False
 
 
+def parse_gongmae_detail(detail_text):
+    """공매 상세(pubauct/view.php) — 입찰결과 표(낙찰가) + 낙찰자.
+    경매와 포맷 다름(경매='매각:금액 매수인:이름', 공매='낙찰가' 표 + '낙찰자' 필드).
+    return: {maegak_price, buyer, bidder_count}."""
+    res = {"maegak_price": "", "buyer": "", "bidder_count": ""}
+    if not detail_text:
+        return res
+    # 낙찰자(매수인): '낙찰자' 뒤 이름. 비어있거나 조사일자면 미낙찰(진행중/유찰)
+    m = re.search(r"낙찰자\s*[\t: ]*([가-힣A-Za-z(][가-힣A-Za-z0-9().주\s]{1,18})", detail_text)
+    if m:
+        b = m.group(1).strip()
+        if b and b != "-" and "조사일자" not in b:
+            b = b.split("/")[0].strip().rstrip(") ").strip()
+            parts = b.split()
+            res["buyer"] = parts[-1] if parts else b
+    # 매각가(낙찰가): 입찰결과 표에서 '매각' 표시된 회차의 금액
+    blk = (re.search(r"입찰결과[\s\S]{0,500}", detail_text) or [None])
+    blk = blk.group(0) if hasattr(blk, "group") else detail_text
+    mm = re.search(r"([\d,]{7,})[\s\n]*매각(?!\s*결정)", blk) or re.search(r"매각[\s\n]*[:：]?\s*([\d,]{7,})", blk)
+    if mm:
+        res["maegak_price"] = mm.group(1).replace(",", "")
+    return res
+
+
 def is_gongmae(case):
     """공매 판정: 법원='공매' 또는 사건번호에 하이픈 2개 이상(예 2026-0400-019462)."""
     court = (case.get("court") or "").strip()
@@ -441,7 +465,7 @@ def process_gongmae(driver, wait, case, base, exp_d6):
                 reason = jr
             sentence = js
         else:
-            md = parse_maegak_detail(detail_txt, exp_d6)
+            md = parse_gongmae_detail(detail_txt)   # 공매 전용 파서
             maegak_price, buyer, bidder_count = md["maegak_price"], md["buyer"], md["bidder_count"]
 
     rec = dict(base,
