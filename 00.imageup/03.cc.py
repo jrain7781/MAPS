@@ -209,32 +209,42 @@ def login(driver, account):
     time.sleep(2)
 
 
-def search_case(driver, wait, case):
-    """종합검색(ca_title.php): 법원(lawsup)+사건번호(본문 num1/num2)+물건현황(전체) 세팅
-    → 메인 검색 버튼 실제 클릭. (auction_num_ser 은 법원 무시하므로 사용 안 함.
-      메인 검색 버튼은 JS .click() 이 안 먹어 Selenium native click 필요.)"""
+def search_case(driver, wait, case, use_date=True):
+    """종합검색(ca_title.php): 법원(lawsup)+사건번호(본문 num1/num2)+매각기일+물건현황(전체)
+    세팅 → 메인 검색 버튼 native click. use_date=True 면 매각기일(next_biddate)도 지정."""
     year = year_of(case)
     num = case_num2(case["sakun_no"])
     lawsup = court_to_lawsup(case.get("court", ""))
+    bid_full = yymmdd_to_full(norm_date6(case.get("bid_date"))) if use_date else ""  # 2026-06-01
     try:
         driver.get(URL_SEARCH)
-        wait.until(EC.presence_of_element_located((By.ID, "num2")))
+        try:
+            wait.until(EC.presence_of_element_located((By.ID, "num2")))
+        except Exception:
+            print(f"    ⚠ 검색폼 미발견(로그인 만료?) url={driver.current_url}")
+            return False
         driver.execute_script(
             """
             var ls=document.querySelector('select[name="lawsup"]'); if(ls && arguments[2]) ls.value=arguments[2];
             var n1=document.getElementById('num1'); if(n1 && arguments[0]) n1.value=arguments[0];
             var n2=document.getElementById('num2'); if(n2) n2.value=arguments[1];
             var st=document.querySelector('select[name="state"]'); if(st) st.value='';
+            var b1=document.getElementById('next_biddate1'), b2=document.getElementById('next_biddate2');
+            if(b1) b1.value=arguments[3]||''; if(b2) b2.value=arguments[3]||'';
             """,
-            year, num, lawsup,
+            year, num, lawsup, bid_full,
         )
-        # 메인 종합검색 버튼 (fm_aulist 안의 '검색' span) — Selenium native click
-        btn = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, "//form[@id='fm_aulist']//*[normalize-space(text())='검색' and contains(@class,'btn_lightblack')]")))
+        # 메인 종합검색 '검색' 버튼 = #fm_aulist .btn_lightblack (span text 가 비어있어 XPath 안됨 → CSS)
+        btns = driver.find_elements(By.CSS_SELECTOR, "#fm_aulist .btn_lightblack")
+        if not btns:
+            print("    ⚠ 검색 버튼 못 찾음")
+            return False
+        btn = btns[0]
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
         try:
-            btn.click()
+            btn.click()              # Selenium native(trusted) click — JS click 은 안 먹음
         except Exception:
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", btn)
+            driver.execute_script("arguments[0].click();", btn)
         try:
             WebDriverWait(driver, 20).until(lambda d: "ca_list" in d.current_url)
         except Exception:
@@ -242,7 +252,7 @@ def search_case(driver, wait, case):
         time.sleep(1.2)
         return True
     except Exception as e:
-        print(f"    ⚠ 검색 오류: {e}")
+        print(f"    ⚠ 검색 오류: {repr(e)[:200]}")
         return False
 
 
@@ -315,11 +325,16 @@ def process_case(driver, wait, case):
         "court": exp_court,
     }
 
-    if not search_case(driver, wait, case):
+    if not search_case(driver, wait, case, use_date=True):
         print(f"RESULT|{json.dumps(dict(base, status='', is_buga=False, key_match=False, detail='', view_url='', fetched_court='', date_hit=False, court_hit=False), ensure_ascii=False)}")
         return
 
     rows = parse_result_rows(driver)
+    # 매각기일까지 넣어 0건이면(변경/취하로 기일 바뀐 경우) 날짜 빼고 재검색
+    if not rows:
+        print("    ↻ 매각기일 일치 0건 → 날짜 제외 재검색")
+        if search_case(driver, wait, case, use_date=False):
+            rows = parse_result_rows(driver)
     if not rows:
         print(f"RESULT|{json.dumps(dict(base, status='조회없음', is_buga=False, key_match=False, detail='', view_url='', fetched_court='', date_hit=False, court_hit=False), ensure_ascii=False)}")
         print("    ⚠ 결과 행 없음")
@@ -420,9 +435,8 @@ def main():
     print(f"🎯 불가확인 시작: {len(cases)}건 (종합검색 → 법원·기일 매칭)\n")
 
     options = webdriver.ChromeOptions()
-    # 화면 숨김(headless): env MJ_IMAGEUP_HEADLESS != '0' 이면 창 안 띄움.
-    # (옥션 로그인 봇감지로 실패하면 MJ_IMAGEUP_HEADLESS=0 으로 창 띄워 사용)
-    if os.environ.get("MJ_IMAGEUP_HEADLESS", "1") != "0":
+    # 기본은 창 표시(사용자가 봐야 함). MJ_IMAGEUP_HEADLESS=1 일 때만 숨김.
+    if os.environ.get("MJ_IMAGEUP_HEADLESS", "0") == "1":
         options.add_argument("--headless=new")
         options.add_argument("--disable-gpu")
         print("[MJ] headless 모드 (창 숨김)")

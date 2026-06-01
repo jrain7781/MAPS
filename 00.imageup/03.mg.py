@@ -154,30 +154,41 @@ def login(driver, account):
     time.sleep(2)
 
 
-def search_case(driver, wait, case):
-    """종합검색(ca_title.php): 법원(lawsup)+사건번호(본문 num1/num2)+물건현황(전체) 세팅
-    → 메인 검색 버튼 실제 클릭. (auction_num_ser 은 법원 무시 → 사용 안 함)"""
+def search_case(driver, wait, case, use_date=True):
+    """종합검색(ca_title.php): 법원(lawsup)+사건번호(본문 num1/num2)+매각기일+물건현황(전체)
+    → 메인 검색 버튼 native click. (#fm_aulist .btn_lightblack — span text 비어 XPath 안됨 → CSS)"""
     year = year_of(case)
     num = case_num2(case["sakun_no"])
     lawsup = court_to_lawsup(case.get("court", ""))
+    bid_full = yymmdd_to_full(norm_date6(case.get("bid_date"))) if use_date else ""
     try:
         driver.get(URL_SEARCH)
-        wait.until(EC.presence_of_element_located((By.ID, "num2")))
+        try:
+            wait.until(EC.presence_of_element_located((By.ID, "num2")))
+        except Exception:
+            print(f"    ⚠ 검색폼 미발견(로그인 만료?) url={driver.current_url}")
+            return False
         driver.execute_script(
             """
             var ls=document.querySelector('select[name="lawsup"]'); if(ls && arguments[2]) ls.value=arguments[2];
             var n1=document.getElementById('num1'); if(n1 && arguments[0]) n1.value=arguments[0];
             var n2=document.getElementById('num2'); if(n2) n2.value=arguments[1];
             var st=document.querySelector('select[name="state"]'); if(st) st.value='';
+            var b1=document.getElementById('next_biddate1'), b2=document.getElementById('next_biddate2');
+            if(b1) b1.value=arguments[3]||''; if(b2) b2.value=arguments[3]||'';
             """,
-            year, num, lawsup,
+            year, num, lawsup, bid_full,
         )
-        btn = wait.until(EC.element_to_be_clickable(
-            (By.XPATH, "//form[@id='fm_aulist']//*[normalize-space(text())='검색' and contains(@class,'btn_lightblack')]")))
+        btns = driver.find_elements(By.CSS_SELECTOR, "#fm_aulist .btn_lightblack")
+        if not btns:
+            print("    ⚠ 검색 버튼 못 찾음")
+            return False
+        btn = btns[0]
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
         try:
             btn.click()
         except Exception:
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", btn)
+            driver.execute_script("arguments[0].click();", btn)
         try:
             WebDriverWait(driver, 20).until(lambda d: "ca_list" in d.current_url)
         except Exception:
@@ -185,7 +196,7 @@ def search_case(driver, wait, case):
         time.sleep(1.2)
         return True
     except Exception as e:
-        print(f"    ⚠ 검색 오류: {e}")
+        print(f"    ⚠ 검색 오류: {repr(e)[:200]}")
         return False
 
 
@@ -375,7 +386,7 @@ def main():
     print(f"🎯 매각확인 시작: {len(cases)}건 (오늘 입찰건)\n")
 
     options = webdriver.ChromeOptions()
-    if os.environ.get("MJ_IMAGEUP_HEADLESS", "1") != "0":
+    if os.environ.get("MJ_IMAGEUP_HEADLESS", "0") == "1":
         options.add_argument("--headless=new")
         options.add_argument("--disable-gpu")
         print("[MJ] headless 모드 (창 숨김)")
