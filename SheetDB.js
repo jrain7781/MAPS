@@ -8218,6 +8218,7 @@ function getProgressList(from6, to6) {
 
     var idIdx = ITEM_HEADERS.indexOf('id'), inDateIdx = ITEM_HEADERS.indexOf('in-date'),
         sakunIdx = ITEM_HEADERS.indexOf('sakun_no'), courtIdx = ITEM_HEADERS.indexOf('court'),
+        stuIdx = ITEM_HEADERS.indexOf('stu_member'),
         mNameIdx = ITEM_HEADERS.indexOf('m_name'), bidIdx = ITEM_HEADERS.indexOf('bidprice');
     var values = sheet.getRange(2, 1, lastRow - 1, bidIdx + 1).getValues();
     var norm6 = function (v) {
@@ -8243,6 +8244,7 @@ function getProgressList(from6, to6) {
         sakun_no: sakun,
         bid_date: d6,
         court: court,
+        stu_member: String(values[i][stuIdx] == null ? '' : values[i][stuIdx]).trim(),
         bidprice: String(values[i][bidIdx] == null ? '' : values[i][bidIdx]).trim(),
         m_name: String(values[i][mNameIdx] == null ? '' : values[i][mNameIdx]).trim()
       });

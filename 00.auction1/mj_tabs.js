@@ -72,14 +72,17 @@
           setTimeout(() => { try { fileEl.value = ''; } catch(_) {} }, 100);
         });
       }
-      // cc(진행사항 확인) 전용: 날짜범위 불러오기 + 오늘버튼
+      // cc(진행사항 확인) 전용: 날짜범위/즐겨찾기/상태 드롭다운
       if (key === 'cc') {
         const loadBtn = card.querySelector('[data-act="cc-load"]');
         if (loadBtn) loadBtn.addEventListener('click', loadProgressList);
-        const todayBtn = card.querySelector('[data-act="cc-today"]');
-        if (todayBtn) todayBtn.addEventListener('click', () => { setCcDates(0, 0); loadProgressList(); });
-        // 날짜 기본값 = 오늘~오늘
-        setCcDates(0, 0);
+        const favSel = card.querySelector('[data-role="cc-fav"]');
+        if (favSel) favSel.addEventListener('change', () => applyCcFav(favSel.value));
+        const favMng = card.querySelector('[data-act="cc-fav-manage"]');
+        if (favMng) favMng.addEventListener('click', openCcFav);
+        setCcDates(0, 0);          // 날짜 기본값 = 오늘~오늘
+        renderCcFavSelect();       // 즐겨찾기 드롭다운 채우기
+        renderCcStatusSelect();    // 상태값 드롭다운(기본 입찰)
       }
       loadAccounts(key);
     });
@@ -100,6 +103,9 @@
       b.classList.toggle('active', b.dataset.subtab === key));
     document.querySelectorAll('.mjcap-subpanel').forEach(p =>
       p.classList.toggle('hidden', p.dataset.subpanel !== key));
+    // 진행사항 확인(cc) 탭에서는 구글드라이브 폴더브라우저/미리보기 숨김
+    document.querySelectorAll('[data-hide-on-cc]').forEach(el =>
+      el.classList.toggle('hidden', key === 'cc'));
     try { localStorage.setItem('mj_capture_subtab', key); } catch(e) {}
   }
 
@@ -313,6 +319,60 @@
   }
   function ymdToYYMMDD(v) { const d = String(v || '').replace(/[^0-9]/g, ''); return d.length >= 8 ? d.slice(2, 8) : d.slice(-6); }
 
+  // ===== 즐겨찾기 기간 (localStorage) =====
+  const CC_FAV_KEY = 'mj_cc_fav_periods';
+  const CC_FAV_DEFAULT = [{ name: '오늘', f: 0, t: 0 }, { name: '7일', f: 0, t: 7 }];
+  function getCcFavs() {
+    try { const v = JSON.parse(localStorage.getItem(CC_FAV_KEY) || 'null'); if (Array.isArray(v) && v.length) return v; } catch (e) {}
+    return CC_FAV_DEFAULT.slice();
+  }
+  function saveCcFavs(arr) { try { localStorage.setItem(CC_FAV_KEY, JSON.stringify(arr)); } catch (e) {} }
+  function renderCcFavSelect() {
+    const sel = $card('cc')?.querySelector('[data-role="cc-fav"]'); if (!sel) return;
+    const favs = getCcFavs();
+    sel.innerHTML = '<option value="">즐겨찾기…</option>' +
+      favs.map((p, i) => `<option value="${i}">${escapeHtml(p.name)} (오늘+${p.f}~+${p.t})</option>`).join('');
+  }
+  function applyCcFav(idx) {
+    if (idx === '' || idx == null) return;
+    const p = getCcFavs()[parseInt(idx, 10)]; if (!p) return;
+    setCcDates(p.f, p.t);
+    loadProgressList();
+  }
+  // 상태값 드롭다운 (MAPS 상태값, 기본 입찰)
+  function renderCcStatusSelect() {
+    const sel = $card('cc')?.querySelector('[data-role="cc-status"]'); if (!sel) return;
+    const STATUSES = ['입찰', '추천', '상품', '검증', '미정', '폐기', '불가', '매각'];
+    sel.innerHTML = STATUSES.map(s => `<option value="${s}"${s === '입찰' ? ' selected' : ''}>${s}</option>`).join('');
+  }
+
+  // 즐겨찾기 관리 모달
+  function openCcFav() { renderCcFavManage(); const m = document.getElementById('ccFavModal'); if (m) m.style.display = 'flex'; }
+  function closeCcFav() { const m = document.getElementById('ccFavModal'); if (m) m.style.display = 'none'; }
+  function renderCcFavManage() {
+    const tbody = document.getElementById('ccFavTbody'); if (!tbody) return;
+    const favs = getCcFavs();
+    tbody.innerHTML = '<thead><tr><th>이름</th><th>오늘+시작</th><th>오늘+끝</th><th></th></tr></thead><tbody>' +
+      favs.map((p, i) => `<tr><td>${escapeHtml(p.name)}</td><td>${p.f}</td><td>${p.t}</td>
+        <td><button type="button" class="btn_box_sss btn_white" data-fav-del="${i}">삭제</button></td></tr>`).join('') +
+      '</tbody>';
+    tbody.querySelectorAll('[data-fav-del]').forEach(b => b.addEventListener('click', () => deleteCcFav(parseInt(b.dataset.favDel, 10))));
+  }
+  function addCcFav() {
+    const name = (document.getElementById('ccFavName')?.value || '').trim();
+    const f = parseInt(document.getElementById('ccFavFrom')?.value, 10);
+    const t = parseInt(document.getElementById('ccFavTo')?.value, 10);
+    if (!name) { alert('이름을 입력하세요.'); return; }
+    if (isNaN(f) || isNaN(t)) { alert('오프셋(숫자)을 입력하세요.'); return; }
+    const favs = getCcFavs(); favs.push({ name, f, t }); saveCcFavs(favs);
+    document.getElementById('ccFavName').value = '';
+    renderCcFavManage(); renderCcFavSelect();
+  }
+  function deleteCcFav(i) {
+    const favs = getCcFavs(); favs.splice(i, 1); saveCcFavs(favs);
+    renderCcFavManage(); renderCcFavSelect();
+  }
+
   // 진행사항 확인 → MAPS 입찰건 불러오기 (날짜범위 FROM~TO, 기본 오늘~오늘)
   function loadProgressList() {
     const apiKey = getMapsAdminKeyMj();
@@ -361,6 +421,7 @@
   }
   function ccStateKind(r) { return String(r.state_kind || r.status || '').trim() || (r.status === '조회없음' ? '조회없음' : '진행중'); }
 
+  const _won = (v) => parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10) || 0;
   // 헤더 클릭 정렬
   function sortCc(key) {
     if (ccSort.key === key) ccSort.dir = -ccSort.dir; else { ccSort.key = key; ccSort.dir = 1; }
@@ -370,7 +431,10 @@
         case 'sakun_no': return String(r.sakun_no || '');
         case 'court': return String(r.court || '');
         case 'm_name': return String(r.m_name || '');
-        case 'bidprice': return parseInt(String(r.bidprice || '').replace(/[^0-9]/g, ''), 10) || 0;
+        case 'buyer': return String(r.buyer || '');
+        case 'bidprice': return _won(r.bidprice);
+        case 'maegak': return _won(r.maegak_price);
+        case 'stu': return String(r.stu_member || '');
         case 'result': return ccStateKind(r);
         default: return '';
       }
@@ -379,8 +443,8 @@
     renderCcResults();
   }
 
-  // 진행사항 결과 테이블 렌더 — MAPS 3키(입찰일자·사건번호·법원) 각 ✓/✗ + 회원·입찰가
-  // + 결과(불가/매각/진행)·상세·업데이트예정. 불가만 강제 체크. 헤더 클릭 정렬.
+  // 진행사항 결과 테이블 — 3키 ✓/✗ + 회원·매수인·입찰가·매각가(일치 파랑/불일치 빨강)
+  // + 결과·상세·현재상태·업데이트예정. 불가만 강제 체크. 헤더 클릭 정렬.
   function renderCcResults() {
     const wrap = $card('cc')?.querySelector('[data-role="cc-results"]');
     if (!wrap) return;
@@ -395,20 +459,28 @@
       const resCls = isBuga ? 'cc-bad' : (stateKind === '매각' ? 'cc-end' : (stateKind === '조회없음' || stateKind === '오류' ? 'cc-warn' : 'cc-ok'));
       const resBadge = `<span class="cc-badge ${resCls}">${escapeHtml(stateKind)}</span>`;
       const dtl = String(r.detail || '');
-      const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 22 ? dtl.slice(0, 22) + '…' : dtl)}</span>` : '';
+      const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 20 ? dtl.slice(0, 20) + '…' : dtl)}</span>` : '';
       const url = r.view_url ? ` <a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">원본</a>` : '';
       const willUpdate = isBuga
         ? `<b style="color:#b91c1c">불가</b>${r.status ? ` <span class="cc-badge cc-bad">${escapeHtml(r.status)}</span>` : ''}`
         : (stateKind === '매각' ? '<span class="cc-badge cc-end">매각</span>' : '<span style="color:#9ca3af">-</span>');
+      // 매각가: 우리입찰가와 일치=파랑(낙찰), 불일치=빨강(패찰). 둘 중 하나 없으면 무색.
+      const bid = _won(r.bidprice), mae = _won(r.maegak_price);
+      let maeCell = mae ? fmtWon(r.maegak_price) : '';
+      if (mae && bid) maeCell = `<b style="color:${bid === mae ? '#2563eb' : '#dc2626'}">${fmtWon(r.maegak_price)}</b>`;
+      const stu = String(r.stu_member || '');
       return `<tr data-idx="${i}" class="${isBuga ? 'cc-row-buga' : ''}">
         <td style="text-align:center"><input type="checkbox" class="cc-cb" ${isBuga ? 'checked' : ''}></td>
         <td>${ccKeyCell(r.bid_date, dateHit)}</td>
         <td>${ccKeyCell(r.sakun_no, sakunHit)}</td>
         <td>${ccKeyCell(r.court, courtHit)}</td>
         <td>${escapeHtml(r.m_name || '')}</td>
+        <td>${escapeHtml(r.buyer || '')}</td>
         <td style="text-align:right">${fmtWon(r.bidprice)}</td>
+        <td style="text-align:right">${maeCell}</td>
         <td style="text-align:center">${resBadge}</td>
         <td>${detail}${url}</td>
+        <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok">${escapeHtml(stu)}</span>` : ''}</td>
         <td>${willUpdate}</td>
       </tr>`;
     }).join('');
@@ -420,6 +492,7 @@
         <span class="mjcap-spacer"></span>
         <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 체크한 건 MAPS '불가' 처리</button>
       </div>
+      <div class="cc-table-wrap">
       <table class="cc-table"><thead>
         <tr>
           <th>✓</th>
@@ -427,12 +500,16 @@
           <th class="cc-sort" data-sort="sakun_no">사건번호${arrow('sakun_no')}</th>
           <th class="cc-sort" data-sort="court">법원${arrow('court')}</th>
           <th class="cc-sort" data-sort="m_name">회원${arrow('m_name')}</th>
+          <th class="cc-sort" data-sort="buyer">매수인${arrow('buyer')}</th>
           <th class="cc-sort" data-sort="bidprice">입찰가${arrow('bidprice')}</th>
+          <th class="cc-sort" data-sort="maegak">매각가${arrow('maegak')}</th>
           <th class="cc-sort" data-sort="result">결과${arrow('result')}</th>
           <th>상세</th>
+          <th class="cc-sort" data-sort="stu">현재상태${arrow('stu')}</th>
           <th>업데이트 예정</th>
         </tr>
       </thead><tbody>${rows}</tbody></table>
+      </div>
     `;
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
@@ -512,6 +589,9 @@
     if (e.target.closest('[data-act="court-map-open"]')) { openCourtMap(); }
     else if (e.target.closest('[data-act="court-map-close"]')) { closeCourtMap(); }
     else if (e.target.id === 'courtMapModal') { closeCourtMap(); } // 오버레이 클릭 닫기
+    else if (e.target.closest('[data-act="cc-fav-close"]')) { closeCcFav(); }
+    else if (e.target.closest('[data-act="cc-fav-add"]')) { addCcFav(); }
+    else if (e.target.id === 'ccFavModal') { closeCcFav(); }
   });
   document.addEventListener('input', e => {
     if (e.target && e.target.id === 'courtMapSearch') renderCourtMap(e.target.value);

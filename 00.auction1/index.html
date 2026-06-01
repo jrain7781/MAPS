@@ -157,22 +157,23 @@
             <button type="button" class="btn_box_sss btn_white" data-act="save-accounts">💾 계정 저장</button>
           </div>
           <div class="mjcap-k-input" style="background:#eef2ff;border-color:#c7d2fe">
-            <div class="mjcap-row" style="align-items:center;gap:6px">
+            <div class="mjcap-row" style="align-items:center;gap:6px;flex-wrap:wrap">
               <label class="bold">입찰일자</label>
               <input type="date" data-role="cc-from" style="font-size:12px;padding:2px 6px">
               <span>~</span>
               <input type="date" data-role="cc-to" style="font-size:12px;padding:2px 6px">
-              <button type="button" class="btn_box_sss btn_white" data-act="cc-today">오늘</button>
+              <select data-role="cc-fav" class="btn_box_sss" style="font-size:12px" title="즐겨찾기 기간"></select>
+              <button type="button" class="btn_box_sss btn_white" data-act="cc-fav-manage" title="즐겨찾기 추가/편집/삭제">⚙</button>
               <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-load">📥 불러오기</button>
+              <span style="width:14px"></span>
+              <label class="bold">상태값</label>
+              <select data-role="cc-status" class="btn_box_sss" style="font-size:12px"></select>
               <span class="mjcap-spacer"></span>
               <button type="button" class="btn_box_sss btn_white" data-act="court-map-open">🏛 법원 매칭표</button>
             </div>
             <div class="mjcap-row" style="font-size:11px;color:#6b7280">
               <span data-role="cc-loaded">기간(기본 오늘~오늘) 선택 → 📥 불러오기 → ▶ 실행</span>
             </div>
-          </div>
-          <div class="mjcap-row" style="margin-top:8px;font-size:11px;color:#6b7280">
-            ℹ️ MAPS 입찰건(입찰일자·사건번호·법원·입찰가·회원)을 옥션 종합검색(법원+사건번호+매각기일)으로 조회 → 진행상태 판정. <b>불가</b>(변경/취소/취하/정지/연기/기각)는 자동체크 후 MAPS '불가' 처리, <b>매각</b>은 표시만(추후 조치).
           </div>
         </div>
         <div data-role="cc-results" style="margin-top:8px"></div>
@@ -181,7 +182,7 @@
     </section>
 
     <!-- 통합 폴더 브라우저: 좌측 위/아래 리스트, 우측 공유 미리보기 -->
-    <section class="mjcap-card mjfb-card mjfb-combined">
+    <section class="mjcap-card mjfb-card mjfb-combined" data-hide-on-cc="1">
       <div class="mjcap-body">
         <div class="mjfb-main">
           <div class="mjfb-listcol-stack">
@@ -776,6 +777,30 @@
   </div>
 </div>
 
+<!-- 즐겨찾기 기간 관리 모달 -->
+<div id="ccFavModal" class="court-modal-overlay" style="display:none">
+  <div class="court-modal" style="width:460px">
+    <div class="court-modal-head">
+      <b>⭐ 즐겨찾기 기간 관리</b>
+      <span class="mjcap-spacer"></span>
+      <button type="button" class="btn_box_sss btn_white" data-act="cc-fav-close">✕ 닫기</button>
+    </div>
+    <div class="court-modal-body" style="padding:10px 14px">
+      <table class="court-map-table" id="ccFavTbody"></table>
+      <div class="mjcap-row" style="margin-top:10px;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="ccFavName" placeholder="이름(예: 이번주)" style="font-size:12px;padding:3px 6px;width:120px">
+        <span>오늘+</span>
+        <input type="number" id="ccFavFrom" value="0" style="font-size:12px;padding:3px 6px;width:56px" title="시작 오프셋(일)">
+        <span>~ 오늘+</span>
+        <input type="number" id="ccFavTo" value="0" style="font-size:12px;padding:3px 6px;width:56px" title="끝 오프셋(일)">
+        <span>일</span>
+        <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-fav-add">+ 추가</button>
+      </div>
+    </div>
+    <div class="court-modal-foot">오프셋 = 오늘 기준 일수. 예) 0~0=오늘, 0~7=오늘부터 7일.</div>
+  </div>
+</div>
+
 <!-- 법원 매칭표 모달 (MAPS ↔ 옥션원) -->
 <div id="courtMapModal" class="court-modal-overlay" style="display:none">
   <div class="court-modal">
@@ -797,6 +822,6 @@
 <script src="data.js?v=51"></script>
 <script src="app.js?v=81"></script>
 <script src="court_map.js?v=1"></script>
-<script src="mj_tabs.js?v=15"></script>
+<script src="mj_tabs.js?v=16"></script>
 </body>
 </html>

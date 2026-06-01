@@ -187,6 +187,33 @@ def parse_jongryo(detail_text):
     return "", ""
 
 
+def parse_maegak_detail(detail_text, target_d6):
+    """매각 상세 '매각가격 결과' 표에서 매각기일==target 행의 매각대금/매수인/입찰자수.
+    return: {maegak_price, buyer, bidder_count}."""
+    res = {"maegak_price": "", "buyer": "", "bidder_count": ""}
+    if not detail_text:
+        return res
+    full = yymmdd_to_full(target_d6)  # 2026-06-01
+    lines = [ln.strip() for ln in detail_text.replace("\r", "").split("\n")]
+    idx = -1
+    for i, ln in enumerate(lines):
+        if full and full in ln:
+            idx = i
+            break
+    chunk = "\n".join(lines[idx: idx + 5]) if idx >= 0 else detail_text
+    mp = re.search(r"매각\s*[:：]?\s*([\d,]+)\s*원", chunk)
+    if mp:
+        res["maegak_price"] = mp.group(1).replace(",", "")
+    bc = re.search(r"입찰\s*(\d+)\s*명", chunk)
+    if bc:
+        res["bidder_count"] = bc.group(1)
+    # 매수인: 줄 끝까지 잡고 뒤쪽 닫는 괄호/공백 제거 (법인 '(주)…' 도 보존)
+    by = re.search(r"매수인\s*[:：]?\s*([^\n]+)", chunk)
+    if by:
+        res["buyer"] = by.group(1).strip().rstrip(") /").strip()
+    return res
+
+
 # ── 옥션 ───────────────────────────────────────────────────────────────
 def login(driver, account):
     driver.get(f"{A1_BASE}/common/login_box.php")
@@ -331,8 +358,9 @@ def process_case(driver, wait, case):
         "sakun_no": case.get("sakun_no", ""),
         "bid_date": case.get("bid_date", ""),
         "court": exp_court,
-        "bidprice": case.get("bidprice", ""),   # 우리 입찰가(없을 수도)
-        "m_name": case.get("m_name", ""),        # 회원명
+        "stu_member": case.get("stu_member", ""),  # 현재 MAPS 물건상태
+        "bidprice": case.get("bidprice", ""),       # 우리 입찰가(없을 수도)
+        "m_name": case.get("m_name", ""),           # 회원명
     }
 
     if not search_case(driver, wait, case, use_date=True):
@@ -383,14 +411,24 @@ def process_case(driver, wait, case):
     reason = ""
     sentence = ""
     view_url = ""
-    if state_kind == "불가":
-        reason = tok
+    maegak_price = ""
+    buyer = ""
+    bidder_count = ""
+    # 불가/매각 모두 상세페이지에서 추가 정보 파싱
+    if state_kind in ("불가", "매각"):
         view_url = build_view_url(driver, picked["pid"], picked["line_num"], line_tnum)
         detail_txt = open_detail_text(driver, view_url)
-        jr, js = parse_jongryo(detail_txt)
-        if jr:
-            reason = jr
-        sentence = js
+        if state_kind == "불가":
+            reason = tok
+            jr, js = parse_jongryo(detail_txt)
+            if jr:
+                reason = jr
+            sentence = js
+        else:  # 매각 → 매각가/매수인/입찰자수
+            md = parse_maegak_detail(detail_txt, exp_d6)
+            maegak_price = md["maegak_price"]
+            buyer = md["buyer"]
+            bidder_count = md["bidder_count"]
 
     is_buga = (state_kind == "불가")
     rec = dict(base,
@@ -405,6 +443,9 @@ def process_case(driver, wait, case):
                fetched_date=picked.get("date_txt", ""),
                date_hit=date_hit,
                court_hit=court_hit,
+               maegak_price=maegak_price,
+               buyer=buyer,
+               bidder_count=bidder_count,
                view_url=view_url)
     print(f"RESULT|{json.dumps(rec, ensure_ascii=False)}")
     flag = "✅" if key_match else "⚠키불일치"
