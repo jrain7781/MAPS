@@ -76,6 +76,8 @@
       if (key === 'cc') {
         const loadBtn = card.querySelector('[data-act="cc-load"]');
         if (loadBtn) loadBtn.addEventListener('click', loadProgressList);
+        const clearBtn = card.querySelector('[data-act="cc-clear"]');
+        if (clearBtn) clearBtn.addEventListener('click', clearCcList);
         const favSel = card.querySelector('[data-role="cc-fav"]');
         if (favSel) favSel.addEventListener('change', () => applyCcFav(favSel.value));
         const favMng = card.querySelector('[data-act="cc-fav-manage"]');
@@ -336,8 +338,14 @@
   function applyCcFav(idx) {
     if (idx === '' || idx == null) return;
     const p = getCcFavs()[parseInt(idx, 10)]; if (!p) return;
-    setCcDates(p.f, p.t);
-    loadProgressList();
+    setCcDates(p.f, p.t);   // 날짜만 세팅 — 불러오기는 📥 버튼으로만
+  }
+  // 진행사항 리스트/결과 초기화
+  function clearCcList() {
+    ccCases = []; ccResults.length = 0; ccSort = { key: '', dir: 1 };
+    renderCcResults();
+    const info = $card('cc')?.querySelector('[data-role="cc-loaded"]');
+    if (info) info.textContent = '기간 + 상태값 선택 → 📥 불러오기 → ▶ 실행';
   }
   // 상태값 다중 선택 (체크박스, 기본 입찰만 체크) — 아래 줄에 펼쳐서
   const CC_STATUSES = ['입찰', '추천', '상품', '검증', '미정', '폐기', '불가', '매각'];
@@ -401,9 +409,11 @@
       if (btn) btn.disabled = false;
       if (j && j.success && Array.isArray(j.cases)) {
         ccCases = j.cases;
-        ccResults.length = 0; renderCcResults();   // 불러온 리스트 즉시 표시(실행 전)
+        ccResults.length = 0; ccSort = { key: '', dir: 1 }; renderCcResults();   // 불러온 리스트 즉시 표시(실행 전)
+        const now = new Date();
+        const hhmmss = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
         const info = card.querySelector('[data-role="cc-loaded"]');
-        if (info) info.textContent = `불러옴 ${ccCases.length}건 (${from6}~${to6}) — ▶ 실행으로 옥션 조회`;
+        if (info) info.textContent = `불러옴 ${ccCases.length}건 (${from6}~${to6}) · 불러온 시각 ${hhmmss} — ▶ 실행으로 옥션 조회`;
         log('cc', `✅ ${ccCases.length}건 불러옴 (${from6}~${to6})`, 'log-ok');
         if (ccCases.length === 0) alert('해당 기간 입찰 건이 없습니다.');
       } else {
