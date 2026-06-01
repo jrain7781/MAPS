@@ -43,6 +43,14 @@ except Exception as _e:
     def addr_to_court(addr_text):
         return ""
 
+# MAPS 법원명 → 옥션 lawsup 코드 (종합검색 법원 드롭다운 지정용)
+try:
+    from court_lawsup import court_to_lawsup
+except Exception as _e:
+    print(f"[MJ] court_lawsup 로드 실패(법원 미지정 검색): {_e}")
+    def court_to_lawsup(c):
+        return ""
+
 # 계정 (매니저 주입)
 ACCOUNTS = []
 _env_acc = os.environ.get("MJ_IMAGEUP_ACCOUNTS_JSON")
@@ -188,21 +196,31 @@ def login(driver, account):
 
 
 def search_case(driver, wait, case):
-    """종합검색(ca_title.php) 진입 → 사건번호(년도+번호)로 auction_num_ser()."""
+    """종합검색(ca_title.php): 법원(lawsup)+사건번호(본문 num1/num2)+물건현황(전체) 세팅
+    → 메인 검색 버튼 실제 클릭. (auction_num_ser 은 법원 무시하므로 사용 안 함.
+      메인 검색 버튼은 JS .click() 이 안 먹어 Selenium native click 필요.)"""
     year = year_of(case)
     num = case_num2(case["sakun_no"])
+    lawsup = court_to_lawsup(case.get("court", ""))
     try:
         driver.get(URL_SEARCH)
-        wait.until(EC.presence_of_element_located((By.ID, "num2_Top")))
+        wait.until(EC.presence_of_element_located((By.ID, "num2")))
         driver.execute_script(
             """
-            var n1=document.getElementById('num1_Top'), n2=document.getElementById('num2_Top');
-            if(n1 && arguments[0]) n1.value=arguments[0];
-            if(n2) n2.value=arguments[1];
-            try{ auction_num_ser(); }catch(e){}
+            var ls=document.querySelector('select[name="lawsup"]'); if(ls && arguments[2]) ls.value=arguments[2];
+            var n1=document.getElementById('num1'); if(n1 && arguments[0]) n1.value=arguments[0];
+            var n2=document.getElementById('num2'); if(n2) n2.value=arguments[1];
+            var st=document.querySelector('select[name="state"]'); if(st) st.value='';
             """,
-            year, num,
+            year, num, lawsup,
         )
+        # 메인 종합검색 버튼 (fm_aulist 안의 '검색' span) — Selenium native click
+        btn = wait.until(EC.element_to_be_clickable(
+            (By.XPATH, "//form[@id='fm_aulist']//*[normalize-space(text())='검색' and contains(@class,'btn_lightblack')]")))
+        try:
+            btn.click()
+        except Exception:
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'}); arguments[0].click();", btn)
         try:
             WebDriverWait(driver, 20).until(lambda d: "ca_list" in d.current_url)
         except Exception:
