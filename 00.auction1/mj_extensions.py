@@ -22,7 +22,8 @@ _IMAGEUP_SCRIPTS = {
     "i":  os.path.join(_DIR_IMAGEUP, "01.i.py"),
     "d":  os.path.join(_DIR_IMAGEUP, "02.d.py"),
     "k":  os.path.join(_DIR_IMAGEUP, "03.k.py"),
-    "cc": os.path.join(_DIR_IMAGEUP, "03.cc.py"),   # 변경/취소 확인 (옥션원 결과 컬럼 조회, 캡처 없음)
+    "cc": os.path.join(_DIR_IMAGEUP, "03.cc.py"),   # 불가확인 (옥션원 결과 컬럼 조회, 캡처 없음)
+    "mg": os.path.join(_DIR_IMAGEUP, "03.mg.py"),   # 매각확인 (오늘 입찰건 → 매각대금/매수인 조회)
 }
 _IMAGEUP_CONFIG_PATH = os.path.join(_DIR_IMAGEUP, "imageup_config.json")
 
@@ -64,8 +65,8 @@ def get_accounts(which: str) -> list:
     saved = (cfg.get(which) or {}).get("accounts")
     if saved:
         return saved
-    # cc 는 다른 스크립트의 계정 공유 (id/pw/manager 동일 master)
-    if which == "cc":
+    # cc/mg 는 다른 스크립트의 계정 공유 (id/pw/manager 동일 master)
+    if which in ("cc", "mg"):
         for other in ("k", "i", "d"):
             shared = (cfg.get(other) or {}).get("accounts")
             if shared:

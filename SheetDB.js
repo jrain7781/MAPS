@@ -7957,6 +7957,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'uploadJosaItems') return bulkUpsertJosaItems(payload);
   if (action === 'uploadChangeCancel') return uploadChangeCancel(payload.items || []);
   if (action === 'get7DaysBugaList')   return get7DaysBugaList();
+  if (action === 'getTodayMaegakList') return getTodayMaegakList();
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
@@ -8112,10 +8113,10 @@ function get7DaysBugaList() {
       cases.push({ sakun_no: sakun, bid_date: inDate, court: court });
     }
 
-    // 입찰일자(YYMMDD) 내림차순 — 가장 최신(늦은) 입찰일이 위로
+    // 입찰일자(YYMMDD) 오름차순 — 오늘(가장 이른 입찰일)이 맨 위
     cases.sort(function (a, b) {
-      if (a.bid_date > b.bid_date) return -1;
-      if (a.bid_date < b.bid_date) return 1;
+      if (a.bid_date < b.bid_date) return -1;
+      if (a.bid_date > b.bid_date) return 1;
       return 0;
     });
 
@@ -8123,6 +8124,67 @@ function get7DaysBugaList() {
     return { success: true, cases: cases, count: cases.length, window: { start: startNum, end: endNum } };
   } catch (e) {
     Logger.log('[get7DaysBugaList] 오류: ' + e.toString());
+    return { success: false, message: String(e), cases: [], count: 0 };
+  }
+}
+
+/**
+ * 매각확인용 — 오늘(입찰일자 in-date) 입찰건 리스트 반환.
+ * 매니저 「매각」 탭이 호출 → 옥션 조회 후 매각대금/매수인 가져와 표시.
+ * @return {{success, cases:[{item_id, sakun_no, bid_date(YYMMDD), court, our_bidprice, m_name}], count}}
+ */
+function getTodayMaegakList() {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'items 시트 없음', cases: [], count: 0 };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, cases: [], count: 0 };
+
+    var tz = Session.getScriptTimeZone();
+    var today = parseInt(Utilities.formatDate(new Date(), tz, 'yyMMdd'), 10); // 오늘만
+
+    // A(id)/B(in-date)/C(sakun_no)/D(court)/H(bidprice)/G(m_name) 포함 위해 A~H 읽기
+    var idIdx     = ITEM_HEADERS.indexOf('id');       // 0
+    var inDateIdx = ITEM_HEADERS.indexOf('in-date');  // 1
+    var sakunIdx  = ITEM_HEADERS.indexOf('sakun_no'); // 2
+    var courtIdx  = ITEM_HEADERS.indexOf('court');    // 3
+    var mNameIdx  = ITEM_HEADERS.indexOf('m_name');   // 6
+    var bidIdx    = ITEM_HEADERS.indexOf('bidprice'); // 7
+    var nCols = bidIdx + 1;
+    var values = sheet.getRange(2, 1, lastRow - 1, nCols).getValues();
+
+    var norm6 = function (v) {
+      var s = (v instanceof Date) ? Utilities.formatDate(v, tz, 'yyMMdd') : String(v == null ? '' : v);
+      var d = s.replace(/[^0-9]/g, '');
+      if (d.length >= 8 && d.slice(0, 2) === '20') d = d.slice(2);
+      if (d.length > 6) d = d.slice(-6);
+      return d;
+    };
+
+    var seen = {};
+    var cases = [];
+    for (var i = 0; i < values.length; i++) {
+      var inDate = norm6(values[i][inDateIdx]);
+      if (!inDate || parseInt(inDate, 10) !== today) continue;
+      var sakun = String(values[i][sakunIdx] == null ? '' : values[i][sakunIdx]).trim();
+      if (!sakun) continue;
+      var court = String(values[i][courtIdx] == null ? '' : values[i][courtIdx]).trim();
+      var key = sakun + '|' + inDate + '|' + court;
+      if (seen[key]) continue;
+      seen[key] = true;
+      cases.push({
+        item_id: String(values[i][idIdx] == null ? '' : values[i][idIdx]),
+        sakun_no: sakun,
+        bid_date: inDate,
+        court: court,
+        our_bidprice: String(values[i][bidIdx] == null ? '' : values[i][bidIdx]).trim(),
+        m_name: String(values[i][mNameIdx] == null ? '' : values[i][mNameIdx]).trim()
+      });
+    }
+
+    return { success: true, cases: cases, count: cases.length, today: today };
+  } catch (e) {
+    Logger.log('[getTodayMaegakList] 오류: ' + e.toString());
     return { success: false, message: String(e), cases: [], count: 0 };
   }
 }

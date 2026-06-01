@@ -22,9 +22,12 @@
     d:  { script: '02.d.py',  title: '입찰일 정렬',     hasLimit: true,  hasCases: false },
     k:  { script: '03.k.py',  title: '건별 캡쳐',       hasLimit: false, hasCases: true  },
     cc: { script: '03.cc.py', title: '불가확인',  hasLimit: false, hasCases: true, hasResults: true },
+    mg: { script: '03.mg.py', title: '매각확인',  hasLimit: false, hasCases: false, hasResults: true },
   };
-  const runState = { i: null, d: null, k: null, cc: null }; // run_id
-  const ccResults = []; // 변경/취소 확인 결과 누적 (실행마다 초기화)
+  const runState = { i: null, d: null, k: null, cc: null, mg: null }; // run_id
+  const ccResults = []; // 불가확인 결과 누적 (실행마다 초기화)
+  const mgResults = []; // 매각확인 결과 누적 (실행마다 초기화)
+  let mgCases = [];     // 오늘 매각 불러오기로 받은 case 객체 배열
 
   let captureInitDone = false;
   function initCaptureTabOnce() {
@@ -74,6 +77,11 @@
       if (key === 'cc') {
         const load7Btn = card.querySelector('[data-act="cc-load7"]');
         if (load7Btn) load7Btn.addEventListener('click', loadMaps7DaysList);
+      }
+      // mg(매각확인) 전용: 오늘 매각 불러오기 버튼
+      if (key === 'mg') {
+        const loadTodayBtn = card.querySelector('[data-act="mg-load-today"]');
+        if (loadTodayBtn) loadTodayBtn.addEventListener('click', loadTodayMaegak);
       }
       loadAccounts(key);
     });
@@ -200,8 +208,14 @@
       const lines = (casesEl.value || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
       payload.cases = lines;
     }
+    // 매각확인: 오늘 불러온 case 객체 배열을 그대로 전달
+    if (key === 'mg') {
+      if (!mgCases.length) { log('mg', '[중단] 먼저 "📥 오늘 매각 불러오기" 를 눌러주세요.', 'log-err'); setRunning('mg', false); return; }
+      payload.cases = mgCases;
+    }
     $log(key).textContent = '';
     if (key === 'cc') { ccResults.length = 0; renderCcResults(); }
+    if (key === 'mg') { mgResults.length = 0; renderMgResults(); }
     log(key, '▶ ' + CAP_SPEC[key].script + ' 시작 (활성 계정 ' + accounts.length + '개)', 'log-ok');
     setStatus(key, '실행중', 'running');
     setRunning(key, true);
@@ -266,12 +280,12 @@
       });
   }
   function log(key, line, cls) {
-    // 'cc' 탭은 RESULT|{json} 라인을 가로채 결과표에 추가
-    if (key === 'cc' && typeof line === 'string' && line.startsWith('RESULT|')) {
+    // 'cc'/'mg' 탭은 RESULT|{json} 라인을 가로채 결과표에 추가
+    if ((key === 'cc' || key === 'mg') && typeof line === 'string' && line.startsWith('RESULT|')) {
       try {
         const obj = JSON.parse(line.slice(7));
-        ccResults.push(obj);
-        renderCcResults();
+        if (key === 'cc') { ccResults.push(obj); renderCcResults(); }
+        else { mgResults.push(obj); renderMgResults(); }
         return;
       } catch (e) { /* fallthrough → 일반 로그 */ }
     }
@@ -406,6 +420,94 @@
       alert('오류: ' + err);
     });
   }
+  // ===== 매각확인 (mg) =====
+  // 오늘 입찰건(매각 대상) MAPS 에서 직접 불러오기
+  function loadTodayMaegak() {
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey) { alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
+    const card = $card('mg');
+    if (!card) return;
+    const btn = card.querySelector('[data-act="mg-load-today"]');
+    if (btn) btn.disabled = true;
+    log('mg', '📥 오늘 입찰건 불러오는 중...', 'log-ok');
+    fetch('/api/maps-gas', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, api_action: 'getTodayMaegakList' })
+    }).then(r => r.json()).then(j => {
+      if (btn) btn.disabled = false;
+      if (j && j.success && Array.isArray(j.cases)) {
+        mgCases = j.cases;
+        mgResults.length = 0;
+        renderMgResults();
+        const info = card.querySelector('[data-role="mg-loaded"]');
+        if (info) info.textContent = `오늘 입찰건 ${mgCases.length}건 불러옴 — ▶ 실행 누르면 옥션 조회`;
+        log('mg', `✅ 오늘 입찰건 ${mgCases.length}건 불러옴`, 'log-ok');
+        if (mgCases.length === 0) alert('오늘(입찰일자 오늘) 입찰 건이 없습니다.');
+      } else {
+        const msg = (j && (j.message || j.error)) || '알 수 없음';
+        log('mg', `❌ 불러오기 실패: ${msg}`, 'log-err');
+        alert('실패: ' + msg);
+      }
+    }).catch(err => {
+      if (btn) btn.disabled = false;
+      log('mg', `❌ 불러오기 오류: ${err}`, 'log-err');
+      alert('오류: ' + err);
+    });
+  }
+
+  function fmtWon(v) {
+    const n = parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10);
+    return isNaN(n) ? '' : n.toLocaleString('ko-KR');
+  }
+
+  // 매각확인 결과 테이블 렌더
+  function renderMgResults() {
+    const wrap = $card('mg')?.querySelector('[data-role="mg-results"]');
+    if (!wrap) return;
+    if (mgResults.length === 0) { wrap.innerHTML = ''; return; }
+    const rows = mgResults.map((r, i) => {
+      const st = String(r.status || '').trim();
+      const cls = st === '매각' ? 'cc-end' : (st === '불가' ? 'cc-bad' : 'cc-ok');
+      const badge = `<span class="cc-badge ${cls}">${escapeHtml(st || '?')}</span>`;
+      const courtTxt = (r.court_hit === false && r.fetched_court)
+        ? `${escapeHtml(r.court || '')}<span style="color:#dc2626">→${escapeHtml(r.fetched_court)}</span>`
+        : escapeHtml(r.court || '');
+      const ourBid = fmtWon(r.our_bidprice);
+      const maegak = fmtWon(r.maegak_price);
+      // 우리입찰가 vs 매각대금 차이 표시(우리가 졌으면 매각가가 더 큼)
+      return `<tr data-idx="${i}">
+        <td>${escapeHtml(r.sakun_no || '')}</td>
+        <td style="text-align:center">${courtTxt}</td>
+        <td style="text-align:center">${escapeHtml(r.m_name || '')}</td>
+        <td style="text-align:right">${ourBid}</td>
+        <td style="text-align:right;font-weight:600">${maegak}</td>
+        <td style="text-align:center">${escapeHtml(r.bidder_count || '')}</td>
+        <td>${escapeHtml(r.buyer || '')}</td>
+        <td style="text-align:center">${badge}</td>
+      </tr>`;
+    }).join('');
+    const maegakCnt = mgResults.filter(r => r.status === '매각').length;
+    wrap.innerHTML = `
+      <div class="cc-results-head">
+        <span><b>결과</b> ${mgResults.length}건 · 매각 ${maegakCnt}건</span>
+        <span class="mjcap-spacer"></span>
+        <label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" data-role="mg-opt-status" disabled> MAPS 상태 업데이트(추후)
+        </label>
+        <select data-role="mg-status-sel" class="btn_box_sss" disabled style="font-size:11px">
+          ${['매각','상품','검증','미정','추천','입찰','폐기','불가'].map(s => `<option value="${s}">${s}</option>`).join('')}
+        </select>
+        <label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">
+          <input type="checkbox" data-role="mg-opt-detail" disabled> 매수인·매각대금 업데이트(추후)
+        </label>
+        <button type="button" class="btn_box_sss btn_blue bold" data-act="mg-apply" disabled title="추후 활성화">📤 MAPS 반영</button>
+      </div>
+      <table class="cc-table"><thead>
+        <tr><th>사건번호</th><th>법원</th><th>회원</th><th>우리입찰가</th><th>매각대금</th><th>입찰자</th><th>매수인</th><th>상태</th></tr>
+      </thead><tbody>${rows}</tbody></table>
+    `;
+  }
+
   function escapeAttr(s) {
     return String(s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
