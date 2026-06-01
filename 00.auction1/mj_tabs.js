@@ -21,13 +21,12 @@
     i:  { script: '01.i.py',  title: '등록일 정렬',     hasLimit: true,  hasCases: false },
     d:  { script: '02.d.py',  title: '입찰일 정렬',     hasLimit: true,  hasCases: false },
     k:  { script: '03.k.py',  title: '건별 캡쳐',       hasLimit: false, hasCases: true  },
-    cc: { script: '03.cc.py', title: '불가확인',  hasLimit: false, hasCases: true, hasResults: true },
-    mg: { script: '03.mg.py', title: '매각확인',  hasLimit: false, hasCases: false, hasResults: true },
+    cc: { script: '04.cc.py', title: '진행사항 확인',  hasLimit: false, hasCases: false, hasResults: true },
   };
-  const runState = { i: null, d: null, k: null, cc: null, mg: null }; // run_id
-  const ccResults = []; // 불가확인 결과 누적 (실행마다 초기화)
-  const mgResults = []; // 매각확인 결과 누적 (실행마다 초기화)
-  let mgCases = [];     // 오늘 매각 불러오기로 받은 case 객체 배열
+  const runState = { i: null, d: null, k: null, cc: null }; // run_id
+  const ccResults = []; // 진행사항 결과 누적 (실행마다 초기화)
+  let ccCases = [];     // 📥 불러오기로 받은 case 객체 배열 (item_id/sakun_no/bid_date/court/bidprice/m_name)
+  let ccSort = { key: '', dir: 1 }; // 결과표 정렬 상태
 
   let captureInitDone = false;
   function initCaptureTabOnce() {
@@ -73,15 +72,14 @@
           setTimeout(() => { try { fileEl.value = ''; } catch(_) {} }, 100);
         });
       }
-      // cc(불가확인) 전용: MAPS 7일 리스트 불러오기 버튼
+      // cc(진행사항 확인) 전용: 날짜범위 불러오기 + 오늘버튼
       if (key === 'cc') {
-        const load7Btn = card.querySelector('[data-act="cc-load7"]');
-        if (load7Btn) load7Btn.addEventListener('click', loadMaps7DaysList);
-      }
-      // mg(매각확인) 전용: 오늘 매각 불러오기 버튼
-      if (key === 'mg') {
-        const loadTodayBtn = card.querySelector('[data-act="mg-load-today"]');
-        if (loadTodayBtn) loadTodayBtn.addEventListener('click', loadTodayMaegak);
+        const loadBtn = card.querySelector('[data-act="cc-load"]');
+        if (loadBtn) loadBtn.addEventListener('click', loadProgressList);
+        const todayBtn = card.querySelector('[data-act="cc-today"]');
+        if (todayBtn) todayBtn.addEventListener('click', () => { setCcDates(0, 0); loadProgressList(); });
+        // 날짜 기본값 = 오늘~오늘
+        setCcDates(0, 0);
       }
       loadAccounts(key);
     });
@@ -208,14 +206,13 @@
       const lines = (casesEl.value || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
       payload.cases = lines;
     }
-    // 매각확인: 오늘 불러온 case 객체 배열을 그대로 전달
-    if (key === 'mg') {
-      if (!mgCases.length) { log('mg', '[중단] 먼저 "📥 오늘 매각 불러오기" 를 눌러주세요.', 'log-err'); setRunning('mg', false); return; }
-      payload.cases = mgCases;
+    // 진행사항 확인: 📥 불러온 case 객체 배열을 그대로 전달
+    if (key === 'cc') {
+      if (!ccCases.length) { log('cc', '[중단] 먼저 "📥 불러오기" 로 MAPS 입찰건을 가져오세요.', 'log-err'); return; }
+      payload.cases = ccCases;
     }
     $log(key).textContent = '';
     if (key === 'cc') { ccResults.length = 0; renderCcResults(); }
-    if (key === 'mg') { mgResults.length = 0; renderMgResults(); }
     log(key, '▶ ' + CAP_SPEC[key].script + ' 시작 (활성 계정 ' + accounts.length + '개)', 'log-ok');
     setStatus(key, '실행중', 'running');
     setRunning(key, true);
@@ -280,12 +277,12 @@
       });
   }
   function log(key, line, cls) {
-    // 'cc'/'mg' 탭은 RESULT|{json} 라인을 가로채 결과표에 추가
-    if ((key === 'cc' || key === 'mg') && typeof line === 'string' && line.startsWith('RESULT|')) {
+    // 'cc' 탭은 RESULT|{json} 라인을 가로채 결과표에 추가
+    if (key === 'cc' && typeof line === 'string' && line.startsWith('RESULT|')) {
       try {
         const obj = JSON.parse(line.slice(7));
-        if (key === 'cc') { ccResults.push(obj); renderCcResults(); }
-        else { mgResults.push(obj); renderMgResults(); }
+        ccResults.push(obj);
+        renderCcResults();
         return;
       } catch (e) { /* fallthrough → 일반 로그 */ }
     }
@@ -302,34 +299,50 @@
     try { return localStorage.getItem('auction1_maps_admin_key') || ''; } catch (e) { return ''; }
   }
 
-  // 불가확인 탭 → MAPS 7일 리스트 직접 불러오기 (사건번호ǀ입찰일자ǀ법원 3키)
-  function loadMaps7DaysList() {
+  // 날짜 input 기본값 세팅 (offsetFrom/offsetTo = 오늘 기준 +일수)
+  function ymd(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function setCcDates(offFrom, offTo) {
+    const card = $card('cc'); if (!card) return;
+    const f = card.querySelector('[data-role="cc-from"]'), t = card.querySelector('[data-role="cc-to"]');
+    const df = new Date(); df.setDate(df.getDate() + offFrom);
+    const dt = new Date(); dt.setDate(dt.getDate() + offTo);
+    if (f) f.value = ymd(df);
+    if (t) t.value = ymd(dt);
+  }
+  function ymdToYYMMDD(v) { const d = String(v || '').replace(/[^0-9]/g, ''); return d.length >= 8 ? d.slice(2, 8) : d.slice(-6); }
+
+  // 진행사항 확인 → MAPS 입찰건 불러오기 (날짜범위 FROM~TO, 기본 오늘~오늘)
+  function loadProgressList() {
     const apiKey = getMapsAdminKeyMj();
     if (!apiKey) { alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
-    const card = $card('cc');
-    if (!card) return;
-    const btn = card.querySelector('[data-act="cc-load7"]');
+    const card = $card('cc'); if (!card) return;
+    const from6 = ymdToYYMMDD(card.querySelector('[data-role="cc-from"]')?.value);
+    const to6 = ymdToYYMMDD(card.querySelector('[data-role="cc-to"]')?.value);
+    const btn = card.querySelector('[data-act="cc-load"]');
     if (btn) btn.disabled = true;
-    log('cc', '📥 MAPS 7일 리스트 불러오는 중...', 'log-ok');
+    log('cc', `📥 MAPS 입찰건 불러오는 중... (${from6}~${to6})`, 'log-ok');
     fetch('/api/maps-gas', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, api_action: 'get7DaysBugaList' })
+      body: JSON.stringify({ api_key: apiKey, api_action: 'getProgressList', from: from6, to: to6 })
     }).then(r => r.json()).then(j => {
       if (btn) btn.disabled = false;
       if (j && j.success && Array.isArray(j.cases)) {
-        const lines = j.cases.map(c => [c.sakun_no, c.bid_date, c.court].join('|'));
-        const casesEl = card.querySelector('[data-role="cases"]');
-        if (casesEl) casesEl.value = lines.join('\n');
-        log('cc', `✅ MAPS 7일 리스트 ${lines.length}건 불러옴 (오늘~+7일 입찰건)`, 'log-ok');
-        if (lines.length === 0) alert('오늘부터 7일 이내 입찰 건이 없습니다.');
+        ccCases = j.cases;
+        ccResults.length = 0; renderCcResults();
+        const info = card.querySelector('[data-role="cc-loaded"]');
+        if (info) info.textContent = `불러옴 ${ccCases.length}건 (${from6}~${to6}) — ▶ 실행으로 옥션 조회`;
+        log('cc', `✅ ${ccCases.length}건 불러옴 (${from6}~${to6})`, 'log-ok');
+        if (ccCases.length === 0) alert('해당 기간 입찰 건이 없습니다.');
       } else {
         const msg = (j && (j.message || j.error)) || '알 수 없음';
-        log('cc', `❌ 리스트 불러오기 실패: ${msg}`, 'log-err');
+        log('cc', `❌ 불러오기 실패: ${msg}`, 'log-err');
         alert('실패: ' + msg);
       }
     }).catch(err => {
       if (btn) btn.disabled = false;
-      log('cc', `❌ 리스트 불러오기 오류: ${err}`, 'log-err');
+      log('cc', `❌ 불러오기 오류: ${err}`, 'log-err');
       alert('오류: ' + err);
     });
   }
@@ -342,56 +355,87 @@
     return `${mark} ${escapeHtml(value || '')}`;
   }
 
-  // 불가확인 결과 테이블 렌더
-  // MAPS 3키(입찰일자·사건번호·법원) 각각 일치 ✓/✗ + 결과·상세 + 업데이트예정 상태.
-  // 불가만 체크박스 강제 체크, 진행중은 미체크.
+  function fmtWon(v) {
+    const n = parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10);
+    return isNaN(n) ? '' : n.toLocaleString('ko-KR');
+  }
+  function ccStateKind(r) { return String(r.state_kind || r.status || '').trim() || (r.status === '조회없음' ? '조회없음' : '진행중'); }
+
+  // 헤더 클릭 정렬
+  function sortCc(key) {
+    if (ccSort.key === key) ccSort.dir = -ccSort.dir; else { ccSort.key = key; ccSort.dir = 1; }
+    const val = (r) => {
+      switch (key) {
+        case 'bid_date': return String(r.bid_date || '');
+        case 'sakun_no': return String(r.sakun_no || '');
+        case 'court': return String(r.court || '');
+        case 'm_name': return String(r.m_name || '');
+        case 'bidprice': return parseInt(String(r.bidprice || '').replace(/[^0-9]/g, ''), 10) || 0;
+        case 'result': return ccStateKind(r);
+        default: return '';
+      }
+    };
+    ccResults.sort((a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * ccSort.dir; });
+    renderCcResults();
+  }
+
+  // 진행사항 결과 테이블 렌더 — MAPS 3키(입찰일자·사건번호·법원) 각 ✓/✗ + 회원·입찰가
+  // + 결과(불가/매각/진행)·상세·업데이트예정. 불가만 강제 체크. 헤더 클릭 정렬.
   function renderCcResults() {
     const wrap = $card('cc')?.querySelector('[data-role="cc-results"]');
     if (!wrap) return;
     if (ccResults.length === 0) { wrap.innerHTML = ''; return; }
+    const arrow = (k) => ccSort.key === k ? (ccSort.dir > 0 ? ' ▲' : ' ▼') : '';
     const rows = ccResults.map((r, i) => {
       const isBuga = !!r.is_buga;
-      const stateKind = String(r.state_kind || r.status || '').trim() || '진행중';
-      // 항목별 일치
-      const dateHit  = r.date_hit !== false;            // 입찰일자
-      const sakunHit = r.sakun_hit !== false;           // 사건번호(검색키 → 보통 일치)
-      const courtHit = r.court_hit !== false;           // 법원
-      // 결과(진행상태) 배지
-      const resCls = isBuga ? 'cc-bad' : (stateKind === '매각' ? 'cc-end' : 'cc-ok');
+      const stateKind = ccStateKind(r);
+      const dateHit  = r.date_hit !== false;
+      const sakunHit = r.sakun_hit !== false;
+      const courtHit = r.court_hit !== false;
+      const resCls = isBuga ? 'cc-bad' : (stateKind === '매각' ? 'cc-end' : (stateKind === '조회없음' || stateKind === '오류' ? 'cc-warn' : 'cc-ok'));
       const resBadge = `<span class="cc-badge ${resCls}">${escapeHtml(stateKind)}</span>`;
-      // 상세(종결문구/사유 문장)
       const dtl = String(r.detail || '');
-      const detail = dtl
-        ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 24 ? dtl.slice(0, 24) + '…' : dtl)}</span>`
-        : '';
-      // 업데이트 예정 상태값: 불가면 "불가 [사유]", 아니면 -
+      const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 22 ? dtl.slice(0, 22) + '…' : dtl)}</span>` : '';
+      const url = r.view_url ? ` <a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">원본</a>` : '';
       const willUpdate = isBuga
         ? `<b style="color:#b91c1c">불가</b>${r.status ? ` <span class="cc-badge cc-bad">${escapeHtml(r.status)}</span>` : ''}`
-        : '<span style="color:#9ca3af">-</span>';
-      const url = r.view_url ? ` <a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">원본</a>` : '';
-      // 불가만 강제 체크, 진행중은 미체크
+        : (stateKind === '매각' ? '<span class="cc-badge cc-end">매각</span>' : '<span style="color:#9ca3af">-</span>');
       return `<tr data-idx="${i}" class="${isBuga ? 'cc-row-buga' : ''}">
         <td style="text-align:center"><input type="checkbox" class="cc-cb" ${isBuga ? 'checked' : ''}></td>
         <td>${ccKeyCell(r.bid_date, dateHit)}</td>
         <td>${ccKeyCell(r.sakun_no, sakunHit)}</td>
         <td>${ccKeyCell(r.court, courtHit)}</td>
+        <td>${escapeHtml(r.m_name || '')}</td>
+        <td style="text-align:right">${fmtWon(r.bidprice)}</td>
         <td style="text-align:center">${resBadge}</td>
         <td>${detail}${url}</td>
         <td>${willUpdate}</td>
       </tr>`;
     }).join('');
     const bugaCnt = ccResults.filter(r => r.is_buga).length;
+    const maegakCnt = ccResults.filter(r => ccStateKind(r) === '매각').length;
     wrap.innerHTML = `
       <div class="cc-results-head">
-        <span><b>결과</b> ${ccResults.length}건 · <b style="color:#b91c1c">불가 ${bugaCnt}건</b> 자동 체크 (진행중 제외)</span>
+        <span><b>결과</b> ${ccResults.length}건 · <b style="color:#b91c1c">불가 ${bugaCnt}</b> · 매각 ${maegakCnt} · <span style="color:#9ca3af">불가만 자동체크</span></span>
         <span class="mjcap-spacer"></span>
         <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 체크한 건 MAPS '불가' 처리</button>
       </div>
       <table class="cc-table"><thead>
-        <tr><th>✓</th><th>입찰일자</th><th>사건번호</th><th>법원</th><th>결과</th><th>상세</th><th>업데이트 예정</th></tr>
+        <tr>
+          <th>✓</th>
+          <th class="cc-sort" data-sort="bid_date">입찰일자${arrow('bid_date')}</th>
+          <th class="cc-sort" data-sort="sakun_no">사건번호${arrow('sakun_no')}</th>
+          <th class="cc-sort" data-sort="court">법원${arrow('court')}</th>
+          <th class="cc-sort" data-sort="m_name">회원${arrow('m_name')}</th>
+          <th class="cc-sort" data-sort="bidprice">입찰가${arrow('bidprice')}</th>
+          <th class="cc-sort" data-sort="result">결과${arrow('result')}</th>
+          <th>상세</th>
+          <th>업데이트 예정</th>
+        </tr>
       </thead><tbody>${rows}</tbody></table>
     `;
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
+    wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
   }
 
   function sendCcToMaps() {
@@ -434,94 +478,6 @@
       alert('오류: ' + err);
     });
   }
-  // ===== 매각확인 (mg) =====
-  // 오늘 입찰건(매각 대상) MAPS 에서 직접 불러오기
-  function loadTodayMaegak() {
-    const apiKey = getMapsAdminKeyMj();
-    if (!apiKey) { alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
-    const card = $card('mg');
-    if (!card) return;
-    const btn = card.querySelector('[data-act="mg-load-today"]');
-    if (btn) btn.disabled = true;
-    log('mg', '📥 오늘 입찰건 불러오는 중...', 'log-ok');
-    fetch('/api/maps-gas', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, api_action: 'getTodayMaegakList' })
-    }).then(r => r.json()).then(j => {
-      if (btn) btn.disabled = false;
-      if (j && j.success && Array.isArray(j.cases)) {
-        mgCases = j.cases;
-        mgResults.length = 0;
-        renderMgResults();
-        const info = card.querySelector('[data-role="mg-loaded"]');
-        if (info) info.textContent = `오늘 입찰건 ${mgCases.length}건 불러옴 — ▶ 실행 누르면 옥션 조회`;
-        log('mg', `✅ 오늘 입찰건 ${mgCases.length}건 불러옴`, 'log-ok');
-        if (mgCases.length === 0) alert('오늘(입찰일자 오늘) 입찰 건이 없습니다.');
-      } else {
-        const msg = (j && (j.message || j.error)) || '알 수 없음';
-        log('mg', `❌ 불러오기 실패: ${msg}`, 'log-err');
-        alert('실패: ' + msg);
-      }
-    }).catch(err => {
-      if (btn) btn.disabled = false;
-      log('mg', `❌ 불러오기 오류: ${err}`, 'log-err');
-      alert('오류: ' + err);
-    });
-  }
-
-  function fmtWon(v) {
-    const n = parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10);
-    return isNaN(n) ? '' : n.toLocaleString('ko-KR');
-  }
-
-  // 매각확인 결과 테이블 렌더
-  function renderMgResults() {
-    const wrap = $card('mg')?.querySelector('[data-role="mg-results"]');
-    if (!wrap) return;
-    if (mgResults.length === 0) { wrap.innerHTML = ''; return; }
-    const rows = mgResults.map((r, i) => {
-      const st = String(r.status || '').trim();
-      const cls = st === '매각' ? 'cc-end' : (st === '불가' ? 'cc-bad' : 'cc-ok');
-      const badge = `<span class="cc-badge ${cls}">${escapeHtml(st || '?')}</span>`;
-      const courtTxt = (r.court_hit === false && r.fetched_court)
-        ? `${escapeHtml(r.court || '')}<span style="color:#dc2626">→${escapeHtml(r.fetched_court)}</span>`
-        : escapeHtml(r.court || '');
-      const ourBid = fmtWon(r.our_bidprice);
-      const maegak = fmtWon(r.maegak_price);
-      // 우리입찰가 vs 매각대금 차이 표시(우리가 졌으면 매각가가 더 큼)
-      return `<tr data-idx="${i}">
-        <td>${escapeHtml(r.sakun_no || '')}</td>
-        <td style="text-align:center">${courtTxt}</td>
-        <td style="text-align:center">${escapeHtml(r.m_name || '')}</td>
-        <td style="text-align:right">${ourBid}</td>
-        <td style="text-align:right;font-weight:600">${maegak}</td>
-        <td style="text-align:center">${escapeHtml(r.bidder_count || '')}</td>
-        <td>${escapeHtml(r.buyer || '')}</td>
-        <td style="text-align:center">${badge}</td>
-      </tr>`;
-    }).join('');
-    const maegakCnt = mgResults.filter(r => r.status === '매각').length;
-    wrap.innerHTML = `
-      <div class="cc-results-head">
-        <span><b>결과</b> ${mgResults.length}건 · 매각 ${maegakCnt}건</span>
-        <span class="mjcap-spacer"></span>
-        <label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">
-          <input type="checkbox" data-role="mg-opt-status" disabled> MAPS 상태 업데이트(추후)
-        </label>
-        <select data-role="mg-status-sel" class="btn_box_sss" disabled style="font-size:11px">
-          ${['매각','상품','검증','미정','추천','입찰','폐기','불가'].map(s => `<option value="${s}">${s}</option>`).join('')}
-        </select>
-        <label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px">
-          <input type="checkbox" data-role="mg-opt-detail" disabled> 매수인·매각대금 업데이트(추후)
-        </label>
-        <button type="button" class="btn_box_sss btn_blue bold" data-act="mg-apply" disabled title="추후 활성화">📤 MAPS 반영</button>
-      </div>
-      <table class="cc-table"><thead>
-        <tr><th>사건번호</th><th>법원</th><th>회원</th><th>우리입찰가</th><th>매각대금</th><th>입찰자</th><th>매수인</th><th>상태</th></tr>
-      </thead><tbody>${rows}</tbody></table>
-    `;
-  }
-
   // ===== 법원 매칭표 모달 (MAPS ↔ 옥션원) =====
   function renderCourtMap(filter) {
     const tbody = document.getElementById('courtMapTbody');

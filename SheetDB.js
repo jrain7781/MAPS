@@ -7958,6 +7958,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'uploadChangeCancel') return uploadChangeCancel(payload.items || []);
   if (action === 'get7DaysBugaList')   return get7DaysBugaList();
   if (action === 'getTodayMaegakList') return getTodayMaegakList();
+  if (action === 'getProgressList')    return getProgressList(payload.from, payload.to);
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
@@ -8185,6 +8186,71 @@ function getTodayMaegakList() {
     return { success: true, cases: cases, count: cases.length, today: today };
   } catch (e) {
     Logger.log('[getTodayMaegakList] 오류: ' + e.toString());
+    return { success: false, message: String(e), cases: [], count: 0 };
+  }
+}
+
+/**
+ * 진행사항 확인용 — 입찰일자(in-date)가 [from, to] (YYMMDD) 범위인 items 반환.
+ * from/to 미지정 시 오늘~오늘. 필드: 입찰일자·사건번호·법원·입찰가·회원명.
+ * @param {string} from6 YYMMDD (예 '260601')
+ * @param {string} to6   YYMMDD
+ * @return {{success, cases:[{item_id,sakun_no,bid_date,court,bidprice,m_name}], count, from, to}}
+ */
+function getProgressList(from6, to6) {
+  try {
+    var tz = Session.getScriptTimeZone();
+    var today = Utilities.formatDate(new Date(), tz, 'yyMMdd');
+    var clean6 = function (v, dflt) {
+      var d = String(v == null ? '' : v).replace(/[^0-9]/g, '');
+      if (d.length >= 8 && d.slice(0, 2) === '20') d = d.slice(2);
+      if (d.length > 6) d = d.slice(-6);
+      return d.length === 6 ? d : dflt;
+    };
+    var fromN = parseInt(clean6(from6, today), 10);
+    var toN = parseInt(clean6(to6, today), 10);
+    if (fromN > toN) { var t = fromN; fromN = toN; toN = t; }
+
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'items 시트 없음', cases: [], count: 0 };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, cases: [], count: 0, from: fromN, to: toN };
+
+    var idIdx = ITEM_HEADERS.indexOf('id'), inDateIdx = ITEM_HEADERS.indexOf('in-date'),
+        sakunIdx = ITEM_HEADERS.indexOf('sakun_no'), courtIdx = ITEM_HEADERS.indexOf('court'),
+        mNameIdx = ITEM_HEADERS.indexOf('m_name'), bidIdx = ITEM_HEADERS.indexOf('bidprice');
+    var values = sheet.getRange(2, 1, lastRow - 1, bidIdx + 1).getValues();
+    var norm6 = function (v) {
+      var s = (v instanceof Date) ? Utilities.formatDate(v, tz, 'yyMMdd') : String(v == null ? '' : v);
+      var d = s.replace(/[^0-9]/g, '');
+      if (d.length >= 8 && d.slice(0, 2) === '20') d = d.slice(2);
+      if (d.length > 6) d = d.slice(-6);
+      return d;
+    };
+    var seen = {}, cases = [];
+    for (var i = 0; i < values.length; i++) {
+      var d6 = norm6(values[i][inDateIdx]);
+      var n = parseInt(d6, 10);
+      if (!n || n < fromN || n > toN) continue;
+      var sakun = String(values[i][sakunIdx] == null ? '' : values[i][sakunIdx]).trim();
+      if (!sakun) continue;
+      var court = String(values[i][courtIdx] == null ? '' : values[i][courtIdx]).trim();
+      var key = sakun + '|' + d6 + '|' + court;
+      if (seen[key]) continue;
+      seen[key] = true;
+      cases.push({
+        item_id: String(values[i][idIdx] == null ? '' : values[i][idIdx]),
+        sakun_no: sakun,
+        bid_date: d6,
+        court: court,
+        bidprice: String(values[i][bidIdx] == null ? '' : values[i][bidIdx]).trim(),
+        m_name: String(values[i][mNameIdx] == null ? '' : values[i][mNameIdx]).trim()
+      });
+    }
+    cases.sort(function (a, b) { return a.bid_date < b.bid_date ? -1 : (a.bid_date > b.bid_date ? 1 : 0); });
+    return { success: true, cases: cases, count: cases.length, from: fromN, to: toN };
+  } catch (e) {
+    Logger.log('[getProgressList] 오류: ' + e.toString());
     return { success: false, message: String(e), cases: [], count: 0 };
   }
 }

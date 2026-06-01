@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<!-- 조사물건관리 전체 레이아웃 정적 목업 — 좌측 리스트 ↔ 우측 그리드 정렬 검증/조정용 -->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>조사물건관리 정렬 목업</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Malgun Gothic','맑은 고딕',system-ui,sans-serif;font-size:13px;color:#1f2937;}
+  .content-hidden{display:none;}
+  /* ===== 실제 index.html 에서 복사한 JM CSS ===== */
+  #jmtAside{width:var(--jmt-aside-w,376px);flex:0 0 auto;}
+  #jmt-list{list-style:none;overflow:auto;}
+  .jmt-card{width:max-content;min-width:100%;}
+  .jmt-rb{margin-left:auto;display:flex;align-items:center;flex-shrink:0;}
+  .jmt-nc{width:36px;text-align:right;padding-right:6px;flex-shrink:0;font-size:11px;font-variant-numeric:tabular-nums;}
+  .nc-all{font-weight:800;color:#0f172a;}.nc-bun{color:#1f2937;font-weight:800;}
+  .nc-jin{color:#4f46e5;font-weight:700;}.nc-done{color:#0f766e;font-weight:700;}.nc-pye{color:#dc2626;font-weight:700;}
+  .jmt-nc.z{color:#cbd5e1!important;font-weight:600!important;}
+  .jmt-kidc{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;flex-shrink:0;background:#e0e7ff;color:#4338ca;}
+  .jmt-card-title,.jmt-branch-label,.jmt-name{flex:0 1 auto;min-width:0;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;}
+  .jmt-card{display:block;margin:5px 4px;border:1px solid #e6eaf0;border-radius:8px;overflow:hidden;background:#fff;list-style:none;position:relative;}
+  .jmt-card-head{display:flex;align-items:center;gap:6px;padding:6px 8px;cursor:pointer;user-select:none;color:#fff;background:linear-gradient(90deg,#5b63ea,#7c83ef);}
+  .jmt-card-check,.jmt-branch-check,.jmt-row-chk{margin:0;flex-shrink:0;width:13px;height:13px;accent-color:#4f46e5;}
+  .jmt-card-head .jmt-card-check{accent-color:#fff;}
+  .jmt-card-title{font-weight:800;font-size:12px;color:#fff;}
+  .jmt-card-head .jmt-kidc{background:#fff;color:#4f46e5;}
+  .jmt-card-head .jmt-nc{color:#fff;font-size:12px;font-weight:800;}
+  .jmt-card-head .jmt-nc.z{color:rgba(255,255,255,.5)!important;}
+  .jmt-card-body{padding:2px 0 4px;list-style:none;margin:0;}
+  .jmt-branch,.jmt-item{display:flex;align-items:center;gap:6px;padding:5px 8px;cursor:pointer;user-select:none;position:relative;background:#fff;}
+  .jmt-branch.sel-on,.jmt-item.sel-on{background:#eef0fe;}
+  .jmt-branch-label{color:#334155;font-weight:700;}
+  .jmt-name{color:#475569;font-weight:600;}
+  .jmt-topbar{display:flex;align-items:flex-start;padding:9px 11px;background:#eef1f6;border-bottom:1px solid #e2e8f0;}
+  .jmt-topbar>*{align-self:flex-start;}
+  .jmt-hlead{flex:1;font-size:12px;font-weight:800;color:#334155;}
+  .jmt-hc{width:42px;padding-right:7px;display:flex;flex-direction:column;align-items:flex-end;gap:1px;cursor:pointer;border-radius:5px;}
+  .jmt-hc i{font-size:10px;font-weight:700;font-style:normal;line-height:1.05;color:#64748b;}
+  .jmt-hc b{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:#0f172a;}
+  .jmt-hc.nc-jin i,.jmt-hc.nc-jin b{color:#4f46e5;}.jmt-hc.nc-done i,.jmt-hc.nc-done b{color:#0f766e;}.jmt-hc.nc-pye i,.jmt-hc.nc-pye b{color:#dc2626;}
+  #jmtSplitter{flex:0 0 6px;cursor:col-resize;background:#e5e7eb;border-left:1px solid #d1d5db;border-right:1px solid #d1d5db;}
+  #jm-grid{border-collapse:collapse;font-size:13px;table-layout:fixed;width:100%;}
+  .jm-th{background:#dbe2ec;border:1px solid #b9c2d4;padding:8px 6px;text-align:center;font-weight:700;color:#1f2b46;position:sticky;top:0;z-index:5;}
+  .jm-th-sub{font-size:10px;font-weight:400;color:#6b7280;display:block;}
+  .jm-td{border:1px solid #e5e7eb;padding:8px;vertical-align:middle;}
+  #jm-status-summary{display:flex;gap:6px;align-items:center;}
+  .jm-summary-act{display:inline-flex;align-items:center;padding:5px 12px;border-radius:6px;border:0;cursor:pointer;font-size:12px;font-weight:800;}
+  .jm-multi-btn{border:1px solid #d1d5db;border-radius:4px;padding:4px 8px;background:#fff;font-size:12px;cursor:pointer;min-width:90px;text-align:left;}
+  .jm-filter-bar input[type="text"],.jm-filter-bar .jm-multi-btn,.jm-filter-bar .jm-filter-reset{padding-top:6px!important;padding-bottom:6px!important;font-size:12.5px;}
+  /* tailwind 대용 최소 유틸 */
+  .flex{display:flex;}.flex-1{flex:1;}.flex-col{flex-direction:column;}.flex-wrap{flex-wrap:wrap;}
+  .items-center{align-items:center;}.gap-2{gap:8px;}.gap-1{gap:4px;}
+  .border-b{border-bottom:1px solid #e5e7eb;}.border-r{border-right:1px solid #e5e7eb;}
+  .bg-white{background:#fff;}.bg-gray-50{background:#f9fafb;}.text-xs{font-size:12px;}
+  .p-3{padding:12px;}.px-2{padding:0 8px;}.py-1{padding:4px 0;}.px-3{padding:0 12px;}.py-2{padding:8px 0;}.p-2{padding:8px;}
+  .overflow-hidden{overflow:hidden;}.overflow-auto{overflow:auto;}.h-screen{height:100vh;}
+  .border{border:1px solid #d1d5db;}.rounded{border-radius:4px;}
+  input[type=text]{border:1px solid #d1d5db;border-radius:4px;padding:2px 8px;}
+  .jm-filter-bar input[type=text]{height:30px;}
+  select{border:1px solid #d1d5db;border-radius:4px;}
+</style>
+</head>
+<body>
+<div id="JosaManagement" class="h-screen flex flex-col bg-white overflow-hidden">
+  <div class="flex flex-1 overflow-hidden">
+    <!-- ===== 좌측 aside ===== -->
+    <aside class="border-r bg-gray-50 text-xs flex-col" id="jmtAside" style="display:flex">
+      <div class="jm-side-header flex items-center gap-2 px-2 py-1 border-b bg-gray-50">
+        <select id="jmtTitleSearch" class="flex-1" style="font-size:11px;min-width:0;padding:2px 8px">
+          <option style="color:#9ca3af">크롤링리스트</option>
+        </select>
+        <button id="jmtBtnDeleteSelected" style="font-size:11px;padding:2px 8px;border-radius:4px;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;font-weight:700;flex-shrink:0">🗑 선택 삭제</button>
+      </div>
+      <div id="jmt-topbar" class="jmt-topbar">
+        <input type="checkbox" id="jm-tree-all" checked style="width:13px;height:13px;flex-shrink:0;margin-right:6px;accent-color:#4f46e5">
+        <span class="jmt-hlead">크롤링리스트</span>
+        <span class="jmt-rb">
+          <span class="jmt-hc nc-all"><i>전체</i><b>170</b></span>
+          <span class="jmt-hc nc-bun"><i>미분류</i><b>145</b></span>
+          <span class="jmt-hc nc-jin"><i>진행중</i><b>13</b></span>
+          <span class="jmt-hc nc-done"><i>완료</i><b>2</b></span>
+          <span class="jmt-hc nc-pye"><i>폐기</i><b>10</b></span>
+        </span>
+      </div>
+      <ul id="jmt-list" class="flex-1 p-2" style="margin:0">
+        <li class="jmt-card">
+          <div class="jmt-card-head" style="padding-left:8px">
+            <span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-card-check" checked>
+            <span class="jmt-card-title">허그포기</span><span class="jmt-kidc">6</span>
+            <span class="jmt-rb"><span class="jmt-nc">106</span><span class="jmt-nc">93</span><span class="jmt-nc">5</span><span class="jmt-nc z">0</span><span class="jmt-nc">8</span></span>
+          </div>
+          <div class="jmt-card-body">
+            <div class="jmt-branch sel-on" style="padding-left:22px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-branch-check" checked><span class="jmt-branch-label">빌라</span><span class="jmt-kidc">3</span><span class="jmt-rb"><span class="jmt-nc nc-all">55</span><span class="jmt-nc nc-bun">43</span><span class="jmt-nc nc-jin">4</span><span class="jmt-nc nc-done z">0</span><span class="jmt-nc nc-pye">8</span></span></div>
+            <div class="jmt-item sel-on" style="padding-left:36px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-row-chk" checked><span class="jmt-name">지방</span><span class="jmt-rb"><span class="jmt-nc nc-all">2</span><span class="jmt-nc nc-bun">2</span><span class="jmt-nc nc-jin z">0</span><span class="jmt-nc nc-done z">0</span><span class="jmt-nc nc-pye z">0</span></span></div>
+            <div class="jmt-item sel-on" style="padding-left:36px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-row-chk" checked><span class="jmt-name">서울</span><span class="jmt-rb"><span class="jmt-nc nc-all">13</span><span class="jmt-nc nc-bun">1</span><span class="jmt-nc nc-jin">4</span><span class="jmt-nc nc-done z">0</span><span class="jmt-nc nc-pye">8</span></span></div>
+            <div class="jmt-item sel-on" style="padding-left:36px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-row-chk" checked><span class="jmt-name">수도권</span><span class="jmt-rb"><span class="jmt-nc nc-all">40</span><span class="jmt-nc nc-bun">40</span><span class="jmt-nc nc-jin z">0</span><span class="jmt-nc nc-done z">0</span><span class="jmt-nc nc-pye z">0</span></span></div>
+            <div class="jmt-branch" style="padding-left:22px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-branch-check"><span class="jmt-branch-label">오피</span><span class="jmt-kidc">2</span><span class="jmt-rb"><span class="jmt-nc nc-all">22</span><span class="jmt-nc nc-bun">22</span><span class="jmt-nc nc-jin z">0</span><span class="jmt-nc nc-done z">0</span><span class="jmt-nc nc-pye z">0</span></span></div>
+            <div class="jmt-item" style="padding-left:36px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-row-chk"><span class="jmt-name">지방</span><span class="jmt-rb"><span class="jmt-nc nc-all">8</span><span class="jmt-nc nc-bun">8</span><span class="jmt-nc nc-jin z">0</span><span class="jmt-nc nc-done z">0</span><span class="jmt-nc nc-pye z">0</span></span></div>
+            <div class="jmt-item" style="padding-left:36px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-row-chk"><span class="jmt-name">수도권</span><span class="jmt-rb"><span class="jmt-nc nc-all">14</span><span class="jmt-nc nc-bun">14</span><span class="jmt-nc nc-jin z">0</span><span class="jmt-nc nc-done z">0</span><span class="jmt-nc nc-pye z">0</span></span></div>
+            <div class="jmt-item" style="padding-left:22px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-row-chk"><span class="jmt-name">아파트</span><span class="jmt-rb"><span class="jmt-nc nc-all">29</span><span class="jmt-nc nc-bun">28</span><span class="jmt-nc nc-jin">1</span><span class="jmt-nc nc-done z">0</span><span class="jmt-nc nc-pye z">0</span></span></div>
+          </div>
+        </li>
+        <li class="jmt-card">
+          <div class="jmt-card-head" style="padding-left:8px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-card-check" checked><span class="jmt-card-title">재매각</span><span class="jmt-kidc">1</span><span class="jmt-rb"><span class="jmt-nc">66</span><span class="jmt-nc">54</span><span class="jmt-nc">8</span><span class="jmt-nc">2</span><span class="jmt-nc">2</span></span></div>
+          <div class="jmt-card-body"><div class="jmt-item sel-on" style="padding-left:22px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-row-chk" checked><span class="jmt-name">주거용 다세대빌라</span><span class="jmt-rb"><span class="jmt-nc nc-all">66</span><span class="jmt-nc nc-bun">54</span><span class="jmt-nc nc-jin">8</span><span class="jmt-nc nc-done">2</span><span class="jmt-nc nc-pye">2</span></span></div></div>
+        </li>
+        <li class="jmt-card">
+          <div class="jmt-card-head" style="padding-left:8px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-card-check" checked><span class="jmt-card-title">반값경매</span><span class="jmt-kidc">1</span><span class="jmt-rb"><span class="jmt-nc z">0</span><span class="jmt-nc z">0</span><span class="jmt-nc z">0</span><span class="jmt-nc z">0</span><span class="jmt-nc z">0</span></span></div>
+          <div class="jmt-card-body"><div class="jmt-item" style="padding-left:22px"><span class="drag-handle">⋮⋮</span><input type="checkbox" class="jmt-row-chk"><span class="jmt-name">보존등기(15.1~)</span><span class="jmt-rb"><span class="jmt-nc nc-all z">0</span><span class="jmt-nc nc-bun z">0</span><span class="jmt-nc nc-jin z">0</span><span class="jmt-nc nc-done z">0</span><span class="jmt-nc nc-pye z">0</span></span></div></div>
+        </li>
+      </ul>
+    </aside>
+
+    <div id="jmtSplitter"></div>
+
+    <!-- ===== 우측 메인 ===== -->
+    <main class="flex-1 overflow-hidden flex flex-col" style="min-width:0">
+      <div class="border-b bg-white p-3 flex flex-wrap gap-2 items-center text-xs jm-filter-bar">
+        <label class="flex items-center gap-1"><input type="checkbox" checked> 오늘 이후만</label>
+        <label class="flex items-center gap-1"><input type="checkbox" checked> 폐기 제외</label>
+        <span style="color:#d1d5db">|</span>
+        <input type="text" placeholder="사건번호" style="width:112px">
+        <input type="text" placeholder="입찰일자" style="width:80px">
+        <input type="text" placeholder="법원" style="width:96px">
+        <button class="jm-multi-btn">상태 전체</button>
+        <button class="jm-multi-btn">조사자 전체</button>
+        <input type="text" placeholder="주소" style="width:128px">
+        <input type="text" placeholder="물건타입" style="width:96px">
+        <input type="text" placeholder="특수물건" style="width:144px">
+        <button class="jm-filter-reset" style="background:#e5e7eb;padding:0 8px;border-radius:4px;border:0">초기화</button>
+        <button style="background:#3b82f6;color:#fff;padding:0 8px;border-radius:4px;border:0;font-weight:700">↻ 새로고침</button>
+      </div>
+      <div id="jm-status-summary" class="border-b bg-white px-3 py-2 text-xs">
+        <button class="jm-summary-act" style="background:#fde68a;color:#92400e">📑 선택보기</button>
+        <button class="jm-summary-act" style="background:#bae6fd;color:#075985">✈ 조사요청전송</button>
+        <span style="display:inline-block;width:14px"></span>
+        <span style="color:#1f2937;font-weight:800;text-decoration:underline">전체 <strong>170</strong></span>
+        <span style="color:#1f2937;font-weight:600;margin-left:12px">미분류 <strong>145</strong></span>
+        <span style="color:#1f2937;font-weight:600;margin-left:12px">조사예정 <strong>4</strong></span>
+        <span style="color:#1f2937;font-weight:600;margin-left:12px">조사요청 <strong>6</strong></span>
+        <span style="color:#1f2937;font-weight:600;margin-left:12px">조사접수 <strong>0</strong></span>
+        <span style="color:#1f2937;font-weight:600;margin-left:12px">조사확정 <strong>2</strong></span>
+        <span style="color:#1f2937;font-weight:600;margin-left:12px">조사불가 <strong>1</strong></span>
+        <span style="color:#1f2937;font-weight:600;margin-left:12px">조사완료 <strong>2</strong></span>
+        <span style="color:#1f2937;font-weight:600;margin-left:12px">폐기 <strong>10</strong></span>
+      </div>
+      <div class="flex-1 overflow-auto">
+        <table id="jm-grid">
+          <thead>
+            <tr>
+              <th class="jm-th" style="width:40px"><input type="checkbox"></th>
+              <th class="jm-th" style="width:112px">상태<span class="jm-th-sub">메모</span></th>
+              <th class="jm-th" style="width:64px">조사자</th>
+              <th class="jm-th" style="width:96px">사진</th>
+              <th class="jm-th" style="width:144px">사건번호<span class="jm-th-sub">물건종류</span></th>
+              <th class="jm-th" style="width:64px">법원</th>
+              <th class="jm-th" style="width:112px">매각기일<span class="jm-th-sub">(시간)</span></th>
+              <th class="jm-th">소재지</th>
+            </tr>
+          </thead>
+          <tbody id="jm-grid-body">
+            <tr class="jm-row"><td class="jm-td"><input type="checkbox"></td><td class="jm-td">조사요청</td><td class="jm-td">이정우</td><td class="jm-td">🏢</td><td class="jm-td"><span class="jm-sakun">23타경6542</span><br>아파트</td><td class="jm-td">대전천안</td><td class="jm-td">2026.06.01<br>입찰 13일전</td><td class="jm-td">충청남도 천안시 서북구 신당동 468-7 …</td></tr>
+            <tr class="jm-row"><td class="jm-td"><input type="checkbox"></td><td class="jm-td">조사요청</td><td class="jm-td">이정우</td><td class="jm-td">🏢</td><td class="jm-td"><span class="jm-sakun">24타경1933</span><br>아파트</td><td class="jm-td">대전천안</td><td class="jm-td">2026.06.01<br>입찰 13일전</td><td class="jm-td">충청남도 천안시 서북구 신당동 468-7 …</td></tr>
+            <tr class="jm-row"><td class="jm-td"><input type="checkbox"></td><td class="jm-td">조사확정</td><td class="jm-td">이정우</td><td class="jm-td">🏢</td><td class="jm-td"><span class="jm-sakun">24타경1933</span><br>아파트</td><td class="jm-td">대전천안</td><td class="jm-td">2026.06.01<br>입찰 13일전</td><td class="jm-td">충청남도 천안시 …</td></tr>
+            <tr class="jm-row"><td class="jm-td"><input type="checkbox"></td><td class="jm-td">조사불가</td><td class="jm-td">이정우</td><td class="jm-td">🏢</td><td class="jm-td"><span class="jm-sakun">24타경543478</span><br>아파트</td><td class="jm-td">인천</td><td class="jm-td">2026.05.26<br>입찰 7일전</td><td class="jm-td">인천광역시 미추홀구 …</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // 실제 js-app.html 의 syncJmtHeaderAlign_ 와 동일 로직
+  function syncJmtHeaderAlign_(){
+    try{
+      var aside=document.getElementById('jmtAside'); if(!aside) return;
+      var fb=document.querySelector('#JosaManagement .jm-filter-bar');
+      var ss=document.getElementById('jm-status-summary');
+      var thead=document.querySelector('#JosaManagement #jm-grid thead');
+      var hdr=aside.querySelector('.jm-side-header');
+      var tb=document.getElementById('jmt-topbar');
+      if(!fb||!ss||!thead||!hdr||!tb) return;
+      var fbH=fb.offsetHeight, ssH=ss.offsetHeight, thH=thead.offsetHeight;
+      if(fbH<=0||ssH<=0) return;
+      hdr.style.minHeight=fbH+'px'; hdr.style.boxSizing='border-box';
+      tb.style.minHeight=(ssH+thH)+'px'; tb.style.boxSizing='border-box';
+      document.title='fb='+fbH+' ss='+ssH+' th='+thH+' hdr='+hdr.offsetHeight+' tb='+tb.offsetHeight;
+    }catch(e){}
+  }
+  requestAnimationFrame(syncJmtHeaderAlign_);
+  window.addEventListener('resize',function(){requestAnimationFrame(syncJmtHeaderAlign_);});
+</script>
+</body>
+</html>

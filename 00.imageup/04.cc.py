@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-MJ경매 [불가확인]
+MJ경매 [진행사항 확인]
 - 입력 한 줄 = "사건번호 | 입찰일자 | 법원(MAPS명)" (MAPS '7일 리스트' 결과).
   (env MJ_IMAGEUP_CASES_JSON 또는 「변경취소 확인리스트」 폴더 최신 .txt)
 - ★ 옥션원 종합검색(ca_title.php) 진입 → 사건번호(년도+번호)로 auction_num_ser() 검색
@@ -10,7 +10,7 @@ MJ경매 [불가확인]
 - 결과는 stdout 에 'RESULT|{json}' 한 줄씩 → 매니저 UI 결과표 렌더.
 - 이미지 캡처 없음. Selenium 일반 모드.
 """
-print("📢 MJ경매 [불가확인] (종합검색 → 법원·기일 매칭 → 불가사유 판정)...")
+print("📢 MJ경매 [진행사항 확인] (종합검색 → 법원·기일 매칭 → 불가사유 판정)...")
 
 import os, sys, json, time, re, glob, traceback
 from selenium import webdriver
@@ -249,7 +249,14 @@ def search_case(driver, wait, case, use_date=True):
             WebDriverWait(driver, 20).until(lambda d: "ca_list" in d.current_url)
         except Exception:
             pass
-        time.sleep(1.2)
+        # 결과 행(체크박스) 또는 '없습니다' 가 렌더될 때까지 대기 (고정 sleep 플레이크 방지)
+        try:
+            WebDriverWait(driver, 12).until(lambda d:
+                d.find_elements(By.CSS_SELECTOR, "input[type=checkbox][value]")
+                or "없습니다" in (d.find_element(By.TAG_NAME, "body").text or ""))
+        except Exception:
+            pass
+        time.sleep(0.4)
         return True
     except Exception as e:
         print(f"    ⚠ 검색 오류: {repr(e)[:200]}")
@@ -320,9 +327,12 @@ def process_case(driver, wait, case):
     exp_d6 = norm_date6(case.get("bid_date"))
     exp_lawsup = court_to_lawsup(exp_court)  # 검색에 법원이 적용됐는지 (적용됐으면 결과는 그 법원으로 이미 필터됨)
     base = {
+        "item_id": case.get("item_id", ""),
         "sakun_no": case.get("sakun_no", ""),
         "bid_date": case.get("bid_date", ""),
         "court": exp_court,
+        "bidprice": case.get("bidprice", ""),   # 우리 입찰가(없을 수도)
+        "m_name": case.get("m_name", ""),        # 회원명
     }
 
     if not search_case(driver, wait, case, use_date=True):
@@ -432,7 +442,7 @@ def main():
 
     acc = ACCOUNTS[0]
     print(f"🔐 로그인 계정: {acc.get('id')}")
-    print(f"🎯 불가확인 시작: {len(cases)}건 (종합검색 → 법원·기일 매칭)\n")
+    print(f"🎯 진행사항 확인 시작: {len(cases)}건 (종합검색 → 법원·기일 매칭)\n")
 
     options = webdriver.ChromeOptions()
     # 기본은 창 표시(사용자가 봐야 함). MJ_IMAGEUP_HEADLESS=1 일 때만 숨김.
@@ -447,7 +457,7 @@ def main():
     try:
         login(driver, acc)
         for i, case in enumerate(cases, 1):
-            print(f"[불가확인 {i}/{len(cases)}] {case['sakun_no']} | {case.get('bid_date')} | {case.get('court')}")
+            print(f"[진행사항 {i}/{len(cases)}] {case['sakun_no']} | {case.get('bid_date')} | {case.get('court')}")
             try:
                 process_case(driver, wait, case)
             except Exception as e:

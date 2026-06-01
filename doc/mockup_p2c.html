@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>확정 필요 — P2c</title>
+<style>
+  body { font-family: 'Malgun Gothic', sans-serif; background:#f3f4f6; margin:0; padding:24px; color:#111827; }
+  h2 { font-size:18px; margin:0 0 4px; }
+  .sub { color:#6b7280; font-size:13px; margin-bottom:18px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:18px 20px; margin-bottom:22px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .card h3 { font-size:15px; margin:0 0 12px; }
+  .label { display:inline-block; font-size:12px; font-weight:700; color:#fff; padding:2px 9px; border-radius:6px; margin-right:6px; }
+  /* 상단 필터버튼 (pill) */
+  .pillbar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .pill { color:#fff; font-weight:700; font-size:13px; padding:6px 16px; border-radius:8px; border:none; }
+  .p-bid{background:#4f46e5;} .p-rec{background:#fb923c;} .p-ver{background:#9333ea;}
+  .p-peg{background:#dc2626;} .p-bul{background:#1f2937;} .p-old{background:#1f2937;}
+  .opt { border:1px solid #e5e7eb; border-radius:10px; padding:12px 14px; margin-top:10px; }
+  .opt b { font-size:13px; }
+  .opt .note { color:#6b7280; font-size:12px; margin-top:6px; }
+  .reco { border-color:#4f46e5; background:#eef2ff; }
+  .reco-tag { background:#4f46e5; color:#fff; font-size:11px; padding:1px 7px; border-radius:6px; margin-left:6px; }
+  /* 테이블 폭 */
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th,td { border-bottom:1px solid #eee; padding:6px 8px; text-align:left; white-space:nowrap; }
+  th { background:#f9fafb; color:#374151; font-size:12px; }
+  .stag { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:5px; border:1.5px solid; }
+  .s-bid{background:#a5b4fc;color:#312e81;border-color:#4338ca;}
+  .s-prod{background:#fef9c3;color:#854d0e;border-color:#a16207;}
+  .s-mij{background:#bbf7d0;color:#14532d;border-color:#15803d;}
+  .s-peg{background:#dc2626;color:#fff;border-color:#b91c1c;}
+  .s-bul{background:#111827;color:#fff;border-color:#000;}
+  .colw { color:#dc2626; font-weight:700; }
+  .arrow{ color:#9ca3af; }
+</style>
+</head>
+<body>
+  <h2>확정 필요 — 입찰물건관리 / 입찰일정</h2>
+  <div class="sub">아래 2개만 골라주면 바로 적용할게. (보고용 목업, 실제 화면 아님)</div>
+
+  <!-- 결정 1: 상단 필터버튼 -->
+  <div class="card">
+    <h3>① 상단 상태 필터버튼 — 지금 4번째 "취소" 버튼을 뭘로?</h3>
+    <div style="margin-bottom:6px;color:#6b7280;font-size:12px;">현재: </div>
+    <div class="pillbar">
+      <button class="pill p-bid">입찰</button>
+      <button class="pill p-rec">추천</button>
+      <button class="pill p-ver">검증</button>
+      <button class="pill p-old">취소</button>
+    </div>
+
+    <div class="opt reco">
+      <b>안 A. 취소 → "폐기" + "불가" 2개 버튼으로 분리</b><span class="reco-tag">추천</span>
+      <div class="pillbar" style="margin-top:8px;">
+        <button class="pill p-bid">입찰</button>
+        <button class="pill p-rec">추천</button>
+        <button class="pill p-ver">검증</button>
+        <button class="pill p-peg">폐기</button>
+        <button class="pill p-bul">불가</button>
+      </div>
+      <div class="note">폐기·불가 따로 켜고 끌 수 있음. 버튼 4→5개.</div>
+    </div>
+
+    <div class="opt">
+      <b>안 B. 버튼 1개로 통합 "불가/폐기" (누르면 둘 다 토글)</b>
+      <div class="pillbar" style="margin-top:8px;">
+        <button class="pill p-bid">입찰</button>
+        <button class="pill p-rec">추천</button>
+        <button class="pill p-ver">검증</button>
+        <button class="pill p-bul">불가/폐기</button>
+      </div>
+      <div class="note">버튼 4개 유지. 폐기·불가를 따로는 못 거름.</div>
+    </div>
+
+    <div class="opt">
+      <b>안 C. 그냥 "불가" 1개로만 (폐기는 상세필터로)</b>
+      <div class="pillbar" style="margin-top:8px;">
+        <button class="pill p-bid">입찰</button>
+        <button class="pill p-rec">추천</button>
+        <button class="pill p-ver">검증</button>
+        <button class="pill p-bul">불가</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 결정 2: 컬럼 폭 -->
+  <div class="card">
+    <h3>② 입찰물건관리 리스트 — 상태 좁게 / 회원 넓게</h3>
+    <div style="color:#6b7280;font-size:12px;margin-bottom:6px;">변경 후 모습 (상태열 <span class="colw">좁게</span>, 회원열 <span class="colw">넓게</span>):</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:70px;">일자</th><th style="width:120px;">사건번호</th><th style="width:70px;">법원</th>
+          <th style="width:54px;">상태 <span class="arrow">▼좁게</span></th><th style="width:32px;">T</th>
+          <th style="width:200px;">회원 <span class="arrow">▶넓게</span></th><th style="width:70px;">담당</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>260529</td><td>2025타경3461</td><td>광주</td><td><span class="stag s-bid">입찰</span></td><td>T</td><td>탁경혜</td><td>대표님</td></tr>
+        <tr><td>260529</td><td>2025타경511039</td><td>인천</td><td><span class="stag s-bid">입찰</span></td><td>T</td><td>이현민</td><td>대표님</td></tr>
+        <tr><td>260601</td><td>2023타경7800</td><td>전주</td><td><span class="stag s-peg">폐기</span></td><td>T</td><td>이대영 (개인) 와이프</td><td>대표님</td></tr>
+        <tr><td>260601</td><td>2026타경500463</td><td>인천</td><td><span class="stag s-bul">불가</span></td><td>T</td><td>이현민</td><td>대표님</td></tr>
+        <tr><td>260601</td><td>2024타경32909</td><td>창원</td><td><span class="stag s-prod">상품</span></td><td></td><td>—</td><td>대표님</td></tr>
+      </tbody>
+    </table>
+    <div style="color:#6b7280;font-size:12px;margin-top:8px;">상태 컬럼 폭만큼 회원 컬럼이 넓어져 긴 회원명도 안 잘림.</div>
+  </div>
+
+</body>
+</html>
