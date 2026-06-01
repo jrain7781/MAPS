@@ -114,6 +114,15 @@ def norm_date6(v):
     return d
 
 
+def extract_date6(s):
+    """매각기일 텍스트에서 날짜만 YYMMDD 추출. '2026.06.01 (10:00)' → '260601'.
+    (시각 10:00 까지 숫자로 긁히는 것 방지)"""
+    m = re.search(r"(20\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})", str(s or ""))
+    if m:
+        return m.group(1)[2:] + m.group(2).zfill(2) + m.group(3).zfill(2)
+    return norm_date6(s)
+
+
 def yymmdd_to_full(d6):
     d6 = re.sub(r"[^0-9]", "", str(d6 or ""))
     if len(d6) != 6:
@@ -262,7 +271,7 @@ def parse_result_rows(driver):
                 "sakun": (tds[2].text or "").strip(),
                 "addr": (tds[3].text or "").strip(),
                 "state": (tds[5].text or "").strip(),
-                "date6": norm_date6(date_txt),
+                "date6": extract_date6(date_txt),
                 "date_txt": date_txt.replace("\n", " "),
             })
         except Exception:
