@@ -7979,7 +7979,7 @@ function uploadChangeCancel(items) {
     if (!Array.isArray(items) || items.length === 0) {
       return { success: false, message: '항목이 비어 있습니다.', updated: 0 };
     }
-    // 3키(사건번호|입찰일자|법원) → {reason(불가사유), detail(상세)} (3키 검증은 cc(03.cc.py)에서 끝냄)
+    // 3키(사건번호|입찰일자|법원) → {reason(불가사유), detail(상세)} (3키 검증은 cc(04.cc.py)에서 끝냄)
     var normDate = function (v) { return String(v || '').replace(/[^0-9]/g, ''); };
     var keyOf = function (sakun, bidDate, court) {
       return String(sakun || '').trim() + '|' + normDate(bidDate) + '|' + String(court || '').trim();
