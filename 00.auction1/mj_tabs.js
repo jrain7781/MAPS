@@ -493,9 +493,13 @@
       const willUpdate = isBuga
         ? `<b style="color:#b91c1c">불가</b>${r.status ? ` <span class="cc-badge cc-bad">${escapeHtml(r.status)}</span>` : ''}`
         : (!pending && stateKind === '매각' ? '<span class="cc-badge cc-end">매각</span>' : '<span style="color:#9ca3af">-</span>');
+      // 매각가 색: 매각가<입찰가=빨강, 매각가>입찰가=검정, 같으면 파랑
       const bid = _won(r.bidprice), mae = _won(r.maegak_price);
       let maeCell = mae ? fmtWon(r.maegak_price) : '';
-      if (mae && bid) maeCell = `<b style="color:${bid === mae ? '#2563eb' : '#dc2626'}">${fmtWon(r.maegak_price)}</b>`;
+      if (mae && bid) {
+        const col = mae < bid ? '#dc2626' : (mae > bid ? '#111827' : '#2563eb');
+        maeCell = `<b style="color:${col}">${fmtWon(r.maegak_price)}</b>`;
+      }
       const stu = String(r.stu_member || '');
       return `<tr data-idx="${i}" class="${isBuga ? 'cc-row-buga' : ''}">
         <td style="text-align:center"><input type="checkbox" class="cc-cb" ${isBuga ? 'checked' : ''}></td>

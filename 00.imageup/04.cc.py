@@ -207,10 +207,14 @@ def parse_maegak_detail(detail_text, target_d6):
     bc = re.search(r"입찰\s*(\d+)\s*명", chunk)
     if bc:
         res["bidder_count"] = bc.group(1)
-    # 매수인: 줄 끝까지 잡고 뒤쪽 닫는 괄호/공백 제거 (법인 '(주)…' 도 보존)
+    # 매수인: '지역 이름' 형식(예 '경기도 석재근') → 지역 떼고 이름만.
     by = re.search(r"매수인\s*[:：]?\s*([^\n]+)", chunk)
     if by:
-        res["buyer"] = by.group(1).strip().rstrip(") /").strip()
+        raw = by.group(1).strip()
+        raw = raw.split("/")[0].strip()      # 공동매수인('A / B')은 앞 1명
+        raw = raw.rstrip(") ").strip()       # 뒤 닫는 괄호/공백 제거
+        parts = raw.split()
+        res["buyer"] = parts[-1] if parts else raw  # 마지막 토큰 = 이름
     return res
 
 
