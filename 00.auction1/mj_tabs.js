@@ -508,6 +508,45 @@
     `;
   }
 
+  // ===== 법원 매칭표 모달 (MAPS ↔ 옥션원) =====
+  function renderCourtMap(filter) {
+    const tbody = document.getElementById('courtMapTbody');
+    const foot = document.getElementById('courtMapFoot');
+    if (!tbody) return;
+    const map = (window.COURT_MAP || []);
+    const q = String(filter || '').replace(/\s/g, '').trim();
+    const rows = map.filter(r => !q || (r.maps + r.auction + r.code).replace(/\s/g, '').indexOf(q) >= 0);
+    tbody.innerHTML = rows.map(r => {
+      const miss = !r.code ? ' class="cm-miss"' : '';
+      return `<tr${miss}><td>${escapeHtml(r.maps)}</td><td>${escapeHtml(r.auction || '— 미매칭 —')}</td><td>${escapeHtml(r.code || '')}</td></tr>`;
+    }).join('');
+    if (foot) {
+      const missCnt = map.filter(r => !r.code).length;
+      foot.textContent = `총 ${map.length}개 · 표시 ${rows.length}개` + (missCnt ? ` · ⚠ 미매칭 ${missCnt}개` : ' · 전부 매칭됨');
+    }
+  }
+  function openCourtMap() {
+    const m = document.getElementById('courtMapModal');
+    if (!m) return;
+    renderCourtMap('');
+    const s = document.getElementById('courtMapSearch');
+    if (s) { s.value = ''; }
+    m.style.display = 'flex';
+    if (s) setTimeout(() => s.focus(), 50);
+  }
+  function closeCourtMap() {
+    const m = document.getElementById('courtMapModal');
+    if (m) m.style.display = 'none';
+  }
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-act="court-map-open"]')) { openCourtMap(); }
+    else if (e.target.closest('[data-act="court-map-close"]')) { closeCourtMap(); }
+    else if (e.target.id === 'courtMapModal') { closeCourtMap(); } // 오버레이 클릭 닫기
+  });
+  document.addEventListener('input', e => {
+    if (e.target && e.target.id === 'courtMapSearch') renderCourtMap(e.target.value);
+  });
+
   function escapeAttr(s) {
     return String(s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   }
