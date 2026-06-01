@@ -142,8 +142,16 @@ def year_of(case):
 
 
 def case_num2(sakun):
-    m = re.search(r"타경\s*(\d+)", sakun) or re.search(r"-\s*(\d+)\s*$", sakun) or re.search(r"(\d{3,})", sakun)
-    return m.group(1) if m else sakun
+    # 물건번호 '(4)' 는 검색 대상 아님 → 떼고 사건번호만
+    s = re.sub(r"\(\s*\d+\s*\)\s*$", "", str(sakun or "")).strip()
+    m = re.search(r"타경\s*(\d+)", s) or re.search(r"-\s*(\d+)\s*$", s) or re.search(r"(\d{3,})", s)
+    return m.group(1) if m else s
+
+
+def mulgeon_no(sakun):
+    """다물건 물건번호 추출. '2025타경476(4)'/'25-476 (4)' → '4'. 단일물건은 ''."""
+    m = re.search(r"\(\s*(\d+)\s*\)", str(sakun or ""))
+    return m.group(1) if m else ""
 
 
 # 진행상태 분류
@@ -313,10 +321,12 @@ def parse_result_rows(driver):
             except Exception:
                 pass
             date_txt = (tds[6].text or "").strip()
+            sakun_txt = (tds[2].text or "").strip()
             out.append({
                 "pid": val,
                 "line_num": line_num,
-                "sakun": (tds[2].text or "").strip(),
+                "sakun": sakun_txt,
+                "mulgeon": mulgeon_no(sakun_txt),   # 다물건 물건번호 '25-476 (4)' → '4'
                 "addr": (tds[3].text or "").strip(),
                 "state": (tds[5].text or "").strip(),
                 "date6": extract_date6(date_txt),
@@ -365,6 +375,7 @@ def process_case(driver, wait, case):
         "stu_member": case.get("stu_member", ""),  # 현재 MAPS 물건상태
         "bidprice": case.get("bidprice", ""),       # 우리 입찰가(없을 수도)
         "m_name": case.get("m_name", ""),           # 회원명
+        "note": case.get("note", ""),               # 비고
     }
 
     if not search_case(driver, wait, case, use_date=True):
@@ -383,9 +394,9 @@ def process_case(driver, wait, case):
         return
 
     line_tnum = len(rows)
-    # (법원 일치) AND (매각기일 일치) 행 선택
-    # 법원은 검색 단계에서 lawsup 으로 이미 필터됨 → court_hit=True 신뢰.
-    # (lawsup 미매핑인 경우만 주소→법원 변환으로 대조, 공백 무시)
+    exp_mulgeon = mulgeon_no(case.get("sakun_no", ""))  # 다물건 물건번호 '(4)'
+    # (법원 일치) AND (매각기일 일치) [AND 물건번호 일치] 행 선택
+    # 법원은 검색 단계 lawsup 으로 이미 필터됨 → court_hit=True 신뢰. (미매핑만 주소대조)
     picked = None
     for r in rows:
         fc = addr_to_court(r["addr"])
@@ -395,9 +406,16 @@ def process_case(driver, wait, case):
         else:
             r["_court_hit"] = bool(exp_court) and (_norm_court(fc) == _norm_court(exp_court))
         r["_date_hit"] = bool(exp_d6) and (r["date6"] == exp_d6)
-        if r["_court_hit"] and r["_date_hit"]:
+        mul_ok = (not exp_mulgeon) or (r.get("mulgeon", "") == exp_mulgeon)  # 다물건이면 물건번호까지 일치
+        if r["_court_hit"] and r["_date_hit"] and mul_ok:
             picked = r
             break
+    # 물건번호 일치 우선 fallback
+    if not picked and exp_mulgeon:
+        for r in rows:
+            if r.get("mulgeon", "") == exp_mulgeon:
+                picked = r
+                break
     if not picked:
         for r in rows:
             if r["_date_hit"]:

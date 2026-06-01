@@ -8225,8 +8225,10 @@ function getProgressList(from6, to6, statuses) {
     var idIdx = ITEM_HEADERS.indexOf('id'), inDateIdx = ITEM_HEADERS.indexOf('in-date'),
         sakunIdx = ITEM_HEADERS.indexOf('sakun_no'), courtIdx = ITEM_HEADERS.indexOf('court'),
         stuIdx = ITEM_HEADERS.indexOf('stu_member'),
-        mNameIdx = ITEM_HEADERS.indexOf('m_name'), bidIdx = ITEM_HEADERS.indexOf('bidprice');
-    var values = sheet.getRange(2, 1, lastRow - 1, bidIdx + 1).getValues();
+        mNameIdx = ITEM_HEADERS.indexOf('m_name'), bidIdx = ITEM_HEADERS.indexOf('bidprice'),
+        noteIdx = ITEM_HEADERS.indexOf('note');
+    var nCols = Math.max(bidIdx, noteIdx) + 1;
+    var values = sheet.getRange(2, 1, lastRow - 1, nCols).getValues();
     var norm6 = function (v) {
       var s = (v instanceof Date) ? Utilities.formatDate(v, tz, 'yyMMdd') : String(v == null ? '' : v);
       var d = s.replace(/[^0-9]/g, '');
@@ -8254,7 +8256,8 @@ function getProgressList(from6, to6, statuses) {
         court: court,
         stu_member: stu,
         bidprice: String(values[i][bidIdx] == null ? '' : values[i][bidIdx]).trim(),
-        m_name: String(values[i][mNameIdx] == null ? '' : values[i][mNameIdx]).trim()
+        m_name: String(values[i][mNameIdx] == null ? '' : values[i][mNameIdx]).trim(),
+        note: String(values[i][noteIdx] == null ? '' : values[i][noteIdx]).trim()
       });
     }
     cases.sort(function (a, b) { return a.bid_date < b.bid_date ? -1 : (a.bid_date > b.bid_date ? 1 : 0); });

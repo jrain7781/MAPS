@@ -489,7 +489,7 @@
       const resBadge = `<span class="cc-badge ${resCls}">${escapeHtml(stateKind)}</span>`;
       const dtl = String(r.detail || '');
       const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 20 ? dtl.slice(0, 20) + '…' : dtl)}</span>` : '';
-      const url = r.view_url ? ` <a href="${escapeAttr(r.view_url)}" target="_blank" class="cc-link">원본</a>` : '';
+      const url = r.view_url ? ` <a href="#" class="cc-link" data-act="cc-view" data-url="${escapeAttr(r.view_url)}">옥션원</a>` : '';
       const willUpdate = isBuga
         ? `<b style="color:#b91c1c">불가</b>${r.status ? ` <span class="cc-badge cc-bad">${escapeHtml(r.status)}</span>` : ''}`
         : (!pending && stateKind === '매각' ? '<span class="cc-badge cc-end">매각</span>' : '<span style="color:#9ca3af">-</span>');
@@ -514,6 +514,7 @@
         <td>${detail}${url}</td>
         <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok">${escapeHtml(stu)}</span>` : ''}</td>
         <td>${willUpdate}</td>
+        <td class="cc-note" title="${escapeAttr(r.note || '')}">${escapeHtml(String(r.note || '').length > 10 ? String(r.note).slice(0, 10) + '…' : (r.note || ''))}</td>
       </tr>`;
     }).join('');
     const doneCnt = merged.filter(r => !r._pending).length;
@@ -540,6 +541,7 @@
           <th>상세</th>
           <th class="cc-sort" data-sort="stu">현재상태${arrow('stu')}</th>
           <th>업데이트 예정</th>
+          <th>비고</th>
         </tr>
       </thead><tbody>${rows}</tbody></table>
       </div>
@@ -626,7 +628,23 @@
     else if (e.target.closest('[data-act="cc-fav-close"]')) { closeCcFav(); }
     else if (e.target.closest('[data-act="cc-fav-add"]')) { addCcFav(); }
     else if (e.target.id === 'ccFavModal') { closeCcFav(); }
+    else if (e.target.closest('[data-act="cc-view"]')) {
+      e.preventDefault();
+      openAuctionView(e.target.closest('[data-act="cc-view"]').dataset.url);
+    }
+    else if (e.target.closest('[data-act="cc-view-close"]')) { closeAuctionView(); }
+    else if (e.target.id === 'auctionViewModal') { closeAuctionView(); }
   });
+  // 옥션원 상세를 모달(iframe)로 — MAPS 입찰물건관리 '옥션원' 버튼과 동일
+  function openAuctionView(url) {
+    const m = document.getElementById('auctionViewModal'); if (!m || !url) return;
+    const f = document.getElementById('auctionViewFrame'); if (f) f.src = url;
+    m.style.display = 'flex';
+  }
+  function closeAuctionView() {
+    const m = document.getElementById('auctionViewModal'); if (m) m.style.display = 'none';
+    const f = document.getElementById('auctionViewFrame'); if (f) f.src = 'about:blank';
+  }
   document.addEventListener('input', e => {
     if (e.target && e.target.id === 'courtMapSearch') renderCourtMap(e.target.value);
   });
