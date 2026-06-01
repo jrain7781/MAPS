@@ -533,13 +533,13 @@ def process_case(driver, wait, case):
 
     reason = ""
     sentence = ""
-    view_url = ""
     maegak_price = ""
     buyer = ""
     bidder_count = ""
-    # 불가/매각 모두 상세페이지에서 추가 정보 파싱
+    # 옥션원 링크는 모든 건(진행/매각/불가)에 대해 생성
+    view_url = build_view_url(driver, picked["pid"], picked["line_num"], line_tnum)
+    # 불가/매각만 상세페이지 열어 추가 정보 파싱
     if state_kind in ("불가", "매각"):
-        view_url = build_view_url(driver, picked["pid"], picked["line_num"], line_tnum)
         detail_txt = open_detail_text(driver, view_url)
         if state_kind == "불가":
             reason = tok

@@ -214,10 +214,12 @@
       const lines = (casesEl.value || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
       payload.cases = lines;
     }
-    // 진행사항 확인: 📥 불러온 case 객체 배열을 그대로 전달
+    // 진행사항 확인: 실행 체크된 건만 조회 (없으면 안내)
     if (key === 'cc') {
       if (!ccCases.length) { log('cc', '[중단] 먼저 "📥 불러오기" 로 MAPS 입찰건을 가져오세요.', 'log-err'); return; }
-      payload.cases = ccCases;
+      const runCases = getCcRunChecked();
+      if (!runCases.length) { log('cc', '[중단] 실행 체크된 건이 없습니다.', 'log-err'); return; }
+      payload.cases = runCases;
     }
     $log(key).textContent = '';
     if (key === 'cc') { ccResults.length = 0; renderCcResults(); }
@@ -450,6 +452,21 @@
     const base = ccCases.length ? ccCases : ccResults;
     return base.map(c => { const r = byKey[ccKeyOf(c)]; return Object.assign({ _pending: !r }, c, r || {}); });
   }
+  // 실행(cc-run-cb) 체크된 행의 케이스만 반환 (체크 안 한 건 조회 안 함)
+  function getCcRunChecked() {
+    const tbody = $card('cc')?.querySelector('[data-role="cc-results"] tbody');
+    if (!tbody) return ccCases.slice();
+    const merged = ccMergedRows();
+    const out = [];
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const cb = tr.querySelector('.cc-run-cb');
+      if (cb && cb.checked) {
+        const idx = parseInt(tr.dataset.idx, 10);
+        if (merged[idx]) out.push(merged[idx]);
+      }
+    });
+    return out;
+  }
   // 헤더 클릭 정렬 (병합 기준 base=ccCases 정렬)
   function sortCc(key) {
     if (ccSort.key === key) ccSort.dir = -ccSort.dir; else { ccSort.key = key; ccSort.dir = 1; }
@@ -507,7 +524,9 @@
       // 비고: 불가 처리 시 MAPS 에 들어갈 사유/상세(취하/변경 등). MAPS note 아님
       const noteVal = isBuga ? [r.status, r.detail].filter(Boolean).join(' / ') : '';
       const noteCell = noteVal ? `<span title="${escapeAttr(noteVal)}">${escapeHtml(noteVal.length > 12 ? noteVal.slice(0, 12) + '…' : noteVal)}</span>` : '';
+      const viewLink = r.view_url ? `<a href="#" class="cc-link" data-act="cc-view" data-url="${escapeAttr(r.view_url)}">옥션원</a>` : '';
       return `<tr data-idx="${i}" class="${isBuga ? 'cc-row-buga' : ''}">
+        <td style="text-align:center"><input type="checkbox" class="cc-run-cb" checked></td>
         <td style="text-align:center"><input type="checkbox" class="cc-cb" ${isBuga ? 'checked' : ''}></td>
         <td>${keyCell(r.bid_date, r.date_hit !== false)}</td>
         <td>${keyCell(r.sakun_no, r.sakun_hit !== false)}</td>
@@ -517,7 +536,7 @@
         <td style="text-align:right">${fmtWon(r.bidprice)}</td>
         <td style="text-align:right">${maeCell}</td>
         <td style="text-align:center">${resBadge}</td>
-        <td>${detail}${url}</td>
+        <td style="text-align:center">${viewLink}</td>
         <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok">${escapeHtml(stu)}</span>` : ''}</td>
         <td>${willUpdate}</td>
         <td class="cc-note">${noteCell}</td>
@@ -528,14 +547,15 @@
     const maegakCnt = merged.filter(r => !r._pending && ccStateKind(r) === '매각').length;
     wrap.innerHTML = `
       <div class="cc-results-head">
-        <span><b>${merged.length}건</b> (조회완료 ${doneCnt}) · <b style="color:#b91c1c">불가 ${bugaCnt}</b> · 매각 ${maegakCnt} · <span style="color:#9ca3af">불가만 자동체크</span></span>
+        <span><b>${merged.length}건</b> (조회완료 ${doneCnt}) · <b style="color:#b91c1c">불가 ${bugaCnt}</b> · 매각 ${maegakCnt} · <span style="color:#9ca3af">실행=조회대상 · 업데이트=불가전송</span></span>
         <span class="mjcap-spacer"></span>
-        <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 체크한 건 MAPS '불가' 처리</button>
+        <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
       </div>
       <div class="cc-table-wrap">
       <table class="cc-table"><thead>
         <tr>
-          <th>✓</th>
+          <th>실행<br><input type="checkbox" class="cc-run-all" checked title="전체 실행 토글"></th>
+          <th>업데이트</th>
           <th class="cc-sort" data-sort="bid_date">입찰일자${arrow('bid_date')}</th>
           <th class="cc-sort" data-sort="sakun_no">사건번호${arrow('sakun_no')}</th>
           <th class="cc-sort" data-sort="court">법원${arrow('court')}</th>
@@ -544,7 +564,7 @@
           <th class="cc-sort" data-sort="bidprice">입찰가${arrow('bidprice')}</th>
           <th class="cc-sort" data-sort="maegak">매각가${arrow('maegak')}</th>
           <th class="cc-sort" data-sort="result">결과${arrow('result')}</th>
-          <th>상세</th>
+          <th>옥션원</th>
           <th class="cc-sort" data-sort="stu">현재상태${arrow('stu')}</th>
           <th>업데이트 예정</th>
           <th>비고</th>
@@ -552,6 +572,9 @@
       </thead><tbody>${rows}</tbody></table>
       </div>
     `;
+    wrap.querySelector('.cc-run-all')?.addEventListener('change', (e) => {
+      wrap.querySelectorAll('.cc-run-cb').forEach(cb => { cb.checked = e.target.checked; });
+    });
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
   }
