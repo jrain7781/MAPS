@@ -27,6 +27,7 @@
   const ccResults = []; // 진행사항 결과 누적 (실행마다 초기화)
   let ccCases = [];     // 📥 불러오기로 받은 case 객체 배열 (item_id/sakun_no/bid_date/court/bidprice/m_name)
   let ccSort = { key: '', dir: 1 }; // 결과표 정렬 상태
+  let ccRunUnchecked = new Set();   // 실행 체크 해제된 행 키 (재렌더에도 보존)
 
   let captureInitDone = false;
   function initCaptureTabOnce() {
@@ -344,7 +345,7 @@
   }
   // 진행사항 리스트/결과 초기화
   function clearCcList() {
-    ccCases = []; ccResults.length = 0; ccSort = { key: '', dir: 1 };
+    ccCases = []; ccResults.length = 0; ccSort = { key: '', dir: 1 }; ccRunUnchecked.clear();
     renderCcResults();
     const info = $card('cc')?.querySelector('[data-role="cc-loaded"]');
     if (info) info.textContent = '기간 + 상태값 선택 → 📥 불러오기 → ▶ 실행';
@@ -411,7 +412,7 @@
       if (btn) btn.disabled = false;
       if (j && j.success && Array.isArray(j.cases)) {
         ccCases = j.cases;
-        ccResults.length = 0; ccSort = { key: '', dir: 1 }; renderCcResults();   // 불러온 리스트 즉시 표시(실행 전)
+        ccResults.length = 0; ccSort = { key: '', dir: 1 }; ccRunUnchecked.clear(); renderCcResults();   // 불러온 리스트 즉시 표시(실행 전)
         const now = new Date();
         const hhmmss = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
         const info = card.querySelector('[data-role="cc-loaded"]');
@@ -452,20 +453,9 @@
     const base = ccCases.length ? ccCases : ccResults;
     return base.map(c => { const r = byKey[ccKeyOf(c)]; return Object.assign({ _pending: !r }, c, r || {}); });
   }
-  // 실행(cc-run-cb) 체크된 행의 케이스만 반환 (체크 안 한 건 조회 안 함)
+  // 실행 체크된 행의 케이스만 반환 (ccRunUnchecked 에 없는 = 체크된 것)
   function getCcRunChecked() {
-    const tbody = $card('cc')?.querySelector('[data-role="cc-results"] tbody');
-    if (!tbody) return ccCases.slice();
-    const merged = ccMergedRows();
-    const out = [];
-    tbody.querySelectorAll('tr').forEach(tr => {
-      const cb = tr.querySelector('.cc-run-cb');
-      if (cb && cb.checked) {
-        const idx = parseInt(tr.dataset.idx, 10);
-        if (merged[idx]) out.push(merged[idx]);
-      }
-    });
-    return out;
+    return ccMergedRows().filter(m => !ccRunUnchecked.has(ccKeyOf(m)));
   }
   // 헤더 클릭 정렬 (병합 기준 base=ccCases 정렬)
   function sortCc(key) {
@@ -525,8 +515,10 @@
       const noteVal = isBuga ? [r.status, r.detail].filter(Boolean).join(' / ') : '';
       const noteCell = noteVal ? `<span title="${escapeAttr(noteVal)}">${escapeHtml(noteVal.length > 12 ? noteVal.slice(0, 12) + '…' : noteVal)}</span>` : '';
       const viewLink = r.view_url ? `<a href="#" class="cc-link" data-act="cc-view" data-url="${escapeAttr(r.view_url)}">옥션원</a>` : '';
+      const rkey = ccKeyOf(r);
+      const runChk = ccRunUnchecked.has(rkey) ? '' : 'checked';
       return `<tr data-idx="${i}" class="${isBuga ? 'cc-row-buga' : ''}">
-        <td style="text-align:center"><input type="checkbox" class="cc-run-cb" checked></td>
+        <td style="text-align:center"><input type="checkbox" class="cc-run-cb" data-key="${escapeAttr(rkey)}" ${runChk}></td>
         <td style="text-align:center"><input type="checkbox" class="cc-cb" ${isBuga ? 'checked' : ''}></td>
         <td>${keyCell(r.bid_date, r.date_hit !== false)}</td>
         <td>${keyCell(r.sakun_no, r.sakun_hit !== false)}</td>
@@ -572,8 +564,17 @@
       </thead><tbody>${rows}</tbody></table>
       </div>
     `;
+    // 실행 체크 상태를 키로 보존 (재렌더에도 유지)
+    wrap.querySelectorAll('.cc-run-cb').forEach(cb => cb.addEventListener('change', () => {
+      const k = cb.dataset.key;
+      if (cb.checked) ccRunUnchecked.delete(k); else ccRunUnchecked.add(k);
+    }));
     wrap.querySelector('.cc-run-all')?.addEventListener('change', (e) => {
-      wrap.querySelectorAll('.cc-run-cb').forEach(cb => { cb.checked = e.target.checked; });
+      const on = e.target.checked;
+      wrap.querySelectorAll('.cc-run-cb').forEach(cb => {
+        cb.checked = on;
+        if (on) ccRunUnchecked.delete(cb.dataset.key); else ccRunUnchecked.add(cb.dataset.key);
+      });
     });
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
