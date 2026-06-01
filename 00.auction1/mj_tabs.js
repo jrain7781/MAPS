@@ -70,6 +70,11 @@
           setTimeout(() => { try { fileEl.value = ''; } catch(_) {} }, 100);
         });
       }
+      // cc(불가확인) 전용: MAPS 7일 리스트 불러오기 버튼
+      if (key === 'cc') {
+        const load7Btn = card.querySelector('[data-act="cc-load7"]');
+        if (load7Btn) load7Btn.addEventListener('click', loadMaps7DaysList);
+      }
       loadAccounts(key);
     });
     // 서브탭 바인딩
@@ -278,6 +283,43 @@
     el.scrollTop = el.scrollHeight;
   }
 
+  // MAPS Admin Key (app.js 와 동일 localStorage 키 — ⚙ MAPS 연동 설정에서 저장됨)
+  function getMapsAdminKeyMj() {
+    try { return localStorage.getItem('auction1_maps_admin_key') || ''; } catch (e) { return ''; }
+  }
+
+  // 불가확인 탭 → MAPS 7일 리스트 직접 불러오기 (사건번호ǀ입찰일자ǀ법원 3키)
+  function loadMaps7DaysList() {
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey) { alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
+    const card = $card('cc');
+    if (!card) return;
+    const btn = card.querySelector('[data-act="cc-load7"]');
+    if (btn) btn.disabled = true;
+    log('cc', '📥 MAPS 7일 리스트 불러오는 중...', 'log-ok');
+    fetch('/api/maps-gas', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, api_action: 'get7DaysBugaList' })
+    }).then(r => r.json()).then(j => {
+      if (btn) btn.disabled = false;
+      if (j && j.success && Array.isArray(j.cases)) {
+        const lines = j.cases.map(c => [c.sakun_no, c.bid_date, c.court].join('|'));
+        const casesEl = card.querySelector('[data-role="cases"]');
+        if (casesEl) casesEl.value = lines.join('\n');
+        log('cc', `✅ MAPS 7일 리스트 ${lines.length}건 불러옴 (오늘~+7일 입찰건)`, 'log-ok');
+        if (lines.length === 0) alert('오늘부터 7일 이내 입찰 건이 없습니다.');
+      } else {
+        const msg = (j && (j.message || j.error)) || '알 수 없음';
+        log('cc', `❌ 리스트 불러오기 실패: ${msg}`, 'log-err');
+        alert('실패: ' + msg);
+      }
+    }).catch(err => {
+      if (btn) btn.disabled = false;
+      log('cc', `❌ 리스트 불러오기 오류: ${err}`, 'log-err');
+      alert('오류: ' + err);
+    });
+  }
+
   // 불가확인 결과 테이블 렌더 (3키 검증 + 사유)
   function renderCcResults() {
     const wrap = $card('cc')?.querySelector('[data-role="cc-results"]');
@@ -339,13 +381,15 @@
       }
     });
     if (picked.length === 0) { alert('체크된 건이 없습니다.'); return; }
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey) { alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
     if (!confirm(`${picked.length}건을 MAPS 로 전송하여 상태를 "불가"(+사유/상세) 로 업데이트 합니다. 진행할까요?`)) return;
     const btn = card.querySelector('[data-act="cc-send"]');
     if (btn) btn.disabled = true;
     log('cc', `📤 ${picked.length}건 MAPS 전송 중...`, 'log-ok');
     fetch('/api/maps-changecancel', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items: picked })
+      body: JSON.stringify({ api_key: apiKey, items: picked })
     }).then(r => r.json()).then(j => {
       if (btn) btn.disabled = false;
       if (j && (j.success || j.ok)) {

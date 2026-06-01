@@ -7956,6 +7956,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'syncJosaPresets') return syncJosaPresets(payload.presets || [], payload.mode);
   if (action === 'uploadJosaItems') return bulkUpsertJosaItems(payload);
   if (action === 'uploadChangeCancel') return uploadChangeCancel(payload.items || []);
+  if (action === 'get7DaysBugaList')   return get7DaysBugaList();
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
@@ -8061,6 +8062,62 @@ function uploadChangeCancel(items) {
   } catch (e) {
     Logger.log('[uploadChangeCancel] 오류: ' + e.toString());
     return { success: false, message: String(e), updated: 0 };
+  }
+}
+
+/**
+ * 불가확인용 — 오늘 ~ 오늘+7일 입찰건의 (사건번호, 입찰일자, 법원) 3키 리스트 반환.
+ * 매니저 「불가확인」 탭의 "MAPS 7일 리스트 불러오기" 버튼이 호출.
+ * (js-app 의 handleDownload7DaysList 서버판 — 동일 필터/포맷)
+ * @return {{success:boolean, cases:Array<{sakun_no,bid_date,court}>, count:number}}
+ */
+function get7DaysBugaList() {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'items 시트 없음', cases: [], count: 0 };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, cases: [], count: 0 };
+
+    // 오늘 ~ +7일 의 YYMMDD 집합 (월/연 경계 안전)
+    var allowed = {};
+    var base = new Date();
+    base.setHours(0, 0, 0, 0);
+    for (var d = 0; d <= 7; d++) {
+      var dt = new Date(base.getTime());
+      dt.setDate(dt.getDate() + d);
+      allowed[Utilities.formatDate(dt, Session.getScriptTimeZone(), 'yyMMdd')] = true;
+    }
+
+    // B(in-date)/C(sakun_no)/D(court) 만 읽어 빠르게 처리
+    var values = sheet.getRange(2, 2, lastRow - 1, 3).getValues();
+    var norm6 = function (v) {
+      var s = (v instanceof Date)
+        ? Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyMMdd')
+        : String(v == null ? '' : v);
+      var digits = s.replace(/[^0-9]/g, '');
+      if (digits.length >= 8 && digits.slice(0, 2) === '20') digits = digits.slice(2); // 20YYMMDD → YYMMDD
+      if (digits.length > 6) digits = digits.slice(-6);
+      return digits;
+    };
+
+    var seen = {};
+    var cases = [];
+    for (var i = 0; i < values.length; i++) {
+      var inDate = norm6(values[i][0]);
+      if (!allowed[inDate]) continue;
+      var sakun = String(values[i][1] == null ? '' : values[i][1]).trim();
+      if (!sakun) continue;
+      var court = String(values[i][2] == null ? '' : values[i][2]).trim();
+      var key = sakun + '|' + inDate + '|' + court;
+      if (seen[key]) continue;
+      seen[key] = true;
+      cases.push({ sakun_no: sakun, bid_date: inDate, court: court });
+    }
+
+    return { success: true, cases: cases, count: cases.length };
+  } catch (e) {
+    Logger.log('[get7DaysBugaList] 오류: ' + e.toString());
+    return { success: false, message: String(e), cases: [], count: 0 };
   }
 }
 
