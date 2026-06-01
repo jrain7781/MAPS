@@ -143,6 +143,11 @@ _MAEGAK_TOKENS = ["매각", "낙찰"]
 _ING_TOKENS = ["유찰", "신건", "진행", "예정", "재진행"]
 
 
+def _norm_court(c):
+    """법원명 비교용 정규화 — 공백 제거. (MAPS '창원 통영' vs 변환 '창원통영')"""
+    return str(c or "").replace(" ", "").strip()
+
+
 def classify_state(state_text):
     t = state_text or ""
     # 불가 토큰 우선 (매각/유찰보다 먼저 — '허가취소' 등도 불가로)
@@ -294,6 +299,7 @@ def open_detail_text(driver, view_url):
 def process_case(driver, wait, case):
     exp_court = (case.get("court") or "").strip()
     exp_d6 = norm_date6(case.get("bid_date"))
+    exp_lawsup = court_to_lawsup(exp_court)  # 검색에 법원이 적용됐는지 (적용됐으면 결과는 그 법원으로 이미 필터됨)
     base = {
         "sakun_no": case.get("sakun_no", ""),
         "bid_date": case.get("bid_date", ""),
@@ -312,11 +318,16 @@ def process_case(driver, wait, case):
 
     line_tnum = len(rows)
     # (법원 일치) AND (매각기일 일치) 행 선택
+    # 법원은 검색 단계에서 lawsup 으로 이미 필터됨 → court_hit=True 신뢰.
+    # (lawsup 미매핑인 경우만 주소→법원 변환으로 대조, 공백 무시)
     picked = None
     for r in rows:
         fc = addr_to_court(r["addr"])
         r["_fc"] = fc
-        r["_court_hit"] = bool(exp_court) and (fc == exp_court)
+        if exp_lawsup:
+            r["_court_hit"] = True
+        else:
+            r["_court_hit"] = bool(exp_court) and (_norm_court(fc) == _norm_court(exp_court))
         r["_date_hit"] = bool(exp_d6) and (r["date6"] == exp_d6)
         if r["_court_hit"] and r["_date_hit"]:
             picked = r

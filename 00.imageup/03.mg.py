@@ -105,6 +105,11 @@ _BUGA_TOKENS = ["변경", "취소", "취하", "정지", "연기", "기각", "각
 _ING_TOKENS = ["유찰", "신건", "진행", "예정", "재진행"]   # 진행중
 
 
+def _norm_court(c):
+    """법원명 비교용 정규화 — 공백 제거. (MAPS '창원 통영' vs 변환 '창원통영')"""
+    return str(c or "").replace(" ", "").strip()
+
+
 def classify_state(state_text):
     t = state_text or ""
     for tok in _MAEGAK_TOKENS:
@@ -268,6 +273,7 @@ def parse_maegak_detail(driver, view_url, target_d6):
 def process_case(driver, wait, case):
     exp_court = (case.get("court") or "").strip()
     exp_d6 = norm_date6(case.get("bid_date"))
+    exp_lawsup = court_to_lawsup(exp_court)  # 검색에 법원 적용됐는지 (적용 시 결과는 이미 그 법원)
     base = {
         "item_id": case.get("item_id", ""),
         "sakun_no": case.get("sakun_no", ""),
@@ -289,10 +295,11 @@ def process_case(driver, wait, case):
 
     line_tnum = len(rows)
     # (법원 일치) AND (매각기일 일치) 행 선택
+    # 법원은 검색 단계 lawsup 으로 이미 필터됨 → court_hit=True 신뢰. (미매핑만 주소대조)
     picked = None
     for r in rows:
         fc = addr_to_court(r["addr"])
-        court_hit = bool(exp_court) and (fc == exp_court)
+        court_hit = True if exp_lawsup else (bool(exp_court) and (_norm_court(fc) == _norm_court(exp_court)))
         date_hit = bool(exp_d6) and (r["date6"] == exp_d6)
         r["_fetched_court"] = fc
         r["_court_hit"] = court_hit
