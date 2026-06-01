@@ -8078,21 +8078,18 @@ function get7DaysBugaList() {
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: true, cases: [], count: 0 };
 
-    // 오늘 ~ +7일 의 YYMMDD 집합 (월/연 경계 안전)
-    var allowed = {};
-    var base = new Date();
-    base.setHours(0, 0, 0, 0);
-    for (var d = 0; d <= 7; d++) {
-      var dt = new Date(base.getTime());
-      dt.setDate(dt.getDate() + d);
-      allowed[Utilities.formatDate(dt, Session.getScriptTimeZone(), 'yyMMdd')] = true;
-    }
+    // 입찰일자(in-date, B열) 기준 — 오늘 포함 ~ 오늘+7일. (js-app '~7일 리스트 다운'과 동일 숫자비교)
+    // YYMMDD 숫자 비교: 같은 8일 범위 내에선 월/연 경계도 안전(실재하지 않는 날짜는 데이터에 없음).
+    var tz = Session.getScriptTimeZone();
+    var now = new Date();
+    var startNum = parseInt(Utilities.formatDate(now, tz, 'yyMMdd'), 10);                                  // 오늘 (포함)
+    var endNum   = parseInt(Utilities.formatDate(new Date(now.getTime() + 7 * 86400000), tz, 'yyMMdd'), 10); // +7일 (포함)
 
     // B(in-date)/C(sakun_no)/D(court) 만 읽어 빠르게 처리
     var values = sheet.getRange(2, 2, lastRow - 1, 3).getValues();
     var norm6 = function (v) {
       var s = (v instanceof Date)
-        ? Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyMMdd')
+        ? Utilities.formatDate(v, tz, 'yyMMdd')
         : String(v == null ? '' : v);
       var digits = s.replace(/[^0-9]/g, '');
       if (digits.length >= 8 && digits.slice(0, 2) === '20') digits = digits.slice(2); // 20YYMMDD → YYMMDD
@@ -8104,7 +8101,8 @@ function get7DaysBugaList() {
     var cases = [];
     for (var i = 0; i < values.length; i++) {
       var inDate = norm6(values[i][0]);
-      if (!allowed[inDate]) continue;
+      var n = parseInt(inDate, 10);
+      if (!n || n < startNum || n > endNum) continue;
       var sakun = String(values[i][1] == null ? '' : values[i][1]).trim();
       if (!sakun) continue;
       var court = String(values[i][2] == null ? '' : values[i][2]).trim();
@@ -8114,7 +8112,15 @@ function get7DaysBugaList() {
       cases.push({ sakun_no: sakun, bid_date: inDate, court: court });
     }
 
-    return { success: true, cases: cases, count: cases.length };
+    // 입찰일자(YYMMDD) 내림차순 — 가장 최신(늦은) 입찰일이 위로
+    cases.sort(function (a, b) {
+      if (a.bid_date > b.bid_date) return -1;
+      if (a.bid_date < b.bid_date) return 1;
+      return 0;
+    });
+
+    // window: 적용된 날짜창(진단용) — 누락 의심 시 start/end 확인
+    return { success: true, cases: cases, count: cases.length, window: { start: startNum, end: endNum } };
   } catch (e) {
     Logger.log('[get7DaysBugaList] 오류: ' + e.toString());
     return { success: false, message: String(e), cases: [], count: 0 };
