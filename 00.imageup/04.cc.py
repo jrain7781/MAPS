@@ -25,7 +25,9 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LIST_FOLDER_NAME = "변경취소 확인리스트"
 LIST_FOLDER = os.path.join(SCRIPT_DIR, LIST_FOLDER_NAME)
 A1_BASE = "https://www.auction1.co.kr"
-URL_SEARCH = f"{A1_BASE}/auction/ca_title.php"
+URL_SEARCH = f"{A1_BASE}/auction/ca_title.php"          # 경매 종합검색
+URL_GONGMAE = f"{A1_BASE}/pubauct/list.php"             # 공매 검색
+URL_GONGMAE_VIEW = f"{A1_BASE}/pubauct/view.php?product_id="
 
 # 법원 변환: 옥션 결과 주소 → MAPS 법원명
 try:
@@ -302,6 +304,47 @@ def search_case(driver, wait, case, use_date=True):
         return False
 
 
+def is_gongmae(case):
+    """공매 판정: 법원='공매' 또는 사건번호에 하이픈 2개 이상(예 2026-0400-019462)."""
+    court = (case.get("court") or "").strip()
+    sakun = str(case.get("sakun_no") or "")
+    return court == "공매" or sakun.count("-") >= 2
+
+
+def search_gongmae(driver, wait, case):
+    """공매 검색(pubauct/list.php): 물건번호(pdNo) 세팅 → #btnSrch native click."""
+    pdno = str(case.get("sakun_no") or "").strip()
+    try:
+        driver.get(URL_GONGMAE)
+        try:
+            wait.until(EC.presence_of_element_located((By.ID, "pdNo")))
+        except Exception:
+            print(f"    ⚠ 공매 검색폼 미발견 url={driver.current_url}")
+            return False
+        driver.execute_script("document.getElementById('pdNo').value=arguments[0];", pdno)
+        btns = driver.find_elements(By.ID, "btnSrch") or driver.find_elements(By.CSS_SELECTOR, "#fmSrch .btn_lightblack")
+        if not btns:
+            print("    ⚠ 공매 검색 버튼 못 찾음")
+            return False
+        btn = btns[0]
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+        try:
+            btn.click()
+        except Exception:
+            driver.execute_script("arguments[0].click();", btn)
+        try:
+            WebDriverWait(driver, 12).until(lambda d:
+                d.find_elements(By.CSS_SELECTOR, "input[type=checkbox][value]")
+                or "없습니다" in (d.find_element(By.TAG_NAME, "body").text or ""))
+        except Exception:
+            pass
+        time.sleep(0.5)
+        return True
+    except Exception as e:
+        print(f"    ⚠ 공매 검색 오류: {repr(e)[:150]}")
+        return False
+
+
 def parse_result_rows(driver):
     out = []
     cbs = driver.find_elements(By.CSS_SELECTOR, "input[type=checkbox][value]")
@@ -312,7 +355,7 @@ def parse_result_rows(driver):
                 continue
             tr = cb.find_element(By.XPATH, "./ancestor::tr[1]")
             tds = tr.find_elements(By.TAG_NAME, "td")
-            if len(tds) < 8:
+            if len(tds) < 7:   # 경매=8칸, 공매=7칸
                 continue
             line_num = ""
             try:
@@ -363,6 +406,60 @@ def open_detail_text(driver, view_url):
         return ""
 
 
+def process_gongmae(driver, wait, case, base, exp_d6):
+    """공매 처리: 물건번호로 공매검색 → 진행상태 판정. (물건번호가 유일키)"""
+    pdno = str(case.get("sakun_no") or "").strip()
+    pdno_digits = re.sub(r"[^0-9]", "", pdno)
+    if not search_gongmae(driver, wait, case):
+        print(f"RESULT|{json.dumps(dict(base, status='', is_buga=False, key_match=False, detail='', view_url='', fetched_court='공매', date_hit=False, court_hit=False, sakun_hit=False), ensure_ascii=False)}")
+        return
+    rows = parse_result_rows(driver)
+    # 물건번호 일치 행 선택 (td2 에 '2026-0400-019462' 포함)
+    picked = None
+    for r in rows:
+        if pdno and (pdno in r["sakun"] or (pdno_digits and pdno_digits in re.sub(r"[^0-9]", "", r["sakun"]))):
+            picked = r
+            break
+    if not picked and rows:
+        picked = rows[0]
+    if not picked:
+        print(f"RESULT|{json.dumps(dict(base, status='조회없음', is_buga=False, key_match=False, detail='', view_url='', fetched_court='공매', date_hit=False, court_hit=False, sakun_hit=False), ensure_ascii=False)}")
+        print("    ⚠ 공매 결과 없음")
+        return
+
+    state_kind, tok = classify_state(picked["state"])
+    is_buga = (state_kind == "불가")
+    view_url = URL_GONGMAE_VIEW + picked["pid"]
+    reason = sentence = ""
+    maegak_price = buyer = bidder_count = ""
+    if state_kind in ("불가", "매각"):
+        detail_txt = open_detail_text(driver, view_url)
+        if state_kind == "불가":
+            reason = tok
+            jr, js = parse_jongryo(detail_txt)
+            if jr:
+                reason = jr
+            sentence = js
+        else:
+            md = parse_maegak_detail(detail_txt, exp_d6)
+            maegak_price, buyer, bidder_count = md["maegak_price"], md["buyer"], md["bidder_count"]
+
+    rec = dict(base,
+               status=reason if is_buga else (state_kind if state_kind == "매각" else ""),
+               state_kind=state_kind,
+               state_raw=picked["state"].replace("\n", " "),
+               detail=sentence,
+               is_buga=is_buga,
+               key_match=True,         # 물건번호 유일키 일치
+               sakun_hit=True, court_hit=True, date_hit=True,
+               fetched_court="공매",
+               fetched_date=picked.get("date_txt", ""),
+               maegak_price=maegak_price, buyer=buyer, bidder_count=bidder_count,
+               view_url=view_url)
+    print(f"RESULT|{json.dumps(rec, ensure_ascii=False)}")
+    print(f"    → [공매] 상태:{state_kind} 물건번호:{pdno} 매각가:{maegak_price} 매수인:{buyer}")
+
+
 def process_case(driver, wait, case):
     exp_court = (case.get("court") or "").strip()
     exp_d6 = norm_date6(case.get("bid_date"))
@@ -376,6 +473,11 @@ def process_case(driver, wait, case):
         "bidprice": case.get("bidprice", ""),       # 우리 입찰가(없을 수도)
         "m_name": case.get("m_name", ""),           # 회원명
     }
+
+    # ── 공매: 진입 경로가 다름 (pubauct/list.php, 물건번호 pdNo) ──
+    if is_gongmae(case):
+        process_gongmae(driver, wait, case, base, exp_d6)
+        return
 
     if not search_case(driver, wait, case, use_date=True):
         print(f"RESULT|{json.dumps(dict(base, status='', is_buga=False, key_match=False, detail='', view_url='', fetched_court='', date_hit=False, court_hit=False), ensure_ascii=False)}")
