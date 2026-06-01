@@ -638,18 +638,27 @@
       e.preventDefault();
       openAuctionView(e.target.closest('[data-act="cc-view"]').dataset.url);
     }
-    else if (e.target.closest('[data-act="cc-view-close"]')) { closeAuctionView(); }
-    else if (e.target.id === 'auctionViewModal') { closeAuctionView(); }
   });
-  // 옥션원 상세를 모달(iframe)로 — MAPS 입찰물건관리 '옥션원' 버튼과 동일
-  function openAuctionView(url) {
-    const m = document.getElementById('auctionViewModal'); if (!m || !url) return;
-    const f = document.getElementById('auctionViewFrame'); if (f) f.src = url;
-    m.style.display = 'flex';
-  }
-  function closeAuctionView() {
-    const m = document.getElementById('auctionViewModal'); if (m) m.style.display = 'none';
-    const f = document.getElementById('auctionViewFrame'); if (f) f.src = 'about:blank';
+  // 옥션원 상세 — MAPS 입찰물건관리 '옥션원' 버튼과 동일: window.open 팝업창(독립 이동/리사이즈).
+  // 첫 클릭은 로그인 페이지(팝업 '_auction' 에 로그인) → 이후 클릭은 상세 열림(같은 세션 사용).
+  let _ccAuctionLoginShown = false;
+  function openAuctionView(viewUrl) {
+    const LOGIN = 'https://www.auction1.co.kr/common/login_box.php';
+    const feat = 'width=896,height=900,left=100,top=50,resizable=yes,scrollbars=yes';
+    if (!_ccAuctionLoginShown) {
+      _ccAuctionLoginShown = true;
+      window.open(LOGIN, '_auction', feat);
+      alert('옥션원 로그인 페이지를 열었습니다. 로그인 후 다시 [옥션원]을 클릭하세요.');
+      return;
+    }
+    const m = String(viewUrl || '').match(/product_id=(\d+)/);
+    const pid = m ? m[1] : '';
+    if (!pid) { window.open(LOGIN, '_auction', feat); return; }
+    const isGong = /pubauct/.test(viewUrl);
+    const base = isGong
+      ? 'https://www.auction1.co.kr/pubauct/view.php?product_id='
+      : 'https://www.auction1.co.kr/auction/ca_view.php?product_id=';
+    window.open(base + pid, '_auction', feat);
   }
   document.addEventListener('input', e => {
     if (e.target && e.target.id === 'courtMapSearch') renderCourtMap(e.target.value);
