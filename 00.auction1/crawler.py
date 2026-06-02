@@ -1157,6 +1157,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/send-report":
             self._handle_send_report()
             return
+        # 보고서 미리보기: 전송 없이 PDF만 생성해 b64 반환 (새 탭 열람용)
+        if self.path == "/api/preview-report":
+            self._handle_preview_report()
+            return
         # 계정 검증 — 설정 모달의 [검증하기] 버튼
         if self.path == "/api/verify-account":
             try:
@@ -1266,6 +1270,31 @@ class Handler(SimpleHTTPRequestHandler):
             }
             result = _gas_post(gas_payload, timeout=300.0)
             self._send_json(200, result)
+        except Exception as e:
+            traceback.print_exc()
+            self._send_json(500, {"success": False, "error": str(e)})
+
+    def _handle_preview_report(self):
+        """보고서 PDF 미리보기 — 전송 없이 PDF만 생성해 base64 반환. (텔레그램/GAS 미사용)"""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+            payload = json.loads(raw or "{}")
+            items = payload.get("items") or []
+            rep_items = [it for it in items if (it.get("state_kind") or "") in ("불가", "매각")]
+            if not rep_items:
+                self._send_json(200, {"success": False, "message": "미리볼 불가/낙찰 건이 없습니다."})
+                return
+            import base64 as _b64
+            import report_builder
+            for it in rep_items:
+                if it.get("addr"):
+                    it["addr"] = str(it["addr"]).split("\n")[0]
+            pdf_bytes = report_builder.build_report_pdf(rep_items)
+            self._send_json(200, {
+                "success": True, "count": len(rep_items),
+                "pdf_b64": _b64.b64encode(pdf_bytes).decode("ascii"),
+            })
         except Exception as e:
             traceback.print_exc()
             self._send_json(500, {"success": False, "error": str(e)})

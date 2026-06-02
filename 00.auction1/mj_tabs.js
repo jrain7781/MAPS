@@ -548,6 +548,7 @@
         <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭(실행) 완료 시 불가/낙찰 보고서를 관리자에게 자동 전송">
           <input type="checkbox" class="cc-auto-report" ${ccAutoReportOn() ? 'checked' : ''}>자동 보고
         </label>
+        <button type="button" class="btn_box_sss bold" data-act="cc-preview" title="전송 전 보고서 PDF를 새 탭에서 미리보기">👁 미리보기</button>
         <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="불가/낙찰 건을 PDF+캡처 보고서로 관리자 텔레그램 전송">📋 보고서 전송</button>
         <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
       </div>
@@ -585,6 +586,7 @@
       });
     });
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
+    wrap.querySelector('[data-act="cc-preview"]')?.addEventListener('click', previewCcReport);
     wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', openReportPicker);
     wrap.querySelector('.cc-auto-report')?.addEventListener('change', (e) => setCcAutoReport(e.target.checked));
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
@@ -676,6 +678,41 @@
     });
   }
   function sendCcReportAuto() { doSendReport(getReportTarget(), true); }   // 자동 보고(저장된 대상)
+
+  // base64 → Blob
+  function b64ToBlob(b64, type) {
+    const bin = atob(b64), len = bin.length, arr = new Uint8Array(len);
+    for (let i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: type || 'application/octet-stream' });
+  }
+  // 보고서 미리보기 — 전송 없이 PDF 새 탭 열람 (텔레그램/키 불필요)
+  function previewCcReport() {
+    const items = ccReportItems();
+    if (!items.length) { alert('미리볼 불가/낙찰 건이 없습니다.'); return; }
+    const btn = $card('cc')?.querySelector('[data-act="cc-preview"]');
+    if (btn) btn.disabled = true;
+    log('cc', `👁 보고서 미리보기 생성 중… (${items.length}건)`, 'log-ok');
+    fetch('/api/preview-report', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    }).then(r => r.json()).then(j => {
+      if (btn) btn.disabled = false;
+      if (j && j.success && j.pdf_b64) {
+        const url = URL.createObjectURL(b64ToBlob(j.pdf_b64, 'application/pdf'));
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        log('cc', `👁 미리보기 열림 (${j.count}건)`, 'log-ok');
+      } else {
+        const msg = j && (j.message || j.error) || '응답 없음';
+        log('cc', `⚠ 미리보기 실패: ${msg}`, 'log-err');
+        alert('미리보기 실패: ' + msg);
+      }
+    }).catch(err => {
+      if (btn) btn.disabled = false;
+      log('cc', `⚠ 미리보기 오류: ${err}`, 'log-err');
+      alert('미리보기 오류: ' + err + '\n(매니저 서버 재시작이 필요할 수 있습니다)');
+    });
+  }
 
   // 대상 후보(구분/회원명 + 텔레그램 상태) 조회 → GAS getReportRecipientCandidates
   let _ccCandCache = null;
