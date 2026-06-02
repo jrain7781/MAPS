@@ -8236,8 +8236,9 @@ function getProgressList(from6, to6, statuses) {
       if (d.length > 6) d = d.slice(-6);
       return d;
     };
-    // 담당자(m_name_id 닉네임/이름) → 강사 회원 매칭: 닉네임 우선, 본명 폴백 → member_id + teacher_color
-    var teacherByLabel = {};
+    // 담당자(m_name_id 닉네임/이름) → 강사 회원 매칭. MAPS와 동일: 닉네임 전역 우선, 그다음 본명.
+    // (닉네임/본명을 한 맵에 섞으면 본명='전부쌤'인 다른 강사가 닉네임='전부쌤'을 덮을 수 있어 분리)
+    var teacherByNick = {}, teacherByName = {};
     try {
       (readAllMembers() || []).forEach(function (m) {
         if (String(m.gubun || '').split(',').map(function (s) { return s.trim(); }).indexOf('강사') < 0) return;
@@ -8245,8 +8246,8 @@ function getProgressList(from6, to6, statuses) {
         var col = String(m.teacher_color || '').trim();
         var info = { member_id: String(m.member_id || '').trim(), display: (nick || nm),
                      color: /^#[0-9a-fA-F]{6}$/.test(col) ? col : '' };
-        if (nick && !teacherByLabel[nick]) teacherByLabel[nick] = info;
-        if (nm && !teacherByLabel[nm]) teacherByLabel[nm] = info;
+        if (nick && !teacherByNick[nick]) teacherByNick[nick] = info;
+        if (nm && !teacherByName[nm]) teacherByName[nm] = info;
       });
     } catch (e) { Logger.log('[getProgressList] 강사색상 매핑 실패: ' + e); }
 
@@ -8264,7 +8265,7 @@ function getProgressList(from6, to6, statuses) {
       if (seen[key]) continue;
       seen[key] = true;
       var midText = String(values[i][mNameIdIdx] == null ? '' : values[i][mNameIdIdx]).trim();  // 담당자(닉네임/이름)
-      var tinfo = teacherByLabel[midText] || null;
+      var tinfo = teacherByNick[midText] || teacherByName[midText] || null;   // 닉네임 우선, 본명 폴백
       cases.push({
         item_id: String(values[i][idIdx] == null ? '' : values[i][idIdx]),
         sakun_no: sakun,
