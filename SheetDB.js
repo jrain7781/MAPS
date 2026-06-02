@@ -8268,9 +8268,9 @@ function getProgressMatchSummary() {
     vals.forEach(function (row) {
       var d = normDate_(row[dIdx]); if (!d) return;
       var c = String(row[cIdx] || '').trim();
-      if (!sum[d]) sum[d] = { n: 0, nak: 0, miss: 0, buga: 0, load_ts: '', match_ts: '' };
+      if (!sum[d]) sum[d] = { n: 0, nak: 0, miss: 0, buga: 0, unk: 0, load_ts: '', match_ts: '' };
       sum[d].n++;
-      if (c === '낙찰') sum[d].nak++; else if (c === '미입찰') sum[d].miss++; else if (c === '불가') sum[d].buga++;
+      if (c === '낙찰') sum[d].nak++; else if (c === '미입찰') sum[d].miss++; else if (c === '불가') sum[d].buga++; else if (c === '확인불가') sum[d].unk++;
       var lt = String(row[ltIdx] || '').trim(), mt = String(row[mtIdx] || '').trim();
       if (lt && lt > sum[d].load_ts) sum[d].load_ts = lt;     // 최신(가장 늦은) 시각
       if (mt && mt > sum[d].match_ts) sum[d].match_ts = mt;

@@ -507,13 +507,13 @@
     const lmap = getLoadTsMap();
     if (ccSheetSummary && ccSheetSummary[ymd2]) {
       const s = ccSheetSummary[ymd2];
-      return { n: s.n, nak: s.nak, miss: s.miss, buga: s.buga, load_ts: s.load_ts || lmap[ymd2] || '', match_ts: s.match_ts || '' };
+      return { n: s.n, nak: s.nak, miss: s.miss, buga: s.buga, unk: s.unk || 0, load_ts: s.load_ts || lmap[ymd2] || '', match_ts: s.match_ts || '' };
     }
     const e = (map || loadCcByDate())[ymd2]; if (!e || !Array.isArray(e.rows)) return null;
     const rows = e.rows, cat = (c) => rows.filter(r => ccCategory(r) === c).length;
     let mts = '';
     if (e.ts) { const t = new Date(e.ts), p = n => String(n).padStart(2, '0'); mts = t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes()); }
-    return { n: rows.length, nak: cat('낙찰'), miss: cat('미입찰'), buga: cat('불가'), load_ts: lmap[ymd2] || '', match_ts: mts };
+    return { n: rows.length, nak: cat('낙찰'), miss: cat('미입찰'), buga: cat('불가'), unk: cat('확인불가'), load_ts: lmap[ymd2] || '', match_ts: mts };
   }
   function renderCcCalendar(y, m) {
     const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
@@ -525,15 +525,15 @@
     const today = _todayYMD();
     const ymd2 = (d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     // 월 합계
-    let mN = 0, mNak = 0, mBuga = 0, mMiss = 0;
-    for (let d = 1; d <= days; d++) { const ci = _ccCellInfo(ymd2(d), map); if (ci) { mN += ci.n; mNak += ci.nak; mBuga += ci.buga; mMiss += ci.miss; } }
+    let mN = 0, mNak = 0, mBuga = 0, mMiss = 0, mUnk = 0;
+    for (let d = 1; d <= days; d++) { const ci = _ccCellInfo(ymd2(d), map); if (ci) { mN += ci.n; mNak += ci.nak; mBuga += ci.buga; mMiss += ci.miss; mUnk += (ci.unk || 0); } }
 
     let h = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="-1">‹</button>
       <b style="min-width:96px;text-align:center;font-size:15px">${y}년 ${m + 1}월</b>
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="1">›</button>
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="today">오늘</button>
-      <span style="margin-left:6px;font-size:13px"><b style="color:#1f2937">입찰 ${mN}건</b> · <b style="color:#2563eb">낙찰 ${mNak}건</b> · <b style="color:#111827">불가 ${mBuga}건</b> · <b style="color:#dc2626">미입찰 ${mMiss}건</b></span>
+      <span style="margin-left:6px;font-size:13px"><b style="color:#1f2937">입찰 ${mN}건</b> · <b style="color:#2563eb">낙찰 ${mNak}건</b> · <b style="color:#111827">불가 ${mBuga}건</b> · <b style="color:#dc2626">미입찰 ${mMiss}건</b> · <b style="color:#9ca3af">확인불가 ${mUnk}건</b></span>
       <span style="flex:1"></span>
       <button type="button" class="btn_box_sss btn_blue bold" data-act="cal-load-sel">📥 선택 날짜 불러오기 (<span data-role="cal-sel-cnt">${ccCalChecked.size}</span>)</button>
     </div>`;
@@ -558,7 +558,7 @@
         body = `<div data-cal-day="${ym}" title="클릭: ${ym} 결과 보기" style="margin-top:4px;cursor:pointer;font-size:11px;line-height:1.5">
           <div>입찰 <b>${c.n}</b>건</div>
           <div><span style="color:#2563eb">낙찰 ${c.nak}건</span> · <span style="color:#111827">불가 ${c.buga}건</span></div>
-          <div style="color:#dc2626">미입찰 ${c.miss}건</div>${tsLine}</div>`;
+          <div><span style="color:#dc2626">미입찰 ${c.miss}건</span> · <span style="color:#9ca3af">확인불가 ${c.unk || 0}건</span></div>${tsLine}</div>`;
       }
       h += `<div style="min-height:84px;border:${border};border-radius:8px;padding:5px;background:${bg}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between">${circle}${cb}</div>${body}</div>`;
