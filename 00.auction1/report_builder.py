@@ -30,9 +30,9 @@ C_GRAY = (120, 128, 142)
 C_LINE = (226, 232, 240)
 
 
-def compose_card_png(screenshot_path, is_buga, reason, sakun, m_name):
+def compose_card_png(screenshot_path, is_buga, reason, sakun, m_name, bid_date=""):
     """컬러 헤더바(불가 빨강·낙찰 파랑) + 캡처 → 라운드 카드 PNG bytes. 텔레그램/PDF 공용.
-    헤더 = '불가 - 변경  |  사건번호  |  회원명' / '낙찰  |  사건번호  |  회원명'."""
+    헤더 = '불가 - 변경 | 입찰일자 | 사건번호 | 회원명' / '낙찰 | 입찰일자 | 사건번호 | 회원명'."""
     if not Image or not screenshot_path or not os.path.exists(screenshot_path):
         return None
     try:
@@ -40,22 +40,38 @@ def compose_card_png(screenshot_path, is_buga, reason, sakun, m_name):
     except Exception:
         return None
     W = shot.width
-    head_h = max(46, int(W * 0.062))
     pad = max(16, int(W * 0.018))
-    try:
-        font = ImageFont.truetype(FONT_BOLD if os.path.exists(FONT_BOLD) else FONT_PATH, int(head_h * 0.46))
-    except Exception:
-        font = ImageFont.load_default()
     accent = (220, 38, 38) if is_buga else (37, 99, 235)
+    sep = "   |   "
+    head = "불가" + (" - " + reason if reason else "") if is_buga else "낙찰"
+    parts = [head] + [p for p in (str(bid_date or ""), str(sakun or ""), str(m_name or "")) if p]
+    txt = sep.join(parts)
+
+    def _font(sz):
+        try:
+            return ImageFont.truetype(FONT_BOLD if os.path.exists(FONT_BOLD) else FONT_PATH, sz)
+        except Exception:
+            return ImageFont.load_default()
+
+    # 폰트 이전 대비 2배(=W*0.057), 가로 넘치면 축소
+    fsize = max(20, int(W * 0.057))
+    font = _font(fsize)
+    _m = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+    while fsize > 14:
+        try:
+            tw = _m.textlength(txt, font=font)
+        except Exception:
+            tw = len(txt) * fsize * 0.6
+        if tw <= W - 2 * pad:
+            break
+        fsize = int(fsize * 0.93)
+        font = _font(fsize)
+    head_h = int(fsize * 1.9)
+
     H = head_h + shot.height
     canvas = Image.new("RGB", (W, H), (255, 255, 255))
     d = ImageDraw.Draw(canvas)
     d.rectangle([0, 0, W, head_h], fill=accent)
-    sep = "   |   "
-    if is_buga:
-        txt = "불가" + (" - " + reason if reason else "") + sep + (sakun or "") + (sep + m_name if m_name else "")
-    else:
-        txt = "낙찰" + sep + (sakun or "") + (sep + m_name if m_name else "")
     try:
         d.text((pad, head_h // 2), txt, fill=(255, 255, 255), font=font, anchor="lm")
     except Exception:
@@ -160,23 +176,24 @@ def _summary_card(pdf, items, n_buga, n_nak, M, W):
     pdf.line(inner_x, y, inner_x + inner_w, y)
     y += 2.5
 
-    # 목록 (사유/낙찰 · 사건번호 · 회원명)
+    # 목록 (● · 입찰일자 · 사건번호 · 회원명) — 상세/사유 제거, 색 점으로 불가(빨강)/낙찰(파랑) 구분
     for it in items:
         is_buga = (it.get("state_kind") or "") == "불가"
         col = C_BUGA if is_buga else C_NAKCHAL
-        tag = (it.get("status") or "변경") if is_buga else "낙찰"
         pdf.set_xy(inner_x, y)
         pdf.set_font("malgun", "B", 9.5)
         pdf.set_text_color(*col)
-        pdf.cell(20, line_h, ("● " + tag))
-        pdf.set_xy(inner_x + 22, y)
+        pdf.cell(7, line_h, "●")
+        pdf.set_xy(inner_x + 8, y)
         pdf.set_font("malgun", "B", 9.5)
         pdf.set_text_color(*C_DARK)
-        pdf.cell(58, line_h, str(it.get("sakun_no", "")))
-        pdf.set_xy(inner_x + 82, y)
+        pdf.cell(28, line_h, str(it.get("bid_date", "")))
+        pdf.set_xy(inner_x + 38, y)
+        pdf.cell(54, line_h, str(it.get("sakun_no", "")))
+        pdf.set_xy(inner_x + 94, y)
         pdf.set_font("malgun", "", 9.5)
         pdf.set_text_color(70, 78, 92)
-        pdf.cell(inner_w - 82, line_h, str(it.get("m_name", "")))
+        pdf.cell(inner_w - 94, line_h, str(it.get("m_name", "")))
         y += line_h
 
     bottom = y + 4
@@ -190,7 +207,8 @@ def _item_card(pdf, it, M, W, PAGE_BOTTOM):
     """합성 카드(컬러 헤더바+캡처+라운드) 이미지를 풀폭으로 배치."""
     is_buga = (it.get("state_kind") or "") == "불가"
     comp = compose_card_png(it.get("screenshot_path", ""), is_buga,
-                            it.get("status", ""), it.get("sakun_no", ""), it.get("m_name", ""))
+                            it.get("status", ""), it.get("sakun_no", ""), it.get("m_name", ""),
+                            it.get("bid_date", ""))
     if not comp:
         # 캡처 없으면 텍스트 한 줄
         accent = C_BUGA if is_buga else C_NAKCHAL

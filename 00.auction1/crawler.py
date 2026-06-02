@@ -1273,7 +1273,8 @@ class Handler(SimpleHTTPRequestHandler):
                         # 컬러 헤더바+캡처 합성 카드(텔레그램 가로 꽉차게 보이게)
                         comp = report_builder.compose_card_png(
                             sp, (it.get("state_kind") == "불가"),
-                            it.get("status", ""), it.get("sakun_no", ""), it.get("m_name", ""))
+                            it.get("status", ""), it.get("sakun_no", ""), it.get("m_name", ""),
+                            it.get("bid_date", ""))
                         data = comp if comp else open(sp, "rb").read()
                         shot_b64 = _b64.b64encode(data).decode("ascii")
                     except Exception:
