@@ -154,7 +154,7 @@ def _parse_accounts_from_py(py_path: str) -> list:
     return out
 
 
-def imageup_start(which: str, accounts: list, limit=None, cases=None):
+def imageup_start(which: str, accounts: list, limit=None, cases=None, headless=False):
     """subprocess 시작 후 (run_id, None) 또는 (None, error_msg)."""
     if which not in _IMAGEUP_SCRIPTS:
         return None, "unknown script: " + str(which)
@@ -175,6 +175,7 @@ def imageup_start(which: str, accounts: list, limit=None, cases=None):
         env["MJ_IMAGEUP_LIMIT"] = str(int(limit))
     if cases:
         env["MJ_IMAGEUP_CASES_JSON"] = json.dumps(list(cases), ensure_ascii=True)
+    env["MJ_IMAGEUP_HEADLESS"] = "1" if headless else "0"   # 매칭 조사 창 숨김/표시
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
 
@@ -621,7 +622,8 @@ def handle_post(handler) -> bool:
             accounts = payload.get("accounts") or []
             limit = payload.get("limit")
             cases = payload.get("cases")
-            run_id, err = imageup_start(which, accounts, limit=limit, cases=cases)
+            headless = bool(payload.get("headless"))
+            run_id, err = imageup_start(which, accounts, limit=limit, cases=cases, headless=headless)
             if err:
                 _send_json(handler, 400, {"ok": False, "error": err})
             else:

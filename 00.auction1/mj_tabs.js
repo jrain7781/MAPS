@@ -89,6 +89,7 @@
         renderCcFavSelect();       // 즐겨찾기 드롭다운 채우기
         renderCcStatusSelect();    // 상태값 드롭다운(기본 입찰)
         loadCcState();             // 저장된 매칭 자료 복원(localStorage)
+        setInterval(ccScheduleTick, 30000);   // 자동 스케줄: 30초마다 시각 확인
       }
       loadAccounts(key);
     });
@@ -224,6 +225,7 @@
       const runCases = getCcRunChecked();
       if (!runCases.length) { log('cc', '[중단] 실행 체크된 건이 없습니다.', 'log-err'); return; }
       payload.cases = runCases;
+      payload.headless = (_ccSchedRun && _ccSchedRun.headless !== undefined) ? !!_ccSchedRun.headless : ccHeadlessOn();
     }
     $log(key).textContent = '';
     if (key === 'cc') { ccResults.length = 0; renderCcResults(); }
@@ -280,10 +282,17 @@
           const code = j.exit_code;
           if (code === 0) {
             setStatus(key, '완료', 'done'); log(key, '✅ 정상 종료 (exit ' + code + ')', 'log-ok');
-            // 진행사항: 실행 완료 시 시트에 1회 저장(날짜 upsert) + 자동 보고
+            // 진행사항: 실행 완료 시 시트에 1회 저장(날짜 upsert) + 자동 보고/스케줄 후처리
             if (key === 'cc') {
               pushCcToSheet();
-              if (ccAutoReportOn()) sendCcReportAuto();
+              if (_ccSchedRun) {
+                const s = _ccSchedRun; _ccSchedRun = null;
+                log('cc', '⏰ 자동 스케줄 후처리 시작', 'log-ok');
+                if (s.doReport) sendCcReportAuto();
+                if (s.doMaps) autoMapsBuga();
+              } else if (ccAutoReportOn()) {
+                sendCcReportAuto();
+              }
             }
           }
           else if (code === null || code === undefined) { setStatus(key, '중지', 'error'); log(key, '⏹ 중지됨', 'log-err'); }
@@ -573,8 +582,8 @@
     renderCcFavManage(); renderCcFavSelect();
   }
 
-  // 진행사항 확인 → MAPS 입찰건 불러오기 (날짜범위 FROM~TO, 기본 오늘~오늘)
-  function loadProgressList() {
+  // 진행사항 확인 → MAPS 입찰건 불러오기 (날짜범위 FROM~TO, 기본 오늘~오늘). onDone: 성공 시 콜백(스케줄 연쇄)
+  function loadProgressList(onDone) {
     const apiKey = getMapsAdminKeyMj();
     if (!apiKey) { alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
     const card = $card('cc'); if (!card) return;
@@ -598,7 +607,8 @@
         const info = card.querySelector('[data-role="cc-loaded"]');
         if (info) info.textContent = `불러옴 ${ccCases.length}건 (${from6}~${to6}) · 불러온 시각 ${hhmmss} — ▶ 실행으로 옥션 조회`;
         log('cc', `✅ ${ccCases.length}건 불러옴 (${from6}~${to6})`, 'log-ok');
-        if (ccCases.length === 0) alert('해당 기간 입찰 건이 없습니다.');
+        if (ccCases.length === 0 && typeof onDone !== 'function') alert('해당 기간 입찰 건이 없습니다.');
+        if (typeof onDone === 'function') onDone();
       } else {
         const msg = (j && (j.message || j.error)) || '알 수 없음';
         log('cc', `❌ 불러오기 실패: ${msg}`, 'log-err');
@@ -746,6 +756,10 @@
         <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭(실행) 완료 시 낙찰/미입찰/불가 일일보고를 설정 대상에게 자동 전송">
           <input type="checkbox" class="cc-auto-report" ${ccAutoReportOn() ? 'checked' : ''}>자동 보고
         </label>
+        <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭 조사 시 브라우저 창을 숨김(헤드리스)">
+          <input type="checkbox" class="cc-headless" ${ccHeadlessOn() ? 'checked' : ''}>조사숨김
+        </label>
+        <button type="button" class="btn_box_sss bold" data-act="cc-schedule" title="지정 시각에 자동 크롤링→매칭→보고/MAPS">⏰ 스케줄${getSchedule().enabled ? ' ' + getSchedule().time : ''}</button>
         <button type="button" class="btn_box_sss bold" data-act="cc-preview" title="전송 전 보고서 PDF를 새 탭에서 미리보기">👁 미리보기</button>
         <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="불가/낙찰 건을 PDF+캡처 보고서로 관리자 텔레그램 전송">📋 보고서 전송</button>
         <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
@@ -788,6 +802,8 @@
     wrap.querySelector('[data-act="cc-preview"]')?.addEventListener('click', previewCcReport);
     wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', openReportPicker);
     wrap.querySelector('[data-act="cc-recipients"]')?.addEventListener('click', (e) => { e.preventDefault(); openReportPicker(); });
+    wrap.querySelector('.cc-headless')?.addEventListener('change', (e) => setCcHeadless(e.target.checked));
+    wrap.querySelector('[data-act="cc-schedule"]')?.addEventListener('click', openScheduleModal);
     wrap.querySelectorAll('.cc-row-send').forEach(b => b.addEventListener('click', () => sendOneByKey(b.dataset.key)));
     wrap.querySelectorAll('.cc-row-copy').forEach(b => b.addEventListener('click', () => copyCardByKey(b.dataset.key)));
     wrap.querySelectorAll('.cc-row-text').forEach(b => b.addEventListener('click', () => copyTitleByKey(b.dataset.key)));
@@ -947,6 +963,100 @@
     });
   }
   function sendCcReportAuto() { doSendReport(getRecipients(), true); }   // 자동 보고(저장된 수신대상)
+
+  // ===== 매칭 조사 창 숨김(헤드리스) =====
+  const CC_HEADLESS_KEY = 'mj_cc_headless';
+  function ccHeadlessOn() { try { return localStorage.getItem(CC_HEADLESS_KEY) === '1'; } catch (e) { return false; } }
+  function setCcHeadless(on) { try { localStorage.setItem(CC_HEADLESS_KEY, on ? '1' : '0'); } catch (e) {} }
+
+  // ===== 자동 스케줄 (지정 시각에 크롤링→매칭→보고/MAPS) =====
+  const CC_SCHED_KEY = 'mj_cc_schedule';
+  let _ccSchedRun = null;          // 스케줄 실행 중 후처리 설정 {doReport,doMaps,headless}
+  let _ccSchedLastFire = '';       // 중복 발화 방지
+  function getSchedule() {
+    try { const s = JSON.parse(localStorage.getItem(CC_SCHED_KEY) || 'null'); if (s && typeof s === 'object') return Object.assign({ enabled: false, time: '14:00', doReport: true, doMaps: false, headless: true }, s); } catch (e) {}
+    return { enabled: false, time: '14:00', doReport: true, doMaps: false, headless: true };
+  }
+  function setSchedule(s) { try { localStorage.setItem(CC_SCHED_KEY, JSON.stringify(s)); } catch (e) {} }
+  // 불가 전체를 MAPS 상태로 자동 반영 + 관리자 결과보고
+  function autoMapsBuga() {
+    const picked = ccMergedRows().filter(r => r.is_buga);
+    if (!picked.length) { log('cc', '⏰ MAPS 자동처리: 불가 건 없음', 'log-ok'); return; }
+    const apiKey = getMapsAdminKeyMj(); if (!apiKey) return;
+    log('cc', `⏰ MAPS 불가 자동처리 ${picked.length}건…`, 'log-ok');
+    fetch('/api/maps-changecancel', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, items: picked })
+    }).then(r => r.json()).then(j => {
+      if (j && (j.success || j.ok)) { const n = j.updated || j.count || picked.length; log('cc', `✅ MAPS 자동처리 ${n}건`, 'log-ok'); notifyAdminsMapsResult(picked, n); }
+      else log('cc', `⚠ MAPS 자동처리 실패: ${(j && (j.error || j.message)) || '?'}`, 'log-err');
+    }).catch(e => log('cc', `⚠ MAPS 자동처리 오류: ${e}`, 'log-err'));
+  }
+  function runScheduledNow(s) {
+    if (runState['cc']) { log('cc', '⏰ 이미 실행 중 — 스케줄 건너뜀', 'log-err'); return; }
+    if (!getMapsAdminKeyMj()) { log('cc', '⏰ MAPS Admin Key 미설정 — 스케줄 중단', 'log-err'); return; }
+    log('cc', `⏰ 자동 스케줄 실행 (${s.time}) — 불러오기→매칭`, 'log-ok');
+    loadProgressList(() => {
+      if (!ccCases.length) { log('cc', '⏰ 입찰 건 없음 — 스케줄 종료', 'log-err'); return; }
+      _ccSchedRun = { doReport: s.doReport, doMaps: s.doMaps, headless: s.headless };
+      runCapture('cc');
+    });
+  }
+  function ccScheduleTick() {
+    const s = getSchedule();
+    if (!s.enabled) return;
+    const now = new Date();
+    const hhmm = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    if (hhmm !== s.time) return;
+    const stamp = ymd(now) + ' ' + hhmm;
+    if (_ccSchedLastFire === stamp) return;   // 같은 분 중복 방지
+    _ccSchedLastFire = stamp;
+    runScheduledNow(s);
+  }
+  function openScheduleModal() {
+    const s = getSchedule();
+    let modal = document.getElementById('ccSchedModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'ccSchedModal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:99999';
+      modal.innerHTML = `<div style="background:#fff;border-radius:10px;width:90%;max-width:420px;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e5e7eb"><b>⏰ 자동 스케줄</b><button data-act="sc-close" style="border:0;background:none;font-size:18px;cursor:pointer">✕</button></div>
+        <div style="padding:14px 16px;font-size:14px;display:flex;flex-direction:column;gap:10px">
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-role="sc-enabled"> <b>자동 스케줄 사용</b></label>
+          <label style="display:flex;gap:8px;align-items:center">실행 시각 <input type="time" data-role="sc-time" style="padding:3px 6px"></label>
+          <div style="border-top:1px solid #eee;padding-top:8px;color:#374151">실행 후 자동으로:</div>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-role="sc-report"> 텔레그램 일일보고 전송</label>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-role="sc-maps"> MAPS 불가 자동처리(+관리자 결과보고)</label>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-role="sc-headless"> 조사 창 숨김(헤드리스)</label>
+          <div style="font-size:12px;color:#6b7280">※ 매니저(이 브라우저)가 켜져 있어야 동작합니다. 30초마다 시각 확인, 정시 1회 실행.</div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #e5e7eb">
+          <button class="btn_box_sss" data-act="sc-close">취소</button>
+          <button class="btn_box_sss btn_blue bold" data-act="sc-save">💾 저장</button>
+        </div></div>`;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+      modal.querySelectorAll('[data-act="sc-close"]').forEach(b => b.addEventListener('click', () => modal.style.display = 'none'));
+      modal.querySelector('[data-act="sc-save"]').addEventListener('click', () => {
+        const ns = {
+          enabled: modal.querySelector('[data-role="sc-enabled"]').checked,
+          time: modal.querySelector('[data-role="sc-time"]').value || '14:00',
+          doReport: modal.querySelector('[data-role="sc-report"]').checked,
+          doMaps: modal.querySelector('[data-role="sc-maps"]').checked,
+          headless: modal.querySelector('[data-role="sc-headless"]').checked
+        };
+        setSchedule(ns); modal.style.display = 'none'; renderCcResults();
+        log('cc', `⏰ 스케줄 저장: ${ns.enabled ? ns.time + ' 사용' : '사용안함'} (보고 ${ns.doReport ? 'O' : 'X'}·MAPS ${ns.doMaps ? 'O' : 'X'}·숨김 ${ns.headless ? 'O' : 'X'})`, 'log-ok');
+      });
+    }
+    modal.querySelector('[data-role="sc-enabled"]').checked = s.enabled;
+    modal.querySelector('[data-role="sc-time"]').value = s.time;
+    modal.querySelector('[data-role="sc-report"]').checked = s.doReport;
+    modal.querySelector('[data-role="sc-maps"]').checked = s.doMaps;
+    modal.querySelector('[data-role="sc-headless"]').checked = s.headless;
+    modal.style.display = 'flex';
+  }
 
   // base64 → Blob
   function b64ToBlob(b64, type) {
