@@ -8331,8 +8331,9 @@ function getProgressList(from6, to6, statuses) {
     var idIdx = ITEM_HEADERS.indexOf('id'), inDateIdx = ITEM_HEADERS.indexOf('in-date'),
         sakunIdx = ITEM_HEADERS.indexOf('sakun_no'), courtIdx = ITEM_HEADERS.indexOf('court'),
         stuIdx = ITEM_HEADERS.indexOf('stu_member'), mNameIdIdx = ITEM_HEADERS.indexOf('m_name_id'),
-        mNameIdx = ITEM_HEADERS.indexOf('m_name'), bidIdx = ITEM_HEADERS.indexOf('bidprice');
-    var values = sheet.getRange(2, 1, lastRow - 1, bidIdx + 1).getValues();
+        mNameIdx = ITEM_HEADERS.indexOf('m_name'), bidIdx = ITEM_HEADERS.indexOf('bidprice'),
+        memberIdIdx = ITEM_HEADERS.indexOf('member_id');
+    var values = sheet.getRange(2, 1, lastRow - 1, memberIdIdx + 1).getValues();
     var norm6 = function (v) {
       var s = (v instanceof Date) ? Utilities.formatDate(v, tz, 'yyMMdd') : String(v == null ? '' : v);
       var d = s.replace(/[^0-9]/g, '');
@@ -8342,18 +8343,21 @@ function getProgressList(from6, to6, statuses) {
     };
     // 담당자(m_name_id 닉네임/이름) → 강사 회원 매칭. MAPS와 동일: 닉네임 전역 우선, 그다음 본명.
     // (닉네임/본명을 한 맵에 섞으면 본명='전부쌤'인 다른 강사가 닉네임='전부쌤'을 덮을 수 있어 분리)
-    var teacherByNick = {}, teacherByName = {};
+    var teacherByNick = {}, teacherByName = {}, tgById = {};
     try {
       (readAllMembers() || []).forEach(function (m) {
+        var mid = String(m.member_id || '').trim();
+        // 회원 텔레그램 사용여부 (MAPS T 뱃지와 동일: telegram_enabled === 'Y')
+        if (mid) tgById[mid] = (String(m.telegram_enabled || '').toUpperCase() === 'Y') ? 'Y' : '';
         if (String(m.gubun || '').split(',').map(function (s) { return s.trim(); }).indexOf('강사') < 0) return;
         var nick = String(m.teacher_nickname || '').trim(), nm = String(m.member_name || '').trim();
         var col = String(m.teacher_color || '').trim();
-        var info = { member_id: String(m.member_id || '').trim(), display: (nick || nm),
+        var info = { member_id: mid, display: (nick || nm),
                      color: /^#[0-9a-fA-F]{6}$/.test(col) ? col : '' };
         if (nick && !teacherByNick[nick]) teacherByNick[nick] = info;
         if (nm && !teacherByName[nm]) teacherByName[nm] = info;
       });
-    } catch (e) { Logger.log('[getProgressList] 강사색상 매핑 실패: ' + e); }
+    } catch (e) { Logger.log('[getProgressList] 회원 매핑 실패: ' + e); }
 
     var seen = {}, cases = [];
     for (var i = 0; i < values.length; i++) {
@@ -8370,6 +8374,7 @@ function getProgressList(from6, to6, statuses) {
       seen[key] = true;
       var midText = String(values[i][mNameIdIdx] == null ? '' : values[i][mNameIdIdx]).trim();  // 담당자(닉네임/이름)
       var tinfo = teacherByNick[midText] || teacherByName[midText] || null;   // 닉네임 우선, 본명 폴백
+      var memberId = String(values[i][memberIdIdx] == null ? '' : values[i][memberIdIdx]).trim();  // 회원 id
       cases.push({
         item_id: String(values[i][idIdx] == null ? '' : values[i][idIdx]),
         sakun_no: sakun,
@@ -8381,6 +8386,8 @@ function getProgressList(from6, to6, statuses) {
         m_name_id_disp: tinfo ? tinfo.display : midText,      // 표시명(닉네임 우선)
         m_name_id_color: tinfo ? tinfo.color : '',            // teacher_color hex
         mid_member_id: tinfo ? tinfo.member_id : '',          // 강사 회원 id (매칭/전송 키)
+        member_id: memberId,                                  // 회원 id
+        m_tg: tgById[memberId] || '',                         // 회원 텔레그램 사용여부 ('Y'/'')
         m_name: String(values[i][mNameIdx] == null ? '' : values[i][mNameIdx]).trim()
       });
     }

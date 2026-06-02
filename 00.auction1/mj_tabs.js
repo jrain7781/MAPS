@@ -719,7 +719,7 @@
         <td>${keyCell(r.sakun_no, r.sakun_hit !== false)}</td>
         <td>${keyCell(r.court, r.court_hit !== false)}</td>
         <td>${midCell}</td>
-        <td>${escapeHtml(r.m_name || '')}</td>
+        <td>${tgDot(r.m_tg === 'Y')}${escapeHtml(r.m_name || '')}</td>
         <td>${buyerCell}</td>
         <td style="text-align:right">${fmtWon(r.bidprice)}</td>
         <td style="text-align:right">${maeCell}</td>
@@ -870,6 +870,13 @@
     if (m.ready) return '<span title="텔레그램 연결+사용" style="color:#16a34a">📨</span>';
     if (m.has_token) return '<span title="연결됨·사용중지" style="color:#d97706">🔔</span>';
     return '<span title="미연결" style="color:#9ca3af">🔕</span>';
+  }
+  // 회원 텔레그램 사용여부 T 뱃지 (MAPS 스타일: 사용=파랑채움 / 미사용=회색테두리)
+  function tgDot(ready) {
+    const base = 'display:inline-block;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;font-size:10px;font-weight:700;margin-right:3px;vertical-align:middle';
+    return ready
+      ? `<span title="텔레그램 사용" style="${base};background:#229ED9;color:#fff">T</span>`
+      : `<span title="텔레그램 미사용" style="${base};border:1px solid #cbd5e1;color:#94a3b8">T</span>`;
   }
   // 우리 회원 낙찰 = 매각 & 매각가==입찰가
   function ccIsOurWin(r) {
