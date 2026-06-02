@@ -1461,22 +1461,17 @@ function _catOfItem_(it) {
   if (c) return c;
   return (String(it.state_kind || '') === '불가') ? '불가' : '낙찰';
 }
-// 일일보고 요약 텍스트 (수신자별 필터된 items 기준). isAdmin 이면 입찰(전체) 표시
+// 일일보고 요약 텍스트 — 헤더 + 카운트 세로(입찰/낙찰/미입찰/불가). 건별 리스트 없음.
 function _dailySummaryText_(items, reportDt, total, isAdmin) {
   var nNak = 0, nMiss = 0, nBuga = 0;
   items.forEach(function (it) { var c = _catOfItem_(it); if (c === '낙찰') nNak++; else if (c === '미입찰') nMiss++; else if (c === '불가') nBuga++; });
   var dateStr = String(reportDt || '').split(' ')[0];
   var title = dateStr ? (dateStr.replace(/-/g, '.') + ' 일일보고') : 'MJ경매 일일보고';
   var lines = ['📋 <b>' + telegramEscapeHtml_(title) + '</b>'];
-  var head = '🔵낙찰 ' + nNak + ' · 🔴미입찰 ' + nMiss + ' · ⚫불가 ' + nBuga;
-  if (isAdmin && total != null && total !== '') head = '입찰 ' + total + ' · ' + head;
-  lines.push(head); lines.push('');
-  items.forEach(function (it) {
-    var c = _catOfItem_(it);
-    var who = it.m_name ? (' (' + it.m_name + ')') : '';
-    var bid = it.bid_date ? (telegramEscapeHtml_(it.bid_date) + '  ') : '';
-    lines.push(_catEmoji_(c) + ' ' + bid + '<b>' + telegramEscapeHtml_(it.sakun_no || '') + '</b>' + telegramEscapeHtml_(who));
-  });
+  if (isAdmin && total != null && total !== '') lines.push('입찰 ' + total);
+  lines.push('낙찰 ' + nNak);
+  lines.push('미입찰 ' + nMiss);
+  lines.push('불가 ' + nBuga);
   return lines.join('\n');
 }
 // 일일보고 수신자 해석. recipients={include_admins, teacher_ids[]} → 관리자=전체(scope 'all'), 강사=자기건(scope member_id)
@@ -1540,7 +1535,13 @@ function sendBugaReport(payload) {
     if (!its.length) { skipped.push(rc.name); return; }
     try {
       telegramSendMessage(rc.chat_id, _dailySummaryText_(its, payload.report_dt, payload.total, rc.scope === 'all'));
-      its.forEach(function (it) {
+      // 이미지 순서: 낙찰 → 미입찰 → 불가 (캡션 유지). 패찰·확인불가는 캡처 없음
+      var _ord = { '낙찰': 0, '미입찰': 1, '불가': 2 };
+      var photoItems = its.slice().sort(function (a, b) {
+        var oa = _ord[_catOfItem_(a)], ob = _ord[_catOfItem_(b)];
+        return (oa == null ? 9 : oa) - (ob == null ? 9 : ob);
+      });
+      photoItems.forEach(function (it) {
         if (!it.screenshot_b64) return;
         try {
           var blob = Utilities.newBlob(Utilities.base64Decode(it.screenshot_b64), 'image/png', (it.sakun_no || 'shot') + '.png');
