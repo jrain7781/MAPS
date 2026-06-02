@@ -129,8 +129,19 @@ def build_report_pdf(items, report_dt=None):
         row("법원/기관", it.get("court", ""))
         if is_buga:
             reason = it.get("status", "") or it.get("state_raw", "")
-            row("처리결과", f"불가 · {reason}" if reason else "불가", C_BUGA)
-            row("상세", it.get("detail", ""), C_BUGA)   # 변경 상세(종결문구) 아래에
+            # 처리결과: 불가(검정) · 변경(빨강)
+            pdf.set_x(pdf.l_margin)
+            pdf.set_font("malgun", "", 9)
+            pdf.set_text_color(*C_GRAY)
+            pdf.cell(22, 6, "처리결과", border=0)
+            pdf.set_font("malgun", "B", 9.5)
+            pdf.set_text_color(*C_BUGA)
+            pdf.cell(11, 6, "불가", border=0)
+            if reason:
+                pdf.set_text_color(220, 38, 38)   # 변경 = 빨강
+                pdf.cell(0, 6, f"· {reason}", border=0)
+            pdf.ln(6)
+            row("상세", it.get("detail", ""), (220, 38, 38))   # 변경 상세(빨강) 아래에
         else:
             row("낙찰가", _fmt_won(it.get("maegak_price", "")), C_NAKCHAL)
             row("매수인", it.get("buyer", "") or "(비공개)")

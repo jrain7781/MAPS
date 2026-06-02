@@ -184,18 +184,24 @@ def classify_state(state_text):
 
 
 def parse_jongryo(detail_text):
-    """상세 종결문구에서 사유/문장. '본사건은 ○○(으)로 경매절차가 종결되었습니다'."""
+    """상세 '본사건은 …' 문장에서 사유/문장 파싱. (여러 표현 대응)
+    예) '본사건은 변경 되었으며 현재 매각기일이 지정되지 않았습니다'
+        '본사건은 취하(으)로 경매절차가 종결되었습니다'"""
     if not detail_text:
         return "", ""
-    m = re.search(r"본사건은\s*(.+?)\s*\(?으?\)?로\s*경매절차가\s*종결", detail_text)
-    if m:
-        sentence = m.group(0).strip()
-        reason_raw = m.group(1).strip()
-        for tok in _BUGA_TOKENS + ["배당종결", "대금납부"]:
-            if tok in reason_raw:
-                return tok, sentence
-        return reason_raw, sentence
-    return "", ""
+    m = re.search(r"본사건은[\s\S]{0,160}?(?:습니다|됩니다|않습니다)\.?", detail_text)
+    if not m:
+        return "", ""
+    sentence = re.sub(r"\s+", " ", m.group(0)).strip()
+    # 사유 토큰(변경/취하/취소…) 이 문장에 있으면 그게 사유
+    for tok in _BUGA_TOKENS + ["배당종결", "대금납부"]:
+        if tok in sentence:
+            return tok, sentence
+    # 종결 패턴의 사유 추출
+    m2 = re.search(r"본사건은\s*(.+?)\s*\(?으?\)?로\s*경매절차", sentence)
+    if m2:
+        return m2.group(1).strip(), sentence
+    return "", sentence
 
 
 def parse_maegak_detail(detail_text, target_d6):

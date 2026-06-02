@@ -86,6 +86,7 @@
         setCcDates(0, 0);          // 날짜 기본값 = 오늘~오늘
         renderCcFavSelect();       // 즐겨찾기 드롭다운 채우기
         renderCcStatusSelect();    // 상태값 드롭다운(기본 입찰)
+        loadCcState();             // 저장된 매칭 자료 복원(localStorage)
       }
       loadAccounts(key);
     });
@@ -298,6 +299,7 @@
         const obj = JSON.parse(line.slice(7));
         ccResults.push(obj);
         renderCcResults();
+        saveCcState();   // 매칭 결과 누적 저장
         return;
       } catch (e) { /* fallthrough → 일반 로그 */ }
     }
@@ -347,9 +349,27 @@
     const p = getCcFavs()[parseInt(idx, 10)]; if (!p) return;
     setCcDates(p.f, p.t);   // 날짜만 세팅 — 불러오기는 📥 버튼으로만
   }
+  // ===== 매칭 자료 저장/복원 (localStorage — 재실행 안 하게) =====
+  const CC_SAVE_KEY = 'mj_cc_saved';
+  function saveCcState() {
+    try { localStorage.setItem(CC_SAVE_KEY, JSON.stringify({ cases: ccCases, results: ccResults.slice(), ts: Date.now() })); } catch (e) {}
+  }
+  function loadCcState() {
+    try {
+      const s = JSON.parse(localStorage.getItem(CC_SAVE_KEY) || 'null');
+      if (!s || (!Array.isArray(s.results) && !Array.isArray(s.cases))) return;
+      ccCases = Array.isArray(s.cases) ? s.cases : [];
+      ccResults.length = 0;
+      (s.results || []).forEach(r => ccResults.push(r));
+      renderCcResults();
+      const info = $card('cc')?.querySelector('[data-role="cc-loaded"]');
+      if (info && s.ts) info.textContent = '💾 저장된 매칭 자료 복원 (' + new Date(s.ts).toLocaleString() + ') · 다시 조회하려면 📥 불러오기 → ▶ 실행';
+    } catch (e) {}
+  }
   // 진행사항 리스트/결과 초기화
   function clearCcList() {
     ccCases = []; ccResults.length = 0; ccSort = { key: '', dir: 1 }; ccRunUnchecked.clear();
+    try { localStorage.removeItem(CC_SAVE_KEY); } catch (e) {}
     renderCcResults();
     const info = $card('cc')?.querySelector('[data-role="cc-loaded"]');
     if (info) info.textContent = '기간 + 상태값 선택 → 📥 불러오기 → ▶ 실행';
@@ -417,6 +437,7 @@
       if (j && j.success && Array.isArray(j.cases)) {
         ccCases = j.cases;
         ccResults.length = 0; ccSort = { key: '', dir: 1 }; ccRunUnchecked.clear(); renderCcResults();   // 불러온 리스트 즉시 표시(실행 전)
+        saveCcState();   // 불러온 리스트 저장
         const now = new Date();
         const hhmmss = [now.getHours(), now.getMinutes(), now.getSeconds()].map(n => String(n).padStart(2, '0')).join(':');
         const info = card.querySelector('[data-role="cc-loaded"]');
@@ -503,8 +524,9 @@
       const url = r.view_url ? ` <a href="#" class="cc-link" data-act="cc-view" data-url="${escapeAttr(r.view_url)}">옥션원</a>` : '';
       // 우리 회원 낙찰 = 매각상태 & 매각가==입찰가 → '낙찰'(대비색), 일반매각은 흐리게
       const _isWin = (!pending && stateKind === '매각' && _won(r.maegak_price) && _won(r.maegak_price) === _won(r.bidprice));
+      // 업데이트 예정 = 물건상태값 그대로(불가만, 사유는 비고로). 낙찰은 우리낙찰.
       const willUpdate = isBuga
-        ? `<b style="color:#b91c1c">불가</b>${r.status ? ` <span class="cc-badge cc-bad">${escapeHtml(r.status)}</span>` : ''}`
+        ? '<span class="cc-badge cc-bad">불가</span>'
         : (_isWin ? '<span style="background:#2563eb;color:#fff;padding:1px 8px;border-radius:4px;font-weight:700">낙찰</span>'
            : (!pending && stateKind === '매각' ? '<span class="cc-badge cc-end" style="color:#9ca3af">매각</span>' : '<span style="color:#9ca3af">-</span>'));
       // 매각가 색: 매각가<입찰가=빨강, 매각가>입찰가=검정, 같으면 파랑
@@ -518,9 +540,15 @@
       // 매수인: 회원이름과 같으면(=우리 회원 낙찰) 파란색
       const mNm = String(r.m_name || '').trim(), buyer = String(r.buyer || '').trim();
       const buyerCell = buyer ? `<span${(mNm && mNm === buyer) ? ' style="color:#2563eb;font-weight:700"' : ''}>${escapeHtml(buyer)}</span>` : '';
-      // 비고: 불가 처리 시 MAPS 에 들어갈 사유/상세(취하/변경 등). MAPS note 아님
-      const noteVal = isBuga ? [r.status, r.detail].filter(Boolean).join(' / ') : '';
-      const noteCell = noteVal ? `<span title="${escapeAttr(noteVal)}">${escapeHtml(noteVal.length > 12 ? noteVal.slice(0, 12) + '…' : noteVal)}</span>` : '';
+      // 비고: 불가 사유(변경=빨강) + 상세값. (물건상태는 업데이트예정 칸, 사유/상세는 여기)
+      const noteReason = isBuga ? String(r.status || '') : '';
+      const noteDetail = isBuga ? String(r.detail || '') : '';
+      const noteCell = (noteReason || noteDetail)
+        ? `<span title="${escapeAttr([noteReason, noteDetail].filter(Boolean).join(' · '))}">`
+          + (noteReason ? `<b style="color:#dc2626">${escapeHtml(noteReason)}</b>` : '')
+          + (noteDetail ? ` ${escapeHtml(noteDetail.length > 18 ? noteDetail.slice(0, 18) + '…' : noteDetail)}` : '')
+          + `</span>`
+        : '';
       const viewLink = r.view_url ? `<a href="#" class="cc-link" data-act="cc-view" data-url="${escapeAttr(r.view_url)}">옥션원</a>` : '';
       const rkey = ccKeyOf(r);
       const runChk = ccRunUnchecked.has(rkey) ? '' : 'checked';
