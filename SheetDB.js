@@ -7964,6 +7964,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'getProgressMatchByDate')  return getProgressMatchByDate(payload.date);
   if (action === 'getReportRecipientCandidates') return getReportRecipientCandidates();
   if (action === 'sendBugaReport')     return sendBugaReport(payload);
+  if (action === 'notifyAdminsText')   return notifyAdminsText(payload);
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };

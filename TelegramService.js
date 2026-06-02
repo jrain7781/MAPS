@@ -1495,6 +1495,27 @@ function resolveDailyRecipients_(recipients, legacyTarget) {
   return out;
 }
 
+// 관리자(텔레그램 연결+사용)에게 단순 텍스트 알림 (MAPS 처리 결과 보고 등)
+function notifyAdminsText(payload) {
+  payload = payload || {};
+  var text = String(payload.text || '').trim();
+  if (!text) return { success: false, message: '빈 메시지' };
+  var admins = [];
+  try {
+    readAllMembers().forEach(function (m) {
+      if (!_memberTelegramReady_(m)) return;
+      if (String(m.gubun || '').split(',').map(function (s) { return s.trim(); }).indexOf('관리자') < 0) return;
+      admins.push({ name: m.member_name || '', chat_id: String(m.telegram_chat_id || '').trim() });
+    });
+  } catch (e) { return { success: false, message: String(e) }; }
+  if (!admins.length) return { success: false, message: '관리자(텔레그램 연결+사용) 없음' };
+  var sent = 0, errors = [];
+  admins.forEach(function (ad) {
+    try { telegramSendMessage(ad.chat_id, text); sent++; } catch (e) { errors.push(ad.name + ': ' + e.message); }
+  });
+  return { success: sent > 0, sent: sent, admins: admins.length, errors: errors };
+}
+
 function sendBugaReport(payload) {
   payload = payload || {};
   var items = payload.items || [];

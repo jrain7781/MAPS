@@ -825,6 +825,7 @@
       if (j && (j.success || j.ok)) {
         const n = j.updated || j.count || picked.length;
         log('cc', `✅ MAPS 업데이트 완료: ${n}건`, 'log-ok');
+        notifyAdminsMapsResult(picked, n);   // 관리자에게 MAPS 처리 결과 보고
         alert('MAPS 업데이트 완료: ' + n + '건');
       } else {
         log('cc', `❌ MAPS 전송 실패: ${j && (j.error || j.message) || '알 수 없음'}`, 'log-err');
@@ -869,18 +870,18 @@
     if (r.teacher_ids && r.teacher_ids.length) parts.push('강사 ' + ((r.teacher_labels && r.teacher_labels.length) ? r.teacher_labels.join('·') : r.teacher_ids.length + '명'));
     return parts.length ? parts.join(' + ') : '대상 없음';
   }
-  // 텔레그램 뱃지: 연결+사용=📨, 연결·사용중지=🔔, 미연결=🔕
+  // 텔레그램 뱃지(파란 T): 연결+사용=파랑채움 / 연결·사용중지=파랑테두리 / 미연결=회색테두리
+  const _TGB = 'display:inline-block;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;font-size:10px;font-weight:700';
   function tgBadge(m) {
-    if (m.ready) return '<span title="텔레그램 연결+사용" style="color:#16a34a">📨</span>';
-    if (m.has_token) return '<span title="연결됨·사용중지" style="color:#d97706">🔔</span>';
-    return '<span title="미연결" style="color:#9ca3af">🔕</span>';
+    if (m.ready) return `<span title="텔레그램 연결+사용" style="${_TGB};background:#2563eb;color:#fff">T</span>`;
+    if (m.has_token) return `<span title="연결됨·사용중지" style="${_TGB};border:1px solid #2563eb;color:#2563eb">T</span>`;
+    return `<span title="미연결" style="${_TGB};border:1px solid #cbd5e1;color:#94a3b8">T</span>`;
   }
-  // 회원 텔레그램 사용여부 T 뱃지 (MAPS 스타일: 사용=파랑채움 / 미사용=회색테두리)
+  // 회원 텔레그램 사용여부 T 뱃지 (사용=파랑채움 / 미사용=회색테두리)
   function tgDot(ready) {
-    const base = 'display:inline-block;width:15px;height:15px;line-height:15px;text-align:center;border-radius:50%;font-size:10px;font-weight:700;margin-right:3px;vertical-align:middle';
     return ready
-      ? `<span title="텔레그램 사용" style="${base};background:#229ED9;color:#fff">T</span>`
-      : `<span title="텔레그램 미사용" style="${base};border:1px solid #cbd5e1;color:#94a3b8">T</span>`;
+      ? `<span title="텔레그램 사용" style="${_TGB};margin-right:3px;vertical-align:middle;background:#2563eb;color:#fff">T</span>`
+      : `<span title="텔레그램 미사용" style="${_TGB};margin-right:3px;vertical-align:middle;border:1px solid #cbd5e1;color:#94a3b8">T</span>`;
   }
   // 우리 회원 낙찰 = 매각 & 매각가==입찰가
   function ccIsOurWin(r) {
@@ -982,6 +983,20 @@
     });
   }
 
+  // MAPS 불가 처리 결과를 관리자 텔레그램으로 보고
+  function notifyAdminsMapsResult(picked, n) {
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey || !picked || !picked.length) return;
+    const lines = picked.map(p => '⚫ ' + String(p.bid_date || '') + ' ' + String(p.sakun_no || '') + (p.m_name ? (' (' + p.m_name + ')') : ''));
+    const txt = '🗂 <b>MAPS 불가 처리 ' + (n || picked.length) + '건 완료</b>\n' + lines.join('\n');
+    fetch('/api/maps-gas', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, api_action: 'notifyAdminsText', text: txt })
+    }).then(r => r.json()).then(j => {
+      if (j && j.success) log('cc', `✅ 관리자 결과보고 전송 (${j.sent || 0}명)`, 'log-ok');
+      else log('cc', `⚠ 관리자 결과보고 실패: ${(j && (j.message || j.error)) || '?'}`, 'log-err');
+    }).catch(e => log('cc', `⚠ 관리자 결과보고 오류: ${e}`, 'log-err'));
+  }
   // 불가 단건: 담당자(강사)에게 즉시 텔레그램 전송
   function sendOneByKey(key) {
     const r = ccMergedRows().find(x => ccKeyOf(x) === key);
@@ -1071,7 +1086,7 @@
           <div data-role="rp-admin-list" style="margin:0 0 12px 24px;font-size:12px;color:#6b7280"></div>
           <div style="border-top:1px solid #e5e7eb;padding-top:10px"><b>강사 — 자기 담당건만 받기</b> <span style="font-size:12px;color:#9ca3af">(체크한 강사에게만 본인 m_name_id 건 전송)</span></div>
           <div data-role="rp-teacher-list" style="max-height:300px;overflow:auto;border:1px solid #e5e7eb;border-radius:6px;margin-top:6px"></div>
-          <div style="margin-top:7px;font-size:12px;color:#6b7280">📨연결+사용 · 🔔연결·사용중지 · 🔕미연결. <b>📨</b> 만 전송됩니다.</div>
+          <div style="margin-top:7px;font-size:12px;color:#6b7280">파랑 채움 T=연결+사용 · 파랑 테두리 T=연결·사용중지 · 회색 T=미연결. <b>파랑 채움</b> 만 전송됩니다.</div>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #e5e7eb">
           <button type="button" class="btn_box_sss" data-act="rp-close">취소</button>
