@@ -492,6 +492,7 @@
       case 'sakun_no': return String(r.sakun_no || '');
       case 'court': return String(r.court || '');
       case 'm_name': return String(r.m_name || '');
+      case 'mid': return String(r.m_name_id || '');
       case 'buyer': return String(r.buyer || '');
       case 'bidprice': return _won(r.bidprice);
       case 'maegak': return _won(r.maegak_price);
@@ -559,6 +560,7 @@
         <td>${keyCell(r.sakun_no, r.sakun_hit !== false)}</td>
         <td>${keyCell(r.court, r.court_hit !== false)}</td>
         <td>${escapeHtml(r.m_name || '')}</td>
+        <td>${escapeHtml(r.m_name_id || '')}</td>
         <td>${buyerCell}</td>
         <td style="text-align:right">${fmtWon(r.bidprice)}</td>
         <td style="text-align:right">${maeCell}</td>
@@ -570,13 +572,11 @@
       </tr>`;
     }).join('');
     const doneCnt = merged.filter(r => !r._pending).length;
-    const bugaCnt = merged.filter(r => r.is_buga).length;
-    const winCnt = merged.filter(r => ccIsOurWin(r)).length;       // 우리 낙찰
-    const maegakCnt = merged.filter(r => !r._pending && ccStateKind(r) === '매각').length;
-    const genMaegak = maegakCnt - winCnt;                          // 일반 매각(보고 제외)
+    const catCnt = (c) => merged.filter(r => ccCategory(r) === c).length;
+    const winCnt = catCnt('낙찰'), missCnt = catCnt('미입찰'), bugaCnt = catCnt('불가'), unkCnt = catCnt('확인불가');
     wrap.innerHTML = `
       <div class="cc-results-head">
-        <span><b>${merged.length}건</b> (조회완료 ${doneCnt}) · <b style="color:#b91c1c">불가 ${bugaCnt}</b> · <b style="color:#2563eb">낙찰 ${winCnt}</b> · <span style="color:#9ca3af">매각 ${genMaegak} · 보고=불가+낙찰</span></span>
+        <span>입찰(전체) <b>${merged.length}</b> (조회완료 ${doneCnt}) · <b style="color:#2563eb">낙찰 ${winCnt}</b> · <b style="color:#dc2626">미입찰 ${missCnt}</b> · <b style="color:#111827">불가 ${bugaCnt}</b>${unkCnt ? ` · <span style="color:#6b7280">확인불가 ${unkCnt}</span>` : ''}</span>
         <span class="mjcap-spacer"></span>
         <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭(실행) 완료 시 불가/낙찰 보고서를 관리자에게 자동 전송">
           <input type="checkbox" class="cc-auto-report" ${ccAutoReportOn() ? 'checked' : ''}>자동 보고
@@ -594,6 +594,7 @@
           <th class="cc-sort" data-sort="sakun_no">사건번호${arrow('sakun_no')}</th>
           <th class="cc-sort" data-sort="court">법원${arrow('court')}</th>
           <th class="cc-sort" data-sort="m_name">회원${arrow('m_name')}</th>
+          <th class="cc-sort" data-sort="mid">담당자${arrow('mid')}</th>
           <th class="cc-sort" data-sort="buyer">매수인${arrow('buyer')}</th>
           <th class="cc-sort" data-sort="bidprice">입찰가${arrow('bidprice')}</th>
           <th class="cc-sort" data-sort="maegak">매각가${arrow('maegak')}</th>
@@ -687,6 +688,20 @@
     if (!r || ccStateKind(r) !== '매각') return false;
     const mae = _won(r.maegak_price), bid = _won(r.bidprice);
     return !!(mae && bid && mae === bid);
+  }
+  // 일일보고 분류: 불가 / 낙찰(매각&매각가==입찰가) / 미입찰(매각&매각가<입찰가) /
+  //   확인불가(매각&입찰가없음) / 일반(매각&매각가>입찰가) / ''(대기·기타)
+  const CC_CAT_COLOR = { '낙찰': '#2563eb', '미입찰': '#dc2626', '불가': '#111827', '확인불가': '#6b7280', '일반': '#9ca3af' };
+  function ccCategory(r) {
+    if (!r || r._pending) return '';
+    if (r.is_buga || ccStateKind(r) === '불가') return '불가';
+    if (ccStateKind(r) !== '매각') return '';
+    const bid = _won(r.bidprice), mae = _won(r.maegak_price);
+    if (!mae) return '';
+    if (!bid) return '확인불가';
+    if (mae === bid) return '낙찰';
+    if (mae < bid) return '미입찰';
+    return '일반';   // 매각가 > 입찰가 (우리보다 높게 팔림)
   }
   // 보고 대상 = 불가 또는 우리낙찰만 (일반 매각은 제외)
   function ccReportItems() { return ccResults.filter(r => r && (r.is_buga || ccIsOurWin(r))); }
