@@ -473,30 +473,40 @@ def capture_detail(driver, tag):
         os.makedirs(REPORT_SHOT_DIR, exist_ok=True)
         safe = re.sub(r"[^0-9A-Za-z가-힣_-]", "_", str(tag))[:50]
         path = os.path.join(REPORT_SHOT_DIR, f"{safe}.png")
-        # 사진/지도(큰 이미지) 3장까지 → 그 아래 잘라냄 (전체 긴 페이지 X)
+        # 본문 테이블 폭(좌우 타이트) + 사진 3장까지(세로) 클립 좌표 계산
+        clip = None
         try:
-            cut = driver.execute_script("""
+            clip = driver.execute_script("""
+                var sx=window.scrollX, sy=window.scrollY;
+                var tabs = Array.prototype.slice.call(document.querySelectorAll('table'))
+                  .map(function(e){ var r=e.getBoundingClientRect(); return {l:r.left+sx, r:r.right+sx, w:r.width}; })
+                  .filter(function(o){ return o.w>=400; });          // 본문 테이블(좌우폭 기준)
                 var imgs = Array.prototype.slice.call(document.images)
-                  .map(function(im){ var r=im.getBoundingClientRect();
-                     return {b: r.bottom + window.scrollY, w: r.width, h: r.height}; })
-                  .filter(function(o){ return o.w>=120 && o.h>=70; })   // 사진/지도(아이콘 제외)
+                  .map(function(e){ var r=e.getBoundingClientRect(); return {b:r.bottom+sy, w:r.width, h:r.height}; })
+                  .filter(function(o){ return o.w>=120 && o.h>=70; }) // 사진/지도
                   .sort(function(a,b){ return a.b-b.b; });
-                if(!imgs.length) return 0;
-                var i = Math.min(2, imgs.length-1);   // 3번째(없으면 마지막) 이미지 하단
-                return Math.ceil(imgs[i].b + 28);
+                if(!tabs.length || !imgs.length) return null;
+                var left = Math.min.apply(null, tabs.map(function(o){return o.l;}));
+                var right = Math.max.apply(null, tabs.map(function(o){return o.r;}));
+                var cutY = imgs[Math.min(2,imgs.length-1)].b + 22;    // 3번째 사진 하단
+                return { x: Math.max(0, Math.floor(left-4)),
+                         w: Math.ceil((right-left)+8),
+                         h: Math.ceil(cutY) };
             """)
         except Exception:
-            cut = 0
+            clip = None
         try:
             m = driver.execute_cdp_cmd("Page.getLayoutMetrics", {})
             css = m.get("cssContentSize") or m.get("contentSize") or {}
-            w = int(css.get("width") or 1400)
+            full_w = int(css.get("width") or 1400)
             full_h = int(css.get("height") or 2400)
-            h = int(cut) if (cut and int(cut) > 200) else full_h   # 사진 못찾으면 전체
-            h = min(h, 20000)
+            if clip and clip.get("w", 0) > 200 and clip.get("h", 0) > 200:
+                cx, cw, ch = int(clip["x"]), int(clip["w"]), min(int(clip["h"]), 20000)
+            else:
+                cx, cw, ch = 0, full_w, min(full_h, 20000)   # 못 찾으면 전체폭
             shot = driver.execute_cdp_cmd("Page.captureScreenshot", {
                 "format": "png", "captureBeyondViewport": True,
-                "clip": {"x": 0, "y": 0, "width": w, "height": h, "scale": 1}})
+                "clip": {"x": cx, "y": 0, "width": cw, "height": ch, "scale": 1}})
             with open(path, "wb") as f:
                 f.write(base64.b64decode(shot["data"]))
         except Exception:
@@ -724,7 +734,7 @@ def main():
         options.add_argument("--disable-gpu")
         print("[MJ] headless 모드 (창 숨김)")
     options.add_argument("--window-size=1400,900")
-    options.add_argument("--force-device-scale-factor=2")   # 캡처 2x 고해상도(텔레그램 선명도)
+    options.add_argument("--force-device-scale-factor=3")   # 캡처 3x 고해상도(화질↑)
     options.add_experimental_option("detach", False)
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     wait = WebDriverWait(driver, 15)
