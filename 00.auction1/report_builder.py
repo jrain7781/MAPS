@@ -7,6 +7,7 @@ MJ경매 진행사항 보고서 PDF (요약카드 + 건별 최소카드).
 item dict: sakun_no, state_kind('불가'|'매각'), status(사유), m_name, screenshot_path …
 """
 import os
+import io
 from datetime import datetime
 
 try:
@@ -14,7 +15,7 @@ try:
 except Exception:
     FPDF = None
 try:
-    from PIL import Image
+    from PIL import Image, ImageDraw, ImageFont
 except Exception:
     Image = None
 
@@ -27,6 +28,48 @@ C_NAKCHAL = (37, 99, 235)
 C_DARK = (17, 24, 39)
 C_GRAY = (120, 128, 142)
 C_LINE = (226, 232, 240)
+
+
+def compose_card_png(screenshot_path, is_buga, reason, sakun, m_name):
+    """컬러 헤더바(불가 빨강·낙찰 파랑) + 캡처 → 라운드 카드 PNG bytes. 텔레그램/PDF 공용.
+    헤더 = '불가 - 변경  |  사건번호  |  회원명' / '낙찰  |  사건번호  |  회원명'."""
+    if not Image or not screenshot_path or not os.path.exists(screenshot_path):
+        return None
+    try:
+        shot = Image.open(screenshot_path).convert("RGB")
+    except Exception:
+        return None
+    W = shot.width
+    head_h = max(46, int(W * 0.062))
+    pad = max(16, int(W * 0.018))
+    try:
+        font = ImageFont.truetype(FONT_BOLD if os.path.exists(FONT_BOLD) else FONT_PATH, int(head_h * 0.46))
+    except Exception:
+        font = ImageFont.load_default()
+    accent = (220, 38, 38) if is_buga else (37, 99, 235)
+    H = head_h + shot.height
+    canvas = Image.new("RGB", (W, H), (255, 255, 255))
+    d = ImageDraw.Draw(canvas)
+    d.rectangle([0, 0, W, head_h], fill=accent)
+    sep = "   |   "
+    if is_buga:
+        txt = "불가" + (" - " + reason if reason else "") + sep + (sakun or "") + (sep + m_name if m_name else "")
+    else:
+        txt = "낙찰" + sep + (sakun or "") + (sep + m_name if m_name else "")
+    try:
+        d.text((pad, head_h // 2), txt, fill=(255, 255, 255), font=font, anchor="lm")
+    except Exception:
+        d.text((pad, head_h // 4), txt, fill=(255, 255, 255), font=font)
+    canvas.paste(shot, (0, head_h))
+    # 라운드 코너 (흰 배경 위)
+    radius = max(16, int(W * 0.020))
+    mask = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, W - 1, H - 1], radius=radius, fill=255)
+    out = Image.new("RGB", (W, H), (255, 255, 255))
+    out.paste(canvas, (0, 0), mask)
+    buf = io.BytesIO()
+    out.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def _img_disp(path, max_w, max_h):
@@ -144,65 +187,46 @@ def _summary_card(pdf, items, n_buga, n_nak, M, W):
 
 
 def _item_card(pdf, it, M, W, PAGE_BOTTOM):
+    """합성 카드(컬러 헤더바+캡처+라운드) 이미지를 풀폭으로 배치."""
     is_buga = (it.get("state_kind") or "") == "불가"
-    accent = C_BUGA if is_buga else C_NAKCHAL
-    badge = "불가" if is_buga else "낙찰"
-    reason = (it.get("status") or "") if is_buga else ""
+    comp = compose_card_png(it.get("screenshot_path", ""), is_buga,
+                            it.get("status", ""), it.get("sakun_no", ""), it.get("m_name", ""))
+    if not comp:
+        # 캡처 없으면 텍스트 한 줄
+        accent = C_BUGA if is_buga else C_NAKCHAL
+        top = pdf.get_y()
+        _pill(pdf, M + 6, top + 4, 15, 7, "불가" if is_buga else "낙찰", accent)
+        pdf.set_xy(M + 26, top + 4)
+        pdf.set_font("malgun", "B", 11)
+        pdf.set_text_color(*C_DARK)
+        hdr = (("불가 - " + (it.get("status") or "")) if is_buga else "낙찰") + "  |  " + str(it.get("sakun_no", "")) + ("  |  " + it.get("m_name", "") if it.get("m_name") else "")
+        pdf.cell(0, 7, hdr)
+        pdf.set_draw_color(*C_LINE)
+        pdf.rect(M, top, W, 15, style="D", round_corners=True, corner_radius=3)
+        pdf.set_y(top + 20)
+        return
 
-    inner_x = M + 6
-    inner_w = W - 12
-    disp = _img_disp(it.get("screenshot_path", ""), inner_w, 215)
+    try:
+        with Image.open(io.BytesIO(comp)) as im:
+            pw, ph = im.size
+    except Exception:
+        return
+    disp_w = W
+    disp_h = disp_w * (ph / pw)
+    max_h = PAGE_BOTTOM - 24
+    if disp_h > max_h:
+        disp_h = max_h
+        disp_w = disp_h * (pw / ph)
 
-    head_h = 11
-    pad = 5
-    img_h = (disp[1] + 4) if disp else 0
-    card_h = pad + head_h + img_h + pad
-
-    if pdf.get_y() + min(card_h, PAGE_BOTTOM - 20) > PAGE_BOTTOM and pdf.get_y() > 40:
+    if pdf.get_y() + disp_h + 6 > PAGE_BOTTOM and pdf.get_y() > 40:
         pdf.add_page()
-    top = pdf.get_y()
-    y = top + pad
-
-    # 헤더: [배지] 사유 / 사건번호 / 회원명
-    _pill(pdf, inner_x, y, 15, 7, badge, accent)
-    pdf.set_xy(inner_x + 18, y)
-    pdf.set_font("malgun", "B", 11)
-    # 사유(불가만, 빨강) / 사건번호(검정) / 회원명(회색)
-    if reason:
-        pdf.set_text_color(*C_BUGA)
-        pdf.cell(pdf.get_string_width(reason) + 2, 7, reason)
-        pdf.set_text_color(*C_GRAY)
-        pdf.cell(4, 7, "/")
-    pdf.set_text_color(*C_DARK)
-    sak = str(it.get("sakun_no", ""))
-    pdf.cell(pdf.get_string_width(sak) + 3, 7, sak)
-    if it.get("m_name"):
-        pdf.set_text_color(*C_GRAY)
-        pdf.cell(4, 7, "/")
-        pdf.set_font("malgun", "", 10.5)
-        pdf.set_text_color(70, 78, 92)
-        pdf.cell(0, 7, str(it.get("m_name", "")))
-    y += head_h
-
-    # 캡처 이미지 (헤더 바로 아래, 중앙)
-    if disp:
-        ix = inner_x + (inner_w - disp[0]) / 2
-        try:
-            pdf.image(it.get("screenshot_path"), x=ix, y=y, w=disp[0], h=disp[1])
-            pdf.set_draw_color(*C_LINE)
-            pdf.set_line_width(0.2)
-            pdf.rect(ix, y, disp[0], disp[1])
-        except Exception:
-            pass
-        y += disp[1] + 4
-
-    bottom = y + pad
-    pdf.set_draw_color(*C_LINE)
-    pdf.set_line_width(0.3)
-    pdf.rect(M, top, W, bottom - top, style="D", round_corners=True, corner_radius=3)
-    pdf.set_fill_color(*accent)
-    pdf.rect(M, top + 3, 2.2, (bottom - top) - 6, style="F", round_corners=True, corner_radius=1)
-    pdf.set_y(bottom + 5)
+    x = M + (W - disp_w) / 2
+    y = pdf.get_y()
+    try:
+        pdf.image(io.BytesIO(comp), x=x, y=y, w=disp_w, h=disp_h)
+    except Exception:
+        pass
+    pdf.set_y(y + disp_h + 6)
 
 
 if __name__ == "__main__":

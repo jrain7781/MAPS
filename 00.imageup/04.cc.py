@@ -468,8 +468,8 @@ def open_detail_text(driver, view_url):
 
 
 def capture_detail(driver, tag, sakun=""):
-    """상세페이지에서 사건번호 제목줄~사진 3장까지만, 좌우는 테이블 폭에 타이트하게 크롭 캡처.
-    위/아래/좌우 여백 없이 표에 딱 맞춤. 실패 시 ''."""
+    """상세 '소재지 표 ~ 사진 3장'만 좌우 타이트 크롭 캡처 → PNG. (상단 툴바/제목/nav 제외)
+    보고서 카드는 별도 컬러 헤더바(사건번호 등)를 붙이므로 표부터 캡처. 실패 시 ''."""
     try:
         os.makedirs(REPORT_SHOT_DIR, exist_ok=True)
         safe = re.sub(r"[^0-9A-Za-z가-힣_-]", "_", str(tag))[:50]
@@ -477,7 +477,6 @@ def capture_detail(driver, tag, sakun=""):
         clip = None
         try:
             clip = driver.execute_script("""
-                var needle = (arguments[0]||'').replace(/\\s/g,'');
                 var sx=window.scrollX, sy=window.scrollY;
                 var tabs = Array.prototype.slice.call(document.querySelectorAll('table'))
                   .map(function(e){ var r=e.getBoundingClientRect(); return {l:r.left+sx, r:r.right+sx, t:r.top+sy, w:r.width}; })
@@ -489,29 +488,11 @@ def capture_detail(driver, tag, sakun=""):
                 if(!tabs.length || !imgs.length) return null;
                 var left = Math.min.apply(null, tabs.map(function(o){return o.l;}));
                 var right = Math.max.apply(null, tabs.map(function(o){return o.r;}));
-                var tableTop = Math.min.apply(null, tabs.map(function(o){return o.t;}));
-                var cutY = imgs[Math.min(2,imgs.length-1)].b + 8;     // 3번째 사진 하단(여백 최소)
-                // 상단: 사건번호 제목줄 top (없으면 첫 테이블 위 32px)
-                var topY = tableTop - 32;
-                if (needle) {
-                  var nodes = document.querySelectorAll('span,div,strong,b,h1,h2,h3,h4,a,td,p,font');
-                  var cands = [];
-                  for (var i=0;i<nodes.length;i++){
-                    var n=nodes[i], own='';
-                    for (var j=0;j<n.childNodes.length;j++) if(n.childNodes[j].nodeType===3) own+=n.childNodes[j].nodeValue;
-                    if (own.replace(/\\s/g,'').indexOf(needle)>=0){
-                      var r=n.getBoundingClientRect();
-                      if (r.height>0 && r.height<70 && (r.top+sy) <= tableTop+5) cands.push(r.top+sy);
-                    }
-                  }
-                  if (cands.length) topY = Math.min.apply(null, cands) - 6;
-                }
-                topY = Math.max(0, Math.floor(topY));
-                return { x: Math.max(0, Math.floor(left-3)),
-                         y: topY,
-                         w: Math.ceil((right-left)+6),
-                         h: Math.ceil(cutY - topY) };
-            """, sakun or "")
+                var topY = Math.max(0, Math.floor(Math.min.apply(null, tabs.map(function(o){return o.t;})) - 2));  // 첫 본문표 상단부터
+                var cutY = imgs[Math.min(2,imgs.length-1)].b + 6;     // 3번째 사진 하단(펼쳐보기 버튼 제외)
+                return { x: Math.max(0, Math.floor(left-3)), y: topY,
+                         w: Math.ceil((right-left)+6), h: Math.ceil(cutY - topY) };
+            """)
         except Exception:
             clip = None
         try:
