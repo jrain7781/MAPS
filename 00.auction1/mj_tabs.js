@@ -492,7 +492,7 @@
       case 'sakun_no': return String(r.sakun_no || '');
       case 'court': return String(r.court || '');
       case 'm_name': return String(r.m_name || '');
-      case 'mid': return String(r.m_name_id || '');
+      case 'mid': return String(r.m_name_id_disp || r.m_name_id || '');
       case 'buyer': return String(r.buyer || '');
       case 'bidprice': return _won(r.bidprice);
       case 'maegak': return _won(r.maegak_price);
@@ -541,6 +541,10 @@
       // 매수인: 회원이름과 같으면(=우리 회원 낙찰) 파란색
       const mNm = String(r.m_name || '').trim(), buyer = String(r.buyer || '').trim();
       const buyerCell = buyer ? `<span${(mNm && mNm === buyer) ? ' style="color:#2563eb;font-weight:700"' : ''}>${escapeHtml(buyer)}</span>` : '';
+      // 담당자: teacher_color 적용(닉네임 표시)
+      const midDisp = String(r.m_name_id_disp || r.m_name_id || '');
+      const midCol = String(r.m_name_id_color || '');
+      const midCell = midDisp ? (midCol ? `<b style="color:${midCol}">${escapeHtml(midDisp)}</b>` : escapeHtml(midDisp)) : '';
       // 비고: 불가 사유(변경=빨강) + 상세값. (물건상태는 업데이트예정 칸, 사유/상세는 여기)
       const noteReason = isBuga ? String(r.status || '') : '';
       const noteDetail = isBuga ? String(r.detail || '') : '';
@@ -559,8 +563,8 @@
         <td>${keyCell(r.bid_date, r.date_hit !== false)}</td>
         <td>${keyCell(r.sakun_no, r.sakun_hit !== false)}</td>
         <td>${keyCell(r.court, r.court_hit !== false)}</td>
+        <td>${midCell}</td>
         <td>${escapeHtml(r.m_name || '')}</td>
-        <td>${escapeHtml(r.m_name_id || '')}</td>
         <td>${buyerCell}</td>
         <td style="text-align:right">${fmtWon(r.bidprice)}</td>
         <td style="text-align:right">${maeCell}</td>
@@ -593,8 +597,8 @@
           <th class="cc-sort" data-sort="bid_date">입찰일자${arrow('bid_date')}</th>
           <th class="cc-sort" data-sort="sakun_no">사건번호${arrow('sakun_no')}</th>
           <th class="cc-sort" data-sort="court">법원${arrow('court')}</th>
-          <th class="cc-sort" data-sort="m_name">회원${arrow('m_name')}</th>
           <th class="cc-sort" data-sort="mid">담당자${arrow('mid')}</th>
+          <th class="cc-sort" data-sort="m_name">회원${arrow('m_name')}</th>
           <th class="cc-sort" data-sort="buyer">매수인${arrow('buyer')}</th>
           <th class="cc-sort" data-sort="bidprice">입찰가${arrow('bidprice')}</th>
           <th class="cc-sort" data-sort="maegak">매각가${arrow('maegak')}</th>

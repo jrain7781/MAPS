@@ -8236,6 +8236,20 @@ function getProgressList(from6, to6, statuses) {
       if (d.length > 6) d = d.slice(-6);
       return d;
     };
+    // 담당자(m_name_id 닉네임/이름) → 강사 회원 매칭: 닉네임 우선, 본명 폴백 → member_id + teacher_color
+    var teacherByLabel = {};
+    try {
+      (readAllMembers() || []).forEach(function (m) {
+        if (String(m.gubun || '').split(',').map(function (s) { return s.trim(); }).indexOf('강사') < 0) return;
+        var nick = String(m.teacher_nickname || '').trim(), nm = String(m.member_name || '').trim();
+        var col = String(m.teacher_color || '').trim();
+        var info = { member_id: String(m.member_id || '').trim(), display: (nick || nm),
+                     color: /^#[0-9a-fA-F]{6}$/.test(col) ? col : '' };
+        if (nick && !teacherByLabel[nick]) teacherByLabel[nick] = info;
+        if (nm && !teacherByLabel[nm]) teacherByLabel[nm] = info;
+      });
+    } catch (e) { Logger.log('[getProgressList] 강사색상 매핑 실패: ' + e); }
+
     var seen = {}, cases = [];
     for (var i = 0; i < values.length; i++) {
       var d6 = norm6(values[i][inDateIdx]);
@@ -8249,6 +8263,8 @@ function getProgressList(from6, to6, statuses) {
       var key = sakun + '|' + d6 + '|' + court;
       if (seen[key]) continue;
       seen[key] = true;
+      var midText = String(values[i][mNameIdIdx] == null ? '' : values[i][mNameIdIdx]).trim();  // 담당자(닉네임/이름)
+      var tinfo = teacherByLabel[midText] || null;
       cases.push({
         item_id: String(values[i][idIdx] == null ? '' : values[i][idIdx]),
         sakun_no: sakun,
@@ -8256,7 +8272,10 @@ function getProgressList(from6, to6, statuses) {
         court: court,
         stu_member: stu,
         bidprice: String(values[i][bidIdx] == null ? '' : values[i][bidIdx]).trim(),
-        m_name_id: String(values[i][mNameIdIdx] == null ? '' : values[i][mNameIdIdx]).trim(),  // 담당자(닉네임/이름)
+        m_name_id: midText,                                   // 원본 텍스트
+        m_name_id_disp: tinfo ? tinfo.display : midText,      // 표시명(닉네임 우선)
+        m_name_id_color: tinfo ? tinfo.color : '',            // teacher_color hex
+        mid_member_id: tinfo ? tinfo.member_id : '',          // 강사 회원 id (매칭/전송 키)
         m_name: String(values[i][mNameIdx] == null ? '' : values[i][mNameIdx]).trim()
       });
     }
