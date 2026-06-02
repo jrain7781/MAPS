@@ -83,6 +83,8 @@
         if (favSel) favSel.addEventListener('change', () => applyCcFav(favSel.value));
         const favMng = card.querySelector('[data-act="cc-fav-manage"]');
         if (favMng) favMng.addEventListener('click', openCcFav);
+        const calBtn = card.querySelector('[data-act="cc-calendar-toggle"]');
+        if (calBtn) calBtn.addEventListener('click', toggleCcCalendar);
         setCcDates(0, 0);          // 날짜 기본값 = 오늘~오늘
         renderCcFavSelect();       // 즐겨찾기 드롭다운 채우기
         renderCcStatusSelect();    // 상태값 드롭다운(기본 입찰)
@@ -353,6 +355,98 @@
   const CC_SAVE_KEY = 'mj_cc_saved';
   function saveCcState() {
     try { localStorage.setItem(CC_SAVE_KEY, JSON.stringify({ cases: ccCases, results: ccResults.slice(), ts: Date.now() })); } catch (e) {}
+    saveCcByDate();   // 날짜별 누적 저장(달력용)
+  }
+
+  // ===== 날짜별 저장/달력 (localStorage — 이 브라우저 한정) =====
+  const CC_BYDATE_KEY = 'mj_cc_saved_byDate';
+  function bidToYMD(d6) {
+    const s = String(d6 || '').replace(/[^0-9]/g, '');
+    if (s.length === 6) return '20' + s.slice(0, 2) + '-' + s.slice(2, 4) + '-' + s.slice(4, 6);
+    if (s.length === 8) return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+    return '';
+  }
+  function loadCcByDate() { try { return JSON.parse(localStorage.getItem(CC_BYDATE_KEY) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function writeCcByDate(o) { try { localStorage.setItem(CC_BYDATE_KEY, JSON.stringify(o)); } catch (e) {} }
+  // 현재 병합 데이터를 입찰일자별로 그룹핑해 저장 (해당 날짜만 갱신, 나머지 날짜 보존)
+  function saveCcByDate() {
+    try {
+      const rows = ccMergedRows();
+      if (!rows.length) return;
+      const map = loadCcByDate();
+      const groups = {};
+      rows.forEach(r => { const ymd = bidToYMD(r.bid_date); if (!ymd) return; (groups[ymd] = groups[ymd] || []).push(r); });
+      Object.keys(groups).forEach(ymd => { map[ymd] = { rows: groups[ymd], ts: Date.now() }; });
+      writeCcByDate(map);
+      const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]');
+      if (cont && cont.style.display !== 'none') renderCcCalendar(ccCalYM ? ccCalYM.y : null, ccCalYM ? ccCalYM.m : null);
+    } catch (e) {}
+  }
+  // 특정 날짜의 저장 자료를 결과표로 복원
+  function restoreCcDate(ymd) {
+    const e = loadCcByDate()[ymd];
+    if (!e || !Array.isArray(e.rows) || !e.rows.length) { alert(ymd + ' 저장된 자료가 없습니다.'); return; }
+    ccCases = e.rows.map(r => Object.assign({}, r));
+    ccResults.length = 0;
+    e.rows.forEach(r => { if (r.state_kind || r.status || r.is_buga) ccResults.push(Object.assign({}, r)); });
+    ccSort = { key: '', dir: 1 }; ccRunUnchecked.clear();
+    renderCcResults();
+    const info = $card('cc')?.querySelector('[data-role="cc-loaded"]');
+    if (info) info.textContent = `📅 ${ymd} 저장 자료 복원 ${e.rows.length}건` + (e.ts ? ` (저장 ${new Date(e.ts).toLocaleString()})` : '');
+  }
+  let ccCalYM = null;   // {y, m(0-based)}
+  function toggleCcCalendar() {
+    const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
+    const show = (cont.style.display === 'none' || !cont.style.display);
+    cont.style.display = show ? '' : 'none';
+    if (show) renderCcCalendar(ccCalYM ? ccCalYM.y : null, ccCalYM ? ccCalYM.m : null);
+  }
+  function renderCcCalendar(y, m) {
+    const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
+    if (y == null || m == null) { const t = new Date(); y = t.getFullYear(); m = t.getMonth(); }
+    ccCalYM = { y, m };
+    const map = loadCcByDate();
+    const startDow = new Date(y, m, 1).getDay();
+    const days = new Date(y, m + 1, 0).getDate();
+    const cellInfo = (ymd) => {
+      const e = map[ymd]; if (!e || !Array.isArray(e.rows)) return null;
+      const rows = e.rows, cat = (c) => rows.filter(r => ccCategory(r) === c).length;
+      return { n: rows.length, nak: cat('낙찰'), miss: cat('미입찰'), buga: cat('불가') };
+    };
+    let h = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <button type="button" class="btn_box_sss btn_white" data-cal-nav="-1">‹</button>
+      <b style="min-width:90px;text-align:center">${y}년 ${m + 1}월</b>
+      <button type="button" class="btn_box_sss btn_white" data-cal-nav="1">›</button>
+      <button type="button" class="btn_box_sss btn_white" data-cal-nav="today">오늘</button>
+      <span style="font-size:11px;color:#9ca3af">날짜 클릭 → 그날 매칭 자료 복원</span></div>`;
+    h += `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">`;
+    ['일', '월', '화', '수', '목', '금', '토'].forEach((d, i) =>
+      h += `<div style="text-align:center;font-size:11px;font-weight:700;color:${i === 0 ? '#dc2626' : (i === 6 ? '#2563eb' : '#6b7280')}">${d}</div>`);
+    for (let i = 0; i < startDow; i++) h += `<div></div>`;
+    for (let d = 1; d <= days; d++) {
+      const ymd = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const c = cellInfo(ymd);
+      const base = 'min-height:46px;border:1px solid #e5e7eb;border-radius:6px;padding:3px;font-size:11px';
+      if (c && c.n) {
+        h += `<div data-cal-day="${ymd}" title="복원: ${ymd}" style="${base};cursor:pointer;background:#eff6ff;border-color:#bfdbfe">
+          <div style="font-weight:700">${d} <span style="float:right;background:#2563eb;color:#fff;border-radius:8px;padding:0 5px;font-size:10px">${c.n}</span></div>
+          <div style="margin-top:2px;line-height:1.3"><span style="color:#2563eb">낙${c.nak}</span> <span style="color:#dc2626">미${c.miss}</span> <span style="color:#111827">불${c.buga}</span></div>
+        </div>`;
+      } else {
+        h += `<div style="${base};color:#9ca3af">${d}</div>`;
+      }
+    }
+    h += `</div>`;
+    cont.innerHTML = h;
+    cont.querySelectorAll('[data-cal-nav]').forEach(b => b.addEventListener('click', () => {
+      const v = b.dataset.calNav;
+      if (v === 'today') { renderCcCalendar(); return; }
+      let mm = ccCalYM.m + parseInt(v, 10), yy = ccCalYM.y;
+      if (mm < 0) { mm = 11; yy--; } if (mm > 11) { mm = 0; yy++; }
+      renderCcCalendar(yy, mm);
+    }));
+    cont.querySelectorAll('[data-cal-day]').forEach(el => el.addEventListener('click', () => restoreCcDate(el.dataset.calDay)));
   }
   function loadCcState() {
     try {
