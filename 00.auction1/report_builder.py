@@ -83,6 +83,11 @@ def compose_card_png(screenshot_path, is_buga, reason, sakun, m_name, bid_date="
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, W - 1, H - 1], radius=radius, fill=255)
     out = Image.new("RGB", (W, H), (255, 255, 255))
     out.paste(canvas, (0, 0), mask)
+    # 카드 테두리 — 헤더와 동일 색(불가 빨강/낙찰 파랑)
+    bw = max(4, int(W * 0.007))
+    ImageDraw.Draw(out).rounded_rectangle(
+        [bw // 2, bw // 2, W - 1 - bw // 2, H - 1 - bw // 2],
+        radius=radius, outline=accent, width=bw)
     buf = io.BytesIO()
     out.save(buf, format="PNG")
     return buf.getvalue()
@@ -167,10 +172,10 @@ def _summary_card(pdf, items, n_buga, n_nak, M, W):
     top = pdf.get_y()
     y = top + 5
 
-    # 카운트
-    _pill(pdf, inner_x, y, 26, 8, f"불가 {n_buga}", C_BUGA, 10)
-    _pill(pdf, inner_x + 29, y, 26, 8, f"낙찰 {n_nak}", C_NAKCHAL, 10)
-    y += 11
+    # 카운트 (버튼 폰트 2배)
+    _pill(pdf, inner_x, y, 44, 14, f"불가 {n_buga}", C_BUGA, 20)
+    _pill(pdf, inner_x + 49, y, 44, 14, f"낙찰 {n_nak}", C_NAKCHAL, 20)
+    y += 18
 
     pdf.set_draw_color(*C_LINE)
     pdf.line(inner_x, y, inner_x + inner_w, y)
