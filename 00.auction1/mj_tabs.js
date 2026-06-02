@@ -729,9 +729,10 @@
         <td style="text-align:center">${viewLink}</td>
         <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok">${escapeHtml(stu)}</span>` : ''}</td>
         <td>${willUpdate}</td>
-        <td class="cc-note">${noteCell}${isBuga ? `<div style="margin-top:3px;display:flex;gap:4px">
+        <td class="cc-note">${noteCell}${isBuga ? `<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap">
           <button type="button" class="cc-row-send btn_box_sss" data-key="${escapeAttr(rkey)}" title="이 불가건을 담당자에게 즉시 텔레그램 전송" style="padding:1px 6px;font-size:11px">📤전송</button>
-          <button type="button" class="cc-row-copy btn_box_sss" data-key="${escapeAttr(rkey)}" title="카드 이미지 복사(카톡 붙여넣기)" style="padding:1px 6px;font-size:11px">📋복사</button></div>` : ''}</td>
+          <button type="button" class="cc-row-copy btn_box_sss" data-key="${escapeAttr(rkey)}" title="카드 이미지만 복사(카톡 붙여넣기)" style="padding:1px 6px;font-size:11px">📋이미지</button>
+          <button type="button" class="cc-row-text btn_box_sss" data-key="${escapeAttr(rkey)}" title="제목 텍스트 복사(카톡에 별도 붙여넣기)" style="padding:1px 6px;font-size:11px">📝제목</button></div>` : ''}</td>
       </tr>`;
     }).join('');
     const doneCnt = merged.filter(r => !r._pending).length;
@@ -789,6 +790,7 @@
     wrap.querySelector('[data-act="cc-recipients"]')?.addEventListener('click', (e) => { e.preventDefault(); openReportPicker(); });
     wrap.querySelectorAll('.cc-row-send').forEach(b => b.addEventListener('click', () => sendOneByKey(b.dataset.key)));
     wrap.querySelectorAll('.cc-row-copy').forEach(b => b.addEventListener('click', () => copyCardByKey(b.dataset.key)));
+    wrap.querySelectorAll('.cc-row-text').forEach(b => b.addEventListener('click', () => copyTitleByKey(b.dataset.key)));
     wrap.querySelector('.cc-auto-report')?.addEventListener('change', (e) => setCcAutoReport(e.target.checked));
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
   }
@@ -999,6 +1001,21 @@
       if (j && j.success) { log('cc', `✅ 즉시전송 완료 (${j.sent || 0}명)`, 'log-ok'); alert('전송 완료'); }
       else { const m = (j && (j.message || j.error)) || '?'; log('cc', `⚠ 즉시전송 실패: ${m}`, 'log-err'); alert('전송 실패: ' + m); }
     }).catch(e => { log('cc', `⚠ 즉시전송 오류: ${e}`, 'log-err'); alert('오류: ' + e); });
+  }
+  // 카드 제목 텍스트 (헤더와 동일: 카테고리 | 입찰일자 | 사건번호 | 회원명)
+  function cardTitleText(r) {
+    const c = ccCategory(r);
+    const head = (c === '불가') ? ('불가' + (r.status ? ' - ' + String(r.status) : '')) : (c || '');
+    return [head, r.bid_date, r.sakun_no, r.m_name].map(x => String(x || '').trim()).filter(Boolean).join(' | ');
+  }
+  // 제목 텍스트만 클립보드 복사 (이미지와 별개로 카톡에 붙여넣기)
+  function copyTitleByKey(key) {
+    const r = ccMergedRows().find(x => ccKeyOf(x) === key);
+    if (!r) return;
+    const txt = cardTitleText(r);
+    navigator.clipboard.writeText(txt).then(() => {
+      log('cc', `✅ 제목 복사: ${txt}`, 'log-ok');
+    }).catch(() => { prompt('아래 텍스트를 복사하세요 (Ctrl+C):', txt); });
   }
   // 카드 이미지 클립보드 복사 (카톡 붙여넣기용)
   function copyCardByKey(key) {
