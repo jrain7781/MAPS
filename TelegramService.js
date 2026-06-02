@@ -1341,3 +1341,120 @@ function sendJosaRequestTelegram(searchId) {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// 진행사항 보고서(불가/낙찰) 텔레그램 전송 — 매니저 crawler → GAS sendBugaReport
+// ════════════════════════════════════════════════════════════════════════
+
+function telegramCheckResp_(resp, method) {
+  var code = resp.getResponseCode();
+  var text = resp.getContentText();
+  var parsed = null;
+  try { parsed = JSON.parse(text); } catch (e) { }
+  if (code < 200 || code >= 300 || (parsed && parsed.ok === false)) {
+    throw new Error('텔레그램 ' + method + ' 오류 (' + code + '): ' + text);
+  }
+  return parsed || text;
+}
+
+// 사진 전송 (multipart — Blob payload)
+function telegramSendPhoto_(chatId, photoBlob, caption) {
+  var payload = { chat_id: String(chatId), photo: photoBlob };
+  if (caption) { payload.caption = caption; payload.parse_mode = 'HTML'; }
+  var resp = UrlFetchApp.fetch(telegramApiUrl_('sendPhoto'), { method: 'post', muteHttpExceptions: true, payload: payload });
+  return telegramCheckResp_(resp, 'sendPhoto');
+}
+
+// 문서 전송 (PDF 등 — Blob payload)
+function telegramSendDocument_(chatId, docBlob, caption) {
+  var payload = { chat_id: String(chatId), document: docBlob };
+  if (caption) { payload.caption = caption; payload.parse_mode = 'HTML'; }
+  var resp = UrlFetchApp.fetch(telegramApiUrl_('sendDocument'), { method: 'post', muteHttpExceptions: true, payload: payload });
+  return telegramCheckResp_(resp, 'sendDocument');
+}
+
+// 보고서 수신 관리자 추출: members gubun='관리자' & telegram_chat_id 있음 & enabled!='N'
+function getReportAdmins_() {
+  var out = [];
+  try {
+    readAllMembers().forEach(function (m) {
+      if (String(m.gubun || '').trim() !== '관리자') return;
+      var chatId = String(m.telegram_chat_id || '').trim();
+      if (!chatId) return;
+      if (String(m.telegram_enabled || '').toUpperCase() === 'N') return;
+      out.push({ name: m.member_name || '', chat_id: chatId });
+    });
+  } catch (e) {
+    Logger.log('[getReportAdmins_] ' + e);
+  }
+  return out;
+}
+
+function _reportFmtWon_(v) {
+  var s = String(v == null ? '' : v).replace(/[^0-9]/g, '');
+  if (!s) return '';
+  return Number(s).toLocaleString('ko-KR') + '원';
+}
+
+/**
+ * 불가/낙찰 진행사항 보고서 전송 (매니저 → GAS).
+ * payload: {
+ *   report_dt: 'YYYY-MM-DD HH:mm',
+ *   items: [{ sakun_no, court, bid_date, state_kind('불가'|'매각'), status, maegak_price, buyer, addr, view_url, screenshot_b64 }],
+ *   pdf_b64, pdf_name
+ * }
+ * 각 관리자에게: 요약텍스트 + 건별 사진(캡션) + PDF 문서.
+ */
+function sendBugaReport(payload) {
+  payload = payload || {};
+  var items = payload.items || [];
+  var admins = getReportAdmins_();
+  if (!admins.length) {
+    return { success: false, message: '텔레그램 연결된 관리자 회원이 없습니다. (members gubun=관리자 + telegram_chat_id 필요)' };
+  }
+  if (!items.length) {
+    return { success: false, message: '보고할 불가/낙찰 건이 없습니다.' };
+  }
+
+  var nBuga = items.filter(function (it) { return (it.state_kind || '') === '불가'; }).length;
+  var nNak = items.filter(function (it) { return (it.state_kind || '') === '매각'; }).length;
+
+  // 요약 텍스트
+  var lines = ['📋 <b>MJ경매 진행사항 보고서</b>'];
+  if (payload.report_dt) lines.push('🕒 ' + telegramEscapeHtml_(payload.report_dt));
+  lines.push('🔴 불가 ' + nBuga + '건 · 🔵 낙찰 ' + nNak + '건');
+  lines.push('');
+  items.forEach(function (it) {
+    var isBuga = (it.state_kind || '') === '불가';
+    var tail = isBuga
+      ? (it.status || '불가')
+      : (_reportFmtWon_(it.maegak_price) + (it.buyer ? (' / ' + it.buyer) : ''));
+    lines.push((isBuga ? '🔴' : '🔵') + ' <b>' + telegramEscapeHtml_(it.sakun_no || '') + '</b>  ' + telegramEscapeHtml_(tail));
+  });
+  var summary = lines.join('\n');
+
+  var sent = 0, errors = [];
+  admins.forEach(function (ad) {
+    try {
+      telegramSendMessage(ad.chat_id, summary);
+      // 건별 상세 캡처 사진
+      items.forEach(function (it) {
+        if (!it.screenshot_b64) return;
+        try {
+          var blob = Utilities.newBlob(Utilities.base64Decode(it.screenshot_b64), 'image/png', (it.sakun_no || 'shot') + '.png');
+          var cap = ((it.state_kind === '불가') ? '🔴불가 ' : '🔵낙찰 ') + (it.sakun_no || '');
+          telegramSendPhoto_(ad.chat_id, blob, cap);
+        } catch (e2) { errors.push(ad.name + ' 사진(' + (it.sakun_no || '') + '): ' + e2.message); }
+      });
+      // PDF 문서 (관리자마다 새 blob)
+      if (payload.pdf_b64) {
+        var pdf = Utilities.newBlob(Utilities.base64Decode(payload.pdf_b64), 'application/pdf', payload.pdf_name || 'MJ경매_보고서.pdf');
+        telegramSendDocument_(ad.chat_id, pdf, 'MJ경매 진행사항 보고서');
+      }
+      sent++;
+    } catch (e) {
+      errors.push(ad.name + ': ' + e.message);
+    }
+  });
+  return { success: sent > 0, sent: sent, admins: admins.length, errors: errors };
+}
+

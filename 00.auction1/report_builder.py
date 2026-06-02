@@ -123,7 +123,7 @@ def build_report_pdf(items, report_dt=None):
             pdf.multi_cell(text_w - 22, 6, str(value), new_x="LMARGIN", new_y="NEXT", max_line_height=6)
 
         row("물건종별", it.get("mulgeon_type", ""))
-        row("소재지", it.get("addr", ""))
+        row("소재지", (it.get("addr", "") or "").split("\n")[0])   # 토지/대항력 등 부가줄 제외
         row("매각기일", _fmt_date6(it.get("bid_date", "")))
         row("법원/기관", it.get("court", ""))
         if is_buga:

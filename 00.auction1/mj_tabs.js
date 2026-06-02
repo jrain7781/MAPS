@@ -275,7 +275,11 @@
           setTimeout(() => pollLogs(key, offset), 700);
         } else {
           const code = j.exit_code;
-          if (code === 0) { setStatus(key, '완료', 'done'); log(key, '✅ 정상 종료 (exit ' + code + ')', 'log-ok'); }
+          if (code === 0) {
+            setStatus(key, '완료', 'done'); log(key, '✅ 정상 종료 (exit ' + code + ')', 'log-ok');
+            // 진행사항: 자동 보고 토글 ON 이면 불가/낙찰 보고서 자동 전송
+            if (key === 'cc' && ccAutoReportOn()) sendCcReport(true);
+          }
           else if (code === null || code === undefined) { setStatus(key, '중지', 'error'); log(key, '⏹ 중지됨', 'log-err'); }
           else { setStatus(key, '오류', 'error'); log(key, '❌ exit ' + code, 'log-err'); }
           setRunning(key, false);
@@ -541,6 +545,10 @@
       <div class="cc-results-head">
         <span><b>${merged.length}건</b> (조회완료 ${doneCnt}) · <b style="color:#b91c1c">불가 ${bugaCnt}</b> · 매각 ${maegakCnt} · <span style="color:#9ca3af">실행=조회대상 · 업데이트=불가전송</span></span>
         <span class="mjcap-spacer"></span>
+        <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭(실행) 완료 시 불가/낙찰 보고서를 관리자에게 자동 전송">
+          <input type="checkbox" class="cc-auto-report" ${ccAutoReportOn() ? 'checked' : ''}>자동 보고
+        </label>
+        <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="불가/낙찰 건을 PDF+캡처 보고서로 관리자 텔레그램 전송">📋 보고서 전송</button>
         <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
       </div>
       <div class="cc-table-wrap">
@@ -577,6 +585,8 @@
       });
     });
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
+    wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', () => sendCcReport(false));
+    wrap.querySelector('.cc-auto-report')?.addEventListener('change', (e) => setCcAutoReport(e.target.checked));
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
   }
 
@@ -619,6 +629,42 @@
       if (btn) btn.disabled = false;
       log('cc', `❌ MAPS 전송 오류: ${err}`, 'log-err');
       alert('오류: ' + err);
+    });
+  }
+
+  // ===== 진행사항 보고서(불가/낙찰) 텔레그램 전송 =====
+  const CC_AUTO_REPORT_KEY = 'mj_cc_auto_report';
+  function ccAutoReportOn() { try { return localStorage.getItem(CC_AUTO_REPORT_KEY) === '1'; } catch (e) { return false; } }
+  function setCcAutoReport(on) { try { localStorage.setItem(CC_AUTO_REPORT_KEY, on ? '1' : '0'); } catch (e) {} }
+  // 보고 대상 = 불가 또는 낙찰(매각) 건
+  function ccReportItems() { return ccResults.filter(r => r && (r.is_buga || ccStateKind(r) === '매각')); }
+  function sendCcReport(auto) {
+    const items = ccReportItems();
+    if (!items.length) { if (!auto) alert('보고할 불가/낙찰 건이 없습니다.'); return; }
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey) { if (!auto) alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
+    if (!auto && !confirm(`불가/낙찰 ${items.length}건을 보고서(PDF+캡처)로 만들어 관리자 텔레그램으로 전송합니다. 진행할까요?`)) return;
+    const btn = $card('cc')?.querySelector('[data-act="cc-report"]');
+    if (btn) btn.disabled = true;
+    log('cc', `📋 보고서 전송 중… (${items.length}건${auto ? ', 자동' : ''})`, 'log-ok');
+    fetch('/api/send-report', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, items })
+    }).then(r => r.json()).then(j => {
+      if (btn) btn.disabled = false;
+      if (j && j.success) {
+        const errN = (j.errors && j.errors.length) ? ` (전송오류 ${j.errors.length})` : '';
+        log('cc', `✅ 보고서 전송 완료 — 관리자 ${j.admins || '?'}명, 전송 ${j.sent || 0}건${errN}`, 'log-ok');
+        if (!auto) alert(`보고서 전송 완료 — 관리자 ${j.admins || '?'}명`);
+      } else {
+        const msg = j && (j.message || j.error) || '응답 없음';
+        log('cc', `⚠ 보고서 전송 실패: ${msg}`, 'log-err');
+        if (!auto) alert('보고서 전송 실패: ' + msg);
+      }
+    }).catch(err => {
+      if (btn) btn.disabled = false;
+      log('cc', `⚠ 보고서 전송 오류: ${err}`, 'log-err');
+      if (!auto) alert('보고서 전송 오류: ' + err);
     });
   }
   // ===== 법원 매칭표 모달 (MAPS ↔ 옥션원) =====

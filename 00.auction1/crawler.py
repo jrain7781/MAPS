@@ -1153,6 +1153,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path in ("/api/maps-sync-presets", "/api/maps-upload-items", "/api/maps-gas", "/api/maps-changecancel"):
             self._handle_maps_proxy()
             return
+        # 진행사항 보고서(불가/낙찰) 전송: PDF 생성 + 캡처 b64 → GAS sendBugaReport
+        if self.path == "/api/send-report":
+            self._handle_send_report()
+            return
         # 계정 검증 — 설정 모달의 [검증하기] 버튼
         if self.path == "/api/verify-account":
             try:
@@ -1208,6 +1212,69 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
             self.wfile.write(json.dumps(err, ensure_ascii=False).encode("utf-8"))
+
+    def _handle_send_report(self):
+        """진행사항 결과(불가/낙찰)로 PDF 생성 + 상세캡처 base64 → GAS sendBugaReport 중계.
+        매니저 JS payload: { api_key, items:[result dict...], (report_dt?) }."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+            payload = json.loads(raw or "{}")
+            items = payload.get("items") or []
+            api_key = payload.get("api_key") or ""
+            rep_items = [it for it in items if (it.get("state_kind") or "") in ("불가", "매각")]
+            if not rep_items:
+                self._send_json(200, {"success": False, "message": "보고할 불가/낙찰 건이 없습니다."})
+                return
+
+            import base64 as _b64
+            import report_builder
+            from datetime import datetime as _dt
+            report_dt = str(payload.get("report_dt") or _dt.now().strftime("%Y-%m-%d %H:%M"))
+
+            # 소재지 첫 줄만 (부가줄 제거) — PDF/텔레그램 공통
+            for it in rep_items:
+                if it.get("addr"):
+                    it["addr"] = str(it["addr"]).split("\n")[0]
+
+            pdf_bytes = report_builder.build_report_pdf(rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"))
+            pdf_b64 = _b64.b64encode(pdf_bytes).decode("ascii")
+
+            out_items = []
+            for it in rep_items:
+                sp = it.get("screenshot_path") or ""
+                shot_b64 = ""
+                if sp and os.path.exists(sp):
+                    try:
+                        with open(sp, "rb") as f:
+                            shot_b64 = _b64.b64encode(f.read()).decode("ascii")
+                    except Exception:
+                        pass
+                out_items.append({
+                    "sakun_no": it.get("sakun_no", ""), "court": it.get("court", ""),
+                    "bid_date": it.get("bid_date", ""), "state_kind": it.get("state_kind", ""),
+                    "status": it.get("status", ""), "maegak_price": it.get("maegak_price", ""),
+                    "buyer": it.get("buyer", ""), "addr": it.get("addr", ""),
+                    "view_url": it.get("view_url", ""), "screenshot_b64": shot_b64,
+                })
+
+            gas_payload = {
+                "api_action": "sendBugaReport", "api_key": api_key,
+                "report_dt": report_dt, "items": out_items,
+                "pdf_b64": pdf_b64, "pdf_name": f"MJ경매_보고서_{report_dt[:10]}.pdf",
+            }
+            result = _gas_post(gas_payload, timeout=300.0)
+            self._send_json(200, result)
+        except Exception as e:
+            traceback.print_exc()
+            self._send_json(500, {"success": False, "error": str(e)})
+
+    def _send_json(self, code, obj):
+        body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(body)
 
     def _handle_maps_proxy(self):
         """매니저 → 이 서버 → GAS 로 페이로드를 forward.

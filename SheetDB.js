@@ -7959,6 +7959,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'get7DaysBugaList')   return get7DaysBugaList();
   if (action === 'getTodayMaegakList') return getTodayMaegakList();
   if (action === 'getProgressList')    return getProgressList(payload.from, payload.to, payload.statuses);
+  if (action === 'sendBugaReport')     return sendBugaReport(payload);
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
