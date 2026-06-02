@@ -675,7 +675,7 @@
       // 실행 전(pending)엔 ✓/✗ 대신 무표시
       const keyCell = (v, hit) => pending ? escapeHtml(v || '') : ccKeyCell(v, hit);
       // 결과 라벨: 낙찰(파랑)/미입찰(빨강)/패찰=매각가>입찰가(회색)/확인불가/불가. 그 외=진행중·조회없음·매각
-      const _catStyle = { '낙찰': 'background:#2563eb;color:#fff', '미입찰': 'background:#dc2626;color:#fff', '일반': 'background:#6b7280;color:#fff', '확인불가': 'background:#9ca3af;color:#fff', '불가': 'background:#b91c1c;color:#fff' };
+      const _catStyle = { '낙찰': 'background:#2563eb;color:#fff', '미입찰': 'background:#dc2626;color:#fff', '일반': 'background:#6b7280;color:#fff', '확인불가': 'background:#9ca3af;color:#fff', '불가': 'background:#111827;color:#fff' };
       const _catLabel = { '낙찰': '낙찰', '미입찰': '미입찰', '일반': '패찰', '확인불가': '확인불가', '불가': '불가' };
       const resBadge = (!pending && _catStyle[cat])
         ? `<span style="${_catStyle[cat]};padding:1px 8px;border-radius:4px;font-weight:700;font-size:12px">${_catLabel[cat]}</span>`
