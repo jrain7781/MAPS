@@ -26,9 +26,45 @@
       <button class="mjTab" data-tab="josa" type="button">🔍 물건조사</button>
       <button class="mjTab" data-tab="kakao" type="button">💬 카카오</button>
     </div>
-    <div class="topShellMeta">로컬 전용</div>
+    <div class="topShellMeta">
+      <button type="button" id="btnRestartServer" onclick="mjRestartServer()" title="코드 갱신 후 매니저 서버 재시작 (클릭 1번)"
+        style="margin-right:10px;padding:3px 9px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">🔄 서버 재시작</button>
+      로컬 전용
+    </div>
   </div>
 </div>
+<script>
+// 매니저 서버 자가 재시작 (코드 갱신 반영) — /api/restart-server 호출 후 복귀 폴링→새로고침
+function mjRestartServer() {
+  if (!confirm('매니저 서버를 재시작합니다.\n(진행 중 작업이 있으면 중단됩니다. 잠시 후 자동 새로고침)')) return;
+  var b = document.getElementById('btnRestartServer');
+  function reset() { if (b) { b.disabled = false; b.textContent = '🔄 서버 재시작'; } }
+  if (b) { b.disabled = true; b.textContent = '♻ 재시작 중…'; }
+  fetch('/api/restart-server', { method: 'POST' })
+    .then(function (r) {
+      if (!r.ok) {   // 구버전 서버 — 이 엔드포인트가 없음(404)
+        reset();
+        alert('지금 실행 중인 서버는 옛 버전이라 이 버튼이 아직 없습니다.\n\n이번 한 번만 검은 콘솔창을 닫고 «크롤링매니저 실행.bat»을 다시 실행해 주세요.\n그 다음부터는 이 버튼으로 재시작됩니다.');
+        return;
+      }
+      mjWaitServerBack();   // 신버전 — 응답 후 서버가 execv로 재시작됨
+    })
+    .catch(function () { mjWaitServerBack(); });   // execv 로 응답이 끊겨도 진행
+}
+// 서버가 내려갔다(execv) 다시 올라오면 새로고침. (다운 감지 후 업 감지 = 2단)
+function mjWaitServerBack() {
+  var sawDown = false, tries = 0;
+  var timer = setInterval(function () {
+    tries++;
+    if (tries > 60) { clearInterval(timer); location.reload(true); return; }   // 안전장치 ~36s
+    fetch('/?_=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) {
+        if (r && r.ok && sawDown) { clearInterval(timer); location.reload(true); }
+      })
+      .catch(function () { sawDown = true; });   // 재시작 중(연결 끊김)
+  }, 600);
+}
+</script>
 
 <!-- ============== 물건캡쳐 탭 ============== -->
 <div id="tab-capture" class="mj-tab-panel">

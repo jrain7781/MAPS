@@ -1161,6 +1161,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/preview-report":
             self._handle_preview_report()
             return
+        # 서버 자가 재시작 (코드 갱신 반영) — 응답 후 os.execv
+        if self.path == "/api/restart-server":
+            self._handle_restart_server()
+            return
         # 계정 검증 — 설정 모달의 [검증하기] 버튼
         if self.path == "/api/verify-account":
             try:
@@ -1298,6 +1302,31 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception as e:
             traceback.print_exc()
             self._send_json(500, {"success": False, "error": str(e)})
+
+    def _handle_restart_server(self):
+        """서버 자기 자신 재실행(os.execv) — 코드 갱신 반영. 응답 전송 후 별도 스레드에서 재시작."""
+        self._send_json(200, {"success": True, "message": "서버 재시작 중…"})
+        try:
+            self.wfile.flush()
+        except Exception:
+            pass
+
+        def _do_restart():
+            time.sleep(1.0)   # 응답 전송 + 클라이언트 수신 대기
+            global _driver
+            try:
+                if _driver:
+                    _driver.quit()   # 셀레니움 드라이버 정리(orphan 방지)
+            except Exception:
+                pass
+            try:
+                print("[crawler] ♻ 서버 재시작 (os.execv)")
+                sys.stdout.flush()
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+            except Exception as e:
+                print(f"[crawler] 재시작 실패: {e} — 콘솔에서 수동 재실행 필요")
+
+        threading.Thread(target=_do_restart, daemon=True).start()
 
     def _send_json(self, code, obj):
         body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
