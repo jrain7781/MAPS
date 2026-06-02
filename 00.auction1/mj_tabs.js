@@ -729,10 +729,10 @@
         <td style="text-align:center">${viewLink}</td>
         <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok">${escapeHtml(stu)}</span>` : ''}</td>
         <td>${willUpdate}</td>
-        <td class="cc-note">${noteCell}${isBuga ? `<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap">
-          <button type="button" class="cc-row-send btn_box_sss" data-key="${escapeAttr(rkey)}" title="이 불가건을 담당자에게 즉시 텔레그램 전송" style="padding:1px 6px;font-size:11px">📤전송</button>
-          <button type="button" class="cc-row-copy btn_box_sss" data-key="${escapeAttr(rkey)}" title="카드 이미지만 복사(카톡 붙여넣기)" style="padding:1px 6px;font-size:11px">📋이미지</button>
-          <button type="button" class="cc-row-text btn_box_sss" data-key="${escapeAttr(rkey)}" title="제목 텍스트 복사(카톡에 별도 붙여넣기)" style="padding:1px 6px;font-size:11px">📝제목</button></div>` : ''}</td>
+        <td class="cc-note">${noteCell}${isBuga ? `<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:nowrap;white-space:nowrap">
+          <button type="button" class="cc-row-send btn_box_sss" data-key="${escapeAttr(rkey)}" title="이 불가건을 담당자에게 즉시 텔레그램 전송" style="padding:1px 6px;font-size:11px;white-space:nowrap">📤전송</button>
+          <button type="button" class="cc-row-copy btn_box_sss" data-key="${escapeAttr(rkey)}" title="카드 이미지만 복사(카톡 붙여넣기)" style="padding:1px 6px;font-size:11px;white-space:nowrap">📋이미지</button>
+          <button type="button" class="cc-row-text btn_box_sss" data-key="${escapeAttr(rkey)}" title="제목 텍스트 복사(카톡에 별도 붙여넣기)" style="padding:1px 6px;font-size:11px;white-space:nowrap">📝제목</button></div>` : ''}</td>
       </tr>`;
     }).join('');
     const doneCnt = merged.filter(r => !r._pending).length;
