@@ -1289,14 +1289,16 @@ class Handler(SimpleHTTPRequestHandler):
                     "category": cat,
                     "status": it.get("status", ""), "maegak_price": it.get("maegak_price", ""),
                     "buyer": it.get("buyer", ""), "addr": it.get("addr", ""),
-                    "m_name": it.get("m_name", ""), "detail": it.get("detail", ""),
+                    "m_name": it.get("m_name", ""), "mid_member_id": it.get("mid_member_id", ""),
+                    "detail": it.get("detail", ""),
                     "view_url": it.get("view_url", ""), "screenshot_b64": shot_b64,
                 })
 
             gas_payload = {
                 "api_action": "sendBugaReport", "api_key": api_key,
                 "report_dt": report_dt, "items": out_items, "total": total,
-                "target": payload.get("target") or None,   # 보고 대상(구분/회원명) — 없으면 GAS가 관리자 기본
+                "recipients": payload.get("recipients") or None,  # {include_admins, teacher_ids} — 관리자=전체/강사=자기건
+                "target": payload.get("target") or None,          # 레거시 폴백(구분/회원명)
                 "pdf_b64": pdf_b64, "pdf_name": f"MJ_일일보고_{report_dt[:10]}.pdf",
             }
             result = _gas_post(gas_payload, timeout=300.0)

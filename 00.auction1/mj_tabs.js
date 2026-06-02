@@ -737,7 +737,8 @@
       <div class="cc-results-head">
         <span>입찰(전체) <b>${merged.length}</b> (조회완료 ${doneCnt}) · <b style="color:#2563eb">낙찰 ${winCnt}</b> · <b style="color:#dc2626">미입찰 ${missCnt}</b> · <b style="color:#111827">불가 ${bugaCnt}</b>${unkCnt ? ` · <span style="color:#6b7280">확인불가 ${unkCnt}</span>` : ''}</span>
         <span class="mjcap-spacer"></span>
-        <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭(실행) 완료 시 불가/낙찰 보고서를 관리자에게 자동 전송">
+        <span style="font-size:12px;color:#374151;margin-right:8px">📨 수신: <b>${escapeHtml(recipientsLabel())}</b> <a href="#" data-act="cc-recipients" style="color:#2563eb;text-decoration:none">설정</a></span>
+        <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭(실행) 완료 시 낙찰/미입찰/불가 일일보고를 설정 대상에게 자동 전송">
           <input type="checkbox" class="cc-auto-report" ${ccAutoReportOn() ? 'checked' : ''}>자동 보고
         </label>
         <button type="button" class="btn_box_sss bold" data-act="cc-preview" title="전송 전 보고서 PDF를 새 탭에서 미리보기">👁 미리보기</button>
@@ -781,6 +782,7 @@
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
     wrap.querySelector('[data-act="cc-preview"]')?.addEventListener('click', previewCcReport);
     wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', openReportPicker);
+    wrap.querySelector('[data-act="cc-recipients"]')?.addEventListener('click', (e) => { e.preventDefault(); openReportPicker(); });
     wrap.querySelector('.cc-auto-report')?.addEventListener('change', (e) => setCcAutoReport(e.target.checked));
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
   }
@@ -842,6 +844,29 @@
     if (t.by === 'members') return `회원 ${(t.labels && t.labels.length) ? t.labels.join('·') : ((t.member_ids || []).length + '명')}`;
     return `구분 ${t.value || '관리자'}`;
   }
+  // ===== 수신 대상(관리자=전체 / 강사=자기 담당건) =====
+  const CC_RECIPIENTS_KEY = 'mj_cc_recipients';
+  function getRecipients() {
+    try {
+      const r = JSON.parse(localStorage.getItem(CC_RECIPIENTS_KEY) || 'null');
+      if (r && typeof r === 'object') return { include_admins: r.include_admins !== false, teacher_ids: r.teacher_ids || [], teacher_labels: r.teacher_labels || [] };
+    } catch (e) {}
+    return { include_admins: true, teacher_ids: [], teacher_labels: [] };
+  }
+  function setRecipients(r) { try { localStorage.setItem(CC_RECIPIENTS_KEY, JSON.stringify(r)); } catch (e) {} }
+  function recipientsLabel(r) {
+    r = r || getRecipients();
+    const parts = [];
+    if (r.include_admins) parts.push('관리자(전체)');
+    if (r.teacher_ids && r.teacher_ids.length) parts.push('강사 ' + ((r.teacher_labels && r.teacher_labels.length) ? r.teacher_labels.join('·') : r.teacher_ids.length + '명'));
+    return parts.length ? parts.join(' + ') : '대상 없음';
+  }
+  // 텔레그램 뱃지: 연결+사용=📨, 연결·사용중지=🔔, 미연결=🔕
+  function tgBadge(m) {
+    if (m.ready) return '<span title="텔레그램 연결+사용" style="color:#16a34a">📨</span>';
+    if (m.has_token) return '<span title="연결됨·사용중지" style="color:#d97706">🔔</span>';
+    return '<span title="미연결" style="color:#9ca3af">🔕</span>';
+  }
   // 우리 회원 낙찰 = 매각 & 매각가==입찰가
   function ccIsOurWin(r) {
     if (!r || ccStateKind(r) !== '매각') return false;
@@ -879,16 +904,17 @@
     return best + ' ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
   }
 
-  // 실제 전송 (target 지정)
-  function doSendReport(target, auto) {
+  // 실제 전송 (recipients = {include_admins, teacher_ids})
+  function doSendReport(recipients, auto) {
     const items = ccReportItems();
     if (!items.length) { if (!auto) alert('보고할 낙찰/미입찰/불가 건이 없습니다.'); return; }
     const apiKey = getMapsAdminKeyMj();
     if (!apiKey) { if (!auto) alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
-    log('cc', `📋 보고서 전송 중… (${items.length}건 · 대상=${reportTargetLabel(target)}${auto ? ' · 자동' : ''})`, 'log-ok');
+    recipients = recipients || getRecipients();
+    log('cc', `📋 보고서 전송 중… (${items.length}건 · 대상=${recipientsLabel(recipients)}${auto ? ' · 자동' : ''})`, 'log-ok');
     fetch('/api/send-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, items, target, total: ccReportTotal(), report_dt: ccReportDate() })
+      body: JSON.stringify({ api_key: apiKey, items, recipients, total: ccReportTotal(), report_dt: ccReportDate() })
     }).then(r => r.json()).then(j => {
       if (j && j.success) {
         const errN = (j.errors && j.errors.length) ? ` (전송오류 ${j.errors.length})` : '';
@@ -904,7 +930,7 @@
       if (!auto) alert('보고서 전송 오류: ' + err);
     });
   }
-  function sendCcReportAuto() { doSendReport(getReportTarget(), true); }   // 자동 보고(저장된 대상)
+  function sendCcReportAuto() { doSendReport(getRecipients(), true); }   // 자동 보고(저장된 수신대상)
 
   // base64 → Blob
   function b64ToBlob(b64, type) {
@@ -955,9 +981,9 @@
     }).catch(e => alert('회원 조회 오류: ' + e));
   }
 
-  // 대상 선택 모달
+  // 수신 대상 설정 모달 (관리자=전체 / 강사=자기 담당건 체크)
   function openReportPicker() {
-    if (!ccReportItems().length) { alert('보고할 불가/낙찰 건이 없습니다.'); return; }
+    if (!ccReportItems().length) { alert('보고할 낙찰/미입찰/불가 건이 없습니다.'); return; }
     let modal = document.getElementById('ccReportModal');
     if (!modal) {
       modal = document.createElement('div');
@@ -965,75 +991,61 @@
       modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:99999';
       modal.innerHTML = `<div style="background:#fff;border-radius:10px;width:90%;max-width:560px;max-height:85vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e5e7eb">
-          <b>📋 보고 대상 선택</b><button type="button" data-act="rp-close" style="border:0;background:none;font-size:18px;cursor:pointer">✕</button></div>
+          <b>📋 보고 수신 대상 설정</b><button type="button" data-act="rp-close" style="border:0;background:none;font-size:18px;cursor:pointer">✕</button></div>
         <div style="padding:14px 16px">
-          <div style="margin-bottom:10px">
-            <label style="margin-right:14px;cursor:pointer"><input type="radio" name="rpBy" value="gubun" checked> 회원관리 구분</label>
-            <label style="cursor:pointer"><input type="radio" name="rpBy" value="members"> 회원명 직접선택</label>
-          </div>
-          <div data-role="rp-gubun" style="margin-bottom:8px">구분 <select data-role="rp-gubun-sel" style="min-width:150px;padding:3px"></select></div>
-          <div data-role="rp-list" style="max-height:320px;overflow:auto;border:1px solid #e5e7eb;border-radius:6px"></div>
-          <div style="margin-top:7px;font-size:12px;color:#6b7280">✅연결=텔레그램 토큰 발급됨 · ▶사용=발송 ON. <b>연결+사용</b>이어야 전송됩니다(미연결은 비활성).</div>
+          <label style="display:flex;gap:8px;align-items:center;cursor:pointer;font-size:14px;margin-bottom:6px">
+            <input type="checkbox" data-role="rp-admins"> <b>관리자 — 전체 일일보고 받기</b></label>
+          <div data-role="rp-admin-list" style="margin:0 0 12px 24px;font-size:12px;color:#6b7280"></div>
+          <div style="border-top:1px solid #e5e7eb;padding-top:10px"><b>강사 — 자기 담당건만 받기</b> <span style="font-size:12px;color:#9ca3af">(체크한 강사에게만 본인 m_name_id 건 전송)</span></div>
+          <div data-role="rp-teacher-list" style="max-height:300px;overflow:auto;border:1px solid #e5e7eb;border-radius:6px;margin-top:6px"></div>
+          <div style="margin-top:7px;font-size:12px;color:#6b7280">📨연결+사용 · 🔔연결·사용중지 · 🔕미연결. <b>📨</b> 만 전송됩니다.</div>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #e5e7eb">
           <button type="button" class="btn_box_sss" data-act="rp-close">취소</button>
-          <button type="button" class="btn_box_sss btn_blue bold" data-act="rp-send">📤 이 대상으로 전송</button>
+          <button type="button" class="btn_box_sss btn_white bold" data-act="rp-save">💾 대상 저장</button>
+          <button type="button" class="btn_box_sss btn_blue bold" data-act="rp-send">📤 저장 후 전송</button>
         </div></div>`;
       document.body.appendChild(modal);
       modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
       modal.querySelectorAll('[data-act="rp-close"]').forEach(b => b.addEventListener('click', () => modal.style.display = 'none'));
-      modal.querySelectorAll('input[name="rpBy"]').forEach(rb => rb.addEventListener('change', () => renderReportPicker(false)));
-      modal.querySelector('[data-role="rp-gubun-sel"]').addEventListener('change', () => renderReportPicker(false));
-      modal.querySelector('[data-act="rp-send"]').addEventListener('click', submitReportPicker);
+      modal.querySelector('[data-act="rp-save"]').addEventListener('click', () => { saveReportPicker(); modal.style.display = 'none'; });
+      modal.querySelector('[data-act="rp-send"]').addEventListener('click', () => { const r = saveReportPicker(); modal.style.display = 'none'; doSendReport(r, false); });
     }
     modal.style.display = 'flex';
-    // 저장된 대상으로 라디오 초기화
-    const saved = getReportTarget();
-    modal.querySelector(`input[name="rpBy"][value="${saved.by === 'members' ? 'members' : 'gubun'}"]`).checked = true;
-    fetchReportCandidates(() => renderReportPicker(true));
+    fetchReportCandidates(() => renderReportPicker());
   }
 
-  function renderReportPicker(initGubun) {
+  function renderReportPicker() {
     const modal = document.getElementById('ccReportModal'); if (!modal || !_ccCandCache) return;
-    const by = modal.querySelector('input[name="rpBy"]:checked').value;
-    const gsel = modal.querySelector('[data-role="rp-gubun-sel"]');
-    const listEl = modal.querySelector('[data-role="rp-list"]');
-    modal.querySelector('[data-role="rp-gubun"]').style.display = (by === 'gubun') ? '' : 'none';
-    if (initGubun) {
-      const saved = getReportTarget();
-      gsel.innerHTML = (_ccCandCache.gubuns || []).map(g => `<option value="${escapeAttr(g)}">${escapeHtml(g)}</option>`).join('');
-      if (saved.by === 'gubun' && saved.value) gsel.value = saved.value;
-      else if ((_ccCandCache.gubuns || []).indexOf('관리자') >= 0) gsel.value = '관리자';
-    }
-    let members = _ccCandCache.members || [];
-    if (by === 'gubun') { const g = gsel.value; members = members.filter(m => m.gubun === g); }
-    const savedIds = (getReportTarget().member_ids || []).map(String);
-    listEl.innerHTML = members.map(m => {
-      const conn = m.has_token ? '<span style="color:#16a34a">✅연결</span>' : '<span style="color:#9ca3af">❌미연결</span>';
-      const use = m.enabled ? '<span style="color:#2563eb">▶사용</span>' : '<span style="color:#9ca3af">⏸중지</span>';
-      const chk = (by === 'members') ? (savedIds.indexOf(String(m.member_id)) >= 0 ? 'checked' : '') : 'checked';
-      return `<label style="display:flex;gap:8px;align-items:center;padding:6px 9px;border-bottom:1px solid #f1f5f9;${m.ready ? '' : 'opacity:.5'}">
-        <input type="checkbox" class="rp-cb" data-id="${escapeAttr(m.member_id)}" data-name="${escapeAttr(m.member_name)}" ${chk} ${m.ready ? '' : 'disabled'}>
-        <span style="flex:1">${escapeHtml(m.member_name)} <span style="color:#9ca3af;font-size:11px">(${escapeHtml(m.gubun || '-')})</span></span>
-        ${conn} <span style="width:6px"></span> ${use}</label>`;
-    }).join('') || '<div style="padding:12px;color:#9ca3af">해당 회원이 없습니다.</div>';
+    const saved = getRecipients();
+    const isG = (m, g) => String(m.gubun || '').split(',').map(s => s.trim()).indexOf(g) >= 0;
+    const members = _ccCandCache.members || [];
+    const admins = members.filter(m => isG(m, '관리자'));
+    const teachers = members.filter(m => isG(m, '강사'));
+    modal.querySelector('[data-role="rp-admins"]').checked = saved.include_admins;
+    modal.querySelector('[data-role="rp-admin-list"]').innerHTML = admins.length
+      ? admins.map(m => `${tgBadge(m)} ${escapeHtml(m.member_name)}`).join(' &nbsp; ')
+      : '<span style="color:#dc2626">관리자 회원 없음</span>';
+    const savedT = (saved.teacher_ids || []).map(String);
+    modal.querySelector('[data-role="rp-teacher-list"]').innerHTML = teachers.length
+      ? teachers.map(m => {
+        const chk = savedT.indexOf(String(m.member_id)) >= 0 ? 'checked' : '';
+        return `<label style="display:flex;gap:8px;align-items:center;padding:6px 9px;border-bottom:1px solid #f1f5f9;${m.ready ? '' : 'opacity:.5'}">
+          <input type="checkbox" class="rp-tcb" data-id="${escapeAttr(m.member_id)}" data-name="${escapeAttr(m.member_name)}" ${chk} ${m.ready ? '' : 'disabled'}>
+          ${tgBadge(m)} <span style="flex:1">${escapeHtml(m.member_name)}</span></label>`;
+      }).join('')
+      : '<div style="padding:12px;color:#9ca3af">강사 회원이 없습니다.</div>';
   }
 
-  function submitReportPicker() {
-    const modal = document.getElementById('ccReportModal'); if (!modal) return;
-    const by = modal.querySelector('input[name="rpBy"]:checked').value;
-    let target;
-    if (by === 'gubun') {
-      target = { by: 'gubun', value: modal.querySelector('[data-role="rp-gubun-sel"]').value };
-    } else {
-      const ids = [], labels = [];
-      modal.querySelectorAll('.rp-cb:checked').forEach(cb => { ids.push(cb.dataset.id); labels.push(cb.dataset.name); });
-      if (!ids.length) { alert('회원을 1명 이상 선택하세요.'); return; }
-      target = { by: 'members', member_ids: ids, labels: labels };
-    }
-    setReportTarget(target);
-    modal.style.display = 'none';
-    doSendReport(target, false);
+  function saveReportPicker() {
+    const modal = document.getElementById('ccReportModal');
+    const include_admins = modal.querySelector('[data-role="rp-admins"]').checked;
+    const ids = [], labels = [];
+    modal.querySelectorAll('.rp-tcb:checked').forEach(cb => { ids.push(cb.dataset.id); labels.push(cb.dataset.name); });
+    const r = { include_admins, teacher_ids: ids, teacher_labels: labels };
+    setRecipients(r);
+    renderCcResults();   // 상단 상시표시 갱신
+    return r;
   }
   // ===== 법원 매칭표 모달 (MAPS ↔ 옥션원) =====
   function renderCourtMap(filter) {

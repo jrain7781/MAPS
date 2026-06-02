@@ -1448,57 +1448,87 @@ function _reportFmtWon_(v) {
  * }
  * 각 관리자에게: 요약텍스트 + 건별 사진(캡션) + PDF 문서.
  */
+function _catEmoji_(c) { return c === '낙찰' ? '🔵' : (c === '미입찰' ? '🔴' : '⚫'); }
+function _catOfItem_(it) {
+  var c = String(it.category || '').trim();
+  if (c) return c;
+  return (String(it.state_kind || '') === '불가') ? '불가' : '낙찰';
+}
+// 일일보고 요약 텍스트 (수신자별 필터된 items 기준). isAdmin 이면 입찰(전체) 표시
+function _dailySummaryText_(items, reportDt, total, isAdmin) {
+  var nNak = 0, nMiss = 0, nBuga = 0;
+  items.forEach(function (it) { var c = _catOfItem_(it); if (c === '낙찰') nNak++; else if (c === '미입찰') nMiss++; else if (c === '불가') nBuga++; });
+  var dateStr = String(reportDt || '').split(' ')[0];
+  var title = dateStr ? (dateStr.replace(/-/g, '.') + ' 일일보고') : 'MJ경매 일일보고';
+  var lines = ['📋 <b>' + telegramEscapeHtml_(title) + '</b>'];
+  var head = '🔵낙찰 ' + nNak + ' · 🔴미입찰 ' + nMiss + ' · ⚫불가 ' + nBuga;
+  if (isAdmin && total != null && total !== '') head = '입찰 ' + total + ' · ' + head;
+  lines.push(head); lines.push('');
+  items.forEach(function (it) {
+    var c = _catOfItem_(it);
+    var who = it.m_name ? (' (' + it.m_name + ')') : '';
+    var bid = it.bid_date ? (telegramEscapeHtml_(it.bid_date) + '  ') : '';
+    lines.push(_catEmoji_(c) + ' ' + bid + '<b>' + telegramEscapeHtml_(it.sakun_no || '') + '</b>' + telegramEscapeHtml_(who));
+  });
+  return lines.join('\n');
+}
+// 일일보고 수신자 해석. recipients={include_admins, teacher_ids[]} → 관리자=전체(scope 'all'), 강사=자기건(scope member_id)
+// recipients 없으면 레거시 target(resolveReportRecipients_) 전체 스코프.
+function resolveDailyRecipients_(recipients, legacyTarget) {
+  var out = [];
+  try {
+    var members = readAllMembers();
+    var hasGubun = function (m, g) { return String(m.gubun || '').split(',').map(function (s) { return s.trim(); }).indexOf(g) >= 0; };
+    if (recipients && typeof recipients === 'object') {
+      var includeAdmins = (recipients.include_admins !== false);
+      var teacherIds = (recipients.teacher_ids || []).map(String);
+      members.forEach(function (m) {
+        if (!_memberTelegramReady_(m)) return;
+        var id = String(m.member_id || '');
+        if (includeAdmins && hasGubun(m, '관리자')) out.push({ name: m.member_name || '', chat_id: String(m.telegram_chat_id || '').trim(), scope: 'all' });
+        else if (teacherIds.indexOf(id) >= 0) out.push({ name: m.member_name || '', chat_id: String(m.telegram_chat_id || '').trim(), scope: id });
+      });
+    } else {
+      out = resolveReportRecipients_(legacyTarget).map(function (r) { return { name: r.name, chat_id: r.chat_id, scope: 'all' }; });
+    }
+  } catch (e) { Logger.log('[resolveDailyRecipients_] ' + e); }
+  return out;
+}
+
 function sendBugaReport(payload) {
   payload = payload || {};
   var items = payload.items || [];
-  var admins = resolveReportRecipients_(payload.target);  // payload.target 없으면 gubun=관리자 기본
-  if (!admins.length) {
-    return { success: false, message: '선택한 대상 중 텔레그램 연결된 회원이 없습니다. (telegram_chat_id 발급 + 사용 필요)' };
+  if (!items.length) return { success: false, message: '보고할 낙찰/미입찰/불가 건이 없습니다.' };
+
+  var recips = resolveDailyRecipients_(payload.recipients, payload.target);
+  if (!recips.length) {
+    return { success: false, message: '전송 대상(텔레그램 연결+사용)이 없습니다.' };
   }
-  if (!items.length) {
-    return { success: false, message: '보고할 불가/낙찰 건이 없습니다.' };
-  }
 
-  var nBuga = items.filter(function (it) { return (it.state_kind || '') === '불가'; }).length;
-  var nNak = items.filter(function (it) { return (it.state_kind || '') === '매각'; }).length;
-
-  // 요약 텍스트
-  var lines = ['📋 <b>MJ경매 진행사항 보고서</b>'];
-  if (payload.report_dt) lines.push('🕒 ' + telegramEscapeHtml_(payload.report_dt));
-  lines.push('🔴 불가 ' + nBuga + '건 · 🔵 낙찰 ' + nNak + '건');
-  lines.push('');
-  items.forEach(function (it) {
-    var isBuga = (it.state_kind || '') === '불가';
-    var who = it.m_name ? (' (' + it.m_name + ')') : '';
-    var bid = it.bid_date ? (telegramEscapeHtml_(it.bid_date) + '  ') : '';
-    // 상세/사유 제거 — 입찰일자 + 사건번호 + 회원명, 🔴/🔵 로 불가/낙찰 구분
-    lines.push((isBuga ? '🔴' : '🔵') + ' ' + bid + '<b>' + telegramEscapeHtml_(it.sakun_no || '') + '</b>' + telegramEscapeHtml_(who));
-  });
-  var summary = lines.join('\n');
-
-  var sent = 0, errors = [];
-  admins.forEach(function (ad) {
+  var sent = 0, errors = [], skipped = [];
+  recips.forEach(function (rc) {
+    // 관리자=전체, 강사=자기 담당(mid_member_id == member_id) 건만
+    var its = (rc.scope === 'all') ? items : items.filter(function (it) { return String(it.mid_member_id || '') === String(rc.scope); });
+    if (!its.length) { skipped.push(rc.name); return; }
     try {
-      telegramSendMessage(ad.chat_id, summary);
-      // 건별 상세 캡처 — 사진(inline)으로 바로 보이게. 크롭+2x라 사진으로도 충분히 보임.
-      items.forEach(function (it) {
+      telegramSendMessage(rc.chat_id, _dailySummaryText_(its, payload.report_dt, payload.total, rc.scope === 'all'));
+      its.forEach(function (it) {
         if (!it.screenshot_b64) return;
         try {
           var blob = Utilities.newBlob(Utilities.base64Decode(it.screenshot_b64), 'image/png', (it.sakun_no || 'shot') + '.png');
-          var cap = ((it.state_kind === '불가') ? '🔴불가 ' : '🔵낙찰 ') + (it.sakun_no || '') + (it.m_name ? (' (' + it.m_name + ')') : '');
-          telegramSendPhoto_(ad.chat_id, blob, cap);   // inline 사진 (document 검은화면 방지)
-        } catch (e2) { errors.push(ad.name + ' 캡처(' + (it.sakun_no || '') + '): ' + e2.message); }
+          var c = _catOfItem_(it);
+          telegramSendPhoto_(rc.chat_id, blob, _catEmoji_(c) + c + ' ' + (it.sakun_no || '') + (it.m_name ? (' (' + it.m_name + ')') : ''));
+        } catch (e2) { errors.push(rc.name + ' 캡처(' + (it.sakun_no || '') + '): ' + e2.message); }
       });
-      // PDF 문서 (관리자마다 새 blob)
-      if (payload.pdf_b64) {
-        var pdf = Utilities.newBlob(Utilities.base64Decode(payload.pdf_b64), 'application/pdf', payload.pdf_name || 'MJ경매_보고서.pdf');
-        telegramSendDocument_(ad.chat_id, pdf, 'MJ경매 진행사항 보고서');
+      if (rc.scope === 'all' && payload.pdf_b64) {   // 전체 PDF는 관리자에게만
+        var pdf = Utilities.newBlob(Utilities.base64Decode(payload.pdf_b64), 'application/pdf', payload.pdf_name || 'MJ_일일보고.pdf');
+        telegramSendDocument_(rc.chat_id, pdf, '일일보고 PDF');
       }
       sent++;
     } catch (e) {
-      errors.push(ad.name + ': ' + e.message);
+      errors.push(rc.name + ': ' + e.message);
     }
   });
-  return { success: sent > 0, sent: sent, admins: admins.length, errors: errors };
+  return { success: sent > 0, sent: sent, admins: recips.length, recipients: recips.length, skipped: skipped, errors: errors };
 }
 
