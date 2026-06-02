@@ -1,38 +1,44 @@
 # -*- coding: utf-8 -*-
 """
-MJ경매 진행사항 보고서 PDF 생성기.
+MJ경매 진행사항 보고서 PDF 생성기 (카드뉴스 스타일).
 - 입력: 불가/낙찰 건 리스트(dict) + 건별 상세 스크린샷 경로.
 - 출력: PDF bytes (한글 malgun.ttf 임베드).
-- crawler.py /api/send-report 에서 호출 → base64 로 GAS sendBugaReport 전송.
 
 item dict 키:
   sakun_no, court, bid_date(YYMMDD), state_kind('불가'|'매각'),
-  status(불가사유), maegak_price, buyer, addr, mulgeon_type, view_url, screenshot_path
+  status(불가사유), detail(불가 상세문장), maegak_price, buyer, m_name,
+  addr, mulgeon_type, view_url, screenshot_path
 """
 import os
 from datetime import datetime
 
 try:
     from fpdf import FPDF
-except Exception as _e:
+except Exception:
     FPDF = None
+try:
+    from PIL import Image
+except Exception:
+    Image = None
 
 FONT_PATH = r"C:\Windows\Fonts\malgun.ttf"
 FONT_BOLD = r"C:\Windows\Fonts\malgunbd.ttf"
 
-# 색상 (MAPS 상태색과 통일)
-C_BUGA = (17, 24, 39)      # 불가 = 검정
-C_NAKCHAL = (37, 99, 235)  # 낙찰 = 파랑
-C_GRAY = (107, 114, 128)
-C_LINE = (209, 213, 219)
-C_HEADBG = (243, 244, 246)
+# 팔레트
+C_NAVY = (24, 33, 57)        # 헤더 배너
+C_BUGA = (220, 38, 38)       # 불가 = 빨강
+C_NAVY_TXT = (17, 24, 39)
+C_NAKCHAL = (37, 99, 235)    # 낙찰 = 파랑
+C_GRAY = (120, 128, 142)
+C_LABEL = (140, 148, 160)
+C_LINE = (226, 232, 240)
+C_PANEL = (247, 249, 252)    # 연한 패널
+C_VALUE = (33, 41, 56)
 
 
 def _fmt_won(v):
     s = "".join(ch for ch in str(v or "") if ch.isdigit())
-    if not s:
-        return ""
-    return format(int(s), ",") + "원"
+    return format(int(s), ",") + "원" if s else ""
 
 
 def _fmt_date6(d6):
@@ -42,8 +48,36 @@ def _fmt_date6(d6):
     return str(d6 or "")
 
 
+def _img_disp(path, max_w, max_h):
+    """이미지를 (max_w x max_h) 안에 맞춘 표시 (w, h) mm. 실패 시 None."""
+    if not Image or not path or not os.path.exists(path):
+        return None
+    try:
+        with Image.open(path) as im:
+            pw, ph = im.size
+        if not pw or not ph:
+            return None
+        ratio = ph / pw
+        w = max_w
+        h = w * ratio
+        if h > max_h:
+            h = max_h
+            w = h / ratio
+        return (w, h)
+    except Exception:
+        return None
+
+
+def _pill(pdf, x, y, w, h, text, color):
+    pdf.set_fill_color(*color)
+    pdf.rect(x, y, w, h, style="F", round_corners=True, corner_radius=1.6)
+    pdf.set_xy(x, y + (h - 4) / 2 - 0.3)
+    pdf.set_font("malgun", "B", 9)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(w, 4, text, align="C")
+
+
 def build_report_pdf(items, report_dt=None):
-    """불가/낙찰 건 리스트 → PDF bytes. report_dt: datetime (없으면 now)."""
     if FPDF is None:
         raise RuntimeError("fpdf2 미설치 (pip install fpdf2)")
     items = list(items or [])
@@ -52,146 +86,184 @@ def build_report_pdf(items, report_dt=None):
     n_nak = sum(1 for it in items if (it.get("state_kind") or "") == "매각")
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(False)          # 카드 단위로 수동 페이지 제어
     pdf.add_font("malgun", "", FONT_PATH)
-    if os.path.exists(FONT_BOLD):
-        pdf.add_font("malgun", "B", FONT_BOLD)
-    else:
-        pdf.add_font("malgun", "B", FONT_PATH)
+    pdf.add_font("malgun", "B", FONT_BOLD if os.path.exists(FONT_BOLD) else FONT_PATH)
     pdf.add_page()
+    M = pdf.l_margin
     W = pdf.w - pdf.l_margin - pdf.r_margin
+    PAGE_BOTTOM = pdf.h - 14
 
-    # ── 헤더 ──
-    pdf.set_font("malgun", "B", 18)
-    pdf.set_text_color(17, 24, 39)
-    pdf.cell(0, 11, "MJ경매 진행사항 보고서", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("malgun", "", 10)
-    pdf.set_text_color(*C_GRAY)
-    pdf.cell(0, 6, f"보고일시  {dt.strftime('%Y-%m-%d %H:%M')}", new_x="LMARGIN", new_y="NEXT")
-    # 요약 배지
-    pdf.ln(1)
-    pdf.set_font("malgun", "B", 11)
-    pdf.set_text_color(*C_BUGA)
-    pdf.cell(45, 8, f"● 불가 {n_buga}건", border=0)
-    pdf.set_text_color(*C_NAKCHAL)
-    pdf.cell(45, 8, f"● 낙찰 {n_nak}건", border=0, new_x="LMARGIN", new_y="NEXT")
-    pdf.set_draw_color(*C_LINE)
-    pdf.ln(1)
-    pdf.line(pdf.l_margin, pdf.get_y(), pdf.l_margin + W, pdf.get_y())
-    pdf.ln(3)
+    # ── 헤더 배너 ──
+    hy = pdf.get_y()
+    pdf.set_fill_color(*C_NAVY)
+    pdf.rect(M, hy, W, 21, style="F", round_corners=True, corner_radius=3)
+    pdf.set_xy(M + 7, hy + 4.5)
+    pdf.set_font("malgun", "B", 17)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 8, "MJ경매 진행사항 보고서", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(M + 7)
+    pdf.set_font("malgun", "", 9)
+    pdf.set_text_color(190, 200, 214)
+    pdf.cell(0, 5, dt.strftime("%Y-%m-%d %H:%M") + " 기준")
+    _pill(pdf, M + W - 64, hy + 6.5, 30, 8, f"불가 {n_buga}", C_BUGA)
+    _pill(pdf, M + W - 32, hy + 6.5, 30, 8, f"낙찰 {n_nak}", C_NAKCHAL)
+    pdf.set_y(hy + 21 + 6)
 
     if not items:
         pdf.set_font("malgun", "", 11)
         pdf.set_text_color(*C_GRAY)
-        pdf.cell(0, 10, "보고 대상 건이 없습니다.", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 10, "보고 대상(불가/낙찰) 건이 없습니다.")
         return bytes(pdf.output())
 
-    # ── 건별 카드 ──
-    for idx, it in enumerate(items, 1):
-        kind = it.get("state_kind") or ""
-        is_buga = (kind == "불가")
-        accent = C_BUGA if is_buga else C_NAKCHAL
-        badge = "불가" if is_buga else "낙찰"
-
-        # 카드 시작 y (페이지 넘김 대비 최소 높이 확보)
-        if pdf.get_y() > pdf.h - 70:
-            pdf.add_page()
-        top = pdf.get_y()
-
-        # 좌측 텍스트 / 우측 스크린샷
-        text_w = W * 0.56
-        img_w = W * 0.40
-        img_x = pdf.l_margin + text_w + (W * 0.04)
-
-        # 제목줄: [배지] 사건번호
-        pdf.set_xy(pdf.l_margin, top)
-        pdf.set_font("malgun", "B", 12)
-        pdf.set_text_color(*accent)
-        pdf.cell(14, 7, f"[{badge}]", border=0)
-        pdf.set_text_color(17, 24, 39)
-        pdf.cell(text_w - 14, 7, f"{it.get('sakun_no','')}", new_x="LMARGIN", new_y="NEXT")
-
-        def row(label, value, vcolor=(31, 41, 55)):
-            if not value:
-                return
-            pdf.set_x(pdf.l_margin)
-            pdf.set_font("malgun", "", 9)
-            pdf.set_text_color(*C_GRAY)
-            pdf.cell(22, 6, label, border=0)
-            pdf.set_font("malgun", "", 9.5)
-            pdf.set_text_color(*vcolor)
-            pdf.multi_cell(text_w - 22, 6, str(value), new_x="LMARGIN", new_y="NEXT", max_line_height=6)
-
-        row("회원", it.get("m_name", ""))
-        row("물건종별", it.get("mulgeon_type", ""))
-        row("소재지", (it.get("addr", "") or "").split("\n")[0])   # 토지/대항력 등 부가줄 제외
-        row("매각기일", _fmt_date6(it.get("bid_date", "")))
-        row("법원/기관", it.get("court", ""))
-        if is_buga:
-            reason = it.get("status", "") or it.get("state_raw", "")
-            # 처리결과: 불가(검정) · 변경(빨강)
-            pdf.set_x(pdf.l_margin)
-            pdf.set_font("malgun", "", 9)
-            pdf.set_text_color(*C_GRAY)
-            pdf.cell(22, 6, "처리결과", border=0)
-            pdf.set_font("malgun", "B", 9.5)
-            pdf.set_text_color(*C_BUGA)
-            pdf.cell(11, 6, "불가", border=0)
-            if reason:
-                pdf.set_text_color(220, 38, 38)   # 변경 = 빨강
-                pdf.cell(0, 6, f"· {reason}", border=0)
-            pdf.ln(6)
-            row("상세", it.get("detail", ""), (220, 38, 38))   # 변경 상세(빨강) 아래에
-        else:
-            row("낙찰가", _fmt_won(it.get("maegak_price", "")), C_NAKCHAL)
-            row("매수인", it.get("buyer", "") or "(비공개)")
-
-        # 옥션원 바로가기 버튼 (하이퍼링크)
-        vu = it.get("view_url", "")
-        if vu:
-            pdf.set_x(pdf.l_margin)
-            pdf.set_font("malgun", "B", 9)
-            pdf.set_fill_color(37, 99, 235)
-            pdf.set_text_color(255, 255, 255)
-            pdf.cell(40, 7, "옥션원 바로가기 ▶", border=0, fill=True, link=vu, align="C",
-                     new_x="LMARGIN", new_y="NEXT")
-            pdf.set_text_color(31, 41, 55)
-
-        text_bottom = pdf.get_y()
-
-        # 우측 스크린샷
-        shot = it.get("screenshot_path", "")
-        if shot and os.path.exists(shot):
-            try:
-                pdf.image(shot, x=img_x, y=top + 8, w=img_w)
-            except Exception:
-                pass
-        img_bottom = top + 8 + img_w  # 대략
-
-        bottom = max(text_bottom, img_bottom, top + 30)
-        # 카드 외곽선
-        pdf.set_draw_color(*C_LINE)
-        pdf.rect(pdf.l_margin - 1, top - 1, W + 2, (bottom - top) + 3)
-        pdf.set_y(bottom + 5)
+    for it in items:
+        _render_card(pdf, it, M, W, PAGE_BOTTOM)
 
     return bytes(pdf.output())
 
 
+def _render_card(pdf, it, M, W, PAGE_BOTTOM):
+    kind = it.get("state_kind") or ""
+    is_buga = (kind == "불가")
+    accent = C_BUGA if is_buga else C_NAKCHAL
+    badge = "불가" if is_buga else "낙찰"
+
+    inner_x = M + 7
+    inner_w = W - 14
+
+    # 스크린샷 표시 크기 (카드 하단, 풀폭, 높이캡 100mm)
+    disp = _img_disp(it.get("screenshot_path", ""), inner_w, 100)
+
+    # 정보 행 구성
+    rows = []
+    rows.append(("회원", it.get("m_name", ""), C_VALUE))
+    rows.append(("물건종별", it.get("mulgeon_type", ""), C_VALUE))
+    rows.append(("소재지", (it.get("addr", "") or "").split("\n")[0], C_VALUE))
+    rows.append(("매각기일", _fmt_date6(it.get("bid_date", "")), C_VALUE))
+    rows.append(("법원/기관", it.get("court", ""), C_VALUE))
+    rows = [r for r in rows if r[1]]
+
+    # 카드 높이 추정
+    pad = 6
+    head_h = 11
+    rows_h = len(rows) * 6.2
+    if is_buga:
+        result_h = 8 + (7 if it.get("detail") else 0)     # 처리결과 + 상세
+    else:
+        result_h = 8 + (6.2 if it.get("buyer") or True else 0)  # 낙찰가 + 매수인
+    btn_h = 9
+    img_h = (disp[1] + 4) if disp else 0
+    card_h = pad + head_h + rows_h + result_h + btn_h + img_h + pad
+
+    # 페이지 넘김
+    if pdf.get_y() + card_h > PAGE_BOTTOM:
+        pdf.add_page()
+    top = pdf.get_y()
+    y = top + pad
+
+    # ── 헤더: 배지 + 사건번호 ──
+    _pill(pdf, inner_x, y, 16, 7, badge, accent)
+    pdf.set_xy(inner_x + 19, y)
+    pdf.set_font("malgun", "B", 13)
+    pdf.set_text_color(*C_NAVY_TXT)
+    pdf.cell(inner_w - 19, 7, str(it.get("sakun_no", "")))
+    y += head_h
+
+    # ── 정보 행 ──
+    def info_row(label, value, color):
+        nonlocal y
+        pdf.set_xy(inner_x, y)
+        pdf.set_font("malgun", "", 8.5)
+        pdf.set_text_color(*C_LABEL)
+        pdf.cell(22, 6, label)
+        pdf.set_xy(inner_x + 22, y)
+        pdf.set_font("malgun", "", 9.5)
+        pdf.set_text_color(*color)
+        pdf.cell(inner_w - 22, 6, str(value))
+        y += 6.2
+
+    for (lb, val, col) in rows:
+        info_row(lb, val, col)
+
+    # ── 결과 하이라이트 박스 ──
+    y += 1
+    if is_buga:
+        reason = it.get("status", "") or ""
+        pdf.set_fill_color(254, 242, 242)        # 연한 빨강
+        box_h = 7.5 + (6.5 if it.get("detail") else 0)
+        pdf.rect(inner_x, y, inner_w, box_h, style="F", round_corners=True, corner_radius=1.5)
+        pdf.set_xy(inner_x + 3, y + 1.3)
+        pdf.set_font("malgun", "B", 10)
+        pdf.set_text_color(*C_BUGA)
+        pdf.cell(0, 5, f"불가  ·  {reason}" if reason else "불가")
+        if it.get("detail"):
+            pdf.set_xy(inner_x + 3, y + 7.3)
+            pdf.set_font("malgun", "", 9)
+            pdf.set_text_color(180, 40, 40)
+            pdf.cell(inner_w - 6, 5, str(it.get("detail", "")))
+        y += box_h + 2
+    else:
+        pdf.set_fill_color(239, 246, 255)        # 연한 파랑
+        pdf.rect(inner_x, y, inner_w, 13.5, style="F", round_corners=True, corner_radius=1.5)
+        pdf.set_xy(inner_x + 3, y + 1.6)
+        pdf.set_font("malgun", "", 8.5)
+        pdf.set_text_color(90, 110, 150)
+        pdf.cell(20, 5, "낙찰가")
+        pdf.set_xy(inner_x + 22, y + 0.8)
+        pdf.set_font("malgun", "B", 13)
+        pdf.set_text_color(*C_NAKCHAL)
+        pdf.cell(inner_w - 22, 7, _fmt_won(it.get("maegak_price", "")))
+        pdf.set_xy(inner_x + 3, y + 8.3)
+        pdf.set_font("malgun", "", 8.5)
+        pdf.set_text_color(90, 110, 150)
+        pdf.cell(20, 4.5, "매수인")
+        pdf.set_xy(inner_x + 22, y + 8.3)
+        pdf.set_font("malgun", "", 9.5)
+        pdf.set_text_color(*C_VALUE)
+        pdf.cell(inner_w - 22, 4.5, it.get("buyer", "") or "(비공개)")
+        y += 13.5 + 2
+
+    # ── 옥션원 바로가기 버튼 ──
+    vu = it.get("view_url", "")
+    if vu:
+        pdf.set_fill_color(*accent)
+        pdf.rect(inner_x, y, 42, 7, style="F", round_corners=True, corner_radius=1.5)
+        pdf.set_xy(inner_x, y + 1.4)
+        pdf.set_font("malgun", "B", 9)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(42, 4, "옥션원에서 보기  ▶", align="C", link=vu)
+        y += btn_h
+
+    # ── 스크린샷 (중앙) ──
+    if disp:
+        ix = inner_x + (inner_w - disp[0]) / 2
+        pdf.set_draw_color(*C_LINE)
+        try:
+            pdf.image(it.get("screenshot_path"), x=ix, y=y + 2, w=disp[0], h=disp[1])
+            pdf.rect(ix, y + 2, disp[0], disp[1])      # 얇은 테두리
+        except Exception:
+            pass
+        y += disp[1] + 4
+
+    bottom = y + pad
+    # ── 카드 외곽선 + 좌측 액센트 바 ──
+    pdf.set_draw_color(*C_LINE)
+    pdf.set_line_width(0.3)
+    pdf.rect(M, top, W, bottom - top, style="D", round_corners=True, corner_radius=3)
+    pdf.set_fill_color(*accent)
+    pdf.rect(M, top + 3, 2.2, (bottom - top) - 6, style="F", round_corners=True, corner_radius=1)
+
+    pdf.set_y(bottom + 5)
+
+
 if __name__ == "__main__":
-    # 자체 검증
     sample = [
-        {"sakun_no": "2025-08032-001", "court": "공매", "bid_date": "260527",
-         "state_kind": "매각", "maegak_price": "234888999", "buyer": "",
-         "addr": "강원특별자치도 홍천군 홍천읍 갈마곡리 73 신성미소지움아파트 제104동 제4층 제404호",
-         "mulgeon_type": "아파트", "view_url": "https://www.auction1.co.kr/pubauct/view.php?product_id=578802",
-         "screenshot_path": ""},
-        {"sakun_no": "2023타경110430", "court": "부산지방법원 동부지원", "bid_date": "260608",
-         "state_kind": "불가", "status": "변경",
-         "addr": "부산광역시 남구 대연동 892-38 대연동금샘하이클래스 101동 2층 201호",
-         "mulgeon_type": "다세대(빌라)", "view_url": "", "screenshot_path": ""},
+        {"sakun_no": "2024타경54944", "court": "춘천강릉", "bid_date": "260608", "state_kind": "불가",
+         "status": "변경", "detail": "본사건은 변경 되었으며 현재 매각기일이 지정되지 않았습니다.",
+         "m_name": "김진현", "addr": "강원특별자치도 강릉시 구정면 학산리 641-129", "mulgeon_type": "주택",
+         "view_url": "https://www.auction1.co.kr/auction/ca_view.php", "screenshot_path": ""},
     ]
-    data = build_report_pdf(sample)
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_report_test.pdf")
     with open(out, "wb") as f:
-        f.write(data)
-    print(f"OK PDF 생성: {out} ({len(data)} bytes), 불가/낙찰 카드 {len(sample)}건")
+        f.write(build_report_pdf(sample))
+    print("OK", out)

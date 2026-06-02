@@ -1482,15 +1482,13 @@ function sendBugaReport(payload) {
   admins.forEach(function (ad) {
     try {
       telegramSendMessage(ad.chat_id, summary);
-      // 건별 상세 캡처 — 텔레그램 사진은 재압축돼 흐림 → 문서(원본 PNG)로 전송(선명)
+      // 건별 상세 캡처 — 사진(inline)으로 바로 보이게. 크롭+2x라 사진으로도 충분히 보임.
       items.forEach(function (it) {
         if (!it.screenshot_b64) return;
         try {
-          var who2 = it.m_name ? ('/' + it.m_name) : '';
-          var blob = Utilities.newBlob(Utilities.base64Decode(it.screenshot_b64), 'image/png',
-            (it.sakun_no || 'shot') + who2 + '.png');
+          var blob = Utilities.newBlob(Utilities.base64Decode(it.screenshot_b64), 'image/png', (it.sakun_no || 'shot') + '.png');
           var cap = ((it.state_kind === '불가') ? '🔴불가 ' : '🔵낙찰 ') + (it.sakun_no || '') + (it.m_name ? (' (' + it.m_name + ')') : '');
-          telegramSendDocument_(ad.chat_id, blob, cap);   // photo → document (선명)
+          telegramSendPhoto_(ad.chat_id, blob, cap);   // inline 사진 (document 검은화면 방지)
         } catch (e2) { errors.push(ad.name + ' 캡처(' + (it.sakun_no || '') + '): ' + e2.message); }
       });
       // PDF 문서 (관리자마다 새 blob)
