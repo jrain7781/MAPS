@@ -671,20 +671,22 @@
       const pending = !!r._pending;
       const isBuga = !!r.is_buga;
       const stateKind = pending ? '대기' : ccStateKind(r);
+      const cat = pending ? '' : ccCategory(r);
       // 실행 전(pending)엔 ✓/✗ 대신 무표시
       const keyCell = (v, hit) => pending ? escapeHtml(v || '') : ccKeyCell(v, hit);
-      const resCls = pending ? 'cc-pend' : (isBuga ? 'cc-bad' : (stateKind === '매각' ? 'cc-end' : (stateKind === '조회없음' || stateKind === '오류' ? 'cc-warn' : 'cc-ok')));
-      const resBadge = `<span class="cc-badge ${resCls}">${escapeHtml(stateKind)}</span>`;
+      // 결과 라벨: 낙찰(파랑)/미입찰(빨강)/패찰=매각가>입찰가(회색)/확인불가/불가. 그 외=진행중·조회없음·매각
+      const _catStyle = { '낙찰': 'background:#2563eb;color:#fff', '미입찰': 'background:#dc2626;color:#fff', '일반': 'background:#6b7280;color:#fff', '확인불가': 'background:#9ca3af;color:#fff', '불가': 'background:#b91c1c;color:#fff' };
+      const _catLabel = { '낙찰': '낙찰', '미입찰': '미입찰', '일반': '패찰', '확인불가': '확인불가', '불가': '불가' };
+      const resBadge = (!pending && _catStyle[cat])
+        ? `<span style="${_catStyle[cat]};padding:1px 8px;border-radius:4px;font-weight:700;font-size:12px">${_catLabel[cat]}</span>`
+        : `<span class="cc-badge ${pending ? 'cc-pend' : (stateKind === '조회없음' || stateKind === '오류' ? 'cc-warn' : 'cc-ok')}">${escapeHtml(stateKind)}</span>`;
       const dtl = String(r.detail || '');
       const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 20 ? dtl.slice(0, 20) + '…' : dtl)}</span>` : '';
       const url = r.view_url ? ` <a href="#" class="cc-link" data-act="cc-view" data-url="${escapeAttr(r.view_url)}">옥션원</a>` : '';
-      // 우리 회원 낙찰 = 매각상태 & 매각가==입찰가 → '낙찰'(대비색), 일반매각은 흐리게
-      const _isWin = (!pending && stateKind === '매각' && _won(r.maegak_price) && _won(r.maegak_price) === _won(r.bidprice));
-      // 업데이트 예정 = 물건상태값 그대로(불가만, 사유는 비고로). 낙찰은 우리낙찰.
-      const willUpdate = isBuga
-        ? '<span class="cc-badge cc-bad">불가</span>'
-        : (_isWin ? '<span style="background:#2563eb;color:#fff;padding:1px 8px;border-radius:4px;font-weight:700">낙찰</span>'
-           : (!pending && stateKind === '매각' ? '<span class="cc-badge cc-end" style="color:#9ca3af">매각</span>' : '<span style="color:#9ca3af">-</span>'));
+      // 업데이트 예정 = 결과 카테고리 라벨 (패찰=매각가>입찰가, 진행중과 구분). 불가는 MAPS 반영 대상
+      const willUpdate = (!pending && _catStyle[cat])
+        ? `<span style="${_catStyle[cat]};padding:1px 8px;border-radius:4px;font-weight:700">${_catLabel[cat]}</span>`
+        : '<span style="color:#9ca3af">-</span>';
       // 매각가 색: 매각가<입찰가=빨강, 매각가>입찰가=검정, 같으면 파랑
       const bid = _won(r.bidprice), mae = _won(r.maegak_price);
       let maeCell = mae ? fmtWon(r.maegak_price) : '';

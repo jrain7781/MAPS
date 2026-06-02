@@ -42,7 +42,7 @@ def _cat_of(it):
     return "불가" if (it.get("state_kind") or "") == "불가" else "낙찰"
 
 
-def compose_card_png(screenshot_path, category, sakun, m_name, bid_date="", reason=""):
+def compose_card_png(screenshot_path, category, sakun, m_name, bid_date="", reason="", footer=False):
     """컬러 헤더바(낙찰 파랑·미입찰 빨강·불가 검정) + 캡처 → 라운드 카드 PNG bytes. 텔레그램/PDF 공용.
     헤더 = '불가 - 변경 | 입찰일자 | 사건번호 | 회원명' / '낙찰|미입찰 | 입찰일자 | 사건번호 | 회원명'."""
     if not Image or not screenshot_path or not os.path.exists(screenshot_path):
@@ -85,7 +85,9 @@ def compose_card_png(screenshot_path, category, sakun, m_name, bid_date="", reas
     bw = max(10, int(W * 0.014))
     radius = max(14, int(bw * 0.9))
     CW = W + bw * 2
-    CH = head_h + shot.height + bw
+    # footer=True 면 캡처 아래에 제목(txt)을 텍스트로 한 줄 더 (카톡 붙여넣기 후 검색용)
+    foot_h = int(fsize * 1.5) if footer else 0
+    CH = head_h + shot.height + foot_h + bw
     canvas = Image.new("RGB", (CW, CH), accent)   # 전체 배경 = 테두리 색
     d = ImageDraw.Draw(canvas)
     try:
@@ -93,6 +95,14 @@ def compose_card_png(screenshot_path, category, sakun, m_name, bid_date="", reas
     except Exception:
         d.text((bw + pad, head_h // 4), txt, fill=(255, 255, 255), font=font)
     canvas.paste(shot, (bw, head_h))   # 좌우/하단 bw 테두리 남기고 캡처 온전히 배치
+    if footer:
+        fy = head_h + shot.height
+        d.rectangle([bw, fy, bw + W, fy + foot_h], fill=(255, 255, 255))   # 흰 바탕 텍스트 줄
+        ffont = _font(max(14, int(fsize * 0.78)))
+        try:
+            d.text((bw + pad, fy + foot_h // 2), txt, fill=(17, 24, 39), font=ffont, anchor="lm")
+        except Exception:
+            d.text((bw + pad, fy + foot_h // 4), txt, fill=(17, 24, 39), font=ffont)
     # 라운드 코너 (흰 배경 위)
     mask = Image.new("L", (CW, CH), 0)
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, CW - 1, CH - 1], radius=radius, fill=255)

@@ -1357,7 +1357,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             comp = report_builder.compose_card_png(
                 sp, cat, it.get("sakun_no", ""), it.get("m_name", ""),
-                it.get("bid_date", ""), it.get("status", ""))
+                it.get("bid_date", ""), it.get("status", ""), footer=True)   # 하단 제목 텍스트(검색용)
             data = comp if comp else open(sp, "rb").read()
             self._send_json(200, {"success": True, "png_b64": _b64.b64encode(data).decode("ascii")})
         except Exception as e:
