@@ -280,8 +280,11 @@
           const code = j.exit_code;
           if (code === 0) {
             setStatus(key, '완료', 'done'); log(key, '✅ 정상 종료 (exit ' + code + ')', 'log-ok');
-            // 진행사항: 자동 보고 토글 ON 이면 불가/낙찰 보고서 자동 전송
-            if (key === 'cc' && ccAutoReportOn()) sendCcReportAuto();
+            // 진행사항: 실행 완료 시 시트에 1회 저장(날짜 upsert) + 자동 보고
+            if (key === 'cc') {
+              pushCcToSheet();
+              if (ccAutoReportOn()) sendCcReportAuto();
+            }
           }
           else if (code === null || code === undefined) { setStatus(key, '중지', 'error'); log(key, '⏹ 중지됨', 'log-err'); }
           else { setStatus(key, '오류', 'error'); log(key, '❌ exit ' + code, 'log-err'); }
@@ -356,7 +359,7 @@
   function saveCcState() {
     try { localStorage.setItem(CC_SAVE_KEY, JSON.stringify({ cases: ccCases, results: ccResults.slice(), ts: Date.now() })); } catch (e) {}
     saveCcByDate();              // 날짜별 누적 저장(로컬 캐시/오프라인 폴백)
-    pushCcToSheetDebounced();    // MAPS 시트 영구 저장(디바운스 — 실행 중 마지막 1회만)
+    // 시트 영구저장은 매 건이 아니라 '실행 완료' 시 1회만 (pollLogs 종료 분기에서 pushCcToSheet)
   }
 
   // ===== MAPS 시트 영구 저장 (cc_daily) =====
