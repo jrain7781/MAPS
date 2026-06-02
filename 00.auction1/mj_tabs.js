@@ -85,11 +85,24 @@
         if (favMng) favMng.addEventListener('click', openCcFav);
         const calBtn = card.querySelector('[data-act="cc-calendar-toggle"]');
         if (calBtn) calBtn.addEventListener('click', toggleCcCalendar);
+        card.querySelector('[data-act="cc-run-inline"]')?.addEventListener('click', () => runCapture('cc'));
+        card.querySelector('[data-act="cc-maps-inline"]')?.addEventListener('click', sendCcToMaps);
         setCcDates(0, 0);          // 날짜 기본값 = 오늘~오늘
         renderCcFavSelect();       // 즐겨찾기 드롭다운 채우기
         renderCcStatusSelect();    // 상태값 드롭다운(기본 입찰)
         loadCcState();             // 저장된 매칭 자료 복원(localStorage)
         setInterval(ccScheduleTick, 30000);   // 자동 스케줄: 30초마다 시각 확인
+        // 최초 진입: 달력 기본으로 열고, 오늘 데이터 있으면 그날 리스트 복원
+        const calCont = card.querySelector('[data-role="cc-calendar"]');
+        if (calCont) {
+          calCont.style.display = '';
+          renderCcCalendar();
+          refreshCcSummary(() => {
+            renderCcCalendar(ccCalYM.y, ccCalYM.m);
+            const t = _todayYMD();
+            if ((ccSheetSummary && ccSheetSummary[t] && ccSheetSummary[t].n) || loadCcByDate()[t]) restoreCcDate(t);
+          });
+        }
       }
       loadAccounts(key);
     });
@@ -461,7 +474,9 @@
       else fallback();
     }).catch(() => fallback());
   }
-  let ccCalYM = null;   // {y, m(0-based)}
+  let ccCalYM = null;            // {y, m(0-based)}
+  const ccCalChecked = new Set(); // 다중 선택된 날짜(ymd)
+  function _todayYMD() { return ymd(new Date()); }
   function toggleCcCalendar() {
     const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
     const show = (cont.style.display === 'none' || !cont.style.display);
@@ -471,41 +486,56 @@
       refreshCcSummary(() => renderCcCalendar(ccCalYM.y, ccCalYM.m));   // 시트 집계로 갱신
     }
   }
+  function _ccCellInfo(ymd2, map) {
+    if (ccSheetSummary && ccSheetSummary[ymd2]) { const s = ccSheetSummary[ymd2]; return { n: s.n, nak: s.nak, miss: s.miss, buga: s.buga }; }
+    const e = (map || loadCcByDate())[ymd2]; if (!e || !Array.isArray(e.rows)) return null;
+    const rows = e.rows, cat = (c) => rows.filter(r => ccCategory(r) === c).length;
+    return { n: rows.length, nak: cat('낙찰'), miss: cat('미입찰'), buga: cat('불가') };
+  }
   function renderCcCalendar(y, m) {
     const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
     if (y == null || m == null) { const t = new Date(); y = t.getFullYear(); m = t.getMonth(); }
     ccCalYM = { y, m };
     const map = loadCcByDate();
-    const startDow = new Date(y, m, 1).getDay();
+    const lead = (new Date(y, m, 1).getDay() + 6) % 7;   // 월요일 시작 보정
     const days = new Date(y, m + 1, 0).getDate();
-    const cellInfo = (ymd) => {
-      if (ccSheetSummary && ccSheetSummary[ymd]) { const s = ccSheetSummary[ymd]; return { n: s.n, nak: s.nak, miss: s.miss, buga: s.buga }; }
-      const e = map[ymd]; if (!e || !Array.isArray(e.rows)) return null;
-      const rows = e.rows, cat = (c) => rows.filter(r => ccCategory(r) === c).length;
-      return { n: rows.length, nak: cat('낙찰'), miss: cat('미입찰'), buga: cat('불가') };
-    };
-    let h = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+    const today = _todayYMD();
+    const ymd2 = (d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    // 월 합계
+    let mN = 0, mNak = 0, mBuga = 0, mMiss = 0;
+    for (let d = 1; d <= days; d++) { const ci = _ccCellInfo(ymd2(d), map); if (ci) { mN += ci.n; mNak += ci.nak; mBuga += ci.buga; mMiss += ci.miss; } }
+
+    let h = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="-1">‹</button>
-      <b style="min-width:90px;text-align:center">${y}년 ${m + 1}월</b>
+      <b style="min-width:96px;text-align:center;font-size:15px">${y}년 ${m + 1}월</b>
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="1">›</button>
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="today">오늘</button>
-      <span style="font-size:11px;color:#9ca3af">날짜 클릭 → 그날 매칭 자료 복원</span></div>`;
-    h += `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">`;
-    ['일', '월', '화', '수', '목', '금', '토'].forEach((d, i) =>
-      h += `<div style="text-align:center;font-size:11px;font-weight:700;color:${i === 0 ? '#dc2626' : (i === 6 ? '#2563eb' : '#6b7280')}">${d}</div>`);
-    for (let i = 0; i < startDow; i++) h += `<div></div>`;
+      <span style="margin-left:6px;font-size:13px"><b style="color:#1f2937">입찰 ${mN}건</b> · <b style="color:#2563eb">낙찰 ${mNak}건</b> · <b style="color:#111827">불가 ${mBuga}건</b> · <b style="color:#dc2626">미입찰 ${mMiss}건</b></span>
+      <span style="flex:1"></span>
+      <button type="button" class="btn_box_sss btn_blue bold" data-act="cal-load-sel">📥 선택 날짜 불러오기 (<span data-role="cal-sel-cnt">${ccCalChecked.size}</span>)</button>
+    </div>`;
+    h += `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">`;
+    ['월', '화', '수', '목', '금', '토', '일'].forEach((d, i) =>
+      h += `<div style="text-align:center;font-size:12px;font-weight:700;color:${i === 5 ? '#2563eb' : (i === 6 ? '#dc2626' : '#6b7280')}">${d}</div>`);
+    for (let i = 0; i < lead; i++) h += `<div></div>`;
     for (let d = 1; d <= days; d++) {
-      const ymd = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const c = cellInfo(ymd);
-      const base = 'min-height:46px;border:1px solid #e5e7eb;border-radius:6px;padding:3px;font-size:11px';
+      const ym = ymd2(d);
+      const c = _ccCellInfo(ym, map);
+      const isToday = ym === today;
+      const checked = ccCalChecked.has(ym);
+      const border = isToday ? '2px solid #dc2626' : '1px solid #e5e7eb';
+      const bg = (c && c.n) ? '#eff6ff' : '#fff';
+      const circle = `<span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:${isToday ? '#dc2626' : '#e5e7eb'};color:${isToday ? '#fff' : '#374151'};font-weight:700;font-size:12px">${d}</span>`;
+      const cb = `<input type="checkbox" class="cal-cb" data-ymd="${ym}" ${checked ? 'checked' : ''} title="다중 선택" style="width:15px;height:15px;cursor:pointer">`;
+      let body = '';
       if (c && c.n) {
-        h += `<div data-cal-day="${ymd}" title="복원: ${ymd}" style="${base};cursor:pointer;background:#eff6ff;border-color:#bfdbfe">
-          <div style="font-weight:700">${d} <span style="float:right;background:#2563eb;color:#fff;border-radius:8px;padding:0 5px;font-size:10px">${c.n}</span></div>
-          <div style="margin-top:2px;line-height:1.3"><span style="color:#2563eb">낙${c.nak}</span> <span style="color:#dc2626">미${c.miss}</span> <span style="color:#111827">불${c.buga}</span></div>
-        </div>`;
-      } else {
-        h += `<div style="${base};color:#9ca3af">${d}</div>`;
+        body = `<div data-cal-day="${ym}" title="클릭: ${ym} 결과 보기" style="margin-top:4px;cursor:pointer;font-size:11px;line-height:1.5">
+          <div>입찰 <b>${c.n}</b>건</div>
+          <div><span style="color:#2563eb">낙찰 ${c.nak}건</span> · <span style="color:#111827">불가 ${c.buga}건</span></div>
+          <div style="color:#dc2626">미입찰 ${c.miss}건</div></div>`;
       }
+      h += `<div style="min-height:84px;border:${border};border-radius:8px;padding:5px;background:${bg}">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between">${circle}${cb}</div>${body}</div>`;
     }
     h += `</div>`;
     cont.innerHTML = h;
@@ -517,6 +547,34 @@
       renderCcCalendar(yy, mm);
     }));
     cont.querySelectorAll('[data-cal-day]').forEach(el => el.addEventListener('click', () => restoreCcDate(el.dataset.calDay)));
+    cont.querySelectorAll('.cal-cb').forEach(cb => cb.addEventListener('change', () => {
+      if (cb.checked) ccCalChecked.add(cb.dataset.ymd); else ccCalChecked.delete(cb.dataset.ymd);
+      const cnt = cont.querySelector('[data-role="cal-sel-cnt"]'); if (cnt) cnt.textContent = ccCalChecked.size;
+    }));
+    cont.querySelector('[data-act="cal-load-sel"]')?.addEventListener('click', loadProgressSelectedDates);
+  }
+  // 달력에서 다중 체크한 날짜들을 MAPS에서 불러오기 (범위 조회 후 선택일만 필터)
+  function loadProgressSelectedDates() {
+    const dates = Array.from(ccCalChecked).sort();
+    if (!dates.length) { alert('달력에서 날짜를 1개 이상 체크하세요.'); return; }
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey) { alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
+    const from6 = ymdToYYMMDD(dates[0]), to6 = ymdToYYMMDD(dates[dates.length - 1]);
+    const wanted = new Set(dates.map(d => ymdToYYMMDD(d)));
+    log('cc', `📥 선택 ${dates.length}일 불러오는 중… (${dates.join(', ')})`, 'log-ok');
+    fetch('/api/maps-gas', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, api_action: 'getProgressList', from: from6, to: to6, statuses: getCcStatuses() })
+    }).then(r => r.json()).then(j => {
+      if (j && j.success && Array.isArray(j.cases)) {
+        ccCases = j.cases.filter(c => wanted.has(String(c.bid_date)));
+        ccResults.length = 0; ccSort = { key: '', dir: 1 }; ccRunUnchecked.clear(); renderCcResults(); saveCcState();
+        const info = $card('cc')?.querySelector('[data-role="cc-loaded"]');
+        if (info) info.textContent = `선택 ${dates.length}일 ${ccCases.length}건 불러옴 — ▶ 실행으로 옥션 조회`;
+        log('cc', `✅ ${ccCases.length}건 불러옴 (선택 ${dates.length}일)`, 'log-ok');
+        if (!ccCases.length) alert('선택한 날짜에 입찰 건이 없습니다.');
+      } else { const msg = (j && (j.message || j.error)) || '?'; log('cc', `❌ 불러오기 실패: ${msg}`, 'log-err'); alert('실패: ' + msg); }
+    }).catch(e => { log('cc', `❌ 불러오기 오류: ${e}`, 'log-err'); alert('오류: ' + e); });
   }
   function loadCcState() {
     try {
