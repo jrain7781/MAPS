@@ -1372,19 +1372,63 @@ function telegramSendDocument_(chatId, docBlob, caption) {
   return telegramCheckResp_(resp, 'sendDocument');
 }
 
-// 보고서 수신 관리자 추출: members gubun='관리자' & telegram_chat_id 있음 & enabled!='N'
-function getReportAdmins_() {
+// 텔레그램 연결(사용 가능) 판정: chat_id 발급됨 & enabled != 'N'
+function _memberTelegramReady_(m) {
+  var chatId = String(m.telegram_chat_id || '').trim();
+  if (!chatId) return false;
+  if (String(m.telegram_enabled || '').toUpperCase() === 'N') return false;
+  return true;
+}
+
+/**
+ * 보고 대상 후보 조회 (UI 선택용).
+ * return { success, gubuns:[구분...], members:[{member_id, member_name, gubun, has_token(연결됨), enabled, ready}] }
+ */
+function getReportRecipientCandidates() {
+  var members = [], gubunSet = {};
+  try {
+    readAllMembers().forEach(function (m) {
+      var name = String(m.member_name || '').trim();
+      if (!name) return;
+      var gubun = String(m.gubun || '').trim();
+      if (gubun) gubunSet[gubun] = true;
+      var enabledRaw = String(m.telegram_enabled || '').toUpperCase();
+      members.push({
+        member_id: String(m.member_id || ''),
+        member_name: name,
+        gubun: gubun,
+        has_token: !!String(m.telegram_chat_id || '').trim(),  // 텔레그램 연결(토큰 발급) 여부
+        enabled: (enabledRaw === 'Y' || enabledRaw === 'TRUE' || enabledRaw === '1' || enabledRaw === 'ON'),
+        ready: _memberTelegramReady_(m)
+      });
+    });
+  } catch (e) {
+    return { success: false, message: String(e) };
+  }
+  return { success: true, gubuns: Object.keys(gubunSet), members: members };
+}
+
+/**
+ * 보고 대상 해석. target:
+ *   미지정 → gubun='관리자' (기본)
+ *   { by:'gubun', value:'관리자' }
+ *   { by:'members', member_ids:[...] }
+ * 텔레그램 연결된(ready) 회원만 반환. return [{name, chat_id}]
+ */
+function resolveReportRecipients_(target) {
+  target = target || { by: 'gubun', value: '관리자' };
+  var ids = (target.by === 'members') ? (target.member_ids || []).map(String) : null;
   var out = [];
   try {
     readAllMembers().forEach(function (m) {
-      if (String(m.gubun || '').trim() !== '관리자') return;
-      var chatId = String(m.telegram_chat_id || '').trim();
-      if (!chatId) return;
-      if (String(m.telegram_enabled || '').toUpperCase() === 'N') return;
-      out.push({ name: m.member_name || '', chat_id: chatId });
+      if (!_memberTelegramReady_(m)) return;
+      var match;
+      if (ids) match = ids.indexOf(String(m.member_id || '')) !== -1;
+      else match = String(m.gubun || '').trim() === String(target.value || '관리자').trim();
+      if (match) out.push({ name: m.member_name || '', chat_id: String(m.telegram_chat_id || '').trim() });
     });
   } catch (e) {
-    Logger.log('[getReportAdmins_] ' + e);
+    Logger.log('[resolveReportRecipients_] ' + e);
   }
   return out;
 }
@@ -1407,9 +1451,9 @@ function _reportFmtWon_(v) {
 function sendBugaReport(payload) {
   payload = payload || {};
   var items = payload.items || [];
-  var admins = getReportAdmins_();
+  var admins = resolveReportRecipients_(payload.target);  // payload.target 없으면 gubun=관리자 기본
   if (!admins.length) {
-    return { success: false, message: '텔레그램 연결된 관리자 회원이 없습니다. (members gubun=관리자 + telegram_chat_id 필요)' };
+    return { success: false, message: '선택한 대상 중 텔레그램 연결된 회원이 없습니다. (telegram_chat_id 발급 + 사용 필요)' };
   }
   if (!items.length) {
     return { success: false, message: '보고할 불가/낙찰 건이 없습니다.' };

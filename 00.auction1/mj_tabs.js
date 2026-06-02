@@ -278,7 +278,7 @@
           if (code === 0) {
             setStatus(key, '완료', 'done'); log(key, '✅ 정상 종료 (exit ' + code + ')', 'log-ok');
             // 진행사항: 자동 보고 토글 ON 이면 불가/낙찰 보고서 자동 전송
-            if (key === 'cc' && ccAutoReportOn()) sendCcReport(true);
+            if (key === 'cc' && ccAutoReportOn()) sendCcReportAuto();
           }
           else if (code === null || code === undefined) { setStatus(key, '중지', 'error'); log(key, '⏹ 중지됨', 'log-err'); }
           else { setStatus(key, '오류', 'error'); log(key, '❌ exit ' + code, 'log-err'); }
@@ -585,7 +585,7 @@
       });
     });
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
-    wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', () => sendCcReport(false));
+    wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', openReportPicker);
     wrap.querySelector('.cc-auto-report')?.addEventListener('change', (e) => setCcAutoReport(e.target.checked));
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
   }
@@ -634,38 +634,142 @@
 
   // ===== 진행사항 보고서(불가/낙찰) 텔레그램 전송 =====
   const CC_AUTO_REPORT_KEY = 'mj_cc_auto_report';
+  const CC_REPORT_TARGET_KEY = 'mj_cc_report_target';
   function ccAutoReportOn() { try { return localStorage.getItem(CC_AUTO_REPORT_KEY) === '1'; } catch (e) { return false; } }
   function setCcAutoReport(on) { try { localStorage.setItem(CC_AUTO_REPORT_KEY, on ? '1' : '0'); } catch (e) {} }
-  // 보고 대상 = 불가 또는 낙찰(매각) 건
+  function getReportTarget() {
+    try { const t = JSON.parse(localStorage.getItem(CC_REPORT_TARGET_KEY) || 'null'); if (t && t.by) return t; } catch (e) {}
+    return { by: 'gubun', value: '관리자' };
+  }
+  function setReportTarget(t) { try { localStorage.setItem(CC_REPORT_TARGET_KEY, JSON.stringify(t)); } catch (e) {} }
+  function reportTargetLabel(t) {
+    t = t || getReportTarget();
+    if (t.by === 'members') return `회원 ${(t.labels && t.labels.length) ? t.labels.join('·') : ((t.member_ids || []).length + '명')}`;
+    return `구분 ${t.value || '관리자'}`;
+  }
+  // 보고 대상 건 = 불가 또는 낙찰(매각)
   function ccReportItems() { return ccResults.filter(r => r && (r.is_buga || ccStateKind(r) === '매각')); }
-  function sendCcReport(auto) {
+
+  // 실제 전송 (target 지정)
+  function doSendReport(target, auto) {
     const items = ccReportItems();
     if (!items.length) { if (!auto) alert('보고할 불가/낙찰 건이 없습니다.'); return; }
     const apiKey = getMapsAdminKeyMj();
     if (!apiKey) { if (!auto) alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
-    if (!auto && !confirm(`불가/낙찰 ${items.length}건을 보고서(PDF+캡처)로 만들어 관리자 텔레그램으로 전송합니다. 진행할까요?`)) return;
-    const btn = $card('cc')?.querySelector('[data-act="cc-report"]');
-    if (btn) btn.disabled = true;
-    log('cc', `📋 보고서 전송 중… (${items.length}건${auto ? ', 자동' : ''})`, 'log-ok');
+    log('cc', `📋 보고서 전송 중… (${items.length}건 · 대상=${reportTargetLabel(target)}${auto ? ' · 자동' : ''})`, 'log-ok');
     fetch('/api/send-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, items })
+      body: JSON.stringify({ api_key: apiKey, items, target })
     }).then(r => r.json()).then(j => {
-      if (btn) btn.disabled = false;
       if (j && j.success) {
         const errN = (j.errors && j.errors.length) ? ` (전송오류 ${j.errors.length})` : '';
-        log('cc', `✅ 보고서 전송 완료 — 관리자 ${j.admins || '?'}명, 전송 ${j.sent || 0}건${errN}`, 'log-ok');
-        if (!auto) alert(`보고서 전송 완료 — 관리자 ${j.admins || '?'}명`);
+        log('cc', `✅ 보고서 전송 완료 — 대상 ${j.admins || '?'}명, 전송 ${j.sent || 0}건${errN}`, 'log-ok');
+        if (!auto) alert(`보고서 전송 완료 — 대상 ${j.admins || '?'}명`);
       } else {
         const msg = j && (j.message || j.error) || '응답 없음';
         log('cc', `⚠ 보고서 전송 실패: ${msg}`, 'log-err');
         if (!auto) alert('보고서 전송 실패: ' + msg);
       }
     }).catch(err => {
-      if (btn) btn.disabled = false;
       log('cc', `⚠ 보고서 전송 오류: ${err}`, 'log-err');
       if (!auto) alert('보고서 전송 오류: ' + err);
     });
+  }
+  function sendCcReportAuto() { doSendReport(getReportTarget(), true); }   // 자동 보고(저장된 대상)
+
+  // 대상 후보(구분/회원명 + 텔레그램 상태) 조회 → GAS getReportRecipientCandidates
+  let _ccCandCache = null;
+  function fetchReportCandidates(cb) {
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey) { alert('MAPS Admin Key 미설정'); return; }
+    fetch('/api/maps-gas', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, api_action: 'getReportRecipientCandidates' })
+    }).then(r => r.json()).then(j => {
+      if (j && j.success) { _ccCandCache = j; cb(j); }
+      else alert('회원 조회 실패: ' + (j && (j.message || j.error) || '?'));
+    }).catch(e => alert('회원 조회 오류: ' + e));
+  }
+
+  // 대상 선택 모달
+  function openReportPicker() {
+    if (!ccReportItems().length) { alert('보고할 불가/낙찰 건이 없습니다.'); return; }
+    let modal = document.getElementById('ccReportModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'ccReportModal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:99999';
+      modal.innerHTML = `<div style="background:#fff;border-radius:10px;width:90%;max-width:560px;max-height:85vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e5e7eb">
+          <b>📋 보고 대상 선택</b><button type="button" data-act="rp-close" style="border:0;background:none;font-size:18px;cursor:pointer">✕</button></div>
+        <div style="padding:14px 16px">
+          <div style="margin-bottom:10px">
+            <label style="margin-right:14px;cursor:pointer"><input type="radio" name="rpBy" value="gubun" checked> 회원관리 구분</label>
+            <label style="cursor:pointer"><input type="radio" name="rpBy" value="members"> 회원명 직접선택</label>
+          </div>
+          <div data-role="rp-gubun" style="margin-bottom:8px">구분 <select data-role="rp-gubun-sel" style="min-width:150px;padding:3px"></select></div>
+          <div data-role="rp-list" style="max-height:320px;overflow:auto;border:1px solid #e5e7eb;border-radius:6px"></div>
+          <div style="margin-top:7px;font-size:12px;color:#6b7280">✅연결=텔레그램 토큰 발급됨 · ▶사용=발송 ON. <b>연결+사용</b>이어야 전송됩니다(미연결은 비활성).</div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #e5e7eb">
+          <button type="button" class="btn_box_sss" data-act="rp-close">취소</button>
+          <button type="button" class="btn_box_sss btn_blue bold" data-act="rp-send">📤 이 대상으로 전송</button>
+        </div></div>`;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+      modal.querySelectorAll('[data-act="rp-close"]').forEach(b => b.addEventListener('click', () => modal.style.display = 'none'));
+      modal.querySelectorAll('input[name="rpBy"]').forEach(rb => rb.addEventListener('change', () => renderReportPicker(false)));
+      modal.querySelector('[data-role="rp-gubun-sel"]').addEventListener('change', () => renderReportPicker(false));
+      modal.querySelector('[data-act="rp-send"]').addEventListener('click', submitReportPicker);
+    }
+    modal.style.display = 'flex';
+    // 저장된 대상으로 라디오 초기화
+    const saved = getReportTarget();
+    modal.querySelector(`input[name="rpBy"][value="${saved.by === 'members' ? 'members' : 'gubun'}"]`).checked = true;
+    fetchReportCandidates(() => renderReportPicker(true));
+  }
+
+  function renderReportPicker(initGubun) {
+    const modal = document.getElementById('ccReportModal'); if (!modal || !_ccCandCache) return;
+    const by = modal.querySelector('input[name="rpBy"]:checked').value;
+    const gsel = modal.querySelector('[data-role="rp-gubun-sel"]');
+    const listEl = modal.querySelector('[data-role="rp-list"]');
+    modal.querySelector('[data-role="rp-gubun"]').style.display = (by === 'gubun') ? '' : 'none';
+    if (initGubun) {
+      const saved = getReportTarget();
+      gsel.innerHTML = (_ccCandCache.gubuns || []).map(g => `<option value="${escapeAttr(g)}">${escapeHtml(g)}</option>`).join('');
+      if (saved.by === 'gubun' && saved.value) gsel.value = saved.value;
+      else if ((_ccCandCache.gubuns || []).indexOf('관리자') >= 0) gsel.value = '관리자';
+    }
+    let members = _ccCandCache.members || [];
+    if (by === 'gubun') { const g = gsel.value; members = members.filter(m => m.gubun === g); }
+    const savedIds = (getReportTarget().member_ids || []).map(String);
+    listEl.innerHTML = members.map(m => {
+      const conn = m.has_token ? '<span style="color:#16a34a">✅연결</span>' : '<span style="color:#9ca3af">❌미연결</span>';
+      const use = m.enabled ? '<span style="color:#2563eb">▶사용</span>' : '<span style="color:#9ca3af">⏸중지</span>';
+      const chk = (by === 'members') ? (savedIds.indexOf(String(m.member_id)) >= 0 ? 'checked' : '') : 'checked';
+      return `<label style="display:flex;gap:8px;align-items:center;padding:6px 9px;border-bottom:1px solid #f1f5f9;${m.ready ? '' : 'opacity:.5'}">
+        <input type="checkbox" class="rp-cb" data-id="${escapeAttr(m.member_id)}" data-name="${escapeAttr(m.member_name)}" ${chk} ${m.ready ? '' : 'disabled'}>
+        <span style="flex:1">${escapeHtml(m.member_name)} <span style="color:#9ca3af;font-size:11px">(${escapeHtml(m.gubun || '-')})</span></span>
+        ${conn} <span style="width:6px"></span> ${use}</label>`;
+    }).join('') || '<div style="padding:12px;color:#9ca3af">해당 회원이 없습니다.</div>';
+  }
+
+  function submitReportPicker() {
+    const modal = document.getElementById('ccReportModal'); if (!modal) return;
+    const by = modal.querySelector('input[name="rpBy"]:checked').value;
+    let target;
+    if (by === 'gubun') {
+      target = { by: 'gubun', value: modal.querySelector('[data-role="rp-gubun-sel"]').value };
+    } else {
+      const ids = [], labels = [];
+      modal.querySelectorAll('.rp-cb:checked').forEach(cb => { ids.push(cb.dataset.id); labels.push(cb.dataset.name); });
+      if (!ids.length) { alert('회원을 1명 이상 선택하세요.'); return; }
+      target = { by: 'members', member_ids: ids, labels: labels };
+    }
+    setReportTarget(target);
+    modal.style.display = 'none';
+    doSendReport(target, false);
   }
   // ===== 법원 매칭표 모달 (MAPS ↔ 옥션원) =====
   function renderCourtMap(filter) {

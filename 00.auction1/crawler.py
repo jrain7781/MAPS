@@ -1261,6 +1261,7 @@ class Handler(SimpleHTTPRequestHandler):
             gas_payload = {
                 "api_action": "sendBugaReport", "api_key": api_key,
                 "report_dt": report_dt, "items": out_items,
+                "target": payload.get("target") or None,   # 보고 대상(구분/회원명) — 없으면 GAS가 관리자 기본
                 "pdf_b64": pdf_b64, "pdf_name": f"MJ경매_보고서_{report_dt[:10]}.pdf",
             }
             result = _gas_post(gas_payload, timeout=300.0)
