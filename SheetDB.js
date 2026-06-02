@@ -7959,6 +7959,9 @@ function handleJosaApiPost_(payload) {
   if (action === 'get7DaysBugaList')   return get7DaysBugaList();
   if (action === 'getTodayMaegakList') return getTodayMaegakList();
   if (action === 'getProgressList')    return getProgressList(payload.from, payload.to, payload.statuses);
+  if (action === 'saveProgressMatches')    return saveProgressMatches(payload);
+  if (action === 'getProgressMatchSummary') return getProgressMatchSummary();
+  if (action === 'getProgressMatchByDate')  return getProgressMatchByDate(payload.date);
   if (action === 'getReportRecipientCandidates') return getReportRecipientCandidates();
   if (action === 'sendBugaReport')     return sendBugaReport(payload);
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
@@ -8199,6 +8202,100 @@ function getTodayMaegakList() {
  * @param {string} to6   YYMMDD
  * @return {{success, cases:[{item_id,sakun_no,bid_date,court,bidprice,m_name}], count, from, to}}
  */
+// ===== 일일보고 매칭자료 영구 저장 (MAPS 스프레드시트 cc_daily 탭, 첫 저장 시 자동 생성) =====
+var CC_DAILY_SHEET_NAME = 'cc_daily';
+var CC_DAILY_HEADERS = ['date', 'item_id', 'sakun_no', 'court', 'bid_date', 'm_name', 'm_name_id',
+  'm_name_id_disp', 'm_name_id_color', 'mid_member_id', 'bidprice', 'maegak_price', 'buyer',
+  'state_kind', 'status', 'category', 'is_buga', 'detail', 'view_url', 'screenshot_path', 'stu_member', 'ts'];
+
+function ensureCcDailySheet_() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(CC_DAILY_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(CC_DAILY_SHEET_NAME);
+    sh.getRange(1, 1, 1, CC_DAILY_HEADERS.length).setValues([CC_DAILY_HEADERS]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// 매칭 결과 저장 (날짜별 upsert: payload에 들어온 날짜의 기존 행 삭제 후 재기록)
+function saveProgressMatches(payload) {
+  try {
+    var items = (payload && payload.items) || [];
+    if (!items.length) return { success: true, saved: 0 };
+    var sh = ensureCcDailySheet_();
+    var dates = {};
+    items.forEach(function (it) { var d = String(it.date || '').trim(); if (d) dates[d] = true; });
+    var last = sh.getLastRow();
+    if (last >= 2) {
+      var existing = sh.getRange(2, 1, last - 1, 1).getValues();   // date 열
+      for (var r = existing.length - 1; r >= 0; r--) {
+        if (dates[String(existing[r][0]).trim()]) sh.deleteRow(r + 2);
+      }
+    }
+    var rows = items.map(function (it) {
+      return CC_DAILY_HEADERS.map(function (h) { return h === 'ts' ? new Date() : (it[h] == null ? '' : it[h]); });
+    });
+    if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, CC_DAILY_HEADERS.length).setValues(rows);
+    return { success: true, saved: rows.length, dates: Object.keys(dates) };
+  } catch (e) {
+    Logger.log('[saveProgressMatches] ' + e);
+    return { success: false, message: String(e) };
+  }
+}
+
+// 달력용 날짜별 집계 {date:{n,nak,miss,buga}}
+function getProgressMatchSummary() {
+  try {
+    var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CC_DAILY_SHEET_NAME);
+    if (!sh) return { success: true, summary: {} };
+    var last = sh.getLastRow();
+    if (last < 2) return { success: true, summary: {} };
+    var dIdx = CC_DAILY_HEADERS.indexOf('date'), cIdx = CC_DAILY_HEADERS.indexOf('category');
+    var vals = sh.getRange(2, 1, last - 1, CC_DAILY_HEADERS.length).getValues();
+    var sum = {};
+    vals.forEach(function (row) {
+      var d = String(row[dIdx] || '').trim(); if (!d) return;
+      var c = String(row[cIdx] || '').trim();
+      if (!sum[d]) sum[d] = { n: 0, nak: 0, miss: 0, buga: 0 };
+      sum[d].n++;
+      if (c === '낙찰') sum[d].nak++; else if (c === '미입찰') sum[d].miss++; else if (c === '불가') sum[d].buga++;
+    });
+    return { success: true, summary: sum };
+  } catch (e) {
+    Logger.log('[getProgressMatchSummary] ' + e);
+    return { success: false, message: String(e), summary: {} };
+  }
+}
+
+// 특정 날짜의 저장 행 반환 (복원용)
+function getProgressMatchByDate(date) {
+  try {
+    var d0 = String(date || '').trim();
+    var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CC_DAILY_SHEET_NAME);
+    if (!sh) return { success: true, rows: [] };
+    var last = sh.getLastRow();
+    if (last < 2) return { success: true, rows: [] };
+    var vals = sh.getRange(2, 1, last - 1, CC_DAILY_HEADERS.length).getValues();
+    var rows = [];
+    vals.forEach(function (row) {
+      if (String(row[0] || '').trim() !== d0) return;
+      var o = {};
+      CC_DAILY_HEADERS.forEach(function (h, i) {
+        o[h] = (h === 'ts' && row[i] instanceof Date)
+          ? Utilities.formatDate(row[i], Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') : row[i];
+      });
+      o.is_buga = (String(o.is_buga) === 'true' || o.is_buga === true || String(o.state_kind).trim() === '불가');
+      rows.push(o);
+    });
+    return { success: true, rows: rows };
+  } catch (e) {
+    Logger.log('[getProgressMatchByDate] ' + e);
+    return { success: false, message: String(e), rows: [] };
+  }
+}
+
 function getProgressList(from6, to6, statuses) {
   try {
     var tz = Session.getScriptTimeZone();

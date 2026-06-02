@@ -355,7 +355,47 @@
   const CC_SAVE_KEY = 'mj_cc_saved';
   function saveCcState() {
     try { localStorage.setItem(CC_SAVE_KEY, JSON.stringify({ cases: ccCases, results: ccResults.slice(), ts: Date.now() })); } catch (e) {}
-    saveCcByDate();   // 날짜별 누적 저장(달력용)
+    saveCcByDate();              // 날짜별 누적 저장(로컬 캐시/오프라인 폴백)
+    pushCcToSheetDebounced();    // MAPS 시트 영구 저장(디바운스 — 실행 중 마지막 1회만)
+  }
+
+  // ===== MAPS 시트 영구 저장 (cc_daily) =====
+  let ccSheetSummary = null;   // {date:{n,nak,miss,buga}} 캐시
+  let _ccSheetTimer = null;
+  function pushCcToSheetDebounced() {
+    if (_ccSheetTimer) clearTimeout(_ccSheetTimer);
+    _ccSheetTimer = setTimeout(pushCcToSheet, 1500);
+  }
+  function pushCcToSheet() {
+    const apiKey = getMapsAdminKeyMj(); if (!apiKey) return;
+    const rows = ccMergedRows().filter(r => bidToYMD(r.bid_date));
+    if (!rows.length) return;
+    const items = rows.map(r => ({
+      date: bidToYMD(r.bid_date), item_id: r.item_id || '', sakun_no: r.sakun_no || '', court: r.court || '',
+      bid_date: r.bid_date || '', m_name: r.m_name || '', m_name_id: r.m_name_id || '',
+      m_name_id_disp: r.m_name_id_disp || '', m_name_id_color: r.m_name_id_color || '', mid_member_id: r.mid_member_id || '',
+      bidprice: r.bidprice || '', maegak_price: r.maegak_price || '', buyer: r.buyer || '',
+      state_kind: r.state_kind || '', status: r.status || '', category: ccCategory(r), is_buga: !!r.is_buga,
+      detail: r.detail || '', view_url: r.view_url || '', screenshot_path: r.screenshot_path || '', stu_member: r.stu_member || ''
+    }));
+    fetch('/api/maps-gas', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, api_action: 'saveProgressMatches', items })
+    }).then(r => r.json()).then(j => {
+      if (j && j.success) { ccSheetSummary = null; log('cc', `💾 시트 저장 ${j.saved}건 (${(j.dates || []).join(',')})`, 'log-ok'); }
+      else log('cc', `⚠ 시트 저장 실패: ${(j && (j.message || j.error)) || '?'}`, 'log-err');
+    }).catch(err => log('cc', `⚠ 시트 저장 오류: ${err}`, 'log-err'));
+  }
+  function refreshCcSummary(cb) {
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey) { if (cb) cb(); return; }
+    fetch('/api/maps-gas', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, api_action: 'getProgressMatchSummary' })
+    }).then(r => r.json()).then(j => {
+      if (j && j.success) ccSheetSummary = j.summary || {};
+      if (cb) cb();
+    }).catch(() => { if (cb) cb(); });
   }
 
   // ===== 날짜별 저장/달력 (localStorage — 이 브라우저 한정) =====
@@ -383,24 +423,41 @@
       if (cont && cont.style.display !== 'none') renderCcCalendar(ccCalYM ? ccCalYM.y : null, ccCalYM ? ccCalYM.m : null);
     } catch (e) {}
   }
-  // 특정 날짜의 저장 자료를 결과표로 복원
-  function restoreCcDate(ymd) {
-    const e = loadCcByDate()[ymd];
-    if (!e || !Array.isArray(e.rows) || !e.rows.length) { alert(ymd + ' 저장된 자료가 없습니다.'); return; }
-    ccCases = e.rows.map(r => Object.assign({}, r));
+  // 특정 날짜의 저장 자료를 결과표로 복원 (시트 우선, 실패 시 로컬 폴백)
+  function _applyRestoredRows(ymd, rows, src) {
+    ccCases = rows.map(r => Object.assign({}, r));
     ccResults.length = 0;
-    e.rows.forEach(r => { if (r.state_kind || r.status || r.is_buga) ccResults.push(Object.assign({}, r)); });
+    rows.forEach(r => { if (r.state_kind || r.status || r.is_buga) ccResults.push(Object.assign({}, r)); });
     ccSort = { key: '', dir: 1 }; ccRunUnchecked.clear();
     renderCcResults();
     const info = $card('cc')?.querySelector('[data-role="cc-loaded"]');
-    if (info) info.textContent = `📅 ${ymd} 저장 자료 복원 ${e.rows.length}건` + (e.ts ? ` (저장 ${new Date(e.ts).toLocaleString()})` : '');
+    if (info) info.textContent = `📅 ${ymd} 저장 자료 복원 ${rows.length}건 (${src})`;
+  }
+  function restoreCcDate(ymd) {
+    const apiKey = getMapsAdminKeyMj();
+    const fallback = () => {
+      const e = loadCcByDate()[ymd];
+      if (!e || !Array.isArray(e.rows) || !e.rows.length) { alert(ymd + ' 저장된 자료가 없습니다.'); return; }
+      _applyRestoredRows(ymd, e.rows, '로컬');
+    };
+    if (!apiKey) { fallback(); return; }
+    fetch('/api/maps-gas', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, api_action: 'getProgressMatchByDate', date: ymd })
+    }).then(r => r.json()).then(j => {
+      if (j && j.success && Array.isArray(j.rows) && j.rows.length) _applyRestoredRows(ymd, j.rows, '시트');
+      else fallback();
+    }).catch(() => fallback());
   }
   let ccCalYM = null;   // {y, m(0-based)}
   function toggleCcCalendar() {
     const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
     const show = (cont.style.display === 'none' || !cont.style.display);
     cont.style.display = show ? '' : 'none';
-    if (show) renderCcCalendar(ccCalYM ? ccCalYM.y : null, ccCalYM ? ccCalYM.m : null);
+    if (show) {
+      renderCcCalendar(ccCalYM ? ccCalYM.y : null, ccCalYM ? ccCalYM.m : null);
+      refreshCcSummary(() => renderCcCalendar(ccCalYM.y, ccCalYM.m));   // 시트 집계로 갱신
+    }
   }
   function renderCcCalendar(y, m) {
     const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
@@ -410,6 +467,7 @@
     const startDow = new Date(y, m, 1).getDay();
     const days = new Date(y, m + 1, 0).getDate();
     const cellInfo = (ymd) => {
+      if (ccSheetSummary && ccSheetSummary[ymd]) { const s = ccSheetSummary[ymd]; return { n: s.n, nak: s.nak, miss: s.miss, buga: s.buga }; }
       const e = map[ymd]; if (!e || !Array.isArray(e.rows)) return null;
       const rows = e.rows, cat = (c) => rows.filter(r => ccCategory(r) === c).length;
       return { n: rows.length, nak: cat('낙찰'), miss: cat('미입찰'), buga: cat('불가') };
