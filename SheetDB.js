@@ -8207,7 +8207,8 @@ function getTodayMaegakList() {
 var CC_DAILY_SHEET_NAME = 'cc_daily';
 var CC_DAILY_HEADERS = ['date', 'item_id', 'sakun_no', 'court', 'bid_date', 'm_name', 'm_name_id',
   'm_name_id_disp', 'm_name_id_color', 'mid_member_id', 'bidprice', 'maegak_price', 'buyer',
-  'state_kind', 'status', 'category', 'is_buga', 'detail', 'view_url', 'screenshot_path', 'stu_member', 'ts'];
+  'state_kind', 'status', 'category', 'is_buga', 'detail', 'view_url', 'screenshot_path', 'stu_member', 'ts',
+  'load_ts', 'match_ts'];
 
 // 날짜 셀 정규화: 시트가 'YYYY-MM-DD'를 Date로 자동변환해도 항상 'yyyy-MM-dd' 문자열로 비교
 function normDate_(v) {
@@ -8220,9 +8221,9 @@ function ensureCcDailySheet_() {
   var sh = ss.getSheetByName(CC_DAILY_SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(CC_DAILY_SHEET_NAME);
-    sh.getRange(1, 1, 1, CC_DAILY_HEADERS.length).setValues([CC_DAILY_HEADERS]);
     sh.setFrozenRows(1);
   }
+  sh.getRange(1, 1, 1, CC_DAILY_HEADERS.length).setValues([CC_DAILY_HEADERS]);  // 헤더 항상 최신(열 추가 반영)
   sh.getRange(1, 1, sh.getMaxRows(), 1).setNumberFormat('@');  // date 열 텍스트 고정(날짜 자동변환 방지)
   return sh;
 }
@@ -8260,15 +8261,19 @@ function getProgressMatchSummary() {
     if (!sh) return { success: true, summary: {} };
     var last = sh.getLastRow();
     if (last < 2) return { success: true, summary: {} };
-    var dIdx = CC_DAILY_HEADERS.indexOf('date'), cIdx = CC_DAILY_HEADERS.indexOf('category');
+    var dIdx = CC_DAILY_HEADERS.indexOf('date'), cIdx = CC_DAILY_HEADERS.indexOf('category'),
+        ltIdx = CC_DAILY_HEADERS.indexOf('load_ts'), mtIdx = CC_DAILY_HEADERS.indexOf('match_ts');
     var vals = sh.getRange(2, 1, last - 1, CC_DAILY_HEADERS.length).getValues();
     var sum = {};
     vals.forEach(function (row) {
       var d = normDate_(row[dIdx]); if (!d) return;
       var c = String(row[cIdx] || '').trim();
-      if (!sum[d]) sum[d] = { n: 0, nak: 0, miss: 0, buga: 0 };
+      if (!sum[d]) sum[d] = { n: 0, nak: 0, miss: 0, buga: 0, load_ts: '', match_ts: '' };
       sum[d].n++;
       if (c === '낙찰') sum[d].nak++; else if (c === '미입찰') sum[d].miss++; else if (c === '불가') sum[d].buga++;
+      var lt = String(row[ltIdx] || '').trim(), mt = String(row[mtIdx] || '').trim();
+      if (lt && lt > sum[d].load_ts) sum[d].load_ts = lt;     // 최신(가장 늦은) 시각
+      if (mt && mt > sum[d].match_ts) sum[d].match_ts = mt;
     });
     return { success: true, summary: sum };
   } catch (e) {

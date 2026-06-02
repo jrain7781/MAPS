@@ -384,8 +384,21 @@
     // 시트 영구저장은 매 건이 아니라 '실행 완료' 시 1회만 (pollLogs 종료 분기에서 pushCcToSheet)
   }
 
+  // ===== 불러온/매칭 시각 기록 (날짜별) =====
+  const CC_LOADTS_KEY = 'mj_cc_loadts';
+  function _nowStamp() {
+    const t = new Date(), p = n => String(n).padStart(2, '0');
+    return t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes());
+  }
+  function getLoadTsMap() { try { return JSON.parse(localStorage.getItem(CC_LOADTS_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function setLoadTsForDates(dates) {
+    const m = getLoadTsMap(), now = _nowStamp();
+    (dates || []).forEach(d => { if (d) m[d] = now; });
+    try { localStorage.setItem(CC_LOADTS_KEY, JSON.stringify(m)); } catch (e) {}
+  }
+
   // ===== MAPS 시트 영구 저장 (cc_daily) =====
-  let ccSheetSummary = null;   // {date:{n,nak,miss,buga}} 캐시
+  let ccSheetSummary = null;   // {date:{n,nak,miss,buga,load_ts,match_ts}} 캐시
   let _ccSheetTimer = null;
   function pushCcToSheetDebounced() {
     if (_ccSheetTimer) clearTimeout(_ccSheetTimer);
@@ -395,13 +408,16 @@
     const apiKey = getMapsAdminKeyMj(); if (!apiKey) return;
     const rows = ccMergedRows().filter(r => bidToYMD(r.bid_date));
     if (!rows.length) return;
+    const loadMap = getLoadTsMap();
+    const matchTs = _nowStamp();   // 매칭(실행 완료) 시각
     const items = rows.map(r => ({
       date: bidToYMD(r.bid_date), item_id: r.item_id || '', sakun_no: r.sakun_no || '', court: r.court || '',
       bid_date: r.bid_date || '', m_name: r.m_name || '', m_name_id: r.m_name_id || '',
       m_name_id_disp: r.m_name_id_disp || '', m_name_id_color: r.m_name_id_color || '', mid_member_id: r.mid_member_id || '',
       bidprice: r.bidprice || '', maegak_price: r.maegak_price || '', buyer: r.buyer || '',
       state_kind: r.state_kind || '', status: r.status || '', category: ccCategory(r), is_buga: !!r.is_buga,
-      detail: r.detail || '', view_url: r.view_url || '', screenshot_path: r.screenshot_path || '', stu_member: r.stu_member || ''
+      detail: r.detail || '', view_url: r.view_url || '', screenshot_path: r.screenshot_path || '', stu_member: r.stu_member || '',
+      load_ts: loadMap[bidToYMD(r.bid_date)] || '', match_ts: matchTs
     }));
     fetch('/api/maps-gas', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -486,11 +502,18 @@
       refreshCcSummary(() => renderCcCalendar(ccCalYM.y, ccCalYM.m));   // 시트 집계로 갱신
     }
   }
+  function _shortTs(s) { s = String(s || ''); return s.length >= 16 ? s.slice(5) : s; }   // 'YYYY-MM-DD HH:MM' → 'MM-DD HH:MM'
   function _ccCellInfo(ymd2, map) {
-    if (ccSheetSummary && ccSheetSummary[ymd2]) { const s = ccSheetSummary[ymd2]; return { n: s.n, nak: s.nak, miss: s.miss, buga: s.buga }; }
+    const lmap = getLoadTsMap();
+    if (ccSheetSummary && ccSheetSummary[ymd2]) {
+      const s = ccSheetSummary[ymd2];
+      return { n: s.n, nak: s.nak, miss: s.miss, buga: s.buga, load_ts: s.load_ts || lmap[ymd2] || '', match_ts: s.match_ts || '' };
+    }
     const e = (map || loadCcByDate())[ymd2]; if (!e || !Array.isArray(e.rows)) return null;
     const rows = e.rows, cat = (c) => rows.filter(r => ccCategory(r) === c).length;
-    return { n: rows.length, nak: cat('낙찰'), miss: cat('미입찰'), buga: cat('불가') };
+    let mts = '';
+    if (e.ts) { const t = new Date(e.ts), p = n => String(n).padStart(2, '0'); mts = t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes()); }
+    return { n: rows.length, nak: cat('낙찰'), miss: cat('미입찰'), buga: cat('불가'), load_ts: lmap[ymd2] || '', match_ts: mts };
   }
   function renderCcCalendar(y, m) {
     const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
@@ -529,10 +552,13 @@
       const cb = `<input type="checkbox" class="cal-cb" data-ymd="${ym}" ${checked ? 'checked' : ''} title="다중 선택" style="width:15px;height:15px;cursor:pointer">`;
       let body = '';
       if (c && c.n) {
+        const tsLine = (c.load_ts || c.match_ts)
+          ? `<div style="margin-top:3px;font-size:10px;color:#6b7280;line-height:1.4">${c.load_ts ? `📥 ${_shortTs(c.load_ts)}<br>` : ''}${c.match_ts ? `🎯 ${_shortTs(c.match_ts)}` : ''}</div>`
+          : '';
         body = `<div data-cal-day="${ym}" title="클릭: ${ym} 결과 보기" style="margin-top:4px;cursor:pointer;font-size:11px;line-height:1.5">
           <div>입찰 <b>${c.n}</b>건</div>
           <div><span style="color:#2563eb">낙찰 ${c.nak}건</span> · <span style="color:#111827">불가 ${c.buga}건</span></div>
-          <div style="color:#dc2626">미입찰 ${c.miss}건</div></div>`;
+          <div style="color:#dc2626">미입찰 ${c.miss}건</div>${tsLine}</div>`;
       }
       h += `<div style="min-height:84px;border:${border};border-radius:8px;padding:5px;background:${bg}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between">${circle}${cb}</div>${body}</div>`;
@@ -568,6 +594,7 @@
     }).then(r => r.json()).then(j => {
       if (j && j.success && Array.isArray(j.cases)) {
         ccCases = j.cases.filter(c => wanted.has(String(c.bid_date)));
+        setLoadTsForDates(dates);   // 불러온 시각 기록
         ccResults.length = 0; ccSort = { key: '', dir: 1 }; ccRunUnchecked.clear(); renderCcResults(); saveCcState();
         const info = $card('cc')?.querySelector('[data-role="cc-loaded"]');
         if (info) info.textContent = `선택 ${dates.length}일 ${ccCases.length}건 불러옴 — ▶ 실행으로 옥션 조회`;
@@ -658,6 +685,7 @@
       if (btn) btn.disabled = false;
       if (j && j.success && Array.isArray(j.cases)) {
         ccCases = j.cases;
+        setLoadTsForDates([...new Set(ccCases.map(c => bidToYMD(c.bid_date)).filter(Boolean))]);   // 불러온 시각 기록
         ccResults.length = 0; ccSort = { key: '', dir: 1 }; ccRunUnchecked.clear(); renderCcResults();   // 불러온 리스트 즉시 표시(실행 전)
         saveCcState();   // 불러온 리스트 저장
         const now = new Date();
