@@ -68,26 +68,24 @@ def compose_card_png(screenshot_path, is_buga, reason, sakun, m_name, bid_date="
         font = _font(fsize)
     head_h = int(fsize * 1.9)
 
-    H = head_h + shot.height
-    canvas = Image.new("RGB", (W, H), (255, 255, 255))
+    # 테두리(헤더와 동일 색)를 캡처 바깥에 둬서 이미지가 잘리지 않게.
+    # 구조: 헤더바(상단 테두리 겸) + 좌/우/하단 bw 만큼 컬러 테두리 + 그 안에 캡처 온전히.
+    bw = max(10, int(W * 0.014))
+    radius = max(14, int(bw * 0.9))
+    CW = W + bw * 2
+    CH = head_h + shot.height + bw
+    canvas = Image.new("RGB", (CW, CH), accent)   # 전체 배경 = 테두리 색
     d = ImageDraw.Draw(canvas)
-    d.rectangle([0, 0, W, head_h], fill=accent)
     try:
-        d.text((pad, head_h // 2), txt, fill=(255, 255, 255), font=font, anchor="lm")
+        d.text((bw + pad, head_h // 2), txt, fill=(255, 255, 255), font=font, anchor="lm")
     except Exception:
-        d.text((pad, head_h // 4), txt, fill=(255, 255, 255), font=font)
-    canvas.paste(shot, (0, head_h))
+        d.text((bw + pad, head_h // 4), txt, fill=(255, 255, 255), font=font)
+    canvas.paste(shot, (bw, head_h))   # 좌우/하단 bw 테두리 남기고 캡처 온전히 배치
     # 라운드 코너 (흰 배경 위)
-    radius = max(16, int(W * 0.020))
-    mask = Image.new("L", (W, H), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, W - 1, H - 1], radius=radius, fill=255)
-    out = Image.new("RGB", (W, H), (255, 255, 255))
+    mask = Image.new("L", (CW, CH), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, CW - 1, CH - 1], radius=radius, fill=255)
+    out = Image.new("RGB", (CW, CH), (255, 255, 255))
     out.paste(canvas, (0, 0), mask)
-    # 카드 테두리 — 헤더와 동일 색(불가 빨강/낙찰 파랑)
-    bw = max(4, int(W * 0.007))
-    ImageDraw.Draw(out).rounded_rectangle(
-        [bw // 2, bw // 2, W - 1 - bw // 2, H - 1 - bw // 2],
-        radius=radius, outline=accent, width=bw)
     buf = io.BytesIO()
     out.save(buf, format="PNG")
     return buf.getvalue()
