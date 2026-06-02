@@ -481,16 +481,21 @@ def capture_detail(driver, tag, sakun=""):
                 var tabs = Array.prototype.slice.call(document.querySelectorAll('table'))
                   .map(function(e){ var r=e.getBoundingClientRect(); return {l:r.left+sx, r:r.right+sx, t:r.top+sy, w:r.width}; })
                   .filter(function(o){ return o.w>=400; });          // 본문 테이블(좌우폭)
-                var imgs = Array.prototype.slice.call(document.images)
-                  .map(function(e){ var r=e.getBoundingClientRect(); return {b:r.bottom+sy, w:r.width, h:r.height}; })
-                  .filter(function(o){ return o.w>=120 && o.h>=70; }) // 사진/지도
-                  .sort(function(a,b){ return a.b-b.b; });
-                if(!tabs.length || !imgs.length) return null;
+                var allimg = Array.prototype.slice.call(document.images)
+                  .map(function(e){ var r=e.getBoundingClientRect(); return {t:r.top+sy, b:r.bottom+sy, w:r.width, h:r.height}; })
+                  .filter(function(o){ return o.w>=120 && o.h>=70; }); // 사진/지도 후보
+                if(!tabs.length || !allimg.length) return null;
                 var left = Math.min.apply(null, tabs.map(function(o){return o.l;}));
                 var right = Math.max.apply(null, tabs.map(function(o){return o.r;}));
                 var topY = Math.max(0, Math.floor(Math.min.apply(null, tabs.map(function(o){return o.t;})) - 2));  // 첫 본문표 상단부터
-                var cutY = imgs[Math.min(2,imgs.length-1)].b + 6;     // 3번째 사진 하단
-                // '사진 펼쳐보기' 버튼/바를 직접 찾아 그 위에서 자르기 (보기 싫은 회색바 제외)
+                // 실제 사진은 키 큰 이미지(h>=120). '사진 펼쳐보기' 회색바 img(폭만 넓고 납작)는 제외.
+                var photos = allimg.filter(function(o){ return o.h>=120; });
+                if(!photos.length) photos = allimg;
+                photos.sort(function(a,b){ return a.t-b.t; });
+                var bandTop = photos[0].t;                                 // 첫 사진 행 상단
+                var row = photos.filter(function(o){ return o.t <= bandTop + 80; }); // 같은 행만
+                var cutY = Math.max.apply(null, row.map(function(o){return o.b;})) + 6; // 사진 행 하단까지
+                // 백업: '사진 펼쳐보기' 텍스트 요소가 있으면 그 위로 한번 더 컷
                 var expandTop = null;
                 var cand = document.querySelectorAll('a,button,span,div,li,p');
                 for(var i=0;i<cand.length;i++){

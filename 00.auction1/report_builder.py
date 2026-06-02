@@ -179,24 +179,24 @@ def _summary_card(pdf, items, n_buga, n_nak, M, W):
     pdf.line(inner_x, y, inner_x + inner_w, y)
     y += 3
 
-    # 목록 (● · 입찰일자 · 사건번호 · 회원명) 폰트 2배 — 색 점으로 불가(빨강)/낙찰(파랑) 구분
+    # 목록 (불가/낙찰 · 입찰일자 · 사건번호 · 회원명) 폰트 2배 — 앞에 불가(빨강)/낙찰(파랑) 글자
     for it in items:
         is_buga = (it.get("state_kind") or "") == "불가"
         col = C_BUGA if is_buga else C_NAKCHAL
         pdf.set_xy(inner_x, y)
-        pdf.set_font("malgun", "B", 13)
+        pdf.set_font("malgun", "B", 19)
         pdf.set_text_color(*col)
-        pdf.cell(9, line_h, "●")
-        pdf.set_xy(inner_x + 11, y)
+        pdf.cell(17, line_h, "불가" if is_buga else "낙찰")
+        pdf.set_xy(inner_x + 18, y)
         pdf.set_font("malgun", "B", 19)
         pdf.set_text_color(*C_DARK)
-        pdf.cell(46, line_h, str(it.get("bid_date", "")))
+        pdf.cell(40, line_h, str(it.get("bid_date", "")))
         pdf.set_xy(inner_x + 59, y)
-        pdf.cell(72, line_h, str(it.get("sakun_no", "")))
-        pdf.set_xy(inner_x + 133, y)
-        pdf.set_font("malgun", "", 19)
+        pdf.cell(64, line_h, str(it.get("sakun_no", "")))
+        pdf.set_xy(inner_x + 124, y)
+        pdf.set_font("malgun", "", 16)
         pdf.set_text_color(70, 78, 92)
-        pdf.cell(inner_w - 133, line_h, str(it.get("m_name", "")))
+        pdf.cell(inner_w - 124, line_h, str(it.get("m_name", "")))
         y += line_h
 
     bottom = y + 4
