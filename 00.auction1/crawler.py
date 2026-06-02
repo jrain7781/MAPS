@@ -1268,10 +1268,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if it.get("addr"):
                     it["addr"] = str(it["addr"]).split("\n")[0]
 
-            pdf_bytes = report_builder.build_report_pdf(
-                rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"), total=total)
-            pdf_b64 = _b64.b64encode(pdf_bytes).decode("ascii")
-
+            # 텔레그램은 PDF 미사용(다운로드 단계 제거) → 생성 안 함. PDF 미리보기는 /api/preview-report 별도
             out_items = []
             for it in rep_items:
                 cat = it.get("category") or report_builder._cat_of(it)
@@ -1304,7 +1301,6 @@ class Handler(SimpleHTTPRequestHandler):
                 "report_dt": report_dt, "items": out_items, "total": total,
                 "recipients": payload.get("recipients") or None,  # {include_admins, teacher_ids} — 관리자=전체/강사=자기건
                 "target": payload.get("target") or None,          # 레거시 폴백(구분/회원명)
-                "pdf_b64": pdf_b64, "pdf_name": f"MJ_일일보고_{report_dt[:10]}.pdf",
             }
             result = _gas_post(gas_payload, timeout=300.0)
             self._send_json(200, result)

@@ -1546,13 +1546,12 @@ function sendBugaReport(payload) {
         try {
           var blob = Utilities.newBlob(Utilities.base64Decode(it.screenshot_b64), 'image/png', (it.sakun_no || 'shot') + '.png');
           var c = _catOfItem_(it);
-          telegramSendPhoto_(rc.chat_id, blob, _catEmoji_(c) + c + ' ' + (it.sakun_no || '') + (it.m_name ? (' (' + it.m_name + ')') : ''));
+          // 캡션 맨 앞에 입찰일자
+          var cap = (it.bid_date ? (it.bid_date + ' ') : '') + _catEmoji_(c) + c + ' ' + (it.sakun_no || '') + (it.m_name ? (' (' + it.m_name + ')') : '');
+          telegramSendPhoto_(rc.chat_id, blob, cap);
         } catch (e2) { errors.push(rc.name + ' 캡처(' + (it.sakun_no || '') + '): ' + e2.message); }
       });
-      if (rc.scope === 'all' && payload.pdf_b64) {   // 전체 PDF는 관리자에게만
-        var pdf = Utilities.newBlob(Utilities.base64Decode(payload.pdf_b64), 'application/pdf', payload.pdf_name || 'MJ_일일보고.pdf');
-        telegramSendDocument_(rc.chat_id, pdf, '일일보고 PDF');
-      }
+      // PDF 문서 전송 제거 — 다운로드 단계 없이 텍스트 요약 + 카드 이미지(인라인)만
       sent++;
     } catch (e) {
       errors.push(rc.name + ': ' + e.message);
