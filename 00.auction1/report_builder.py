@@ -166,37 +166,37 @@ def build_report_pdf(items, report_dt=None):
 def _summary_card(pdf, items, n_buga, n_nak, M, W):
     inner_x = M + 6
     inner_w = W - 12
-    line_h = 6.5
+    line_h = 12
     top = pdf.get_y()
     y = top + 5
 
-    # 카운트 (버튼 폰트 2배)
-    _pill(pdf, inner_x, y, 44, 14, f"불가 {n_buga}", C_BUGA, 20)
-    _pill(pdf, inner_x + 49, y, 44, 14, f"낙찰 {n_nak}", C_NAKCHAL, 20)
-    y += 18
+    # 카운트 (버튼 폰트 살짝 축소)
+    _pill(pdf, inner_x, y, 36, 12, f"불가 {n_buga}", C_BUGA, 15)
+    _pill(pdf, inner_x + 41, y, 36, 12, f"낙찰 {n_nak}", C_NAKCHAL, 15)
+    y += 16
 
     pdf.set_draw_color(*C_LINE)
     pdf.line(inner_x, y, inner_x + inner_w, y)
-    y += 2.5
+    y += 3
 
-    # 목록 (● · 입찰일자 · 사건번호 · 회원명) — 상세/사유 제거, 색 점으로 불가(빨강)/낙찰(파랑) 구분
+    # 목록 (● · 입찰일자 · 사건번호 · 회원명) 폰트 2배 — 색 점으로 불가(빨강)/낙찰(파랑) 구분
     for it in items:
         is_buga = (it.get("state_kind") or "") == "불가"
         col = C_BUGA if is_buga else C_NAKCHAL
         pdf.set_xy(inner_x, y)
-        pdf.set_font("malgun", "B", 9.5)
+        pdf.set_font("malgun", "B", 13)
         pdf.set_text_color(*col)
-        pdf.cell(7, line_h, "●")
-        pdf.set_xy(inner_x + 8, y)
-        pdf.set_font("malgun", "B", 9.5)
+        pdf.cell(9, line_h, "●")
+        pdf.set_xy(inner_x + 11, y)
+        pdf.set_font("malgun", "B", 19)
         pdf.set_text_color(*C_DARK)
-        pdf.cell(28, line_h, str(it.get("bid_date", "")))
-        pdf.set_xy(inner_x + 38, y)
-        pdf.cell(54, line_h, str(it.get("sakun_no", "")))
-        pdf.set_xy(inner_x + 94, y)
-        pdf.set_font("malgun", "", 9.5)
+        pdf.cell(46, line_h, str(it.get("bid_date", "")))
+        pdf.set_xy(inner_x + 59, y)
+        pdf.cell(72, line_h, str(it.get("sakun_no", "")))
+        pdf.set_xy(inner_x + 133, y)
+        pdf.set_font("malgun", "", 19)
         pdf.set_text_color(70, 78, 92)
-        pdf.cell(inner_w - 94, line_h, str(it.get("m_name", "")))
+        pdf.cell(inner_w - 133, line_h, str(it.get("m_name", "")))
         y += line_h
 
     bottom = y + 4

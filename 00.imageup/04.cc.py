@@ -489,7 +489,18 @@ def capture_detail(driver, tag, sakun=""):
                 var left = Math.min.apply(null, tabs.map(function(o){return o.l;}));
                 var right = Math.max.apply(null, tabs.map(function(o){return o.r;}));
                 var topY = Math.max(0, Math.floor(Math.min.apply(null, tabs.map(function(o){return o.t;})) - 2));  // 첫 본문표 상단부터
-                var cutY = imgs[Math.min(2,imgs.length-1)].b + 6;     // 3번째 사진 하단(펼쳐보기 버튼 제외)
+                var cutY = imgs[Math.min(2,imgs.length-1)].b + 6;     // 3번째 사진 하단
+                // '사진 펼쳐보기' 버튼/바를 직접 찾아 그 위에서 자르기 (보기 싫은 회색바 제외)
+                var expandTop = null;
+                var cand = document.querySelectorAll('a,button,span,div,li,p');
+                for(var i=0;i<cand.length;i++){
+                  var t=(cand[i].textContent||'').replace(/\\s/g,'');
+                  if(t.length<=12 && t.indexOf('펼쳐보기')>=0){
+                    var r2=cand[i].getBoundingClientRect();
+                    if(r2.width>0 && r2.height>0){ var yy=r2.top+sy; if(expandTop===null||yy<expandTop) expandTop=yy; }
+                  }
+                }
+                if(expandTop!==null && expandTop>topY+100) cutY = Math.min(cutY, expandTop-3);
                 return { x: Math.max(0, Math.floor(left-3)), y: topY,
                          w: Math.ceil((right-left)+6), h: Math.ceil(cutY - topY) };
             """)
