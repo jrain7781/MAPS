@@ -1279,6 +1279,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "bid_date": it.get("bid_date", ""), "state_kind": it.get("state_kind", ""),
                     "status": it.get("status", ""), "maegak_price": it.get("maegak_price", ""),
                     "buyer": it.get("buyer", ""), "addr": it.get("addr", ""),
+                    "m_name": it.get("m_name", ""), "detail": it.get("detail", ""),
                     "view_url": it.get("view_url", ""), "screenshot_b64": shot_b64,
                 })
 

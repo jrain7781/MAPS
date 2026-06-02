@@ -1469,10 +1469,12 @@ function sendBugaReport(payload) {
   lines.push('');
   items.forEach(function (it) {
     var isBuga = (it.state_kind || '') === '불가';
+    var who = it.m_name ? (' (' + it.m_name + ')') : '';
     var tail = isBuga
-      ? (it.status || '불가')
+      ? ('불가 · ' + (it.status || ''))
       : (_reportFmtWon_(it.maegak_price) + (it.buyer ? (' / ' + it.buyer) : ''));
-    lines.push((isBuga ? '🔴' : '🔵') + ' <b>' + telegramEscapeHtml_(it.sakun_no || '') + '</b>  ' + telegramEscapeHtml_(tail));
+    lines.push((isBuga ? '🔴' : '🔵') + ' <b>' + telegramEscapeHtml_(it.sakun_no || '') + '</b>' + telegramEscapeHtml_(who) + '  ' + telegramEscapeHtml_(tail));
+    if (isBuga && it.detail) lines.push('   └ ' + telegramEscapeHtml_(it.detail));   // 변경 상세
   });
   var summary = lines.join('\n');
 
@@ -1480,14 +1482,16 @@ function sendBugaReport(payload) {
   admins.forEach(function (ad) {
     try {
       telegramSendMessage(ad.chat_id, summary);
-      // 건별 상세 캡처 사진
+      // 건별 상세 캡처 — 텔레그램 사진은 재압축돼 흐림 → 문서(원본 PNG)로 전송(선명)
       items.forEach(function (it) {
         if (!it.screenshot_b64) return;
         try {
-          var blob = Utilities.newBlob(Utilities.base64Decode(it.screenshot_b64), 'image/png', (it.sakun_no || 'shot') + '.png');
-          var cap = ((it.state_kind === '불가') ? '🔴불가 ' : '🔵낙찰 ') + (it.sakun_no || '');
-          telegramSendPhoto_(ad.chat_id, blob, cap);
-        } catch (e2) { errors.push(ad.name + ' 사진(' + (it.sakun_no || '') + '): ' + e2.message); }
+          var who2 = it.m_name ? ('/' + it.m_name) : '';
+          var blob = Utilities.newBlob(Utilities.base64Decode(it.screenshot_b64), 'image/png',
+            (it.sakun_no || 'shot') + who2 + '.png');
+          var cap = ((it.state_kind === '불가') ? '🔴불가 ' : '🔵낙찰 ') + (it.sakun_no || '') + (it.m_name ? (' (' + it.m_name + ')') : '');
+          telegramSendDocument_(ad.chat_id, blob, cap);   // photo → document (선명)
+        } catch (e2) { errors.push(ad.name + ' 캡처(' + (it.sakun_no || '') + '): ' + e2.message); }
       });
       // PDF 문서 (관리자마다 새 blob)
       if (payload.pdf_b64) {

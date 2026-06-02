@@ -122,16 +122,29 @@ def build_report_pdf(items, report_dt=None):
             pdf.set_text_color(*vcolor)
             pdf.multi_cell(text_w - 22, 6, str(value), new_x="LMARGIN", new_y="NEXT", max_line_height=6)
 
+        row("회원", it.get("m_name", ""))
         row("물건종별", it.get("mulgeon_type", ""))
         row("소재지", (it.get("addr", "") or "").split("\n")[0])   # 토지/대항력 등 부가줄 제외
         row("매각기일", _fmt_date6(it.get("bid_date", "")))
         row("법원/기관", it.get("court", ""))
         if is_buga:
-            row("불가사유", it.get("status", ""), C_BUGA)
+            reason = it.get("status", "") or it.get("state_raw", "")
+            row("처리결과", f"불가 · {reason}" if reason else "불가", C_BUGA)
+            row("상세", it.get("detail", ""), C_BUGA)   # 변경 상세(종결문구) 아래에
         else:
             row("낙찰가", _fmt_won(it.get("maegak_price", "")), C_NAKCHAL)
             row("매수인", it.get("buyer", "") or "(비공개)")
-        row("옥션원", it.get("view_url", ""), (37, 99, 235))
+
+        # 옥션원 바로가기 버튼 (하이퍼링크)
+        vu = it.get("view_url", "")
+        if vu:
+            pdf.set_x(pdf.l_margin)
+            pdf.set_font("malgun", "B", 9)
+            pdf.set_fill_color(37, 99, 235)
+            pdf.set_text_color(255, 255, 255)
+            pdf.cell(40, 7, "옥션원 바로가기 ▶", border=0, fill=True, link=vu, align="C",
+                     new_x="LMARGIN", new_y="NEXT")
+            pdf.set_text_color(31, 41, 55)
 
         text_bottom = pdf.get_y()
 

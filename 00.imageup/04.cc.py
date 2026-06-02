@@ -462,17 +462,32 @@ def open_detail_text(driver, view_url):
 
 
 def capture_detail(driver, tag):
-    """현재 상세페이지 전체(풀페이지) 캡처 → PNG 저장, 경로 반환. 보고서용. 실패 시 ''."""
+    """상세페이지 상단부(물건정보~사진 3장까지)만 크롭 캡처 → PNG. 보고서용. 실패 시 ''."""
     try:
         os.makedirs(REPORT_SHOT_DIR, exist_ok=True)
         safe = re.sub(r"[^0-9A-Za-z가-힣_-]", "_", str(tag))[:50]
         path = os.path.join(REPORT_SHOT_DIR, f"{safe}.png")
+        # 사진/지도(큰 이미지) 3장까지 → 그 아래 잘라냄 (전체 긴 페이지 X)
         try:
-            # 전체 페이지 캡처 (CDP captureBeyondViewport) — 뷰포트 밖까지
+            cut = driver.execute_script("""
+                var imgs = Array.prototype.slice.call(document.images)
+                  .map(function(im){ var r=im.getBoundingClientRect();
+                     return {b: r.bottom + window.scrollY, w: r.width, h: r.height}; })
+                  .filter(function(o){ return o.w>=120 && o.h>=70; })   // 사진/지도(아이콘 제외)
+                  .sort(function(a,b){ return a.b-b.b; });
+                if(!imgs.length) return 0;
+                var i = Math.min(2, imgs.length-1);   // 3번째(없으면 마지막) 이미지 하단
+                return Math.ceil(imgs[i].b + 28);
+            """)
+        except Exception:
+            cut = 0
+        try:
             m = driver.execute_cdp_cmd("Page.getLayoutMetrics", {})
             css = m.get("cssContentSize") or m.get("contentSize") or {}
             w = int(css.get("width") or 1400)
-            h = min(int(css.get("height") or 2400), 20000)
+            full_h = int(css.get("height") or 2400)
+            h = int(cut) if (cut and int(cut) > 200) else full_h   # 사진 못찾으면 전체
+            h = min(h, 20000)
             shot = driver.execute_cdp_cmd("Page.captureScreenshot", {
                 "format": "png", "captureBeyondViewport": True,
                 "clip": {"x": 0, "y": 0, "width": w, "height": h, "scale": 1}})
@@ -703,6 +718,7 @@ def main():
         options.add_argument("--disable-gpu")
         print("[MJ] headless 모드 (창 숨김)")
     options.add_argument("--window-size=1400,900")
+    options.add_argument("--force-device-scale-factor=2")   # 캡처 2x 고해상도(텔레그램 선명도)
     options.add_experimental_option("detach", False)
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     wait = WebDriverWait(driver, 15)
