@@ -893,11 +893,11 @@
     if (m.has_token) return `<span title="연결됨·사용중지" style="${_TGB};border:1px solid #2563eb;color:#2563eb">T</span>`;
     return `<span title="미연결" style="${_TGB};border:1px solid #cbd5e1;color:#94a3b8">T</span>`;
   }
-  // 회원 텔레그램 사용여부 T 뱃지 (파랑 계열: 사용=파랑채움 / 미사용=연파랑 테두리)
+  // 회원 텔레그램 사용여부 T 뱃지 (사용=파랑채움 T / 미사용=뱃지 없음)
   function tgDot(ready) {
     return ready
       ? `<span title="텔레그램 사용" style="${_TGB};margin-right:3px;vertical-align:middle;background:#2563eb;color:#fff">T</span>`
-      : `<span title="텔레그램 미사용" style="${_TGB};margin-right:3px;vertical-align:middle;border:1px solid #93c5fd;color:#93c5fd">T</span>`;
+      : '';
   }
   // 우리 회원 낙찰 = 매각 & 매각가==입찰가
   function ccIsOurWin(r) {
