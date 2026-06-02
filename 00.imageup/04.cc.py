@@ -335,8 +335,37 @@ def is_gongmae(case):
     return court == "공매" or sakun.count("-") >= 2
 
 
+def set_gongmae_state_all(driver):
+    """공매 검색폼 물건상태 → '전체' 강제. (낙찰/유찰/변경 물건 누락 방지)
+    select id 미상 + 처분방식('매각')과 구분 위해 '낙찰' 옵션 가진 select만 물건상태로 판별."""
+    try:
+        for sel in driver.find_elements(By.TAG_NAME, "select"):
+            opts = sel.find_elements(By.TAG_NAME, "option")
+            texts = [(o.text or "").strip() for o in opts]
+            if not any("낙찰" in t for t in texts):   # 물건상태 select 식별 (처분방식엔 낙찰 없음)
+                continue
+            target = None
+            for o in opts:
+                if "전체" in (o.text or "").strip():
+                    target = o
+                    break
+            if target is None and opts:
+                target = opts[0]   # 첫 옵션이 보통 전체
+            if target is not None:
+                driver.execute_script(
+                    "arguments[0].value=arguments[1]; arguments[0].dispatchEvent(new Event('change'));",
+                    sel, target.get_attribute("value"))
+                print(f"    공매 물건상태 → 전체 ('{(target.text or '').strip()}')")
+            return True
+        print("    ⚠ 공매 물건상태 select 미발견 (디폴트 사용)")
+        return False
+    except Exception as e:
+        print(f"    ⚠ 공매 물건상태 설정 오류: {repr(e)[:120]}")
+        return False
+
+
 def search_gongmae(driver, wait, case):
-    """공매 검색(pubauct/list.php): 물건번호(pdNo) 세팅 → #btnSrch native click."""
+    """공매 검색(pubauct/list.php): 물건상태=전체 → 물건번호(pdNo) 세팅 → #btnSrch native click."""
     pdno = str(case.get("sakun_no") or "").strip()
     try:
         driver.get(URL_GONGMAE)
@@ -345,6 +374,7 @@ def search_gongmae(driver, wait, case):
         except Exception:
             print(f"    ⚠ 공매 검색폼 미발견 url={driver.current_url}")
             return False
+        set_gongmae_state_all(driver)   # 물건상태 전체 강제 (낙찰물건 검색누락 방지)
         driver.execute_script("document.getElementById('pdNo').value=arguments[0];", pdno)
         btns = driver.find_elements(By.ID, "btnSrch") or driver.find_elements(By.CSS_SELECTOR, "#fmSrch .btn_lightblack")
         if not btns:
