@@ -319,10 +319,10 @@ def parse_gongmae_detail(detail_text):
             b = b.split("/")[0].strip().rstrip(") ").strip()
             parts = b.split()
             res["buyer"] = parts[-1] if parts else b
-    # 매각가(낙찰가): 입찰결과 표에서 '매각' 표시된 회차의 금액
-    blk = (re.search(r"입찰결과[\s\S]{0,500}", detail_text) or [None])
-    blk = blk.group(0) if hasattr(blk, "group") else detail_text
-    mm = re.search(r"([\d,]{7,})[\s\n]*매각(?!\s*결정)", blk) or re.search(r"매각[\s\n]*[:：]?\s*([\d,]{7,})", blk)
+    # 낙찰가: 공매 상세는 '낙찰 : 234,888,999원 (106.77%)' 형태 (경매의 '매각:금액'과 다름)
+    mm = (re.search(r"낙찰\s*[:：]\s*([\d,]{7,})\s*원", detail_text)
+          or re.search(r"([\d,]{7,})[\s\n]*매각(?!\s*결정)", detail_text)
+          or re.search(r"매각[\s\n]*[:：]?\s*([\d,]{7,})", detail_text))
     if mm:
         res["maegak_price"] = mm.group(1).replace(",", "")
     return res
