@@ -29,15 +29,21 @@ C_DARK = (17, 24, 39)
 C_GRAY = (120, 128, 142)
 C_LINE = (226, 232, 240)
 
-# 일일보고 카테고리 색: 낙찰=파랑, 미입찰=빨강, 불가=검정
+# 일일보고 카테고리 색: 낙찰=파랑, 미입찰=빨강, 불가=검정 (이미지 카드용)
 CARD_COLOR = {"낙찰": (37, 99, 235), "미입찰": (220, 38, 38), "불가": (17, 24, 39)}
-CARD_ORDER = {"낙찰": 0, "미입찰": 1, "불가": 2}
+# 리스트 표기용(패찰=일반, 확인불가 포함). 정렬: 낙찰→불가→미입찰→패찰→확인불가
+ALL_CATS = ("낙찰", "미입찰", "불가", "일반", "확인불가")
+CARD_ORDER = {"낙찰": 0, "불가": 1, "미입찰": 2, "일반": 3, "확인불가": 4}
+CAT_LABEL = {"낙찰": "낙찰", "미입찰": "미입찰", "불가": "불가", "일반": "패찰", "확인불가": "확인불가"}
+CAT_COLOR_RGB = {"낙찰": (37, 99, 235), "미입찰": (220, 38, 38), "불가": (17, 24, 39),
+                 "일반": (107, 114, 128), "확인불가": (156, 163, 175)}
+CARD_CATS = ("낙찰", "불가", "미입찰")   # 이미지 카드는 이 셋만
 
 
 def _cat_of(it):
     """item에서 일일보고 카테고리 결정 (category 우선, 없으면 state_kind 기반)."""
     c = (it.get("category") or "").strip()
-    if c in CARD_COLOR:
+    if c in ALL_CATS:
         return c
     return "불가" if (it.get("state_kind") or "") == "불가" else "낙찰"
 
@@ -177,9 +183,10 @@ def build_report_pdf(items, report_dt=None, total=None):
     if not items:
         return bytes(pdf.output())
 
-    # ── 건별 카드 (낙찰→미입찰→불가) ──
+    # ── 건별 카드 (낙찰→불가→미입찰만, 패찰·확인불가는 카드 없음) ──
     for it in items:
-        _item_card(pdf, it, M, W, PAGE_BOTTOM)
+        if _cat_of(it) in CARD_CATS:
+            _item_card(pdf, it, M, W, PAGE_BOTTOM)
 
     return bytes(pdf.output())
 
@@ -203,24 +210,24 @@ def _summary_card(pdf, items, counts, M, W):
     pdf.line(inner_x, y, inner_x + inner_w, y)
     y += 3
 
-    # 목록 (카테고리 · 입찰일자 · 사건번호 · 회원명) — 앞 카테고리 글자 색
+    # 목록 (카테고리 · 입찰일자 · 사건번호 · 회원명) — 낙찰·불가·미입찰·패찰·확인불가 순, 앞 카테고리 글자 색
     for it in items:
         cat = _cat_of(it)
-        col = CARD_COLOR.get(cat, C_DARK)
+        col = CAT_COLOR_RGB.get(cat, C_DARK)
         pdf.set_xy(inner_x, y)
         pdf.set_font("malgun", "B", 19)
         pdf.set_text_color(*col)
-        pdf.cell(24, line_h, cat)
-        pdf.set_xy(inner_x + 25, y)
+        pdf.cell(33, line_h, CAT_LABEL.get(cat, cat))
+        pdf.set_xy(inner_x + 34, y)
         pdf.set_font("malgun", "B", 19)
         pdf.set_text_color(*C_DARK)
-        pdf.cell(38, line_h, str(it.get("bid_date", "")))
-        pdf.set_xy(inner_x + 64, y)
-        pdf.cell(62, line_h, str(it.get("sakun_no", "")))
-        pdf.set_xy(inner_x + 128, y)
+        pdf.cell(36, line_h, str(it.get("bid_date", "")))
+        pdf.set_xy(inner_x + 72, y)
+        pdf.cell(58, line_h, str(it.get("sakun_no", "")))
+        pdf.set_xy(inner_x + 132, y)
         pdf.set_font("malgun", "", 16)
         pdf.set_text_color(70, 78, 92)
-        pdf.cell(inner_w - 128, line_h, str(it.get("m_name", "")))
+        pdf.cell(inner_w - 132, line_h, str(it.get("m_name", "")))
         y += line_h
 
     bottom = y + 4

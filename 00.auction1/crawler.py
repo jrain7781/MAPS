@@ -1251,11 +1251,11 @@ class Handler(SimpleHTTPRequestHandler):
             items = payload.get("items") or []
             api_key = payload.get("api_key") or ""
             total = payload.get("total")
-            rep_items = [it for it in items if (it.get("category") or "") in ("낙찰", "미입찰", "불가")]
+            rep_items = [it for it in items if (it.get("category") or "") in ("낙찰", "미입찰", "불가", "일반", "확인불가")]
             if not rep_items:   # 레거시 폴백
                 rep_items = [it for it in items if (it.get("state_kind") or "") in ("불가", "매각")]
             if not rep_items:
-                self._send_json(200, {"success": False, "message": "보고할 낙찰/미입찰/불가 건이 없습니다."})
+                self._send_json(200, {"success": False, "message": "보고할 건이 없습니다."})
                 return
 
             import base64 as _b64
@@ -1277,7 +1277,8 @@ class Handler(SimpleHTTPRequestHandler):
                 cat = it.get("category") or report_builder._cat_of(it)
                 sp = it.get("screenshot_path") or ""
                 shot_b64 = ""
-                if sp and os.path.exists(sp):
+                # 이미지 카드는 낙찰·불가·미입찰만 (패찰·확인불가는 리스트만)
+                if cat in ("낙찰", "불가", "미입찰") and sp and os.path.exists(sp):
                     try:
                         # 컬러 헤더바+캡처 합성 카드(텔레그램 가로 꽉차게 보이게)
                         comp = report_builder.compose_card_png(
@@ -1319,11 +1320,11 @@ class Handler(SimpleHTTPRequestHandler):
             payload = json.loads(raw or "{}")
             items = payload.get("items") or []
             total = payload.get("total")
-            rep_items = [it for it in items if (it.get("category") or "") in ("낙찰", "미입찰", "불가")]
+            rep_items = [it for it in items if (it.get("category") or "") in ("낙찰", "미입찰", "불가", "일반", "확인불가")]
             if not rep_items:   # 레거시 폴백
                 rep_items = [it for it in items if (it.get("state_kind") or "") in ("불가", "매각")]
             if not rep_items:
-                self._send_json(200, {"success": False, "message": "미리볼 낙찰/미입찰/불가 건이 없습니다."})
+                self._send_json(200, {"success": False, "message": "미리볼 건이 없습니다."})
                 return
             import base64 as _b64
             import report_builder

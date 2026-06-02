@@ -1448,7 +1448,14 @@ function _reportFmtWon_(v) {
  * }
  * 각 관리자에게: 요약텍스트 + 건별 사진(캡션) + PDF 문서.
  */
-function _catEmoji_(c) { return c === '낙찰' ? '🔵' : (c === '미입찰' ? '🔴' : '⚫'); }
+function _catEmoji_(c) {
+  if (c === '낙찰') return '🔵';
+  if (c === '미입찰') return '🔴';
+  if (c === '불가') return '⚫';
+  if (c === '일반' || c === '패찰') return '⚪';
+  if (c === '확인불가') return '❔';
+  return '⚫';
+}
 function _catOfItem_(it) {
   var c = String(it.category || '').trim();
   if (c) return c;

@@ -919,9 +919,9 @@
     if (mae < bid) return '미입찰';
     return '일반';   // 매각가 > 입찰가 (우리보다 높게 팔림)
   }
-  // 일일보고 항목 = 낙찰/미입찰/불가 (category 부착). 일반매각·확인불가·진행중 제외
+  // 일일보고 항목 = 낙찰/미입찰/불가/패찰(일반)/확인불가 (리스트용). 이미지 카드는 PDF/텔레그램에서 낙찰·불가·미입찰만. 진행중 제외
   function ccReportItems() {
-    return ccMergedRows().filter(r => ['낙찰', '미입찰', '불가'].indexOf(ccCategory(r)) >= 0)
+    return ccMergedRows().filter(r => ['낙찰', '미입찰', '불가', '일반', '확인불가'].indexOf(ccCategory(r)) >= 0)
       .map(r => Object.assign({}, r, { category: ccCategory(r) }));
   }
   function ccReportTotal() { return ccMergedRows().length; }   // 입찰(전체)
