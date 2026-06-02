@@ -1246,9 +1246,12 @@ class Handler(SimpleHTTPRequestHandler):
             payload = json.loads(raw or "{}")
             items = payload.get("items") or []
             api_key = payload.get("api_key") or ""
-            rep_items = [it for it in items if (it.get("state_kind") or "") in ("불가", "매각")]
+            total = payload.get("total")
+            rep_items = [it for it in items if (it.get("category") or "") in ("낙찰", "미입찰", "불가")]
+            if not rep_items:   # 레거시 폴백
+                rep_items = [it for it in items if (it.get("state_kind") or "") in ("불가", "매각")]
             if not rep_items:
-                self._send_json(200, {"success": False, "message": "보고할 불가/낙찰 건이 없습니다."})
+                self._send_json(200, {"success": False, "message": "보고할 낙찰/미입찰/불가 건이 없습니다."})
                 return
 
             import base64 as _b64
@@ -1261,20 +1264,21 @@ class Handler(SimpleHTTPRequestHandler):
                 if it.get("addr"):
                     it["addr"] = str(it["addr"]).split("\n")[0]
 
-            pdf_bytes = report_builder.build_report_pdf(rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"))
+            pdf_bytes = report_builder.build_report_pdf(
+                rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"), total=total)
             pdf_b64 = _b64.b64encode(pdf_bytes).decode("ascii")
 
             out_items = []
             for it in rep_items:
+                cat = it.get("category") or report_builder._cat_of(it)
                 sp = it.get("screenshot_path") or ""
                 shot_b64 = ""
                 if sp and os.path.exists(sp):
                     try:
                         # 컬러 헤더바+캡처 합성 카드(텔레그램 가로 꽉차게 보이게)
                         comp = report_builder.compose_card_png(
-                            sp, (it.get("state_kind") == "불가"),
-                            it.get("status", ""), it.get("sakun_no", ""), it.get("m_name", ""),
-                            it.get("bid_date", ""))
+                            sp, cat, it.get("sakun_no", ""), it.get("m_name", ""),
+                            it.get("bid_date", ""), it.get("status", ""))
                         data = comp if comp else open(sp, "rb").read()
                         shot_b64 = _b64.b64encode(data).decode("ascii")
                     except Exception:
@@ -1282,6 +1286,7 @@ class Handler(SimpleHTTPRequestHandler):
                 out_items.append({
                     "sakun_no": it.get("sakun_no", ""), "court": it.get("court", ""),
                     "bid_date": it.get("bid_date", ""), "state_kind": it.get("state_kind", ""),
+                    "category": cat,
                     "status": it.get("status", ""), "maegak_price": it.get("maegak_price", ""),
                     "buyer": it.get("buyer", ""), "addr": it.get("addr", ""),
                     "m_name": it.get("m_name", ""), "detail": it.get("detail", ""),
@@ -1290,9 +1295,9 @@ class Handler(SimpleHTTPRequestHandler):
 
             gas_payload = {
                 "api_action": "sendBugaReport", "api_key": api_key,
-                "report_dt": report_dt, "items": out_items,
+                "report_dt": report_dt, "items": out_items, "total": total,
                 "target": payload.get("target") or None,   # 보고 대상(구분/회원명) — 없으면 GAS가 관리자 기본
-                "pdf_b64": pdf_b64, "pdf_name": f"MJ경매_보고서_{report_dt[:10]}.pdf",
+                "pdf_b64": pdf_b64, "pdf_name": f"MJ_일일보고_{report_dt[:10]}.pdf",
             }
             result = _gas_post(gas_payload, timeout=300.0)
             self._send_json(200, result)
@@ -1307,16 +1312,22 @@ class Handler(SimpleHTTPRequestHandler):
             raw = self.rfile.read(length).decode("utf-8") if length else "{}"
             payload = json.loads(raw or "{}")
             items = payload.get("items") or []
-            rep_items = [it for it in items if (it.get("state_kind") or "") in ("불가", "매각")]
+            total = payload.get("total")
+            rep_items = [it for it in items if (it.get("category") or "") in ("낙찰", "미입찰", "불가")]
+            if not rep_items:   # 레거시 폴백
+                rep_items = [it for it in items if (it.get("state_kind") or "") in ("불가", "매각")]
             if not rep_items:
-                self._send_json(200, {"success": False, "message": "미리볼 불가/낙찰 건이 없습니다."})
+                self._send_json(200, {"success": False, "message": "미리볼 낙찰/미입찰/불가 건이 없습니다."})
                 return
             import base64 as _b64
             import report_builder
+            from datetime import datetime as _dt
+            report_dt = str(payload.get("report_dt") or _dt.now().strftime("%Y-%m-%d %H:%M"))
             for it in rep_items:
                 if it.get("addr"):
                     it["addr"] = str(it["addr"]).split("\n")[0]
-            pdf_bytes = report_builder.build_report_pdf(rep_items)
+            pdf_bytes = report_builder.build_report_pdf(
+                rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"), total=total)
             self._send_json(200, {
                 "success": True, "count": len(rep_items),
                 "pdf_b64": _b64.b64encode(pdf_bytes).decode("ascii"),

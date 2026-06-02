@@ -29,10 +29,22 @@ C_DARK = (17, 24, 39)
 C_GRAY = (120, 128, 142)
 C_LINE = (226, 232, 240)
 
+# 일일보고 카테고리 색: 낙찰=파랑, 미입찰=빨강, 불가=검정
+CARD_COLOR = {"낙찰": (37, 99, 235), "미입찰": (220, 38, 38), "불가": (17, 24, 39)}
+CARD_ORDER = {"낙찰": 0, "미입찰": 1, "불가": 2}
 
-def compose_card_png(screenshot_path, is_buga, reason, sakun, m_name, bid_date=""):
-    """컬러 헤더바(불가 빨강·낙찰 파랑) + 캡처 → 라운드 카드 PNG bytes. 텔레그램/PDF 공용.
-    헤더 = '불가 - 변경 | 입찰일자 | 사건번호 | 회원명' / '낙찰 | 입찰일자 | 사건번호 | 회원명'."""
+
+def _cat_of(it):
+    """item에서 일일보고 카테고리 결정 (category 우선, 없으면 state_kind 기반)."""
+    c = (it.get("category") or "").strip()
+    if c in CARD_COLOR:
+        return c
+    return "불가" if (it.get("state_kind") or "") == "불가" else "낙찰"
+
+
+def compose_card_png(screenshot_path, category, sakun, m_name, bid_date="", reason=""):
+    """컬러 헤더바(낙찰 파랑·미입찰 빨강·불가 검정) + 캡처 → 라운드 카드 PNG bytes. 텔레그램/PDF 공용.
+    헤더 = '불가 - 변경 | 입찰일자 | 사건번호 | 회원명' / '낙찰|미입찰 | 입찰일자 | 사건번호 | 회원명'."""
     if not Image or not screenshot_path or not os.path.exists(screenshot_path):
         return None
     try:
@@ -41,9 +53,9 @@ def compose_card_png(screenshot_path, is_buga, reason, sakun, m_name, bid_date="
         return None
     W = shot.width
     pad = max(16, int(W * 0.018))
-    accent = (220, 38, 38) if is_buga else (37, 99, 235)
+    accent = CARD_COLOR.get(category, (17, 24, 39))
     sep = "   |   "
-    head = "불가" + (" - " + reason if reason else "") if is_buga else "낙찰"
+    head = ("불가" + (" - " + reason if reason else "")) if category == "불가" else category
     parts = [head] + [p for p in (str(bid_date or ""), str(sakun or ""), str(m_name or "")) if p]
     txt = sep.join(parts)
 
@@ -119,13 +131,16 @@ def _pill(pdf, x, y, w, h, text, color, fsize=9):
     pdf.cell(w, 4, text, align="C")
 
 
-def build_report_pdf(items, report_dt=None):
+def build_report_pdf(items, report_dt=None, total=None):
     if FPDF is None:
         raise RuntimeError("fpdf2 미설치 (pip install fpdf2)")
     items = list(items or [])
+    items.sort(key=lambda it: CARD_ORDER.get(_cat_of(it), 9))   # 낙찰→미입찰→불가 순
     dt = report_dt or datetime.now()
-    n_buga = sum(1 for it in items if (it.get("state_kind") or "") == "불가")
-    n_nak = sum(1 for it in items if (it.get("state_kind") or "") == "매각")
+    n_nak = sum(1 for it in items if _cat_of(it) == "낙찰")
+    n_miss = sum(1 for it in items if _cat_of(it) == "미입찰")
+    n_buga = sum(1 for it in items if _cat_of(it) == "불가")
+    n_ipchal = total if total is not None else len(items)
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(False)
@@ -136,67 +151,66 @@ def build_report_pdf(items, report_dt=None):
     W = pdf.w - pdf.l_margin - pdf.r_margin
     PAGE_BOTTOM = pdf.h - 14
 
-    # ── 헤더 배너 ──
+    # ── 헤더 배너: 'YYYY년 MM월 DD일 일일보고' ──
     hy = pdf.get_y()
     pdf.set_fill_color(*C_NAVY)
     pdf.rect(M, hy, W, 18, style="F", round_corners=True, corner_radius=3)
-    pdf.set_xy(M + 7, hy + 3.5)
-    pdf.set_font("malgun", "B", 16)
+    pdf.set_xy(M + 7, hy + 4.5)
+    pdf.set_font("malgun", "B", 17)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 7, "MJ경매 진행사항 보고서", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_x(M + 7)
-    pdf.set_font("malgun", "", 9)
-    pdf.set_text_color(190, 200, 214)
-    pdf.cell(0, 5, dt.strftime("%Y-%m-%d %H:%M") + " 기준")
+    pdf.cell(0, 9, dt.strftime("%Y년 %m월 %d일") + " 일일보고", new_x="LMARGIN", new_y="NEXT")
     pdf.set_y(hy + 18 + 5)
 
-    # ── 요약 카드 ──
-    _summary_card(pdf, items, n_buga, n_nak, M, W)
+    # ── 집계 + 목록 카드 ──
+    _summary_card(pdf, items, {"낙찰": n_nak, "입찰": n_ipchal, "불가": n_buga, "미입찰": n_miss}, M, W)
 
     if not items:
         return bytes(pdf.output())
 
-    # ── 건별 카드 ──
+    # ── 건별 카드 (낙찰→미입찰→불가) ──
     for it in items:
         _item_card(pdf, it, M, W, PAGE_BOTTOM)
 
     return bytes(pdf.output())
 
 
-def _summary_card(pdf, items, n_buga, n_nak, M, W):
+def _summary_card(pdf, items, counts, M, W):
     inner_x = M + 6
     inner_w = W - 12
     line_h = 12
     top = pdf.get_y()
     y = top + 5
 
-    # 카운트 (버튼 폰트 살짝 축소)
-    _pill(pdf, inner_x, y, 36, 12, f"불가 {n_buga}", C_BUGA, 15)
-    _pill(pdf, inner_x + 41, y, 36, 12, f"낙찰 {n_nak}", C_NAKCHAL, 15)
+    # 집계 4종: 낙찰(파랑) · 입찰(네이비) · 불가(검정) · 미입찰(빨강)
+    pills = [("낙찰", C_NAKCHAL), ("입찰", C_NAVY), ("불가", C_DARK), ("미입찰", C_BUGA)]
+    px = inner_x
+    for label, color in pills:
+        _pill(pdf, px, y, 36, 12, f"{label} {counts.get(label, 0)}", color, 15)
+        px += 41
     y += 16
 
     pdf.set_draw_color(*C_LINE)
     pdf.line(inner_x, y, inner_x + inner_w, y)
     y += 3
 
-    # 목록 (불가/낙찰 · 입찰일자 · 사건번호 · 회원명) 폰트 2배 — 앞에 불가(빨강)/낙찰(파랑) 글자
+    # 목록 (카테고리 · 입찰일자 · 사건번호 · 회원명) — 앞 카테고리 글자 색
     for it in items:
-        is_buga = (it.get("state_kind") or "") == "불가"
-        col = C_BUGA if is_buga else C_NAKCHAL
+        cat = _cat_of(it)
+        col = CARD_COLOR.get(cat, C_DARK)
         pdf.set_xy(inner_x, y)
         pdf.set_font("malgun", "B", 19)
         pdf.set_text_color(*col)
-        pdf.cell(17, line_h, "불가" if is_buga else "낙찰")
-        pdf.set_xy(inner_x + 18, y)
+        pdf.cell(24, line_h, cat)
+        pdf.set_xy(inner_x + 25, y)
         pdf.set_font("malgun", "B", 19)
         pdf.set_text_color(*C_DARK)
-        pdf.cell(40, line_h, str(it.get("bid_date", "")))
-        pdf.set_xy(inner_x + 59, y)
-        pdf.cell(64, line_h, str(it.get("sakun_no", "")))
-        pdf.set_xy(inner_x + 124, y)
+        pdf.cell(38, line_h, str(it.get("bid_date", "")))
+        pdf.set_xy(inner_x + 64, y)
+        pdf.cell(62, line_h, str(it.get("sakun_no", "")))
+        pdf.set_xy(inner_x + 128, y)
         pdf.set_font("malgun", "", 16)
         pdf.set_text_color(70, 78, 92)
-        pdf.cell(inner_w - 124, line_h, str(it.get("m_name", "")))
+        pdf.cell(inner_w - 128, line_h, str(it.get("m_name", "")))
         y += line_h
 
     bottom = y + 4
@@ -208,19 +222,19 @@ def _summary_card(pdf, items, n_buga, n_nak, M, W):
 
 def _item_card(pdf, it, M, W, PAGE_BOTTOM):
     """합성 카드(컬러 헤더바+캡처+라운드) 이미지를 풀폭으로 배치."""
-    is_buga = (it.get("state_kind") or "") == "불가"
-    comp = compose_card_png(it.get("screenshot_path", ""), is_buga,
-                            it.get("status", ""), it.get("sakun_no", ""), it.get("m_name", ""),
-                            it.get("bid_date", ""))
+    cat = _cat_of(it)
+    comp = compose_card_png(it.get("screenshot_path", ""), cat,
+                            it.get("sakun_no", ""), it.get("m_name", ""),
+                            it.get("bid_date", ""), it.get("status", ""))
     if not comp:
         # 캡처 없으면 텍스트 한 줄
-        accent = C_BUGA if is_buga else C_NAKCHAL
+        accent = CARD_COLOR.get(cat, C_DARK)
         top = pdf.get_y()
-        _pill(pdf, M + 6, top + 4, 15, 7, "불가" if is_buga else "낙찰", accent)
-        pdf.set_xy(M + 26, top + 4)
+        _pill(pdf, M + 6, top + 4, 18, 7, cat, accent)
+        pdf.set_xy(M + 28, top + 4)
         pdf.set_font("malgun", "B", 11)
         pdf.set_text_color(*C_DARK)
-        hdr = (("불가 - " + (it.get("status") or "")) if is_buga else "낙찰") + "  |  " + str(it.get("sakun_no", "")) + ("  |  " + it.get("m_name", "") if it.get("m_name") else "")
+        hdr = ((cat + " - " + (it.get("status") or "")) if cat == "불가" else cat) + "  |  " + str(it.get("sakun_no", "")) + ("  |  " + it.get("m_name", "") if it.get("m_name") else "")
         pdf.cell(0, 7, hdr)
         pdf.set_draw_color(*C_LINE)
         pdf.rect(M, top, W, 15, style="D", round_corners=True, corner_radius=3)
@@ -252,10 +266,11 @@ def _item_card(pdf, it, M, W, PAGE_BOTTOM):
 
 if __name__ == "__main__":
     items = [
-        {"sakun_no": "2024타경54944", "state_kind": "불가", "status": "변경", "m_name": "김진현", "screenshot_path": ""},
-        {"sakun_no": "2025-08032-001", "state_kind": "매각", "m_name": "석재근", "screenshot_path": ""},
+        {"sakun_no": "2024타경54944", "category": "불가", "status": "변경", "m_name": "김진현", "bid_date": "260602", "screenshot_path": ""},
+        {"sakun_no": "2025-08032-001", "category": "낙찰", "m_name": "석재근", "bid_date": "260527", "screenshot_path": ""},
+        {"sakun_no": "2025타경1646", "category": "미입찰", "m_name": "이대영", "bid_date": "260602", "screenshot_path": ""},
     ]
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_report_test.pdf")
     with open(out, "wb") as f:
-        f.write(build_report_pdf(items))
+        f.write(build_report_pdf(items, total=7))
     print("OK", out)

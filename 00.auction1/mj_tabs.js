@@ -862,19 +862,33 @@
     if (mae < bid) return '미입찰';
     return '일반';   // 매각가 > 입찰가 (우리보다 높게 팔림)
   }
-  // 보고 대상 = 불가 또는 우리낙찰만 (일반 매각은 제외)
-  function ccReportItems() { return ccResults.filter(r => r && (r.is_buga || ccIsOurWin(r))); }
+  // 일일보고 항목 = 낙찰/미입찰/불가 (category 부착). 일반매각·확인불가·진행중 제외
+  function ccReportItems() {
+    return ccMergedRows().filter(r => ['낙찰', '미입찰', '불가'].indexOf(ccCategory(r)) >= 0)
+      .map(r => Object.assign({}, r, { category: ccCategory(r) }));
+  }
+  function ccReportTotal() { return ccMergedRows().length; }   // 입찰(전체)
+  // 보고 날짜 = 항목들의 대표 입찰일자(YYYY-MM-DD) + 현재 시각
+  function ccReportDate() {
+    const cnt = {};
+    ccMergedRows().forEach(r => { const d = bidToYMD(r.bid_date); if (d) cnt[d] = (cnt[d] || 0) + 1; });
+    let best = '', bn = -1;
+    Object.keys(cnt).forEach(d => { if (cnt[d] > bn) { bn = cnt[d]; best = d; } });
+    if (!best) best = ymd(new Date());
+    const t = new Date();
+    return best + ' ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+  }
 
   // 실제 전송 (target 지정)
   function doSendReport(target, auto) {
     const items = ccReportItems();
-    if (!items.length) { if (!auto) alert('보고할 불가/낙찰 건이 없습니다.'); return; }
+    if (!items.length) { if (!auto) alert('보고할 낙찰/미입찰/불가 건이 없습니다.'); return; }
     const apiKey = getMapsAdminKeyMj();
     if (!apiKey) { if (!auto) alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
     log('cc', `📋 보고서 전송 중… (${items.length}건 · 대상=${reportTargetLabel(target)}${auto ? ' · 자동' : ''})`, 'log-ok');
     fetch('/api/send-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, items, target })
+      body: JSON.stringify({ api_key: apiKey, items, target, total: ccReportTotal(), report_dt: ccReportDate() })
     }).then(r => r.json()).then(j => {
       if (j && j.success) {
         const errN = (j.errors && j.errors.length) ? ` (전송오류 ${j.errors.length})` : '';
@@ -901,13 +915,13 @@
   // 보고서 미리보기 — 전송 없이 PDF 새 탭 열람 (텔레그램/키 불필요)
   function previewCcReport() {
     const items = ccReportItems();
-    if (!items.length) { alert('미리볼 불가/낙찰 건이 없습니다.'); return; }
+    if (!items.length) { alert('미리볼 낙찰/미입찰/불가 건이 없습니다.'); return; }
     const btn = $card('cc')?.querySelector('[data-act="cc-preview"]');
     if (btn) btn.disabled = true;
     log('cc', `👁 보고서 미리보기 생성 중… (${items.length}건)`, 'log-ok');
     fetch('/api/preview-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items })
+      body: JSON.stringify({ items, total: ccReportTotal(), report_dt: ccReportDate() })
     }).then(r => r.json()).then(j => {
       if (btn) btn.disabled = false;
       if (j && j.success && j.pdf_b64) {
