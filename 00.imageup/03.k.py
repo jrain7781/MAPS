@@ -608,7 +608,15 @@ def run_macro(account, list_filepath):
                             print(f"    - 연도 선택 시도 (JS): {year_val}")
                         except:
                             pass
-                
+                else:
+                    # 연도 미상(사건번호에 연도 없음) → num1 '전체연도'(value=0) 강제 — 연도필터 누락 방지
+                    try:
+                        Select(wait.until(EC.element_to_be_clickable((By.NAME, "num1")))).select_by_value("0")
+                        print(f"    - 연도 미상 → 전체연도(0) 선택")
+                    except Exception:
+                        driver.execute_script("var s=document.querySelector('select[name=\"num1\"]'); if(s){s.value='0';s.dispatchEvent(new Event('change'));}")
+                        print(f"    - 연도 미상 → 전체연도(0) 선택 (JS)")
+
                 # 번호 입력
                 el = wait.until(EC.presence_of_element_located((By.ID, "num2")))
                 el.clear()
