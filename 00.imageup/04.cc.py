@@ -12,7 +12,7 @@ MJ경매 [진행사항 확인]
 """
 print("📢 MJ경매 [진행사항 확인] (종합검색 → 법원·기일 매칭 → 불가사유 판정)...")
 
-import os, sys, json, time, re, glob, traceback
+import os, sys, json, time, re, glob, traceback, base64
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -24,6 +24,7 @@ from selenium.webdriver.support import expected_conditions as EC
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LIST_FOLDER_NAME = "변경취소 확인리스트"
 LIST_FOLDER = os.path.join(SCRIPT_DIR, LIST_FOLDER_NAME)
+REPORT_SHOT_DIR = os.path.join(SCRIPT_DIR, "report_shots")  # 보고서용 불가/낙찰 상세 캡처
 A1_BASE = "https://www.auction1.co.kr"
 URL_SEARCH = f"{A1_BASE}/auction/ca_title.php"          # 경매 종합검색
 URL_GONGMAE = f"{A1_BASE}/pubauct/list.php"             # 공매 검색
@@ -460,6 +461,31 @@ def open_detail_text(driver, view_url):
         return ""
 
 
+def capture_detail(driver, tag):
+    """현재 상세페이지 전체(풀페이지) 캡처 → PNG 저장, 경로 반환. 보고서용. 실패 시 ''."""
+    try:
+        os.makedirs(REPORT_SHOT_DIR, exist_ok=True)
+        safe = re.sub(r"[^0-9A-Za-z가-힣_-]", "_", str(tag))[:50]
+        path = os.path.join(REPORT_SHOT_DIR, f"{safe}.png")
+        try:
+            # 전체 페이지 캡처 (CDP captureBeyondViewport) — 뷰포트 밖까지
+            m = driver.execute_cdp_cmd("Page.getLayoutMetrics", {})
+            css = m.get("cssContentSize") or m.get("contentSize") or {}
+            w = int(css.get("width") or 1400)
+            h = min(int(css.get("height") or 2400), 20000)
+            shot = driver.execute_cdp_cmd("Page.captureScreenshot", {
+                "format": "png", "captureBeyondViewport": True,
+                "clip": {"x": 0, "y": 0, "width": w, "height": h, "scale": 1}})
+            with open(path, "wb") as f:
+                f.write(base64.b64decode(shot["data"]))
+        except Exception:
+            driver.save_screenshot(path)   # 폴백: 뷰포트만
+        return path
+    except Exception as e:
+        print(f"    ⚠ 상세 캡처 실패: {repr(e)[:100]}")
+        return ""
+
+
 def process_gongmae(driver, wait, case, base, exp_d6):
     """공매 처리: 물건번호로 공매검색 → 진행상태 판정. (물건번호가 유일키)"""
     pdno = str(case.get("sakun_no") or "").strip()
@@ -486,8 +512,10 @@ def process_gongmae(driver, wait, case, base, exp_d6):
     view_url = URL_GONGMAE_VIEW + picked["pid"]
     reason = sentence = ""
     maegak_price = buyer = bidder_count = ""
+    screenshot_path = ""
     if state_kind in ("불가", "매각"):
         detail_txt = open_detail_text(driver, view_url)
+        screenshot_path = capture_detail(driver, f"{pdno}_{state_kind}")   # 보고서용 상세 캡처
         if state_kind == "불가":
             reason = tok
             jr, js = parse_jongryo(detail_txt)
@@ -509,6 +537,8 @@ def process_gongmae(driver, wait, case, base, exp_d6):
                fetched_court="공매",
                fetched_date=picked.get("date_txt", ""),
                maegak_price=maegak_price, buyer=buyer, bidder_count=bidder_count,
+               addr=picked.get("addr", ""),
+               screenshot_path=screenshot_path,
                view_url=view_url)
     print(f"RESULT|{json.dumps(rec, ensure_ascii=False)}")
     print(f"    → [공매] 상태:{state_kind} 물건번호:{pdno} 매각가:{maegak_price} 매수인:{buyer}")
@@ -592,9 +622,11 @@ def process_case(driver, wait, case):
     bidder_count = ""
     # 옥션원 링크는 모든 건(진행/매각/불가)에 대해 생성
     view_url = build_view_url(driver, picked["pid"], picked["line_num"], line_tnum)
+    screenshot_path = ""
     # 불가/매각만 상세페이지 열어 추가 정보 파싱
     if state_kind in ("불가", "매각"):
         detail_txt = open_detail_text(driver, view_url)
+        screenshot_path = capture_detail(driver, f"{case_num2(case['sakun_no'])}_{state_kind}")   # 보고서용 상세 캡처
         if state_kind == "불가":
             reason = tok
             jr, js = parse_jongryo(detail_txt)
@@ -623,6 +655,8 @@ def process_case(driver, wait, case):
                maegak_price=maegak_price,
                buyer=buyer,
                bidder_count=bidder_count,
+               addr=picked.get("addr", ""),
+               screenshot_path=screenshot_path,
                view_url=view_url)
     print(f"RESULT|{json.dumps(rec, ensure_ascii=False)}")
     flag = "✅" if key_match else "⚠키불일치"
