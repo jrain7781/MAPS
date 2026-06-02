@@ -501,9 +501,12 @@
       const dtl = String(r.detail || '');
       const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 20 ? dtl.slice(0, 20) + '…' : dtl)}</span>` : '';
       const url = r.view_url ? ` <a href="#" class="cc-link" data-act="cc-view" data-url="${escapeAttr(r.view_url)}">옥션원</a>` : '';
+      // 우리 회원 낙찰 = 매각상태 & 매각가==입찰가 → '낙찰'(대비색), 일반매각은 흐리게
+      const _isWin = (!pending && stateKind === '매각' && _won(r.maegak_price) && _won(r.maegak_price) === _won(r.bidprice));
       const willUpdate = isBuga
         ? `<b style="color:#b91c1c">불가</b>${r.status ? ` <span class="cc-badge cc-bad">${escapeHtml(r.status)}</span>` : ''}`
-        : (!pending && stateKind === '매각' ? '<span class="cc-badge cc-end">매각</span>' : '<span style="color:#9ca3af">-</span>');
+        : (_isWin ? '<span style="background:#2563eb;color:#fff;padding:1px 8px;border-radius:4px;font-weight:700">낙찰</span>'
+           : (!pending && stateKind === '매각' ? '<span class="cc-badge cc-end" style="color:#9ca3af">매각</span>' : '<span style="color:#9ca3af">-</span>'));
       // 매각가 색: 매각가<입찰가=빨강, 매각가>입찰가=검정, 같으면 파랑
       const bid = _won(r.bidprice), mae = _won(r.maegak_price);
       let maeCell = mae ? fmtWon(r.maegak_price) : '';
@@ -540,10 +543,12 @@
     }).join('');
     const doneCnt = merged.filter(r => !r._pending).length;
     const bugaCnt = merged.filter(r => r.is_buga).length;
+    const winCnt = merged.filter(r => ccIsOurWin(r)).length;       // 우리 낙찰
     const maegakCnt = merged.filter(r => !r._pending && ccStateKind(r) === '매각').length;
+    const genMaegak = maegakCnt - winCnt;                          // 일반 매각(보고 제외)
     wrap.innerHTML = `
       <div class="cc-results-head">
-        <span><b>${merged.length}건</b> (조회완료 ${doneCnt}) · <b style="color:#b91c1c">불가 ${bugaCnt}</b> · 매각 ${maegakCnt} · <span style="color:#9ca3af">실행=조회대상 · 업데이트=불가전송</span></span>
+        <span><b>${merged.length}건</b> (조회완료 ${doneCnt}) · <b style="color:#b91c1c">불가 ${bugaCnt}</b> · <b style="color:#2563eb">낙찰 ${winCnt}</b> · <span style="color:#9ca3af">매각 ${genMaegak} · 보고=불가+낙찰</span></span>
         <span class="mjcap-spacer"></span>
         <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭(실행) 완료 시 불가/낙찰 보고서를 관리자에게 자동 전송">
           <input type="checkbox" class="cc-auto-report" ${ccAutoReportOn() ? 'checked' : ''}>자동 보고
@@ -649,8 +654,14 @@
     if (t.by === 'members') return `회원 ${(t.labels && t.labels.length) ? t.labels.join('·') : ((t.member_ids || []).length + '명')}`;
     return `구분 ${t.value || '관리자'}`;
   }
-  // 보고 대상 건 = 불가 또는 낙찰(매각)
-  function ccReportItems() { return ccResults.filter(r => r && (r.is_buga || ccStateKind(r) === '매각')); }
+  // 우리 회원 낙찰 = 매각 & 매각가==입찰가
+  function ccIsOurWin(r) {
+    if (!r || ccStateKind(r) !== '매각') return false;
+    const mae = _won(r.maegak_price), bid = _won(r.bidprice);
+    return !!(mae && bid && mae === bid);
+  }
+  // 보고 대상 = 불가 또는 우리낙찰만 (일반 매각은 제외)
+  function ccReportItems() { return ccResults.filter(r => r && (r.is_buga || ccIsOurWin(r))); }
 
   // 실제 전송 (target 지정)
   function doSendReport(target, auto) {

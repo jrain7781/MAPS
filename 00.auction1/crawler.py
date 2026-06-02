@@ -165,6 +165,10 @@ A1_BASE    = "https://www.auction1.co.kr"
 URL_LOGIN  = f"{A1_BASE}/common/login_box.php"
 URL_SEARCH = f"{A1_BASE}/auction/ca_title.php"
 
+# 빌드 태그 — /api/status 로 노출(헤더 상태표시등). 코드 갱신·재시작 반영 확인용.
+BUILD_TAG = "2026-06-02 보고서+미리보기+재시작+상태"
+_STARTED_AT = time.time()
+
 _driver = None
 _lock = threading.Lock()
 _last_login_at = 0.0
@@ -1109,6 +1113,18 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
             self.wfile.write(b'{"ok":true,"service":"auction1-crawler"}')
+            return
+        # 서버 상태(헤더 표시등): 빌드태그 + 가동시간 + 보고서 라우트 존재여부
+        if self.path.startswith("/api/status"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "ok": True, "build": BUILD_TAG,
+                "uptime_sec": int(time.time() - _STARTED_AT),
+                "has_report": True,   # 이 빌드는 /api/send-report·preview-report·restart-server 보유
+            }, ensure_ascii=False).encode("utf-8"))
             return
         # 크롤링 진행상황 폴링
         if self.path.startswith("/api/progress"):

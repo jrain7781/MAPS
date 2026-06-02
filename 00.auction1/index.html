@@ -27,6 +27,7 @@
       <button class="mjTab" data-tab="kakao" type="button">💬 카카오</button>
     </div>
     <div class="topShellMeta">
+      <span id="mjServerStatus" title="매니저 서버 상태" style="margin-right:8px;font-size:12px;font-weight:700;color:#9ca3af">⏳ 확인중</span>
       <button type="button" id="btnRestartServer" onclick="mjRestartServer()" title="코드 갱신 후 매니저 서버 재시작 (클릭 1번)"
         style="margin-right:10px;padding:3px 9px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;font-size:12px">🔄 서버 재시작</button>
       로컬 전용
@@ -51,6 +52,25 @@ function mjRestartServer() {
     })
     .catch(function () { mjWaitServerBack(); });   // execv 로 응답이 끊겨도 진행
 }
+// 헤더 서버 상태 표시등 — /api/status 폴링
+function mjPollStatus() {
+  fetch('/api/status', { cache: 'no-store' }).then(function (r) {
+    var el = document.getElementById('mjServerStatus'); if (!el) return null;
+    if (r.status === 404) { el.textContent = '🟡 구버전(재시작 필요)'; el.style.color = '#b45309'; el.title = '옛 서버 구동중 — 서버 재시작 누르거나 .bat 재실행'; return null; }
+    if (!r.ok) { el.textContent = '🔴 오류'; el.style.color = '#dc2626'; return null; }
+    return r.json().then(function (j) {
+      el.textContent = '🟢 구동중';
+      el.style.color = '#16a34a';
+      el.title = '빌드: ' + (j.build || '?') + ' · 가동 ' + (j.uptime_sec || 0) + '초';
+    });
+  }).catch(function () {
+    var el = document.getElementById('mjServerStatus');
+    if (el) { el.textContent = '🔴 꺼짐'; el.style.color = '#dc2626'; el.title = '서버 응답 없음 — .bat 실행 확인'; }
+  });
+}
+setInterval(mjPollStatus, 4000);
+mjPollStatus();
+
 // 서버가 내려갔다(execv) 다시 올라오면 새로고침. (다운 감지 후 업 감지 = 2단)
 function mjWaitServerBack() {
   var sawDown = false, tries = 0;
