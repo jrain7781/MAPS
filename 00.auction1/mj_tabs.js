@@ -727,7 +727,9 @@
         <td style="text-align:center">${viewLink}</td>
         <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok">${escapeHtml(stu)}</span>` : ''}</td>
         <td>${willUpdate}</td>
-        <td class="cc-note">${noteCell}</td>
+        <td class="cc-note">${noteCell}${isBuga ? `<div style="margin-top:3px;display:flex;gap:4px">
+          <button type="button" class="cc-row-send btn_box_sss" data-key="${escapeAttr(rkey)}" title="이 불가건을 담당자에게 즉시 텔레그램 전송" style="padding:1px 6px;font-size:11px">📤전송</button>
+          <button type="button" class="cc-row-copy btn_box_sss" data-key="${escapeAttr(rkey)}" title="카드 이미지 복사(카톡 붙여넣기)" style="padding:1px 6px;font-size:11px">📋복사</button></div>` : ''}</td>
       </tr>`;
     }).join('');
     const doneCnt = merged.filter(r => !r._pending).length;
@@ -783,6 +785,8 @@
     wrap.querySelector('[data-act="cc-preview"]')?.addEventListener('click', previewCcReport);
     wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', openReportPicker);
     wrap.querySelector('[data-act="cc-recipients"]')?.addEventListener('click', (e) => { e.preventDefault(); openReportPicker(); });
+    wrap.querySelectorAll('.cc-row-send').forEach(b => b.addEventListener('click', () => sendOneByKey(b.dataset.key)));
+    wrap.querySelectorAll('.cc-row-copy').forEach(b => b.addEventListener('click', () => copyCardByKey(b.dataset.key)));
     wrap.querySelector('.cc-auto-report')?.addEventListener('change', (e) => setCcAutoReport(e.target.checked));
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
   }
@@ -965,6 +969,49 @@
       log('cc', `⚠ 미리보기 오류: ${err}`, 'log-err');
       alert('미리보기 오류: ' + err + '\n(매니저 서버 재시작이 필요할 수 있습니다)');
     });
+  }
+
+  // 불가 단건: 담당자(강사)에게 즉시 텔레그램 전송
+  function sendOneByKey(key) {
+    const r = ccMergedRows().find(x => ccKeyOf(x) === key);
+    if (!r) return;
+    const mid = String(r.mid_member_id || '');
+    if (!mid) { alert('담당자(강사 회원)가 매칭되지 않아 전송 대상이 없습니다.\n(담당자 닉네임이 회원관리 강사와 일치해야 함)'); return; }
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey) { alert('MAPS Admin Key 미설정'); return; }
+    const who = r.m_name_id_disp || r.m_name_id || '담당자';
+    if (!confirm(`이 불가건을 담당자 "${who}" 에게 즉시 전송할까요?\n${r.sakun_no || ''}`)) return;
+    const item = Object.assign({}, r, { category: ccCategory(r) });
+    log('cc', `📤 즉시전송: ${r.sakun_no || ''} → 담당자 ${who}`, 'log-ok');
+    fetch('/api/send-report', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, items: [item], recipients: { include_admins: false, teacher_ids: [mid] }, total: 1, report_dt: ccReportDate() })
+    }).then(r2 => r2.json()).then(j => {
+      if (j && j.success) { log('cc', `✅ 즉시전송 완료 (${j.sent || 0}명)`, 'log-ok'); alert('전송 완료'); }
+      else { const m = (j && (j.message || j.error)) || '?'; log('cc', `⚠ 즉시전송 실패: ${m}`, 'log-err'); alert('전송 실패: ' + m); }
+    }).catch(e => { log('cc', `⚠ 즉시전송 오류: ${e}`, 'log-err'); alert('오류: ' + e); });
+  }
+  // 카드 이미지 클립보드 복사 (카톡 붙여넣기용)
+  function copyCardByKey(key) {
+    const r = ccMergedRows().find(x => ccKeyOf(x) === key);
+    if (!r) return;
+    const item = Object.assign({}, r, { category: ccCategory(r) });
+    log('cc', `📋 카드 이미지 준비… ${r.sakun_no || ''}`, 'log-ok');
+    fetch('/api/card-image', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item)
+    }).then(r2 => r2.json()).then(async j => {
+      if (!(j && j.success && j.png_b64)) { const m = (j && (j.message || j.error)) || '?'; alert('이미지 생성 실패: ' + m); return; }
+      try {
+        const blob = b64ToBlob(j.png_b64, 'image/png');
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        log('cc', `✅ 이미지 복사됨 — 카톡에 Ctrl+V`, 'log-ok');
+        alert('카드 이미지를 복사했습니다. 카톡 대화창에 Ctrl+V 로 붙여넣으세요.');
+      } catch (e) {
+        const url = URL.createObjectURL(b64ToBlob(j.png_b64, 'image/png'));
+        window.open(url, '_blank');
+        alert('자동복사가 차단되어 새 탭으로 열었습니다. 이미지 우클릭 → 복사 하세요.');
+      }
+    }).catch(e => alert('이미지 복사 오류: ' + e));
   }
 
   // 대상 후보(구분/회원명 + 텔레그램 상태) 조회 → GAS getReportRecipientCandidates

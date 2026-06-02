@@ -1177,6 +1177,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/preview-report":
             self._handle_preview_report()
             return
+        # 단건 카드 이미지(합성 PNG) b64 — 카톡 붙여넣기용 클립보드 복사
+        if self.path == "/api/card-image":
+            self._handle_card_image()
+            return
         # 서버 자가 재시작 (코드 갱신 반영) — 응답 후 os.execv
         if self.path == "/api/restart-server":
             self._handle_restart_server()
@@ -1334,6 +1338,28 @@ class Handler(SimpleHTTPRequestHandler):
                 "success": True, "count": len(rep_items),
                 "pdf_b64": _b64.b64encode(pdf_bytes).decode("ascii"),
             })
+        except Exception as e:
+            traceback.print_exc()
+            self._send_json(500, {"success": False, "error": str(e)})
+
+    def _handle_card_image(self):
+        """단건 합성 카드 PNG(base64) 반환 — 카톡 붙여넣기용 클립보드 복사."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+            it = json.loads(raw or "{}")
+            import base64 as _b64
+            import report_builder
+            cat = it.get("category") or report_builder._cat_of(it)
+            sp = it.get("screenshot_path") or ""
+            if not sp or not os.path.exists(sp):
+                self._send_json(200, {"success": False, "message": "캡처 이미지가 없습니다(이 PC에서 실행한 건만 복사 가능)."})
+                return
+            comp = report_builder.compose_card_png(
+                sp, cat, it.get("sakun_no", ""), it.get("m_name", ""),
+                it.get("bid_date", ""), it.get("status", ""))
+            data = comp if comp else open(sp, "rb").read()
+            self._send_json(200, {"success": True, "png_b64": _b64.b64encode(data).decode("ascii")})
         except Exception as e:
             traceback.print_exc()
             self._send_json(500, {"success": False, "error": str(e)})
