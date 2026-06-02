@@ -467,20 +467,21 @@ def open_detail_text(driver, view_url):
         return ""
 
 
-def capture_detail(driver, tag):
-    """상세페이지 상단부(물건정보~사진 3장까지)만 크롭 캡처 → PNG. 보고서용. 실패 시 ''."""
+def capture_detail(driver, tag, sakun=""):
+    """상세페이지에서 사건번호 제목줄~사진 3장까지만, 좌우는 테이블 폭에 타이트하게 크롭 캡처.
+    위/아래/좌우 여백 없이 표에 딱 맞춤. 실패 시 ''."""
     try:
         os.makedirs(REPORT_SHOT_DIR, exist_ok=True)
         safe = re.sub(r"[^0-9A-Za-z가-힣_-]", "_", str(tag))[:50]
         path = os.path.join(REPORT_SHOT_DIR, f"{safe}.png")
-        # 본문 테이블 폭(좌우 타이트) + 사진 3장까지(세로) 클립 좌표 계산
         clip = None
         try:
             clip = driver.execute_script("""
+                var needle = (arguments[0]||'').replace(/\\s/g,'');
                 var sx=window.scrollX, sy=window.scrollY;
                 var tabs = Array.prototype.slice.call(document.querySelectorAll('table'))
-                  .map(function(e){ var r=e.getBoundingClientRect(); return {l:r.left+sx, r:r.right+sx, w:r.width}; })
-                  .filter(function(o){ return o.w>=400; });          // 본문 테이블(좌우폭 기준)
+                  .map(function(e){ var r=e.getBoundingClientRect(); return {l:r.left+sx, r:r.right+sx, t:r.top+sy, w:r.width}; })
+                  .filter(function(o){ return o.w>=400; });          // 본문 테이블(좌우폭)
                 var imgs = Array.prototype.slice.call(document.images)
                   .map(function(e){ var r=e.getBoundingClientRect(); return {b:r.bottom+sy, w:r.width, h:r.height}; })
                   .filter(function(o){ return o.w>=120 && o.h>=70; }) // 사진/지도
@@ -488,11 +489,29 @@ def capture_detail(driver, tag):
                 if(!tabs.length || !imgs.length) return null;
                 var left = Math.min.apply(null, tabs.map(function(o){return o.l;}));
                 var right = Math.max.apply(null, tabs.map(function(o){return o.r;}));
-                var cutY = imgs[Math.min(2,imgs.length-1)].b + 22;    // 3번째 사진 하단
-                return { x: Math.max(0, Math.floor(left-4)),
-                         w: Math.ceil((right-left)+8),
-                         h: Math.ceil(cutY) };
-            """)
+                var tableTop = Math.min.apply(null, tabs.map(function(o){return o.t;}));
+                var cutY = imgs[Math.min(2,imgs.length-1)].b + 8;     // 3번째 사진 하단(여백 최소)
+                // 상단: 사건번호 제목줄 top (없으면 첫 테이블 위 32px)
+                var topY = tableTop - 32;
+                if (needle) {
+                  var nodes = document.querySelectorAll('span,div,strong,b,h1,h2,h3,h4,a,td,p,font');
+                  var cands = [];
+                  for (var i=0;i<nodes.length;i++){
+                    var n=nodes[i], own='';
+                    for (var j=0;j<n.childNodes.length;j++) if(n.childNodes[j].nodeType===3) own+=n.childNodes[j].nodeValue;
+                    if (own.replace(/\\s/g,'').indexOf(needle)>=0){
+                      var r=n.getBoundingClientRect();
+                      if (r.height>0 && r.height<70 && (r.top+sy) <= tableTop+5) cands.push(r.top+sy);
+                    }
+                  }
+                  if (cands.length) topY = Math.min.apply(null, cands) - 6;
+                }
+                topY = Math.max(0, Math.floor(topY));
+                return { x: Math.max(0, Math.floor(left-3)),
+                         y: topY,
+                         w: Math.ceil((right-left)+6),
+                         h: Math.ceil(cutY - topY) };
+            """, sakun or "")
         except Exception:
             clip = None
         try:
@@ -501,12 +520,13 @@ def capture_detail(driver, tag):
             full_w = int(css.get("width") or 1400)
             full_h = int(css.get("height") or 2400)
             if clip and clip.get("w", 0) > 200 and clip.get("h", 0) > 200:
-                cx, cw, ch = int(clip["x"]), int(clip["w"]), min(int(clip["h"]), 20000)
+                cx, cy = int(clip["x"]), int(clip.get("y", 0))
+                cw, ch = int(clip["w"]), min(int(clip["h"]), 20000)
             else:
-                cx, cw, ch = 0, full_w, min(full_h, 20000)   # 못 찾으면 전체폭
+                cx, cy, cw, ch = 0, 0, full_w, min(full_h, 20000)   # 못 찾으면 전체
             shot = driver.execute_cdp_cmd("Page.captureScreenshot", {
                 "format": "png", "captureBeyondViewport": True,
-                "clip": {"x": cx, "y": 0, "width": cw, "height": ch, "scale": 1}})
+                "clip": {"x": cx, "y": cy, "width": cw, "height": ch, "scale": 1}})
             with open(path, "wb") as f:
                 f.write(base64.b64decode(shot["data"]))
         except Exception:
@@ -546,7 +566,7 @@ def process_gongmae(driver, wait, case, base, exp_d6):
     screenshot_path = ""
     if state_kind in ("불가", "매각"):
         detail_txt = open_detail_text(driver, view_url)
-        screenshot_path = capture_detail(driver, f"{pdno}_{state_kind}")   # 보고서용 상세 캡처
+        screenshot_path = capture_detail(driver, f"{pdno}_{state_kind}", pdno)   # 보고서용 상세 캡처
         if state_kind == "불가":
             reason = tok
             jr, js = parse_jongryo(detail_txt)
@@ -657,7 +677,7 @@ def process_case(driver, wait, case):
     # 불가/매각만 상세페이지 열어 추가 정보 파싱
     if state_kind in ("불가", "매각"):
         detail_txt = open_detail_text(driver, view_url)
-        screenshot_path = capture_detail(driver, f"{case_num2(case['sakun_no'])}_{state_kind}")   # 보고서용 상세 캡처
+        screenshot_path = capture_detail(driver, f"{case_num2(case['sakun_no'])}_{state_kind}", case.get('sakun_no', ''))   # 보고서용 상세 캡처
         if state_kind == "불가":
             reason = tok
             jr, js = parse_jongryo(detail_txt)
