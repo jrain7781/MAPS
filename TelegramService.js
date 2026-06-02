@@ -1470,11 +1470,9 @@ function sendBugaReport(payload) {
   items.forEach(function (it) {
     var isBuga = (it.state_kind || '') === '불가';
     var who = it.m_name ? (' (' + it.m_name + ')') : '';
-    var tail = isBuga
-      ? ('불가 · ' + (it.status || ''))
-      : (_reportFmtWon_(it.maegak_price) + (it.buyer ? (' / ' + it.buyer) : ''));
-    lines.push((isBuga ? '🔴' : '🔵') + ' <b>' + telegramEscapeHtml_(it.sakun_no || '') + '</b>' + telegramEscapeHtml_(who) + '  ' + telegramEscapeHtml_(tail));
-    if (isBuga && it.detail) lines.push('   └ ' + telegramEscapeHtml_(it.detail));   // 변경 상세
+    var bid = it.bid_date ? (telegramEscapeHtml_(it.bid_date) + '  ') : '';
+    // 상세/사유 제거 — 입찰일자 + 사건번호 + 회원명, 🔴/🔵 로 불가/낙찰 구분
+    lines.push((isBuga ? '🔴' : '🔵') + ' ' + bid + '<b>' + telegramEscapeHtml_(it.sakun_no || '') + '</b>' + telegramEscapeHtml_(who));
   });
   var summary = lines.join('\n');
 
