@@ -1485,6 +1485,20 @@ function _dailySummaryText_(items, reportDt, total, isAdmin) {
     lines.push('불가 ' + nBuga + '건');
     lines.push('미입찰 ' + nMiss + '건');
   }
+  // ── 건별 리스트: 낙찰/패찰/미입찰 (사건번호 · 입찰가 · 매각가). 텔레그램은 색 미지원 → 이모지로 구분 ──
+  var _won = function (v) { var s = String(v == null ? '' : v).replace(/[^0-9]/g, ''); return s ? s.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''; };
+  var _lblEmoji = { '낙찰': '🔵', '일반': '⚪', '미입찰': '🔴' };
+  var _lblName = { '낙찰': '낙찰', '일반': '패찰', '미입찰': '미입찰' };
+  var _lblOrder = { '낙찰': 0, '일반': 1, '미입찰': 2 };
+  var listItems = (items || []).filter(function (it) { return _lblOrder[_catOfItem_(it)] != null; })
+    .sort(function (a, b) { return _lblOrder[_catOfItem_(a)] - _lblOrder[_catOfItem_(b)]; });
+  if (listItems.length) {
+    lines.push('');
+    listItems.forEach(function (it) {
+      var c = _catOfItem_(it), bp = _won(it.bidprice), mp = _won(it.maegak_price);
+      lines.push(_lblEmoji[c] + ' ' + _lblName[c] + ' ' + (it.sakun_no || '') + (bp ? ('  입찰 ' + bp) : '') + (mp ? ('  매각 ' + mp) : ''));
+    });
+  }
   return lines.join('\n');
 }
 // 일일보고 수신자 해석. recipients={include_admins, teacher_ids[]} → 관리자=전체(scope 'all'), 강사=자기건(scope member_id)
@@ -1565,7 +1579,11 @@ function sendBugaReport(payload) {
       }
       // ── 텍스트 + 이미지 모드 ── 강사는 본인 건 없으면 스킵, 관리자는 결과 없어도 요약 전송
       if (rc.scope !== 'all' && !its.length) { skipped.push(rc.name); return; }
-      telegramSendMessage(rc.chat_id, _dailySummaryText_(its, payload.report_dt, payload.total, rc.scope === 'all'));
+      // 미리보기에서 편집한 요약은 관리자(전체)에게만 그대로 사용. 강사는 본인 건 기준 자동 생성.
+      var summaryText = (rc.scope === 'all' && payload.custom_summary)
+        ? String(payload.custom_summary)
+        : _dailySummaryText_(its, payload.report_dt, payload.total, rc.scope === 'all');
+      telegramSendMessage(rc.chat_id, summaryText);
       // 이미지 순서: 낙찰 → 미입찰 → 불가 (캡션 유지). 패찰·확인불가는 캡처 없음
       var _ord = { '낙찰': 0, '미입찰': 1, '불가': 2 };
       var photoItems = its.slice().sort(function (a, b) {

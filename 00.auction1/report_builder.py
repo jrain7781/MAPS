@@ -220,25 +220,31 @@ def _summary_card(pdf, items, counts, M, W):
     pdf.line(inner_x, y, inner_x + inner_w, y)
     y += 3
 
-    # 목록 (카테고리 · 입찰일자 · 사건번호 · 회원명) — 낙찰·불가·미입찰·패찰·확인불가 순, 앞 카테고리 글자 색
+    # 목록 (카테고리 · 사건번호 · 입찰가 · 매각가) — 낙찰/패찰/미입찰만, 카테고리·입찰가 색상
+    def _wonpy(v):
+        s = "".join(ch for ch in str(v or "") if ch.isdigit())
+        return f"{int(s):,}" if s else ""
+    lh = 10
     for it in items:
         cat = _cat_of(it)
+        if cat not in ("낙찰", "미입찰", "일반"):
+            continue   # 불가·확인불가는 목록 제외 (불가는 아래 이미지 카드)
         col = CAT_COLOR_RGB.get(cat, C_DARK)
+        bidcol = C_NAKCHAL if cat == "낙찰" else (C_BUGA if cat == "미입찰" else C_DARK)
         pdf.set_xy(inner_x, y)
-        pdf.set_font("malgun", "B", 19)
+        pdf.set_font("malgun", "B", 15)
         pdf.set_text_color(*col)
-        pdf.cell(33, line_h, CAT_LABEL.get(cat, cat))
-        pdf.set_xy(inner_x + 34, y)
-        pdf.set_font("malgun", "B", 19)
+        pdf.cell(26, lh, CAT_LABEL.get(cat, cat))
+        pdf.set_xy(inner_x + 26, y)
         pdf.set_text_color(*C_DARK)
-        pdf.cell(36, line_h, str(it.get("bid_date", "")))
-        pdf.set_xy(inner_x + 72, y)
-        pdf.cell(58, line_h, str(it.get("sakun_no", "")))
-        pdf.set_xy(inner_x + 132, y)
-        pdf.set_font("malgun", "", 16)
-        pdf.set_text_color(70, 78, 92)
-        pdf.cell(inner_w - 132, line_h, str(it.get("m_name", "")))
-        y += line_h
+        pdf.cell(56, lh, str(it.get("sakun_no", "")))
+        pdf.set_xy(inner_x + 84, y)
+        pdf.set_text_color(*bidcol)
+        pdf.cell(52, lh, _wonpy(it.get("bidprice", "")))
+        pdf.set_xy(inner_x + 138, y)
+        pdf.set_text_color(*C_DARK)
+        pdf.cell(inner_w - 138, lh, _wonpy(it.get("maegak_price", "")))
+        y += lh
 
     bottom = y + 4
     pdf.set_draw_color(*C_LINE)

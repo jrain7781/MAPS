@@ -1307,6 +1307,7 @@ class Handler(SimpleHTTPRequestHandler):
                     "bid_date": it.get("bid_date", ""), "state_kind": it.get("state_kind", ""),
                     "category": cat,
                     "status": it.get("status", ""), "maegak_price": it.get("maegak_price", ""),
+                    "bidprice": it.get("bidprice", ""),
                     "buyer": it.get("buyer", ""), "addr": it.get("addr", ""),
                     "m_name": it.get("m_name", ""), "mid_member_id": it.get("mid_member_id", ""),
                     "detail": it.get("detail", ""),
@@ -1317,6 +1318,7 @@ class Handler(SimpleHTTPRequestHandler):
                 "api_action": "sendBugaReport", "api_key": api_key,
                 "report_dt": report_dt, "items": out_items, "total": total,
                 "mode": mode, "attach_pdf": attach_pdf, "pdf_b64": pdf_b64,
+                "custom_summary": payload.get("custom_summary") or "",   # 텔레그램 미리보기에서 편집한 요약(관리자용)
                 "recipients": payload.get("recipients") or None,  # {include_admins, teacher_ids} — 관리자=전체/강사=자기건
                 "target": payload.get("target") or None,          # 레거시 폴백(구분/회원명)
             }
@@ -1413,14 +1415,16 @@ class Handler(SimpleHTTPRequestHandler):
             self._send_json(500, {"success": False, "error": str(e)})
 
     def _handle_restart_server(self):
-        """서버 자기 자신 재실행(os.execv) — 코드 갱신 반영. 응답 전송 후 별도 스레드에서 재시작."""
+        """서버 재시작 — 새 프로세스를 띄우고 현재 프로세스 종료(포트 해제 후). os.execv 는 포트 미해제로 실패해 사용 안 함."""
         self._send_json(200, {"success": True, "message": "서버 재시작 중…"})
         try:
             self.wfile.flush()
         except Exception:
             pass
+        srv = self.server   # 리스닝 소켓 종료용
 
         def _do_restart():
+            import subprocess
             time.sleep(1.0)   # 응답 전송 + 클라이언트 수신 대기
             global _driver
             try:
@@ -1428,12 +1432,30 @@ class Handler(SimpleHTTPRequestHandler):
                     _driver.quit()   # 셀레니움 드라이버 정리(orphan 방지)
             except Exception:
                 pass
+            here = os.path.dirname(os.path.abspath(__file__))
+            script = os.path.join(here, "crawler.py")
+            # 1) 현재 리스닝 소켓 종료 → 포트(8765) 해제 (allow_reuse_address 라도 fd 상속 방지 위해 먼저 닫음)
             try:
-                print("[crawler] ♻ 서버 재시작 (os.execv)")
+                srv.shutdown()
+            except Exception:
+                pass
+            try:
+                srv.server_close()
+            except Exception:
+                pass
+            # 2) 새 인스턴스를 분리된 콘솔로 기동 (현재 소켓 fd 미상속)
+            try:
+                creation = getattr(subprocess, "CREATE_NEW_CONSOLE", 0) if os.name == "nt" else 0
+                subprocess.Popen([sys.executable, "-u", script], cwd=here,
+                                 creationflags=creation, close_fds=True)
+                print("[crawler] ♻ 새 인스턴스 기동 — 현재 인스턴스 종료")
                 sys.stdout.flush()
-                os.execv(sys.executable, [sys.executable] + sys.argv)
             except Exception as e:
                 print(f"[crawler] 재시작 실패: {e} — 콘솔에서 수동 재실행 필요")
+                return
+            # 3) 현재 프로세스 종료 (새 인스턴스가 포트 인계)
+            time.sleep(0.5)
+            os._exit(0)
 
         threading.Thread(target=_do_restart, daemon=True).start()
 

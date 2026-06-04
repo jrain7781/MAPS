@@ -511,24 +511,29 @@
   }
   function _ccCellInfo(ymd2, map) {
     const lmap = getLoadTsMap();
+    // 1) 로컬 매칭 자료 우선 — 카테고리(낙찰/미입찰/불가/패찰/확인불가) 정확 → 매각/진행 정확
+    const e = (map || loadCcByDate())[ymd2];
+    if (e && Array.isArray(e.rows) && e.rows.length) {
+      const rows = e.rows, cat = (c) => rows.filter(r => ccCategory(r) === c).length;
+      let mts = '';
+      if (e.ts) { const t = new Date(e.ts), p = n => String(n).padStart(2, '0'); mts = t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes()); }
+      const nak = cat('낙찰'), miss = cat('미입찰'), buga = cat('불가'), unk = cat('확인불가'), ilban = cat('일반');
+      const maegak = nak + miss + ilban + unk;   // 매각 = 낙찰+미입찰+패찰(남에게 매각)+확인불가
+      const sm = (ccSheetSummary && ccSheetSummary[ymd2]) || null;
+      return { n: rows.length, nak: nak, miss: miss, buga: buga, unk: unk,
+        maegak: maegak, jinhaeng: Math.max(0, rows.length - maegak - buga),
+        load_ts: lmap[ymd2] || (sm && sm.load_ts) || '', match_ts: (sm && sm.match_ts) || mts };
+    }
+    // 2) 폴백: 서버 시트 요약 (이 브라우저에서 매칭 안 한 과거 날짜). 매각=낙찰+미입찰+패찰+확인불가
     if (ccSheetSummary && ccSheetSummary[ymd2]) {
       const s = ccSheetSummary[ymd2];
       const n = s.n || 0, buga = s.buga || 0;
-      // 매각 = 낙찰+미입찰+패찰(일반)+확인불가. 시트에 maegak 있으면 우선, 없으면 근사(일반 제외 가능)
       const maegak = (s.maegak != null) ? s.maegak : ((s.nak || 0) + (s.miss || 0) + (s.ilban || 0) + (s.unk || 0));
       return { n: n, nak: s.nak || 0, miss: s.miss || 0, buga: buga, unk: s.unk || 0,
         maegak: maegak, jinhaeng: Math.max(0, n - maegak - buga),
         load_ts: s.load_ts || lmap[ymd2] || '', match_ts: s.match_ts || '' };
     }
-    const e = (map || loadCcByDate())[ymd2]; if (!e || !Array.isArray(e.rows)) return null;
-    const rows = e.rows, cat = (c) => rows.filter(r => ccCategory(r) === c).length;
-    let mts = '';
-    if (e.ts) { const t = new Date(e.ts), p = n => String(n).padStart(2, '0'); mts = t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes()); }
-    const nak = cat('낙찰'), miss = cat('미입찰'), buga = cat('불가'), unk = cat('확인불가'), ilban = cat('일반');
-    const maegak = nak + miss + ilban + unk;
-    return { n: rows.length, nak: nak, miss: miss, buga: buga, unk: unk,
-      maegak: maegak, jinhaeng: Math.max(0, rows.length - maegak - buga),
-      load_ts: lmap[ymd2] || '', match_ts: mts };
+    return null;
   }
   function renderCcCalendar(y, m) {
     const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
@@ -856,25 +861,27 @@
     const catCnt = (c) => merged.filter(r => ccCategory(r) === c).length;
     const winCnt = catCnt('낙찰'), missCnt = catCnt('미입찰'), bugaCnt = catCnt('불가'), unkCnt = catCnt('확인불가');
     wrap.innerHTML = `
-      <div class="cc-results-head">
-        <span>입찰(전체) <b>${merged.length}</b> (조회완료 ${doneCnt}) · <b style="color:#2563eb">낙찰 ${winCnt}</b> · <b style="color:#dc2626">미입찰 ${missCnt}</b> · <b style="color:#111827">불가 ${bugaCnt}</b>${unkCnt ? ` · <span style="color:#6b7280">확인불가 ${unkCnt}</span>` : ''}</span>
-        <span class="mjcap-spacer"></span>
-        <span style="font-size:12px;color:#374151;margin-right:8px">📨 수신: <b>${escapeHtml(recipientsLabel())}</b> <a href="#" data-act="cc-recipients" style="color:#2563eb;text-decoration:none">설정</a></span>
-        <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭(실행) 완료 시 낙찰/미입찰/불가 일일보고를 설정 대상에게 자동 전송">
-          <input type="checkbox" class="cc-auto-report" ${ccAutoReportOn() ? 'checked' : ''}>자동 보고
-        </label>
-        <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭 조사 시 브라우저 창을 숨김(헤드리스)">
-          <input type="checkbox" class="cc-headless" ${ccHeadlessOn() ? 'checked' : ''}>조사숨김
-        </label>
-        <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="일일보고 전송 시 보고서 PDF를 텔레그램 마지막에 첨부">
-          <input type="checkbox" class="cc-attach-pdf" ${ccAttachPdfOn() ? 'checked' : ''}>PDF첨부
-        </label>
-        <button type="button" class="btn_box_sss bold" data-act="cc-schedule" title="지정 시각에 자동 크롤링→매칭→보고/MAPS">⏰ 스케줄${getSchedule().enabled ? ' ' + getSchedule().time : ''}</button>
-        <button type="button" class="btn_box_sss bold" data-act="cc-preview-tg" title="텔레그램 전송 미리보기(텍스트+이미지)">👁 텔레그램 미리보기</button>
-        <button type="button" class="btn_box_sss bold" data-act="cc-preview-pdf" title="일일보고 PDF를 새 탭에서 미리보기">👁 PDF 미리보기</button>
-        <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="텔레그램으로 텍스트+이미지 일일보고 전송 (PDF첨부 체크 시 PDF 동봉)">📋 일일보고 전송</button>
-        <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report-pdf" title="텔레그램으로 일일보고 PDF만 전송">📄 일일보고 PDF 전송</button>
-        <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
+      <div class="cc-results-head" style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px">
+          <span>입찰(전체) <b>${merged.length}</b> (조회완료 ${doneCnt}) · <b style="color:#2563eb">낙찰 ${winCnt}</b> · <b style="color:#dc2626">미입찰 ${missCnt}</b> · <b style="color:#111827">불가 ${bugaCnt}</b>${unkCnt ? ` · <span style="color:#6b7280">확인불가 ${unkCnt}</span>` : ''}</span>
+          <span style="flex:1"></span>
+          <span style="font-size:12px;color:#374151">📨 수신: <b>${escapeHtml(recipientsLabel())}</b> <a href="#" data-act="cc-recipients" style="color:#2563eb;text-decoration:none">설정</a></span>
+          <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="매칭(실행) 완료 시 일일보고를 설정 대상에게 자동 전송">
+            <input type="checkbox" class="cc-auto-report" ${ccAutoReportOn() ? 'checked' : ''}>자동 보고</label>
+          <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="매칭 조사 시 브라우저 창을 숨김(헤드리스)">
+            <input type="checkbox" class="cc-headless" ${ccHeadlessOn() ? 'checked' : ''}>조사숨김</label>
+          <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="일일보고 전송 시 보고서 PDF를 텔레그램 마지막에 첨부">
+            <input type="checkbox" class="cc-attach-pdf" ${ccAttachPdfOn() ? 'checked' : ''}>PDF첨부</label>
+        </div>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+          <button type="button" class="btn_box_sss bold" data-act="cc-schedule" title="지정 시각에 자동 크롤링→매칭→보고/MAPS">⏰ 스케줄${getSchedule().enabled ? ' ' + getSchedule().time : ''}</button>
+          <button type="button" class="btn_box_sss bold" data-act="cc-preview-tg" title="텔레그램 전송 미리보기(텍스트+이미지)">👁 텔레그램 미리보기</button>
+          <button type="button" class="btn_box_sss bold" data-act="cc-preview-pdf" title="일일보고 PDF를 새 탭에서 미리보기">👁 PDF 미리보기</button>
+          <span style="flex:1"></span>
+          <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="텔레그램으로 텍스트+이미지 일일보고 전송 (PDF첨부 체크 시 PDF 동봉)">📋 일일보고 전송</button>
+          <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report-pdf" title="텔레그램으로 일일보고 PDF만 전송">📄 일일보고 PDF 전송</button>
+          <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
+        </div>
       </div>
       <div class="cc-table-wrap">
       <table class="cc-table"><thead>
@@ -1053,7 +1060,7 @@
 
   // 실제 전송 (recipients = {include_admins, teacher_ids}, mode='full'(텍스트+이미지)|'pdf'(PDF만))
   // 낙찰/결과가 없어도 불러온 입찰이 있으면 요약을 전송한다(자동·수동 공통).
-  function doSendReport(recipients, auto, mode) {
+  function doSendReport(recipients, auto, mode, customSummary) {
     mode = mode || 'full';
     const items = ccReportItems();
     const total = ccReportTotal();
@@ -1066,7 +1073,7 @@
     log('cc', `📋 ${label} 전송 중… (결과 ${items.length}건 / 입찰 ${total} · 대상=${recipientsLabel(recipients)}${auto ? ' · 자동' : ''}${attachPdf ? ' · PDF첨부' : ''})`, 'log-ok');
     fetch('/api/send-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, items, recipients, total, report_dt: ccReportDate(), mode, attach_pdf: attachPdf })
+      body: JSON.stringify({ api_key: apiKey, items, recipients, total, report_dt: ccReportDate(), mode, attach_pdf: attachPdf, custom_summary: (customSummary || '') })
     }).then(r => r.json()).then(j => {
       if (j && j.success) {
         const errN = (j.errors && j.errors.length) ? ` (전송오류 ${j.errors.length})` : '';
@@ -1095,7 +1102,19 @@
     });
     const nJin = Math.max(0, total - nMaegak - nBuga);
     const dateStr = (ccReportDate() || '').split(' ')[0].replace(/-/g, '.');
-    return `📋 ${dateStr} 경매진행보고\n입찰 ${total}건\n낙찰 ${nNak}건 (매각 ${nMaegak}건  진행 ${nJin}건)\n불가 ${nBuga}건\n미입찰 ${nMiss}건`;
+    const out = [`📋 ${dateStr} 경매진행보고`, `입찰 ${total}건`,
+      `낙찰 ${nNak}건 (매각 ${nMaegak}건  진행 ${nJin}건)`, `불가 ${nBuga}건`, `미입찰 ${nMiss}건`];
+    // 건별 리스트: 낙찰/패찰/미입찰 (사건번호 · 입찰가 · 매각가)
+    const emo = { '낙찰': '🔵', '일반': '⚪', '미입찰': '🔴' }, nm = { '낙찰': '낙찰', '일반': '패찰', '미입찰': '미입찰' }, ord = { '낙찰': 0, '일반': 1, '미입찰': 2 };
+    const list = rows.filter(r => ord[ccCategory(r)] != null).sort((a, b) => ord[ccCategory(a)] - ord[ccCategory(b)]);
+    if (list.length) {
+      out.push('');
+      list.forEach(r => {
+        const c = ccCategory(r), bp = fmtWon(r.bidprice), mp = fmtWon(r.maegak_price);
+        out.push(`${emo[c]} ${nm[c]} ${r.sakun_no || ''}${bp ? ('  입찰 ' + bp) : ''}${mp ? ('  매각 ' + mp) : ''}`);
+      });
+    }
+    return out.join('\n');
   }
 
   // ===== 매칭 조사 창 숨김(헤드리스) =====
@@ -1257,16 +1276,28 @@
       const cardHtml = cards.map(c => `
         <div style="margin:8px 0"><img src="data:image/png;base64,${c.b64}" style="max-width:100%;border-radius:8px;display:block">
         <div style="font-size:12px;color:#374151;margin-top:2px">${escapeHtml(c.caption || '')}</div></div>`).join('');
+      const rowsN = Math.min(20, Math.max(7, summary.split('\n').length + 1));
       modal.innerHTML = `<div style="background:#cfe6d4;border-radius:12px;width:92%;max-width:480px;max-height:88vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35);padding:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <b style="font-size:14px;color:#111">📱 텔레그램 전송 미리보기</b>
+          <b style="font-size:14px;color:#111">📱 텔레그램 전송 미리보기 <span style="font-weight:400;font-size:11px;color:#374151">(아래 텍스트 직접 편집 가능)</span></b>
           <button type="button" id="ccTgClose" style="border:0;background:none;font-size:18px;cursor:pointer">✕</button></div>
-        <div style="background:#fff;border-radius:10px;padding:12px;white-space:pre-wrap;font-size:14px;line-height:1.6;color:#111">${escapeHtml(summary)}</div>
+        <textarea id="ccTgText" rows="${rowsN}" style="width:100%;box-sizing:border-box;background:#fff;border:1px solid #9ca3af;border-radius:10px;padding:12px;font-size:14px;line-height:1.6;color:#111;font-family:inherit;resize:vertical">${escapeHtml(summary)}</textarea>
         ${cards.length ? cardHtml : '<div style="font-size:12px;color:#6b7280;margin-top:8px">캡처 이미지 없음 (요약 텍스트만 전송)</div>'}
-        <div style="font-size:11px;color:#4b5563;margin-top:8px">※ 관리자 기준 미리보기. 실제 전송은 수신 대상별로 분리됩니다.</div>
+        <div style="font-size:11px;color:#4b5563;margin:8px 0">※ 관리자 기준 미리보기. 텍스트를 고치면 그 내용 그대로 전송됩니다(색상은 텔레그램 미지원, 이모지로 구분).</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button type="button" id="ccTgClose2" class="btn_box_sss">닫기</button>
+          <button type="button" id="ccTgSend" class="btn_box_sss btn_blue bold">📤 이 내용으로 전송</button>
+        </div>
       </div>`;
       modal.style.display = 'flex';
-      modal.querySelector('#ccTgClose').addEventListener('click', () => modal.style.display = 'none');
+      const close = () => modal.style.display = 'none';
+      modal.querySelector('#ccTgClose').addEventListener('click', close);
+      modal.querySelector('#ccTgClose2').addEventListener('click', close);
+      modal.querySelector('#ccTgSend').addEventListener('click', () => {
+        const edited = modal.querySelector('#ccTgText').value || '';
+        close();
+        doSendReport(getRecipients(), false, 'full', edited);
+      });
       log('cc', `👁 텔레그램 미리보기 (요약 + 캡처 ${cards.length}장)`, 'log-ok');
     }).catch(err => {
       if (btn) btn.disabled = false;
