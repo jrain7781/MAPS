@@ -204,7 +204,7 @@ def _summary_card(pdf, items, counts, M, W):
     # 집계 4줄: 입찰 / 낙찰(매각·진행) / 불가 / 미입찰
     lines2 = [
         (f"입찰 {counts.get('입찰', 0)}건", C_DARK),
-        (f"낙찰 {counts.get('낙찰', 0)}건  (매각 {counts.get('매각', 0)}건   진행 {counts.get('진행', 0)}건)", C_NAKCHAL),
+        (f"낙찰 {counts.get('낙찰', 0)}건  (패찰 {counts.get('매각', 0)}건   유찰 {counts.get('진행', 0)}건)", C_NAKCHAL),
         (f"불가 {counts.get('불가', 0)}건", C_DARK),
         (f"미입찰 {counts.get('미입찰', 0)}건", C_BUGA),
     ]

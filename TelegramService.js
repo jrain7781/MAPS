@@ -1461,43 +1461,48 @@ function _catOfItem_(it) {
   if (c) return c;
   return (String(it.state_kind || '') === '불가') ? '불가' : '낙찰';
 }
-// 경매진행보고 요약 텍스트 — 헤더 + 입찰/낙찰(매각·진행)/불가/미입찰. 건별 리스트 없음.
-// 매각 = 낙찰+미입찰+패찰(일반)+확인불가, 진행 = 입찰 − 매각 − 불가 (오늘 아직 경매 전인 건).
+// 경매진행보고 요약 — 카드형. 관리자는 매니저에서 편집한 템플릿(custom_summary) 사용, 이 함수는 강사/폴백용.
+// 패찰(=매각 실시 건수)=낙찰+미입찰+패찰+확인불가, 유찰=입찰−패찰−불가. 작은 원 ●/○ (텔레그램 색 미지원).
 function _dailySummaryText_(items, reportDt, total, isAdmin) {
   var nNak = 0, nMiss = 0, nBuga = 0, nMaegak = 0;
-  items.forEach(function (it) {
+  (items || []).forEach(function (it) {
     var c = _catOfItem_(it);
     if (c === '낙찰') nNak++; else if (c === '미입찰') nMiss++; else if (c === '불가') nBuga++;
-    if (c === '낙찰' || c === '미입찰' || c === '일반' || c === '확인불가') nMaegak++;   // 매각(경매 실시)건
+    if (c === '낙찰' || c === '미입찰' || c === '일반' || c === '확인불가') nMaegak++;
   });
-  var dateStr = String(reportDt || '').split(' ')[0];
-  var title = dateStr ? (dateStr.replace(/-/g, '.') + ' 경매진행보고') : 'MJ경매 진행보고';
-  var lines = ['📋 <b>' + telegramEscapeHtml_(title) + '</b>'];
+  var dateStr = String(reportDt || '').split(' ')[0].replace(/-/g, '.');
+  var lines = ['[' + (dateStr || 'MJ경매') + ' 경매진행보고]', ''];
   if (isAdmin && total != null && total !== '') {
-    var t = parseInt(total, 10); if (isNaN(t)) t = items.length;
-    var nJin = Math.max(0, t - nMaegak - nBuga);   // 진행(아직 경매 전)
-    lines.push('입찰 ' + t + '건');
-    lines.push('낙찰 ' + nNak + '건 (매각 ' + nMaegak + '건  진행 ' + nJin + '건)');
-    lines.push('불가 ' + nBuga + '건');
-    lines.push('미입찰 ' + nMiss + '건');
+    var t = parseInt(total, 10); if (isNaN(t)) t = (items || []).length;
+    var nJin = Math.max(0, t - nMaegak - nBuga);
+    lines.push('● 입찰 ' + t + '건');
+    lines.push('● 낙찰 ' + nNak + '건 (패찰 ' + nMaegak + '건 유찰 ' + nJin + '건)');
+    lines.push('● 불가 ' + nBuga + '건');
+    lines.push('● 미입찰 ' + nMiss + '건');
   } else {
-    lines.push('낙찰 ' + nNak + '건');
-    lines.push('불가 ' + nBuga + '건');
-    lines.push('미입찰 ' + nMiss + '건');
+    lines.push('● 낙찰 ' + nNak + '건');
+    lines.push('● 불가 ' + nBuga + '건');
+    lines.push('● 미입찰 ' + nMiss + '건');
   }
-  // ── 건별 리스트: 낙찰/패찰/미입찰 (사건번호 · 입찰가 · 매각가). 텔레그램은 색 미지원 → 이모지로 구분 ──
+  // ── 카드형 건별 목록 (낙찰/패찰/미입찰): ○ 카테고리 회원 / 사건번호 (법원) / 입찰가(±%) / 매각가 ──
   var _won = function (v) { var s = String(v == null ? '' : v).replace(/[^0-9]/g, ''); return s ? s.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''; };
-  var _lblEmoji = { '낙찰': '🔵', '일반': '⚪', '미입찰': '🔴' };
-  var _lblName = { '낙찰': '낙찰', '일반': '패찰', '미입찰': '미입찰' };
-  var _lblOrder = { '낙찰': 0, '일반': 1, '미입찰': 2 };
-  var listItems = (items || []).filter(function (it) { return _lblOrder[_catOfItem_(it)] != null; })
-    .sort(function (a, b) { return _lblOrder[_catOfItem_(a)] - _lblOrder[_catOfItem_(b)]; });
+  var _nm = { '낙찰': '낙찰', '일반': '패찰', '미입찰': '미입찰' }, _ord = { '낙찰': 0, '일반': 1, '미입찰': 2 };
+  var listItems = (items || []).filter(function (it) { return _ord[_catOfItem_(it)] != null; })
+    .sort(function (a, b) { return _ord[_catOfItem_(a)] - _ord[_catOfItem_(b)]; });
   if (listItems.length) {
     lines.push('');
     listItems.forEach(function (it) {
-      var c = _catOfItem_(it), bp = _won(it.bidprice), mp = _won(it.maegak_price);
-      lines.push(_lblEmoji[c] + ' ' + _lblName[c] + ' ' + (it.sakun_no || '') + (bp ? ('  입찰 ' + bp) : '') + (mp ? ('  매각 ' + mp) : ''));
+      var c = _catOfItem_(it);
+      var bn = parseInt(String(it.bidprice || '').replace(/[^0-9]/g, ''), 10) || 0;
+      var mn = parseInt(String(it.maegak_price || '').replace(/[^0-9]/g, ''), 10) || 0;
+      var pct = ''; if (bn && mn) { var p = Math.round((bn - mn) / mn * 100); pct = ' (' + (p > 0 ? '+' : '') + p + '%)'; }
+      lines.push('○ ' + _nm[c] + (it.m_name ? (' ' + it.m_name) : ''));
+      lines.push('   ' + (it.sakun_no || '') + (it.court ? ('   (' + it.court + ')') : ''));
+      if (bn) lines.push('   입찰가: ' + _won(it.bidprice) + pct);
+      if (mn) lines.push('   매각가: ' + _won(it.maegak_price));
+      lines.push('');
     });
+    if (lines[lines.length - 1] === '') lines.pop();
   }
   return lines.join('\n');
 }
@@ -1583,7 +1588,8 @@ function sendBugaReport(payload) {
       var summaryText = (rc.scope === 'all' && payload.custom_summary)
         ? String(payload.custom_summary)
         : _dailySummaryText_(its, payload.report_dt, payload.total, rc.scope === 'all');
-      telegramSendMessage(rc.chat_id, summaryText);
+      // parse_mode=HTML 이므로 본문에 들어간 <,>,& 이스케이프 (의도된 태그 없음)
+      telegramSendMessage(rc.chat_id, telegramEscapeHtml_(summaryText));
       // 이미지 순서: 낙찰 → 미입찰 → 불가 (캡션 유지). 패찰·확인불가는 캡처 없음
       var _ord = { '낙찰': 0, '미입찰': 1, '불가': 2 };
       var photoItems = its.slice().sort(function (a, b) {

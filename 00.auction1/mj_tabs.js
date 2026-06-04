@@ -583,7 +583,7 @@
           : '';
         body = `<div data-cal-day="${ym}" title="클릭: ${ym} 결과 보기" style="margin-top:4px;cursor:pointer;line-height:1.45;font-size:11px">
           <div style="font-weight:700;color:#1f2937">입찰 ${c.n}건</div>
-          <div style="font-weight:700;color:#2563eb">낙찰 ${c.nak}건 <span style="font-weight:600;color:#6b7280;font-size:10px">(매각 ${c.maegak}건 진행 ${c.jinhaeng}건)</span></div>
+          <div style="font-weight:700;color:#2563eb">낙찰 ${c.nak}건 <span style="font-weight:600;color:#6b7280;font-size:10px">(패찰 ${c.maegak}건 유찰 ${c.jinhaeng}건)</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">${mkPill('불가', c.buga, '#111827')}${mkPill('미입찰', c.miss, '#dc2626')}${mkPill('확인불가', c.unk, '#9ca3af', '#111827')}</div>${tsLine}</div>`;
       }
       h += `<div style="min-height:84px;border:${border};border-radius:8px;padding:5px;background:${bg}">
@@ -1069,11 +1069,13 @@
     if (!apiKey) { if (!auto) alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
     recipients = recipients || getRecipients();
     const attachPdf = (mode === 'full') && ccAttachPdfOn();
+    // 관리자용 본문 = 편집된 템플릿 렌더 결과(카드형). pdf 모드는 본문 없음.
+    const cs = (mode === 'pdf') ? '' : (customSummary || renderCcTemplate());
     const label = (mode === 'pdf') ? '일일보고 PDF' : '일일보고';
     log('cc', `📋 ${label} 전송 중… (결과 ${items.length}건 / 입찰 ${total} · 대상=${recipientsLabel(recipients)}${auto ? ' · 자동' : ''}${attachPdf ? ' · PDF첨부' : ''})`, 'log-ok');
     fetch('/api/send-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, items, recipients, total, report_dt: ccReportDate(), mode, attach_pdf: attachPdf, custom_summary: (customSummary || '') })
+      body: JSON.stringify({ api_key: apiKey, items, recipients, total, report_dt: ccReportDate(), mode, attach_pdf: attachPdf, custom_summary: cs })
     }).then(r => r.json()).then(j => {
       if (j && j.success) {
         const errN = (j.errors && j.errors.length) ? ` (전송오류 ${j.errors.length})` : '';
@@ -1090,32 +1092,49 @@
     });
   }
   function sendCcReportAuto() { doSendReport(getRecipients(), true, 'full'); }   // 자동 보고(저장된 수신대상)
-  // 텔레그램 일일보고 요약 텍스트(미리보기용) — GAS _dailySummaryText_ 와 동일 형식
-  function ccTelegramSummaryText() {
-    const rows = ccMergedRows();
-    const total = rows.length;
-    let nNak = 0, nMiss = 0, nBuga = 0, nMaegak = 0;
-    rows.forEach(r => {
-      const c = ccCategory(r);
-      if (c === '낙찰') nNak++; else if (c === '미입찰') nMiss++; else if (c === '불가') nBuga++;
-      if (c === '낙찰' || c === '미입찰' || c === '일반' || c === '확인불가') nMaegak++;
-    });
-    const nJin = Math.max(0, total - nMaegak - nBuga);
-    const dateStr = (ccReportDate() || '').split(' ')[0].replace(/-/g, '.');
-    const out = [`📋 ${dateStr} 경매진행보고`, `입찰 ${total}건`,
-      `낙찰 ${nNak}건 (매각 ${nMaegak}건  진행 ${nJin}건)`, `불가 ${nBuga}건`, `미입찰 ${nMiss}건`];
-    // 건별 리스트: 낙찰/패찰/미입찰 (사건번호 · 입찰가 · 매각가)
-    const emo = { '낙찰': '🔵', '일반': '⚪', '미입찰': '🔴' }, nm = { '낙찰': '낙찰', '일반': '패찰', '미입찰': '미입찰' }, ord = { '낙찰': 0, '일반': 1, '미입찰': 2 };
-    const list = rows.filter(r => ord[ccCategory(r)] != null).sort((a, b) => ord[ccCategory(a)] - ord[ccCategory(b)]);
-    if (list.length) {
-      out.push('');
-      list.forEach(r => {
-        const c = ccCategory(r), bp = fmtWon(r.bidprice), mp = fmtWon(r.maegak_price);
-        out.push(`${emo[c]} ${nm[c]} ${r.sakun_no || ''}${bp ? ('  입찰 ' + bp) : ''}${mp ? ('  매각 ' + mp) : ''}`);
-      });
-    }
-    return out.join('\n');
+  // ===== 텔레그램 일일보고 템플릿 (편집·저장·재사용) =====
+  const CC_TEMPLATE_KEY = 'mj_cc_tg_template';
+  const DEFAULT_CC_TEMPLATE =
+    '[{날짜} 경매진행보고]\n\n' +
+    '● 입찰 {입찰}건\n' +
+    '● 낙찰 {낙찰}건 (패찰 {패찰}건 유찰 {유찰}건)\n' +
+    '● 불가 {불가}건\n' +
+    '● 미입찰 {미입찰}건\n\n' +
+    '{목록}';
+  function getCcTemplate() { try { return localStorage.getItem(CC_TEMPLATE_KEY) || DEFAULT_CC_TEMPLATE; } catch (e) { return DEFAULT_CC_TEMPLATE; } }
+  function setCcTemplate(t) { try { localStorage.setItem(CC_TEMPLATE_KEY, t); } catch (e) {} }
+  // 카드형 건별 목록 (첨부1 양식): ○ 카테고리 회원 / 사건번호 (법원) / 입찰가(±%) / 매각가
+  function _ccCardList() {
+    const nm = { '낙찰': '낙찰', '일반': '패찰', '미입찰': '미입찰' }, ord = { '낙찰': 0, '일반': 1, '미입찰': 2 };
+    const list = ccMergedRows().filter(r => ord[ccCategory(r)] != null).sort((a, b) => ord[ccCategory(a)] - ord[ccCategory(b)]);
+    return list.map(r => {
+      const c = ccCategory(r), bp = _won(r.bidprice), mp = _won(r.maegak_price);
+      let pct = '';
+      if (bp && mp) { const p = Math.round((bp - mp) / mp * 100); pct = ' (' + (p > 0 ? '+' : '') + p + '%)'; }
+      const L = ['○ ' + nm[c] + (r.m_name ? ' ' + r.m_name : ''),
+        '   ' + (r.sakun_no || '') + (r.court ? '   (' + r.court + ')' : '')];
+      if (bp) L.push('   입찰가: ' + fmtWon(r.bidprice) + pct);
+      if (mp) L.push('   매각가: ' + fmtWon(r.maegak_price));
+      return L.join('\n');
+    }).join('\n\n');
   }
+  function _ccCounts() {
+    const rows = ccMergedRows(), total = rows.length;
+    let nNak = 0, nMiss = 0, nBuga = 0, nMaegak = 0;
+    rows.forEach(r => { const c = ccCategory(r); if (c === '낙찰') nNak++; else if (c === '미입찰') nMiss++; else if (c === '불가') nBuga++; if (c === '낙찰' || c === '미입찰' || c === '일반' || c === '확인불가') nMaegak++; });
+    return { total: total, nNak: nNak, nMiss: nMiss, nBuga: nBuga, nMaegak: nMaegak, nJin: Math.max(0, total - nMaegak - nBuga) };
+  }
+  // 템플릿 렌더 — 플레이스홀더 치환 + {목록} 카드 확장
+  function renderCcTemplate(tpl) {
+    const c = _ccCounts();
+    const dateStr = (ccReportDate() || '').split(' ')[0].replace(/-/g, '.');
+    return String(tpl == null ? getCcTemplate() : tpl)
+      .replace(/\{날짜\}/g, dateStr).replace(/\{입찰\}/g, c.total).replace(/\{낙찰\}/g, c.nNak)
+      .replace(/\{패찰\}/g, c.nMaegak).replace(/\{유찰\}/g, c.nJin)
+      .replace(/\{불가\}/g, c.nBuga).replace(/\{미입찰\}/g, c.nMiss)
+      .replace(/\{목록\}/g, _ccCardList());
+  }
+  function ccTelegramSummaryText() { return renderCcTemplate(getCcTemplate()); }
 
   // ===== 매칭 조사 창 숨김(헤드리스) =====
   const CC_HEADLESS_KEY = 'mj_cc_headless';
@@ -1257,8 +1276,7 @@
   function previewTelegram(items, total) {
     const btn = $card('cc')?.querySelector('[data-act="cc-preview-tg"]');
     if (btn) btn.disabled = true;
-    log('cc', `👁 텔레그램 미리보기 생성 중…`, 'log-ok');
-    const summary = ccTelegramSummaryText();
+    log('cc', `👁 텔레그램 템플릿 편집 열기…`, 'log-ok');
     fetch('/api/preview-telegram', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ items, total, report_dt: ccReportDate() })
@@ -1276,29 +1294,41 @@
       const cardHtml = cards.map(c => `
         <div style="margin:8px 0"><img src="data:image/png;base64,${c.b64}" style="max-width:100%;border-radius:8px;display:block">
         <div style="font-size:12px;color:#374151;margin-top:2px">${escapeHtml(c.caption || '')}</div></div>`).join('');
-      const rowsN = Math.min(20, Math.max(7, summary.split('\n').length + 1));
-      modal.innerHTML = `<div style="background:#cfe6d4;border-radius:12px;width:92%;max-width:480px;max-height:88vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35);padding:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <b style="font-size:14px;color:#111">📱 텔레그램 전송 미리보기 <span style="font-weight:400;font-size:11px;color:#374151">(아래 텍스트 직접 편집 가능)</span></b>
+      const tpl = getCcTemplate();
+      modal.innerHTML = `<div style="background:#e9edf2;border-radius:12px;width:94%;max-width:520px;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35);padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <b style="font-size:14px;color:#111">📱 텔레그램 일일보고 — 템플릿 편집</b>
           <button type="button" id="ccTgClose" style="border:0;background:none;font-size:18px;cursor:pointer">✕</button></div>
-        <textarea id="ccTgText" rows="${rowsN}" style="width:100%;box-sizing:border-box;background:#fff;border:1px solid #9ca3af;border-radius:10px;padding:12px;font-size:14px;line-height:1.6;color:#111;font-family:inherit;resize:vertical">${escapeHtml(summary)}</textarea>
-        ${cards.length ? cardHtml : '<div style="font-size:12px;color:#6b7280;margin-top:8px">캡처 이미지 없음 (요약 텍스트만 전송)</div>'}
-        <div style="font-size:11px;color:#4b5563;margin:8px 0">※ 관리자 기준 미리보기. 텍스트를 고치면 그 내용 그대로 전송됩니다(색상은 텔레그램 미지원, 이모지로 구분).</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
+        <div style="font-size:11px;color:#4b5563;margin-bottom:4px">치환어: <code>{날짜} {입찰} {낙찰} {패찰} {유찰} {불가} {미입찰} {목록}</code> · 저장하면 매번 이 양식으로 전송됩니다.</div>
+        <textarea id="ccTplEdit" rows="9" style="width:100%;box-sizing:border-box;background:#fff;border:1px solid #9ca3af;border-radius:8px;padding:10px;font-size:13px;line-height:1.5;color:#111;font-family:Consolas,monospace;resize:vertical">${escapeHtml(tpl)}</textarea>
+        <div style="display:flex;gap:6px;margin:6px 0">
+          <button type="button" id="ccTplSave" class="btn_box_sss btn_blue bold">💾 템플릿 저장</button>
+          <button type="button" id="ccTplReset" class="btn_box_sss">↺ 기본값</button>
+          <span style="flex:1"></span>
+          <button type="button" id="ccTplPdf" class="btn_box_sss bold">📄 PDF 보고서 보기</button>
+        </div>
+        <div style="font-size:12px;color:#374151;margin:8px 0 3px">▼ 미리보기 (실제 전송 모습 · 텔레그램은 색 미지원이라 흑백 ●○)</div>
+        <div style="background:#cfe6d4;border-radius:12px;padding:10px">
+          <div id="ccTplPreview" style="background:#fff;border-radius:10px;padding:12px;white-space:pre-wrap;font-size:13.5px;line-height:1.6;color:#111"></div>
+          ${cards.length ? cardHtml : '<div style="font-size:12px;color:#6b7280;margin-top:8px">캡처 이미지 없음 (텍스트만 전송)</div>'}
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
           <button type="button" id="ccTgClose2" class="btn_box_sss">닫기</button>
-          <button type="button" id="ccTgSend" class="btn_box_sss btn_blue bold">📤 이 내용으로 전송</button>
         </div>
       </div>`;
       modal.style.display = 'flex';
       const close = () => modal.style.display = 'none';
+      const ta = modal.querySelector('#ccTplEdit');
+      const pv = modal.querySelector('#ccTplPreview');
+      const refresh = () => { pv.textContent = renderCcTemplate(ta.value); };
+      refresh();
+      ta.addEventListener('input', refresh);
       modal.querySelector('#ccTgClose').addEventListener('click', close);
       modal.querySelector('#ccTgClose2').addEventListener('click', close);
-      modal.querySelector('#ccTgSend').addEventListener('click', () => {
-        const edited = modal.querySelector('#ccTgText').value || '';
-        close();
-        doSendReport(getRecipients(), false, 'full', edited);
-      });
-      log('cc', `👁 텔레그램 미리보기 (요약 + 캡처 ${cards.length}장)`, 'log-ok');
+      modal.querySelector('#ccTplSave').addEventListener('click', () => { setCcTemplate(ta.value); log('cc', '💾 텔레그램 템플릿 저장됨', 'log-ok'); alert('템플릿을 저장했습니다. 이후 일일보고 전송 시 이 양식으로 나갑니다.'); });
+      modal.querySelector('#ccTplReset').addEventListener('click', () => { ta.value = DEFAULT_CC_TEMPLATE; refresh(); });
+      modal.querySelector('#ccTplPdf').addEventListener('click', () => previewCcReport('pdf'));
+      log('cc', `👁 텔레그램 템플릿 편집 (캡처 ${cards.length}장)`, 'log-ok');
     }).catch(err => {
       if (btn) btn.disabled = false;
       log('cc', `⚠ 텔레그램 미리보기 오류: ${err}`, 'log-err');
