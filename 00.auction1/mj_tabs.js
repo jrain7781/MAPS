@@ -1006,9 +1006,9 @@
   function getRecipients() {
     try {
       const r = JSON.parse(localStorage.getItem(CC_RECIPIENTS_KEY) || 'null');
-      if (r && typeof r === 'object') return { include_admins: r.include_admins !== false, teacher_ids: r.teacher_ids || [], teacher_labels: r.teacher_labels || [] };
+      if (r && typeof r === 'object') return { include_admins: r.include_admins !== false, teacher_ids: r.teacher_ids || [], teacher_labels: r.teacher_labels || [], extra_ids: r.extra_ids || [], extra_labels: r.extra_labels || [] };
     } catch (e) {}
-    return { include_admins: true, teacher_ids: [], teacher_labels: [] };
+    return { include_admins: true, teacher_ids: [], teacher_labels: [], extra_ids: [], extra_labels: [] };
   }
   function setRecipients(r) { try { localStorage.setItem(CC_RECIPIENTS_KEY, JSON.stringify(r)); } catch (e) {} }
   function recipientsLabel(r) {
@@ -1016,6 +1016,7 @@
     const parts = [];
     if (r.include_admins) parts.push('관리자(전체)');
     if (r.teacher_ids && r.teacher_ids.length) parts.push('강사 ' + ((r.teacher_labels && r.teacher_labels.length) ? r.teacher_labels.join('·') : r.teacher_ids.length + '명'));
+    if (r.extra_ids && r.extra_ids.length) parts.push('추가 ' + ((r.extra_labels && r.extra_labels.length) ? r.extra_labels.join('·') : r.extra_ids.length + '명'));
     return parts.length ? parts.join(' + ') : '대상 없음';
   }
   // 텔레그램 뱃지(파란 T): 연결+사용=파랑채움 / 연결·사용중지=파랑테두리 / 미연결=회색테두리
@@ -1057,6 +1058,13 @@
       .map(r => Object.assign({}, r, { category: ccCategory(r) }));
   }
   function ccReportTotal() { return ccMergedRows().length; }   // 입찰(전체)
+  // 보고 날짜 범위 = 불러온 입찰일자의 최소~최대 (from~to). 단일이면 한 날짜. 'YYYY.MM.DD' 형식.
+  function ccReportRange() {
+    const ds = ccMergedRows().map(r => bidToYMD(r.bid_date)).filter(Boolean).sort();
+    if (!ds.length) return ymd(new Date()).replace(/-/g, '.');
+    const f = ds[0].replace(/-/g, '.'), t = ds[ds.length - 1].replace(/-/g, '.');
+    return f === t ? f : (f + ' ~ ' + t);
+  }
   // 보고 날짜 = 항목들의 대표 입찰일자(YYYY-MM-DD) + 현재 시각
   function ccReportDate() {
     const cnt = {};
@@ -1085,7 +1093,7 @@
     log('cc', `📋 ${label} 전송 중… (결과 ${items.length}건 / 입찰 ${total} · 대상=${recipientsLabel(recipients)}${auto ? ' · 자동' : ''}${attachPdf ? ' · PDF첨부' : ''})`, 'log-ok');
     fetch('/api/send-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, items, recipients, total, report_dt: ccReportDate(), mode, attach_pdf: attachPdf, custom_summary: cs })
+      body: JSON.stringify({ api_key: apiKey, items, recipients, total, report_dt: ccReportDate(), report_range: ccReportRange(), mode, attach_pdf: attachPdf, custom_summary: cs })
     }).then(r => r.json()).then(j => {
       if (j && j.success) {
         const errN = (j.errors && j.errors.length) ? ` (전송오류 ${j.errors.length})` : '';
@@ -1150,7 +1158,7 @@
   // 템플릿 렌더 — 본문 치환 + {목록}을 목록양식으로 확장
   function renderCcTemplate(tpl, itemTpl) {
     const c = _ccCounts();
-    const dateStr = (ccReportDate() || '').split(' ')[0].replace(/-/g, '.');
+    const dateStr = ccReportRange();   // from~to 범위
     return String(tpl == null ? getCcTemplate() : tpl)
       .replace(/\{날짜\}/g, dateStr).replace(/\{입찰\}/g, c.total).replace(/\{낙찰\}/g, c.nNak)
       .replace(/\{패찰\}/g, c.nMaegak).replace(/\{유찰\}/g, c.nJin)
@@ -1276,7 +1284,7 @@
     log('cc', `👁 PDF 미리보기 생성 중… (${items.length}건)`, 'log-ok');
     fetch('/api/preview-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items, total, report_dt: ccReportDate() })
+      body: JSON.stringify({ items, total, report_dt: ccReportDate(), report_range: ccReportRange() })
     }).then(r => r.json()).then(j => {
       if (btn) btn.disabled = false;
       if (j && j.success && j.pdf_b64) {
@@ -1467,8 +1475,12 @@
             <input type="checkbox" data-role="rp-admins"> <b>관리자 — 전체 일일보고 받기</b></label>
           <div data-role="rp-admin-list" style="margin:0 0 12px 24px;font-size:12px;color:#6b7280"></div>
           <div style="border-top:1px solid #e5e7eb;padding-top:10px"><b>강사 — 자기 담당건만 받기</b> <span style="font-size:12px;color:#9ca3af">(체크한 강사에게만 본인 m_name_id 건 전송)</span></div>
-          <div data-role="rp-teacher-list" style="max-height:300px;overflow:auto;border:1px solid #e5e7eb;border-radius:6px;margin-top:6px"></div>
-          <div style="margin-top:7px;font-size:12px;color:#6b7280">파랑 채움 T=연결+사용 · 파랑 테두리 T=연결·사용중지 · 회색 T=미연결. <b>파랑 채움</b> 만 전송됩니다.</div>
+          <div data-role="rp-teacher-list" style="max-height:240px;overflow:auto;border:1px solid #e5e7eb;border-radius:6px;margin-top:6px"></div>
+          <div style="border-top:1px solid #e5e7eb;padding-top:10px;margin-top:12px"><b>특정 회원 추가 — 전체 보고 받기</b> <span style="font-size:12px;color:#9ca3af">(이름으로 검색해서 추가)</span></div>
+          <input type="text" data-role="rp-search" placeholder="회원 이름 검색…" autocomplete="off" style="width:100%;box-sizing:border-box;margin-top:6px;padding:7px 9px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+          <div data-role="rp-search-res" style="max-height:150px;overflow:auto;margin-top:4px"></div>
+          <div data-role="rp-extra-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+          <div style="margin-top:9px;font-size:12px;color:#6b7280">파랑 채움 T=연결+사용 · 파랑 테두리 T=연결·사용중지 · 회색 T=미연결. <b>파랑 채움</b> 만 전송됩니다.</div>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #e5e7eb">
           <button type="button" class="btn_box_sss" data-act="rp-close">취소</button>
@@ -1480,6 +1492,19 @@
       modal.querySelectorAll('[data-act="rp-close"]').forEach(b => b.addEventListener('click', () => modal.style.display = 'none'));
       modal.querySelector('[data-act="rp-save"]').addEventListener('click', () => { saveReportPicker(); modal.style.display = 'none'; });
       modal.querySelector('[data-act="rp-send"]').addEventListener('click', () => { const r = saveReportPicker(); modal.style.display = 'none'; doSendReport(r, false, _ccReportMode); });
+      // 특정 회원 검색/추가
+      modal.querySelector('[data-role="rp-search"]').addEventListener('input', renderExtraSearch);
+      modal.querySelector('[data-role="rp-search-res"]').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-extra-add]'); if (!b) return;
+        const id = b.getAttribute('data-extra-add'), nm = b.getAttribute('data-extra-name');
+        if (id && !_ccExtraSel.some(x => x.id === id)) _ccExtraSel.push({ id: id, name: nm });
+        renderExtraChips(); renderExtraSearch();
+      });
+      modal.querySelector('[data-role="rp-extra-chips"]').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-extra-del]'); if (!b) return;
+        _ccExtraSel = _ccExtraSel.filter(x => x.id !== b.getAttribute('data-extra-del'));
+        renderExtraChips(); renderExtraSearch();
+      });
     }
     const sendBtn = modal.querySelector('[data-act="rp-send"]');
     if (sendBtn) sendBtn.textContent = (_ccReportMode === 'pdf') ? '📄 저장 후 PDF 전송' : '📤 저장 후 전송';
@@ -1487,9 +1512,36 @@
     fetchReportCandidates(() => renderReportPicker());
   }
 
+  // 특정 회원(전체 보고 수신) 선택 상태 — 모달 세션
+  let _ccExtraSel = [];
+  function renderExtraChips() {
+    const modal = document.getElementById('ccReportModal'); if (!modal) return;
+    const box = modal.querySelector('[data-role="rp-extra-chips"]');
+    box.innerHTML = _ccExtraSel.length
+      ? _ccExtraSel.map(x => `<span style="display:inline-flex;align-items:center;gap:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:999px;padding:3px 6px 3px 10px;font-size:12px;color:#1d4ed8">${escapeHtml(x.name)}<button type="button" data-extra-del="${escapeAttr(x.id)}" style="border:0;background:none;cursor:pointer;color:#1d4ed8;font-size:14px;line-height:1">×</button></span>`).join('')
+      : '<span style="font-size:12px;color:#9ca3af">추가된 회원 없음</span>';
+  }
+  function renderExtraSearch() {
+    const modal = document.getElementById('ccReportModal'); if (!modal || !_ccCandCache) return;
+    const q = String(modal.querySelector('[data-role="rp-search"]').value || '').replace(/\s/g, '').trim();
+    const res = modal.querySelector('[data-role="rp-search-res"]');
+    if (!q) { res.innerHTML = ''; return; }
+    const sel = new Set(_ccExtraSel.map(x => x.id));
+    const hits = (_ccCandCache.members || []).filter(m => String(m.member_name || '').replace(/\s/g, '').indexOf(q) >= 0 && !sel.has(String(m.member_id))).slice(0, 20);
+    res.innerHTML = hits.length
+      ? hits.map(m => `<div style="display:flex;gap:8px;align-items:center;padding:5px 8px;border-bottom:1px solid #f1f5f9;${m.ready ? '' : 'opacity:.55'}">
+          ${tgBadge(m)} <span style="flex:1">${escapeHtml(m.member_name)}</span>
+          <button type="button" class="btn_box_sss" data-extra-add="${escapeAttr(m.member_id)}" data-extra-name="${escapeAttr(m.member_name)}" ${m.ready ? '' : 'disabled title="텔레그램 미연결"'} style="padding:1px 8px;font-size:12px">+ 추가</button></div>`).join('')
+      : '<div style="padding:8px;color:#9ca3af;font-size:12px">검색 결과 없음</div>';
+  }
   function renderReportPicker() {
     const modal = document.getElementById('ccReportModal'); if (!modal || !_ccCandCache) return;
     const saved = getRecipients();
+    // 저장된 특정회원 → 세션 선택 초기화 + 검색창/칩 초기화
+    _ccExtraSel = (saved.extra_ids || []).map((id, i) => ({ id: String(id), name: (saved.extra_labels && saved.extra_labels[i]) || String(id) }));
+    modal.querySelector('[data-role="rp-search"]').value = '';
+    modal.querySelector('[data-role="rp-search-res"]').innerHTML = '';
+    renderExtraChips();
     const isG = (m, g) => String(m.gubun || '').split(',').map(s => s.trim()).indexOf(g) >= 0;
     const members = _ccCandCache.members || [];
     const admins = members.filter(m => isG(m, '관리자'));
@@ -1514,7 +1566,10 @@
     const include_admins = modal.querySelector('[data-role="rp-admins"]').checked;
     const ids = [], labels = [];
     modal.querySelectorAll('.rp-tcb:checked').forEach(cb => { ids.push(cb.dataset.id); labels.push(cb.dataset.name); });
-    const r = { include_admins, teacher_ids: ids, teacher_labels: labels };
+    const r = {
+      include_admins, teacher_ids: ids, teacher_labels: labels,
+      extra_ids: _ccExtraSel.map(x => x.id), extra_labels: _ccExtraSel.map(x => x.name)
+    };
     setRecipients(r);
     renderCcResults();   // 상단 상시표시 갱신
     return r;

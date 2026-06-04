@@ -1289,7 +1289,8 @@ class Handler(SimpleHTTPRequestHandler):
             if mode == "pdf" or attach_pdf:
                 try:
                     pdf_bytes = report_builder.build_report_pdf(
-                        rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"), total=total)
+                        rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"), total=total,
+                        report_range=payload.get("report_range"))
                     pdf_b64 = _b64.b64encode(pdf_bytes).decode("ascii")
                 except Exception:
                     traceback.print_exc()
@@ -1359,7 +1360,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if it.get("addr"):
                     it["addr"] = str(it["addr"]).split("\n")[0]
             pdf_bytes = report_builder.build_report_pdf(
-                rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"), total=total)
+                rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"), total=total,
+                report_range=payload.get("report_range"))
             self._send_json(200, {
                 "success": True, "count": len(rep_items),
                 "pdf_b64": _b64.b64encode(pdf_bytes).decode("ascii"),

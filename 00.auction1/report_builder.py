@@ -147,7 +147,7 @@ def _pill(pdf, x, y, w, h, text, color, fsize=9):
     pdf.cell(w, 4, text, align="C")
 
 
-def build_report_pdf(items, report_dt=None, total=None):
+def build_report_pdf(items, report_dt=None, total=None, report_range=None):
     if FPDF is None:
         raise RuntimeError("fpdf2 미설치 (pip install fpdf2)")
     items = list(items or [])
@@ -169,14 +169,15 @@ def build_report_pdf(items, report_dt=None, total=None):
     W = pdf.w - pdf.l_margin - pdf.r_margin
     PAGE_BOTTOM = pdf.h - 14
 
-    # ── 헤더 배너: 'YYYY년 MM월 DD일 일일보고' ──
+    # ── 헤더 배너: 'from ~ to 경매진행보고' (범위 없으면 단일 날짜) ──
+    head_title = (str(report_range).strip() + " 경매진행보고") if report_range else (dt.strftime("%Y.%m.%d") + " 경매진행보고")
     hy = pdf.get_y()
     pdf.set_fill_color(*C_NAVY)
     pdf.rect(M, hy, W, 18, style="F", round_corners=True, corner_radius=3)
     pdf.set_xy(M + 7, hy + 4.5)
     pdf.set_font("malgun", "B", 17)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 9, dt.strftime("%Y년 %m월 %d일") + " 일일보고", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 9, head_title, new_x="LMARGIN", new_y="NEXT")
     pdf.set_y(hy + 18 + 5)
 
     # ── 집계 + 목록 카드 ──

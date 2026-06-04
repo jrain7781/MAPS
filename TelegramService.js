@@ -1516,11 +1516,16 @@ function resolveDailyRecipients_(recipients, legacyTarget) {
     if (recipients && typeof recipients === 'object') {
       var includeAdmins = (recipients.include_admins !== false);
       var teacherIds = (recipients.teacher_ids || []).map(String);
+      var extraIds = (recipients.extra_ids || []).map(String);   // 특정 회원 = 전체 보고 수신
       members.forEach(function (m) {
         if (!_memberTelegramReady_(m)) return;
         var id = String(m.member_id || '');
-        if (includeAdmins && hasGubun(m, '관리자')) out.push({ name: m.member_name || '', chat_id: String(m.telegram_chat_id || '').trim(), scope: 'all' });
-        else if (teacherIds.indexOf(id) >= 0) out.push({ name: m.member_name || '', chat_id: String(m.telegram_chat_id || '').trim(), scope: id });
+        // 우선순위: 관리자(전체) > 특정회원(전체) > 강사(자기건). 중복 추가 방지.
+        if ((includeAdmins && hasGubun(m, '관리자')) || extraIds.indexOf(id) >= 0) {
+          out.push({ name: m.member_name || '', chat_id: String(m.telegram_chat_id || '').trim(), scope: 'all' });
+        } else if (teacherIds.indexOf(id) >= 0) {
+          out.push({ name: m.member_name || '', chat_id: String(m.telegram_chat_id || '').trim(), scope: id });
+        }
       });
     } else {
       out = resolveReportRecipients_(legacyTarget).map(function (r) { return { name: r.name, chat_id: r.chat_id, scope: 'all' }; });
