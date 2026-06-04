@@ -1127,22 +1127,23 @@
         const inp = _bidEl_(scope);
         if (inp) inp.style.borderColor = msg ? '#dc2626' : '';
     }
-    // 자유 모드 oninput: 한글(억/만/십/백/천/조) 입력 중엔 포맷 보류, 순수숫자만 콤마
+    // 자유 모드 oninput: 숫자/콤마만일 때만 콤마 포맷 (한글 조합 중엔 절대 손대지 않음 → IME 보존)
     function onBidInput_(el, scope) {
-        if (!/[억만십백천조]/.test(el.value)) { formatNumber(el); _bidErr_(scope, ''); }
+        if (/^[0-9,\s]*$/.test(el.value)) { formatNumber(el); _bidErr_(scope, ''); }
+        updateBidRatio_(scope);   // 미러는 parseBidWon_ 로 억/만 라이브 환산
+    }
+    // 확정(Enter/blur): 십/백/천/조 오류, 억/만 환산하여 숫자로 고정
+    function onBidCommit_(el, scope) {
+        const v = el.value;
+        if (/[십백천조]/.test(v)) { _bidErr_(scope, '억·만만 입력 가능 (십·백·천·조 불가)'); return; }
+        if (/[억만]/.test(v)) {
+            const n = parseBidWon_(v);
+            if (n == null) { _bidErr_(scope, '인식할 수 없는 형식'); return; }
+            _bidErr_(scope, ''); el.value = _bidFmt_(n);
+        } else { formatNumber(el); _bidErr_(scope, ''); }
         updateBidRatio_(scope);
     }
-    // 자유 모드 Enter: 십/백/천/조 오류, 억/만 환산
-    function onBidEnter_(e, el, scope) {
-        if (e.key !== 'Enter') return;
-        if (/[십백천조]/.test(el.value)) { e.preventDefault(); _bidErr_(scope, '억·만만 입력 가능 (십·백·천·조 불가)'); return; }
-        if (/[억만]/.test(el.value)) {
-            e.preventDefault();
-            const n = parseBidWon_(el.value);
-            if (n == null) { _bidErr_(scope, '인식할 수 없는 형식'); return; }
-            _bidErr_(scope, ''); el.value = _bidFmt_(n); updateBidRatio_(scope);
-        }
-    }
+    function onBidEnter_(e, el, scope) { if (e.key === 'Enter') { e.preventDefault(); onBidCommit_(el, scope); } }
     // 분리 모드 억/만 칸 → #form-bidprice 에 합산 기록
     function _splitEl_(scope, which) { return document.getElementById(_bidPrefix_(scope) + 'form-bid-' + which); }
     function bidSplitCompute_(scope) {
@@ -13114,7 +13115,7 @@ MJ 이정우 팀장
 
     function updateBidRatio_(scope) {
         const bpInput = document.getElementById(scope === 'modal' ? 'modal-form-bidprice' : 'form-bidprice');
-        const bp = parseInt(String(bpInput && bpInput.value || '').replace(/[^0-9]/g, ''), 10) || 0;
+        const bp = (parseBidWon_(bpInput && bpInput.value) ) || 0;   // 억/만 라이브 환산 (숫자만 긁지 않음)
         // col2 입찰가 숫자(수정불가) 미러
         const numEl = document.getElementById((scope === 'modal' ? 'modal' : 'detail') + '-bid-num');
         if (numEl) numEl.textContent = bp > 0 ? new Intl.NumberFormat('ko-KR').format(bp) : '';
