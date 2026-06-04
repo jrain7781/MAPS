@@ -513,13 +513,22 @@
     const lmap = getLoadTsMap();
     if (ccSheetSummary && ccSheetSummary[ymd2]) {
       const s = ccSheetSummary[ymd2];
-      return { n: s.n, nak: s.nak, miss: s.miss, buga: s.buga, unk: s.unk || 0, load_ts: s.load_ts || lmap[ymd2] || '', match_ts: s.match_ts || '' };
+      const n = s.n || 0, buga = s.buga || 0;
+      // 매각 = 낙찰+미입찰+패찰(일반)+확인불가. 시트에 maegak 있으면 우선, 없으면 근사(일반 제외 가능)
+      const maegak = (s.maegak != null) ? s.maegak : ((s.nak || 0) + (s.miss || 0) + (s.ilban || 0) + (s.unk || 0));
+      return { n: n, nak: s.nak || 0, miss: s.miss || 0, buga: buga, unk: s.unk || 0,
+        maegak: maegak, jinhaeng: Math.max(0, n - maegak - buga),
+        load_ts: s.load_ts || lmap[ymd2] || '', match_ts: s.match_ts || '' };
     }
     const e = (map || loadCcByDate())[ymd2]; if (!e || !Array.isArray(e.rows)) return null;
     const rows = e.rows, cat = (c) => rows.filter(r => ccCategory(r) === c).length;
     let mts = '';
     if (e.ts) { const t = new Date(e.ts), p = n => String(n).padStart(2, '0'); mts = t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate()) + ' ' + p(t.getHours()) + ':' + p(t.getMinutes()); }
-    return { n: rows.length, nak: cat('낙찰'), miss: cat('미입찰'), buga: cat('불가'), unk: cat('확인불가'), load_ts: lmap[ymd2] || '', match_ts: mts };
+    const nak = cat('낙찰'), miss = cat('미입찰'), buga = cat('불가'), unk = cat('확인불가'), ilban = cat('일반');
+    const maegak = nak + miss + ilban + unk;
+    return { n: rows.length, nak: nak, miss: miss, buga: buga, unk: unk,
+      maegak: maegak, jinhaeng: Math.max(0, rows.length - maegak - buga),
+      load_ts: lmap[ymd2] || '', match_ts: mts };
   }
   function renderCcCalendar(y, m) {
     const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
@@ -567,9 +576,10 @@
         const tsLine = c.match_ts
           ? `<div style="margin-top:3px;font-size:10px;color:#6b7280;line-height:1.4">🎯 실행 ${_shortTs(c.match_ts)}</div>`
           : '';
-        body = `<div data-cal-day="${ym}" title="클릭: ${ym} 결과 보기" style="margin-top:4px;cursor:pointer;line-height:1.5">
-          <div style="margin-bottom:3px;font-size:11px;font-weight:700;color:#1f2937">입찰 ${c.n}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:3px">${mkPill('낙찰', c.nak, '#2563eb')}${mkPill('불가', c.buga, '#111827')}${mkPill('미입찰', c.miss, '#dc2626')}${mkPill('확인불가', c.unk, '#9ca3af', '#111827')}</div>${tsLine}</div>`;
+        body = `<div data-cal-day="${ym}" title="클릭: ${ym} 결과 보기" style="margin-top:4px;cursor:pointer;line-height:1.45;font-size:11px">
+          <div style="font-weight:700;color:#1f2937">입찰 ${c.n}건</div>
+          <div style="font-weight:700;color:#2563eb">낙찰 ${c.nak}건 <span style="font-weight:600;color:#6b7280;font-size:10px">(매각 ${c.maegak}건 진행 ${c.jinhaeng}건)</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">${mkPill('불가', c.buga, '#111827')}${mkPill('미입찰', c.miss, '#dc2626')}${mkPill('확인불가', c.unk, '#9ca3af', '#111827')}</div>${tsLine}</div>`;
       }
       h += `<div style="min-height:84px;border:${border};border-radius:8px;padding:5px;background:${bg}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between">${circle}${cb}</div>${body}</div>`;
@@ -856,9 +866,14 @@
         <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="매칭 조사 시 브라우저 창을 숨김(헤드리스)">
           <input type="checkbox" class="cc-headless" ${ccHeadlessOn() ? 'checked' : ''}>조사숨김
         </label>
+        <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;margin-right:6px;cursor:pointer" title="일일보고 전송 시 보고서 PDF를 텔레그램 마지막에 첨부">
+          <input type="checkbox" class="cc-attach-pdf" ${ccAttachPdfOn() ? 'checked' : ''}>PDF첨부
+        </label>
         <button type="button" class="btn_box_sss bold" data-act="cc-schedule" title="지정 시각에 자동 크롤링→매칭→보고/MAPS">⏰ 스케줄${getSchedule().enabled ? ' ' + getSchedule().time : ''}</button>
-        <button type="button" class="btn_box_sss bold" data-act="cc-preview" title="전송 전 보고서 PDF를 새 탭에서 미리보기">👁 미리보기</button>
-        <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="오늘 경매 결과(낙찰/매각/진행/불가)를 캡처 포함 보고서로 관리자 텔레그램 전송">📋 경매진행보고</button>
+        <button type="button" class="btn_box_sss bold" data-act="cc-preview-tg" title="텔레그램 전송 미리보기(텍스트+이미지)">👁 텔레그램 미리보기</button>
+        <button type="button" class="btn_box_sss bold" data-act="cc-preview-pdf" title="일일보고 PDF를 새 탭에서 미리보기">👁 PDF 미리보기</button>
+        <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="텔레그램으로 텍스트+이미지 일일보고 전송 (PDF첨부 체크 시 PDF 동봉)">📋 일일보고 전송</button>
+        <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report-pdf" title="텔레그램으로 일일보고 PDF만 전송">📄 일일보고 PDF 전송</button>
         <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
       </div>
       <div class="cc-table-wrap">
@@ -896,10 +911,13 @@
       });
     });
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
-    wrap.querySelector('[data-act="cc-preview"]')?.addEventListener('click', previewCcReport);
-    wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', openReportPicker);
-    wrap.querySelector('[data-act="cc-recipients"]')?.addEventListener('click', (e) => { e.preventDefault(); openReportPicker(); });
+    wrap.querySelector('[data-act="cc-preview-tg"]')?.addEventListener('click', () => previewCcReport('telegram'));
+    wrap.querySelector('[data-act="cc-preview-pdf"]')?.addEventListener('click', () => previewCcReport('pdf'));
+    wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', () => openReportPicker('full'));
+    wrap.querySelector('[data-act="cc-report-pdf"]')?.addEventListener('click', () => openReportPicker('pdf'));
+    wrap.querySelector('[data-act="cc-recipients"]')?.addEventListener('click', (e) => { e.preventDefault(); openReportPicker('full'); });
     wrap.querySelector('.cc-headless')?.addEventListener('change', (e) => setCcHeadless(e.target.checked));
+    wrap.querySelector('.cc-attach-pdf')?.addEventListener('change', (e) => setCcAttachPdf(e.target.checked));
     wrap.querySelector('[data-act="cc-schedule"]')?.addEventListener('click', openScheduleModal);
     wrap.querySelectorAll('.cc-row-send').forEach(b => b.addEventListener('click', () => sendOneByKey(b.dataset.key)));
     wrap.querySelectorAll('.cc-row-copy').forEach(b => b.addEventListener('click', () => copyCardByKey(b.dataset.key)));
@@ -1033,38 +1051,61 @@
     return best + ' ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
   }
 
-  // 실제 전송 (recipients = {include_admins, teacher_ids})
-  function doSendReport(recipients, auto) {
+  // 실제 전송 (recipients = {include_admins, teacher_ids}, mode='full'(텍스트+이미지)|'pdf'(PDF만))
+  // 낙찰/결과가 없어도 불러온 입찰이 있으면 요약을 전송한다(자동·수동 공통).
+  function doSendReport(recipients, auto, mode) {
+    mode = mode || 'full';
     const items = ccReportItems();
-    if (!items.length) { if (!auto) alert('보고할 낙찰/미입찰/불가 건이 없습니다.'); return; }
+    const total = ccReportTotal();
+    if (!total && !items.length) { if (!auto) alert('불러온 입찰 건이 없습니다. 먼저 불러오기→실행 하세요.'); return; }
     const apiKey = getMapsAdminKeyMj();
     if (!apiKey) { if (!auto) alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
     recipients = recipients || getRecipients();
-    log('cc', `📋 보고서 전송 중… (${items.length}건 · 대상=${recipientsLabel(recipients)}${auto ? ' · 자동' : ''})`, 'log-ok');
+    const attachPdf = (mode === 'full') && ccAttachPdfOn();
+    const label = (mode === 'pdf') ? '일일보고 PDF' : '일일보고';
+    log('cc', `📋 ${label} 전송 중… (결과 ${items.length}건 / 입찰 ${total} · 대상=${recipientsLabel(recipients)}${auto ? ' · 자동' : ''}${attachPdf ? ' · PDF첨부' : ''})`, 'log-ok');
     fetch('/api/send-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, items, recipients, total: ccReportTotal(), report_dt: ccReportDate() })
+      body: JSON.stringify({ api_key: apiKey, items, recipients, total, report_dt: ccReportDate(), mode, attach_pdf: attachPdf })
     }).then(r => r.json()).then(j => {
       if (j && j.success) {
         const errN = (j.errors && j.errors.length) ? ` (전송오류 ${j.errors.length})` : '';
-        log('cc', `✅ 보고서 전송 완료 — 대상 ${j.admins || '?'}명, 전송 ${j.sent || 0}건${errN}`, 'log-ok');
-        if (!auto) alert(`보고서 전송 완료 — 대상 ${j.admins || '?'}명`);
+        log('cc', `✅ ${label} 전송 완료 — 대상 ${j.admins || '?'}명, 전송 ${j.sent || 0}건${errN}`, 'log-ok');
+        if (!auto) alert(`${label} 전송 완료 — 대상 ${j.admins || '?'}명`);
       } else {
         const msg = j && (j.message || j.error) || '응답 없음';
-        log('cc', `⚠ 보고서 전송 실패: ${msg}`, 'log-err');
-        if (!auto) alert('보고서 전송 실패: ' + msg);
+        log('cc', `⚠ ${label} 전송 실패: ${msg}`, 'log-err');
+        if (!auto) alert(label + ' 전송 실패: ' + msg);
       }
     }).catch(err => {
-      log('cc', `⚠ 보고서 전송 오류: ${err}`, 'log-err');
-      if (!auto) alert('보고서 전송 오류: ' + err);
+      log('cc', `⚠ ${label} 전송 오류: ${err}`, 'log-err');
+      if (!auto) alert(label + ' 전송 오류: ' + err);
     });
   }
-  function sendCcReportAuto() { doSendReport(getRecipients(), true); }   // 자동 보고(저장된 수신대상)
+  function sendCcReportAuto() { doSendReport(getRecipients(), true, 'full'); }   // 자동 보고(저장된 수신대상)
+  // 텔레그램 일일보고 요약 텍스트(미리보기용) — GAS _dailySummaryText_ 와 동일 형식
+  function ccTelegramSummaryText() {
+    const rows = ccMergedRows();
+    const total = rows.length;
+    let nNak = 0, nMiss = 0, nBuga = 0, nMaegak = 0;
+    rows.forEach(r => {
+      const c = ccCategory(r);
+      if (c === '낙찰') nNak++; else if (c === '미입찰') nMiss++; else if (c === '불가') nBuga++;
+      if (c === '낙찰' || c === '미입찰' || c === '일반' || c === '확인불가') nMaegak++;
+    });
+    const nJin = Math.max(0, total - nMaegak - nBuga);
+    const dateStr = (ccReportDate() || '').split(' ')[0].replace(/-/g, '.');
+    return `📋 ${dateStr} 경매진행보고\n입찰 ${total}건\n낙찰 ${nNak}건 (매각 ${nMaegak}건  진행 ${nJin}건)\n불가 ${nBuga}건\n미입찰 ${nMiss}건`;
+  }
 
   // ===== 매칭 조사 창 숨김(헤드리스) =====
   const CC_HEADLESS_KEY = 'mj_cc_headless';
   function ccHeadlessOn() { try { return localStorage.getItem(CC_HEADLESS_KEY) === '1'; } catch (e) { return false; } }
   function setCcHeadless(on) { try { localStorage.setItem(CC_HEADLESS_KEY, on ? '1' : '0'); } catch (e) {} }
+  // ===== 일일보고 PDF 첨부 (텔레그램 마지막에 PDF 동봉) =====
+  const CC_ATTACH_PDF_KEY = 'mj_cc_attach_pdf';
+  function ccAttachPdfOn() { try { return localStorage.getItem(CC_ATTACH_PDF_KEY) === '1'; } catch (e) { return false; } }
+  function setCcAttachPdf(on) { try { localStorage.setItem(CC_ATTACH_PDF_KEY, on ? '1' : '0'); } catch (e) {} }
 
   // ===== 자동 스케줄 (지정 시각에 크롤링→매칭→보고/MAPS) =====
   const CC_SCHED_KEY = 'mj_cc_schedule';
@@ -1161,32 +1202,76 @@
     for (let i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
     return new Blob([arr], { type: type || 'application/octet-stream' });
   }
-  // 보고서 미리보기 — 전송 없이 PDF 새 탭 열람 (텔레그램/키 불필요)
-  function previewCcReport() {
+  // 보고서 미리보기 — mode='pdf'(PDF 새 탭) | 'telegram'(텍스트+이미지 모달)
+  function previewCcReport(mode) {
+    mode = mode || 'pdf';
     const items = ccReportItems();
-    if (!items.length) { alert('미리볼 낙찰/미입찰/불가 건이 없습니다.'); return; }
-    const btn = $card('cc')?.querySelector('[data-act="cc-preview"]');
+    const total = ccReportTotal();
+    if (!total && !items.length) { alert('미리볼 입찰 건이 없습니다. 먼저 불러오기→실행 하세요.'); return; }
+    if (mode === 'telegram') { previewTelegram(items, total); return; }
+    // ── PDF 미리보기 ──
+    const btn = $card('cc')?.querySelector('[data-act="cc-preview-pdf"]');
     if (btn) btn.disabled = true;
-    log('cc', `👁 보고서 미리보기 생성 중… (${items.length}건)`, 'log-ok');
+    log('cc', `👁 PDF 미리보기 생성 중… (${items.length}건)`, 'log-ok');
     fetch('/api/preview-report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items, total: ccReportTotal(), report_dt: ccReportDate() })
+      body: JSON.stringify({ items, total, report_dt: ccReportDate() })
     }).then(r => r.json()).then(j => {
       if (btn) btn.disabled = false;
       if (j && j.success && j.pdf_b64) {
         const url = URL.createObjectURL(b64ToBlob(j.pdf_b64, 'application/pdf'));
         window.open(url, '_blank');
         setTimeout(() => URL.revokeObjectURL(url), 60000);
-        log('cc', `👁 미리보기 열림 (${j.count}건)`, 'log-ok');
+        log('cc', `👁 PDF 미리보기 열림 (${j.count}건)`, 'log-ok');
       } else {
         const msg = j && (j.message || j.error) || '응답 없음';
-        log('cc', `⚠ 미리보기 실패: ${msg}`, 'log-err');
-        alert('미리보기 실패: ' + msg);
+        log('cc', `⚠ PDF 미리보기 실패: ${msg}`, 'log-err');
+        alert('PDF 미리보기 실패: ' + msg);
       }
     }).catch(err => {
       if (btn) btn.disabled = false;
-      log('cc', `⚠ 미리보기 오류: ${err}`, 'log-err');
-      alert('미리보기 오류: ' + err + '\n(매니저 서버 재시작이 필요할 수 있습니다)');
+      log('cc', `⚠ PDF 미리보기 오류: ${err}`, 'log-err');
+      alert('PDF 미리보기 오류: ' + err + '\n(매니저 서버 재시작이 필요할 수 있습니다)');
+    });
+  }
+  // 텔레그램 전송 미리보기 — 실제로 전송될 요약 텍스트 + 캡처 이미지(인라인)를 모달로 표시
+  function previewTelegram(items, total) {
+    const btn = $card('cc')?.querySelector('[data-act="cc-preview-tg"]');
+    if (btn) btn.disabled = true;
+    log('cc', `👁 텔레그램 미리보기 생성 중…`, 'log-ok');
+    const summary = ccTelegramSummaryText();
+    fetch('/api/preview-telegram', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, total, report_dt: ccReportDate() })
+    }).then(r => r.json()).then(j => {
+      if (btn) btn.disabled = false;
+      const cards = (j && j.success && Array.isArray(j.cards)) ? j.cards : [];
+      let modal = document.getElementById('ccTgPreview');
+      if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ccTgPreview';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:99999';
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+        document.body.appendChild(modal);
+      }
+      const cardHtml = cards.map(c => `
+        <div style="margin:8px 0"><img src="data:image/png;base64,${c.b64}" style="max-width:100%;border-radius:8px;display:block">
+        <div style="font-size:12px;color:#374151;margin-top:2px">${escapeHtml(c.caption || '')}</div></div>`).join('');
+      modal.innerHTML = `<div style="background:#cfe6d4;border-radius:12px;width:92%;max-width:480px;max-height:88vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35);padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <b style="font-size:14px;color:#111">📱 텔레그램 전송 미리보기</b>
+          <button type="button" id="ccTgClose" style="border:0;background:none;font-size:18px;cursor:pointer">✕</button></div>
+        <div style="background:#fff;border-radius:10px;padding:12px;white-space:pre-wrap;font-size:14px;line-height:1.6;color:#111">${escapeHtml(summary)}</div>
+        ${cards.length ? cardHtml : '<div style="font-size:12px;color:#6b7280;margin-top:8px">캡처 이미지 없음 (요약 텍스트만 전송)</div>'}
+        <div style="font-size:11px;color:#4b5563;margin-top:8px">※ 관리자 기준 미리보기. 실제 전송은 수신 대상별로 분리됩니다.</div>
+      </div>`;
+      modal.style.display = 'flex';
+      modal.querySelector('#ccTgClose').addEventListener('click', () => modal.style.display = 'none');
+      log('cc', `👁 텔레그램 미리보기 (요약 + 캡처 ${cards.length}장)`, 'log-ok');
+    }).catch(err => {
+      if (btn) btn.disabled = false;
+      log('cc', `⚠ 텔레그램 미리보기 오류: ${err}`, 'log-err');
+      alert('텔레그램 미리보기 오류: ' + err);
     });
   }
 
@@ -1276,9 +1361,11 @@
     }).catch(e => alert('회원 조회 오류: ' + e));
   }
 
-  // 수신 대상 설정 모달 (관리자=전체 / 강사=자기 담당건 체크)
-  function openReportPicker() {
-    if (!ccReportItems().length) { alert('보고할 낙찰/미입찰/불가 건이 없습니다.'); return; }
+  // 수신 대상 설정 모달 (관리자=전체 / 강사=자기 담당건 체크). mode='full'|'pdf'
+  let _ccReportMode = 'full';
+  function openReportPicker(mode) {
+    _ccReportMode = (mode === 'pdf') ? 'pdf' : 'full';
+    if (!ccReportItems().length && !ccReportTotal()) { alert('보고할 입찰 건이 없습니다. 먼저 불러오기→실행 하세요.'); return; }
     let modal = document.getElementById('ccReportModal');
     if (!modal) {
       modal = document.createElement('div');
@@ -1304,8 +1391,10 @@
       modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
       modal.querySelectorAll('[data-act="rp-close"]').forEach(b => b.addEventListener('click', () => modal.style.display = 'none'));
       modal.querySelector('[data-act="rp-save"]').addEventListener('click', () => { saveReportPicker(); modal.style.display = 'none'; });
-      modal.querySelector('[data-act="rp-send"]').addEventListener('click', () => { const r = saveReportPicker(); modal.style.display = 'none'; doSendReport(r, false); });
+      modal.querySelector('[data-act="rp-send"]').addEventListener('click', () => { const r = saveReportPicker(); modal.style.display = 'none'; doSendReport(r, false, _ccReportMode); });
     }
+    const sendBtn = modal.querySelector('[data-act="rp-send"]');
+    if (sendBtn) sendBtn.textContent = (_ccReportMode === 'pdf') ? '📄 저장 후 PDF 전송' : '📤 저장 후 전송';
     modal.style.display = 'flex';
     fetchReportCandidates(() => renderReportPicker());
   }

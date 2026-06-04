@@ -157,6 +157,8 @@ def build_report_pdf(items, report_dt=None, total=None):
     n_miss = sum(1 for it in items if _cat_of(it) == "미입찰")
     n_buga = sum(1 for it in items if _cat_of(it) == "불가")
     n_ipchal = total if total is not None else len(items)
+    n_maegak = sum(1 for it in items if _cat_of(it) in ("낙찰", "미입찰", "일반", "확인불가"))   # 매각(경매 실시)
+    n_jin = max(0, (n_ipchal or 0) - n_maegak - n_buga)                                          # 진행(아직 경매 전)
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(False)
@@ -178,7 +180,8 @@ def build_report_pdf(items, report_dt=None, total=None):
     pdf.set_y(hy + 18 + 5)
 
     # ── 집계 + 목록 카드 ──
-    _summary_card(pdf, items, {"낙찰": n_nak, "입찰": n_ipchal, "불가": n_buga, "미입찰": n_miss}, M, W)
+    _summary_card(pdf, items, {"낙찰": n_nak, "입찰": n_ipchal, "불가": n_buga, "미입찰": n_miss,
+                               "매각": n_maegak, "진행": n_jin}, M, W)
 
     if not items:
         return bytes(pdf.output())
@@ -198,13 +201,20 @@ def _summary_card(pdf, items, counts, M, W):
     top = pdf.get_y()
     y = top + 5
 
-    # 집계 4종: 낙찰(파랑) · 입찰(네이비) · 불가(검정) · 미입찰(빨강)
-    pills = [("낙찰", C_NAKCHAL), ("입찰", C_NAVY), ("불가", C_DARK), ("미입찰", C_BUGA)]
-    px = inner_x
-    for label, color in pills:
-        _pill(pdf, px, y, 36, 12, f"{label} {counts.get(label, 0)}", color, 15)
-        px += 41
-    y += 16
+    # 집계 4줄: 입찰 / 낙찰(매각·진행) / 불가 / 미입찰
+    lines2 = [
+        (f"입찰 {counts.get('입찰', 0)}건", C_DARK),
+        (f"낙찰 {counts.get('낙찰', 0)}건  (매각 {counts.get('매각', 0)}건   진행 {counts.get('진행', 0)}건)", C_NAKCHAL),
+        (f"불가 {counts.get('불가', 0)}건", C_DARK),
+        (f"미입찰 {counts.get('미입찰', 0)}건", C_BUGA),
+    ]
+    pdf.set_font("malgun", "B", 15)
+    for txt, col in lines2:
+        pdf.set_xy(inner_x, y)
+        pdf.set_text_color(*col)
+        pdf.cell(inner_w, 8, txt)
+        y += 9
+    y += 3
 
     pdf.set_draw_color(*C_LINE)
     pdf.line(inner_x, y, inner_x + inner_w, y)

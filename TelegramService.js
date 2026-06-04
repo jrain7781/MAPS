@@ -1534,19 +1534,37 @@ function notifyAdminsText(payload) {
 function sendBugaReport(payload) {
   payload = payload || {};
   var items = payload.items || [];
-  if (!items.length) return { success: false, message: '보고할 낙찰/미입찰/불가 건이 없습니다.' };
+  var mode = String(payload.mode || 'full');          // 'full'(텍스트+이미지) | 'pdf'(PDF만)
+  var pdfB64 = payload.pdf_b64 || '';
+  var hasTotal = (payload.total != null && payload.total !== '');
+  // 낙찰/결과가 없어도 입찰(total)이 있으면 요약 보고 전송
+  if (!items.length && !hasTotal) return { success: false, message: '보고할 건이 없습니다.' };
 
   var recips = resolveDailyRecipients_(payload.recipients, payload.target);
   if (!recips.length) {
     return { success: false, message: '전송 대상(텔레그램 연결+사용)이 없습니다.' };
   }
 
+  var dateStr = String(payload.report_dt || '').split(' ')[0].replace(/-/g, '.');
+  var pdfName = (dateStr || 'MJ경매') + '_경매진행보고.pdf';
+  var pdfCaption = (dateStr ? (dateStr + ' ') : '') + '경매진행보고';
+
   var sent = 0, errors = [], skipped = [];
   recips.forEach(function (rc) {
     // 관리자=전체, 강사=자기 담당(mid_member_id == member_id) 건만
     var its = (rc.scope === 'all') ? items : items.filter(function (it) { return String(it.mid_member_id || '') === String(rc.scope); });
-    if (!its.length) { skipped.push(rc.name); return; }
     try {
+      // ── PDF만 전송 모드 ── (PDF는 전체 보고서라 관리자에게만)
+      if (mode === 'pdf') {
+        if (rc.scope !== 'all') { skipped.push(rc.name + '(PDF는 관리자)'); return; }
+        if (!pdfB64) { errors.push(rc.name + ': PDF 미생성'); return; }
+        var pblob = Utilities.newBlob(Utilities.base64Decode(pdfB64), 'application/pdf', pdfName);
+        telegramSendDocument_(rc.chat_id, pblob, pdfCaption);
+        sent++;
+        return;
+      }
+      // ── 텍스트 + 이미지 모드 ── 강사는 본인 건 없으면 스킵, 관리자는 결과 없어도 요약 전송
+      if (rc.scope !== 'all' && !its.length) { skipped.push(rc.name); return; }
       telegramSendMessage(rc.chat_id, _dailySummaryText_(its, payload.report_dt, payload.total, rc.scope === 'all'));
       // 이미지 순서: 낙찰 → 미입찰 → 불가 (캡션 유지). 패찰·확인불가는 캡처 없음
       var _ord = { '낙찰': 0, '미입찰': 1, '불가': 2 };
@@ -1564,7 +1582,13 @@ function sendBugaReport(payload) {
           telegramSendPhoto_(rc.chat_id, blob, cap);
         } catch (e2) { errors.push(rc.name + ' 캡처(' + (it.sakun_no || '') + '): ' + e2.message); }
       });
-      // PDF 문서 전송 제거 — 다운로드 단계 없이 텍스트 요약 + 카드 이미지(인라인)만
+      // PDF 첨부 옵션: 관리자에게만 마지막에 문서로 동봉 (전체 보고서)
+      if (pdfB64 && rc.scope === 'all') {
+        try {
+          var ablob = Utilities.newBlob(Utilities.base64Decode(pdfB64), 'application/pdf', pdfName);
+          telegramSendDocument_(rc.chat_id, ablob, pdfCaption);
+        } catch (e3) { errors.push(rc.name + ' PDF: ' + e3.message); }
+      }
       sent++;
     } catch (e) {
       errors.push(rc.name + ': ' + e.message);

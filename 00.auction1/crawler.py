@@ -1177,6 +1177,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == "/api/preview-report":
             self._handle_preview_report()
             return
+        # 텔레그램 전송 미리보기: 전송 없이 캡처 카드 이미지 b64 목록 반환 (요약 텍스트는 클라이언트 생성)
+        if self.path == "/api/preview-telegram":
+            self._handle_preview_telegram()
+            return
         # 단건 카드 이미지(합성 PNG) b64 — 카톡 붙여넣기용 클립보드 복사
         if self.path == "/api/card-image":
             self._handle_card_image()
@@ -1251,10 +1255,13 @@ class Handler(SimpleHTTPRequestHandler):
             items = payload.get("items") or []
             api_key = payload.get("api_key") or ""
             total = payload.get("total")
+            mode = str(payload.get("mode") or "full")          # 'full'(텍스트+이미지) | 'pdf'(PDF만)
+            attach_pdf = bool(payload.get("attach_pdf"))         # full 모드에서 PDF 동봉 여부
             rep_items = [it for it in items if (it.get("category") or "") in ("낙찰", "미입찰", "불가", "일반", "확인불가")]
             if not rep_items:   # 레거시 폴백
                 rep_items = [it for it in items if (it.get("state_kind") or "") in ("불가", "매각")]
-            if not rep_items:
+            # 낙찰/결과가 없어도 불러온 입찰(total)이 있으면 요약 보고를 전송한다
+            if not rep_items and not total:
                 self._send_json(200, {"success": False, "message": "보고할 건이 없습니다."})
                 return
 
@@ -1268,14 +1275,24 @@ class Handler(SimpleHTTPRequestHandler):
                 if it.get("addr"):
                     it["addr"] = str(it["addr"]).split("\n")[0]
 
-            # 텔레그램은 PDF 미사용(다운로드 단계 제거) → 생성 안 함. PDF 미리보기는 /api/preview-report 별도
+            # PDF: mode=='pdf'(PDF만 전송) 또는 attach_pdf(동봉) 일 때만 생성
+            pdf_b64 = ""
+            if mode == "pdf" or attach_pdf:
+                try:
+                    pdf_bytes = report_builder.build_report_pdf(
+                        rep_items, report_dt=_dt.strptime(report_dt, "%Y-%m-%d %H:%M"), total=total)
+                    pdf_b64 = _b64.b64encode(pdf_bytes).decode("ascii")
+                except Exception:
+                    traceback.print_exc()
+
+            # 캡처 이미지 카드(낙찰·불가·미입찰). mode=='pdf' 면 텔레그램에 이미지 미전송 → 생략
             out_items = []
             for it in rep_items:
                 cat = it.get("category") or report_builder._cat_of(it)
                 sp = it.get("screenshot_path") or ""
                 shot_b64 = ""
-                # 이미지 카드는 낙찰·불가·미입찰만 (패찰·확인불가는 리스트만)
-                if cat in ("낙찰", "불가", "미입찰") and sp and os.path.exists(sp):
+                # 이미지 카드는 낙찰·불가·미입찰만 (패찰·확인불가는 리스트만). PDF만 모드면 이미지 생략
+                if mode != "pdf" and cat in ("낙찰", "불가", "미입찰") and sp and os.path.exists(sp):
                     try:
                         # 컬러 헤더바+캡처 합성 카드(텔레그램 가로 꽉차게 보이게)
                         comp = report_builder.compose_card_png(
@@ -1299,6 +1316,7 @@ class Handler(SimpleHTTPRequestHandler):
             gas_payload = {
                 "api_action": "sendBugaReport", "api_key": api_key,
                 "report_dt": report_dt, "items": out_items, "total": total,
+                "mode": mode, "attach_pdf": attach_pdf, "pdf_b64": pdf_b64,
                 "recipients": payload.get("recipients") or None,  # {include_admins, teacher_ids} — 관리자=전체/강사=자기건
                 "target": payload.get("target") or None,          # 레거시 폴백(구분/회원명)
             }
@@ -1335,6 +1353,39 @@ class Handler(SimpleHTTPRequestHandler):
                 "success": True, "count": len(rep_items),
                 "pdf_b64": _b64.b64encode(pdf_bytes).decode("ascii"),
             })
+        except Exception as e:
+            traceback.print_exc()
+            self._send_json(500, {"success": False, "error": str(e)})
+
+    def _handle_preview_telegram(self):
+        """텔레그램 전송 미리보기 — 캡처 카드 이미지(낙찰/불가/미입찰) b64 + 캡션 목록 반환. 전송/GAS 미사용."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+            payload = json.loads(raw or "{}")
+            items = payload.get("items") or []
+            rep_items = [it for it in items if (it.get("category") or "") in ("낙찰", "미입찰", "불가", "일반", "확인불가")]
+            import base64 as _b64
+            import report_builder
+            order = {"낙찰": 0, "미입찰": 1, "불가": 2}
+            cards = []
+            picked = [it for it in rep_items if (it.get("category") or report_builder._cat_of(it)) in ("낙찰", "불가", "미입찰")]
+            picked.sort(key=lambda it: order.get(it.get("category") or report_builder._cat_of(it), 9))
+            for it in picked:
+                cat = it.get("category") or report_builder._cat_of(it)
+                sp = it.get("screenshot_path") or ""
+                if not (sp and os.path.exists(sp)):
+                    continue
+                try:
+                    comp = report_builder.compose_card_png(
+                        sp, cat, it.get("sakun_no", ""), it.get("m_name", ""),
+                        it.get("bid_date", ""), it.get("status", ""))
+                    data = comp if comp else open(sp, "rb").read()
+                    cap = (str(it.get("bid_date", "")) + " " if it.get("bid_date") else "") + cat + " " + str(it.get("sakun_no", "")) + ((" (" + str(it.get("m_name")) + ")") if it.get("m_name") else "")
+                    cards.append({"caption": cap, "b64": _b64.b64encode(data).decode("ascii")})
+                except Exception:
+                    pass
+            self._send_json(200, {"success": True, "cards": cards})
         except Exception as e:
             traceback.print_exc()
             self._send_json(500, {"success": False, "error": str(e)})
