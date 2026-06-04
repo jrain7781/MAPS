@@ -220,31 +220,56 @@ def _summary_card(pdf, items, counts, M, W):
     pdf.line(inner_x, y, inner_x + inner_w, y)
     y += 3
 
-    # 목록 (카테고리 · 사건번호 · 입찰가 · 매각가) — 낙찰/패찰/미입찰만, 카테고리·입찰가 색상
+    # 카드형 목록 (텔레그램과 동일): ○ 카테고리 회원 / 사건번호 (법원) / 입찰가(±%) / 매각가 — 낙찰/패찰/미입찰
+    def _digits(v):
+        return "".join(ch for ch in str(v or "") if ch.isdigit())
     def _wonpy(v):
-        s = "".join(ch for ch in str(v or "") if ch.isdigit())
+        s = _digits(v)
         return f"{int(s):,}" if s else ""
-    lh = 10
+    lh = 8
     for it in items:
         cat = _cat_of(it)
         if cat not in ("낙찰", "미입찰", "일반"):
             continue   # 불가·확인불가는 목록 제외 (불가는 아래 이미지 카드)
         col = CAT_COLOR_RGB.get(cat, C_DARK)
         bidcol = C_NAKCHAL if cat == "낙찰" else (C_BUGA if cat == "미입찰" else C_DARK)
+        # 헤더: ○ 카테고리 회원
         pdf.set_xy(inner_x, y)
-        pdf.set_font("malgun", "B", 15)
+        pdf.set_font("malgun", "B", 14)
         pdf.set_text_color(*col)
-        pdf.cell(26, lh, CAT_LABEL.get(cat, cat))
-        pdf.set_xy(inner_x + 26, y)
-        pdf.set_text_color(*C_DARK)
-        pdf.cell(56, lh, str(it.get("sakun_no", "")))
-        pdf.set_xy(inner_x + 84, y)
-        pdf.set_text_color(*bidcol)
-        pdf.cell(52, lh, _wonpy(it.get("bidprice", "")))
-        pdf.set_xy(inner_x + 138, y)
-        pdf.set_text_color(*C_DARK)
-        pdf.cell(inner_w - 138, lh, _wonpy(it.get("maegak_price", "")))
+        pdf.cell(inner_w, lh, "○ " + CAT_LABEL.get(cat, cat) + ("  " + str(it.get("m_name", "")) if it.get("m_name") else ""))
         y += lh
+        # 사건번호 (법원)
+        pdf.set_xy(inner_x + 6, y)
+        pdf.set_font("malgun", "", 12)
+        pdf.set_text_color(*C_DARK)
+        court = it.get("court", "")
+        pdf.cell(inner_w - 6, lh, str(it.get("sakun_no", "")) + ("   (" + str(court) + ")" if court else ""))
+        y += lh
+        # 입찰가 (±%)
+        bd = _wonpy(it.get("bidprice", ""))
+        if bd:
+            pct = ""
+            try:
+                b = int(_digits(it.get("bidprice", "")) or 0)
+                m = int(_digits(it.get("maegak_price", "")) or 0)
+                if b and m:
+                    p = round((b - m) / m * 100)
+                    pct = f" ({'+' if p > 0 else ''}{p}%)"
+            except Exception:
+                pass
+            pdf.set_xy(inner_x + 6, y)
+            pdf.set_text_color(*bidcol)
+            pdf.cell(inner_w - 6, lh, "입찰가: " + bd + pct)
+            y += lh
+        # 매각가
+        mg = _wonpy(it.get("maegak_price", ""))
+        if mg:
+            pdf.set_xy(inner_x + 6, y)
+            pdf.set_text_color(*C_DARK)
+            pdf.cell(inner_w - 6, lh, "매각가: " + mg)
+            y += lh
+        y += 2   # 카드 간격
 
     bottom = y + 4
     pdf.set_draw_color(*C_LINE)

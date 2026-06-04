@@ -297,6 +297,8 @@
             setStatus(key, '완료', 'done'); log(key, '✅ 정상 종료 (exit ' + code + ')', 'log-ok');
             // 진행사항: 실행 완료 시 시트에 1회 저장(날짜 upsert) + 자동 보고/스케줄 후처리
             if (key === 'cc') {
+              // 실행시각: 이번 실행으로 매칭된 모든 날짜에 동일 기록 (시작/끝뿐 아니라 중간일도)
+              try { setMatchTsForDates([...new Set(ccMergedRows().map(r => bidToYMD(r.bid_date)).filter(Boolean))]); } catch (e) {}
               pushCcToSheet();
               if (_ccSchedRun) {
                 const s = _ccSchedRun; _ccSchedRun = null;
@@ -395,6 +397,14 @@
     const m = getLoadTsMap(), now = _nowStamp();
     (dates || []).forEach(d => { if (d) m[d] = now; });
     try { localStorage.setItem(CC_LOADTS_KEY, JSON.stringify(m)); } catch (e) {}
+  }
+  // 매칭(실행) 시각 — 날짜별 명시 기록 (실행 완료 시 해당 날짜 전부 갱신)
+  const CC_MATCHTS_KEY = 'mj_cc_matchts';
+  function getMatchTsMap() { try { return JSON.parse(localStorage.getItem(CC_MATCHTS_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function setMatchTsForDates(dates) {
+    const m = getMatchTsMap(), now = _nowStamp();
+    (dates || []).forEach(d => { if (d) m[d] = now; });
+    try { localStorage.setItem(CC_MATCHTS_KEY, JSON.stringify(m)); } catch (e) {}
   }
 
   // ===== MAPS 시트 영구 저장 (cc_daily) =====
@@ -510,7 +520,7 @@
     return s;
   }
   function _ccCellInfo(ymd2, map) {
-    const lmap = getLoadTsMap();
+    const lmap = getLoadTsMap(), mmap = getMatchTsMap();
     // 1) 로컬 매칭 자료 우선 — 카테고리(낙찰/미입찰/불가/패찰/확인불가) 정확 → 매각/진행 정확
     const e = (map || loadCcByDate())[ymd2];
     if (e && Array.isArray(e.rows) && e.rows.length) {
@@ -522,7 +532,7 @@
       const sm = (ccSheetSummary && ccSheetSummary[ymd2]) || null;
       return { n: rows.length, nak: nak, miss: miss, buga: buga, unk: unk,
         maegak: maegak, jinhaeng: Math.max(0, rows.length - maegak - buga),
-        load_ts: lmap[ymd2] || (sm && sm.load_ts) || '', match_ts: (sm && sm.match_ts) || mts };
+        load_ts: lmap[ymd2] || (sm && sm.load_ts) || '', match_ts: mmap[ymd2] || (sm && sm.match_ts) || mts };
     }
     // 2) 폴백: 서버 시트 요약 (이 브라우저에서 매칭 안 한 과거 날짜). 매각=낙찰+미입찰+패찰+확인불가
     if (ccSheetSummary && ccSheetSummary[ymd2]) {
@@ -531,7 +541,7 @@
       const maegak = (s.maegak != null) ? s.maegak : ((s.nak || 0) + (s.miss || 0) + (s.ilban || 0) + (s.unk || 0));
       return { n: n, nak: s.nak || 0, miss: s.miss || 0, buga: buga, unk: s.unk || 0,
         maegak: maegak, jinhaeng: Math.max(0, n - maegak - buga),
-        load_ts: s.load_ts || lmap[ymd2] || '', match_ts: s.match_ts || '' };
+        load_ts: s.load_ts || lmap[ymd2] || '', match_ts: mmap[ymd2] || s.match_ts || '' };
     }
     return null;
   }
@@ -878,7 +888,7 @@
           <button type="button" class="btn_box_sss bold" data-act="cc-preview-tg" title="텔레그램 전송 미리보기(텍스트+이미지)">👁 텔레그램 미리보기</button>
           <button type="button" class="btn_box_sss bold" data-act="cc-preview-pdf" title="일일보고 PDF를 새 탭에서 미리보기">👁 PDF 미리보기</button>
           <span style="flex:1"></span>
-          <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="텔레그램으로 텍스트+이미지 일일보고 전송 (PDF첨부 체크 시 PDF 동봉)">📋 일일보고 전송</button>
+          <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="텔레그램으로 텍스트+이미지 일일보고 전송 (PDF첨부 체크 시 PDF 동봉)">📋 일일보고 전송(T)</button>
           <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report-pdf" title="텔레그램으로 일일보고 PDF만 전송">📄 일일보고 PDF 전송</button>
           <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
         </div>

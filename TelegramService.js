@@ -1588,8 +1588,17 @@ function sendBugaReport(payload) {
       var summaryText = (rc.scope === 'all' && payload.custom_summary)
         ? String(payload.custom_summary)
         : _dailySummaryText_(its, payload.report_dt, payload.total, rc.scope === 'all');
+      // 메시지 하단 인라인 버튼: 건별 옥션원 링크 (추천물건과 동일 방식). url 유효한 건만.
+      var _bo = { '낙찰': 0, '일반': 1, '미입찰': 2 }, _bn = { '낙찰': '낙찰', '일반': '패찰', '미입찰': '미입찰' };
+      var _btns = its.filter(function (it) { return _bo[_catOfItem_(it)] != null && /^https?:\/\//.test(String(it.view_url || '')); })
+        .sort(function (a, b) { return _bo[_catOfItem_(a)] - _bo[_catOfItem_(b)]; })
+        .map(function (it) {
+          var c = _catOfItem_(it);
+          return [{ text: '🔎 ' + (_bn[c] || c) + ' ' + (it.sakun_no || '') + (it.m_name ? (' ' + it.m_name) : ''), url: String(it.view_url) }];
+        });
+      var _kb = _btns.length ? { inline_keyboard: _btns } : null;
       // parse_mode=HTML 이므로 본문에 들어간 <,>,& 이스케이프 (의도된 태그 없음)
-      telegramSendMessage(rc.chat_id, telegramEscapeHtml_(summaryText));
+      telegramSendMessage(rc.chat_id, telegramEscapeHtml_(summaryText), _kb);
       // 이미지 순서: 낙찰 → 미입찰 → 불가 (캡션 유지). 패찰·확인불가는 캡처 없음
       var _ord = { '낙찰': 0, '미입찰': 1, '불가': 2 };
       var photoItems = its.slice().sort(function (a, b) {
