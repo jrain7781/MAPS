@@ -594,34 +594,36 @@ def run_macro(account, list_filepath):
         for idx, sakun in enumerate(k_auction_list):
             year_val, num2_val = extract_auction_parts(sakun)
             print(f"  ▶ [경매] 사건번호 입력: {sakun} → #num1={year_val}, #num2={num2_val}")
+            # ★ 연도 드롭다운은 상단 검색바(num1_Top)가 아닌 '관심물건 필터'의 num1 (id=num1_Top 제외)
+            YEAR_SEL = 'select[name="num1"]:not(#num1_Top)'
             try:
                 # 연도 선택
                 if year_val:
-                    print(f"    - 연도 선택 시도: {year_val} (#num1)")
-                    select_el = wait.until(EC.element_to_be_clickable((By.NAME, "num1")))
+                    print(f"    - 연도 선택 시도: {year_val} (관심물건 필터 #num1)")
+                    select_el = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, YEAR_SEL)))
                     sel = Select(select_el)
-                    # 1) value 매칭 → 2) 표시텍스트 매칭(옵션 value가 연도와 다른 경우) → 3) JS 강제
+                    # 1) value 매칭 → 2) 표시텍스트 매칭 → 3) JS 강제
                     try:
                         sel.select_by_value(year_val)
                     except Exception:
                         try:
                             sel.select_by_visible_text(year_val)
                         except Exception:
-                            driver.execute_script(f"var s=document.querySelector('select[name=\"num1\"]'); if(s){{s.value='{year_val}'; s.dispatchEvent(new Event('change'));}}")
+                            driver.execute_script(f"var s=document.querySelector('{YEAR_SEL}'); if(s){{s.value='{year_val}'; s.dispatchEvent(new Event('change'));}}")
                     time.sleep(0.3)
-                    # 적용값 검증 — 연도가 실제로 반영됐는지 확인(전체연도로 빠지면 경고)
-                    applied = driver.execute_script("var s=document.querySelector('select[name=\"num1\"]'); return s ? String(s.value) : '';")
+                    # 적용값 검증 — 실제 필터 드롭다운에 반영됐는지 확인
+                    applied = driver.execute_script(f"var s=document.querySelector('{YEAR_SEL}'); return s ? String(s.value) : '';")
                     if applied == str(year_val):
-                        print(f"    - 연도 적용 확인: #num1={applied}")
+                        print(f"    - 연도 적용 확인: 필터 #num1={applied}")
                     else:
-                        print(f"    - ⚠ 연도 미반영: #num1={applied} (기대 {year_val}) — 드롭다운 옵션값 확인 필요")
+                        print(f"    - ⚠ 연도 미반영: 필터 #num1={applied} (기대 {year_val})")
                 else:
-                    # 연도 미상(사건번호에 연도 없음) → num1 '전체연도'(value=0) 강제 — 연도필터 누락 방지
+                    # 연도 미상 → 전체연도(0)
                     try:
-                        Select(wait.until(EC.element_to_be_clickable((By.NAME, "num1")))).select_by_value("0")
+                        Select(wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, YEAR_SEL)))).select_by_value("0")
                         print(f"    - 연도 미상 → 전체연도(0) 선택")
                     except Exception:
-                        driver.execute_script("var s=document.querySelector('select[name=\"num1\"]'); if(s){s.value='0';s.dispatchEvent(new Event('change'));}")
+                        driver.execute_script(f"var s=document.querySelector('{YEAR_SEL}'); if(s){{s.value='0';s.dispatchEvent(new Event('change'));}}")
                         print(f"    - 연도 미상 → 전체연도(0) 선택 (JS)")
 
                 # 번호 입력
