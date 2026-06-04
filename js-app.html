@@ -1189,12 +1189,13 @@
             const e = _splitEl_(scope, 'eok'), m = _splitEl_(scope, 'man');
             if (e) e.value = Math.floor(cur / 100000000) > 0 ? String(Math.floor(cur / 100000000)) : '';
             if (m) m.value = Math.floor((cur % 100000000) / 10000) > 0 ? String(Math.floor((cur % 100000000) / 10000)) : '';
-            if (split) split.style.display = '';
-            bid.readOnly = true; bid.style.background = '#f8fafc';
+            if (split) split.style.display = 'flex';
+            bid.style.display = 'none';     // 분리 모드: 텍스트 입력칸 숨김(억/만 칸이 입력, col2가 숫자 표시)
         } else {
             if (split) split.style.display = 'none';
-            bid.readOnly = false; bid.style.background = '';
+            bid.style.display = '';
         }
+        try { updateBidRatio_(scope); } catch (e) {}   // col2 숫자 미러 동기화
     }
 
     let statusHideTimer_ = null;
@@ -13112,11 +13113,14 @@ MJ 이정우 팀장
     }
 
     function updateBidRatio_(scope) {
+        const bpInput = document.getElementById(scope === 'modal' ? 'modal-form-bidprice' : 'form-bidprice');
+        const bp = parseInt(String(bpInput && bpInput.value || '').replace(/[^0-9]/g, ''), 10) || 0;
+        // col2 입찰가 숫자(수정불가) 미러
+        const numEl = document.getElementById((scope === 'modal' ? 'modal' : 'detail') + '-bid-num');
+        if (numEl) numEl.textContent = bp > 0 ? new Intl.NumberFormat('ko-KR').format(bp) : '';
         const ratioEl = document.getElementById((scope === 'modal' ? 'modal-' : 'detail-') + 'bid-ratio');
         if (!ratioEl) return;
-        const bpInput = document.getElementById(scope === 'modal' ? 'modal-form-bidprice' : 'form-bidprice');
         const low = parseInt(bpInput && bpInput.dataset.lowestPrice || '0', 10) || 0;
-        const bp = parseInt(String(bpInput && bpInput.value || '').replace(/[^0-9]/g, ''), 10) || 0;
         if (!low || !bp) { ratioEl.textContent = ''; ratioEl.style.color = ''; return; }
         const pct = Math.round(bp / low * 100);
         ratioEl.textContent = '(' + pct + '%)';
