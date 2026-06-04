@@ -1113,19 +1113,32 @@
     '{목록}';
   function getCcTemplate() { try { return localStorage.getItem(CC_TEMPLATE_KEY) || DEFAULT_CC_TEMPLATE; } catch (e) { return DEFAULT_CC_TEMPLATE; } }
   function setCcTemplate(t) { try { localStorage.setItem(CC_TEMPLATE_KEY, t); } catch (e) {} }
-  // 카드형 건별 목록 (첨부1 양식): ○ 카테고리 회원 / 사건번호 (법원) / 입찰가(±%) / 매각가
-  function _ccCardList() {
+  // 목록 한 건(카드) 양식 — 편집 가능. 건별 치환어: {카테고리}{회원}{사건번호}{법원}{입찰가}{매각가}{퍼센트}
+  const CC_ITEM_TEMPLATE_KEY = 'mj_cc_tg_item_template';
+  const DEFAULT_CC_ITEM_TEMPLATE =
+    '○ {카테고리} {회원}\n' +
+    '   {사건번호}   ({법원})\n' +
+    '   입찰가: {입찰가}{퍼센트}\n' +
+    '   매각가: {매각가}';
+  function getCcItemTemplate() { try { return localStorage.getItem(CC_ITEM_TEMPLATE_KEY) || DEFAULT_CC_ITEM_TEMPLATE; } catch (e) { return DEFAULT_CC_ITEM_TEMPLATE; } }
+  function setCcItemTemplate(t) { try { localStorage.setItem(CC_ITEM_TEMPLATE_KEY, t); } catch (e) {} }
+  // 카드형 건별 목록 — 각 건을 목록 양식(itemTpl)으로 렌더
+  function _ccCardList(itemTpl) {
+    const tpl = (itemTpl == null) ? getCcItemTemplate() : itemTpl;
     const nm = { '낙찰': '낙찰', '일반': '패찰', '미입찰': '미입찰' }, ord = { '낙찰': 0, '일반': 1, '미입찰': 2 };
     const list = ccMergedRows().filter(r => ord[ccCategory(r)] != null).sort((a, b) => ord[ccCategory(a)] - ord[ccCategory(b)]);
     return list.map(r => {
       const c = ccCategory(r), bp = _won(r.bidprice), mp = _won(r.maegak_price);
       let pct = '';
       if (bp && mp) { const p = Math.round((bp - mp) / mp * 100); pct = ' (' + (p > 0 ? '+' : '') + p + '%)'; }
-      const L = ['○ ' + nm[c] + (r.m_name ? ' ' + r.m_name : ''),
-        '   ' + (r.sakun_no || '') + (r.court ? '   (' + r.court + ')' : '')];
-      if (bp) L.push('   입찰가: ' + fmtWon(r.bidprice) + pct);
-      if (mp) L.push('   매각가: ' + fmtWon(r.maegak_price));
-      return L.join('\n');
+      return String(tpl)
+        .replace(/\{카테고리\}/g, nm[c] || c)
+        .replace(/\{회원\}/g, r.m_name || '')
+        .replace(/\{사건번호\}/g, r.sakun_no || '')
+        .replace(/\{법원\}/g, r.court || '')
+        .replace(/\{입찰가\}/g, bp ? fmtWon(r.bidprice) : '')
+        .replace(/\{매각가\}/g, mp ? fmtWon(r.maegak_price) : '')
+        .replace(/\{퍼센트\}/g, pct);
     }).join('\n\n');
   }
   function _ccCounts() {
@@ -1134,17 +1147,17 @@
     rows.forEach(r => { const c = ccCategory(r); if (c === '낙찰') nNak++; else if (c === '미입찰') nMiss++; else if (c === '불가') nBuga++; if (c === '낙찰' || c === '미입찰' || c === '일반' || c === '확인불가') nMaegak++; });
     return { total: total, nNak: nNak, nMiss: nMiss, nBuga: nBuga, nMaegak: nMaegak, nJin: Math.max(0, total - nMaegak - nBuga) };
   }
-  // 템플릿 렌더 — 플레이스홀더 치환 + {목록} 카드 확장
-  function renderCcTemplate(tpl) {
+  // 템플릿 렌더 — 본문 치환 + {목록}을 목록양식으로 확장
+  function renderCcTemplate(tpl, itemTpl) {
     const c = _ccCounts();
     const dateStr = (ccReportDate() || '').split(' ')[0].replace(/-/g, '.');
     return String(tpl == null ? getCcTemplate() : tpl)
       .replace(/\{날짜\}/g, dateStr).replace(/\{입찰\}/g, c.total).replace(/\{낙찰\}/g, c.nNak)
       .replace(/\{패찰\}/g, c.nMaegak).replace(/\{유찰\}/g, c.nJin)
       .replace(/\{불가\}/g, c.nBuga).replace(/\{미입찰\}/g, c.nMiss)
-      .replace(/\{목록\}/g, _ccCardList());
+      .replace(/\{목록\}/g, _ccCardList(itemTpl));
   }
-  function ccTelegramSummaryText() { return renderCcTemplate(getCcTemplate()); }
+  function ccTelegramSummaryText() { return renderCcTemplate(getCcTemplate(), getCcItemTemplate()); }
 
   // ===== 매칭 조사 창 숨김(헤드리스) =====
   const CC_HEADLESS_KEY = 'mj_cc_headless';
@@ -1304,14 +1317,16 @@
       const cardHtml = cards.map(c => `
         <div style="margin:8px 0"><img src="data:image/png;base64,${c.b64}" style="max-width:100%;border-radius:8px;display:block">
         <div style="font-size:12px;color:#374151;margin-top:2px">${escapeHtml(c.caption || '')}</div></div>`).join('');
-      const tpl = getCcTemplate();
+      const tpl = getCcTemplate(), itpl = getCcItemTemplate();
       modal.innerHTML = `<div style="background:#e9edf2;border-radius:12px;width:94%;max-width:520px;max-height:90vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35);padding:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <b style="font-size:14px;color:#111">📱 텔레그램 일일보고 — 템플릿 편집</b>
           <button type="button" id="ccTgClose" style="border:0;background:none;font-size:18px;cursor:pointer">✕</button></div>
-        <div style="font-size:11px;color:#4b5563;margin-bottom:4px">치환어: <code>{날짜} {입찰} {낙찰} {패찰} {유찰} {불가} {미입찰} {목록}</code> · 저장하면 매번 이 양식으로 전송됩니다.</div>
-        <textarea id="ccTplEdit" rows="9" style="width:100%;box-sizing:border-box;background:#fff;border:1px solid #9ca3af;border-radius:8px;padding:10px;font-size:13px;line-height:1.5;color:#111;font-family:Consolas,monospace;resize:vertical">${escapeHtml(tpl)}</textarea>
-        <div style="display:flex;gap:6px;margin:6px 0">
+        <div style="font-size:11px;color:#4b5563;margin-bottom:3px"><b>① 전체 양식</b> — 치환어: <code>{날짜} {입찰} {낙찰} {패찰} {유찰} {불가} {미입찰} {목록}</code></div>
+        <textarea id="ccTplEdit" rows="7" style="width:100%;box-sizing:border-box;background:#fff;border:1px solid #9ca3af;border-radius:8px;padding:10px;font-size:13px;line-height:1.5;color:#111;font-family:Consolas,monospace;resize:vertical">${escapeHtml(tpl)}</textarea>
+        <div style="font-size:11px;color:#4b5563;margin:8px 0 3px"><b>② 목록 한 건 양식</b> (위 {목록} 위치에 건마다 반복) — 치환어: <code>{카테고리} {회원} {사건번호} {법원} {입찰가} {매각가} {퍼센트}</code></div>
+        <textarea id="ccItemEdit" rows="5" style="width:100%;box-sizing:border-box;background:#fff;border:1px solid #9ca3af;border-radius:8px;padding:10px;font-size:13px;line-height:1.5;color:#111;font-family:Consolas,monospace;resize:vertical">${escapeHtml(itpl)}</textarea>
+        <div style="display:flex;gap:6px;margin:8px 0">
           <button type="button" id="ccTplSave" class="btn_box_sss btn_blue bold">💾 템플릿 저장</button>
           <button type="button" id="ccTplReset" class="btn_box_sss">↺ 기본값</button>
           <span style="flex:1"></span>
@@ -1329,14 +1344,16 @@
       modal.style.display = 'flex';
       const close = () => modal.style.display = 'none';
       const ta = modal.querySelector('#ccTplEdit');
+      const ia = modal.querySelector('#ccItemEdit');
       const pv = modal.querySelector('#ccTplPreview');
-      const refresh = () => { pv.textContent = renderCcTemplate(ta.value); };
+      const refresh = () => { pv.textContent = renderCcTemplate(ta.value, ia.value); };
       refresh();
       ta.addEventListener('input', refresh);
+      ia.addEventListener('input', refresh);
       modal.querySelector('#ccTgClose').addEventListener('click', close);
       modal.querySelector('#ccTgClose2').addEventListener('click', close);
-      modal.querySelector('#ccTplSave').addEventListener('click', () => { setCcTemplate(ta.value); log('cc', '💾 텔레그램 템플릿 저장됨', 'log-ok'); alert('템플릿을 저장했습니다. 이후 일일보고 전송 시 이 양식으로 나갑니다.'); });
-      modal.querySelector('#ccTplReset').addEventListener('click', () => { ta.value = DEFAULT_CC_TEMPLATE; refresh(); });
+      modal.querySelector('#ccTplSave').addEventListener('click', () => { setCcTemplate(ta.value); setCcItemTemplate(ia.value); log('cc', '💾 텔레그램 템플릿 저장됨(전체+목록)', 'log-ok'); alert('템플릿을 저장했습니다. 이후 일일보고 전송 시 이 양식으로 나갑니다.'); });
+      modal.querySelector('#ccTplReset').addEventListener('click', () => { ta.value = DEFAULT_CC_TEMPLATE; ia.value = DEFAULT_CC_ITEM_TEMPLATE; refresh(); });
       modal.querySelector('#ccTplPdf').addEventListener('click', () => previewCcReport('pdf'));
       log('cc', `👁 텔레그램 템플릿 편집 (캡처 ${cards.length}장)`, 'log-ok');
     }).catch(err => {
