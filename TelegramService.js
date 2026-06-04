@@ -1461,17 +1461,30 @@ function _catOfItem_(it) {
   if (c) return c;
   return (String(it.state_kind || '') === '불가') ? '불가' : '낙찰';
 }
-// 일일보고 요약 텍스트 — 헤더 + 카운트 세로(입찰/낙찰/미입찰/불가). 건별 리스트 없음.
+// 경매진행보고 요약 텍스트 — 헤더 + 입찰/낙찰(매각·진행)/불가/미입찰. 건별 리스트 없음.
+// 매각 = 낙찰+미입찰+패찰(일반)+확인불가, 진행 = 입찰 − 매각 − 불가 (오늘 아직 경매 전인 건).
 function _dailySummaryText_(items, reportDt, total, isAdmin) {
-  var nNak = 0, nMiss = 0, nBuga = 0;
-  items.forEach(function (it) { var c = _catOfItem_(it); if (c === '낙찰') nNak++; else if (c === '미입찰') nMiss++; else if (c === '불가') nBuga++; });
+  var nNak = 0, nMiss = 0, nBuga = 0, nMaegak = 0;
+  items.forEach(function (it) {
+    var c = _catOfItem_(it);
+    if (c === '낙찰') nNak++; else if (c === '미입찰') nMiss++; else if (c === '불가') nBuga++;
+    if (c === '낙찰' || c === '미입찰' || c === '일반' || c === '확인불가') nMaegak++;   // 매각(경매 실시)건
+  });
   var dateStr = String(reportDt || '').split(' ')[0];
-  var title = dateStr ? (dateStr.replace(/-/g, '.') + ' 일일보고') : 'MJ경매 일일보고';
+  var title = dateStr ? (dateStr.replace(/-/g, '.') + ' 경매진행보고') : 'MJ경매 진행보고';
   var lines = ['📋 <b>' + telegramEscapeHtml_(title) + '</b>'];
-  if (isAdmin && total != null && total !== '') lines.push('입찰 ' + total);
-  lines.push('낙찰 ' + nNak);
-  lines.push('미입찰 ' + nMiss);
-  lines.push('불가 ' + nBuga);
+  if (isAdmin && total != null && total !== '') {
+    var t = parseInt(total, 10); if (isNaN(t)) t = items.length;
+    var nJin = Math.max(0, t - nMaegak - nBuga);   // 진행(아직 경매 전)
+    lines.push('입찰 ' + t + '건');
+    lines.push('낙찰 ' + nNak + '건 (매각 ' + nMaegak + '건  진행 ' + nJin + '건)');
+    lines.push('불가 ' + nBuga + '건');
+    lines.push('미입찰 ' + nMiss + '건');
+  } else {
+    lines.push('낙찰 ' + nNak + '건');
+    lines.push('불가 ' + nBuga + '건');
+    lines.push('미입찰 ' + nMiss + '건');
+  }
   return lines.join('\n');
 }
 // 일일보고 수신자 해석. recipients={include_admins, teacher_ids[]} → 관리자=전체(scope 'all'), 강사=자기건(scope member_id)

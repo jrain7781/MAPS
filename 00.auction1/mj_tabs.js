@@ -502,7 +502,13 @@
       refreshCcSummary(() => renderCcCalendar(ccCalYM.y, ccCalYM.m));   // 시트 집계로 갱신
     }
   }
-  function _shortTs(s) { s = String(s || ''); return s.length >= 16 ? s.slice(5) : s; }   // 'YYYY-MM-DD HH:MM' → 'MM-DD HH:MM'
+  function _shortTs(s) {   // 다양한 입력을 'MM-DD HH:MM' 로 정규화
+    s = String(s || '').trim(); if (!s) return '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.length >= 16 ? s.slice(5, 16) : s.slice(5);   // 'YYYY-MM-DD HH:MM[...]'
+    const d = new Date(s);                                                                    // Date.toString() 등 기타 형식 파싱
+    if (!isNaN(d.getTime())) { const p = n => String(n).padStart(2, '0'); return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+    return s;
+  }
   function _ccCellInfo(ymd2, map) {
     const lmap = getLoadTsMap();
     if (ccSheetSummary && ccSheetSummary[ymd2]) {
@@ -527,13 +533,19 @@
     // 월 합계
     let mN = 0, mNak = 0, mBuga = 0, mMiss = 0, mUnk = 0;
     for (let d = 1; d <= days; d++) { const ci = _ccCellInfo(ymd2(d), map); if (ci) { mN += ci.n; mNak += ci.nak; mBuga += ci.buga; mMiss += ci.miss; mUnk += (ci.unk || 0); } }
+    // 공용 배지 — 0이면 흐리게, 1+ 면 색 강조 (헤더/셀 공통)
+    const mkPill = (label, val, color, txt, fs) => {
+      const v = val || 0;
+      const st = v > 0 ? `background:${color};color:${txt || '#fff'}` : `background:#f3f4f6;color:#b0b6bf`;
+      return `<span style="display:inline-block;padding:1px 6px;border-radius:9px;font-size:${fs || 10}px;font-weight:700;white-space:nowrap;${st}">${label} ${v}</span>`;
+    };
 
     let h = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="-1">‹</button>
       <b style="min-width:96px;text-align:center;font-size:15px">${y}년 ${m + 1}월</b>
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="1">›</button>
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="today">오늘</button>
-      <span style="margin-left:6px;font-size:13px"><b style="color:#1f2937">입찰 ${mN}건</b> · <b style="color:#2563eb">낙찰 ${mNak}건</b> · <b style="color:#111827">불가 ${mBuga}건</b> · <b style="color:#dc2626">미입찰 ${mMiss}건</b> · <b style="color:#9ca3af">확인불가 ${mUnk}건</b></span>
+      <span style="margin-left:6px;font-size:13px;display:inline-flex;align-items:center;gap:5px"><b style="color:#1f2937">입찰 ${mN}</b>${mkPill('낙찰', mNak, '#2563eb', null, 12)}${mkPill('불가', mBuga, '#111827', null, 12)}${mkPill('미입찰', mMiss, '#dc2626', null, 12)}${mkPill('확인불가', mUnk, '#9ca3af', '#111827', 12)}</span>
       <span style="flex:1"></span>
       <button type="button" class="btn_box_sss btn_blue bold" data-act="cal-load-sel">📥 선택 날짜 불러오기 (<span data-role="cal-sel-cnt">${ccCalChecked.size}</span>)</button>
     </div>`;
@@ -552,13 +564,12 @@
       const cb = `<input type="checkbox" class="cal-cb" data-ymd="${ym}" ${checked ? 'checked' : ''} title="다중 선택" style="width:15px;height:15px;cursor:pointer">`;
       let body = '';
       if (c && c.n) {
-        const tsLine = (c.load_ts || c.match_ts)
-          ? `<div style="margin-top:3px;font-size:10px;color:#6b7280;line-height:1.4">${c.load_ts ? `📥 ${_shortTs(c.load_ts)}<br>` : ''}${c.match_ts ? `🎯 ${_shortTs(c.match_ts)}` : ''}</div>`
+        const tsLine = c.match_ts
+          ? `<div style="margin-top:3px;font-size:10px;color:#6b7280;line-height:1.4">🎯 실행 ${_shortTs(c.match_ts)}</div>`
           : '';
-        body = `<div data-cal-day="${ym}" title="클릭: ${ym} 결과 보기" style="margin-top:4px;cursor:pointer;font-size:11px;line-height:1.5">
-          <div>입찰 <b>${c.n}</b>건</div>
-          <div><span style="color:#2563eb">낙찰 ${c.nak}건</span> · <span style="color:#111827">불가 ${c.buga}건</span></div>
-          <div><span style="color:#dc2626">미입찰 ${c.miss}건</span> · <span style="color:#9ca3af">확인불가 ${c.unk || 0}건</span></div>${tsLine}</div>`;
+        body = `<div data-cal-day="${ym}" title="클릭: ${ym} 결과 보기" style="margin-top:4px;cursor:pointer;line-height:1.5">
+          <div style="margin-bottom:3px;font-size:11px;font-weight:700;color:#1f2937">입찰 ${c.n}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px">${mkPill('낙찰', c.nak, '#2563eb')}${mkPill('불가', c.buga, '#111827')}${mkPill('미입찰', c.miss, '#dc2626')}${mkPill('확인불가', c.unk, '#9ca3af', '#111827')}</div>${tsLine}</div>`;
       }
       h += `<div style="min-height:84px;border:${border};border-radius:8px;padding:5px;background:${bg}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between">${circle}${cb}</div>${body}</div>`;
@@ -847,7 +858,7 @@
         </label>
         <button type="button" class="btn_box_sss bold" data-act="cc-schedule" title="지정 시각에 자동 크롤링→매칭→보고/MAPS">⏰ 스케줄${getSchedule().enabled ? ' ' + getSchedule().time : ''}</button>
         <button type="button" class="btn_box_sss bold" data-act="cc-preview" title="전송 전 보고서 PDF를 새 탭에서 미리보기">👁 미리보기</button>
-        <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="불가/낙찰 건을 PDF+캡처 보고서로 관리자 텔레그램 전송">📋 보고서 전송</button>
+        <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="오늘 경매 결과(낙찰/매각/진행/불가)를 캡처 포함 보고서로 관리자 텔레그램 전송">📋 경매진행보고</button>
         <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
       </div>
       <div class="cc-table-wrap">
