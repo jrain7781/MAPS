@@ -39,6 +39,20 @@
       if (!card) return;
       card.querySelector('[data-act="run"]').addEventListener('click', () => runCapture(key));
       card.querySelector('[data-act="stop"]').addEventListener('click', () => stopCapture(key));
+      // i/d/k: 조사숨김(헤드리스) 체크박스 주입 — 실행 버튼 옆, 탭별 저장
+      if (key !== 'cc') {
+        const runBtn = card.querySelector('[data-act="run"]');
+        if (runBtn && !card.querySelector('.cap-headless')) {
+          const lbl = document.createElement('label');
+          lbl.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin-left:10px;font-size:12px;cursor:pointer;color:#374151';
+          lbl.title = '조사 시 브라우저 창을 숨김(헤드리스)';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox'; cb.className = 'cap-headless'; cb.checked = capHeadlessOn(key);
+          cb.addEventListener('change', () => setCapHeadless(key, cb.checked));
+          lbl.appendChild(cb); lbl.appendChild(document.createTextNode('조사숨김'));
+          runBtn.insertAdjacentElement('afterend', lbl);
+        }
+      }
       card.querySelector('[data-act="reload-accounts"]').addEventListener('click', () => loadAccounts(key));
       card.querySelector('[data-act="save-accounts"]').addEventListener('click', () => saveAccounts(key));
       // 캡쳐 행수 localStorage 복원/저장
@@ -239,6 +253,8 @@
       if (!runCases.length) { log('cc', '[중단] 실행 체크된 건이 없습니다.', 'log-err'); return; }
       payload.cases = runCases;
       payload.headless = (_ccSchedRun && _ccSchedRun.headless !== undefined) ? !!_ccSchedRun.headless : ccHeadlessOn();
+    } else {
+      payload.headless = capHeadlessOn(key);   // i/d/k 탭별 조사숨김
     }
     $log(key).textContent = '';
     if (key === 'cc') { ccResults.length = 0; renderCcResults(); }
@@ -1171,6 +1187,9 @@
   const CC_HEADLESS_KEY = 'mj_cc_headless';
   function ccHeadlessOn() { try { return localStorage.getItem(CC_HEADLESS_KEY) === '1'; } catch (e) { return false; } }
   function setCcHeadless(on) { try { localStorage.setItem(CC_HEADLESS_KEY, on ? '1' : '0'); } catch (e) {} }
+  // 캡처 탭(i/d/k)별 조사숨김 — 탭마다 저장
+  function capHeadlessOn(key) { try { return localStorage.getItem('mj_cap_headless_' + key) === '1'; } catch (e) { return false; } }
+  function setCapHeadless(key, on) { try { localStorage.setItem('mj_cap_headless_' + key, on ? '1' : '0'); } catch (e) {} }
   // ===== 일일보고 PDF 첨부 (텔레그램 마지막에 PDF 동봉) =====
   const CC_ATTACH_PDF_KEY = 'mj_cc_attach_pdf';
   function ccAttachPdfOn() { try { return localStorage.getItem(CC_ATTACH_PDF_KEY) === '1'; } catch (e) { return false; } }

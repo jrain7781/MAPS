@@ -558,6 +558,11 @@ def run_macro(account, list_filepath):
     os.makedirs(BASE_SAVE_DIR, exist_ok=True)
 
     options = webdriver.ChromeOptions()
+    # 기본은 창 표시. MJ_IMAGEUP_HEADLESS=1 일 때만 숨김(조사 숨김 옵션).
+    if os.environ.get("MJ_IMAGEUP_HEADLESS", "0") == "1":
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        print("[MJ] headless 모드 (창 숨김)")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--force-device-scale-factor=2")
     options.add_experimental_option("detach", True)
@@ -592,22 +597,24 @@ def run_macro(account, list_filepath):
             try:
                 # 연도 선택
                 if year_val:
+                    print(f"    - 연도 선택 시도: {year_val} (#num1)")
+                    select_el = wait.until(EC.element_to_be_clickable((By.NAME, "num1")))
+                    sel = Select(select_el)
+                    # 1) value 매칭 → 2) 표시텍스트 매칭(옵션 value가 연도와 다른 경우) → 3) JS 강제
                     try:
-                        print(f"    - 연도 선택 시도: {year_val} (#num1)")
-                        # 명시적 대기: 요소가 나타나고 활성화될 때까지
-                        select_el = wait.until(EC.element_to_be_clickable((By.NAME, "num1")))
-                        sel = Select(select_el)
                         sel.select_by_value(year_val)
-                        print(f"    - 연도 선택 완료: {year_val}")
-                        time.sleep(0.3) # 선택 반영 대기
-                    except Exception as e_sel:
-                        print(f"    - 연도 선택 실패 (Select 클래스): {e_sel}")
+                    except Exception:
                         try:
-                            # JS로 강제 설정 (마지막 수단)
-                            driver.execute_script(f"var s = document.querySelector('select[name=\"num1\"]'); if(s) {{ s.value = '{year_val}'; s.dispatchEvent(new Event('change')); }}")
-                            print(f"    - 연도 선택 시도 (JS): {year_val}")
-                        except:
-                            pass
+                            sel.select_by_visible_text(year_val)
+                        except Exception:
+                            driver.execute_script(f"var s=document.querySelector('select[name=\"num1\"]'); if(s){{s.value='{year_val}'; s.dispatchEvent(new Event('change'));}}")
+                    time.sleep(0.3)
+                    # 적용값 검증 — 연도가 실제로 반영됐는지 확인(전체연도로 빠지면 경고)
+                    applied = driver.execute_script("var s=document.querySelector('select[name=\"num1\"]'); return s ? String(s.value) : '';")
+                    if applied == str(year_val):
+                        print(f"    - 연도 적용 확인: #num1={applied}")
+                    else:
+                        print(f"    - ⚠ 연도 미반영: #num1={applied} (기대 {year_val}) — 드롭다운 옵션값 확인 필요")
                 else:
                     # 연도 미상(사건번호에 연도 없음) → num1 '전체연도'(value=0) 강제 — 연도필터 누락 방지
                     try:

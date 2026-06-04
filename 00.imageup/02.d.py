@@ -533,6 +533,11 @@ def run_macro(account):
     print(f"📂 저장 경로: {save_dir}")
 
     options = webdriver.ChromeOptions()
+    # 기본은 창 표시. MJ_IMAGEUP_HEADLESS=1 일 때만 숨김(조사 숨김 옵션).
+    if os.environ.get("MJ_IMAGEUP_HEADLESS", "0") == "1":
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        print("[MJ] headless 모드 (창 숨김)")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--force-device-scale-factor=2")
     options.add_experimental_option("detach", True)
