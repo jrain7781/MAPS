@@ -859,7 +859,7 @@
         <td style="text-align:right">${maeCell}</td>
         <td style="text-align:center">${resBadge}</td>
         <td style="text-align:center">${viewLink}</td>
-        <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok">${escapeHtml(stu)}</span>` : ''}</td>
+        <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok"${stu === '불가' ? ' style="background:#111827;color:#fff;border-color:#111827"' : ''}>${escapeHtml(stu)}</span>` : ''}</td>
         <td>${willUpdate}</td>
         <td class="cc-note">${noteCell}${(['낙찰', '미입찰', '불가'].indexOf(cat) >= 0) ? `<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:nowrap;white-space:nowrap">
           <button type="button" class="cc-row-send btn_box_sss" data-key="${escapeAttr(rkey)}" title="이 건을 담당자에게 즉시 텔레그램 전송" style="padding:1px 6px;font-size:11px;white-space:nowrap">📤전송</button>
