@@ -65,26 +65,35 @@ def _img_to_b64_data_uri(url: str, max_bytes: int = 35000) -> str:
         return url
 
 
-def _gas_post(payload: dict, timeout: float = 60.0) -> dict:
-    """GAS 웹앱으로 JSON POST 호출. 응답 JSON 반환."""
+def _gas_post(payload: dict, timeout: float = 60.0, retries: int = 0) -> dict:
+    """GAS 웹앱으로 JSON POST 호출. 응답 JSON 반환.
+    retries>0 이면 GAS 일시 오류(HTML 응답=파싱실패 / 404 / 5xx)에 한해 재시도(읽기 전용에만 사용)."""
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(
-        GAS_WEBAPP_URL,
-        data=body,
-        method="POST",
-        headers={"Content-Type": "application/json; charset=utf-8"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8")
-            try:
-                return json.loads(raw)
-            except json.JSONDecodeError:
-                return {"success": False, "error": "GAS 응답 JSON 파싱 실패", "raw": raw[:500]}
-    except urllib.error.HTTPError as e:
-        return {"success": False, "error": f"HTTP {e.code} {e.reason}"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    last = {"success": False, "error": "GAS 호출 실패"}
+    for attempt in range(retries + 1):
+        req = urllib.request.Request(
+            GAS_WEBAPP_URL, data=body, method="POST",
+            headers={"Content-Type": "application/json; charset=utf-8"},
+        )
+        transient = False
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8")
+                try:
+                    return json.loads(raw)
+                except json.JSONDecodeError:
+                    last = {"success": False, "error": "GAS 응답 JSON 파싱 실패", "raw": raw[:500]}
+                    transient = True   # HTML 에러페이지 → 일시 오류로 간주
+        except urllib.error.HTTPError as e:
+            last = {"success": False, "error": f"HTTP {e.code} {e.reason}"}
+            transient = e.code in (404, 429, 500, 502, 503, 504)
+        except Exception as e:
+            last = {"success": False, "error": str(e)}
+            transient = True
+        if not transient or attempt >= retries:
+            return last
+        time.sleep(1.5 * (attempt + 1))   # 점증 대기 후 재시도
+    return last
 
 # stdout 버퍼링 비활성 + utf-8 강제 (Windows 콘솔 cp949 가 한글/유니코드 못 찍어 print 실패 → 예외 → 크롤 실패 막기 위함)
 try:
@@ -1484,7 +1493,14 @@ class Handler(SimpleHTTPRequestHandler):
             # 업로드는 GAS 처리 시간(시트 쓰기 N건) 60s 넘는 사례 있음 — 5분까지 허용.
             # sync/일반 라우터는 메타만이라 60s 충분.
             timeout = 300.0 if self.path in ("/api/maps-upload-items", "/api/maps-changecancel") else 60.0
-            result = _gas_post(payload, timeout=timeout)
+            # 읽기 전용 액션은 GAS 일시오류(HTML 파싱실패/404 등)에 재시도 — 쓰기는 중복 위험이라 제외
+            _READ_ACTIONS = {
+                "getProgressList", "getProgressMatchSummary", "getProgressMatchByDate",
+                "getReportRecipientCandidates", "getInvestigators",
+                "get7DaysBugaList", "getTodayMaegakList",
+            }
+            _retries = 2 if str(payload.get("api_action") or "") in _READ_ACTIONS else 0
+            result = _gas_post(payload, timeout=timeout, retries=_retries)
             body = json.dumps(result, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
