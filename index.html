@@ -1759,8 +1759,13 @@
                                         <div class="mb-4">
                                             <div class="flex justify-between items-center mb-1">
                                                 <label for="form-bidprice"
-                                                    class="block text-sm font-medium text-gray-700">입찰가
-                                                    (원)</label>
+                                                    class="block text-sm font-medium text-gray-700" style="white-space:nowrap">입찰가 (원)
+                                                    <span style="margin-left:6px;font-size:11px;font-weight:400;color:#64748b;white-space:nowrap">
+                                                        <label style="cursor:pointer"><input type="radio" name="detail-bidstyle" id="detail-bidstyle-free" onchange="setBidStyle_('detail','free')">자유</label>
+                                                        <label style="cursor:pointer;margin-left:4px"><input type="radio" name="detail-bidstyle" id="detail-bidstyle-split" onchange="setBidStyle_('detail','split')">분리</label>
+                                                        <span id="detail-bid-adv" style="display:none">(<label style="cursor:pointer"><input type="radio" name="detail-bidadv" id="detail-bidadv-1" onchange="setBidAdv_('detail',1)">1</label><label style="cursor:pointer;margin-left:3px"><input type="radio" name="detail-bidadv" id="detail-bidadv-2" onchange="setBidAdv_('detail',2)">2</label>)</span>
+                                                    </span>
+                                                </label>
                                                 <div class="space-x-1" id="detail-bid-state-buttons">
                                                     <button type="button" tabindex="-1" onclick="setDetailBidState('신규')"
                                                         id="detail-bid-state-new-btn"
@@ -1774,9 +1779,19 @@
                                                 </div>
                                             </div>
                                             <input type="text" id="form-bidprice" name="bidprice"
-                                                placeholder="예: 100,000,000" oninput="formatNumber(this); updateBidRatioDetail_()"
-                                                onfocus="this.select()"
+                                                placeholder="예: 14억5900만 / 100000000" oninput="onBidInput_(this,'detail')"
+                                                onkeydown="onBidEnter_(event,this,'detail')" onfocus="this.select()"
                                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-right">
+                                            <div id="form-bid-split" style="display:none;align-items:center;gap:6px;margin-top:6px">
+                                                <input id="form-bid-eok" inputmode="numeric" placeholder="억" oninput="bidSplitEok_('detail')" onfocus="this.select()"
+                                                    class="w-full px-2 py-2 border border-gray-300 rounded-lg text-right">
+                                                <span class="text-sm font-bold text-gray-600">억</span>
+                                                <input id="form-bid-man" inputmode="numeric" placeholder="만" oninput="bidSplitMan_('detail')" onfocus="this.select()"
+                                                    onkeydown="if(event.key==='Enter'){event.preventDefault();bidSplitCompute_('detail');}"
+                                                    class="w-full px-2 py-2 border border-gray-300 rounded-lg text-right">
+                                                <span class="text-sm font-bold text-gray-600">만</span>
+                                            </div>
+                                            <div id="detail-bid-err" class="text-xs text-red-600 font-bold mt-1"></div>
                                             <div class="flex justify-between items-center mt-1.5 text-xs">
                                                 <div class="text-left">
                                                     <span class="text-gray-500">최저가:</span>
@@ -5032,7 +5047,13 @@
                         </div>
                         <div class="mb-4">
                             <div class="flex justify-between items-center mb-1">
-                                <label class="block text-sm font-medium text-gray-700">입찰가</label>
+                                <label class="block text-sm font-medium text-gray-700" style="white-space:nowrap">입찰가
+                                    <span style="margin-left:6px;font-size:11px;font-weight:400;color:#64748b;white-space:nowrap">
+                                        <label style="cursor:pointer"><input type="radio" name="modal-bidstyle" id="modal-bidstyle-free" onchange="setBidStyle_('modal','free')">자유</label>
+                                        <label style="cursor:pointer;margin-left:4px"><input type="radio" name="modal-bidstyle" id="modal-bidstyle-split" onchange="setBidStyle_('modal','split')">분리</label>
+                                        <span id="modal-bid-adv" style="display:none">(<label style="cursor:pointer"><input type="radio" name="modal-bidadv" id="modal-bidadv-1" onchange="setBidAdv_('modal',1)">1</label><label style="cursor:pointer;margin-left:3px"><input type="radio" name="modal-bidadv" id="modal-bidadv-2" onchange="setBidAdv_('modal',2)">2</label>)</span>
+                                    </span>
+                                </label>
                                 <div class="space-x-1" id="modal-bid-state-buttons">
                                     <button type="button" tabindex="-1" onclick="setBidState('신규')" id="modal-bid-state-new-btn"
                                         class="bg-red-100 hover:bg-red-200 text-red-700 text-xs px-2 py-0.5 rounded border border-red-300 transition">신규</button>
@@ -5044,9 +5065,19 @@
                                         class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded border border-gray-300 transition">확인완료</button>
                                 </div>
                             </div>
-                            <input type="text" id="modal-form-bidprice" oninput="formatNumber(this); updateBidRatioModal_()"
-                                onfocus="this.select()"
+                            <input type="text" id="modal-form-bidprice" placeholder="예: 14억5900만 / 100000000"
+                                oninput="onBidInput_(this,'modal')" onkeydown="onBidEnter_(event,this,'modal')" onfocus="this.select()"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm text-right font-bold text-gray-700">
+                            <div id="modal-form-bid-split" style="display:none;align-items:center;gap:6px;margin-top:6px">
+                                <input id="modal-form-bid-eok" inputmode="numeric" placeholder="억" oninput="bidSplitEok_('modal')" onfocus="this.select()"
+                                    class="w-full px-2 py-2 border border-gray-300 rounded-lg text-right">
+                                <span class="text-sm font-bold text-gray-600">억</span>
+                                <input id="modal-form-bid-man" inputmode="numeric" placeholder="만" oninput="bidSplitMan_('modal')" onfocus="this.select()"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault();bidSplitCompute_('modal');}"
+                                    class="w-full px-2 py-2 border border-gray-300 rounded-lg text-right">
+                                <span class="text-sm font-bold text-gray-600">만</span>
+                            </div>
+                            <div id="modal-bid-err" class="text-xs text-red-600 font-bold mt-1"></div>
                             <div class="flex justify-between items-center mt-1.5 text-xs">
                                 <div class="text-left">
                                     <span class="text-gray-500">최저가:</span>

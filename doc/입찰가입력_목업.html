@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>입찰가 입력 목업 (React)</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  body{margin:0;background:#f1f5f9;font-family:"Malgun Gothic","맑은 고딕",-apple-system,Segoe UI,sans-serif;color:#1f2937;padding:24px;}
+  .wrap{max-width:780px;margin:0 auto;}
+  h2{font-size:17px;margin:0 0 4px;}
+  .sub{font-size:12.5px;color:#6b7280;margin:0 0 16px;}
+  .card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:18px 20px;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:start;}
+  .field label{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:#374151;margin-bottom:5px;min-height:22px;white-space:nowrap;}
+  input,select{font-family:inherit;font-size:14px;}
+  .inp{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid #cbd5e1;border-radius:8px;}
+  .inp:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+  /* 입찰가 라벨 옆 미니 라디오 */
+  .styleradio{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#64748b;white-space:nowrap;}
+  .styleradio label{display:inline-flex;align-items:center;gap:2px;margin:0;min-height:0;cursor:pointer;font-weight:600;color:#64748b;white-space:nowrap;}
+  .styleradio input{transform:scale(.85);margin:0;}
+  /* 중간 숫자 박스 (원/라벨 없음) */
+  .numbox{padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;background:#f8fafc;
+    font-size:18px;font-weight:800;color:#2563eb;text-align:right;line-height:1.35;}
+  /* 상태 버튼 줄 — 중간박스 우측 테두리에 맞춰 오른쪽 정렬 */
+  .statebtns{display:flex;justify-content:flex-end;gap:5px;margin-bottom:5px;min-height:22px;}
+  .stbtn{border:0;border-radius:7px;padding:3px 9px;font-size:11.5px;font-weight:700;cursor:pointer;}
+  .stbtn.new{background:#fee2e2;color:#b91c1c;}      .stbtn.new.on{background:#ef4444;color:#fff;}
+  .stbtn.deliv{background:#f1f5f9;color:#475569;}    .stbtn.deliv.on{background:#111827;color:#fff;}
+  .stbtn.conf{background:#f1f5f9;color:#475569;}     .stbtn.conf.on{background:#2563eb;color:#fff;}
+  .eokman{display:flex;align-items:center;gap:6px;}
+  .eokman input{width:100%;box-sizing:border-box;padding:9px 8px;border:1px solid #cbd5e1;border-radius:8px;text-align:right;}
+  .eokman .u{font-size:13px;font-weight:700;color:#475569;}
+  .hint{font-size:11px;color:#94a3b8;margin-top:6px;}
+  .note{font-size:12px;color:#6b7280;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-top:14px;line-height:1.6;}
+  code{background:#eef2f7;padding:1px 5px;border-radius:4px;font-size:12px;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// "14억5900만","1억 800만","1억5279만 입니다.","1459900000","1,459,900,000" 모두 처리
+function parseBidWon(s) {
+  s = String(s == null ? '' : s);
+  if (!/[억만]/.test(s)) { const n = parseInt(s.replace(/[^0-9]/g, ''), 10); return isNaN(n) ? null : n; }
+  let total = 0, m;
+  m = s.match(/(\d+)\s*억/); if (m) total += parseInt(m[1], 10) * 100000000;
+  m = s.match(/(\d+)\s*만/); if (m) total += parseInt(m[1], 10) * 10000;
+  return total > 0 ? total : null;
+}
+const fmt = (n) => (n == null ? '' : new Intl.NumberFormat('ko-KR').format(n));
+const EOK_MAXLEN = 2, MAN_MAXLEN = 4;
+
+function StyleFree({ value, onChange }) {
+  const [text, setText] = useState(() => value != null ? fmt(value) : '');   // 전환 시 기존 값 반영
+  const [err, setErr] = useState('');
+  const commit = () => {
+    if (/[십백천조]/.test(text)) {                       // 억·만만 지원
+      setErr('억·만만 입력 가능 (십·백·천·조 불가)'); onChange(null); return;
+    }
+    if (/[억만]/.test(text) && parseBidWon(text) == null) {
+      setErr('인식할 수 없는 형식입니다'); onChange(null); return;
+    }
+    setErr('');
+    const n = parseBidWon(text); onChange(n); if (n != null) setText(fmt(n));
+  };
+  return (
+    <div>
+      <input className="inp" value={text} placeholder="예: 14억5900만 / 1459900000"
+        style={err ? { borderColor: '#dc2626', boxShadow: '0 0 0 3px rgba(220,38,38,.12)' } : null}
+        value={text}
+        onChange={e => { setText(e.target.value); if (err) setErr(''); }}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+        onBlur={commit} onFocus={e => e.target.select()} />
+      <div className="hint" style={err ? { color: '#dc2626', fontWeight: 700 } : null}>
+        {err || <span>억/만 또는 순수숫자 입력 후 <b>Enter</b></span>}
+      </div>
+    </div>
+  );
+}
+function decompose(v) {   // 숫자 → {억, 만} 표시값 (만 단위)
+  if (v == null) return { eok: '', man: '' };
+  const e = Math.floor(v / 100000000), m = Math.floor((v % 100000000) / 10000);
+  return { eok: e > 0 ? String(e) : '', man: m > 0 ? String(m) : '' };
+}
+function StyleSplit({ value, onChange, adv }) {
+  const init = decompose(value);   // 전환 시 기존 값에서 억/만 복원
+  const [eok, setEok] = useState(init.eok); const [man, setMan] = useState(init.man); const manRef = useRef(null);
+  const compute = (e, m) => { const ev = parseInt(e || '0', 10) || 0, mv = parseInt(m || '0', 10) || 0;
+    onChange((!ev && !mv) ? null : ev * 100000000 + mv * 10000); };
+  const onEok = (v) => { v = v.replace(/[^0-9]/g, '').slice(0, 2); setEok(v); compute(v, man);
+    if (v.length >= adv && manRef.current) manRef.current.focus(); };   // 선택한 자릿수 채우면 만으로 이동
+  const onMan = (v) => { v = v.replace(/[^0-9]/g, '').slice(0, MAN_MAXLEN); setMan(v); compute(eok, v); };
+  return (
+    <div className="eokman">
+      <input value={eok} inputMode="numeric" placeholder="억" onChange={e => onEok(e.target.value)} onFocus={e => e.target.select()} />
+      <span className="u">억</span>
+      <input ref={manRef} value={man} inputMode="numeric" placeholder="만" onChange={e => onMan(e.target.value)}
+        onFocus={e => e.target.select()} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); compute(eok, man); } }} />
+      <span className="u">만</span>
+    </div>
+  );
+}
+
+function App() {
+  const [style, setStyle] = useState(() => localStorage.getItem('bidInputStyle') || 'free');
+  const [num, setNum] = useState(null);
+  const [bidState, setBidState] = useState('신규');
+  const [adv, setAdv] = useState(() => parseInt(localStorage.getItem('bidEokAdvance') || '1', 10) === 2 ? 2 : 1);
+  useEffect(() => { localStorage.setItem('bidInputStyle', style); }, [style]);
+  useEffect(() => { localStorage.setItem('bidEokAdvance', String(adv)); }, [adv]);
+
+  return (
+    <div className="wrap">
+      <h2>입찰가 입력 — 3분할 (시안)</h2>
+      <p className="sub">입찰가 라벨 옆 미니 라디오로 입력 스타일 선택(저장됨). 기존 구도 유지.</p>
+
+      <div className="card">
+        <div className="row3">
+          {/* ① 입찰가 입력 + 미니 라디오 */}
+          <div className="field">
+            <label>입찰가
+              <span className="styleradio">
+                <label><input type="radio" name="bs" checked={style === 'free'} onChange={() => setStyle('free')} />자유</label>
+                <label><input type="radio" name="bs" checked={style === 'split'} onChange={() => setStyle('split')} />분리</label>
+                {style === 'split' && (
+                  <span className="styleradio">(
+                    <label><input type="radio" name="eokadv" checked={adv === 1} onChange={() => setAdv(1)} />1</label>
+                    <label><input type="radio" name="eokadv" checked={adv === 2} onChange={() => setAdv(2)} />2</label>
+                    )</span>
+                )}
+              </span>
+            </label>
+            {style === 'free' ? <StyleFree value={num} onChange={setNum} /> : <StyleSplit value={num} onChange={setNum} adv={adv} />}
+          </div>
+
+          {/* ② 숫자(수정불가) — 라벨 없음, 상태버튼을 박스 우측 위에 정렬, 원 표기 없음 */}
+          <div className="field">
+            <div className="statebtns">
+              <button className={'stbtn new' + (bidState === '신규' ? ' on' : '')} onClick={() => setBidState('신규')}>신규</button>
+              <button className={'stbtn deliv' + (bidState === '전달완료' ? ' on' : '')} onClick={() => setBidState('전달완료')}>전달완료</button>
+              <button className={'stbtn conf' + (bidState === '확인완료' ? ' on' : '')} onClick={() => setBidState('확인완료')}>확인완료</button>
+            </div>
+            <div className="numbox">{fmt(num) || '—'}</div>
+          </div>
+
+          {/* ③ 입찰가 담당 */}
+          <div className="field">
+            <label>입찰가 담당</label>
+            <select className="inp" defaultValue="">
+              <option value="" disabled>담당 선택</option>
+              <option>대표님</option><option>전부쌤</option><option>표재덕</option><option>이정우</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="note">
+          테스트: 자유 → <code>14억5900만</code> / <code>1억8만</code> / <code>1459900000</code> + Enter · 분리 → 억 <code>14</code> → 만 <code>5900</code><br/>
+          조절: <code>EOK_MAXLEN</code>(억칸 자릿수, 현재 2). 담당은 예시 드롭다운(실제 회원 연동 예정).
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

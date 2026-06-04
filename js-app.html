@@ -1106,6 +1106,97 @@
         }
     }
 
+    // ===== 입찰가 입력: 자유(억/만 파싱) / 분리(억·만 칸) 토글 (scope: 'detail'|'modal') =====
+    function _bidPrefix_(scope) { return scope === 'modal' ? 'modal-' : ''; }
+    function _bidEl_(scope) { return document.getElementById(scope === 'modal' ? 'modal-form-bidprice' : 'form-bidprice'); }
+    function _bidFmt_(n) { return (n == null || isNaN(n)) ? '' : new Intl.NumberFormat('ko-KR').format(n); }
+    function bidStyleGet_() { try { return localStorage.getItem('bidInputStyle') === 'split' ? 'split' : 'free'; } catch (e) { return 'free'; } }
+    function bidAdvGet_() { try { return parseInt(localStorage.getItem('bidEokAdvance') || '1', 10) === 2 ? 2 : 1; } catch (e) { return 1; } }
+    // 한글 억/만 → 숫자 ("14억5900만","1억 800만","1억5279만 입니다.","1459900000")
+    function parseBidWon_(s) {
+        s = String(s == null ? '' : s);
+        if (!/[억만]/.test(s)) { const n = parseInt(s.replace(/[^0-9]/g, ''), 10); return isNaN(n) ? null : n; }
+        let t = 0, m;
+        m = s.match(/(\d+)\s*억/); if (m) t += parseInt(m[1], 10) * 100000000;
+        m = s.match(/(\d+)\s*만/); if (m) t += parseInt(m[1], 10) * 10000;
+        return t > 0 ? t : null;
+    }
+    function _bidErr_(scope, msg) {
+        const el = document.getElementById((scope === 'modal' ? 'modal' : 'detail') + '-bid-err');
+        if (el) el.textContent = msg || '';
+        const inp = _bidEl_(scope);
+        if (inp) inp.style.borderColor = msg ? '#dc2626' : '';
+    }
+    // 자유 모드 oninput: 한글(억/만/십/백/천/조) 입력 중엔 포맷 보류, 순수숫자만 콤마
+    function onBidInput_(el, scope) {
+        if (!/[억만십백천조]/.test(el.value)) { formatNumber(el); _bidErr_(scope, ''); }
+        updateBidRatio_(scope);
+    }
+    // 자유 모드 Enter: 십/백/천/조 오류, 억/만 환산
+    function onBidEnter_(e, el, scope) {
+        if (e.key !== 'Enter') return;
+        if (/[십백천조]/.test(el.value)) { e.preventDefault(); _bidErr_(scope, '억·만만 입력 가능 (십·백·천·조 불가)'); return; }
+        if (/[억만]/.test(el.value)) {
+            e.preventDefault();
+            const n = parseBidWon_(el.value);
+            if (n == null) { _bidErr_(scope, '인식할 수 없는 형식'); return; }
+            _bidErr_(scope, ''); el.value = _bidFmt_(n); updateBidRatio_(scope);
+        }
+    }
+    // 분리 모드 억/만 칸 → #form-bidprice 에 합산 기록
+    function _splitEl_(scope, which) { return document.getElementById(_bidPrefix_(scope) + 'form-bid-' + which); }
+    function bidSplitCompute_(scope) {
+        const e = _splitEl_(scope, 'eok'), m = _splitEl_(scope, 'man');
+        const ev = parseInt((e ? e.value : '').replace(/[^0-9]/g, '') || '0', 10) || 0;
+        const mv = parseInt((m ? m.value : '').replace(/[^0-9]/g, '') || '0', 10) || 0;
+        const bid = _bidEl_(scope);
+        if (bid) bid.value = (!ev && !mv) ? '' : _bidFmt_(ev * 100000000 + mv * 10000);
+        updateBidRatio_(scope);
+    }
+    function bidSplitEok_(scope) {
+        const e = _splitEl_(scope, 'eok'); if (!e) return;
+        e.value = e.value.replace(/[^0-9]/g, '').slice(0, 2);
+        bidSplitCompute_(scope);
+        if (e.value.length >= bidAdvGet_()) { const m = _splitEl_(scope, 'man'); if (m) m.focus(); }
+    }
+    function bidSplitMan_(scope) {
+        const m = _splitEl_(scope, 'man'); if (!m) return;
+        m.value = m.value.replace(/[^0-9]/g, '').slice(0, 4);
+        bidSplitCompute_(scope);
+    }
+    // 스타일/자릿수 라디오 핸들러
+    function setBidStyle_(scope, style) { try { localStorage.setItem('bidInputStyle', style); } catch (e) {} applyBidStyle_(scope); }
+    function setBidAdv_(scope, adv) { try { localStorage.setItem('bidEokAdvance', String(adv)); } catch (e) {} applyBidStyle_(scope); }
+    // 현재 스타일을 화면에 적용 (입력칸 ↔ 분리칸 전환, 값 연동, 라디오 상태)
+    function applyBidStyle_(scope) {
+        const style = bidStyleGet_(), adv = bidAdvGet_();
+        const bid = _bidEl_(scope);
+        const split = document.getElementById(_bidPrefix_(scope) + 'form-bid-split');
+        const advWrap = document.getElementById((scope === 'modal' ? 'modal' : 'detail') + '-bid-adv');
+        // 라디오 반영
+        const r = (id) => document.getElementById(id);
+        const pfx = (scope === 'modal' ? 'modal' : 'detail');
+        if (r(pfx + '-bidstyle-free')) r(pfx + '-bidstyle-free').checked = (style === 'free');
+        if (r(pfx + '-bidstyle-split')) r(pfx + '-bidstyle-split').checked = (style === 'split');
+        if (r(pfx + '-bidadv-1')) r(pfx + '-bidadv-1').checked = (adv === 1);
+        if (r(pfx + '-bidadv-2')) r(pfx + '-bidadv-2').checked = (adv === 2);
+        if (advWrap) advWrap.style.display = (style === 'split') ? '' : 'none';
+        _bidErr_(scope, '');
+        if (!bid) return;
+        if (style === 'split') {
+            // 현재 값 → 억/만 분해
+            const cur = parseInt((bid.value || '').replace(/[^0-9]/g, ''), 10) || 0;
+            const e = _splitEl_(scope, 'eok'), m = _splitEl_(scope, 'man');
+            if (e) e.value = Math.floor(cur / 100000000) > 0 ? String(Math.floor(cur / 100000000)) : '';
+            if (m) m.value = Math.floor((cur % 100000000) / 10000) > 0 ? String(Math.floor((cur % 100000000) / 10000)) : '';
+            if (split) split.style.display = '';
+            bid.readOnly = true; bid.style.background = '#f8fafc';
+        } else {
+            if (split) split.style.display = 'none';
+            bid.readOnly = false; bid.style.background = '';
+        }
+    }
+
     let statusHideTimer_ = null;
 
     function setStatusStyle_(type) {
@@ -4809,6 +4900,7 @@
 
             const price = data.bidprice;
             if (formBidPrice) formBidPrice.value = (price == 0 || price === '0') ? '' : new Intl.NumberFormat('ko-KR').format(price);
+            try { applyBidStyle_('detail'); } catch (e) {}   // 저장된 입력스타일 반영 + 분리칸 값 동기화
 
             // [NEW] 보증금/최저가 표시 + 비율 계산
             applyBidPriceMeta_('detail', data);
@@ -6250,6 +6342,7 @@
         if (modalFormMNameId) modalFormMNameId.value = data.m_name_id || '대표님';
         const price = data.bidprice;
         if (modalFormBidPrice) modalFormBidPrice.value = (price == 0 || price === '0') ? '' : new Intl.NumberFormat('ko-KR').format(price);
+        try { applyBidStyle_('modal'); } catch (e) {}   // 저장된 입력스타일 반영 + 분리칸 값 동기화
 
         // [NEW] 보증금/최저가 표시 + 비율 계산
         applyBidPriceMeta_('modal', data);
@@ -8034,7 +8127,7 @@ MJ 이정우 팀장
     }
 
     // 드래그 리사이즈 초기화
-    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); initItemPaneResize(); initItemListColumnResize(); });
+    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); initItemPaneResize(); initItemListColumnResize(); try { applyBidStyle_('detail'); applyBidStyle_('modal'); } catch (e) {} });
 
     // 입찰물건 관리 리스트 — 컬럼 헤더 우측에 드래그 핸들 부착, 폭 저장
     function initItemListColumnResize() {
