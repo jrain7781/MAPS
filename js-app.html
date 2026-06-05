@@ -1132,18 +1132,28 @@
         if (/^[0-9,\s]*$/.test(el.value)) { formatNumber(el); _bidErr_(scope, ''); }
         updateBidRatio_(scope);   // 미러는 parseBidWon_ 로 억/만 라이브 환산
     }
-    // 확정(Enter/blur): 십/백/천/조 오류, 억/만 환산하여 숫자로 고정
+    // 확정(Enter/blur): 십/백/천/조 오류, 억/만 환산하여 숫자로 고정 (성공 시 true)
     function onBidCommit_(el, scope) {
         const v = el.value;
-        if (/[십백천조]/.test(v)) { _bidErr_(scope, '억·만만 입력 가능 (십·백·천·조 불가)'); return; }
+        if (/[십백천조]/.test(v)) { _bidErr_(scope, '억·만만 입력 가능 (십·백·천·조 불가)'); return false; }
         if (/[억만]/.test(v)) {
             const n = parseBidWon_(v);
-            if (n == null) { _bidErr_(scope, '인식할 수 없는 형식'); return; }
+            if (n == null) { _bidErr_(scope, '인식할 수 없는 형식'); return false; }
             _bidErr_(scope, ''); el.value = _bidFmt_(n);
         } else { formatNumber(el); _bidErr_(scope, ''); }
         updateBidRatio_(scope);
+        return true;
     }
-    function onBidEnter_(e, el, scope) { if (e.key === 'Enter') { e.preventDefault(); onBidCommit_(el, scope); } }
+    // 입찰가 Enter → 즉시 저장 (자유=입력칸 Enter, 분리=만칸 Enter). scope별 저장 함수 호출
+    function _bidSaveByScope_(scope) {
+        try {
+            if (scope === 'modal') { if (typeof handleModalUpdate === 'function') handleModalUpdate(); }
+            else { if (typeof handleFormSubmit === 'function') handleFormSubmit(); }
+        } catch (e) {}
+    }
+    function onBidEnter_(e, el, scope) { if (e.key === 'Enter') { e.preventDefault(); if (onBidCommit_(el, scope)) _bidSaveByScope_(scope); } }
+    // 분리 모드 만칸 Enter → 합산 후 즉시 저장
+    function onBidSplitManEnter_(e, scope) { if (e.key === 'Enter') { e.preventDefault(); bidSplitCompute_(scope); _bidSaveByScope_(scope); } }
     // 분리 모드 억/만 칸 → #form-bidprice 에 합산 기록
     function _splitEl_(scope, which) { return document.getElementById(_bidPrefix_(scope) + 'form-bid-' + which); }
     function bidSplitCompute_(scope) {
