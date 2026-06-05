@@ -15420,8 +15420,12 @@ ${token}
                 ${resizeHandleHtml}
             </th>`;
         }
-        // [패딩] class.class_loop만큼 회차 컬럼 채움 (실제 회차가 부족할 때 빈칸 표시)
-        const _padCount_ = Math.max(0, classTotalLoop_ - N);
+        // [패딩=틀] 계약/실제 회차와 무관하게 항상 최소 15칸 "틀"(빈 회차 자리)을 표시.
+        //   틀만 그리는 것 — 실제 회차(class_d1)나 계약회차는 건드리지 않음. 신규·기존 수업 모두 자동 적용.
+        //   프레임 = max(실제 N, 수업 class_loop, 15)  → 실제가 15보다 많으면 그만큼, 적으면 15까지 빈칸
+        const FRAME_MIN_LOOPS_ = 15;
+        const _frameLoops_ = Math.max(N, classTotalLoop_ || 0, FRAME_MIN_LOOPS_);
+        const _padCount_ = Math.max(0, _frameLoops_ - N);
         for (let i = 0; i < _padCount_; i++) {
             // 패딩 칸: 틀(빈 회차 자리)만 표시, 회차 제목 제거 (사용자 요청)
             sessionColHeaders += `<th class="d1-sess-th px-1 py-1 text-center bg-gray-50 border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px">
