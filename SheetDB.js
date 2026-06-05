@@ -2469,7 +2469,12 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   var totalSessions = typeof opts.totalSessions === 'number' ? opts.totalSessions : 0;
 
   // 회차 추가 모드: startLoop/endLoop을 기존 마지막 회차 기준으로 계산
+  //  - 임시 loop(맨 끝)로 생성 후, 마지막에 rebuildClassD1BatchOrder_가 날짜순 재정렬
+  //  - 반드시 기존 배치 timestamp 필요 (없으면 새 배치/수업이 생성되는 버그 → 차단)
   if (addCount !== null) {
+    if (!batchTimestamp) {
+      return { success: false, message: '회차 추가에는 기존 배치 정보가 필요합니다. 배치를 다시 선택한 뒤 시도하세요.' };
+    }
     var existingLoops = sheet.getLastRow() > 1
       ? sheet.getRange(2, 1, sheet.getLastRow() - 1, CLASS_D1_HEADERS.length).getValues()
           .filter(function(r) { return String(r[CLASS_D1_HEADERS.indexOf('class_id')]) === String(classId); })
@@ -2580,7 +2585,209 @@ function generateClassD1(classId, startDate, loopUnit, options) {
     addMemberToClassD1Batch(batchKey, memberIds, classId, memberData, actualTotal);
   }
 
+  // 회차 추가 모드: 임시 loop으로 생성된 새 회차를 날짜순으로 재정렬하고
+  //   회원 출석(no_N) 시프트 + 새 회차 출석 채움 + class 마스터 class_loop 동기화
+  if (addCount !== null) {
+    var addBatchKey = extractD1BatchKey_(newD1Ids[0]);
+    rebuildClassD1BatchOrder_(addBatchKey, { fillNewIds: newD1Ids });
+  }
+
   return { success: true, message: newRows.length + '개 회차 생성 완료 (회원 ' + memberIds.length + '명)', created: newRows.length };
+}
+
+/**
+ * 배치 회차를 날짜순으로 1..M 재정렬하고, 관련 데이터를 모두 정정한다.
+ *  - class_d1.class_loop 를 날짜 오름차순 1..M 로 재배치
+ *  - 각 회원(member_class_details)의 no_N 출석값을 동일 매핑으로 시프트
+ *    (수업회차/남은회차/이월회차/심블은 프론트에서 no_N+회차로 자동 재계산되므로 별도 저장 불필요)
+ *  - 새로 삽입된 회차(fillNewIds)는 "활성 회원 + 미래 + 남은회차 여유" 일 때만 'O' 채움 (없으면 빈칸)
+ *  - 휴강 백업(holiday_backup)의 shifted_loop 참조도 같은 매핑으로 보정 (휴강 로직 자체는 불변)
+ *  - class 마스터 class_loop 를 이 수업의 배치 중 최대 회차수로 동기화 (빈 패딩칸 방지, 다중 배치 안전)
+ *  - 계약회차(contract_loop)는 의도적으로 변경하지 않음 (남은/이월로 자동 흡수)
+ * @param {string} batchKey  classId_timestamp
+ * @param {Object} [options]  { fillNewIds: string[] }  이번에 삽입된 class_d1_id 목록
+ */
+function rebuildClassD1BatchOrder_(batchKey, options) {
+  options = options || {};
+  var fillNew = {};
+  (options.fillNewIds || []).forEach(function(id) { fillNew[String(id)] = true; });
+
+  var tz = Session.getScriptTimeZone();
+  var todayStr = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
+
+  var d1Sheet = ensureClassD1Sheet_();
+  var d1Last = d1Sheet.getLastRow();
+  if (d1Last < 2) return { success: false, message: '회차 데이터 없음' };
+
+  var idIdx      = CLASS_D1_HEADERS.indexOf('class_d1_id');
+  var classIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
+  var loopIdx    = CLASS_D1_HEADERS.indexOf('class_loop');
+  var dateIdx    = CLASS_D1_HEADERS.indexOf('class_date');
+  var holidayIdx = CLASS_D1_HEADERS.indexOf('holiday');
+  var holBackIdx = CLASS_D1_HEADERS.indexOf('holiday_backup');
+
+  var d1Data = d1Sheet.getRange(2, 1, d1Last - 1, CLASS_D1_HEADERS.length).getValues();
+
+  // 이 배치의 회차 행 수집
+  var rows = [];
+  var classId = null;
+  for (var i = 0; i < d1Data.length; i++) {
+    if (extractD1BatchKey_(String(d1Data[i][idIdx])) !== batchKey) continue;
+    classId = String(d1Data[i][classIdIdx]);
+    var rawDate = d1Data[i][dateIdx];
+    var dateStr = (rawDate instanceof Date)
+      ? Utilities.formatDate(rawDate, tz, 'yyyyMMdd')
+      : String(rawDate || '').replace(/-/g, '');
+    rows.push({
+      sheetRow: i + 2,
+      oldLoop: Number(d1Data[i][loopIdx]),
+      dateStr: dateStr,
+      holiday: String(d1Data[i][holidayIdx] || '') === 'Y',
+      isNew: !!fillNew[String(d1Data[i][idIdx])],
+      backupRaw: holBackIdx >= 0 ? String(d1Data[i][holBackIdx] || '') : ''
+    });
+  }
+  if (rows.length === 0) return { success: false, message: '배치 회차 없음' };
+
+  // 날짜 오름차순 정렬 (빈 날짜는 맨 뒤, 동일 날짜는 기존 loop 순)
+  rows.sort(function(a, b) {
+    var ad = a.dateStr || '99999999';
+    var bd = b.dateStr || '99999999';
+    if (ad !== bd) return ad < bd ? -1 : 1;
+    return a.oldLoop - b.oldLoop;
+  });
+
+  // oldLoop -> newLoop 매핑
+  var loopMap = {};
+  rows.forEach(function(r, idx) { r.newLoop = idx + 1; loopMap[r.oldLoop] = r.newLoop; });
+  var total = rows.length;
+
+  // 1) class_d1.class_loop 갱신 + holiday_backup.shifted_loop 보정
+  rows.forEach(function(r) {
+    if (Number(r.oldLoop) !== r.newLoop) {
+      d1Sheet.getRange(r.sheetRow, loopIdx + 1).setValue(r.newLoop);
+    }
+    if (holBackIdx >= 0 && r.backupRaw) {
+      try {
+        var bk = JSON.parse(r.backupRaw);
+        var touched = false;
+        Object.keys(bk).forEach(function(mid) {
+          var e = bk[mid];
+          if (e && e.shifted_loop !== null && e.shifted_loop !== undefined && e.shifted_loop !== '') {
+            var mapped = loopMap[Number(e.shifted_loop)];
+            e.shifted_loop = (mapped !== undefined) ? mapped : null; // 대상 회차 삭제됐으면 null
+            touched = true;
+          }
+        });
+        if (touched) d1Sheet.getRange(r.sheetRow, holBackIdx + 1).setValue(JSON.stringify(bk));
+      } catch (e) {}
+    }
+  });
+
+  // 2) 회원 출석(no_N) 시프트
+  var mcdSheet = ensureMemberClassDetailsSheet_();
+  var mcdLast = mcdSheet.getLastRow();
+  if (mcdLast >= 2) {
+    var mcdData = mcdSheet.getRange(2, 1, mcdLast - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+    var mD1Idx      = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+    var statusIdx   = MEMBER_CLASS_DETAILS_HEADERS.indexOf('member_status');
+    var contractIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('contract_loop');
+    var noIdxCache = {};
+    function noIdx_(n) {
+      if (noIdxCache[n] === undefined) noIdxCache[n] = MEMBER_CLASS_DETAILS_HEADERS.indexOf('no_' + n);
+      return noIdxCache[n];
+    }
+    var INACTIVE = ['종료', '홀딩'];
+
+    for (var mi = 0; mi < mcdData.length; mi++) {
+      if (String(mcdData[mi][mD1Idx]) !== String(batchKey)) continue;
+      var rowVals = mcdData[mi].slice();
+
+      // 기존 no_oldLoop 스냅샷
+      var oldNo = {};
+      rows.forEach(function(r) {
+        var ci = noIdx_(r.oldLoop);
+        oldNo[r.oldLoop] = (ci >= 0) ? String(rowVals[ci] || '') : '';
+      });
+
+      // newLoop 위치로 재배치 (새 회차는 일단 빈값)
+      var newNo = {};
+      rows.forEach(function(r) { newNo[r.newLoop] = r.isNew ? '' : (oldNo[r.oldLoop] || ''); });
+
+      // 새 회차 출석 채움: 활성 + 미래 + (futureO < remaining) → 'O'
+      var isActive = INACTIVE.indexOf(String(rowVals[statusIdx] || '')) < 0;
+      if (isActive) {
+        rows.forEach(function(r) {
+          if (!r.isNew) return;
+          if (!(r.dateStr !== '' && r.dateStr > todayStr)) return; // 미래만
+          var used = 0, futureO = 0;
+          rows.forEach(function(rr) {
+            if (rr.holiday) return; // 휴강 제외
+            var v = String(newNo[rr.newLoop] || '').trim().toUpperCase();
+            if (rr.dateStr !== '' && rr.dateStr <= todayStr) { if (v === 'O' || v === 'R') used++; }
+            else if (rr.dateStr !== '' && rr.dateStr > todayStr) { if (v === 'O' || v === 'R') futureO++; }
+          });
+          var contract = parseInt(rowVals[contractIdx], 10);
+          if (isNaN(contract)) contract = total; // 비어있으면 배치 회차수 fallback
+          var remaining = Math.max(0, contract - used);
+          if (futureO < remaining) newNo[r.newLoop] = 'O';
+        });
+      }
+
+      // no_1..no_20 기록 (배치 범위 밖은 비움)
+      var changed = false;
+      for (var n = 1; n <= 20; n++) {
+        var ci2 = noIdx_(n);
+        if (ci2 < 0) continue;
+        var nv = (n <= total) ? (newNo[n] || '') : '';
+        if (String(rowVals[ci2] || '') !== String(nv)) { rowVals[ci2] = nv; changed = true; }
+      }
+      if (changed) mcdSheet.getRange(mi + 2, 1, 1, MEMBER_CLASS_DETAILS_HEADERS.length).setValues([rowVals]);
+    }
+  }
+
+  // 3) class 마스터 class_loop = 이 수업의 배치 중 최대 회차수 (빈 패딩칸 방지, 다중 배치 안전)
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var classSh = ss.getSheetByName(CLASS_SHEET_NAME_DB);
+    if (classSh && classSh.getLastRow() >= 2 && classId) {
+      // 같은 class_id의 배치별 회차수 집계 → 최대값
+      var batchCount = {};
+      for (var k = 0; k < d1Data.length; k++) {
+        if (String(d1Data[k][classIdIdx]) !== String(classId)) continue;
+        var bk = extractD1BatchKey_(String(d1Data[k][idIdx]));
+        batchCount[bk] = (batchCount[bk] || 0) + 1;
+      }
+      // 현재 배치는 방금 재정렬한 total로 반영 (d1Data 스냅샷은 추가 전일 수 있음)
+      batchCount[batchKey] = total;
+      var maxLoop = 0;
+      Object.keys(batchCount).forEach(function(bk) { if (batchCount[bk] > maxLoop) maxLoop = batchCount[bk]; });
+
+      var cData = classSh.getRange(2, 1, classSh.getLastRow() - 1, CLASS_HEADERS.length).getValues();
+      var cidIdx = CLASS_HEADERS.indexOf('class_id');
+      var clpIdx = CLASS_HEADERS.indexOf('class_loop');
+      for (var ci3 = 0; ci3 < cData.length; ci3++) {
+        if (String(cData[ci3][cidIdx]) === String(classId)) {
+          if (parseInt(cData[ci3][clpIdx], 10) !== maxLoop) {
+            classSh.getRange(ci3 + 2, clpIdx + 1).setValue(maxLoop);
+          }
+          break;
+        }
+      }
+    }
+  } catch (e) {}
+
+  SpreadsheetApp.flush();
+  // 캐시 무효화
+  var cache = CacheService.getScriptCache();
+  cache.remove('mcd_' + batchKey);
+  if (classId) cache.remove('sessions_' + classId);
+  cache.remove('all_class_d1_sessions');
+  cache.remove('class_batch_counts');
+  cache.remove('all_batch_members');
+  cache.remove('class_member_index');
+
+  return { success: true, total: total };
 }
 
 /**

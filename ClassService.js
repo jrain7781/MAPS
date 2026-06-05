@@ -1004,10 +1004,24 @@ function deleteClassD1Batch(classD1Ids) {
     const rawD1Data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
     const ids = rawD1Data.map(function(r) { return r[0]; });
     const affectedClassIds2 = new Set();
-    rawD1Data.forEach(function(r) { if (idSet2.has(String(r[0]))) affectedClassIds2.add(String(r[1])); });
+    const affectedBatchKeys2 = new Set();
+    rawD1Data.forEach(function(r) {
+        if (idSet2.has(String(r[0]))) {
+            affectedClassIds2.add(String(r[1]));
+            affectedBatchKeys2.add(extractD1BatchKey_(String(r[0])));
+        }
+    });
     for (let i = ids.length - 1; i >= 0; i--) {
         if (idSet2.has(String(ids[i]))) sheet.deleteRow(i + 2);
     }
+    SpreadsheetApp.flush();
+
+    // 삭제 후: 남은 회차를 날짜순 1..M 으로 재정렬하고 회원 출석(no_N) 시프트 +
+    //   class 마스터 class_loop 동기화 (휴강 백업 참조도 함께 보정)
+    affectedBatchKeys2.forEach(function(bk) {
+        if (bk) rebuildClassD1BatchOrder_(bk);
+    });
+
     const scriptCache2 = CacheService.getScriptCache();
     affectedClassIds2.forEach(function(cId) { if (cId) scriptCache2.remove('sessions_' + cId); });
     scriptCache2.remove('all_class_d1_sessions');

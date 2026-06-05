@@ -18124,36 +18124,21 @@ ${token}
             bid2Count: bid2Count ? parseInt(bid2Count) : null,
         };
 
-        const doCreate = () => {
-            // startLoop으로 정확한 회차 번호 지정
-            const options = { addCount: 1, startLoop: insertPos, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds: [], memberData: [], totalSessions: 1, teacherId };
-            google.script.run
-                .withSuccessHandler(r => {
-                    if (r.success) {
-                        showStatus(laterItems.length > 0 ? '회차 추가 및 번호 재조정 완료' : r.message, 'success');
-                        editD1NewRowMode_ = false; editD1FocusedId_ = null;
-                        document.getElementById('editD1BatchModal').classList.add('content-hidden');
-                        reloadClassD1Grid(selectedClassId);
-                    } else showStatus(r.message, 'error');
-                })
-                .withFailureHandler(e => showStatus(e.message, 'error'))
-                .generateClassD1(selectedClassId, startDate, 1, options);
-        };
-
-        if (laterItems.length === 0) {
-            doCreate();
-        } else {
-            // 순차 처리: 높은 번호부터 +1 → 충돌 없이 공간 확보 후 생성
-            function doRenumber(idx) {
-                if (idx >= laterItems.length) { doCreate(); return; }
-                const d = laterItems[idx];
-                google.script.run
-                    .withSuccessHandler(() => doRenumber(idx + 1))
-                    .withFailureHandler(e => showStatus(e.message, 'error'))
-                    .updateClassD1Batch([d.class_d1_id], { class_loop: (parseInt(d.class_loop)||0) + 1 });
-            }
-            doRenumber(0);
-        }
+        // 회차 1개 생성 → 백엔드(generateClassD1 → rebuildClassD1BatchOrder_)가
+        //   날짜순 자동 재정렬 + 회원 출석(no_N) 시프트 + 새 회차 출석 채움 + 마스터 동기화까지 처리
+        //   (프론트 수동 번호 재조정 불필요 — 회원 출석이 어긋나던 버그 제거)
+        const options = { addCount: 1, timeFrom, timeTo, ...bidOpts, batchTimestamp, memberIds: [], memberData: [], totalSessions: 1, teacherId };
+        google.script.run
+            .withSuccessHandler(r => {
+                if (r.success) {
+                    showStatus(laterItems.length > 0 ? '회차 추가 및 번호 재조정 완료' : (r.message || '회차 추가 완료'), 'success');
+                    editD1NewRowMode_ = false; editD1FocusedId_ = null;
+                    document.getElementById('editD1BatchModal').classList.add('content-hidden');
+                    reloadClassD1Grid(selectedClassId);
+                } else showStatus(r.message, 'error');
+            })
+            .withFailureHandler(e => showStatus(e.message, 'error'))
+            .generateClassD1(selectedClassId, startDate, 1, options);
     }
 
     // ─── editD1 모달 분할선 드래그 (1회 초기화) ──────────────────────
