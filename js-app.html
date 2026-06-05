@@ -15203,6 +15203,125 @@ ${token}
         loadD1SummaryGrid();
     }
 
+    // ── 단일 회원 출석 계산 (renderD1SummaryGrid 의 renderRow_ 와 동일 규칙) ──
+    //    부분 갱신(updateMemberAttendRow_)과 전체 렌더가 같은 결과를 내도록 공유 로직.
+    function computeMemberAttend_(m, d1List, todayStr, classTotalLoop_) {
+        let used = 0, lastPastO = -1;
+        const futureSlots = [];
+        const isInactive = ['종료','홀딩'].indexOf(String(m.member_status||'').trim()) >= 0;
+        for (let i = 0; i < d1List.length; i++) {
+            if (String(d1List[i].holiday || '') === 'Y') continue; // 휴강 제외
+            const loop = Number(d1List[i].class_loop);
+            const val = String(m['no_' + loop] || '').trim().toUpperCase();
+            const raw = String(d1List[i].class_date || '').replace(/-/g, '');
+            const isPast = raw !== '' && raw <= todayStr;
+            if (isPast) {
+                if (val === 'O' || val === 'R') used++;
+                if (val === 'O') lastPastO = loop;
+            } else {
+                futureSlots.push({ loop: loop, val: val });
+            }
+        }
+        const rawContract = (m.contract_loop !== undefined && m.contract_loop !== '' && m.contract_loop !== null)
+            ? parseInt(m.contract_loop, 10) : NaN;
+        const contract = !isNaN(rawContract) ? rawContract : (classTotalLoop_ || 0);
+        const remaining = Math.max(0, contract - used);
+        const visO = new Set(), visX = new Set();
+        let lastO = -1, placedO = 0;
+        if (!isInactive && remaining > 0) {
+            let intents = 0;
+            for (let k = 0; k < futureSlots.length && intents < remaining; k++) {
+                if (futureSlots[k].val === 'X') { visX.add(futureSlots[k].loop); }
+                else { visO.add(futureSlots[k].loop); lastO = futureSlots[k].loop; placedO++; }
+                intents++;
+            }
+        }
+        const carry = isInactive ? 0 : Math.max(0, remaining - placedO);
+        const black = (remaining - placedO === 0) && placedO > 0;
+        const isEnded = String(m.member_status || '').trim() === '종료';
+        return { used, remaining, carry, contract, isInactive, isEnded, visO, visX, lastO, black, lastPastO };
+    }
+
+    // 단일 셀(회차) 표시값 — renderRow_ 의 셀 분기와 동일
+    function attendCellDisplay_(calc, loopNo, val, isPast, isHoliday) {
+        if (calc.isInactive && !isPast) return { display:'·', colorClass:'text-gray-200 text-[10px]', cellBg:'' };
+        if (isHoliday) return { display:'✕', colorClass:'text-gray-900 font-bold text-[13px]', cellBg:'bg-gray-300' };
+        if (isPast) {
+            if (val === 'X') return { display:'✕', colorClass:'text-red-500 font-semibold', cellBg:'bg-red-50' };
+            if (val === 'R') return { display:'●', colorClass:'text-red-600 text-[15px]', cellBg:'' };
+            if (val === 'O') {
+                let color = 'text-green-500';
+                if (Number(loopNo) === calc.lastPastO) {
+                    if (calc.isEnded) color = 'text-red-600';
+                    else if (calc.remaining === 0) color = 'text-gray-900';
+                }
+                return { display:'●', colorClass: color + ' text-[15px]', cellBg:'' };
+            }
+            return { display:'·', colorClass:'text-gray-300 text-[10px]', cellBg:'' };
+        }
+        // 미래
+        if (calc.visX.has(loopNo)) return { display:'✕', colorClass:'text-gray-400 text-[12px]', cellBg:'' };
+        if (calc.visO.has(loopNo)) {
+            if (val === 'R') return { display:'●', colorClass:'text-red-600 text-[15px]', cellBg:'' };
+            const isLast = (loopNo === calc.lastO);
+            return { display:'●', colorClass: (isLast && calc.black) ? 'text-gray-900 text-[15px]' : 'text-gray-300 text-[15px]', cellBg:'' };
+        }
+        return { display:'·', colorClass:'text-gray-200 text-[10px]', cellBg:'' };
+    }
+
+    function _remColor_(remaining) {
+        return remaining <= 2 ? 'text-red-600 font-bold' : remaining <= 5 ? 'text-amber-600 font-semibold' : 'text-gray-700';
+    }
+
+    // 부분 갱신: 클릭한 회원 행의 출석 셀 + 수업/남은/이월 카운트만 DOM 업데이트
+    //   → 전체 표 재렌더(innerHTML 재생성)로 인한 덜컥거림/깜빡임 제거
+    function updateMemberAttendRow_(memberId) {
+        const tbody = document.getElementById('d1SummaryTbody');
+        if (!tbody) return false;
+        const m = (summaryMemberData_ || []).find(function(x){ return String(x.member_id) === String(memberId); });
+        if (!m) return false;
+        const sel = String(memberId).replace(/["\\]/g, '\\$&');
+        const row = tbody.querySelector('tr[data-summary-row="' + sel + '"]');
+        if (!row) return false;
+
+        const todayStr = (function(){ const n=new Date(); return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0'); })();
+        const currentBatchKey = getCurrentBatchKey_();
+        const d1List = (allClassD1Data || [])
+            .filter(function(d){ return currentBatchKey ? getD1BatchKey_(String(d.class_d1_id)) === currentBatchKey : String(d.class_id) === String(selectedClassId); })
+            .slice().sort(function(a,b){ return Number(a.class_loop) - Number(b.class_loop); });
+        const clsForLoop = (allClassesData || []).find(function(c){ return String(c.class_id) === String(selectedClassId); }) || {};
+        const classTotalLoop_ = parseInt(clsForLoop.class_loop, 10) || d1List.length || 0;
+
+        const calc = computeMemberAttend_(m, d1List, todayStr, classTotalLoop_);
+
+        // 출석 셀 갱신 (span 텍스트 + 색상, 과거 X 배경)
+        for (let i = 0; i < d1List.length; i++) {
+            const loopNo = Number(d1List[i].class_loop);
+            const raw = String(d1List[i].class_date || '').replace(/-/g,'');
+            const isPast = raw !== '' && raw <= todayStr;
+            const isHoliday = String(d1List[i].holiday || '') === 'Y';
+            const val = String(m['no_' + loopNo] || '').trim().toUpperCase();
+            const disp = attendCellDisplay_(calc, loopNo, val, isPast, isHoliday);
+            const td = row.querySelector('td[data-attend-cell="' + sel + '|' + loopNo + '"]');
+            if (!td) continue;
+            const span = td.querySelector('span');
+            if (span) { span.textContent = disp.display; span.className = disp.colorClass; }
+            if (!d1AttendEditMode_) {
+                td.classList.remove('bg-red-50','bg-gray-300');
+                if (disp.cellBg) td.classList.add(disp.cellBg);
+            }
+        }
+
+        // 카운트 갱신 (값+색은 내부 span 으로)
+        const usedSpan = row.querySelector('[data-mcol="used"]');
+        if (usedSpan) usedSpan.textContent = calc.used;
+        const remSpan = row.querySelector('[data-mcol="rem"]');
+        if (remSpan) { remSpan.textContent = calc.remaining; remSpan.className = _remColor_(calc.remaining); }
+        const carrySpan = row.querySelector('[data-mcol="carry"]');
+        if (carrySpan) { carrySpan.textContent = calc.carry > 0 ? calc.carry : '-'; carrySpan.className = calc.carry > 0 ? 'text-orange-600' : 'text-gray-300'; }
+        return true;
+    }
+
     function renderD1SummaryGrid(members) {
         const thead = document.getElementById('d1SummaryThead');
         const tbody = document.getElementById('d1SummaryTbody');
@@ -15701,9 +15820,9 @@ ${token}
                 <td class="px-2 py-1 text-center text-gray-500 text-xs group-hover:bg-indigo-100 ${lastTdCls}">${escapeHtml(m.phone || '-')}</td>
                 <td class="px-1 py-1 text-center group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation()">${statusSel}</td>
                 <td class="px-1 py-1 text-center text-xs font-semibold ${contractColor} group-hover:bg-indigo-100 ${lastTdCls}" onclick="event.stopPropagation(); editContractLoop_('${memIdEsc}')" title="계약회차 클릭하여 수정">${contract || '-'}</td>
-                <td class="px-1 py-1 text-center text-xs font-semibold text-emerald-700 group-hover:bg-indigo-100 ${lastTdCls}">${used}</td>
-                <td class="px-1 py-1 text-center text-xs font-bold ${remColor} group-hover:bg-indigo-100 ${lastTdCls}" title="계약회차 − 수업회차">${remaining}</td>
-                <td class="px-1 py-1 text-center text-xs font-bold ${_carryOver_ > 0 ? 'text-orange-600' : 'text-gray-300'} group-hover:bg-indigo-100 ${lastTdCls}" title="이번 배치에서 못 채운 잔여 (다음 배치로 이월)">${_carryOver_ > 0 ? _carryOver_ : '-'}</td>
+                <td class="px-1 py-1 text-center text-xs font-semibold text-emerald-700 group-hover:bg-indigo-100 ${lastTdCls}"><span data-mcol="used">${used}</span></td>
+                <td class="px-1 py-1 text-center text-xs font-bold group-hover:bg-indigo-100 ${lastTdCls}" title="계약회차 − 수업회차"><span data-mcol="rem" class="${remColor}">${remaining}</span></td>
+                <td class="px-1 py-1 text-center text-xs font-bold group-hover:bg-indigo-100 ${lastTdCls}" title="이번 배치에서 못 채운 잔여 (다음 배치로 이월)"><span data-mcol="carry" class="${_carryOver_ > 0 ? 'text-orange-600' : 'text-gray-300'}">${_carryOver_ > 0 ? _carryOver_ : '-'}</span></td>
                 ${sessionCells}
             </tr>`;
         }; // end renderRow_
@@ -16547,20 +16666,21 @@ ${token}
         }
 
         // [OPTIMISTIC] 즉시 화면 반영 + 백그라운드 저장
-        renderD1SummaryGrid(summaryMemberData_);
+        //   부분 갱신(클릭 회원 행만) → 전체 표 재렌더로 인한 덜컥거림 제거. 실패 시 폴백 전체렌더.
+        if (!updateMemberAttendRow_(memberId)) renderD1SummaryGrid(summaryMemberData_);
         google.script.run
             .withSuccessHandler(function(r) {
                 if (r && r.success) {
                     showStatus('출석 저장 완료', 'success');
                 } else {
                     Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
-                    renderD1SummaryGrid(summaryMemberData_);
+                    if (!updateMemberAttendRow_(memberId)) renderD1SummaryGrid(summaryMemberData_);
                     showStatus((r && r.message) || '저장 실패', 'error');
                 }
             })
             .withFailureHandler(function(e) {
                 Object.keys(oldVals).forEach(k => { m[k] = oldVals[k]; });
-                renderD1SummaryGrid(summaryMemberData_);
+                if (!updateMemberAttendRow_(memberId)) renderD1SummaryGrid(summaryMemberData_);
                 showStatus(e.message || '저장 실패', 'error');
             })
             .saveMemberClassDetail(currentBatchKey, memberId, updates);
@@ -16578,7 +16698,7 @@ ${token}
                 if (r && r.success) {
                     const m = summaryMemberData_.find(function(x){ return String(x.member_id) === String(memberId); });
                     if (m) m[fieldKey] = saveVal;
-                    renderD1SummaryGrid(summaryMemberData_);
+                    if (!updateMemberAttendRow_(memberId)) renderD1SummaryGrid(summaryMemberData_);
                     showStatus('출석 저장 완료', 'success');
                 } else {
                     showStatus((r && r.message) || '저장 실패', 'error');
