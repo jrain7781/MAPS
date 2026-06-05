@@ -545,13 +545,24 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
     }
   }
 
-  // [추가] 회원변경(회원명 변경) 시: bid_state + bid_datetime_2 초기화 (기존 chuchen 리셋 로직과 별개로 추가)
-  //   - 상태(stu_member)만 바뀐 경우는 제외, 회원명이 실제로 바뀐 경우에만 적용
+  // [추가] 회원변경(회원명 변경) 시: bid_state + class_d1_id + bid_datetime_2 초기화
+  //   - 회원이 바뀌면 회차 연결(class_d1_id)까지 끊고 입찰상태도 리셋
   //   - bidState 변수까지 비워 히스토리/텔레그램(전달완료 자동발송) 판정에도 반영
+  //   - chuchen_state/date(Q/R)는 위 shouldResetChuchen 분기에서 이미 클리어됨
   if (mNameChanged) {
     bidState = '';
     newRowValues[11] = ''; // L: bid_state
+    newRowValues[18] = ''; // S: class_d1_id
     newRowValues[19] = ''; // T: bid_datetime_2
+  }
+
+  // [추가] 추천/입찰 → 미정 전환 시: bid_state 초기화 (class_d1_id 는 보존)
+  const _toUndeterminedFromRecOrBid =
+    (newStuMemberVal === '미정') &&
+    (oldValues.stu_member === '추천' || oldValues.stu_member === '입찰');
+  if (_toUndeterminedFromRecOrBid) {
+    bidState = '';
+    newRowValues[11] = ''; // L: bid_state
   }
 
   // [추가] items_youngdo (U열) — 클라이언트에서 값을 넘긴 경우에만 갱신, 아니면 기존값 유지
@@ -576,6 +587,15 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
 
   // [BATCH] 일괄 저장 (setValue 10여 회 -> setValues 1회로 단축)
   range.setValues([newRowValues]);
+
+  // [추가] chuchen 끊김(회원변경 or 추천이탈/상태변경) 시 추천 읽음표시 초기화
+  //   - chuchen_read(X=24)/chuchen_read_date(Y=25)는 ITEM_HEADERS(A~W) 밖이라 별도 셀 기록
+  //   - 중복체크 early-return 이후, 저장 확정(setValues) 뒤에 기록 → 부분 손상 방지
+  if (shouldResetChuchen || isFromRecommendToOther) {
+    if (sheet.getMaxColumns() >= 25) {
+      sheet.getRange(realRowIndex, 24, 1, 2).setValues([['', '']]); // X: chuchen_read, Y: chuchen_read_date
+    }
+  }
 
   // [PHASE 1-4] 변경 감지 및 히스토리 기록 (배치 처리)
   const updateBatchTs = String(new Date().getTime());
