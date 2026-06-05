@@ -15304,10 +15304,10 @@ ${token}
         // [패딩] class.class_loop만큼 회차 컬럼 채움 (실제 회차가 부족할 때 빈칸 표시)
         const _padCount_ = Math.max(0, classTotalLoop_ - N);
         for (let i = 0; i < _padCount_; i++) {
-            const loopLabel = N + i + 1;
+            // 패딩 칸: 틀(빈 회차 자리)만 표시, 회차 제목 제거 (사용자 요청)
             sessionColHeaders += `<th class="d1-sess-th px-1 py-1 text-center bg-gray-50 border-l border-gray-200" style="min-width:${sessionColWidth_}px;width:${sessionColWidth_}px;max-width:${sessionColWidth_}px">
-                <div class="text-[11px] text-gray-400">${loopLabel}회</div>
-                <div class="text-[9px] text-gray-300">-</div>
+                <div class="text-[11px] text-gray-300">&nbsp;</div>
+                <div class="text-[9px] text-gray-300">&nbsp;</div>
             </th>`;
         }
         // 연도 행에 패딩용 빈 colspan 추가
@@ -15355,18 +15355,18 @@ ${token}
         const memberCarryMap_ = {};
         filtered.forEach(function(m) {
             let used = 0;
-            let futureO = 0;
+            let availFuture = 0; // 미래 슬롯 수 (과거/오늘 아님 · 휴강 아님 · X 아님) — 날짜 미정 포함
+            const isInactive_ = ['종료','홀딩'].indexOf(String(m.member_status||'').trim()) >= 0;
             for (let i = 0; i < d1List.length; i++) {
                 if (String(d1List[i].holiday || '') === 'Y') continue; // 휴강 제외
                 const val = String(m['no_' + d1List[i].class_loop] || '').trim().toUpperCase();
                 const raw = String(d1List[i].class_date || '').replace(/-/g, '');
                 const isPastIncludingToday = raw !== '' && raw <= todayStr;
-                const isStrictFuture = raw !== '' && raw > todayStr;
                 if (isPastIncludingToday) {
                     if (val === 'O' || val === 'R') used++;
-                }
-                if (isStrictFuture) {
-                    if (val === 'O' || val === 'R') futureO++;
+                } else {
+                    // 미래/미정 슬롯 (날짜 없음 또는 날짜>오늘), 미래 결석(X) 제외
+                    if (val !== 'X') availFuture++;
                 }
             }
             memberUsedMap_[String(m.member_id)] = used;
@@ -15377,7 +15377,9 @@ ${token}
             const rem = Math.max(0, contract - used);
             memberContractMap_[String(m.member_id)] = contract;
             memberRemainingMap_[String(m.member_id)] = rem;
-            memberCarryMap_[String(m.member_id)] = Math.max(0, rem - futureO);
+            // [이월 = 남은회차 기반] 미래 ●는 남은회차만큼 배치 → 이월 = 남은회차 − 실제 배치(가능 슬롯 한도)
+            const placed_ = isInactive_ ? 0 : Math.min(rem, availFuture);
+            memberCarryMap_[String(m.member_id)] = isInactive_ ? 0 : Math.max(0, rem - placed_);
         });
 
         // 수업 정보 툴팁 (수업구분 - 수업명 [등급] (지역))
@@ -15552,30 +15554,32 @@ ${token}
             }
             const _isEnded_ = String(m.member_status || '').trim() === '종료';
             const _isInactiveMember_ = ['종료','홀딩'].indexOf(String(m.member_status||'').trim()) >= 0;
-            // 검정 = 계약이 이번 배치에서 정확히 끝남 (carry=0). carry>0 시 마지막 ●도 회색.
-            const _futureLastIsBlack_ = (remaining === _futureOCount_) && _futureOCount_ > 0;
-            // 이월회차: 비활성(종료/홀딩) 회원은 항상 0, 그 외엔 남은 - 미래O
-            const _carryOver_ = _isInactiveMember_ ? 0 : Math.max(0, remaining - _futureOCount_);
-            // 미래 ● 시각 정규화: 'O'/'R' 데이터 개수만큼을 가장 빠른 미래 슬롯(휴강·X 제외)에 배치
-            // → 데이터에 ●가 뒤에 몰려있어도 화면엔 가장 빠른 빈 셀부터 ● 표시
+            // [미래 심블 = 남은회차 기반] (사용자 규칙)
+            //   미래 ●는 날짜 유무와 무관하게 "남은회차(remaining)" 개수만큼,
+            //   가장 빠른 미래 슬롯(과거/오늘 아님 · 휴강 아님 · X 아님)부터 배치한다.
+            //     - 미래 슬롯 = 날짜 미정(빈값) 또는 날짜 > 오늘  → 날짜 없는 PT 회차도 ● 표시
+            //     - 마지막으로 배치된 ●는 검정(계약 마지막 회차), 단 remaining 을 전부 배치했을 때만
+            //     - 이월회차 = 남은회차 − 실제 배치된 ● (슬롯 부족분), 비활성 회원은 0
             const _visibleFutureOSet_ = new Set();
             let _visibleFutureLastLoop_ = -1;
-            {
-                let placed = 0;
-                const targetCount = _futureOCount_;
-                for (let _i = 0; _i < d1List.length && placed < targetCount; _i++) {
+            let _placedFutureO_ = 0;
+            if (!_isInactiveMember_ && remaining > 0) {
+                for (let _i = 0; _i < d1List.length && _placedFutureO_ < remaining; _i++) {
                     const _d = d1List[_i];
-                    const _raw = String(_d.class_date || '').replace(/-/g, '');
-                    const _isFut = _raw !== '' && _raw > todayStr;
-                    if (!_isFut) continue;
                     if (String(_d.holiday || '') === 'Y') continue;
+                    const _raw = String(_d.class_date || '').replace(/-/g, '');
+                    const _isPastSlot = _raw !== '' && _raw <= todayStr; // 과거/오늘(=수업회차)은 미래 슬롯 아님
+                    if (_isPastSlot) continue;
                     const _v = String(m['no_' + _d.class_loop] || '').trim().toUpperCase();
-                    if (_v === 'X') continue; // X 위치는 그대로 유지
+                    if (_v === 'X') continue; // 미래 결석(X)은 ● 배치에서 제외
                     _visibleFutureOSet_.add(Number(_d.class_loop));
                     _visibleFutureLastLoop_ = Number(_d.class_loop);
-                    placed++;
+                    _placedFutureO_++;
                 }
             }
+            // 검정 = remaining 을 이번 배치 안에서 전부 소화 (carry=0)
+            const _futureLastIsBlack_ = (_placedFutureO_ === remaining) && remaining > 0;
+            const _carryOver_ = _isInactiveMember_ ? 0 : Math.max(0, remaining - _placedFutureO_);
             let sessionCells = '';
             for (let i = 0; i < d1List.length; i++) {
                 const loopNo = Number(d1List[i].class_loop);
