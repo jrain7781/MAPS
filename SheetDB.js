@@ -2496,8 +2496,11 @@ function generateClassD1(classId, startDate, loopUnit, options) {
   var currentDate = new Date(year, month, day);
 
   var tz        = Session.getScriptTimeZone();
-  // class_d1_id 배치키: 생성 시각 ms 타임스탬프 (날짜 변경에도 유니크 보장)
-  var timestamp = batchTimestamp || String(new Date().getTime());
+  // class_d1_id 배치 prefix
+  //  - 추가 모드: batchTimestamp = 기존 배치키(이미 classId 포함, 예 "5004_1777..." 또는 "CLS_..._...")
+  //    → 그대로 prefix 로 사용해야 같은 배치로 편입됨 (classId 중복 prepend 금지)
+  //  - 신규 모드: classId_<생성 ms 타임스탬프>
+  var batchPrefix = batchTimestamp ? String(batchTimestamp) : (classId + '_' + String(new Date().getTime()));
   var regDate   = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
   var weekNames = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -2541,7 +2544,7 @@ function generateClassD1(classId, startDate, loopUnit, options) {
     var hasDate = !isNoDateMode || isFirst;
     var dateStr = hasDate ? Utilities.formatDate(currentDate, Session.getScriptTimeZone(), 'yyyyMMdd') : '';
     var weekDay = hasDate ? weekNames[currentDate.getDay()] : '';
-    var d1Id    = classId + '_' + timestamp + '_' + loopNo;
+    var d1Id    = batchPrefix + '_' + loopNo;
 
     var row = CLASS_D1_HEADERS.map(function(h) {
       switch (h) {
