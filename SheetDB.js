@@ -545,6 +545,15 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
     }
   }
 
+  // [추가] 회원변경(회원명 변경) 시: bid_state + bid_datetime_2 초기화 (기존 chuchen 리셋 로직과 별개로 추가)
+  //   - 상태(stu_member)만 바뀐 경우는 제외, 회원명이 실제로 바뀐 경우에만 적용
+  //   - bidState 변수까지 비워 히스토리/텔레그램(전달완료 자동발송) 판정에도 반영
+  if (mNameChanged) {
+    bidState = '';
+    newRowValues[11] = ''; // L: bid_state
+    newRowValues[19] = ''; // T: bid_datetime_2
+  }
+
   // [추가] items_youngdo (U열) — 클라이언트에서 값을 넘긴 경우에만 갱신, 아니면 기존값 유지
   if (typeof itemsYongdo !== 'undefined' && itemsYongdo !== null) {
     newRowValues[20] = String(itemsYongdo).trim();
