@@ -15322,6 +15322,45 @@ ${token}
         return true;
     }
 
+    // 부분 갱신(셀 1개): 출석 변경 모드에서 클릭한 셀만 갱신 → 전체 재렌더 제거
+    function updateMemberAttendCell_(memberId, loopNo) {
+        const tbody = document.getElementById('d1SummaryTbody');
+        if (!tbody) return false;
+        const m = (summaryMemberData_ || []).find(function(x){ return String(x.member_id) === String(memberId); });
+        if (!m) return false;
+        const sel = String(memberId).replace(/["\\]/g, '\\$&');
+        const td = tbody.querySelector('td[data-attend-cell="' + sel + '|' + loopNo + '"]');
+        if (!td) return false;
+
+        const todayStr = (function(){ const n=new Date(); return ''+n.getFullYear()+String(n.getMonth()+1).padStart(2,'0')+String(n.getDate()).padStart(2,'0'); })();
+        const currentBatchKey = getCurrentBatchKey_();
+        const d1List = (allClassD1Data || [])
+            .filter(function(d){ return currentBatchKey ? getD1BatchKey_(String(d.class_d1_id)) === currentBatchKey : String(d.class_id) === String(selectedClassId); })
+            .slice().sort(function(a,b){ return Number(a.class_loop) - Number(b.class_loop); });
+        const d1Item = d1List.find(function(d){ return Number(d.class_loop) === Number(loopNo); });
+        if (!d1Item) return false;
+        const clsForLoop = (allClassesData || []).find(function(c){ return String(c.class_id) === String(selectedClassId); }) || {};
+        const classTotalLoop_ = parseInt(clsForLoop.class_loop, 10) || d1List.length || 0;
+
+        const calc = computeMemberAttend_(m, d1List, todayStr, classTotalLoop_);
+        const raw = String(d1Item.class_date || '').replace(/-/g,'');
+        const isPast = raw !== '' && raw <= todayStr;
+        const isHoliday = String(d1Item.holiday || '') === 'Y';
+        const key = String(memberId) + '|' + loopNo;
+        const hasPending = d1AttendEditMode_ && d1AttendPending_[key] !== undefined;
+        const val = hasPending ? String(d1AttendPending_[key]).toUpperCase() : String(m['no_'+loopNo]||'').trim().toUpperCase();
+        const disp = attendCellDisplay_(calc, Number(loopNo), val, isPast, isHoliday);
+
+        const span = td.querySelector('span');
+        if (span) { span.textContent = disp.display; span.className = disp.colorClass; }
+        td.classList.remove('bg-yellow-100','bg-red-50','bg-gray-300','bg-indigo-100');
+        const isSelected = String(selectedSummaryMemberId_) === String(memberId);
+        if (hasPending) td.classList.add('bg-yellow-100');
+        else if (isSelected) td.classList.add('bg-indigo-100');
+        else if (disp.cellBg) td.classList.add(disp.cellBg);
+        return true;
+    }
+
     function renderD1SummaryGrid(members) {
         const thead = document.getElementById('d1SummaryThead');
         const tbody = document.getElementById('d1SummaryTbody');
@@ -16219,8 +16258,8 @@ ${token}
         // X→O, 그 외(O, '')→X 토글 (1클릭으로 X 전환)
         const newVal = curVal === 'X' ? 'O' : 'X';
         d1AttendPending_[key] = newVal;
-        renderD1MemberSummaryBar_(summaryMemberData_, getD1StatusList_());
-        renderD1SummaryGrid(summaryMemberData_);
+        // 부분 갱신: 클릭한 셀 1개만 (요약바는 출석과 무관해 갱신 불필요) → 덜컥거림 제거
+        if (!updateMemberAttendCell_(memberId, loopNo)) renderD1SummaryGrid(summaryMemberData_);
     }
 
     function applyD1AttendChanges_() {
