@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PT 통합 현황 — 다크 프리미엄</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root{ --bg0:#0a0e16; --bg1:#0e131e; --gold-a:#f7e3a1; --gold-b:#d4af37; }
+  *{ font-family:'Pretendard','Pretendard Variable',system-ui,sans-serif; }
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(212,175,55,.10), transparent 55%),
+      radial-gradient(900px 500px at 0% 0%, rgba(99,102,241,.08), transparent 50%),
+      linear-gradient(180deg,var(--bg0),var(--bg1));
+    background-attachment:fixed; color:#e6edf3; -webkit-font-smoothing:antialiased;
+  }
+  .surface{
+    background:linear-gradient(180deg, rgba(28,35,48,.85), rgba(18,24,34,.92));
+    border:1px solid rgba(255,255,255,.07); border-radius:16px;
+    box-shadow:0 10px 30px -12px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04);
+    backdrop-filter:blur(6px);
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .surface.hov:hover{ transform:translateY(-2px); border-color:rgba(212,175,55,.28); box-shadow:0 18px 40px -14px rgba(0,0,0,.8), 0 0 0 1px rgba(212,175,55,.12); }
+  .accent-top{ position:relative; overflow:hidden; }
+  .accent-top::before{ content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent, var(--c,#d4af37), transparent); opacity:.85; }
+  .num-gold{ background:linear-gradient(135deg,var(--gold-a),var(--gold-b)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .glow-gold{ box-shadow:0 0 24px -6px rgba(212,175,55,.45); }
+  ::-webkit-scrollbar{height:10px;width:10px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(212,175,55,.4);background-clip:padding-box}
+  table tbody tr{ transition:background .12s ease; cursor:pointer; }
+  .chip{ font-size:11px; padding:2px 8px; border-radius:9999px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+  .tab{ padding:6px 16px; border-radius:10px; font-size:13px; font-weight:600; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.04); color:#cbd5e1; cursor:pointer; transition:all .15s; }
+  .tab.on{ border-color:rgba(212,175,55,.5); color:#1a1305; background:linear-gradient(135deg,#f7e3a1,#d4af37); }
+</style>
+</head>
+<body class="text-slate-100">
+
+<!-- ===== 헤더 ===== -->
+<header class="sticky top-0 z-20 border-b border-white/10 backdrop-blur-xl bg-[#0b0f18]/80">
+  <div class="max-w-[1560px] mx-auto px-6 py-3.5 flex items-center gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl grid place-items-center glow-gold" style="background:linear-gradient(135deg,#f7e3a1,#c89b3c)">
+        <span class="text-[#1a1305] font-black text-lg">P</span>
+      </div>
+      <div>
+        <div class="text-[15px] font-bold tracking-tight leading-none">PT 통합 현황 <span class="num-gold font-extrabold">PREMIUM</span></div>
+        <div class="text-[11px] text-slate-400 mt-1">재등록 · 휴면/미예약 · <b class="text-amber-300">보장 진행</b> · 돈클 추천 큐</div>
+      </div>
+    </div>
+    <div class="ml-auto text-right">
+      <div class="text-[11px] text-slate-500">기준일</div>
+      <div class="text-xs font-semibold text-slate-300">2026-06-05 <span class="text-slate-500">(금)</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1560px] mx-auto px-6 py-6 space-y-6">
+
+  <!-- ① 요약 지표 -->
+  <section class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+    <div class="surface hov accent-top p-4" style="--c:#9aa4b2">
+      <div class="text-[11px] text-slate-400 font-medium">전체 회원</div>
+      <div class="mt-1 text-[28px] font-extrabold leading-none" id="smTotal">–<span class="text-sm text-slate-500 font-bold ml-0.5">명</span></div>
+      <div class="text-[10px] text-slate-500 mt-1.5" id="smTotalSub">&nbsp;</div>
+    </div>
+    <div class="surface hov accent-top p-4" style="--c:#a78bfa">
+      <div class="text-[11px] text-slate-400 font-medium">총 잔여회차</div>
+      <div class="mt-1 text-[28px] font-extrabold leading-none text-violet-300" id="smRemain">–<span class="text-sm text-slate-500 font-bold ml-0.5">회</span></div>
+      <div class="text-[10px] text-slate-600 mt-1.5">PT·CLASS</div>
+    </div>
+    <div class="surface hov accent-top p-4" style="--c:#60a5fa">
+      <div class="text-[11px] text-slate-400 font-medium">예약된 수업</div>
+      <div class="mt-1 text-[28px] font-extrabold leading-none text-sky-300" id="smWeek">–<span class="text-sm text-slate-500 font-bold ml-0.5">건</span></div>
+      <div class="text-[10px] text-slate-600 mt-1.5">&nbsp;</div>
+    </div>
+    <div class="surface hov accent-top p-4 glow-gold" style="--c:#f87171">
+      <div class="text-[11px] text-slate-400 font-medium flex items-center gap-1">🎯 종료 대상</div>
+      <div class="mt-1 text-[28px] font-extrabold leading-none text-red-400" id="smEnd">–<span class="text-sm text-slate-500 font-bold ml-0.5">명</span></div>
+      <div class="text-[10px] text-slate-500 mt-1.5">보장달성+최소회차</div>
+    </div>
+    <div class="surface hov accent-top p-4" style="--c:#34d399">
+      <div class="text-[11px] text-slate-400 font-medium">보장달성·최소진행</div>
+      <div class="mt-1 text-[28px] font-extrabold leading-none text-emerald-300" id="smMinProg">–<span class="text-sm text-slate-500 font-bold ml-0.5">명</span></div>
+      <div class="text-[10px] text-slate-500 mt-1.5">최소회차 남음</div>
+    </div>
+    <div class="surface hov accent-top p-4" style="--c:#2dd4bf">
+      <div class="text-[11px] text-slate-400 font-medium">보장 임박</div>
+      <div class="mt-1 text-[28px] font-extrabold leading-none text-teal-300" id="smNear">–<span class="text-sm text-slate-500 font-bold ml-0.5">명</span></div>
+      <div class="text-[10px] text-slate-600 mt-1.5">&nbsp;</div>
+    </div>
+    <div class="surface hov accent-top p-4" style="--c:#fbbf24">
+      <div class="text-[11px] text-slate-400 font-medium">관리 필요</div>
+      <div class="mt-1 text-[28px] font-extrabold leading-none num-gold" id="smManage">–<span class="text-sm text-slate-500 font-bold ml-0.5">명</span></div>
+      <div class="text-[10px] text-slate-500 mt-1.5" id="smManageSub">&nbsp;</div>
+    </div>
+  </section>
+
+  <!-- ② 액션 알림 -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="surface overflow-hidden ring-1 ring-red-500/25">
+      <div class="px-4 py-3 flex items-center gap-2 border-b border-white/8 bg-red-500/10"><span class="text-red-300 font-bold text-sm">🎯 보장 달성 — 종료/처리 대상</span></div>
+      <div class="divide-y divide-white/5 text-xs" id="alertEnd"></div>
+    </div>
+    <div class="surface overflow-hidden ring-1 ring-teal-500/20">
+      <div class="px-4 py-3 border-b border-white/8 bg-teal-500/10"><span class="text-teal-300 font-bold text-sm">⏳ 보장 임박</span></div>
+      <div class="divide-y divide-white/5 text-xs" id="alertNear"></div>
+    </div>
+    <div class="surface overflow-hidden ring-1 ring-amber-500/20">
+      <div class="px-4 py-3 border-b border-white/8 bg-amber-500/10"><span class="text-amber-300 font-bold text-sm">🔴 재등록 · 🟡 미예약 · ⚫ 휴면</span></div>
+      <div class="divide-y divide-white/5 text-xs" id="alertManage"></div>
+    </div>
+  </section>
+
+  <!-- ③ 돈클 물건추천 큐 -->
+  <section class="surface overflow-hidden ring-1 ring-amber-500/20">
+    <div class="px-4 py-3 border-b border-white/8 bg-amber-500/[0.07] flex items-center gap-3 flex-wrap">
+      <span class="font-bold text-sm num-gold">💎 돈클 물건추천 큐</span>
+      <span class="text-[11px] text-slate-400">수업 없이 물건추천+보장으로 진행 · 추천 주기마다 자동 정렬</span>
+      <label class="ml-auto flex items-center gap-1.5 text-[11px] text-slate-400">추천 주기
+        <input id="cycleInput" type="number" min="1" value="14" class="w-14 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-xs text-slate-100 text-center focus:outline-none focus:ring-2 focus:ring-amber-500/40"> 일
+      </label>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-xs whitespace-nowrap">
+        <thead class="text-slate-400 bg-white/[0.03]"><tr class="border-b border-white/8">
+          <th class="px-4 py-2 text-left font-semibold">우선순위</th><th class="px-3 py-2 text-left font-semibold">회원</th><th class="px-2 py-2 font-semibold">등급</th><th class="px-2 py-2 font-semibold">구분</th>
+          <th class="px-3 py-2 text-left font-semibold text-amber-300/90">물건추천 보장</th>
+          <th class="px-2 py-2 font-semibold">마지막 추천</th><th class="px-2 py-2 font-semibold">다음 추천</th><th class="px-3 py-2 font-semibold">추천 상태</th>
+        </tr></thead>
+        <tbody id="dkBody" class="divide-y divide-white/5"></tbody>
+      </table>
+    </div>
+    <div id="dkWait" class="px-4 py-2.5 border-t border-white/8 text-[11px] text-slate-400"></div>
+  </section>
+
+  <!-- ④ 분석 그래프 -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="surface p-4">
+      <div class="flex items-center gap-2 mb-1"><span class="w-1.5 h-4 rounded-full" style="background:linear-gradient(180deg,#f7e3a1,#d4af37)"></span><span class="text-sm font-bold text-slate-100">보장형식별 분포</span><span class="text-[10px] text-slate-500 ml-1">· 클릭하면 아래 목록 필터</span></div>
+      <div class="relative h-[230px]"><canvas id="chartType"></canvas></div>
+    </div>
+    <div class="surface p-4">
+      <div class="flex items-center gap-2 mb-1"><span class="w-1.5 h-4 rounded-full" style="background:linear-gradient(180deg,#f7e3a1,#d4af37)"></span><span class="text-sm font-bold text-slate-100">회원 구성 분포</span><span class="text-[10px] text-slate-500 ml-1">· 프리미엄PT·PT·CLASS·돈클, 클릭 시 탭</span></div>
+      <div class="relative h-[230px]"><canvas id="chartGubun"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ⑤ 테이블 -->
+  <section class="surface overflow-hidden">
+    <div class="px-4 pt-3 flex items-center gap-2 flex-wrap" id="gubunTabs">
+      <button data-g="all" class="tab on">전체</button>
+      <button data-g="프리미엄PT" class="tab">프리미엄PT</button>
+      <button data-g="PT" class="tab">PT</button>
+      <button data-g="CLASS" class="tab">CLASS</button>
+      <button data-g="돈클" class="tab">돈클</button>
+    </div>
+    <div class="px-4 py-3 flex items-center gap-2 flex-wrap">
+      <span class="text-sm font-bold text-slate-100">회원 목록</span>
+      <div class="relative ml-2">
+        <input placeholder="회원명 검색" class="pl-3 pr-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs w-36 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/40 transition" oninput="filterRows(this.value)">
+      </div>
+      <div class="flex items-center gap-1.5 ml-1 text-xs" id="fbar">
+        <button data-f="all" class="fb px-2.5 py-1 rounded-lg border border-amber-500/50 text-[#1a1305] font-semibold" style="background:linear-gradient(135deg,#f7e3a1,#d4af37)">전체</button>
+        <button data-f="종료대상" class="fb px-2.5 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-300">종료대상</button>
+        <button data-f="보장임박" class="fb px-2.5 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-300">보장임박</button>
+        <button data-f="재등록" class="fb px-2.5 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-300">재등록</button>
+        <button data-f="미예약" class="fb px-2.5 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-300">미예약</button>
+        <button data-f="휴면" class="fb px-2.5 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-300">휴면</button>
+      </div>
+      <div id="activeFilters" class="flex items-center gap-1.5"></div>
+      <span class="ml-auto text-xs text-slate-500" id="rowcount"></span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-xs whitespace-nowrap">
+        <thead class="text-slate-400 bg-white/[0.03]"><tr class="border-b border-white/8">
+          <th class="px-4 py-2.5 text-left font-semibold">회원</th><th class="px-2 py-2.5 font-semibold">등급</th><th class="px-2 py-2.5 font-semibold">구분</th>
+          <th class="px-3 py-2.5 text-left font-semibold text-amber-300/90 bg-amber-500/[0.06]">보장 진행</th>
+          <th class="px-2 py-2.5 font-semibold">계약</th><th class="px-2 py-2.5 font-semibold">수업</th><th class="px-2 py-2.5 font-semibold">최소</th><th class="px-2 py-2.5 font-semibold">남은</th><th class="px-2 py-2.5 font-semibold">이월</th>
+          <th class="px-2 py-2.5 font-semibold">다음</th><th class="px-2 py-2.5 font-semibold">마지막</th><th class="px-2 py-2.5 font-semibold">상태</th><th class="px-2 py-2.5 font-semibold">알림</th>
+        </tr></thead>
+        <tbody id="tbody" class="divide-y divide-white/5"></tbody>
+      </table>
+    </div>
+    <div class="px-4 py-3 border-t border-white/8 text-[11px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+      <span>🎯 보장 달성 + <b class="text-red-300/90">최소회차 충족</b> = 종료 대상</span>
+      <span class="text-amber-300/80">돈클 = 수업 없음(—) · 다음/마지막 = 물건추천 일정</span>
+      <span class="text-amber-300/80">행 클릭 → 회원 상세</span>
+    </div>
+  </section>
+
+  <p class="text-[11px] text-slate-600 text-center pt-1">※ 목업 (샘플). 구분·종목명·돈클 추천일은 임의 배정값. 추천=히스토리 집계, 낙찰=items, 수익=members 컬럼(원). 보장달성 시 자동종료.</p>
+</main>
+
+<!-- ===== 회원 상세 드로어 ===== -->
+<div id="overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden" onclick="closeDetail()"></div>
+<aside id="drawer" class="fixed top-0 right-0 h-full w-full max-w-[440px] z-50" style="transform:translateX(100%);transition:transform .3s cubic-bezier(.22,.61,.36,1)">
+  <div class="h-full surface !rounded-none border-l border-white/10 overflow-y-auto" id="drawerBody"></div>
+</aside>
+
+<script>
+/* gubun: PT/CLASS/돈클. 돈클은 수업 없음(c/u/r=null) · 물건추천+보장 · recCycle/lastRec로 추천 일정.
+   metrics: bid 낙찰건수, rec 추천건수, profit 수익(원), u 수업회차. g:{type,target} 보장형식. */
+const DATA = [
+  // ---- 프리미엄PT (등급 플래티넘/블랙/실버 · 구분 1:1·2:1 · 보장=수익) ----
+  {name:'박경우', grade:'플래티넘', sub:'1:1', bid:3, rec:5, profit:82000000, c:8,  u:8,  r:0,  carry:0, min:6, next:'-',     last:'06/05', st:'진행중', houses:2, capital:500000000,  note:'공동명의 검토중', g:{type:'수익',target:80000000}},
+  {name:'문가온', grade:'플래티넘', sub:'1:1', bid:0, rec:2, profit:35000000, c:12, u:6,  r:6,  carry:0, min:6, next:'06/08', last:'06/01', st:'진행중', houses:1, capital:500000000,  note:'', g:{type:'수익',target:80000000}},
+  {name:'강현수', grade:'플래티넘', sub:'2:1', bid:2, rec:6, profit:68000000, c:12, u:9,  r:3,  carry:0, min:6, next:'06/10', last:'06/04', st:'진행중', houses:2, capital:900000000,  note:'법인+개인 병행', g:{type:'수익',target:80000000}},
+  {name:'배준서', grade:'블랙',    sub:'1:1', bid:2, rec:1, profit:31000000, c:10, u:2,  r:8,  carry:0, min:6, next:'06/09', last:'06/01', st:'진행중', houses:1, capital:400000000,  note:'', g:{type:'수익',target:30000000}},
+  {name:'김도윤', grade:'블랙',    sub:'2:1', bid:1, rec:0, profit:12000000, c:15, u:4,  r:11, carry:0, min:8, next:'06/06', last:'06/03', st:'진행중', houses:0, capital:600000000,  note:'', g:{type:'수익',target:30000000}},
+  {name:'윤서연', grade:'실버',    sub:'1:1', bid:1, rec:2, profit:8000000,  c:10, u:7,  r:3,  carry:1, min:6, next:'-',     last:'05/29', st:'진행중', houses:0, capital:150000000,  note:'무주택 첫 구매', g:{type:'수익',target:20000000}},
+  {name:'한도경', grade:'실버',    sub:'2:1', bid:2, rec:3, profit:16000000, c:10, u:5,  r:5,  carry:0, min:6, next:'06/07', last:'06/02', st:'진행중', houses:1, capital:350000000,  note:'', g:{type:'수익',target:20000000}},
+  // ---- PT (등급 PT · 구분 1:1·2:1·3:1 · 보장=낙찰 1건) ----
+  {name:'정민호', grade:'PT', sub:'1:1', bid:0, rec:3, profit:0,       c:10, u:9,  r:1, carry:0, min:6, next:'06/06', last:'06/02', st:'진행중', houses:1, capital:300000000, note:'대출한도 확인필요', g:{type:'낙찰',target:1}},
+  {name:'김태현', grade:'PT', sub:'2:1', bid:0, rec:1, profit:0,       c:8,  u:3,  r:5, carry:0, min:6, next:'-',     last:'05/28', st:'진행중', houses:1, capital:250000000, note:'', g:{type:'낙찰',target:1}},
+  {name:'오하늘', grade:'PT', sub:'3:1', bid:0, rec:0, profit:0,       c:8,  u:8,  r:0, carry:0, min:6, next:'-',     last:'05/20', st:'홀딩',  houses:1, capital:300000000, note:'홀딩 사유: 출산', g:{type:'낙찰',target:1}},
+  {name:'노은성', grade:'PT', sub:'1:1', bid:1, rec:1, profit:4000000, c:10, u:10, r:0, carry:0, min:6, next:'-',     last:'04/30', st:'종료',  houses:1, capital:300000000, note:'종료(완료)', g:{type:'낙찰',target:1}},
+  // ---- CLASS (등급 CLASS · 구분=수업 종목명 · 보장=물건추천 또는 수업) ----
+  {name:'이수진', grade:'CLASS', sub:'부산단기경매클럽', bid:0, rec:12, profit:0, c:15, u:9, r:6, carry:2, min:8, next:'-',     last:'05/30', st:'진행중', houses:1, capital:250000000, note:'', g:{type:'물건추천',target:20}},
+  {name:'박서윤', grade:'CLASS', sub:'트레이닝반',       bid:0, rec:8,  profit:0, c:12, u:5, r:7, carry:0, min:6, next:'06/11', last:'06/03', st:'진행중', houses:1, capital:300000000, note:'수업 보장(1달)', g:{type:'수업',target:8}},
+  {name:'강민지', grade:'CLASS', sub:'대구단기경매클럽', bid:0, rec:6,  profit:0, c:8,  u:3, r:5, carry:0, min:5, next:'06/15', last:'05/12', st:'진행중', houses:1, capital:200000000, note:'연락 뜸함', g:{type:'물건추천',target:15}},
+  // ---- 돈클 (등급 돈클 · 구분 수익·월세·올인원 · 수업없음 · 물건추천 보장 · 2주 주기) ----
+  {name:'한지영', grade:'돈클', sub:'수익',   bid:1, rec:8,  profit:122000000, c:null,u:null,r:null,carry:null,min:null,next:null,last:null, st:'진행중', houses:3, capital:1200000000, note:'VIP 장기회원', g:{type:'물건추천',target:12}, recLast:'05/24'},
+  {name:'조현우', grade:'돈클', sub:'월세',   bid:2, rec:4,  profit:36000000,  c:null,u:null,r:null,carry:null,min:null,next:null,last:null, st:'진행중', houses:2, capital:800000000,  note:'법인 별도 보유', g:{type:'물건추천',target:8}, recLast:'05/20'},
+  {name:'서지후', grade:'돈클', sub:'올인원', bid:1, rec:19, profit:64000000,  c:null,u:null,r:null,carry:null,min:null,next:null,last:null, st:'진행중', houses:4, capital:2000000000, note:'다주택 절세상담', g:{type:'물건추천',target:20}, recLast:'06/02'},
+  {name:'임채원', grade:'돈클', sub:'수익',   bid:0, rec:5,  profit:0,         c:null,u:null,r:null,carry:null,min:null,next:null,last:null, st:'대기',  houses:2, capital:700000000,  note:'돈클 입회 대기(미진입)', g:{type:'물건추천',target:12}, recLast:null},
+];
+
+let DK_CYCLE = 14;
+const TODAY = new Date(2026,5,5);
+const parseMD = md => { const [m,d]=md.split('/').map(Number); return new Date(2026, m-1, d); };
+const addDays = (dt,n) => { const x=new Date(dt); x.setDate(x.getDate()+n); return x; };
+const fmtMD = dt => String(dt.getMonth()+1).padStart(2,'0')+'/'+String(dt.getDate()).padStart(2,'0');
+const daysBetween = (a,b) => Math.round((a-b)/86400000);
+const dkNext = d => d.recLast ? addDays(parseMD(d.recLast), DK_CYCLE) : null;
+const dkLeft = d => { const n=dkNext(d); return n? daysBetween(n,TODAY): null; };
+
+const fmtMoney = v => { if(!v) return '0원'; const eok=Math.floor(v/1e8), man=Math.floor((v%1e8)/1e4); let s=''; if(eok)s+=eok+'억'; if(man)s+=(s?' ':'')+man.toLocaleString()+'만'; return (s||'0')+'원'; };
+const won = v => { v=v||0; const eok=Math.floor(v/1e8), man=Math.round((v%1e8)/1e4); let s=''; if(eok)s+=eok+'억'; if(man)s+=(s?' ':'')+man.toLocaleString()+'만'; return s||'0'; };
+const dash = v => (v===null||v===undefined) ? '<span class="text-slate-600">—</span>' : v;
+const unitOf = t => t==='수익'?'원': t==='수업'?'회':'건';
+const curOf  = d => d.g.type==='낙찰'?d.bid : d.g.type==='물건추천'?d.rec : d.g.type==='수익'?d.profit : d.u;
+const isDk = d => d.grade==='돈클';
+const catOf = g => (['플래티넘','블랙','실버'].includes(g) ? '프리미엄PT' : g);
+
+function gradeChip(gr){
+  if(gr==='플래티넘') return '<span class="chip text-[#0f172a] font-bold" style="background:linear-gradient(135deg,#f1f5f9,#9aa6b8)">♦ 플래티넘</span>';
+  if(gr==='블랙')    return '<span class="chip font-bold ring-1 ring-amber-400/40" style="background:linear-gradient(135deg,#374151,#0f1722);color:#f7e3a1">♛ 블랙</span>';
+  if(gr==='실버')    return '<span class="chip bg-white/8 text-slate-300 ring-1 ring-white/10">실버</span>';
+  if(gr==='PT')      return '<span class="chip bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/25">PT</span>';
+  if(gr==='CLASS')   return '<span class="chip bg-teal-500/15 text-teal-300 ring-1 ring-teal-500/25">CLASS</span>';
+  if(gr==='돈클')    return '<span class="chip bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30">돈클</span>';
+  return `<span class="chip bg-white/5 text-slate-400 ring-1 ring-white/10">${gr}</span>`;
+}
+function catChip(p){
+  const m = {'프리미엄PT':'bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30','PT':'bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-500/25','CLASS':'bg-teal-500/15 text-teal-300 ring-1 ring-teal-500/25','돈클':'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30'};
+  return `<span class="chip ${m[p]||'bg-white/8 text-slate-300'}">${p}</span>`;
+}
+const stChip = s => s==='진행중'?'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/25'
+                  : s==='홀딩' ?'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/25'
+                  : s==='대기' ?'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/25'
+                  :             'bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/20';
+
+function calc(d){
+  const cur=curOf(d), target=d.g.target, unit=unitOf(d.g.type);
+  const pct = Math.min(100, Math.round(cur/target*100));
+  const done = cur >= target;
+  const isAmt = unit==='원';
+  const near = !done && (isAmt ? pct>=80 : (target-cur)===1 && target>1);
+  const minOk = isDk(d) ? true : d.u >= d.min;
+  const active = d.st==='진행중';
+  const endTarget = done && minOk && active;
+  const minProgress = !isDk(d) && done && !minOk && active;
+  return {cur,target,unit,pct,done,near,minOk,endTarget,minProgress};
+}
+function flags(d){
+  const k=calc(d); const f=[];
+  if(d.st==='대기'){ return ['입회대기']; }
+  if(k.endTarget) f.push('종료대상');
+  if(k.minProgress) f.push('최소진행');
+  if(k.near && d.st==='진행중') f.push('보장임박');
+  if(isDk(d)){
+    const dl=dkLeft(d);
+    if(d.st==='진행중' && dl!==null && dl<0) f.push('추천지연');
+    else if(d.st==='진행중' && dl!==null && dl<=3) f.push('추천임박');
+    return f;
+  }
+  if(d.r<=2 && d.st==='진행중' && !k.endTarget) f.push('재등록');
+  if(d.next==='-' && d.r>0 && d.st==='진행중' && !k.endTarget) f.push('미예약');
+  if(d.st==='진행중' && d.last < '0513' && !k.endTarget) f.push('휴면');
+  return f;
+}
+const badge = {
+  '종료대상':'<span class="chip bg-red-500 text-white" style="box-shadow:0 0 16px -4px rgba(248,113,113,.6)">종료대상</span>',
+  '최소진행':'<span class="chip bg-emerald-500 text-white">최소진행</span>',
+  '보장임박':'<span class="chip bg-teal-500/15 text-teal-300 ring-1 ring-teal-500/30">보장임박</span>',
+  '재등록':'<span class="chip bg-red-500/15 text-red-300 ring-1 ring-red-500/30">재등록</span>',
+  '미예약':'<span class="chip bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30">미예약</span>',
+  '휴면':'<span class="chip bg-slate-500/15 text-slate-400 ring-1 ring-slate-500/25">휴면</span>',
+  '추천지연':'<span class="chip bg-red-500/20 text-red-300 ring-1 ring-red-500/40">추천지연</span>',
+  '추천임박':'<span class="chip bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30">추천임박</span>',
+  '입회대기':'<span class="chip bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/30">입회대기</span>',
+};
+function gCell(d){
+  const k=calc(d);
+  const fmt = k.unit==='원' ? (won(k.cur)+' / '+won(k.target)+' ('+k.pct+'%)') : (k.cur+' / '+k.target+k.unit);
+  const bar = k.done ? 'background:linear-gradient(90deg,#f7e3a1,#d4af37);box-shadow:0 0 12px -2px rgba(212,175,55,.7)'
+            : k.near ? 'background:linear-gradient(90deg,#5eead4,#2dd4bf)'
+            :          'background:linear-gradient(90deg,#818cf8,#6366f1)';
+  const txtC = k.done?'text-amber-300 font-bold':k.near?'text-teal-300 font-semibold':'text-slate-300';
+  const bdg = k.done?'<span class="ml-1 px-1.5 rounded text-[#1a1305] text-[10px] font-bold" style="background:linear-gradient(135deg,#f7e3a1,#d4af37)">달성</span>'
+            : k.near?'<span class="ml-1 px-1.5 rounded bg-teal-500 text-white text-[10px] font-bold">임박</span>':'';
+  return `<div class="min-w-[180px]"><div class="flex items-center gap-1.5 ${txtC}"><span class="px-1.5 rounded bg-white/8 text-slate-400 text-[10px]">${d.g.type}</span><span>${fmt}</span>${bdg}</div>
+    <div class="h-1.5 bg-white/8 rounded-full mt-1.5 overflow-hidden"><div class="h-full rounded-full" style="width:${k.pct}%;${bar}"></div></div></div>`;
+}
+
+let curF='all', curQ='', curType=null, curGrade=null, curGubun='all';
+
+function render(){
+  const rows=DATA.filter(d=> (curGubun==='all'||catOf(d.grade)===curGubun) && (curF==='all'||flags(d).includes(curF)) && (!curQ||d.name.includes(curQ)) && (!curType||d.g.type===curType) && (!curGrade||d.grade===curGrade));
+  document.getElementById('tbody').innerHTML = rows.map(d=>{
+    const k=calc(d); const fl=flags(d); const dk=isDk(d);
+    const rColor=d.r<=2?'text-red-400 font-bold':d.r<=5?'text-amber-300 font-semibold':'text-slate-200';
+    const rCell = dk ? dash(null) : (k.endTarget ? `<span class="text-red-400 font-bold" title="보장달성+최소회차 충족 → 종료">${d.r} ⚠</span>` : `<span class="${rColor}">${d.r}</span>`);
+    const minCell = dk ? dash(null) : `<span class="${k.minOk?'text-slate-500':'text-amber-300 font-semibold'}">${d.u}/${d.min}</span>`;
+    const rowBg = k.endTarget?'background:rgba(248,113,113,.07)':k.minProgress?'background:rgba(52,211,153,.06)':d.st==='대기'?'background:rgba(56,189,248,.05)':'';
+    // 돈클: 다음/마지막 = 추천일정
+    const nextV = dk ? (dkNext(d)?('🔁 '+fmtMD(dkNext(d))):'<span class="text-sky-300">대기</span>') : (d.next==='-'?'없음':d.next);
+    const nextC = dk ? (dkLeft(d)!==null&&dkLeft(d)<0?'text-red-400 font-semibold':'text-amber-300') : (d.next==='-'?'text-amber-300 font-semibold':'text-slate-300');
+    const lastV = dk ? (d.recLast||dash(null)) : d.last;
+    return `<tr class="hover:bg-white/[0.04]" style="${rowBg}" onclick="openDetail('${d.name}')">
+      <td class="px-4 py-2.5 font-semibold text-slate-100">${d.name}</td>
+      <td class="px-2 py-2.5 text-center">${gradeChip(d.grade)}</td>
+      <td class="px-2 py-2.5 text-center text-slate-300">${d.sub}</td>
+      <td class="px-3 py-2.5">${gCell(d)}</td>
+      <td class="px-2 py-2.5 text-center text-violet-300 font-semibold">${dk?dash(null):d.c}</td>
+      <td class="px-2 py-2.5 text-center text-emerald-300 font-semibold">${dk?dash(null):d.u}</td>
+      <td class="px-2 py-2.5 text-center text-[11px]">${minCell}</td>
+      <td class="px-2 py-2.5 text-center">${rCell}</td>
+      <td class="px-2 py-2.5 text-center ${!dk&&d.carry>0?'text-orange-300 font-bold':'text-slate-600'}">${dk?dash(null):(d.carry>0?d.carry:'-')}</td>
+      <td class="px-2 py-2.5 text-center ${nextC}">${nextV}</td>
+      <td class="px-2 py-2.5 text-center text-slate-500">${lastV}</td>
+      <td class="px-2 py-2.5 text-center"><span class="chip ${stChip(d.st)}">${d.st}</span></td>
+      <td class="px-2 py-2.5 text-center"><div class="flex gap-1 justify-center flex-wrap">${fl.map(f=>badge[f]).join('')||'<span class="text-slate-600">-</span>'}</div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('rowcount').textContent = rows.length+'명';
+  renderActiveFilters();
+}
+function renderActiveFilters(){
+  const el=document.getElementById('activeFilters'); const chips=[];
+  if(curType) chips.push(`<button onclick="setTypeFilter(null)" class="chip bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/40">보장: ${curType} ✕</button>`);
+  if(curGrade) chips.push(`<button onclick="setGradeFilter(null)" class="chip bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/40">등급: ${curGrade} ✕</button>`);
+  el.innerHTML = chips.join('');
+}
+
+/* ===== 액션 알림 (DATA 기반) ===== */
+function alertRow(name, right, rc){ return `<div class="px-4 py-2.5 flex items-center cursor-pointer hover:bg-white/[0.03]" onclick="openDetail('${name}')"><b class="text-slate-100">${name}</b> <span class="ml-auto ${rc} font-bold text-right">${right}</span></div>`; }
+function renderAlerts(){
+  const end=[],near=[],manage=[];
+  DATA.forEach(d=>{ const k=calc(d), fl=flags(d);
+    if(fl.includes('종료대상')) end.push(alertRow(d.name, `${d.g.type} ${k.cur>=10000?won(k.cur):k.cur}/${k.target>=10000?won(k.target):k.target} 달성 · 최소충족 → 종료`,'text-red-300'));
+    else if(fl.includes('최소진행')) end.push(alertRow(d.name, `${d.g.type} 달성 · 최소회차까지 진행`,'text-emerald-300'));
+    if(fl.includes('보장임박')){ const left = k.unit==='원'? `(${k.pct}%)` : `(${k.target-k.cur}${k.unit} 남음)`; near.push(alertRow(d.name, `${d.g.type} ${k.cur}/${k.target} ${left}`,'text-teal-300')); }
+    if(fl.includes('재등록')) manage.push(alertRow(d.name, `재등록 · 남은${d.r}`,'text-red-300'));
+    else if(fl.includes('미예약')) manage.push(alertRow(d.name, `미예약 · 잔여${d.r}`,'text-amber-300'));
+    else if(fl.includes('휴면')) manage.push(alertRow(d.name, `휴면`,'text-slate-400'));
+  });
+  const empty = '<div class="px-4 py-3 text-slate-600">해당 없음</div>';
+  document.getElementById('alertEnd').innerHTML = end.join('')||empty;
+  document.getElementById('alertNear').innerHTML = near.join('')||empty;
+  document.getElementById('alertManage').innerHTML = manage.join('')||empty;
+}
+
+/* ===== 돈클 추천 큐 ===== */
+function renderQueue(){
+  const active = DATA.filter(d=>isDk(d) && d.st==='진행중').sort((a,b)=> (dkLeft(a)??1e9)-(dkLeft(b)??1e9));
+  const waiting = DATA.filter(d=>isDk(d) && d.st==='대기');
+  document.getElementById('dkBody').innerHTML = active.map((d,i)=>{
+    const k=calc(d); const dl=dkLeft(d);
+    const stat = dl<0 ? `<span class="chip bg-red-500/20 text-red-300 ring-1 ring-red-500/40">지연 ${-dl}일</span>`
+               : dl<=3 ? `<span class="chip bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30">임박 D-${dl}</span>`
+               : `<span class="chip bg-white/8 text-slate-300 ring-1 ring-white/10">D-${dl}</span>`;
+    const rank = i===0 ? '<span class="num-gold font-extrabold">1순위</span>' : `<span class="text-slate-400">${i+1}순위</span>`;
+    return `<tr class="hover:bg-white/[0.04] cursor-pointer" onclick="openDetail('${d.name}')">
+      <td class="px-4 py-2.5">${rank}</td>
+      <td class="px-3 py-2.5 font-semibold text-slate-100">${d.name}</td>
+      <td class="px-2 py-2.5 text-center">${gradeChip(d.grade)}</td>
+      <td class="px-2 py-2.5 text-center text-amber-300">${d.sub}</td>
+      <td class="px-3 py-2.5">${gCell(d)}</td>
+      <td class="px-2 py-2.5 text-center text-slate-400">${d.recLast}</td>
+      <td class="px-2 py-2.5 text-center ${dl<0?'text-red-400 font-bold':'text-amber-300 font-semibold'}">${fmtMD(dkNext(d))}</td>
+      <td class="px-3 py-2.5 text-center">${stat}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('dkWait').innerHTML = waiting.length
+    ? `<span class="text-sky-300 font-semibold">입회 대기 ${waiting.length}명</span> · ${waiting.map(w=>w.name).join(', ')} <span class="text-slate-500">— 아직 돈클 미진입, 추천 일정 없음</span>`
+    : '';
+}
+
+document.getElementById('fbar').addEventListener('click',e=>{
+  const b=e.target.closest('.fb'); if(!b)return; curF=b.dataset.f;
+  document.querySelectorAll('.fb').forEach(x=>{x.className='fb px-2.5 py-1 rounded-lg border border-white/10 bg-white/5 text-slate-300'; x.style.background='';});
+  b.className='fb px-2.5 py-1 rounded-lg border border-amber-500/50 text-[#1a1305] font-semibold';
+  b.style.background='linear-gradient(135deg,#f7e3a1,#d4af37)'; render();
+});
+document.getElementById('gubunTabs').addEventListener('click',e=>{
+  const b=e.target.closest('.tab'); if(!b)return; curGubun=b.dataset.g;
+  document.querySelectorAll('#gubunTabs .tab').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); render();
+});
+document.getElementById('cycleInput').addEventListener('input',e=>{ DK_CYCLE=Math.max(1, parseInt(e.target.value)||14); renderQueue(); renderAlerts(); render(); renderSummary(); });
+function filterRows(q){curQ=q.trim();render();}
+function setTypeFilter(v){ curType=v; render(); }
+function setGradeFilter(v){ curGrade=v; render(); }
+function setGubunFilter(v){
+  curGubun = (curGubun===v ? 'all' : v);
+  document.querySelectorAll('#gubunTabs .tab').forEach(x=>x.classList.toggle('on', x.dataset.g===curGubun));
+  render();
+}
+
+/* ===== 요약 ===== */
+function renderSummary(){
+  const n = s => DATA.filter(d=>d.st===s).length;
+  let remain=0, week=0, end=0, minP=0, near=0, manage=0;
+  DATA.forEach(d=>{ const k=calc(d), fl=flags(d);
+    if(!isDk(d) && typeof d.r==='number') remain+=d.r;
+    if(!isDk(d) && d.st==='진행중' && d.next!=='-') week++;
+    if(fl.includes('종료대상')) end++;
+    if(fl.includes('최소진행')) minP++;
+    if(fl.includes('보장임박')) near++;
+    if(fl.some(f=>['재등록','미예약','휴면','추천지연'].includes(f))) manage++;
+  });
+  const set=(id,v,u)=>document.getElementById(id).innerHTML=`${v}<span class="text-sm text-slate-500 font-bold ml-0.5">${u}</span>`;
+  set('smTotal',DATA.length,'명'); document.getElementById('smTotalSub').textContent=`진행 ${n('진행중')} · 홀딩 ${n('홀딩')} · 대기 ${n('대기')} · 종료 ${n('종료')}`;
+  set('smRemain',remain,'회'); set('smWeek',week,'건'); set('smEnd',end,'명'); set('smMinProg',minP,'명'); set('smNear',near,'명'); set('smManage',manage,'명');
+  document.getElementById('smManageSub').textContent='재등록·미예약·휴면·추천지연';
+}
+
+/* ===== 회원 상세 드로어 ===== */
+function metricCard(label, valStr, active, sub){
+  const ring = active ? 'ring-1 ring-amber-400/50' : 'ring-1 ring-white/8';
+  const star = active ? '<span class="ml-1 text-[10px] px-1 rounded text-[#1a1305] font-bold" style="background:linear-gradient(135deg,#f7e3a1,#d4af37)">보장</span>' : '';
+  return `<div class="rounded-xl bg-white/[0.03] ${ring} p-3">
+    <div class="text-[11px] text-slate-400 flex items-center">${label}${star}</div>
+    <div class="text-lg font-extrabold text-slate-100 mt-0.5">${valStr}</div>
+    <div class="text-[10px] text-slate-500 mt-0.5">${sub||'&nbsp;'}</div></div>`;
+}
+function openDetail(name){
+  const d = DATA.find(x=>x.name===name); if(!d) return;
+  const k = calc(d); const gType=d.g.type; const dk=isDk(d);
+  const mBid = metricCard('🏆 낙찰', d.bid+'건',  gType==='낙찰', gType==='낙찰'?`목표 ${d.g.target}건`:'');
+  const mRec = metricCard('📌 물건추천', d.rec+'건', gType==='물건추천', gType==='물건추천'?`목표 ${d.g.target}건`:'');
+  const mPro = metricCard('💰 수익', won(d.profit)+'원', gType==='수익', gType==='수익'?`목표 ${won(d.g.target)}원`:'');
+  const mCls = metricCard('🏋️ 수업', dk?'해당없음':(d.u+'회'), gType==='수업', dk?'돈클':`계약 ${d.c}회`);
+  const gFmt = k.unit==='원' ? (won(k.cur)+' / '+won(k.target)+'원') : (k.cur+' / '+k.target+k.unit);
+  const gBar = k.done?'linear-gradient(90deg,#f7e3a1,#d4af37)':k.near?'linear-gradient(90deg,#5eead4,#2dd4bf)':'linear-gradient(90deg,#818cf8,#6366f1)';
+  // 수업현황 vs 추천현황
+  let bottom;
+  if(dk){
+    const dl=dkLeft(d);
+    const nextTxt = dkNext(d) ? fmtMD(dkNext(d)) : '대기';
+    const statTxt = d.st==='대기' ? '입회 대기' : dl<0 ? `지연 ${-dl}일` : `D-${dl}`;
+    const statC = d.st==='대기'?'text-sky-300':dl<0?'text-red-400':dl<=3?'text-amber-300':'text-slate-200';
+    bottom = `<div><div class="text-xs font-bold text-slate-300 mb-2">물건추천 일정 <span class="text-[10px] text-slate-500 font-normal">· 주기 ${DK_CYCLE}일</span></div>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="rounded-lg bg-white/[0.03] ring-1 ring-white/8 p-2.5"><div class="text-[10px] text-slate-400">마지막 추천</div><div class="text-base font-bold text-slate-300">${d.recLast||'—'}</div></div>
+        <div class="rounded-lg bg-white/[0.03] ring-1 ring-white/8 p-2.5"><div class="text-[10px] text-slate-400">다음 추천</div><div class="text-base font-bold text-amber-300">${nextTxt}</div></div>
+        <div class="rounded-lg bg-white/[0.03] ring-1 ring-white/8 p-2.5"><div class="text-[10px] text-slate-400">상태</div><div class="text-base font-bold ${statC}">${statTxt}</div></div>
+      </div></div>`;
+  } else {
+    bottom = `<div><div class="text-xs font-bold text-slate-300 mb-2">수업 현황</div>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="rounded-lg bg-white/[0.03] ring-1 ring-white/8 p-2.5"><div class="text-[10px] text-slate-400">계약</div><div class="text-base font-bold text-violet-300">${d.c}</div></div>
+        <div class="rounded-lg bg-white/[0.03] ring-1 ring-white/8 p-2.5"><div class="text-[10px] text-slate-400">수업</div><div class="text-base font-bold text-emerald-300">${d.u}</div></div>
+        <div class="rounded-lg bg-white/[0.03] ring-1 ring-white/8 p-2.5"><div class="text-[10px] text-slate-400">남은</div><div class="text-base font-bold ${d.r<=2?'text-red-400':'text-slate-100'}">${d.r}</div></div>
+        <div class="rounded-lg bg-white/[0.03] ring-1 ring-white/8 p-2.5"><div class="text-[10px] text-slate-400">최소</div><div class="text-base font-bold ${k.minOk?'text-slate-300':'text-amber-300'}">${d.u}/${d.min}</div></div>
+        <div class="rounded-lg bg-white/[0.03] ring-1 ring-white/8 p-2.5"><div class="text-[10px] text-slate-400">다음</div><div class="text-base font-bold ${d.next==='-'?'text-amber-300':'text-slate-100'}">${d.next==='-'?'없음':d.next}</div></div>
+        <div class="rounded-lg bg-white/[0.03] ring-1 ring-white/8 p-2.5"><div class="text-[10px] text-slate-400">마지막</div><div class="text-base font-bold text-slate-300">${d.last}</div></div>
+      </div></div>`;
+  }
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="sticky top-0 bg-[#11161f]/95 backdrop-blur border-b border-white/8 px-5 py-4 flex items-center gap-3 z-10">
+      <div>
+        <div class="flex items-center gap-2"><span class="text-xl font-extrabold text-slate-50">${d.name}</span>${gradeChip(d.grade)}</div>
+        <div class="flex items-center gap-1.5 mt-1.5">${catChip(catOf(d.grade))}<span class="chip bg-white/8 text-slate-300">${d.sub}</span><span class="chip ${stChip(d.st)}">${d.st}</span></div>
+      </div>
+      <button onclick="closeDetail()" class="ml-auto w-8 h-8 grid place-items-center rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 text-lg">✕</button>
+    </div>
+    <div class="p-5 space-y-5">
+      <div class="rounded-xl p-4" style="background:rgba(212,175,55,.06);border:1px solid rgba(212,175,55,.18)">
+        <div class="text-[11px] text-amber-300/90 font-semibold mb-1">보장 진행 · ${gType}</div>
+        <div class="flex items-end justify-between"><span class="text-lg font-extrabold text-amber-200">${gFmt}</span><span class="text-sm font-bold ${k.done?'text-amber-300':k.near?'text-teal-300':'text-slate-400'}">${k.pct}%${k.done?' · 달성':k.near?' · 임박':''}</span></div>
+        <div class="h-2 bg-white/8 rounded-full mt-2 overflow-hidden"><div class="h-full rounded-full" style="width:${k.pct}%;background:${gBar}"></div></div>
+        <div class="text-[11px] text-slate-400 mt-2">${dk?'돈클 · 수업 없음':`최소회차 ${d.u}/${d.min} ${k.minOk?'<span class="text-emerald-300">충족</span>':'<span class="text-amber-300">미달</span>'} · 남은회차 ${d.r}회`}${k.endTarget?' · <span class="text-red-300 font-bold">종료 대상</span>':''}</div>
+      </div>
+      <div>
+        <div class="text-xs font-bold text-slate-300 mb-2">보장내역 전체 <span class="text-[10px] text-slate-500 font-normal">· 보장형식과 무관하게 모두 집계</span></div>
+        <div class="grid grid-cols-2 gap-2">${mBid}${mRec}${mPro}${mCls}</div>
+      </div>
+      <div>
+        <div class="text-xs font-bold text-slate-300 mb-2">일반 사항</div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="rounded-xl bg-white/[0.03] ring-1 ring-white/8 p-3"><div class="text-[11px] text-slate-400">주택수</div><div class="text-lg font-extrabold text-slate-100 mt-0.5">${d.houses}<span class="text-xs text-slate-500 ml-0.5">채</span></div></div>
+          <div class="rounded-xl bg-white/[0.03] ring-1 ring-white/8 p-3"><div class="text-[11px] text-slate-400">자본금</div><div class="text-lg font-extrabold num-gold mt-0.5">${fmtMoney(d.capital)}</div></div>
+        </div>
+        <div class="rounded-xl bg-white/[0.03] ring-1 ring-white/8 p-3 mt-2"><div class="text-[11px] text-slate-400 mb-1">비고</div><div class="text-sm text-slate-200">${d.note||'<span class=\"text-slate-600\">—</span>'}</div></div>
+      </div>
+      ${bottom}
+    </div>`;
+  document.getElementById('overlay').classList.remove('hidden');
+  document.getElementById('drawer').style.transform='translateX(0)';
+}
+function closeDetail(){
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('drawer').style.transform='translateX(100%)';
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDetail(); });
+
+renderSummary(); renderAlerts(); renderQueue(); render();
+
+/* ===== 그래프 ===== */
+Chart.register(ChartDataLabels);
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
+Chart.defaults.font.family = "'Pretendard',system-ui,sans-serif";
+const countBy = (arr,fn)=>arr.reduce((m,d)=>{const k=fn(d);m[k]=(m[k]||0)+1;return m;},{});
+const dlCommon = { color:'#fff', font:{weight:'700',size:13}, textStrokeColor:'rgba(0,0,0,.6)', textStrokeWidth:3, textAlign:'center',
+  formatter:(v,ctx)=> v ? `${ctx.chart.data.labels[ctx.dataIndex]}\n${v}명` : '' };
+const doughnutOpts = (onPick)=>({
+  cutout:'58%', responsive:true, maintainAspectRatio:false,
+  onClick:(e,els)=>{ if(els.length) onPick(els[0].index); },
+  onHover:(e,els)=>{ e.native.target.style.cursor = els.length?'pointer':'default'; },
+  plugins:{
+    legend:{ position:'bottom', labels:{ boxWidth:10, boxHeight:10, padding:12, usePointStyle:true, font:{size:11} } },
+    datalabels:dlCommon,
+    tooltip:{ callbacks:{ label:(c)=>` ${c.label}: ${c.parsed}명` } }
+  }
+});
+const typeC = countBy(DATA, d=>d.g.type);
+const typeOrder = ['낙찰','물건추천','수익','수업'].filter(k=>typeC[k]);
+new Chart(document.getElementById('chartType'), {
+  type:'doughnut',
+  data:{ labels:typeOrder, datasets:[{ data:typeOrder.map(k=>typeC[k]),
+    backgroundColor:typeOrder.map(k=>({'낙찰':'#d4af37','물건추천':'#818cf8','수익':'#34d399','수업':'#2dd4bf'}[k])),
+    borderColor:'#0e131e', borderWidth:3, hoverOffset:8 }] },
+  options:doughnutOpts(i=>{ const v=typeOrder[i]; setTypeFilter(curType===v?null:v); })
+});
+const gubunC = countBy(DATA, d=>catOf(d.grade));
+const gubunOrder = ['프리미엄PT','PT','CLASS','돈클'].filter(k=>gubunC[k]);
+new Chart(document.getElementById('chartGubun'), {
+  type:'doughnut',
+  data:{ labels:gubunOrder, datasets:[{ data:gubunOrder.map(k=>gubunC[k]),
+    backgroundColor:gubunOrder.map(k=>({'프리미엄PT':'#a78bfa','PT':'#818cf8','CLASS':'#2dd4bf','돈클':'#d4af37'}[k])),
+    borderColor:'#0e131e', borderWidth:3, hoverOffset:8 }] },
+  options:doughnutOpts(i=>{ setGubunFilter(gubunOrder[i]); })
+});
+</script>
+</body>
+</html>

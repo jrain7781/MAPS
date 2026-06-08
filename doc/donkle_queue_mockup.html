@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>돈클 추천 큐 — 다크 프리미엄</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root{ --gold-a:#f7e3a1; --gold-b:#d4af37; }
+  *{ font-family:'Pretendard','Pretendard Variable',system-ui,sans-serif; }
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(212,175,55,.12), transparent 55%),
+      radial-gradient(900px 500px at 0% 0%, rgba(99,102,241,.08), transparent 50%),
+      linear-gradient(180deg,#0a0e16,#0e131e);
+    background-attachment:fixed; color:#e6edf3; -webkit-font-smoothing:antialiased;
+  }
+  .surface{ background:linear-gradient(180deg, rgba(28,35,48,.85), rgba(18,24,34,.92)); border:1px solid rgba(255,255,255,.07); border-radius:16px; box-shadow:0 10px 30px -12px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04); }
+  .accent-top{ position:relative; overflow:hidden; }
+  .accent-top::before{ content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent, var(--c,#d4af37), transparent); }
+  .num-gold{ background:linear-gradient(135deg,var(--gold-a),var(--gold-b)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .glow-gold{ box-shadow:0 0 24px -6px rgba(212,175,55,.45); }
+  ::-webkit-scrollbar{height:10px;width:10px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:8px}
+  table tbody tr{ transition:background .12s ease; cursor:pointer; }
+  .chip{ font-size:11px; padding:2px 8px; border-radius:9999px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+  .navtab{ padding:7px 16px; border-radius:10px; font-size:13px; font-weight:700; color:#94a3b8; cursor:pointer; }
+  .navtab.on{ color:#1a1305; background:linear-gradient(135deg,#f7e3a1,#d4af37); }
+</style>
+</head>
+<body class="text-slate-100">
+
+<!-- 헤더 + 상위 탭 -->
+<header class="sticky top-0 z-20 border-b border-white/10 backdrop-blur-xl bg-[#0b0f18]/80">
+  <div class="max-w-[1280px] mx-auto px-6 py-3 flex items-center gap-4">
+    <div class="w-9 h-9 rounded-xl grid place-items-center glow-gold" style="background:linear-gradient(135deg,#f7e3a1,#c89b3c)"><span class="text-[#1a1305] font-black text-lg">D</span></div>
+    <div class="flex items-center gap-1.5">
+      <a href="pt_dashboard_mockup_dark.html" class="navtab">PT 통합 현황</a>
+      <span class="navtab on">돈클 추천 큐</span>
+    </div>
+    <div class="ml-auto flex items-center gap-4">
+      <label class="flex items-center gap-1.5 text-[11px] text-slate-400">추천 주기
+        <input id="cycleInput" type="number" min="1" value="14" class="w-14 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-xs text-slate-100 text-center focus:outline-none focus:ring-2 focus:ring-amber-500/40"> 일</label>
+      <div class="text-right"><div class="text-[11px] text-slate-500">기준일</div><div class="text-xs font-semibold text-slate-300">2026-06-05 (금)</div></div>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1280px] mx-auto px-6 py-6 space-y-6">
+
+  <div class="flex items-end gap-3">
+    <div>
+      <h1 class="text-lg font-extrabold">💎 돈클 물건추천 큐</h1>
+      <p class="text-[12px] text-slate-400 mt-1">언제 추천했는지 → <b class="text-amber-300">누구를 먼저 추천해야 하는지</b> 시스템이 알려줍니다. (원천: telegram_requests 발송 이력)</p>
+    </div>
+  </div>
+
+  <!-- 요약 -->
+  <section class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div class="surface accent-top p-4" style="--c:#9aa4b2"><div class="text-[11px] text-slate-400">전체 돈클</div><div class="mt-1 text-[26px] font-extrabold leading-none" id="smTotal">–</div></div>
+    <div class="surface accent-top p-4 glow-gold" style="--c:#f87171"><div class="text-[11px] text-slate-400">🔴 추천 필요(밀림)</div><div class="mt-1 text-[26px] font-extrabold leading-none text-red-400" id="smOwed">–</div></div>
+    <div class="surface accent-top p-4" style="--c:#fbbf24"><div class="text-[11px] text-slate-400">⏳ 임박(D-3↓)</div><div class="mt-1 text-[26px] font-extrabold leading-none text-amber-300" id="smSoon">–</div></div>
+    <div class="surface accent-top p-4" style="--c:#34d399"><div class="text-[11px] text-slate-400">✅ 정상</div><div class="mt-1 text-[26px] font-extrabold leading-none text-emerald-300" id="smOk">–</div></div>
+    <div class="surface accent-top p-4" style="--c:#38bdf8"><div class="text-[11px] text-slate-400">⏸ 입회 대기</div><div class="mt-1 text-[26px] font-extrabold leading-none text-sky-300" id="smWait">–</div></div>
+  </section>
+
+  <!-- 추천 우선순위 큐 -->
+  <section class="surface overflow-hidden">
+    <div class="px-4 py-3 border-b border-white/8 flex items-center gap-2">
+      <span class="text-sm font-bold text-slate-100">추천 우선순위</span>
+      <span class="text-[11px] text-slate-500">· 밀린 건수 · 지연일 순 정렬</span>
+      <span class="ml-auto text-[11px] text-slate-500" id="qcount"></span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-xs whitespace-nowrap">
+        <thead class="text-slate-400 bg-white/[0.03]"><tr class="border-b border-white/8">
+          <th class="px-4 py-2.5 text-left font-semibold">우선순위</th>
+          <th class="px-3 py-2.5 text-left font-semibold">회원</th>
+          <th class="px-2 py-2.5 font-semibold">구분</th>
+          <th class="px-2 py-2.5 font-semibold">누적 추천</th>
+          <th class="px-2 py-2.5 font-semibold">마지막 추천</th>
+          <th class="px-2 py-2.5 font-semibold">다음 예정</th>
+          <th class="px-3 py-2.5 font-semibold">추천 상태</th>
+          <th class="px-3 py-2.5 font-semibold">액션</th>
+        </tr></thead>
+        <tbody id="qbody" class="divide-y divide-white/5"></tbody>
+      </table>
+    </div>
+    <div id="waitRow" class="px-4 py-2.5 border-t border-white/8 text-[11px] text-slate-400"></div>
+    <div class="px-4 py-3 border-t border-white/8 text-[11px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+      <span>다음 예정 = <b class="text-slate-300">기산일 + 누적건수 × 주기</b></span>
+      <span class="text-amber-300/80">오늘 2건 추천하면 → 다음은 2주기(4주) 뒤</span>
+      <span>행 클릭 → 추천 이력 타임라인</span>
+    </div>
+  </section>
+</main>
+
+<!-- 상세 드로어 -->
+<div id="overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden" onclick="closeDetail()"></div>
+<aside id="drawer" class="fixed top-0 right-0 h-full w-full max-w-[420px] z-50" style="transform:translateX(100%);transition:transform .3s cubic-bezier(.22,.61,.36,1)">
+  <div class="h-full surface !rounded-none border-l border-white/10 overflow-y-auto" id="drawerBody"></div>
+</aside>
+
+<script>
+const TODAY = new Date(2026,5,5);   // 2026-06-05
+let CYCLE = 14;
+const parseMD = md => { const [m,d]=md.split('/').map(Number); return new Date(2026, m-1, d); };
+const addDays = (dt,n) => { const x=new Date(dt); x.setDate(x.getDate()+n); return x; };
+const fmtMD = dt => String(dt.getMonth()+1).padStart(2,'0')+'/'+String(dt.getDate()).padStart(2,'0');
+const dayDiff = (a,b) => Math.round((a-b)/86400000);
+
+// 돈클 회원 + 추천 발송 이력(telegram_requests에서 회원별 집계한 형태). q=한 날 발송 건수.
+const DK = [
+  {name:'조현우', sub:'월세',   recStart:'03/01', hist:[{d:'03/05',q:1},{d:'03/20',q:1},{d:'04/05',q:1},{d:'04/20',q:1}]},
+  {name:'강태오', sub:'수익',   recStart:'05/15', hist:[{d:'05/16',q:1}]},
+  {name:'서지후', sub:'올인원', recStart:'05/06', hist:[{d:'05/20',q:2}]},
+  {name:'한지영', sub:'수익',   recStart:'03/01', hist:[{d:'03/03',q:1},{d:'03/17',q:1},{d:'03/31',q:1},{d:'04/14',q:1},{d:'04/28',q:1},{d:'05/12',q:1},{d:'05/26',q:1}]},
+  {name:'윤재호', sub:'올인원', recStart:'05/25', hist:[{d:'05/27',q:1}]},
+  {name:'임채원', sub:'수익',   recStart:null, hist:[], waiting:true},
+];
+const subChip = s => { const m={'수익':'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/25','월세':'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30','올인원':'bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30'}; return `<span class="chip ${m[s]||'bg-white/8 text-slate-300'}">${s}</span>`; };
+
+function calc(m){
+  const total = m.hist.reduce((s,h)=>s+h.q,0);
+  const lastH = m.hist.length ? m.hist[m.hist.length-1] : null;
+  const last  = lastH ? lastH.d : null;
+  const lastQ = lastH ? lastH.q : 0;
+  if(m.waiting || (!last && !m.recStart)) return {total,last,lastQ,next:null,dleft:null,owed:0,waiting:true};
+  const base = last ? parseMD(last) : parseMD(m.recStart);
+  const next = addDays(base, (lastQ||1)*CYCLE);                          // 마지막 추천일 + 그날 건수×주기
+  const dleft = dayDiff(next, TODAY);
+  const owed = dleft<0 ? Math.floor(-dleft/CYCLE)+1 : 0;
+  return {total,last,lastQ,next,dleft,owed,waiting:false};
+}
+function statusCell(k){
+  if(k.waiting) return '<span class="chip bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/30">입회 대기</span>';
+  if(k.owed>=1) return `<span class="chip bg-red-500/20 text-red-300 ring-1 ring-red-500/40">밀림 ${k.owed}건 · ${-k.dleft}일 지연</span>`;
+  if(k.dleft<=3) return `<span class="chip bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30">임박 D-${k.dleft}</span>`;
+  return `<span class="chip bg-white/8 text-slate-300 ring-1 ring-white/10">여유 D-${k.dleft}</span>`;
+}
+
+function render(){
+  const active = DK.filter(m=>!m.waiting).map(m=>({m,k:calc(m)}))
+    .sort((a,b)=> (b.k.owed-a.k.owed) || (a.k.dleft-b.k.dleft));
+  const waiting = DK.filter(m=>m.waiting);
+
+  document.getElementById('qbody').innerHTML = active.map(({m,k},i)=>{
+    const rank = i===0 ? '<span class="num-gold font-extrabold text-sm">★ 1순위</span>' : `<span class="text-slate-400">${i+1}순위</span>`;
+    const nextC = k.dleft<0 ? 'text-red-400 font-bold' : k.dleft<=3 ? 'text-amber-300 font-semibold' : 'text-slate-300';
+    const rowBg = k.owed>=1 ? 'background:rgba(248,113,113,.07)' : '';
+    const btn = (k.owed>=1||k.dleft<=3)
+      ? `<button onclick="event.stopPropagation();markRec('${m.name}')" class="px-2.5 py-1 rounded-lg text-[#1a1305] font-bold text-[11px]" style="background:linear-gradient(135deg,#f7e3a1,#d4af37)">추천하기</button>`
+      : `<span class="text-slate-600 text-[11px]">—</span>`;
+    return `<tr class="hover:bg-white/[0.04]" style="${rowBg}" onclick="openDetail('${m.name}')">
+      <td class="px-4 py-3">${rank}</td>
+      <td class="px-3 py-3 font-semibold text-slate-100">${m.name}</td>
+      <td class="px-2 py-3 text-center">${subChip(m.sub)}</td>
+      <td class="px-2 py-3 text-center text-slate-200 font-semibold">${k.total}건</td>
+      <td class="px-2 py-3 text-center text-slate-400">${k.last||'—'}</td>
+      <td class="px-2 py-3 text-center ${nextC}">${fmtMD(k.next)}</td>
+      <td class="px-3 py-3 text-center">${statusCell(k)}</td>
+      <td class="px-3 py-3 text-center">${btn}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('qcount').textContent = active.length+'명 진행 · '+waiting.length+'명 대기';
+
+  document.getElementById('waitRow').innerHTML = waiting.length
+    ? `<span class="text-sky-300 font-semibold">⏸ 입회 대기 ${waiting.length}명</span> · ${waiting.map(w=>w.name+'('+w.sub+')').join(', ')} <span class="text-slate-500">— 아직 돈클 미진입, 추천 일정 없음</span>` : '';
+
+  // 요약
+  let owed=0, soon=0, ok=0;
+  active.forEach(({k})=>{ if(k.owed>=1) owed++; else if(k.dleft<=3) soon++; else ok++; });
+  document.getElementById('smTotal').textContent = DK.length;
+  document.getElementById('smOwed').textContent = owed;
+  document.getElementById('smSoon').textContent = soon;
+  document.getElementById('smOk').textContent = ok;
+  document.getElementById('smWait').textContent = waiting.length;
+}
+
+function openDetail(name){
+  const m = DK.find(x=>x.name===name); if(!m) return; const k=calc(m);
+  const timeline = m.hist.length ? m.hist.slice().reverse().map((h,idx)=>`
+    <div class="flex items-center gap-3 py-2">
+      <div class="w-2 h-2 rounded-full ${idx===0?'bg-amber-400':'bg-slate-600'}"></div>
+      <div class="text-sm text-slate-200 font-semibold">${h.d}</div>
+      <div class="text-xs text-slate-400">물건 추천 ${h.q}건</div>
+      ${idx===0?'<span class="ml-auto chip bg-amber-500/15 text-amber-300 text-[10px]">최근</span>':''}
+    </div>`).join('') : '<div class="text-sm text-slate-500 py-2">추천 이력 없음</div>';
+  const calcLine = m.waiting ? '입회 대기 — 추천 일정 없음'
+    : `기산일 <b class="text-slate-200">${m.recStart}</b> + 누적 <b class="text-slate-200">${k.total}건</b> × 주기 <b class="text-slate-200">${CYCLE}일</b> = 다음 예정 <b class="text-amber-300">${fmtMD(k.next)}</b>`;
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="sticky top-0 bg-[#11161f]/95 backdrop-blur border-b border-white/8 px-5 py-4 flex items-center gap-3 z-10">
+      <div><div class="flex items-center gap-2"><span class="text-xl font-extrabold text-slate-50">${m.name}</span>${subChip(m.sub)}</div>
+        <div class="mt-1.5">${statusCell(k)}</div></div>
+      <button onclick="closeDetail()" class="ml-auto w-8 h-8 grid place-items-center rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 text-lg">✕</button>
+    </div>
+    <div class="p-5 space-y-5">
+      <div class="rounded-xl p-4" style="background:rgba(212,175,55,.06);border:1px solid rgba(212,175,55,.18)">
+        <div class="text-[11px] text-amber-300/90 font-semibold mb-1">추천 타이밍 계산</div>
+        <div class="text-xs text-slate-300 leading-relaxed">${calcLine}</div>
+        ${k.waiting?'':`<div class="text-[11px] mt-2 ${k.owed>=1?'text-red-300':'text-slate-400'}">${k.owed>=1?`현재 ${k.owed}건 밀림 (${-k.dleft}일 지연) → 우선 추천`:`D-${k.dleft} (아직 여유)`}</div>`}
+      </div>
+      <div>
+        <div class="text-xs font-bold text-slate-300 mb-1">추천 이력 (언제 추천했는지)</div>
+        <div class="rounded-xl bg-white/[0.03] ring-1 ring-white/8 px-4 py-2 divide-y divide-white/5">${timeline}</div>
+        <div class="text-[11px] text-slate-500 mt-1.5">총 누적 ${k.total}건 · 원천: telegram_requests 발송 이력</div>
+      </div>
+    </div>`;
+  document.getElementById('overlay').classList.remove('hidden');
+  document.getElementById('drawer').style.transform='translateX(0)';
+}
+function closeDetail(){ document.getElementById('overlay').classList.add('hidden'); document.getElementById('drawer').style.transform='translateX(100%)'; }
+function markRec(name){ const m=DK.find(x=>x.name===name); if(!m) return; const ds=fmtMD(TODAY); const lh=m.hist[m.hist.length-1]; if(lh&&lh.d===ds) lh.q+=1; else m.hist.push({d:ds,q:1}); render(); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDetail(); });
+document.getElementById('cycleInput').addEventListener('input',e=>{ CYCLE=Math.max(1, parseInt(e.target.value)||14); render(); });
+render();
+</script>
+</body>
+</html>

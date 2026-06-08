@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>돈클 추천요청 현황 — 카드 목업</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  *{ font-family:'Pretendard','Pretendard Variable',system-ui,sans-serif; }
+  body{ background:#f1f3f8; color:#1f2937; }
+  .card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .num{ cursor:pointer; border-radius:6px; padding:1px 6px; font-weight:700; transition:background .12s; }
+  .num:hover{ background:#eef2ff; text-decoration:underline; }
+</style>
+</head>
+<body class="p-6">
+
+<div class="max-w-[1100px] mx-auto">
+  <div class="text-[12px] text-gray-400 mb-3">※ 목업 — 실제 대시보드 가운데 "물건 용도 관리" 자리에 들어갈 카드 (라이트 톤, 그 크기). 물건 용도 관리는 실제 적용 시 주석처리(삭제 X).</div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+    <!-- ===== 카드: 돈클 추천요청 현황 ===== -->
+    <div class="card p-5">
+      <div class="flex items-center mb-3">
+        <h2 class="text-base font-bold text-gray-800">돈클 추천요청 현황</h2>
+        <span class="ml-2 text-[11px] text-gray-400">전달대기 → 추천완료</span>
+        <select class="ml-auto text-xs border border-gray-300 rounded-md px-2 py-1 text-gray-600">
+          <option>대표님</option><option>전부쌤</option><option>전체</option>
+        </select>
+      </div>
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-gray-500 border-b border-gray-200 text-[12px]">
+            <th class="text-left font-semibold py-2">날짜</th>
+            <th class="text-center font-semibold py-2 w-28">전달대기</th>
+            <th class="text-center font-semibold py-2 w-28">추천완료</th>
+          </tr>
+        </thead>
+        <tbody id="cardBody"></tbody>
+        <tfoot>
+          <tr class="border-t-2 border-gray-200 bg-gray-50 font-bold">
+            <td class="py-2 pl-1 text-gray-700">전체</td>
+            <td class="text-center"><span class="num text-amber-600" id="totWait" onclick="drill('all','wait')">–</span></td>
+            <td class="text-center"><span class="num text-indigo-600" id="totDone" onclick="drill('all','done')">–</span></td>
+          </tr>
+        </tfoot>
+      </table>
+      <div class="text-[11px] text-gray-400 mt-2">숫자 클릭 → 입찰물건관리에 해당 건만 리스트업</div>
+    </div>
+
+    <!-- ===== 드릴다운: 입찰물건관리(필터된 미리보기) ===== -->
+    <div class="card p-5">
+      <div class="flex items-center mb-3">
+        <h2 class="text-base font-bold text-gray-800">입찰물건관리 <span class="text-[12px] font-normal text-indigo-600" id="drillTitle">— 숫자를 클릭하세요</span></h2>
+        <span class="ml-auto text-xs text-gray-400" id="drillCount"></span>
+      </div>
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="text-gray-500 border-b border-gray-200">
+            <th class="text-left font-semibold py-2">사건번호</th>
+            <th class="text-left font-semibold py-2">회원</th>
+            <th class="text-center font-semibold py-2">구분</th>
+            <th class="text-center font-semibold py-2">상태</th>
+            <th class="text-center font-semibold py-2">담당</th>
+          </tr>
+        </thead>
+        <tbody id="drillBody"><tr><td colspan="5" class="py-8 text-center text-gray-400">왼쪽 카드의 숫자를 클릭하면 해당 건이 여기 표시됩니다</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// 날짜별 전달대기(등록·미전달) / 추천완료(전달됨) 물건 — 샘플
+// 전달대기 = stu_member='추천' & chuchen_state≠전달완료  /  추천완료 = chuchen_state='전달완료'
+const DATA = [
+  { date:'오늘 06/08 (월)', key:'06/08',
+    wait:[ {s:'2024타경51023', m:'조현우', g:'월세', t:'전부쌤'}, {s:'2024타경48771', m:'강태오', g:'수익', t:'대표님'}, {s:'2024타경52310', m:'서지후', g:'올인원', t:'대표님'} ],
+    done:[ {s:'2024타경40021', m:'한지영', g:'수익', t:'대표님'}, {s:'2024타경40588', m:'조현우', g:'월세', t:'전부쌤'}, {s:'2024타경41200', m:'윤재호', g:'올인원', t:'대표님'}, {s:'2024타경41999', m:'한지영', g:'수익', t:'대표님'}, {s:'2024타경42050', m:'강태오', g:'수익', t:'전부쌤'} ] },
+  { date:'06/07 (일)', key:'06/07', wait:[], done:[ {s:'2024타경39001', m:'서지후', g:'올인원', t:'대표님'}, {s:'2024타경39112', m:'조현우', g:'월세', t:'대표님'} ] },
+  { date:'06/06 (토)', key:'06/06', wait:[ {s:'2024타경38020', m:'한지영', g:'수익', t:'대표님'} ], done:[ {s:'2024타경37001', m:'강태오', g:'수익', t:'전부쌤'}, {s:'2024타경37044', m:'윤재호', g:'올인원', t:'대표님'}, {s:'2024타경37200', m:'서지후', g:'올인원', t:'대표님'}, {s:'2024타경37260', m:'한지영', g:'수익', t:'대표님'} ] },
+  { date:'06/05 (금)', key:'06/05', wait:[ {s:'2024타경36010', m:'조현우', g:'월세', t:'전부쌤'}, {s:'2024타경36077', m:'강태오', g:'수익', t:'대표님'} ], done:[ {s:'2024타경35001', m:'한지영', g:'수익', t:'대표님'}, {s:'2024타경35080', m:'서지후', g:'올인원', t:'대표님'}, {s:'2024타경35140', m:'조현우', g:'월세', t:'전부쌤'} ] },
+  { date:'06/04 (목)', key:'06/04', wait:[], done:[ {s:'2024타경34001', m:'윤재호', g:'올인원', t:'대표님'}, {s:'2024타경34060', m:'한지영', g:'수익', t:'대표님'}, {s:'2024타경34120', m:'강태오', g:'수익', t:'전부쌤'}, {s:'2024타경34200', m:'서지후', g:'올인원', t:'대표님'}, {s:'2024타경34280', m:'조현우', g:'월세', t:'대표님'}, {s:'2024타경34355', m:'한지영', g:'수익', t:'대표님'} ] },
+];
+const gChip = g => { const m={'수익':'bg-emerald-100 text-emerald-700','월세':'bg-amber-100 text-amber-700','올인원':'bg-violet-100 text-violet-700'}; return `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${m[g]||'bg-gray-100 text-gray-600'}">${g}</span>`; };
+
+function render(){
+  document.getElementById('cardBody').innerHTML = DATA.map((r,i)=>`
+    <tr class="border-b border-gray-100 ${i===0?'bg-indigo-50/40':''}">
+      <td class="py-2 pl-1 text-gray-700 ${i===0?'font-bold':''}">${r.date}</td>
+      <td class="text-center">${r.wait.length? `<span class="num text-amber-600" onclick="drill('${r.key}','wait')">${r.wait.length}</span>` : '<span class="text-gray-300">0</span>'}</td>
+      <td class="text-center">${r.done.length? `<span class="num text-indigo-600" onclick="drill('${r.key}','done')">${r.done.length}</span>` : '<span class="text-gray-300">0</span>'}</td>
+    </tr>`).join('');
+  document.getElementById('totWait').textContent = DATA.reduce((s,r)=>s+r.wait.length,0);
+  document.getElementById('totDone').textContent = DATA.reduce((s,r)=>s+r.done.length,0);
+}
+function drill(key, kind){
+  let items=[], label='';
+  const kindLabel = kind==='wait'?'전달대기':'추천완료';
+  if(key==='all'){ DATA.forEach(r=> items=items.concat(r[kind])); label=`전체 · ${kindLabel}`; }
+  else { const r=DATA.find(x=>x.key===key); items=r? r[kind]:[]; label=`${r?r.date:key} · ${kindLabel}`; }
+  document.getElementById('drillTitle').textContent = '— '+label;
+  document.getElementById('drillCount').textContent = items.length+'건';
+  const stTag = kind==='wait'
+    ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">전달대기</span>'
+    : '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700">추천완료</span>';
+  document.getElementById('drillBody').innerHTML = items.length ? items.map(it=>`
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="py-2 text-gray-700 font-medium">${it.s}</td>
+      <td class="py-2 text-gray-700">${it.m}</td>
+      <td class="py-2 text-center">${gChip(it.g)}</td>
+      <td class="py-2 text-center">${stTag}</td>
+      <td class="py-2 text-center text-gray-500">${it.t}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="py-8 text-center text-gray-400">해당 건 없음</td></tr>';
+}
+render();
+</script>
+</body>
+</html>

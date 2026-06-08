@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>추천물건관리 — 목업</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  *{ font-family:'Pretendard','Pretendard Variable',system-ui,sans-serif; }
+  body{ background:#f1f3f8; color:#1f2937; }
+  .card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  .tab{ padding:8px 18px; font-size:14px; font-weight:700; color:#6b7280; cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.on{ color:#4f46e5; border-bottom-color:#4f46e5; }
+  .chip{ font-size:11px; padding:2px 8px; border-radius:9999px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+  .btn-gold{ background:linear-gradient(135deg,#fbbf24,#d4af37); color:#1a1305; font-weight:700; }
+  .badge-count{ background:#ef4444; color:#fff; font-size:10px; font-weight:700; border-radius:9999px; padding:1px 6px; margin-left:4px; }
+  .sb{ padding:7px 14px; border-radius:9px; font-size:13px; font-weight:600; border:1px solid #e5e7eb; background:#fff; color:#6b7280; cursor:pointer; }
+  .sb:hover{ border-color:#c7d2fe; }
+  .sb.on{ border-color:rgba(212,175,55,.5); color:#1a1305; background:linear-gradient(135deg,#f7e3a1,#d4af37); }
+
+  /* 물건 상태/용도 태그 (실제 css.html과 동일) */
+  .stu-tag{ display:inline-block; min-width:50px; margin:1px; padding:3px 6px; font-size:.75rem; line-height:1.1; border-radius:4px; font-weight:500; text-align:center; vertical-align:middle; box-sizing:border-box; }
+  .stu-tag-bid{ background-color:#a5b4fc; color:#312e81; border:1.5px solid #4338ca; }
+  .stu-tag-recommend{ background-color:#ffbe76; color:#9c4a18; border:1.5px solid #c2410c; }
+  .stu-tag-default{ background-color:#bbf7d0; color:#14532d; border:1.5px solid #15803d; }
+  .stu-tag-changed{ background-color:#111827; color:#fff; border:1.5px solid #000; }
+  .stu-tag-discard{ background-color:#dc2626; color:#fff; border:1.5px solid #b91c1c; }
+  .stu-tag-product{ background-color:#fef9c3; color:#854d0e; border:1.5px solid #a16207; }
+  .stu-tag-verified{ background-color:#e9d5ff; color:#6b21a8; border:1.5px solid #7e22ce; }
+  .yongdo-tag{ display:inline-block; min-width:56px; margin:1px; padding:3px 6px; font-size:.75rem; line-height:1.1; border-radius:4px; font-weight:500; text-align:center; white-space:nowrap; letter-spacing:-0.04em; vertical-align:middle; box-sizing:border-box; }
+  .yongdo-tag-platinum{ background-color:#e2e8f0; color:#1e293b; border:1.5px solid #475569; }
+  .yongdo-tag-black{ background-color:#1f2937; color:#f9fafb; border:1.5px solid #111827; }
+  .yongdo-tag-silver{ background-color:#f1f5f9; color:#334155; border:1.5px solid #94a3b8; }
+  .yongdo-tag-income{ background-color:#d1fae5; color:#065f46; border:1.5px solid #047857; }
+  .yongdo-tag-rent{ background-color:#cffafe; color:#155e75; border:1.5px solid #0e7490; }
+  .yongdo-tag-other{ background-color:#fde68a; color:#78350f; border:1.5px solid #b45309; }
+  .yongdo-tag-pre{ background-color:#fee2e2; color:#991b1b; border:1.5px solid #ef4444; }
+
+  /* ===== 나이트 모드 (body.dark 오버라이드) ===== */
+  body.dark{ background:radial-gradient(1200px 600px at 80% -10%, rgba(212,175,55,.10), transparent 55%), linear-gradient(180deg,#0a0e16,#0e131e); background-attachment:fixed; color:#e6edf3; }
+  body.dark .card{ background:#161d28; border-color:rgba(255,255,255,.08); box-shadow:0 10px 30px -12px rgba(0,0,0,.7); }
+  body.dark .bg-white{ background:#161d28 !important; }
+  body.dark .text-gray-800{ color:#e6edf3 !important; }
+  body.dark .text-gray-700{ color:#cbd5e1 !important; }
+  body.dark .text-gray-600{ color:#aeb8c6 !important; }
+  body.dark .text-gray-500{ color:#94a3b8 !important; }
+  body.dark .text-gray-400{ color:#7c8694 !important; }
+  body.dark .text-gray-300{ color:#5c6675 !important; }
+  body.dark .border-gray-200{ border-color:rgba(255,255,255,.08) !important; }
+  body.dark .border-gray-100{ border-color:rgba(255,255,255,.05) !important; }
+  body.dark .border-gray-300{ border-color:rgba(255,255,255,.14) !important; }
+  body.dark .bg-gray-50{ background:rgba(255,255,255,.03) !important; }
+  body.dark .bg-gray-100{ background:rgba(255,255,255,.07) !important; }
+  body.dark .bg-gray-200{ background:rgba(255,255,255,.1) !important; }
+  body.dark .hover\:bg-gray-50:hover{ background:rgba(255,255,255,.04) !important; }
+  body.dark .hover\:bg-indigo-50\/40:hover{ background:rgba(99,102,241,.12) !important; }
+  body.dark .bg-indigo-50\/40{ background:rgba(99,102,241,.10) !important; }
+  body.dark .bg-red-50\/40{ background:rgba(248,113,113,.10) !important; }
+  body.dark input{ background:#0f1722 !important; color:#e6edf3 !important; }
+  body.dark thead.bg-gray-50{ background:#1b2330 !important; }
+  /* 칩: 라이트 틴트 → 다크 틴트 */
+  body.dark .bg-emerald-100{ background:rgba(16,185,129,.16)!important } body.dark .text-emerald-700{ color:#6ee7b7!important }
+  body.dark .bg-amber-100{ background:rgba(245,158,11,.16)!important } body.dark .text-amber-700{ color:#fcd34d!important } body.dark .text-amber-600{ color:#fcd34d!important }
+  body.dark .bg-violet-100{ background:rgba(139,92,246,.16)!important } body.dark .text-violet-700{ color:#c4b5fd!important }
+  body.dark .bg-sky-100{ background:rgba(56,189,248,.16)!important } body.dark .text-sky-700{ color:#7dd3fc!important } body.dark .text-sky-600{ color:#7dd3fc!important }
+  body.dark .bg-red-100{ background:rgba(239,68,68,.16)!important } body.dark .text-red-700{ color:#fca5a5!important } body.dark .text-red-600{ color:#fca5a5!important }
+  body.dark .bg-blue-100{ background:rgba(59,130,246,.16)!important } body.dark .text-blue-700{ color:#93c5fd!important }
+  body.dark .text-indigo-600{ color:#a5b4fc!important } body.dark .text-indigo-700{ color:#a5b4fc!important }
+  body.dark .bg-rose-100{ background:rgba(244,63,94,.16)!important } body.dark .text-rose-600{ color:#fda4af!important }
+  body.dark .bg-orange-100{ background:rgba(249,115,22,.16)!important } body.dark .text-orange-700{ color:#fdba74!important }
+  body.dark .bg-purple-100{ background:rgba(168,85,247,.16)!important } body.dark .text-purple-700{ color:#d8b4fe!important }
+  body.dark .bg-blue-50{ background:rgba(59,130,246,.10)!important } body.dark .border-blue-100{ border-color:rgba(59,130,246,.2)!important } body.dark .text-blue-800{ color:#93c5fd!important }
+  body.dark .bg-indigo-50{ background:rgba(99,102,241,.12)!important } body.dark .border-indigo-100{ border-color:rgba(99,102,241,.25)!important } body.dark .text-indigo-700{ color:#a5b4fc!important }
+  body.dark .bg-indigo-50\/60{ background:rgba(99,102,241,.18)!important }
+  body.dark .tab{ color:#94a3b8; }
+  body.dark .tab.on{ color:#a5b4fc; border-bottom-color:#818cf8; }
+</style>
+</head>
+<body class="p-6">
+<div class="max-w-[1080px] mx-auto">
+
+  <!-- 경로 + 제목 -->
+  <div class="text-[12px] text-gray-400 mb-1">입찰물건관리 ▸ <span class="text-gray-600 font-semibold">추천물건관리</span> <span class="text-gray-300">(목업)</span></div>
+  <div class="flex items-center mb-3">
+    <h1 class="text-xl font-bold text-gray-800">추천물건관리 <span class="text-[13px] font-normal text-gray-400">돈클</span></h1>
+    <button id="themeBtn" onclick="toggleTheme()" class="ml-auto text-xs border border-gray-300 rounded-lg px-3 py-1.5 text-gray-600">나이트 모드</button>
+  </div>
+
+  <!-- 탭 -->
+  <div class="flex items-center gap-1 border-b border-gray-200 mb-4">
+    <div class="tab on" id="tab-queue" onclick="switchTab('queue')">추천 큐 <span class="text-[11px] text-gray-400 font-normal">(누구 먼저)</span></div>
+    <div class="tab" id="tab-wait" onclick="switchTab('wait')">전달 대기함 <span class="badge-count" id="waitBadge">0</span></div>
+    <div class="ml-auto flex items-center gap-2 text-[11px] text-gray-400 pb-2">기준일
+      <input id="dateInput" type="date" value="2026-06-08" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700"> · 추천 주기
+      <input id="cycleInput" type="number" min="1" value="14" onfocus="this.select()" onclick="this.select()" class="w-12 border border-gray-300 rounded px-1.5 py-0.5 text-center text-gray-700"> 일
+      <button id="cycleSave" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-semibold">저장</button></div>
+  </div>
+
+  <!-- ========== 탭1: 추천 큐 (추천담당자) ========== -->
+  <div id="view-queue" class="flex items-stretch">
+    <div class="card p-5 flex-1 min-w-0">
+      <!-- 상단 필터 버튼 -->
+      <div class="flex items-center gap-1.5 mb-4 flex-wrap" id="statBtns">
+        <button data-f="all" class="sb on" onclick="setStat('all')">전체 <b>0</b></button>
+        <button data-f="urgent" class="sb" onclick="setStat('urgent')">긴급<span class="text-[11px] font-normal opacity-70">(지난)</span> <b>0</b></button>
+        <button data-f="soon" class="sb" onclick="setStat('soon')">임박 <b>0</b></button>
+        <button data-f="wait" class="sb" onclick="setStat('wait')">대기 <b>0</b></button>
+        <button data-f="done" class="sb" onclick="setStat('done')">완료 <b>0</b></button>
+        <label class="ml-2 text-xs text-gray-500 flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="setSoon(this.value)" class="w-12 border border-gray-300 rounded px-1.5 py-1 text-center text-gray-700"></label>
+      </div>
+      <div class="flex items-center mb-3 gap-2">
+        <h2 class="text-base font-bold text-gray-800">추천 우선순위</h2>
+        <input id="queueSearch" oninput="setQueueQuery(this.value)" onfocus="this.select()" onclick="this.select()" placeholder="회원이름 조회" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs w-40 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <span class="text-[12px] text-gray-400 ml-auto">정렬: 헤더 클릭</span>
+      </div>
+      <table class="w-full text-sm">
+        <thead><tr class="text-gray-500 border-b border-gray-200 text-[12px] select-none">
+          <th class="text-left py-2 font-semibold">우선순위</th>
+          <th class="text-left py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="sortQueue('name')">회원<span id="qa-name"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="sortQueue('sub')">구분<span id="qa-sub"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="sortQueue('total')">누적<span id="qa-total"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="sortQueue('last')">마지막<span id="qa-last"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="sortQueue('next')">다음예정<span id="qa-next"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="sortQueue('status')">상태<span id="qa-status"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="sortQueue('wait')">진행상황<span id="qa-wait"></span></th>
+          <th class="text-center py-2 font-semibold">액션</th>
+        </tr></thead>
+        <tbody id="queueBody"></tbody>
+      </table>
+      <div id="queueWait" class="text-[12px] text-sky-600 mt-3"></div>
+    </div>
+    <!-- 드래그로 좌우 너비 조절 -->
+    <div id="recDivider" class="w-1.5 mx-1.5 cursor-col-resize bg-gray-200 hover:bg-indigo-400 rounded transition-colors flex-none" title="드래그로 너비 조절"></div>
+    <!-- 우측 상시 패널: 선택한 추천 물건 -->
+    <div class="card flex-none overflow-hidden" id="recPanel" style="width:360px"><div id="recBody"></div></div>
+  </div>
+
+  <!-- ========== 탭2: 전달 대기함 (전달담당자) ========== -->
+  <div id="view-wait" class="hidden">
+    <div class="card p-5">
+      <div class="flex items-center mb-3">
+        <h2 class="text-base font-bold text-gray-800">전달 대기함</h2>
+        <span class="ml-2 text-[12px] text-gray-400">추천담당자가 등록한 물건 · 텔레그램/카톡으로 전달 → 전달완료</span>
+        <span class="ml-auto text-xs text-gray-400" id="waitCount"></span>
+      </div>
+      <table class="w-full text-sm">
+        <thead><tr class="text-gray-500 border-b border-gray-200 text-[12px]">
+          <th class="text-left py-2 font-semibold">회원</th><th class="text-center py-2 font-semibold">요청일자</th><th class="text-center py-2 font-semibold">구분</th><th class="text-left py-2 font-semibold">사건번호</th><th class="text-left py-2 font-semibold">법원</th>
+          <th class="text-center py-2 font-semibold">등록자</th><th class="text-center py-2 font-semibold">등록일</th>
+        </tr></thead>
+        <tbody id="waitBody"></tbody>
+      </table>
+      <div class="text-[11px] text-gray-400 mt-2">추천담당자가 등록한 전달 대기 물건 목록</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 추천하기 모달 = 물건 선택 (수업관리 물건등록 모달 그대로) ===== -->
+<div id="modal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center" onclick="if(event.target===this)closeModal()">
+  <div class="card w-full mx-4 flex flex-col" style="max-width:1320px;width:98vw;max-height:90vh;padding:0">
+    <!-- 헤더 -->
+    <div class="px-4 py-3 border-b border-gray-200 flex items-center gap-2 relative">
+      <h3 class="text-base font-bold text-gray-800 mx-auto">물건 선택</h3>
+      <button class="absolute left-4 text-xs px-2 py-0.5 rounded border bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-300">🔄 새로고침</button>
+      <button onclick="closeModal()" class="absolute right-3 text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+    </div>
+    <div class="flex flex-1 min-h-0">
+      <!-- 좌: 후보 리스트 -->
+      <div class="flex-1 flex flex-col border-r border-gray-200 min-w-0">
+        <div class="px-2 py-2.5 bg-gray-50 border-b border-gray-200 flex gap-1.5 flex-wrap items-center">
+          <input id="pf-date" oninput="renderPickerList()" onfocus="this.select()" placeholder="입찰일자" class="w-20 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+          <input id="searchInput" oninput="renderPickerList()" onfocus="this.select()" onclick="this.select()" placeholder="사건번호" class="w-32 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+          <input id="pf-court" oninput="renderPickerList()" onfocus="this.select()" placeholder="법원" class="w-16 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+          <select id="pf-status" onchange="renderPickerList()" class="w-16 px-1 py-1.5 border border-gray-300 rounded text-xs bg-white">
+            <option value="">상태</option><option value="상품">상품</option><option value="검증">검증</option><option value="미정">미정</option><option value="추천">추천</option><option value="입찰">입찰</option><option value="폐기">폐기</option><option value="불가">불가</option>
+          </select>
+          <input id="pf-member" oninput="renderPickerList()" onfocus="this.select()" placeholder="회원" class="w-16 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+          <input id="pf-regdate" oninput="renderPickerList()" onfocus="this.select()" placeholder="등록일자" class="w-20 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+          <select id="pf-mgr" onchange="renderPickerList()" class="w-24 px-1.5 py-1.5 border border-gray-300 rounded text-xs bg-white">
+            <option value="">담당자</option><option value="대표님">대표님</option><option value="전부쌤">전부쌤</option>
+          </select>
+        </div>
+        <!-- 요약 바 -->
+        <div id="pickerSummary" class="px-2 py-1 bg-blue-50 border-b border-blue-100 text-xs flex flex-wrap gap-x-2 gap-y-0.5 items-center"></div>
+        <div class="flex-1 overflow-y-auto p-2">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 sticky top-0"><tr class="text-gray-600 border-b border-gray-200">
+              <th class="text-center py-2 px-1 font-bold">일자</th><th class="text-center py-2 font-bold">IMG</th><th class="text-left py-2 font-bold">사건번호</th><th class="text-left py-2 font-bold">법원</th><th class="text-center py-2 font-bold">용도</th><th class="text-center py-2 font-bold">상태</th><th class="text-center py-2 font-bold">회원</th><th class="text-center py-2 font-bold">담당</th>
+            </tr></thead>
+            <tbody id="candBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- 우: 선택된 물건 -->
+      <div class="bg-gray-50 flex flex-col flex-none" style="width:520px">
+        <div class="px-3 py-2 border-b border-gray-200 bg-white flex items-center justify-between gap-2">
+          <span class="text-xs font-bold text-gray-700">선택된 물건 <span id="cartCount" class="text-indigo-600 font-semibold"></span></span>
+          <div class="flex gap-1">
+            <button onclick="confirmPicker()" class="px-2.5 py-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded">일괄 등록</button>
+            <button onclick="closeModal()" class="px-2.5 py-1 text-xs border border-gray-300 rounded text-gray-600 hover:bg-gray-100">취소</button>
+          </div>
+        </div>
+        <!-- 정보 바 (돈클 회원) -->
+        <div id="cartInfoBar" class="px-3 py-1.5 bg-indigo-50 border-b border-indigo-100 text-[11px] text-indigo-700 flex flex-nowrap gap-x-2 items-center overflow-x-auto whitespace-nowrap"></div>
+        <div class="px-2 py-1.5 bg-white border-b border-gray-100"><input id="cartSearch" oninput="renderCart()" onfocus="this.select()" placeholder="사건번호 조회" class="w-full px-2 py-1 border border-gray-300 rounded text-xs"></div>
+        <div class="flex-1 overflow-y-auto p-2">
+          <table class="min-w-full text-[11px]">
+            <thead class="sticky top-0 bg-gray-100"><tr class="text-gray-600 border-b border-gray-200">
+              <th class="text-center py-2 px-1 font-bold">일자</th><th class="text-left py-2 font-bold">사건번호</th><th class="text-left py-2 font-bold">법원</th><th class="text-center py-2 font-bold">용도</th><th class="text-center py-2 font-bold">상태</th><th class="text-center py-2 font-bold">회원</th><th class="text-center py-2 font-bold">담당</th><th class="w-5"></th>
+            </tr></thead>
+            <tbody id="cartBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden z-50"></div>
+
+
+<script>
+let TODAY = new Date(2026,5,8);  // 2026-06-08 (기준일 — 입력으로 변경 가능)
+let CYCLE = 14;
+const parseMD = md => { const [m,d]=md.split('/').map(Number); return new Date(2026, m-1, d); };
+const addDays = (dt,n) => { const x=new Date(dt); x.setDate(x.getDate()+n); return x; };
+const fmtMD = dt => String(dt.getMonth()+1).padStart(2,'0')+'/'+String(dt.getDate()).padStart(2,'0');
+const dayDiff = (a,b) => Math.round((a-b)/86400000);
+const won = v => { v=v||0; const eok=Math.floor(v/1e8), man=Math.round((v%1e8)/1e4); let s=''; if(eok)s+=eok+'억'; if(man)s+=(s?' ':'')+man.toLocaleString()+'만'; return s||'0'; };
+
+// 돈클 회원 + 추천 발송 이력
+const DK = [
+  {name:'조현우', sub:'월세',   recStart:'03/01', hist:[{d:'03/05',q:1},{d:'03/20',q:1},{d:'04/05',q:1},{d:'04/20',q:1}]},
+  {name:'강태오', sub:'수익',   recStart:'05/15', hist:[{d:'05/16',q:1}]},
+  {name:'서지후', sub:'올인원', recStart:'05/06', hist:[{d:'05/20',q:2}]},
+  {name:'윤재호', sub:'올인원', recStart:'05/26', hist:[{d:'05/27',q:1}]},
+  {name:'남도현', sub:'수익',   recStart:'05/18', hist:[]},
+  {name:'한지영', sub:'수익',   recStart:'03/01', hist:[{d:'03/03',q:1},{d:'03/17',q:1},{d:'03/31',q:1},{d:'04/14',q:1},{d:'04/28',q:1},{d:'05/12',q:1},{d:'05/26',q:1},{d:'06/07',q:1}]},
+  {name:'임채원', sub:'수익',   recStart:null, hist:[], waiting:true},
+];
+// 후보 물건 (상품/미정)
+// date=등록일자(YYMMDD), youngdo=용도, stu=상태, member=회원, mgr=담당
+const CAND = [
+  {date:'260608', s:'2023타경110430(1)', court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'이서원',       mgr:'전부쌤'},
+  {date:'260608', s:'2023타경110430(2)', court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'이서원',       mgr:'전부쌤'},
+  {date:'260608', s:'2023타경110430(3)', court:'부산동부', youngdo:'등록전',   stu:'미정', member:'박성미',       mgr:'전부쌤'},
+  {date:'260608', s:'2023타경103746',    court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'김정희',       mgr:'전부쌤'},
+  {date:'260608', s:'2023타경110430',    court:'부산동부', youngdo:'등록전',   stu:'미정', member:'이서원심희정', mgr:'전부쌤'},
+  {date:'260608', s:'2024타경1670(2)',   court:'부산동부', youngdo:'등록전',   stu:'상품', member:'',             mgr:'전부쌤'},
+  {date:'260608', s:'2024타경11848',     court:'수원',     youngdo:'등록전',   stu:'입찰', member:'최정미',       mgr:'대표님'},
+  {date:'260608', s:'2024타경54944',     court:'춘천강릉', youngdo:'등록전',   stu:'불가', member:'김지영',       mgr:'대표님'},
+  {date:'260608', s:'2024타경104050',    court:'부산동부', youngdo:'돈클수익', stu:'입찰', member:'신혜진',       mgr:'대표님'},
+  {date:'260608', s:'2025타경4931(1)',   court:'부산동부', youngdo:'등록전',   stu:'미정', member:'안수정',       mgr:'대표님'},
+  {date:'260608', s:'2025타경4931(2)',   court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'이종진',       mgr:'대표님'},
+  {date:'260608', s:'2025타경20198(3)',  court:'대전논산', youngdo:'등록전',   stu:'폐기', member:'',             mgr:'대표님'},
+  {date:'260608', s:'2025타경51125(5)',  court:'서울동부', youngdo:'등록전',   stu:'입찰', member:'강성은',       mgr:'대표님'},
+  {date:'260608', s:'2025타경51125(7)',  court:'서울동부', youngdo:'등록전',   stu:'미정', member:'박예진',       mgr:'대표님'},
+  {date:'260608', s:'2025타경384',       court:'서울동부', youngdo:'등록전',   stu:'상품', member:'',             mgr:'전부쌤'},
+  {date:'260608', s:'2025타경1095',      court:'대구',     youngdo:'등록전',   stu:'상품', member:'',             mgr:'대표님'},
+  {date:'260608', s:'2025타경3768',      court:'대구포항', youngdo:'등록전',   stu:'미정', member:'박경우',       mgr:'전부쌤'},
+  {date:'260608', s:'2025타경3997',      court:'대구포항', youngdo:'등록전',   stu:'상품', member:'',             mgr:'전부쌤'},
+  {date:'260608', s:'2025타경5018',      court:'부산동부', youngdo:'등록전',   stu:'상품', member:'',             mgr:'대표님'},
+  {date:'260608', s:'2025타경20756',     court:'전주군산', youngdo:'등록전',   stu:'미정', member:'권윤찬',       mgr:'전부쌤'},
+  {date:'260608', s:'2025타경21459',     court:'창원통영', youngdo:'등록전',   stu:'불가', member:'신혜진',       mgr:'대표님'},
+  {date:'260608', s:'2025타경41887',     court:'수원평택', youngdo:'등록전',   stu:'미정', member:'최숙희',       mgr:'대표님'},
+];
+const STU_PICK = ['상품','미정','추천'];   // 선택 가능(돈클 추천 대상). 나머지는 흐리게·비활성
+// 실제 getStatusTagClass / getYongdoTagClass 와 동일 매핑
+const statusTag = s => { const m={'상품':'stu-tag-product','입찰':'stu-tag-bid','추천':'stu-tag-recommend','검증':'stu-tag-verified','폐기':'stu-tag-discard','불가':'stu-tag-changed','취소':'stu-tag-changed','변경':'stu-tag-changed','미정':'stu-tag-default'}; return `<span class="stu-tag ${m[s]||'stu-tag-default'}">${s}</span>`; };
+const yongdoTag = y => { const m={'돈클수익':'yongdo-tag-income','돈클월세':'yongdo-tag-rent','플래티넘':'yongdo-tag-platinum','블랙':'yongdo-tag-black','실버':'yongdo-tag-silver','PT, 단투':'yongdo-tag-other'}; return `<span class="yongdo-tag ${m[y]||'yongdo-tag-pre'}">${y||'등록전'}</span>`; };
+CAND.forEach((c,i)=>{ c.bid=['06/12','06/16','06/18','06/20','06/23','06/25'][i%6]; });   // 입찰일자(매각기일) 샘플
+// 전달 대기함 (등록됐지만 미전달)
+let WAIT = [
+  {name:'조현우', sub:'월세', s:'2024타경59001', court:'부산지법', bidDate:'06/16', by:'대표님', regDate:'06/07', channel:'텔레그램'},
+  {name:'한지영', sub:'수익', s:'2024타경59112', court:'창원지법', bidDate:'06/18', by:'전부쌤', regDate:'06/08', channel:'텔레그램'},
+];
+// 전달완료 이력 (사건번호 보존)
+let DELIVERED = [
+  {name:'강태오', s:'2024타경58010', court:'부산지법', bidDate:'06/12', date:'05/16', by:'전부쌤'},
+  {name:'서지후', s:'2024타경58220', court:'창원지법', bidDate:'06/20', date:'05/20', by:'대표님'},
+  {name:'윤재호', s:'2024타경58330', court:'대구지법', bidDate:'06/23', date:'05/27', by:'대표님'},
+];
+
+const subChip = s => { const m={'수익':'border-emerald-500 text-emerald-700','월세':'border-amber-500 text-amber-700','올인원':'border-violet-500 text-violet-700'}; return `<span class="inline-block w-[68px] text-center text-[11px] font-bold py-1 rounded-md border-2 bg-white ${m[s]||'border-gray-400 text-gray-600'}">${s}</span>`; };
+// 텔레그램 연결 뱃지 (T 동그라미). 미연결 회원만 별도 표기.
+const TELE_OFF = new Set(['임채원']);
+const teleBadge = name => `<span class="inline-grid place-items-center w-4 h-4 rounded-full text-[9px] font-bold align-middle mr-1 ${TELE_OFF.has(name)?'bg-gray-300 text-white':'bg-sky-500 text-white'}" title="${TELE_OFF.has(name)?'텔레그램 미연결':'텔레그램 연결됨'}">T</span>`;
+
+function calc(m){
+  const total = m.hist.reduce((s,h)=>s+h.q,0);
+  const lastH = m.hist.length ? m.hist[m.hist.length-1] : null;
+  const last  = lastH ? lastH.d : null;
+  const lastQ = lastH ? lastH.q : 0;
+  if(m.waiting || (!last && !m.recStart)) return {total,last,lastQ,next:null,dleft:null,owed:0,waiting:true};
+  // 다음예정 = 마지막 추천일 + (그날 발송건수 × 주기). 2건이면 4주 뒤.
+  const base = last ? parseMD(last) : parseMD(m.recStart);
+  const next = addDays(base, (lastQ||1)*CYCLE);
+  const dleft = dayDiff(next, TODAY);
+  const owed = dleft<0 ? Math.floor(-dleft/CYCLE)+1 : 0;   // 지연 시 밀린 건수
+  return {total,last,lastQ,next,dleft,owed,waiting:false};
+}
+function statusCell(k){
+  if(k.waiting) return '<span class="chip bg-sky-100 text-sky-700">입회 대기</span>';
+  if(k.dleft<0) return `<span class="chip bg-red-100 text-red-700">긴급 · ${-k.dleft}일 지남</span>`;
+  if(k.dleft<=SOON) return `<span class="chip bg-amber-100 text-amber-700">임박 D-${k.dleft}</span>`;
+  return `<span class="chip bg-gray-100 text-gray-500">여유 D-${k.dleft}</span>`;
+}
+const waitCountFor = name => WAIT.filter(w=>w.name===name).length;
+
+function renderQueue(){
+  renderStatBtns();
+  let list = DK.filter(m=> (!queueQuery || m.name.includes(queueQuery)) && matchStat(m)).map(m=>({m,k:calc(m)}));
+  if(qSort.key){
+    const d=qSort.dir, g=o=>{switch(qSort.key){case 'name':return o.m.name;case 'sub':return o.m.sub;case 'total':return o.k.total;case 'last':return o.k.last||'';case 'next':return o.k.next?o.k.next.getTime():0;case 'status':return o.k.dleft==null?1e9:o.k.dleft;case 'wait':return waitCountFor(o.m.name);}};
+    list.sort((a,b)=>{const av=g(a),bv=g(b); return (typeof av==='string'?av.localeCompare(bv):av-bv)*d;});
+  } else { list.sort((a,b)=>{ const aw=a.m.waiting?1:0,bw=b.m.waiting?1:0; if(aw!==bw) return aw-bw; return (b.k.owed-a.k.owed)||((a.k.dleft==null?1e9:a.k.dleft)-(b.k.dleft==null?1e9:b.k.dleft)); }); }
+  document.getElementById('queueBody').innerHTML = list.length ? list.map(({m,k},i)=>{
+    const w8=m.waiting;
+    const rank = (i===0 && !qSort.key && !w8) ? '<span class="text-amber-600 font-extrabold">★ 1순위</span>' : `<span class="text-gray-500">${i+1}</span>`;
+    const sel = (m.name===curRecMember);
+    const rowSty = sel ? 'background:rgba(99,102,241,.10);box-shadow:inset 3px 0 0 #6366f1' : (k.owed>=1 ? 'background:rgba(248,113,113,.07)' : '');
+    const nextV = w8 ? '—' : (k.next?fmtMD(k.next):'—');
+    const nextC = (!w8 && k.dleft<0)?'text-red-600 font-bold':(!w8 && k.dleft<=3)?'text-amber-600 font-semibold':'text-gray-600';
+    const ps = progStateOf(m.name);
+    const waitTag = ps==='대기' ? `<span class="chip bg-amber-100 text-amber-700">대기 ${waitCountFor(m.name)}건</span>`
+                  : ps==='완료' ? '<span class="chip bg-gray-100 text-gray-500">완료</span>'
+                  : '<span class="chip bg-white text-gray-400 ring-1 ring-gray-200">없음</span>';
+    const action = w8 ? '<span class="text-gray-300 text-[12px]">미진입</span>' : `<button onclick="event.stopPropagation();openModal('${m.name}')" class="btn-gold px-3 py-1 rounded-lg text-[12px]">추천하기</button>`;
+    return `<tr class="border-b border-gray-100 cursor-pointer hover:bg-gray-50/60" style="${rowSty}" onclick="openMemberRecs('${m.name}')">
+      <td class="py-3">${rank}</td>
+      <td class="py-3 font-semibold text-gray-800">${teleBadge(m.name)}${m.name}</td>
+      <td class="py-3 text-center">${subChip(m.sub)}</td>
+      <td class="py-3 text-center text-gray-700 font-semibold">${w8?'—':k.total+'건'}</td>
+      <td class="py-3 text-center text-gray-500">${k.last||'—'}</td>
+      <td class="py-3 text-center ${nextC}">${nextV}</td>
+      <td class="py-3 text-center">${statusCell(k)}</td>
+      <td class="py-3 text-center">${waitTag}</td>
+      <td class="py-3 text-center">${action}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9" class="py-6 text-center text-gray-400">선택한 상태의 회원이 없습니다</td></tr>';
+  document.getElementById('queueWait').innerHTML = '';
+  document.getElementById('waitBadge').textContent = WAIT.length;
+  updateSortArrows();
+}
+
+function renderWait(){
+  document.getElementById('waitBody').innerHTML = WAIT.length ? WAIT.map((w,idx)=>`
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="py-3 font-semibold text-gray-800">${teleBadge(w.name)}${w.name}</td>
+      <td class="py-3 text-center text-gray-500">${w.regDate}</td>
+      <td class="py-3 text-center">${subChip(w.sub)}</td>
+      <td class="py-3 text-gray-700 font-medium">${w.s}</td>
+      <td class="py-3 text-gray-500">${w.court}</td>
+      <td class="py-3 text-center text-gray-500">${w.by}</td>
+      <td class="py-3 text-center text-gray-500">${w.regDate}</td>
+    </tr>`).join('') : '<tr><td colspan="7" class="py-10 text-center text-gray-400">전달 대기 물건이 없습니다</td></tr>';
+  document.getElementById('waitCount').textContent = WAIT.length+'건 대기';
+  document.getElementById('waitBadge').textContent = WAIT.length;
+}
+
+// 추천하기 = 물건 선택 모달 (수업관리 물건등록 모달 그대로: 좌 후보 / 우 장바구니 → 일괄등록)
+let modalMember = null;
+let cart = [];
+let qSort={key:null,dir:1};
+let curStat='all', SOON=3;
+function progStateOf(name){ if(waitCountFor(name)>0) return '대기'; if(DELIVERED.some(d=>d.name===name)) return '완료'; return '없음'; }
+function matchStat(m){
+  if(curStat==='all') return true;
+  if(curStat==='wait') return progStateOf(m.name)==='대기';
+  if(curStat==='done') return progStateOf(m.name)==='완료';
+  if(m.waiting) return false;
+  const k=calc(m);
+  if(curStat==='urgent') return k.dleft<0;
+  if(curStat==='soon') return k.dleft>=0 && k.dleft<=SOON;
+  return true;
+}
+function setStat(f){ curStat=f; document.querySelectorAll('#statBtns .sb').forEach(b=>b.classList.toggle('on', b.dataset.f===f)); renderQueue(); }
+function setSoon(v){ SOON=Math.max(0, parseInt(v)||0); renderQueue(); }
+function renderStatBtns(){
+  const A=DK.filter(m=>!m.waiting).map(m=>calc(m));
+  const set=(f,v)=>{const b=document.querySelector('#statBtns .sb[data-f="'+f+'"] b'); if(b)b.textContent=v;};
+  set('all',DK.length);
+  set('urgent',A.filter(k=>k.dleft<0).length);
+  set('soon',A.filter(k=>k.dleft>=0&&k.dleft<=SOON).length);
+  set('wait',DK.filter(m=>progStateOf(m.name)==='대기').length);
+  set('done',DK.filter(m=>progStateOf(m.name)==='완료').length);
+}
+function sortQueue(key){ if(qSort.key===key) qSort.dir*=-1; else { qSort.key=key; qSort.dir=1; } renderQueue(); }
+function updateSortArrows(){ ['name','sub','total','last','next','status','wait'].forEach(k=>{ const e=document.getElementById('qa-'+k); if(e) e.textContent = (qSort.key===k)?(qSort.dir>0?' ▲':' ▼'):''; }); }
+function v(id){ const e=document.getElementById(id); return e?(e.value||'').trim():''; }
+function openModal(name){
+  modalMember=name; cart=[];
+  ['pf-date','searchInput','pf-court','pf-member','pf-regdate','cartSearch'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
+  document.getElementById('pf-status').value=''; document.getElementById('pf-mgr').value='';
+  const m=DK.find(x=>x.name===name); const sep='<span class="opacity-40">|</span>';
+  document.getElementById('cartInfoBar').innerHTML = m ? `<span><b>구분</b> 돈클</span>${sep}<span><b>회원</b> ${m.name}</span>${sep}<span><b>종목</b> ${m.sub}</span>${sep}<span><b>등록일</b> ${fmtMD(TODAY)}</span>${sep}<span><b>추천주기</b> ${CYCLE}일</span>` : '';
+  renderPickerList(); renderCart();
+  document.getElementById('modal').classList.remove('hidden'); document.getElementById('modal').classList.add('flex');
+}
+function closeModal(){ document.getElementById('modal').classList.add('hidden'); document.getElementById('modal').classList.remove('flex'); }
+function pickerFiltered(){
+  const q=v('searchInput'),dt=v('pf-date'),ct=v('pf-court'),st=v('pf-status'),mb=v('pf-member'),rd=v('pf-regdate'),mg=v('pf-mgr');
+  return CAND.filter(c=> (!q||c.s.includes(q)) && (!dt||c.date.includes(dt)) && (!ct||c.court.includes(ct)) && (!st||c.stu===st) && (!mb||(c.member||'').includes(mb)) && (!rd||c.date.includes(rd)) && (!mg||c.mgr===mg));
+}
+function renderPickerSummary(){
+  const cnt=s=>CAND.filter(c=>c.stu===s).length;
+  document.getElementById('pickerSummary').innerHTML =
+    `<span class="font-semibold text-blue-800">전체 ${CAND.length}건</span>`+
+    ['상품','미정','추천','입찰','폐기','불가'].map(s=>`<span class="opacity-40">|</span><span class="text-gray-600">${s} ${cnt(s)}건</span>`).join('');
+}
+function renderPickerList(){
+  renderPickerSummary();
+  const list=pickerFiltered();
+  document.getElementById('candBody').innerHTML = list.length ? list.map(c=>{
+    const pickable=STU_PICK.includes(c.stu); const inCart=cart.includes(c.s);
+    const click = pickable ? `onclick="addToCart('${c.s}')"` : '';
+    const cur = pickable ? 'cursor-pointer hover:bg-indigo-50/40' : 'cursor-not-allowed opacity-50';
+    return `<tr class="border-b border-gray-100 ${cur} ${inCart?'bg-indigo-50/60':''}" ${click}>
+      <td class="py-2 px-1 text-center text-gray-500">${c.date}</td>
+      <td class="py-2 text-center"><span class="inline-block w-2 h-2 rounded-full ${pickable?'bg-emerald-400':'bg-gray-300'}"></span></td>
+      <td class="py-2 font-medium ${pickable?'text-gray-800':'text-gray-400'}">${c.s}${inCart?' <span class="text-[10px] text-emerald-600 font-bold">담김</span>':''}</td>
+      <td class="py-2 ${pickable?'text-gray-600':'text-gray-400'}">${c.court}</td>
+      <td class="py-2 text-center">${yongdoTag(c.youngdo)}</td>
+      <td class="py-2 text-center">${statusTag(c.stu)}</td>
+      <td class="py-2 text-center text-gray-600">${c.member||'-'}</td>
+      <td class="py-2 text-center text-gray-500">${c.mgr||'-'}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="8" class="py-6 text-center text-gray-400">검색 결과 없음</td></tr>';
+}
+function addToCart(s){ if(!cart.includes(s)) cart.push(s); renderCart(); renderPickerList(); }
+function removeFromCart(s){ cart=cart.filter(x=>x!==s); renderCart(); renderPickerList(); }
+function renderCart(){
+  const q=v('cartSearch');
+  const items=cart.map(s=>CAND.find(c=>c.s===s)).filter(Boolean).filter(c=>!q||c.s.includes(q));
+  document.getElementById('cartCount').textContent = cart.length? cart.length+'건':'';
+  document.getElementById('cartBody').innerHTML = items.length ? items.map(c=>`
+    <tr class="border-b border-gray-100">
+      <td class="py-1.5 px-1 text-center text-gray-500">${c.date}</td>
+      <td class="py-1.5 font-medium text-gray-700">${c.s}</td>
+      <td class="py-1.5 text-gray-500">${c.court}</td>
+      <td class="py-1.5 text-center">${yongdoTag(c.youngdo)}</td>
+      <td class="py-1.5 text-center">${statusTag(c.stu)}</td>
+      <td class="py-1.5 text-center text-gray-600">${c.member||'-'}</td>
+      <td class="py-1.5 text-center text-gray-500">${c.mgr||'-'}</td>
+      <td class="py-1.5 text-center"><button onclick="removeFromCart('${c.s}')" class="text-gray-400 hover:text-red-500 text-sm">&times;</button></td>
+    </tr>`).join('') : '<tr><td colspan="8" class="py-8 text-center text-gray-400">클릭하면 추가됩니다</td></tr>';
+}
+function confirmPicker(){
+  const m=DK.find(x=>x.name===modalMember); if(!m){ closeModal(); return; }
+  if(!cart.length){ toast('선택된 물건이 없습니다'); return; }
+  cart.forEach(s=>{ const c=CAND.find(x=>x.s===s); if(c) WAIT.push({name:m.name, sub:m.sub, s:c.s, court:c.court, bidDate:c.bid, by:'대표님', regDate:fmtMD(TODAY), channel:'텔레그램'}); });
+  const n=cart.length; cart=[]; closeModal(); renderQueue(); renderWait(); openMemberRecs(m.name);
+  toast(`${m.name} 앞으로 ${n}건 전달대기 등록`);
+}
+// 전달 (전달완료)
+function deliver(idx, ch){
+  const w = WAIT[idx]; if(!w) return;
+  if(ch==='kakao'){ if(!confirm(`${w.s} 카드 이미지·텍스트를 복사했습니다.\n카톡에 붙여넣은 뒤 [확인]을 누르면 전달완료 처리됩니다.`)) return; }
+  // chuchen_state=전달완료 → 큐 회원 누적+1
+  const m = DK.find(x=>x.name===w.name); if(m){ const ds=fmtMD(TODAY); const lh=m.hist[m.hist.length-1]; if(lh&&lh.d===ds) lh.q+=1; else m.hist.push({d:ds,q:1}); }
+  DELIVERED.push({name:w.name, s:w.s, court:w.court, bidDate:w.bidDate, date:fmtMD(TODAY), by:w.by});
+  WAIT.splice(idx,1);
+  renderWait(); renderQueue();
+  toast(`${w.name} ${w.s} ${ch==='tele'?'텔레그램 발송':'카톡 전달'} → 추천완료 (큐 갱신)`);
+}
+
+// ===== 회원 추천 사건번호 드로어 =====
+function recsFor(name){
+  const w = WAIT.filter(x=>x.name===name).map(x=>({bid:x.bidDate||'—', req:x.regDate||'—', s:x.s, court:x.court, mgr:x.by||'-', status:'대기'}));
+  const d = DELIVERED.filter(x=>x.name===name).map(x=>({bid:x.bidDate||'—', req:x.date||'—', s:x.s, court:x.court, mgr:x.by||'-', status:'완료'}));
+  return w.concat(d);
+}
+let curRecMember = null;
+function openMemberRecs(name){
+  curRecMember = name;
+  const m = DK.find(x=>x.name===name); const list = recsFor(name);
+  const recTag = s => s==='대기' ? '<span class="chip bg-amber-100 text-amber-700">전달대기</span>' : '<span class="chip bg-gray-100 text-gray-500">추천완료</span>';
+  document.getElementById('recBody').innerHTML = `
+    <div class="border-b border-gray-200 bg-white px-4 py-3">
+      <div class="text-[11px] text-gray-400 mb-1">선택한 추천 물건</div>
+      <div class="flex items-center gap-1.5">${teleBadge(name)}<span class="text-base font-extrabold text-gray-800">${name}</span>${m?subChip(m.sub):''}</div>
+    </div>
+    <div class="p-3">
+      <div class="text-xs font-bold text-gray-600 mb-2 px-1">물건 <span class="text-gray-400 font-normal">${list.length}건</span></div>
+      ${ list.length ? `<table class="w-full text-xs">
+        <thead><tr class="text-gray-500 border-b border-gray-200">
+          <th class="text-center py-2 font-semibold">추천요청</th><th class="text-center py-2 font-semibold">입찰일자</th><th class="text-left py-2 font-semibold">사건번호</th><th class="text-left py-2 font-semibold">법원</th><th class="text-center py-2 font-semibold">담당</th><th class="text-center py-2 font-semibold">진행상태</th>
+        </tr></thead><tbody>
+        ${list.map(r=>`<tr class="border-b border-gray-100">
+          <td class="py-2 text-center text-gray-500">${r.req}</td>
+          <td class="py-2 text-center text-gray-500">${r.bid}</td>
+          <td class="py-2 font-medium text-gray-800">${r.s}</td>
+          <td class="py-2 text-gray-500">${r.court}</td>
+          <td class="py-2 text-center text-gray-500">${r.mgr}</td>
+          <td class="py-2 text-center">${recTag(r.status)}</td>
+        </tr>`).join('')}
+        </tbody></table>` : '<div class="text-sm text-gray-400 py-8 text-center">선택된 추천 물건이 없습니다<br><span class="text-[11px]">왼쪽 회원 클릭 또는 추천하기로 등록</span></div>' }
+    </div>`;
+  renderQueue();
+}
+
+function switchTab(t){
+  document.getElementById('view-queue').classList.toggle('hidden', t!=='queue');
+  document.getElementById('view-wait').classList.toggle('hidden', t!=='wait');
+  document.getElementById('tab-queue').classList.toggle('on', t==='queue');
+  document.getElementById('tab-wait').classList.toggle('on', t==='wait');
+}
+let toastT;
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.remove('hidden'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.add('hidden'),2200); }
+let queueQuery='';
+function setQueueQuery(v){ queueQuery=(v||'').trim(); renderQueue(); }
+// 추천주기: 저장 버튼 누를 때만 반영
+document.getElementById('cycleSave').addEventListener('click',()=>{ CYCLE=Math.max(1,parseInt(document.getElementById('cycleInput').value)||14); renderQueue(); toast('추천 주기 '+CYCLE+'일 저장됨'); });
+document.getElementById('dateInput').addEventListener('change',e=>{ const v=e.target.value; if(v){ const [y,mo,d]=v.split('-').map(Number); TODAY=new Date(y,mo-1,d); renderQueue(); renderWait(); } });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+// ===== 테마(나이트/화이트) — PC별 localStorage 저장 =====
+function applyTheme(t){ const dark=t==='dark'; document.body.classList.toggle('dark',dark); const b=document.getElementById('themeBtn'); if(b) b.textContent=dark?'화이트 모드':'나이트 모드'; }
+function toggleTheme(){ const next=document.body.classList.contains('dark')?'light':'dark'; try{localStorage.setItem('donkle_theme',next);}catch(e){} applyTheme(next); }
+(function(){ let t='light'; try{ t=localStorage.getItem('donkle_theme')||'light'; }catch(e){} applyTheme(t); })();
+renderQueue(); renderWait();
+// 우측 패널 기본 선택 = 1순위 회원
+(function(){ const a=DK.filter(m=>!m.waiting).map(m=>({m,k:calc(m)})).sort((x,y)=>(y.k.owed-x.k.owed)||(x.k.dleft-y.k.dleft))[0]; openMemberRecs(a? a.m.name : (DK[0]&&DK[0].name)); })();
+// ===== 그리드↔패널 너비 드래그 조절 (PC별 localStorage 저장) =====
+(function(){
+  const divider=document.getElementById('recDivider'), panel=document.getElementById('recPanel');
+  if(!divider||!panel) return;
+  try{ const w=localStorage.getItem('donkle_recpanel_w'); if(w) panel.style.width=w+'px'; }catch(e){}
+  let drag=false;
+  divider.addEventListener('mousedown',e=>{ drag=true; document.body.style.userSelect='none'; e.preventDefault(); });
+  window.addEventListener('mousemove',e=>{ if(!drag)return; let w=panel.getBoundingClientRect().right-e.clientX; w=Math.max(280,Math.min(680,w)); panel.style.width=w+'px'; });
+  window.addEventListener('mouseup',()=>{ if(!drag)return; drag=false; document.body.style.userSelect=''; try{localStorage.setItem('donkle_recpanel_w',parseInt(panel.style.width)||360);}catch(e){} });
+})();
+</script>
+</body>
+</html>
