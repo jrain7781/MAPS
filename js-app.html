@@ -6652,16 +6652,17 @@ MJ 이정우 팀장
         s = s.replace(/\{\{최저가\}\}/g, fmt(lowNum));
         s = s.replace(/\{\{수수료\}\}/g, fmt(feeNum));
         s = s.replace(/\{\{총금액\}\}/g, fmt(totalNum));
-        // 추천만료: bid_datetime_2 → MM/DD(요일) HH시 (토/일 14시 보정 적용)
+        // 추천만료: bid_datetime_2 → YYYY년 MM월 DD일(요일) HH시 (토/일 14시 보정 적용)
         let bd2Str = '';
         let bd2 = (typeof _parseBidDt_ === 'function') ? _parseBidDt_(data.bid_datetime_2) : null;
         if (bd2) {
             if (typeof adjustFinalDeadline_ === 'function') bd2 = adjustFinalDeadline_(bd2);
             const _dow = ['일','월','화','수','목','금','토'][bd2.getDay()];
+            const _yyyy = bd2.getFullYear();
             const _mm = String(bd2.getMonth() + 1).padStart(2, '0');
             const _dd = String(bd2.getDate()).padStart(2, '0');
             const _hh = String(bd2.getHours()).padStart(2, '0');
-            bd2Str = `${_mm}/${_dd}(${_dow}) ${_hh}시`;
+            bd2Str = `${_yyyy}년 ${_mm}월 ${_dd}일(${_dow}) ${_hh}시`;
         }
         s = s.replace(/\{\{추천만료\}\}/g, bd2Str);
         return s;
