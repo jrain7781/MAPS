@@ -7478,6 +7478,15 @@ MJ 이정우 팀장
                     }
                     allBiddingData.sort(dataComparator);
                     dataCache = { data: allBiddingData, timestamp: Date.now() };
+
+                    // [수정 후 리프레시] 상세패널에 떠있는 동일 물건이면 서버 확정값으로 currentDetailItem 갱신
+                    //  → 백엔드가 클리어한 파생필드(chuchen_date/bid_datetime_2/class_d1_id 등) 반영
+                    //  → 로딩바/마감/메시지탭({{추천만료}})이 실제 상태와 맞게 재계산
+                    if (currentDetailItem && String(currentDetailItem.id) === String(result.data.id)) {
+                        currentDetailItem = Object.assign({}, currentDetailItem, result.data);
+                        if (typeof renderSidebarChuchenInfo_ === 'function') renderSidebarChuchenInfo_(currentDetailItem);
+                        if (typeof _updateKakaoTextarea === 'function') _updateKakaoTextarea('item');
+                    }
                 }
 
                 toggleLoading(false);
