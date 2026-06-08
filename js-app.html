@@ -6635,8 +6635,17 @@ MJ 이정우 팀장
         if (!content || !data) return content || '';
         extra = extra || {};
         let s = content;
+        const _DOW = ['일','월','화','수','목','금','토'];
         let dateStr = String(data['in-date'] || '').trim();
-        if (dateStr.length === 6) dateStr = `20${dateStr.slice(0, 2)}년 ${dateStr.slice(2, 4)}월 ${dateStr.slice(4, 6)}일`;
+        let inDate = null;   // 입찰일자 Date (추천만료 클램프용)
+        if (dateStr.length === 6) {
+            const _y = 2000 + parseInt(dateStr.slice(0, 2), 10);
+            const _mo = parseInt(dateStr.slice(2, 4), 10) - 1;
+            const _da = parseInt(dateStr.slice(4, 6), 10);
+            inDate = new Date(_y, _mo, _da);
+            const _dw = isNaN(inDate.getTime()) ? '' : `(${_DOW[inDate.getDay()]})`;
+            dateStr = `20${dateStr.slice(0, 2)}년 ${dateStr.slice(2, 4)}월 ${dateStr.slice(4, 6)}일${_dw}`;
+        }
         const fmt = n => (n == null || n === '' || isNaN(n)) ? '' : new Intl.NumberFormat('ko-KR').format(n);
         let price = (data.bidprice == 0 || data.bidprice === '0') ? '0' : fmt(data.bidprice);
         const depNum = parseInt(String(data.deposit || 0).replace(/[^0-9]/g, ''), 10) || 0;
@@ -6657,12 +6666,20 @@ MJ 이정우 팀장
         let bd2 = (typeof _parseBidDt_ === 'function') ? _parseBidDt_(data.bid_datetime_2) : null;
         if (bd2) {
             if (typeof adjustFinalDeadline_ === 'function') bd2 = adjustFinalDeadline_(bd2);
-            const _dow = ['일','월','화','수','목','금','토'][bd2.getDay()];
+            // 긴급물건 클램프: 추천만료가 (입찰일 -1일 오후 3시)보다 늦으면 강제로 그 시각으로 당김
+            let _urgent = false;
+            if (inDate && !isNaN(inDate.getTime())) {
+                const cutoff = new Date(inDate.getTime());
+                cutoff.setDate(cutoff.getDate() - 1);
+                cutoff.setHours(15, 0, 0, 0);
+                if (bd2.getTime() > cutoff.getTime()) { bd2 = cutoff; _urgent = true; }
+            }
+            const _dow = _DOW[bd2.getDay()];
             const _yyyy = bd2.getFullYear();
             const _mm = String(bd2.getMonth() + 1).padStart(2, '0');
             const _dd = String(bd2.getDate()).padStart(2, '0');
             const _hh = String(bd2.getHours()).padStart(2, '0');
-            bd2Str = `${_yyyy}년 ${_mm}월 ${_dd}일(${_dow}) ${_hh}시`;
+            bd2Str = `${_yyyy}년 ${_mm}월 ${_dd}일(${_dow}) ${_hh}시${_urgent ? ' [긴급추천]' : ''}`;
         }
         s = s.replace(/\{\{추천만료\}\}/g, bd2Str);
         return s;
