@@ -322,13 +322,19 @@ function _createDataImpl(inDate, sakunNo, court, stuMember, mNameId, mName, bidP
   // [중복 체크] 동일 입찰일자+사건번호+법원명 존재 여부 확인 (B,C,D열만 읽어 속도 최적화)
   const dupLastRow = sheet.getLastRow();
   if (dupLastRow > 1) {
-    const dupRows = sheet.getRange(2, 2, dupLastRow - 1, 3).getValues(); // B=in-date, C=sakun_no, D=court
-    const isDup = dupRows.some(function(r) {
-      return String(r[0]) === String(inDate) &&
-             String(r[1]).trim() === String(sakunNo).trim() &&
-             String(r[2]).trim() === String(court).trim();
-    });
-    if (isDup) return { success: false, message: '이미 동일한 입찰일자/사건번호/법원명으로 등록된 물건이 있습니다.' };
+    const dupRows = sheet.getRange(2, 1, dupLastRow - 1, 4).getValues(); // A=id, B=in-date, C=sakun_no, D=court
+    var _dupConflict = null;
+    for (var _di = 0; _di < dupRows.length; _di++) {
+      var _r = dupRows[_di];
+      if (String(_r[1]) === String(inDate) &&
+          String(_r[2]).trim() === String(sakunNo).trim() &&
+          String(_r[3]).trim() === String(court).trim()) { _dupConflict = _r; break; }
+    }
+    if (_dupConflict) {
+      // [진단] 신규(create)가 발동했다는 것 자체가 단서 — "회원 수정 중"이라면 create 가 뜨면 안 됨
+      Logger.log('[DUP진단:신규] inDate=' + inDate + ' sakun=' + sakunNo + ' court=' + court + ' / 충돌ID=' + _dupConflict[0]);
+      return { success: false, message: '[진단:신규] 중복감지 — 충돌ID=' + _dupConflict[0] + ' / 키=' + court + ' ' + sakunNo + ' (' + inDate + ')' };
+    }
   }
 
   const id = new Date().getTime().toString();
@@ -596,13 +602,19 @@ function _updateDataImpl(id, inDate, sakunNo, court, stuMember, mName, bidPrice,
     const dupLastRow = sheet.getLastRow();
     if (dupLastRow > 1) {
       const dupRows = sheet.getRange(2, 1, dupLastRow - 1, 4).getValues(); // A=id, B=in-date, C=sakun_no, D=court
-      const isDup = dupRows.some(function(r) {
-        if (String(r[0]) === String(id)) return false; // 자기 자신 제외
-        return String(r[1]) === String(inDate) &&
-               String(r[2]).trim() === String(sakunNo).trim() &&
-               String(r[3]).trim() === String(court).trim();
-      });
-      if (isDup) return { success: false, message: '이미 동일한 입찰일자/사건번호/법원명으로 등록된 물건이 있습니다.' };
+      var _dupConflict = null;
+      for (var _di = 0; _di < dupRows.length; _di++) {
+        var _r = dupRows[_di];
+        if (String(_r[0]) === String(id)) continue; // 자기 자신 제외
+        if (String(_r[1]) === String(inDate) &&
+            String(_r[2]).trim() === String(sakunNo).trim() &&
+            String(_r[3]).trim() === String(court).trim()) { _dupConflict = _r; break; }
+      }
+      if (_dupConflict) {
+        // [진단] 제출ID vs 충돌ID 노출 → 진짜 중복행인지/폼 상태 꼬임인지 팝업으로 즉시 판별
+        Logger.log('[DUP진단:수정] 제출ID=' + id + ' inDate=' + inDate + ' sakun=' + sakunNo + ' court=' + court + ' / 충돌ID=' + _dupConflict[0]);
+        return { success: false, message: '[진단:수정] 중복감지 — 제출ID=' + id + ' / 충돌ID=' + _dupConflict[0] + ' / 키=' + court + ' ' + sakunNo + ' (' + inDate + ')' };
+      }
     }
   }
 
