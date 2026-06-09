@@ -13783,7 +13783,7 @@ MJ 이정우 팀장
 
     // ─── [PHASE 3-3] 회원 상세 탭 전환 ─────────────────────────────────────────
     function switchMemberDetailTab(tabName) {
-        ['info', 'cancel'].forEach(function (t) {
+        ['info', 'cancel', 'status'].forEach(function (t) {
             const btn = document.getElementById('memberTab-' + t);
             const panel = document.getElementById('memberTabPanel-' + t);
             if (!btn || !panel) return;
@@ -13792,6 +13792,189 @@ MJ 이정우 팀장
             panel.classList.toggle('hidden', !active);
         });
         if (tabName === 'cancel') loadAdminMemberItemHistory();
+        if (tabName === 'status') loadMemberItemStatus();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // [돈클 ⑦] 회원별 물건상태 탭 (members_item_status 적립 원장 CRUD)
+    // ─────────────────────────────────────────────────────────────────────────
+    window.MIS_STATUS_OPTIONS = ['추천', '입찰', '낙찰', '불가'];
+    window.misRowsCache = [];
+
+    function loadMemberItemStatus() {
+        const tbody = document.getElementById('misTableBody');
+        const statusEl = document.getElementById('misStatus');
+        const countEl = document.getElementById('misRowCount');
+        if (!tbody) return;
+        const memberId = (document.getElementById('mem-member_id') || {}).value || '';
+        if (!memberId) {
+            tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td></tr>';
+            if (countEl) countEl.textContent = '';
+            return;
+        }
+        if (statusEl) statusEl.textContent = '조회 중...';
+        tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
+        google.script.run
+            .withSuccessHandler(function (rows) {
+                window.misRowsCache = rows || [];
+                renderMisRows();
+                if (statusEl) statusEl.textContent = '';
+            })
+            .withFailureHandler(function (err) {
+                if (statusEl) statusEl.textContent = '오류: ' + err.toString();
+                tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-red-400">로드 중 오류가 발생했습니다.</td></tr>';
+            })
+            .getMemberItemStatusRows(memberId);
+    }
+
+    function misStatusBadge(st) {
+        let cls = 'bg-gray-100 text-gray-600';
+        if (st === '추천') cls = 'bg-blue-100 text-blue-600';
+        else if (st === '입찰') cls = 'bg-green-100 text-green-600';
+        else if (st === '낙찰') cls = 'bg-amber-100 text-amber-700';
+        else if (st === '불가') cls = 'bg-red-100 text-red-500';
+        return '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold ' + cls + '">' + escapeHtml(st || '-') + '</span>';
+    }
+
+    function renderMisRows() {
+        const tbody = document.getElementById('misTableBody');
+        const countEl = document.getElementById('misRowCount');
+        const rows = window.misRowsCache || [];
+        if (countEl) countEl.textContent = '총 ' + rows.length + '건';
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="12" class="p-6 text-center text-gray-400">적립된 물건상태가 없습니다.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(function (r) {
+            const rec = String(r.recorded_at || '').substring(0, 16).replace('T', ' ');
+            return `
+                <tr class="hover:bg-gray-50 transition-colors" data-mis="${escapeHtml(r.mis_id)}">
+                    <td class="px-2 py-1.5 text-center">${misStatusBadge(r.status)}</td>
+                    <td class="px-2 py-1.5 text-center font-mono text-gray-700">${escapeHtml(r.in_date)}</td>
+                    <td class="px-2 py-1.5 font-semibold text-gray-800">${escapeHtml(r.sakun_no)}</td>
+                    <td class="px-2 py-1.5 text-gray-600">${escapeHtml(r.court)}</td>
+                    <td class="px-2 py-1.5 text-gray-600">${escapeHtml(r.myeongui)}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-600">${escapeHtml(r.lowest_price)}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-600">${escapeHtml(r.bid_price)}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-700">${escapeHtml(r.win_price)}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-600">${escapeHtml(r.est_interior)}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-600">${escapeHtml(r.est_resale)}</td>
+                    <td class="px-2 py-1.5 text-center font-mono text-gray-400 text-[10px]">${escapeHtml(rec)}</td>
+                    <td class="px-2 py-1.5 text-center whitespace-nowrap">
+                        <button onclick="editMisRowUI('${escapeHtml(r.mis_id)}')" class="text-indigo-600 hover:text-indigo-800 mr-1">수정</button>
+                        <button onclick="deleteMisRowUI('${escapeHtml(r.mis_id)}')" class="text-red-500 hover:text-red-700">삭제</button>
+                    </td>
+                </tr>`;
+        }).join('');
+    }
+
+    // 편집 가능 필드 정의
+    window.MIS_EDIT_FIELDS = ['status', 'in_date', 'sakun_no', 'court', 'myeongui', 'win_price', 'est_interior', 'est_resale'];
+
+    function misEditRowHtml(r, isNew) {
+        const v = function (k) { return escapeHtml((r && r[k] != null) ? r[k] : ''); };
+        const sel = (window.MIS_STATUS_OPTIONS || []).map(function (o) {
+            return '<option value="' + o + '"' + ((r && r.status === o) ? ' selected' : '') + '>' + o + '</option>';
+        }).join('');
+        const inp = function (k, ph) { return '<input data-f="' + k + '" value="' + v(k) + '" placeholder="' + (ph || '') + '" class="w-full border border-gray-300 rounded px-1 py-0.5 text-xs">'; };
+        const num = function (k) { return '<input data-f="' + k + '" value="' + v(k) + '" inputmode="numeric" class="w-full border border-gray-300 rounded px-1 py-0.5 text-xs text-right">'; };
+        const misId = isNew ? '__new__' : escapeHtml(r.mis_id);
+        return `
+            <td class="px-1 py-1"><select data-f="status" class="w-full border border-gray-300 rounded px-1 py-0.5 text-xs">${sel}</select></td>
+            <td class="px-1 py-1">${inp('in_date', 'YYMMDD')}</td>
+            <td class="px-1 py-1">${inp('sakun_no')}</td>
+            <td class="px-1 py-1">${inp('court')}</td>
+            <td class="px-1 py-1">${inp('myeongui')}</td>
+            <td class="px-1 py-1 text-gray-400 text-right font-mono">${v('lowest_price') || '-'}</td>
+            <td class="px-1 py-1 text-gray-400 text-right font-mono">${v('bid_price') || '-'}</td>
+            <td class="px-1 py-1">${num('win_price')}</td>
+            <td class="px-1 py-1">${num('est_interior')}</td>
+            <td class="px-1 py-1">${num('est_resale')}</td>
+            <td class="px-1 py-1 text-center text-gray-400 text-[10px]">${isNew ? '신규' : escapeHtml(String(r.recorded_at || '').substring(0, 16).replace('T', ' '))}</td>
+            <td class="px-1 py-1 text-center whitespace-nowrap">
+                <button onclick="saveMisRowUI(this, '${misId}')" class="text-green-600 hover:text-green-800 mr-1">저장</button>
+                <button onclick="cancelMisEditUI(this, '${misId}')" class="text-gray-500 hover:text-gray-700">취소</button>
+            </td>`;
+    }
+
+    function editMisRowUI(misId) {
+        const tr = document.querySelector('#misTableBody tr[data-mis="' + misId + '"]');
+        if (!tr) return;
+        const r = (window.misRowsCache || []).find(function (x) { return String(x.mis_id) === String(misId); });
+        if (!r) return;
+        tr.innerHTML = misEditRowHtml(r, false);
+    }
+
+    function cancelMisEditUI(btn, misId) {
+        if (misId === '__new__') {
+            const tr = btn.closest('tr');
+            if (tr) tr.remove();
+            if (!(window.misRowsCache || []).length) renderMisRows();
+            return;
+        }
+        renderMisRows();
+    }
+
+    function collectMisEditFields(tr) {
+        const out = {};
+        (window.MIS_EDIT_FIELDS || []).forEach(function (k) {
+            const el = tr.querySelector('[data-f="' + k + '"]');
+            if (el) out[k] = el.value.trim();
+        });
+        return out;
+    }
+
+    function addMisRowUI() {
+        const memberId = (document.getElementById('mem-member_id') || {}).value || '';
+        if (!memberId) { alert('먼저 회원을 선택해 주세요.'); return; }
+        const tbody = document.getElementById('misTableBody');
+        // 빈 테이블 안내행 제거
+        if (!(window.misRowsCache || []).length) tbody.innerHTML = '';
+        const tr = document.createElement('tr');
+        tr.className = 'bg-indigo-50';
+        tr.setAttribute('data-mis', '__new__');
+        tr.innerHTML = misEditRowHtml({ status: '추천' }, true);
+        tbody.insertBefore(tr, tbody.firstChild);
+    }
+
+    function saveMisRowUI(btn, misId) {
+        const tr = btn.closest('tr');
+        if (!tr) return;
+        const fields = collectMisEditFields(tr);
+        if (!fields.status) { alert('상태를 선택해 주세요.'); return; }
+        btn.disabled = true; btn.textContent = '저장중';
+        const statusEl = document.getElementById('misStatus');
+        if (misId === '__new__') {
+            const memberId = (document.getElementById('mem-member_id') || {}).value || '';
+            const mName = (document.getElementById('mem-member_name') || {}).value || '';
+            fields.m_name = mName;
+            google.script.run
+                .withSuccessHandler(function (res) {
+                    if (res && res.success) { loadMemberItemStatus(); }
+                    else { alert('추가 실패: ' + ((res && res.message) || '')); btn.disabled = false; btn.textContent = '저장'; }
+                })
+                .withFailureHandler(function (err) { alert('오류: ' + err); btn.disabled = false; btn.textContent = '저장'; })
+                .addMisRow(memberId, fields);
+        } else {
+            google.script.run
+                .withSuccessHandler(function (res) {
+                    if (res && res.success) { loadMemberItemStatus(); }
+                    else { alert('수정 실패: ' + ((res && res.message) || '')); btn.disabled = false; btn.textContent = '저장'; }
+                })
+                .withFailureHandler(function (err) { alert('오류: ' + err); btn.disabled = false; btn.textContent = '저장'; })
+                .updateMisRow(misId, fields);
+        }
+    }
+
+    function deleteMisRowUI(misId) {
+        if (!confirm('이 물건상태 행을 삭제할까요?')) return;
+        google.script.run
+            .withSuccessHandler(function (res) {
+                if (res && res.success) { loadMemberItemStatus(); }
+                else { alert('삭제 실패: ' + ((res && res.message) || '')); }
+            })
+            .withFailureHandler(function (err) { alert('오류: ' + err); })
+            .deleteMisRow(misId);
     }
 
     /**
@@ -13948,6 +14131,9 @@ MJ 이정우 팀장
         switchMemberDetailTab('info');
         const cancelBody = document.getElementById('cancelHistoryTableBody');
         if (cancelBody) cancelBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">취소건 조회 탭을 클릭하세요.</td></tr>';
+        const misBody = document.getElementById('misTableBody');
+        if (misBody) misBody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-gray-400">물건상태 탭을 클릭하세요.</td></tr>';
+        window.misRowsCache = [];
     }
 
     function handleMemberFormSubmitNew() {

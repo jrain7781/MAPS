@@ -8949,6 +8949,37 @@ function updateMisRow(misId, updates) {
     return { success: false, message: 'mis_id 없음' };
   } catch (e) { return { success: false, message: String(e) }; }
 }
+/** 수동 행 추가 (사람이 UI에서 직접 추가). fields = {status,in_date,sakun_no,court,myeongui,win_price,est_interior,est_resale, item_id, m_name, m_name_id} */
+function addMisRow(memberId, fields) {
+  try {
+    if (!memberId) return { success: false, message: 'member_id 없음' };
+    const f = fields || {};
+    const sheet = ensureMembersItemStatusSheet_();
+    const now = new Date();
+    const misId = 'MIS' + now.getTime() + Math.floor(Math.random() * 1000);
+    const row = [
+      misId,                              // A: mis_id
+      String(memberId),                   // B: member_id
+      String(f.m_name || ''),             // C: m_name
+      String(f.m_name_id || ''),          // D: m_name_id
+      String(f.myeongui || ''),           // E: myeongui
+      String(f.item_id || ''),            // F: item_id
+      String(f.in_date || ''),            // G: in_date
+      String(f.sakun_no || ''),           // H: sakun_no
+      String(f.court || ''),              // I: court
+      String(f.status || ''),             // J: status
+      now.toISOString(),                  // K: recorded_at
+      String(f.lowest_price || ''),       // L: lowest_price
+      String(f.bid_price || ''),          // M: bid_price
+      String(f.win_price || ''),          // N: win_price
+      String(f.est_interior || ''),       // O: est_interior
+      String(f.est_resale || '')          // P: est_resale
+    ];
+    sheet.appendRow(row);
+    SpreadsheetApp.flush();
+    return { success: true, mis_id: misId };
+  } catch (e) { return { success: false, message: String(e) }; }
+}
 
 /**
  * 불가확인용 — 오늘 ~ 오늘+7일 입찰건의 (사건번호, 입찰일자, 법원) 3키 리스트 반환.
