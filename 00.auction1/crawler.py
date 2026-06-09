@@ -1175,7 +1175,7 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception as _e:
             traceback.print_exc()
         # MAPS GAS 중계 엔드포인트 (매니저 JS → 이 서버 → GAS)
-        if self.path in ("/api/maps-sync-presets", "/api/maps-upload-items", "/api/maps-gas", "/api/maps-changecancel"):
+        if self.path in ("/api/maps-sync-presets", "/api/maps-upload-items", "/api/maps-gas", "/api/maps-changecancel", "/api/maps-winning"):
             self._handle_maps_proxy()
             return
         # 진행사항 보고서(불가/낙찰) 전송: PDF 생성 + 캡처 b64 → GAS sendBugaReport
@@ -1488,13 +1488,14 @@ class Handler(SimpleHTTPRequestHandler):
                 "/api/maps-sync-presets":   "syncJosaPresets",
                 "/api/maps-upload-items":   "uploadJosaItems",
                 "/api/maps-changecancel":   "uploadChangeCancel",
+                "/api/maps-winning":        "uploadWinningBids",
             }
             # /api/maps-gas 는 payload.api_action 그대로 사용 (진단용 일반 라우터)
             if self.path in action_map:
                 payload["api_action"] = action_map[self.path]
             # 업로드는 GAS 처리 시간(시트 쓰기 N건) 60s 넘는 사례 있음 — 5분까지 허용.
             # sync/일반 라우터는 메타만이라 60s 충분.
-            timeout = 300.0 if self.path in ("/api/maps-upload-items", "/api/maps-changecancel") else 60.0
+            timeout = 300.0 if self.path in ("/api/maps-upload-items", "/api/maps-changecancel", "/api/maps-winning") else 60.0
             # 읽기 전용 액션은 GAS 일시오류(HTML 파싱실패/404 등)에 재시도 — 쓰기는 중복 위험이라 제외
             _READ_ACTIONS = {
                 "getProgressList", "getProgressMatchSummary", "getProgressMatchByDate",

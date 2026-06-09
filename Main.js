@@ -103,7 +103,7 @@ function doPost(e) {
         // josa* 액션은 josa 라우터, 나머지는 search 라우터
         // (이름에 'Josa' 가 없지만 josa 핸들러가 처리하는 액션도 명시 — 라우팅 누락 방지)
         const apiAction = String(payload.api_action || '');
-        const JOSA_EXTRA_ACTIONS = ['uploadChangeCancel', 'getInvestigators', 'get7DaysBugaList', 'getTodayMaegakList', 'getProgressList', 'saveProgressMatches', 'getProgressMatchSummary', 'getProgressMatchByDate', 'sendBugaReport', 'notifyAdminsText', 'getReportRecipientCandidates'];
+        const JOSA_EXTRA_ACTIONS = ['uploadChangeCancel', 'uploadWinningBids', 'getInvestigators', 'get7DaysBugaList', 'getTodayMaegakList', 'getProgressList', 'saveProgressMatches', 'getProgressMatchSummary', 'getProgressMatchByDate', 'sendBugaReport', 'notifyAdminsText', 'getReportRecipientCandidates'];
         var result;
         var isJosaAction = apiAction.indexOf('Josa') !== -1 || JOSA_EXTRA_ACTIONS.indexOf(apiAction) !== -1;
         if (isJosaAction && typeof handleJosaApiPost_ === 'function') {

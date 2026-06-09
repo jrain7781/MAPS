@@ -8650,6 +8650,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'syncJosaPresets') return syncJosaPresets(payload.presets || [], payload.mode);
   if (action === 'uploadJosaItems') return bulkUpsertJosaItems(payload);
   if (action === 'uploadChangeCancel') return uploadChangeCancel(payload.items || []);
+  if (action === 'uploadWinningBids')  return uploadWinningBids(payload.items || []);
   if (action === 'get7DaysBugaList')   return get7DaysBugaList();
   if (action === 'getTodayMaegakList') return getTodayMaegakList();
   if (action === 'getProgressList')    return getProgressList(payload.from, payload.to, payload.statuses);
@@ -8764,6 +8765,100 @@ function uploadChangeCancel(items) {
   } catch (e) {
     Logger.log('[uploadChangeCancel] 오류: ' + e.toString());
     return { success: false, message: String(e), updated: 0 };
+  }
+}
+
+/**
+ * [돈클/낙찰] 크롤러 매니저 "MAPS 낙찰 처리" — 3키 매칭 물건의 stu_member='낙찰' 세팅 + 낙찰가 적립
+ *  · 불가 경로(uploadChangeCancel)와 평행. items: [{sakun_no, bid_date|in-date, court, maegak_price(낙찰가), buyer}]
+ *  · stu_member='낙찰' setValue → writeItemHistoryBatch_(to_value='낙찰') → ②적립훅이 members_item_status 낙찰행 생성
+ *  · 적립 후 setMisWinPrice_로 그 행의 win_price(낙찰가) 채움
+ */
+function uploadWinningBids(items) {
+  try {
+    if (!Array.isArray(items) || items.length === 0) return { success: false, message: '항목이 비어 있습니다.', updated: 0 };
+    var normDate = function (v) { return String(v || '').replace(/[^0-9]/g, ''); };
+    var keyOf = function (s, d, c) { return String(s || '').trim() + '|' + normDate(d) + '|' + String(c || '').trim(); };
+    var byKey = {};
+    items.forEach(function (it) {
+      if (!it) return;
+      var sakun = String(it.sakun_no || '').trim(); if (!sakun) return;
+      byKey[keyOf(sakun, it.bid_date || it['in-date'] || it.bid_datetime_2, it.court)] = {
+        win: String(it.maegak_price || it.win_price || '').replace(/[^0-9]/g, ''),  // 낙찰가 숫자만
+        buyer: String(it.buyer || '').trim()
+      };
+    });
+    var keyList = Object.keys(byKey);
+    if (keyList.length === 0) return { success: false, message: '유효한 항목(사건번호)이 없습니다.', updated: 0 };
+
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'items 시트 없음', updated: 0 };
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: 'items 비어있음', updated: 0 };
+
+    var idIdx = ITEM_HEADERS.indexOf('id'), sakunIdx = ITEM_HEADERS.indexOf('sakun_no'),
+        courtIdx = ITEM_HEADERS.indexOf('court'), inDateIdx = ITEM_HEADERS.indexOf('in-date'),
+        stuIdx = ITEM_HEADERS.indexOf('stu_member'), memberIdIdx = ITEM_HEADERS.indexOf('member_id'),
+        mNameIdx = ITEM_HEADERS.indexOf('m_name');
+
+    var data = sheet.getRange(2, 1, lastRow - 1, ITEM_HEADERS.length).getValues();
+    var historyEntries = [], winByMI = {}, updated = 0, matched = {};
+    for (var i = 0; i < data.length; i++) {
+      var row = data[i]; var k = keyOf(row[sakunIdx], row[inDateIdx], row[courtIdx]);
+      if (!byKey.hasOwnProperty(k)) continue;
+      matched[k] = true;
+      var info = byKey[k], cur = String(row[stuIdx] || '').trim(), rn = i + 2;
+      sheet.getRange(rn, stuIdx + 1).setValue('낙찰');  // E: stu_member='낙찰'
+      updated++;
+      var itemId = String(row[idIdx] || ''), memberId = String(row[memberIdIdx] || '');
+      if (memberId && info.win) winByMI[memberId + '|' + itemId] = info.win;
+      historyEntries.push({
+        action: 'AUCTION_WINNING', item_id: itemId, member_id: memberId, member_name: String(row[mNameIdx] || ''),
+        field_name: 'stu_member', from_value: cur, to_value: '낙찰',
+        note: 'auction1 낙찰 낙찰가=' + info.win + (info.buyer ? (' / 매수인 ' + info.buyer) : ''),
+        trigger_type: 'auction-manager', approved_by: 'manager', status: 'DONE'
+      });
+    }
+    SpreadsheetApp.flush();
+
+    // 적립 훅 발화 (낙찰 행 생성) → 그 뒤 win_price 채움
+    if (historyEntries.length > 0 && typeof writeItemHistoryBatch_ === 'function') writeItemHistoryBatch_(historyEntries);
+    var winFilled = 0;
+    Object.keys(winByMI).forEach(function (mi) {
+      var p = mi.split('|');
+      if (setMisWinPrice_(p[0], p[1], winByMI[mi])) winFilled++;
+    });
+
+    return {
+      success: true, updated: updated, win_filled: winFilled, history: historyEntries.length,
+      matched_keys: Object.keys(matched).length, unmatched: keyList.length - Object.keys(matched).length,
+      message: updated + '건 낙찰 처리 완료'
+    };
+  } catch (e) {
+    Logger.log('[uploadWinningBids] 오류: ' + e.toString());
+    return { success: false, message: String(e), updated: 0 };
+  }
+}
+
+/** [돈클] members_item_status의 (member,item,낙찰) 행에 win_price(낙찰가) 기록 */
+function setMisWinPrice_(memberId, itemId, winPrice) {
+  try {
+    var sheet = ensureMembersItemStatusSheet_();
+    var last = sheet.getLastRow();
+    if (last < 2) return false;
+    var hits = sheet.getRange(2, 6, last - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true).findAll();
+    for (var h = 0; h < hits.length; h++) {
+      var rn = hits[h].getRow();
+      var rr = sheet.getRange(rn, 1, 1, MIS_HEADERS.length).getValues()[0];
+      if (String(rr[1]) === String(memberId) && String(rr[9]) === '낙찰') {
+        sheet.getRange(rn, 14).setValue(winPrice); // N: win_price (idx13 → 14열)
+        return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    Logger.log('[setMisWinPrice_] 오류: ' + e.toString());
+    return false;
   }
 }
 

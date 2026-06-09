@@ -676,7 +676,7 @@
     if (info) info.textContent = '기간 + 상태값 선택 → 📥 불러오기 → ▶ 실행';
   }
   // 상태값 다중 선택 (체크박스, 기본 입찰만 체크) — 아래 줄에 펼쳐서
-  const CC_STATUSES = ['입찰', '추천', '상품', '검증', '미정', '폐기', '불가', '매각'];
+  const CC_STATUSES = ['입찰', '추천', '상품', '검증', '미정', '폐기', '불가', '낙찰', '매각'];
   function renderCcStatusSelect() {
     const box = $card('cc')?.querySelector('[data-role="cc-status"]'); if (!box) return;
     box.innerHTML = CC_STATUSES.map(s =>
@@ -864,7 +864,7 @@
       const runChk = ccRunUnchecked.has(rkey) ? '' : 'checked';
       return `<tr data-idx="${i}" class="${isBuga ? 'cc-row-buga' : ''}">
         <td style="text-align:center"><input type="checkbox" class="cc-run-cb" data-key="${escapeAttr(rkey)}" ${runChk}></td>
-        <td style="text-align:center"><input type="checkbox" class="cc-cb" ${isBuga ? 'checked' : ''}></td>
+        <td style="text-align:center"><input type="checkbox" class="cc-cb" ${(isBuga || cat === '낙찰') ? 'checked' : ''}></td>
         <td>${keyCell(r.bid_date, r.date_hit !== false)}</td>
         <td>${keyCell(r.sakun_no, r.sakun_hit !== false)}</td>
         <td>${keyCell(r.court, r.court_hit !== false)}</td>
@@ -907,6 +907,7 @@
           <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report" title="텔레그램으로 텍스트+이미지 일일보고 전송 (PDF첨부 체크 시 PDF 동봉)">📋 일일보고 전송(T)</button>
           <button type="button" class="btn_box_sss btn_gray bold" data-act="cc-report-pdf" title="텔레그램으로 일일보고 PDF만 전송">📄 일일보고 PDF 전송</button>
           <button type="button" class="btn_box_sss btn_blue bold" data-act="cc-send">📤 업데이트 체크건 MAPS '불가' 처리</button>
+          <button type="button" class="btn_box_sss bold" data-act="cc-send-win" style="background:#2563eb;color:#fff">🏆 체크건 MAPS '낙찰' 처리</button>
         </div>
       </div>
       <div class="cc-table-wrap">
@@ -944,6 +945,7 @@
       });
     });
     wrap.querySelector('[data-act="cc-send"]')?.addEventListener('click', sendCcToMaps);
+    wrap.querySelector('[data-act="cc-send-win"]')?.addEventListener('click', sendCcWinToMaps);
     wrap.querySelector('[data-act="cc-preview-tg"]')?.addEventListener('click', () => previewCcReport('telegram'));
     wrap.querySelector('[data-act="cc-preview-pdf"]')?.addEventListener('click', () => previewCcReport('pdf'));
     wrap.querySelector('[data-act="cc-report"]')?.addEventListener('click', () => openReportPicker('full'));
@@ -998,6 +1000,49 @@
     }).catch(err => {
       if (btn) btn.disabled = false;
       log('cc', `❌ MAPS 전송 오류: ${err}`, 'log-err');
+      alert('오류: ' + err);
+    });
+  }
+
+  // [돈클] 체크된 낙찰 건을 MAPS '낙찰'로 처리 (불가 경로 sendCcToMaps와 평행)
+  function sendCcWinToMaps() {
+    const card = $card('cc');
+    if (!card) return;
+    const tbody = card.querySelector('[data-role="cc-results"] tbody');
+    if (!tbody) return;
+    const merged = ccMergedRows();
+    const picked = [];
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const cb = tr.querySelector('.cc-cb');
+      if (cb && cb.checked) {
+        const idx = parseInt(tr.dataset.idx, 10);
+        const r = merged[idx];
+        if (r && ccCategory(r) === '낙찰') picked.push(r);   // 낙찰 확정 건만
+      }
+    });
+    if (picked.length === 0) { alert('체크된 낙찰 건이 없습니다.'); return; }
+    const apiKey = getMapsAdminKeyMj();
+    if (!apiKey) { alert('MAPS Admin Key 미설정 — 상단 ⚙(MAPS 연동) 설정에서 키를 먼저 저장하세요.'); return; }
+    if (!confirm(`${picked.length}건을 MAPS 로 전송하여 상태를 "낙찰"(+낙찰가) 로 업데이트 합니다. 진행할까요?`)) return;
+    const btn = card.querySelector('[data-act="cc-send-win"]');
+    if (btn) btn.disabled = true;
+    log('cc', `🏆 ${picked.length}건 낙찰 MAPS 전송 중...`, 'log-ok');
+    fetch('/api/maps-winning', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey, items: picked })
+    }).then(r => r.json()).then(j => {
+      if (btn) btn.disabled = false;
+      if (j && (j.success || j.ok)) {
+        const n = j.updated || j.count || picked.length;
+        log('cc', `✅ MAPS 낙찰 업데이트 완료: ${n}건`, 'log-ok');
+        alert('MAPS 낙찰 업데이트 완료: ' + n + '건');
+      } else {
+        log('cc', `❌ MAPS 낙찰 전송 실패: ${j && (j.error || j.message) || '알 수 없음'}`, 'log-err');
+        alert('실패: ' + (j && (j.error || j.message) || '?'));
+      }
+    }).catch(err => {
+      if (btn) btn.disabled = false;
+      log('cc', `❌ MAPS 낙찰 전송 오류: ${err}`, 'log-err');
       alert('오류: ' + err);
     });
   }
