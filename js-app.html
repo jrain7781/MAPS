@@ -7825,6 +7825,7 @@ MJ 이정우 팀장
                 renderMissingBidDashboard();
                 renderStatusManagementDashboard();
                 renderYongdoManagementDashboard();
+                renderDonkleRequestDashboard();
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
             })
@@ -13875,12 +13876,12 @@ MJ 이정우 팀장
         initMisHorizontalWheel();
         const memberId = (document.getElementById('mem-member_id') || {}).value || '';
         if (!memberId) {
-            tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td></tr>';
             if (countEl) countEl.textContent = '';
             return;
         }
         if (statusEl) statusEl.textContent = '조회 중...';
-        tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
         google.script.run
             .withSuccessHandler(function (rows) {
                 window.misRowsCache = rows || [];
@@ -13889,7 +13890,7 @@ MJ 이정우 팀장
             })
             .withFailureHandler(function (err) {
                 if (statusEl) statusEl.textContent = '오류: ' + err.toString();
-                tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-red-400">로드 중 오류가 발생했습니다.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-red-400">로드 중 오류가 발생했습니다.</td></tr>';
             })
             .getMemberItemStatusRows(memberId);
     }
@@ -13905,7 +13906,7 @@ MJ 이정우 팀장
         const rows = window.misRowsCache || [];
         if (countEl) countEl.textContent = '총 ' + rows.length + '건';
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="12" class="p-6 text-center text-gray-400">적립된 물건상태가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="13" class="p-6 text-center text-gray-400">적립된 물건상태가 없습니다.</td></tr>';
             return;
         }
         tbody.innerHTML = rows.map(function (r) {
@@ -13916,9 +13917,11 @@ MJ 이정우 팀장
             const nameCell = (myeongui ? `<div class="text-gray-800">${escapeHtml(myeongui)}</div>` : '')
                 + (mName ? `<div class="text-gray-400 text-[10px]">${escapeHtml(mName)}</div>` : '')
                 || '<span class="text-gray-300">-</span>';
+            const evd = String(r.event_date || '').substring(0, 10).replace('T', ' ');
             return `
                 <tr class="hover:bg-gray-50 transition-colors" data-mis="${escapeHtml(r.mis_id)}">
                     <td class="px-2 py-1.5 text-center whitespace-nowrap">${misStatusBadge(r.status)}</td>
+                    <td class="px-2 py-1.5 text-center font-mono text-indigo-700 font-semibold whitespace-nowrap">${escapeHtml(evd) || '<span class=\"text-gray-300\">-</span>'}</td>
                     <td class="px-2 py-1.5 text-center font-mono text-gray-700 whitespace-nowrap">${escapeHtml(r.in_date)}</td>
                     <td class="px-2 py-1.5 font-semibold text-gray-800 whitespace-nowrap">${escapeHtml(r.sakun_no)}</td>
                     <td class="px-2 py-1.5 text-gray-600 whitespace-nowrap">${escapeHtml(r.court)}</td>
@@ -13938,7 +13941,7 @@ MJ 이정우 팀장
     }
 
     // 편집 가능 필드 정의
-    window.MIS_EDIT_FIELDS = ['status', 'in_date', 'sakun_no', 'court', 'myeongui', 'win_price', 'est_interior', 'est_resale'];
+    window.MIS_EDIT_FIELDS = ['status', 'event_date', 'in_date', 'sakun_no', 'court', 'myeongui', 'win_price', 'est_interior', 'est_resale'];
 
     function misEditRowHtml(r, isNew) {
         const v = function (k) { return escapeHtml((r && r[k] != null) ? r[k] : ''); };
@@ -13950,6 +13953,7 @@ MJ 이정우 팀장
         const misId = isNew ? '__new__' : escapeHtml(r.mis_id);
         return `
             <td class="px-1 py-1"><select data-f="status" class="w-full border border-gray-300 rounded px-1 py-0.5 text-xs">${sel}</select></td>
+            <td class="px-1 py-1">${inp('event_date', 'YYYY-MM-DD')}</td>
             <td class="px-1 py-1">${inp('in_date', 'YYMMDD')}</td>
             <td class="px-1 py-1">${inp('sakun_no')}</td>
             <td class="px-1 py-1">${inp('court')}</td>
@@ -14201,7 +14205,7 @@ MJ 이정우 팀장
         const cancelBody = document.getElementById('cancelHistoryTableBody');
         if (cancelBody) cancelBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">취소건 조회 탭을 클릭하세요.</td></tr>';
         const misBody = document.getElementById('misTableBody');
-        if (misBody) misBody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-gray-400">물건상태 탭을 클릭하세요.</td></tr>';
+        if (misBody) misBody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">물건상태 탭을 클릭하세요.</td></tr>';
         window.misRowsCache = [];
     }
 

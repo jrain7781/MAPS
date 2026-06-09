@@ -564,8 +564,51 @@
 
                     <!-- ② 물건 용도 관리 + 물건 상태 관리 (위/아래 분할) -->
                     <div id="dashCol2" style="flex:0 0 41.7%; min-width:180px; padding:0 8px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px;">
-                        <!-- ②-위: 물건 용도 관리 -->
+                        <!-- ②-위: 돈클 추천요청 현황 (구 물건용도관리 자리. 용도관리는 아래 display:none 으로 숨김 보관 — 삭제X) -->
                         <div style="position:relative;">
+                            <div id="donkleReqCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:434px;">
+                                <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
+                                    <div class="flex justify-between items-center">
+                                        <div class="flex items-center gap-2">
+                                            <h2 class="text-sm font-bold text-gray-800">돈클 추천요청 현황</h2>
+                                            <span class="text-[11px] text-gray-400">전달대기 → 추천완료</span>
+                                        </div>
+                                        <select id="donkleReqFilterMember" onchange="renderDonkleRequestDashboard()"
+                                            class="text-xs text-gray-800 bg-gray-50 border border-gray-300 rounded px-2 py-1 focus:outline-none cursor-pointer">
+                                            <option value="All">전체</option>
+                                            <option value="대표님" selected>대표님</option>
+                                            <option value="전부쌤">전부쌤</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="flex-1 overflow-y-auto">
+                                    <table class="w-full text-center border-collapse text-sm">
+                                        <thead class="sticky top-0 bg-gray-50 z-10">
+                                            <tr class="border-b border-gray-200 text-gray-600 text-sm leading-normal">
+                                                <th class="py-2 px-2 font-bold text-left">날짜</th>
+                                                <th class="py-2 px-1 font-bold">전달대기</th>
+                                                <th class="py-2 px-1 font-bold">추천완료</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="donkleReqBody" class="text-gray-700 text-sm">
+                                            <tr><td colspan="3" class="py-4 text-center text-gray-400">데이터 로딩 중...</td></tr>
+                                        </tbody>
+                                        <tfoot class="sticky bottom-0 bg-blue-50 z-10 font-bold border-t-2 border-blue-100">
+                                            <tr>
+                                                <td class="py-2 px-2 text-left text-gray-700">전체</td>
+                                                <td class="py-2 px-1 text-center"><span id="donkleReqTotWait" class="text-amber-600 cursor-pointer hover:underline" onclick="drillDonkleRequest('all','wait')">–</span></td>
+                                                <td class="py-2 px-1 text-center"><span id="donkleReqTotDone" class="text-indigo-600 cursor-pointer hover:underline" onclick="drillDonkleRequest('all','done')">–</span></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                                <div class="px-3 py-1.5 text-[11px] text-gray-400 border-t border-gray-100 flex-shrink-0">숫자 클릭 → 입찰물건관리에 해당 건만 표시</div>
+                            </div>
+                            <div class="dash-card-h-resizer" data-card="donkleReqCard" data-pair-card="statusManagementCard"></div>
+                        </div>
+
+                        <!-- ②-위(구): 물건 용도 관리 — 삭제하지 않고 숨김 보관 (돈클 추천요청 현황 카드로 교체) -->
+                        <div style="position:relative; display:none;">
                             <div id="yongdoManagementCard" class="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col" style="height:434px;">
                                 <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
                                     <div class="flex justify-between items-center mb-1">
@@ -2891,6 +2934,7 @@
                                     <thead class="bg-gray-50">
                                         <tr>
                                             <th class="px-2 py-2 text-center font-bold text-gray-600 whitespace-nowrap">상태</th>
+                                            <th class="px-2 py-2 text-center font-bold text-gray-600 whitespace-nowrap">발생일</th>
                                             <th class="px-2 py-2 text-center font-bold text-gray-600">입찰일자</th>
                                             <th class="px-2 py-2 text-center font-bold text-gray-600">사건번호</th>
                                             <th class="px-2 py-2 text-center font-bold text-gray-600">법원</th>
@@ -2906,7 +2950,7 @@
                                     </thead>
                                     <tbody id="misTableBody" class="bg-white divide-y divide-gray-100">
                                         <tr>
-                                            <td colspan="12" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td>
+                                            <td colspan="13" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td>
                                         </tr>
                                     </tbody>
                                 </table>
