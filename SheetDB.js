@@ -1971,6 +1971,21 @@ function testAccrueMembersItemStatus() {
   return { itemId: itemId, accrued: ok, before: before, after: after };
 }
 
+// ===== [돈클] 시트 메뉴(Admin ▸ 돈클 물건상태) 클릭용 래퍼 — 결과를 팝업으로 표시 =====
+function menuDonkleInitMis_() {
+  const r = initMembersItemStatusSheet();
+  SpreadsheetApp.getUi().alert('✅ members_item_status 준비 완료\n\n컬럼 ' + r.cols + '개\n현재 데이터 ' + r.rows + '행');
+}
+function menuDonkleTestAccrue_() {
+  const r = testAccrueMembersItemStatus();
+  const ui = SpreadsheetApp.getUi();
+  if (!r) { ui.alert('테스트 대상 없음\n\nstu_member=추천 + 회원이 지정된 물건이 없습니다.'); return; }
+  ui.alert('적립 테스트 결과\n\nitem_id: ' + r.itemId +
+    '\n적립: ' + (r.accrued ? '신규 적립됨(true)' : '이미있음/dedup(false)') +
+    '\n행수: ' + r.before + ' → ' + r.after +
+    '\n\n※ 한 번 더 실행 시 false + 행수 동일이면 dedup 정상');
+}
+
 function updateItemStuMemberById_(itemId, newStatus) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) throw new Error('items 시트를 찾을 수 없습니다.');

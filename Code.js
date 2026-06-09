@@ -211,6 +211,10 @@ function onOpen() {
     .addItem('🔄 텔레그램 웹훅 초기화', 'resetTelegramWebhookClean') // 웹훅 초기화
     .addItem('☁️ CF 프록시 진단', 'debugCloudflareProxy') // Cloudflare 프록시 진단
     .addItem('☁️ CF 프록시 웹훅 설정', 'setTelegramWebhookViaProxy') // 프록시 웹훅 설정
+    .addSeparator()
+    .addSubMenu(SpreadsheetApp.getUi().createMenu('🏠 돈클 물건상태')
+      .addItem('① members_item_status 시트 생성/검증', 'menuDonkleInitMis_')
+      .addItem('② 적립 테스트(추천 1건)', 'menuDonkleTestAccrue_'))
     .addToUi();
 }
 

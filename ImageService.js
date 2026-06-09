@@ -699,8 +699,9 @@ function autoSyncImagesWrapper() {
  * 단, 자동화를 원한다면 여기서 setupDailyImageSync()를 호출해도 됨.
  * 여기서는 사용자가 수동 설정할 수 있도록 놔둡니다.
  */
-function onOpen() {
-  // 자동화가 필요하면 setupDailyImageSync()를 주석 해제하여 사용
+// [비활성화] 빈 onOpen이 Code.js의 Admin 메뉴를 가리는 문제로 트리거명 해제
+//   (내용 없음 — 자동화 필요 시 setupDailyImageSync() 직접 사용)
+function onOpen_imageService_DISABLED_() {
   // setupDailyImageSync();
 }
 
