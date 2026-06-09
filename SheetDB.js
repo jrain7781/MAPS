@@ -331,9 +331,8 @@ function _createDataImpl(inDate, sakunNo, court, stuMember, mNameId, mName, bidP
           String(_r[3]).trim() === String(court).trim()) { _dupConflict = _r; break; }
     }
     if (_dupConflict) {
-      // [진단] 신규(create)가 발동했다는 것 자체가 단서 — "회원 수정 중"이라면 create 가 뜨면 안 됨
-      Logger.log('[DUP진단:신규] inDate=' + inDate + ' sakun=' + sakunNo + ' court=' + court + ' / 충돌ID=' + _dupConflict[0]);
-      return { success: false, message: '[진단:신규] 중복감지 — 충돌ID=' + _dupConflict[0] + ' / 키=' + court + ' ' + sakunNo + ' (' + inDate + ')' };
+      Logger.log('[DUP:신규] inDate=' + inDate + ' sakun=' + sakunNo + ' court=' + court + ' / 충돌ID=' + _dupConflict[0]);
+      return { success: false, message: '이미 동일한 입찰일자/사건번호/법원명으로 등록된 물건이 있습니다.' };
     }
   }
 
@@ -611,9 +610,8 @@ function _updateDataImpl(id, inDate, sakunNo, court, stuMember, mName, bidPrice,
             String(_r[3]).trim() === String(court).trim()) { _dupConflict = _r; break; }
       }
       if (_dupConflict) {
-        // [진단] 제출ID vs 충돌ID 노출 → 진짜 중복행인지/폼 상태 꼬임인지 팝업으로 즉시 판별
-        Logger.log('[DUP진단:수정] 제출ID=' + id + ' inDate=' + inDate + ' sakun=' + sakunNo + ' court=' + court + ' / 충돌ID=' + _dupConflict[0]);
-        return { success: false, message: '[진단:수정] 중복감지 — 제출ID=' + id + ' / 충돌ID=' + _dupConflict[0] + ' / 키=' + court + ' ' + sakunNo + ' (' + inDate + ')' };
+        Logger.log('[DUP:수정] 제출ID=' + id + ' inDate=' + inDate + ' sakun=' + sakunNo + ' court=' + court + ' / 충돌ID=' + _dupConflict[0]);
+        return { success: false, message: '이미 동일한 입찰일자/사건번호/법원명으로 등록된 물건이 있습니다.' };
       }
     }
   }

@@ -7591,11 +7591,18 @@ MJ 이정우 팀장
             toggleLoading(true); // 신규 등록은 ID가 없으므로 로딩 표시
         }
 
-        if (currentMode === 'create') {
+        // [버그수정] 신규/수정 판단을 currentMode가 아니라 formId(id) 유무로 통일.
+        //   create 모드는 showForm('create')에서 formId를 반드시 ''로 비움 → formId가 있으면 무조건 기존 물건.
+        //   따라서 currentMode가 'create'로 꼬여 있어도 기존 물건을 createData(중복생성)로 보내지 않고
+        //   updateData(id)로 보정 → "수정 중인데 신규 중복오류" 근절.
+        if (!id) {
+            // 진짜 신규 등록 (formId 비어있음)
             // Server createData signature: (inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId, itemsYongdo)
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
                 .createData(processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, panelChuchenState, regMember, auctionId, itemsYongdo);
-        } else if (currentMode === 'edit') {
+        } else {
+            // 기존 물건 (formId 있음) → 반드시 updateData(id)
+            if (currentMode === 'create') console.warn('[SAVE보정] create 모드인데 formId=' + id + ' → 중복생성 대신 updateData(id)로 보정');
             // [통합] 사유(Z/AA)를 updateData 인자로 함께 전달 — 병렬 saveItemReason 제거(단일 원자적 쓰기)
             //   [가드] 사유 입력요소가 둘 다 없으면 undefined 전달 → 서버가 기존값 보존 (빈값 덮어쓰기 방지)
             var _stuReasonEl = document.getElementById('form-stu-reason');
