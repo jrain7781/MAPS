@@ -8255,7 +8255,7 @@ MJ 이정우 팀장
     }
 
     // 드래그 리사이즈 초기화
-    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); initItemPaneResize(); initItemListColumnResize(); try { applyBidStyle_('detail'); applyBidStyle_('modal'); } catch (e) {} });
+    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); initItemPaneResize(); initItemListColumnResize(); initMemberColumnResize(); try { applyBidStyle_('detail'); applyBidStyle_('modal'); } catch (e) {} });
 
     // 입찰물건 관리 리스트 — 컬럼 헤더 우측에 드래그 핸들 부착, 폭 저장
     function initItemListColumnResize() {
@@ -8310,6 +8310,45 @@ MJ 이정우 팀장
                 document.body.style.userSelect = '';
                 const finalWidth = Math.round(th.getBoundingClientRect().width);
                 saved[colClass] = finalWidth;
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) { /* ignore */ }
+            });
+        });
+    }
+
+    // 회원관리 그리드: 컬럼 너비 드래그 조절 (initItemListColumnResize 미러링, data-sort-key를 키로)
+    function initMemberColumnResize() {
+        const STORAGE_KEY = 'mj_member_col_widths';
+        const MIN_VALID_PX = 30;
+        const table = document.getElementById('memberDataTable');
+        if (!table) return;
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; } catch (e) { saved = {}; }
+        table.querySelectorAll('thead th').forEach(th => {
+            const key = th.dataset.sortKey;
+            if (!key) return;
+            th.style.position = 'relative';
+            if (saved[key] && saved[key] >= MIN_VALID_PX) th.style.width = saved[key] + 'px';
+            if (th.querySelector('.col-resizer')) return;
+            const handle = document.createElement('span');
+            handle.className = 'col-resizer';
+            th.appendChild(handle);
+            let isDragging = false, startX = 0, startWidth = 0;
+            handle.addEventListener('mousedown', (e) => {
+                isDragging = true; handle.classList.add('dragging');
+                startX = e.clientX; startWidth = th.getBoundingClientRect().width;
+                document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+                e.preventDefault(); e.stopPropagation();
+            });
+            handle.addEventListener('click', (e) => { e.stopPropagation(); });
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                th.style.width = Math.max(MIN_VALID_PX, startWidth + (e.clientX - startX)) + 'px';
+            });
+            document.addEventListener('mouseup', () => {
+                if (!isDragging) return;
+                isDragging = false; handle.classList.remove('dragging');
+                document.body.style.cursor = ''; document.body.style.userSelect = '';
+                saved[key] = Math.round(th.getBoundingClientRect().width);
                 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) { /* ignore */ }
             });
         });
