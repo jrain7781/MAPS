@@ -33,8 +33,17 @@ const MIS_HEADERS = [
   'bid_price',     // 입찰가 (items.bidprice 연계)
   'win_price',     // 낙찰가 (크롤러 매각가)
   'est_interior',  // 예상 인테리어비용 (낙찰건, 수동입력)
-  'est_resale'     // 예상 매도가 (낙찰건, 수동입력)
+  'est_resale',    // 예상 매도가 (낙찰건, 수동입력)
+  'event_date'     // 상태 실제 발생일: 추천=전달완료 시점(telegram B/chuchen_date) / 입찰=in_date / 불가·낙찰=이벤트 시점. recorded_at(적립시각)과 별개
 ];
+
+/** in_date(YYMMDD/YYYYMMDD 등) → 'YYYY-MM-DD' 정규화 (event_date 입찰용) */
+function _inDateToIso_(v) {
+  var s = String(v == null ? '' : v).replace(/[^0-9]/g, '');
+  if (s.length === 6) return '20' + s.slice(0, 2) + '-' + s.slice(2, 4) + '-' + s.slice(4, 6);
+  if (s.length >= 8) return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+  return String(v == null ? '' : v);
+}
 
 // - m_name2: "선택된 명의 표시값" (예: "(MJ) 한한한") — 화면 복원/리스트 표시에 사용
 // - auction_id: "옥션 고유번호 (7자리)"
@@ -1920,6 +1929,13 @@ function accrueMembersItemStatus_(itemId, memberIdHint, memberNameHint, status, 
     const now = new Date();
     const misId = 'MIS' + now.getTime() + Math.floor(Math.random() * 1000);
     const winPrice = (extra && extra.win_price != null) ? String(extra.win_price) : '';
+    // event_date: 상태 실제 발생일. 추천=items.chuchen_date(방금 찍힌 전달완료 시점, R열 r[17]) / 입찰=in_date / 불가·낙찰=now
+    let eventDate = (extra && extra.event_date) ? String(extra.event_date) : '';
+    if (!eventDate) {
+      if (status === '추천') eventDate = String(r[17] || '') || now.toISOString();
+      else if (status === '입찰') eventDate = _inDateToIso_(r[1]);
+      else eventDate = now.toISOString();
+    }
     const row = [
       misId,                    // A: mis_id
       memberId,                 // B: member_id
@@ -1931,12 +1947,13 @@ function accrueMembersItemStatus_(itemId, memberIdHint, memberNameHint, status, 
       String(r[2] || ''),       // H: sakun_no (C)
       String(r[3] || ''),       // I: court (D)
       status,                   // J: status
-      now.toISOString(),        // K: recorded_at
+      now.toISOString(),        // K: recorded_at (적립 시각)
       String(r[22] || ''),      // L: lowest_price (W)
       String(r[7] || ''),       // M: bid_price (bidprice, H)
       winPrice,                 // N: win_price
       '',                       // O: est_interior
-      ''                        // P: est_resale
+      '',                       // P: est_resale
+      eventDate                 // Q: event_date (상태 실제 발생일)
     ];
     misSheet.appendRow(row);
     return true;
@@ -2048,9 +2065,10 @@ function backfillMembersItemStatus(opts) {
     for (let i = 0; i < md.length; i++) seen[String(md[i][1]) + '|' + String(md[i][5]) + '|' + String(md[i][9])] = true;
   }
 
-  // 4) 신규 행 빌드 (dedup)
+  // 4) 신규 행 빌드 — (member,item,status) 별 "가장 최근 이벤트" 1건만. 기존 적립분(seen)은 skip
   const newRows = []; const stat = { '추천': 0, '입찰': 0, '불가': 0, '낙찰': 0 };
   let skipNoMember = 0, skipBidFuture = 0, skipNoItem = 0;
+  const agg = {};   // key=(member|item|status) -> { t(가장 최근 이벤트), memberId, mName, item }
   for (let i = 0; i < tuples.length; i++) {
     const t = tuples[i]; const item = itemMap[t.itemId];
     if (!item) { skipNoItem++; continue; }   // items에 없는(삭제된) 물건 → 적립 안 함
@@ -2059,20 +2077,27 @@ function backfillMembersItemStatus(opts) {
     if (!mName) mName = item.mName;
     if (!memberId) { skipNoMember++; continue; }
     if (t.status === '입찰') {  // 입찰: in_date < 오늘(어제 이전)만
-      const inD = item ? item.inDate : '';
+      const inD = item.inDate;
       if (!inD || String(inD) >= todayYYMMDD) { skipBidFuture++; continue; }
     }
     const key = memberId + '|' + t.itemId + '|' + t.status;
-    if (seen[key]) continue;
-    seen[key] = true;
+    if (seen[key]) continue;                   // 이미 MIS에 적립됨
+    const cur = agg[key];
+    if (!cur || t.at > cur.t.at) agg[key] = { t: t, memberId: memberId, mName: mName, item: item };  // 토글 시 가장 최근 전달완료 유지
+  }
+  Object.keys(agg).forEach(function (key) {
+    const a = agg[key], t = a.t, item = a.item;
+    // event_date: 추천/불가/낙찰=이벤트 시각(telegram requested_at) / 입찰=in_date
+    const eventDate = (t.status === '입찰') ? _inDateToIso_(item.inDate) : t.at.toISOString();
     const misId = 'MIS' + t.at.getTime() + Math.floor(Math.random() * 1000) + newRows.length;
     newRows.push([
-      misId, memberId, mName, item ? item.mNameId : '', item ? item.myeongui : '', t.itemId,
-      item ? item.inDate : '', item ? item.sakunNo : '', item ? item.court : '', t.status,
-      t.at.toISOString(), item ? item.lowest : '', item ? item.bidprice : '', '', '', ''
+      misId, a.memberId, a.mName, item.mNameId, item.myeongui, t.itemId,
+      item.inDate, item.sakunNo, item.court, t.status,
+      t.at.toISOString(), item.lowest, item.bidprice, '', '', '',
+      eventDate   // Q: event_date
     ]);
     stat[t.status]++;
-  }
+  });
 
   // 5) 쓰기
   if (!dryRun && newRows.length) {
@@ -2152,7 +2177,8 @@ function accrueBidsDaily() {
     newRows.push([
       misId, memberId, String(r[6] || ''), String(r[5] || ''), String(r[14] || ''), itemId,
       inD, String(r[2] || ''), String(r[3] || ''), '입찰', now.toISOString(),
-      String(r[22] || ''), String(r[7] || ''), '', '', ''
+      String(r[22] || ''), String(r[7] || ''), '', '', '',
+      _inDateToIso_(inD)   // Q: event_date = 입찰일(in_date)
     ]);
   }
   if (newRows.length) {
@@ -8957,6 +8983,9 @@ function addMisRow(memberId, fields) {
     const sheet = ensureMembersItemStatusSheet_();
     const now = new Date();
     const misId = 'MIS' + now.getTime() + Math.floor(Math.random() * 1000);
+    // event_date: 입력값 우선, 없으면 입찰=in_date / 그 외=now
+    let eventDate = String(f.event_date || '');
+    if (!eventDate) eventDate = (String(f.status || '') === '입찰') ? _inDateToIso_(f.in_date) : now.toISOString();
     const row = [
       misId,                              // A: mis_id
       String(memberId),                   // B: member_id
@@ -8973,7 +9002,8 @@ function addMisRow(memberId, fields) {
       String(f.bid_price || ''),          // M: bid_price
       String(f.win_price || ''),          // N: win_price
       String(f.est_interior || ''),       // O: est_interior
-      String(f.est_resale || '')          // P: est_resale
+      String(f.est_resale || ''),         // P: est_resale
+      eventDate                           // Q: event_date
     ];
     sheet.appendRow(row);
     SpreadsheetApp.flush();
