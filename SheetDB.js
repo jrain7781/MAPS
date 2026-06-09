@@ -12,6 +12,30 @@ const CLASS_SHEET_NAME_DB = 'class';
 const CLASS_D1_SHEET_NAME_DB = 'class_d1';
 const MEMBER_CLASS_DETAILS_SHEET_NAME_DB = 'member_class_details';
 
+// [돈클] 회원별 물건 상태(추천/입찰/낙찰/불가) 적립 원장 — append-only, 자동삭제 없음(수동 UI만)
+//  · 1행 = (회원, 물건, 상태) 1건. dedup키 = (member_id, item_id, status)
+//  · myeongui = 선택된 명의 1개 (items.m_name2 스냅샷)
+//  · 적립: 추천/불가/낙찰=이벤트 즉시, 입찰=일별 트리거(in_date≤어제)
+const MEMBERS_ITEM_STATUS_SHEET_NAME = 'members_item_status';
+const MIS_HEADERS = [
+  'mis_id',        // 레코드 PK (UI 수정/삭제용)
+  'member_id',     // 회원ID (적립 시점 스냅샷)
+  'm_name',        // 회원명
+  'm_name_id',     // 입찰담당자
+  'myeongui',      // 선택 명의 1개 (items.m_name2)
+  'item_id',       // 물건ID
+  'in_date',       // 입찰일자 (items.in-date)
+  'sakun_no',      // 사건번호
+  'court',         // 법원
+  'status',        // 추천 | 입찰 | 낙찰 | 불가
+  'recorded_at',   // 적립 일시 (ISO)
+  'lowest_price',  // 최저가 (items 연계)
+  'bid_price',     // 입찰가 (items.bidprice 연계)
+  'win_price',     // 낙찰가 (크롤러 매각가)
+  'est_interior',  // 예상 인테리어비용 (낙찰건, 수동입력)
+  'est_resale'     // 예상 매도가 (낙찰건, 수동입력)
+];
+
 // - m_name2: "선택된 명의 표시값" (예: "(MJ) 한한한") — 화면 복원/리스트 표시에 사용
 // - auction_id: "옥션 고유번호 (7자리)"
 const ITEM_HEADERS = ['id', 'in-date', 'sakun_no', 'court', 'stu_member', 'm_name_id', 'm_name', 'bidprice', 'member_id', 'reg_date', 'reg_member', 'bid_state', 'image_id', 'note', 'm_name2', 'auction_id', 'chuchen_state', 'chuchen_date', 'class_d1_id', 'bid_datetime_2', 'items_youngdo', 'deposit', 'lowest_price'];
@@ -1268,6 +1292,7 @@ function initAllSheets() {
   ensureTelegramRequestsSheet_(); // 기존 존재
   ensureSettingsSheet_();         // [PHASE 3-1] settings 시트
   ensureMsgTemplatesSheet_();     // [PHASE 4-1] msg_templates 시트
+  ensureMembersItemStatusSheet_(); // [돈클] 회원별 물건상태 적립 원장
   return "All sheets initialized.";
 }
 
@@ -1804,6 +1829,49 @@ function ensureTelegramRequestsSheet_() {
 }
 
 // getMemberByTelegramChatId: 중복 제거됨. Line 1165의 신버전 사용
+
+/**
+ * [돈클] members_item_status 시트 보장 (없으면 생성, 헤더 보정)
+ * @returns {Sheet}
+ */
+function ensureMembersItemStatusSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(MEMBERS_ITEM_STATUS_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(MEMBERS_ITEM_STATUS_SHEET_NAME);
+  if (sheet.getLastRow() < 1) {
+    sheet.getRange(1, 1, 1, MIS_HEADERS.length).setValues([MIS_HEADERS]);
+    sheet.setFrozenRows(1);
+    SpreadsheetApp.flush();
+  } else {
+    // 헤더 최소 보장 (불일치 시 1행만 재기록)
+    const maxCols = sheet.getMaxColumns();
+    const row = sheet.getRange(1, 1, 1, Math.max(MIS_HEADERS.length, maxCols)).getValues()[0];
+    let needs = false;
+    for (let i = 0; i < MIS_HEADERS.length; i++) {
+      if (String(row[i] || '').trim() !== MIS_HEADERS[i]) { needs = true; break; }
+    }
+    if (needs) {
+      sheet.getRange(1, 1, 1, MIS_HEADERS.length).setValues([MIS_HEADERS]);
+      SpreadsheetApp.flush();
+    }
+  }
+  return sheet;
+}
+
+/**
+ * [돈클] members_item_status 시트 생성/검증 — 수동 실행용 공개 함수
+ * GAS 편집기에서 이 함수 실행 → 시트 생성 확인
+ */
+function initMembersItemStatusSheet() {
+  const sheet = ensureMembersItemStatusSheet_();
+  const headerRow = sheet.getRange(1, 1, 1, MIS_HEADERS.length).getValues()[0];
+  Logger.log('[members_item_status] 시트 준비 완료');
+  Logger.log('  시트명: ' + sheet.getName());
+  Logger.log('  컬럼수: ' + MIS_HEADERS.length);
+  Logger.log('  헤더: ' + headerRow.join(' | '));
+  Logger.log('  현재 데이터행: ' + Math.max(0, sheet.getLastRow() - 1) + '건');
+  return { sheet: sheet.getName(), cols: MIS_HEADERS.length, headers: headerRow, rows: Math.max(0, sheet.getLastRow() - 1) };
+}
 
 function updateItemStuMemberById_(itemId, newStatus) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
