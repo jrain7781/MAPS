@@ -2111,6 +2111,92 @@ function menuDonkleClearMis_() {
   ui.alert('✅ ' + n + '개 행 비움 완료 (헤더 유지)\n\n이제 ③ 백필을 다시 실행하면 깨끗하게 재적재됩니다.');
 }
 
+// ===== [돈클] ④ 입찰 일별 적립 (시간 트리거) =====
+const DONKLE_BID_HOUR_KEY = 'donkle_bid_accrual_hour'; // 입찰 적립 트리거 실행 시각(0~23), 기본 4시
+
+/**
+ * [돈클] 입찰 일별 적립 — items에서 stu_member=입찰 AND in_date<오늘(어제 이전) AND 미적립 → 입찰 적립
+ *  · 입찰일 전(예정)은 제외, 입찰일 지난 실제 입찰건만. 영구 보존(dedup).
+ *  · 매일 1회 시간 트리거가 호출. 수동 실행도 가능.
+ */
+function accrueBidsDaily() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const now = new Date();
+  const todayYYMMDD = Utilities.formatDate(now, 'Asia/Seoul', 'yyMMdd');
+  const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
+  if (!itemSheet || itemSheet.getLastRow() < 2) return { scanned: 0, accrued: 0 };
+  const idata = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, ITEM_HEADERS.length).getValues();
+
+  // 기존 (member,item) 입찰 적립 set
+  const misSheet = ensureMembersItemStatusSheet_();
+  const seen = {};
+  if (misSheet.getLastRow() >= 2) {
+    const md = misSheet.getRange(2, 1, misSheet.getLastRow() - 1, MIS_HEADERS.length).getValues();
+    for (let i = 0; i < md.length; i++) if (String(md[i][9]) === '입찰') seen[String(md[i][1]) + '|' + String(md[i][5])] = true;
+  }
+
+  const newRows = []; let scanned = 0;
+  for (let i = 0; i < idata.length; i++) {
+    const r = idata[i];
+    if (String(r[4] || '').trim() !== '입찰') continue;        // stu_member=입찰
+    const inD = String(r[1] || '');
+    if (!inD || inD >= todayYYMMDD) continue;                 // in_date < 오늘(어제 이전)
+    const memberId = String(r[8] || '').trim();
+    if (!memberId) continue;
+    scanned++;
+    const itemId = String(r[0] || '').trim();
+    const key = memberId + '|' + itemId;
+    if (seen[key]) continue;
+    seen[key] = true;
+    const misId = 'MIS' + now.getTime() + Math.floor(Math.random() * 1000) + newRows.length;
+    newRows.push([
+      misId, memberId, String(r[6] || ''), String(r[5] || ''), String(r[14] || ''), itemId,
+      inD, String(r[2] || ''), String(r[3] || ''), '입찰', now.toISOString(),
+      String(r[22] || ''), String(r[7] || ''), '', '', ''
+    ]);
+  }
+  if (newRows.length) {
+    const lr = misSheet.getLastRow();
+    misSheet.getRange(lr + 1, 1, newRows.length, MIS_HEADERS.length).setValues(newRows);
+    SpreadsheetApp.flush();
+  }
+  Logger.log('[입찰적립] 대상(입찰&지난) ' + scanned + ' → 신규 적립 ' + newRows.length);
+  return { scanned: scanned, accrued: newRows.length };
+}
+
+/**
+ * [돈클] 입찰 일별 적립 트리거 설치/재설치 — 설정된 시각(donkle_bid_accrual_hour)에 매일 1회
+ */
+function setupBidAccrualTrigger() {
+  const trgs = ScriptApp.getProjectTriggers();
+  for (let i = 0; i < trgs.length; i++) {
+    if (trgs[i].getHandlerFunction() === 'accrueBidsDaily') ScriptApp.deleteTrigger(trgs[i]);
+  }
+  let hour = parseInt(getSetting_(DONKLE_BID_HOUR_KEY, '4'), 10);
+  if (isNaN(hour) || hour < 0 || hour > 23) hour = 4;
+  ScriptApp.newTrigger('accrueBidsDaily').timeBased().everyDays(1).atHour(hour).create();
+  Logger.log('[입찰트리거] 매일 ' + hour + '시 설치 완료');
+  return hour;
+}
+
+// 메뉴: 입찰 적립 지금 실행
+function menuDonkleBidAccrueNow_() {
+  const r = accrueBidsDaily();
+  SpreadsheetApp.getUi().alert('입찰 적립 실행 결과\n\n대상(입찰 & 입찰일 지남): ' + r.scanned + '건\n신규 적립: ' + r.accrued + '건');
+}
+// 메뉴: 실행 시각 설정 + 트리거 설치
+function menuDonkleBidTrigger_() {
+  const ui = SpreadsheetApp.getUi();
+  const cur = getSetting_(DONKLE_BID_HOUR_KEY, '4');
+  const resp = ui.prompt('입찰 적립 트리거 시각', '매일 몇 시에 입찰 적립을 돌릴까요? (0~23)\n현재 설정: ' + cur + '시', ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) { ui.alert('취소됨'); return; }
+  let h = parseInt(String(resp.getResponseText()).trim(), 10);
+  if (isNaN(h) || h < 0 || h > 23) { ui.alert('0~23 사이 숫자를 입력하세요. (변경 안 됨)'); return; }
+  saveSetting_(DONKLE_BID_HOUR_KEY, String(h));
+  const setH = setupBidAccrualTrigger();
+  ui.alert('✅ 입찰 적립 트리거 설치 완료\n\n매일 ' + setH + '시에 자동 실행됩니다.');
+}
+
 function updateItemStuMemberById_(itemId, newStatus) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) throw new Error('items 시트를 찾을 수 없습니다.');

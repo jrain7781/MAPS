@@ -216,6 +216,8 @@ function onOpen() {
       .addItem('① members_item_status 시트 생성/검증', 'menuDonkleInitMis_')
       .addItem('② 적립 테스트(추천 1건)', 'menuDonkleTestAccrue_')
       .addItem('③ 백필(미리보기→실행)', 'menuDonkleBackfill_')
+      .addItem('④ 입찰 적립 지금 실행', 'menuDonkleBidAccrueNow_')
+      .addItem('④ 입찰 일별 트리거 설치/시각설정', 'menuDonkleBidTrigger_')
       .addItem('🧹 데이터 비우기(헤더 유지)', 'menuDonkleClearMis_'))
     .addToUi();
 }
