@@ -1,0 +1,782 @@
+<!-- ============================================================================
+     돈클 추천물건관리 화면 (입찰물건관리 ▸ 추천물건관리)
+     - 목업 doc/donkle_rec_manage_mockup.html 이식 (메뉴+화면 골격 단계)
+     - CSS는 #RecManagement 로 스코프, JS는 IIFE + window.REC 네임스페이스로 격리
+       (앱 전역 renderCalendar/escHtml/toast/v 등과 충돌 방지)
+     - 현재 데이터 = 목업 mock(DK/CAND/WAIT/DELIVERED). 실데이터 연동은 다음 단계.
+============================================================================ -->
+<style>
+  #RecManagement .card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  #RecManagement .tab{ padding:8px 18px; font-size:14px; font-weight:700; color:#6b7280; cursor:pointer; border-bottom:2px solid transparent; }
+  #RecManagement .tab.on{ color:#4f46e5; border-bottom-color:#4f46e5; }
+  #RecManagement .chip{ font-size:11px; padding:2px 8px; border-radius:9999px; font-weight:600; display:inline-flex; align-items:center; gap:4px; }
+  #RecManagement .btn-gold{ background:linear-gradient(135deg,#fbbf24,#d4af37); color:#1a1305; font-weight:700; }
+  #RecManagement .badge-count{ background:#ef4444; color:#fff; font-size:10px; font-weight:700; border-radius:9999px; padding:1px 6px; margin-left:4px; }
+  #RecManagement .sb{ padding:7px 14px; border-radius:9px; font-size:13px; font-weight:600; border:1px solid #e5e7eb; background:#fff; color:#6b7280; cursor:pointer; }
+  #RecManagement .sb:hover{ border-color:#c7d2fe; }
+  #RecManagement .sb.on{ border-color:rgba(212,175,55,.5); color:#1a1305; background:linear-gradient(135deg,#f7e3a1,#d4af37); }
+  #RecManagement .sb-all{ border-color:#c7d2fe; color:#4338ca; background:#eef2ff; }
+  #RecManagement .sb-all.on{ border-color:#4f46e5; color:#fff; background:#4f46e5; }
+  #RecManagement .sb-urgent{ border-color:#fecaca; color:#dc2626; background:#fef2f2; }
+  #RecManagement .sb-urgent.on{ border-color:#dc2626; color:#fff; background:#dc2626; }
+  #RecManagement .sb-soon{ border-color:#fed7aa; color:#d97706; background:#fff7ed; }
+  #RecManagement .sb-soon.on{ border-color:#f59e0b; color:#fff; background:#f59e0b; }
+  #RecManagement .sb-wait{ border-color:#bae6fd; color:#0284c7; background:#f0f9ff; }
+  #RecManagement .sb-wait.on{ border-color:#0ea5e9; color:#fff; background:#0ea5e9; }
+  #RecManagement .sb-done{ border-color:#bbf7d0; color:#16a34a; background:#f0fdf4; }
+  #RecManagement .sb-done.on{ border-color:#16a34a; color:#fff; background:#16a34a; }
+  #RecManagement .sb-new{ border-color:#a5f3fc; color:#0891b2; background:#ecfeff; }
+  #RecManagement .sb-new.on{ border-color:#06b6d4; color:#fff; background:#06b6d4; }
+  /* 월별 현황 달력 */
+  #RecManagement .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  #RecManagement .cal-cell{ min-height:80px; border:1px solid #eef0f4; border-radius:8px; padding:5px 6px; background:#fff; }
+  #RecManagement .cal-empty{ border:none; background:transparent; }
+  #RecManagement .cal-today{ border-color:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,.18); }
+  #RecManagement .cal-day{ font-size:12px; font-weight:700; margin-bottom:3px; }
+  #RecManagement .cal-name{ font-size:10px; font-weight:600; border-radius:4px; padding:1px 5px; margin-top:2px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #RecManagement .cal-sum{ font-size:9.5px; font-weight:700; color:#64748b; margin-left:4px; }
+  #RecManagement .cal-sum-sub{ font-weight:500; color:#94a3b8; }
+  #RecManagement .cal-mems{ display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-top:3px; }
+  #RecManagement .cal-mem{ display:flex; align-items:center; gap:3px; font-size:10px; font-weight:600; border-radius:5px; padding:1px 4px; cursor:pointer; overflow:hidden; }
+  #RecManagement .cal-mem:hover{ filter:brightness(.96); outline:1px solid rgba(0,0,0,.08); }
+  #RecManagement .cal-mbadge{ position:relative; display:inline-grid; place-items:center; min-width:14px; height:14px; border-radius:4px; font-size:9px; font-weight:800; flex:none; }
+  #RecManagement .cal-mbadge.note::before{ content:''; position:absolute; top:-2px; left:-2px; width:6px; height:6px; border-radius:50%; background:#111827; border:1px solid #fff; box-shadow:0 0 0 .5px rgba(0,0,0,.2); }
+  .cal-pop{ position:fixed; z-index:60; max-width:250px; background:#1f2937; color:#fff; font-size:11px; line-height:1.5; border-radius:8px; padding:8px 10px; box-shadow:0 10px 28px rgba(0,0,0,.3); pointer-events:none; }
+  .cal-pop .cp-title{ font-weight:700; margin-bottom:3px; color:#fcd34d; }
+  .cal-pop .cp-note{ color:#e5e7eb; white-space:pre-wrap; }
+  #RecManagement .cal-st-대기{ background:#fff7ed; color:#c2410c; } #RecManagement .cal-st-대기 .cal-mbadge{ background:#fb923c; color:#fff; }
+  #RecManagement .cal-st-완료{ background:#ecfdf5; color:#047857; } #RecManagement .cal-st-완료 .cal-mbadge{ background:#10b981; color:#fff; }
+  /* 상태별 요약 칩 (클릭 필터) */
+  #RecManagement .lifechip{ font-size:12px; font-weight:700; padding:3px 11px; border-radius:9999px; border:1px solid; cursor:pointer; transition:.12s; }
+  #RecManagement .lifechip-all{ color:#4338ca; background:#eef2ff; border-color:#c7d2fe; }
+  #RecManagement .lifechip-all.on{ color:#fff; background:#4f46e5; border-color:#4f46e5; }
+  #RecManagement .lifechip-대기{ color:#c2410c; background:#fff7ed; border-color:#fed7aa; }
+  #RecManagement .lifechip-대기.on{ color:#fff; background:#fb923c; border-color:#fb923c; }
+  #RecManagement .lifechip-완료{ color:#047857; background:#ecfdf5; border-color:#a7f3d0; }
+  #RecManagement .lifechip-완료.on{ color:#fff; background:#10b981; border-color:#10b981; }
+  #RecManagement .lifechip-진행{ color:#047857; background:#ecfdf5; border-color:#a7f3d0; }
+  #RecManagement .lifechip-진행.on{ color:#fff; background:#10b981; border-color:#10b981; }
+  #RecManagement .lifechip-보류{ color:#6d28d9; background:#f5f3ff; border-color:#ddd6fe; }
+  #RecManagement .lifechip-보류.on{ color:#fff; background:#8b5cf6; border-color:#8b5cf6; }
+  #RecManagement .lifechip-종료{ color:#6b7280; background:#f3f4f6; border-color:#e5e7eb; }
+  #RecManagement .lifechip-종료.on{ color:#fff; background:#6b7280; border-color:#6b7280; }
+  /* 회원상태 색상 셀렉트 */
+  #RecManagement .life-sel{ font-size:11px; font-weight:700; border-radius:6px; padding:2px 4px; border:1px solid; cursor:pointer; }
+  #RecManagement .life-진행{ color:#047857; background:#ecfdf5; border-color:#6ee7b7; }
+  #RecManagement .life-보류{ color:#6d28d9; background:#f5f3ff; border-color:#c4b5fd; }
+  #RecManagement .life-종료{ color:#6b7280; background:#f3f4f6; border-color:#d1d5db; }
+  /* 그리드 열 너비 드래그 리사이즈 */
+  #RecManagement #queueTable thead th{ position:relative; overflow:hidden; }
+  #RecManagement #queueTable td{ overflow:hidden; text-overflow:ellipsis; }
+  #RecManagement .colrz{ position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:5; }
+  #RecManagement .colrz:hover{ background:rgba(99,102,241,.35); }
+</style>
+
+<div id="RecManagement" class="tab-content content-hidden p-6 h-full overflow-y-auto">
+  <div class="max-w-[1080px] mx-auto">
+
+  <!-- 경로 + 제목 -->
+  <div class="text-[12px] text-gray-400 mb-1">입찰물건관리 ▸ <span class="text-gray-600 font-semibold">추천물건관리</span></div>
+  <div class="flex items-center mb-3 gap-2">
+    <h1 class="text-xl font-bold text-gray-800">추천물건관리 <span class="text-[13px] font-normal text-gray-400">돈클</span></h1>
+  </div>
+
+  <!-- 탭 -->
+  <div class="flex items-center gap-1 border-b border-gray-200 mb-4">
+    <div class="tab on" id="tab-queue" onclick="REC.switchTab('queue')">추천 큐 <span class="text-[11px] text-gray-400 font-normal">(누구 먼저)</span></div>
+    <div class="tab" id="tab-cal" onclick="REC.switchTab('cal')">월별 현황 <span class="text-[11px] text-gray-400 font-normal">(달력)</span></div>
+    <div class="ml-auto flex items-center gap-2 text-[11px] text-gray-400 pb-2">기준일
+      <input id="dateInput" type="date" value="2026-06-08" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700"> · 추천 주기
+      <input id="cycleInput" type="number" min="1" value="14" onfocus="this.select()" onclick="this.select()" class="w-12 border border-gray-300 rounded px-1.5 py-0.5 text-center text-gray-700"> 일
+      <button id="cycleSave" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-semibold">저장</button></div>
+  </div>
+
+  <!-- ========== 탭1: 추천 큐 (추천담당자) ========== -->
+  <div id="view-queue" class="flex items-stretch">
+    <div class="card p-5 flex-1 min-w-0">
+      <!-- 상단 필터 버튼 -->
+      <div class="flex items-center gap-1.5 mb-4 flex-wrap" id="statBtns">
+        <button data-f="all" class="sb sb-all on" onclick="REC.setStat('all')">전체 <b>0</b></button>
+        <button data-f="new" class="sb sb-new" onclick="REC.setStat('new')">0건 <b>0</b></button>
+        <button data-f="urgent" class="sb sb-urgent" onclick="REC.setStat('urgent')" title="다음예정일이 지난(14일 주기 초과) 전체">긴급 <b>0</b></button>
+        <button data-f="soon" class="sb sb-soon" onclick="REC.setStat('soon')">임박 <b>0</b></button>
+        <button data-f="wait" class="sb sb-wait" onclick="REC.setStat('wait')">대기 <b>0</b></button>
+        <button data-f="done" class="sb sb-done" onclick="REC.setStat('done')">완료 <b>0</b></button>
+        <label class="ml-2 text-xs text-gray-500 flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-12 border border-gray-300 rounded px-1.5 py-1 text-center text-gray-700"></label>
+      </div>
+      <div class="flex items-center mb-3 gap-2">
+        <h2 class="text-base font-bold text-gray-800">추천 우선순위</h2>
+        <input id="queueSearch" oninput="REC.setQueueQuery(this.value)" onfocus="this.select()" onclick="this.select()" placeholder="회원이름 조회" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs w-36 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <span class="w-px h-5 bg-gray-200"></span>
+        <select id="bulkTargetTop" class="border border-gray-300 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white"><option value="status">상태값</option></select>
+        <button onclick="REC.openBulkModal()" class="text-xs font-semibold border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg px-3 py-1.5">✓ 일괄적용</button>
+        <span class="text-[12px] text-gray-400 ml-auto">정렬: 헤더 클릭</span>
+      </div>
+      <!-- 상태별 요약 (클릭 = 회원상태 필터) -->
+      <div class="flex items-center gap-1.5 mb-3" id="lifeSummary">
+        <span class="text-[11px] text-gray-400 mr-0.5">상태</span>
+        <button data-life="진행" onclick="REC.setLife('진행')" class="lifechip lifechip-진행">진행 <b>0</b></button>
+        <button data-life="보류" onclick="REC.setLife('보류')" class="lifechip lifechip-보류">보류 <b>0</b></button>
+        <button data-life="종료" onclick="REC.setLife('종료')" class="lifechip lifechip-종료">종료 <b>0</b></button>
+        <span id="lifeClear" class="hidden text-[11px] text-gray-400 underline cursor-pointer ml-1" onclick="REC.setLife(REC._curLife())">필터 해제</span>
+      </div>
+      <table id="queueTable" class="w-full text-sm" style="table-layout:fixed">
+        <colgroup id="queueColgroup"><col><col><col><col><col><col><col><col><col><col><col></colgroup>
+        <thead><tr class="text-gray-500 border-b border-gray-200 text-[12px] select-none">
+          <th class="text-center py-2 font-semibold w-7"><input type="checkbox" id="selAll" onclick="REC.toggleSelAll(this.checked)" title="보이는 회원 전체 선택"></th>
+          <th class="text-center py-2 font-semibold">순위</th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('life')">상태<span id="qa-life"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('name')">회원<span id="qa-name"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('sub')">구분<span id="qa-sub"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('total')">누적<span id="qa-total"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('last')">마지막<span id="qa-last"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('next')">다음예정<span id="qa-next"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('status')">추천상태<span id="qa-status"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('wait')">진행상황<span id="qa-wait"></span></th>
+          <th class="text-center py-2 font-semibold">액션</th>
+        </tr></thead>
+        <tbody id="queueBody"></tbody>
+      </table>
+      <div id="queueWait" class="text-[12px] text-sky-600 mt-3"></div>
+    </div>
+    <!-- 드래그로 좌우 너비 조절 -->
+    <div id="recDivider" class="w-1.5 mx-1.5 cursor-col-resize bg-gray-200 hover:bg-indigo-400 rounded transition-colors flex-none" title="드래그로 너비 조절"></div>
+    <!-- 우측 상시 패널: 선택한 추천 물건 -->
+    <div class="card flex-none overflow-hidden" id="recPanel" style="width:360px"><div id="recBody"></div></div>
+  </div>
+
+  <!-- ========== 탭2: 월별 진행 현황 (달력) ========== -->
+  <div id="view-cal" class="hidden">
+    <div class="card p-5">
+      <div class="flex items-center mb-4 gap-2 flex-wrap">
+        <h2 class="text-base font-bold text-gray-800">월별 진행 현황</h2>
+        <div class="flex items-center gap-1 ml-3">
+          <button onclick="REC.calNav(-1)" class="px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs">◀</button>
+          <span id="calTitle" class="text-sm font-bold text-gray-700 w-28 text-center"></span>
+          <button onclick="REC.calNav(1)" class="px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs">▶</button>
+          <button onclick="REC.calToday()" class="ml-1 px-2 py-1 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs">오늘</button>
+        </div>
+      </div>
+      <!-- 현황판 조회: 회원이름 + 전달대기/추천완료 필터 -->
+      <div class="flex items-center gap-1.5 mb-3 flex-wrap" id="calFilter">
+        <input id="calSearch" oninput="REC.setCalQuery(this.value)" onfocus="this.select()" onclick="this.select()" placeholder="회원이름 조회" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs w-36 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        <span class="w-px h-5 bg-gray-200 mx-0.5"></span>
+        <button data-cs="all" onclick="REC.setCalStatus('all')" class="lifechip lifechip-all on">전체 <b>0</b></button>
+        <button data-cs="대기" onclick="REC.setCalStatus('대기')" class="lifechip lifechip-대기">전달대기 <b>0</b></button>
+        <button data-cs="완료" onclick="REC.setCalStatus('완료')" class="lifechip lifechip-완료">추천완료 <b>0</b></button>
+      </div>
+      <div class="grid grid-cols-7 gap-1.5 mb-1.5 text-center text-[11px] font-bold">
+        <div class="text-gray-500">월</div><div class="text-gray-500">화</div><div class="text-gray-500">수</div><div class="text-gray-500">목</div><div class="text-gray-500">금</div><div class="text-blue-500">토</div><div class="text-red-500">일</div>
+      </div>
+      <div id="calGrid" class="cal-grid"></div>
+      <div class="flex items-center flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] text-gray-400">
+        <span class="flex items-center gap-1"><span class="cal-mem cal-st-대기" style="cursor:default"><span class="cal-mbadge">N</span>대기</span> 전달 대기</span>
+        <span class="flex items-center gap-1"><span class="cal-mem cal-st-완료" style="cursor:default"><span class="cal-mbadge">N</span>완료</span> 전달 완료</span>
+        <span class="text-gray-300">·</span>
+        <span>뱃지=당일 추천 물건수 · 색=진행여부 · 뱃지 <b class="text-gray-700">⬤</b> 검은점=추천비고 있음(hover) · 칩 클릭 시 입찰물건관리 이동</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 추천하기 모달 = 물건 선택 ===== -->
+  <div id="recPickModal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center" onclick="if(event.target===this)REC.closeModal()">
+    <div class="card w-full mx-4 flex flex-col" style="max-width:1320px;width:98vw;max-height:90vh;padding:0">
+      <div class="px-4 py-3 border-b border-gray-200 flex items-center gap-2 relative">
+        <h3 class="text-base font-bold text-gray-800 mx-auto">물건 선택</h3>
+        <button class="absolute left-4 text-xs px-2 py-0.5 rounded border bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-300">🔄 새로고침</button>
+        <button onclick="REC.closeModal()" class="absolute right-3 text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+      </div>
+      <div class="flex flex-1 min-h-0">
+        <!-- 좌: 후보 리스트 -->
+        <div class="flex-1 flex flex-col border-r border-gray-200 min-w-0">
+          <div class="px-2 py-2.5 bg-gray-50 border-b border-gray-200 flex gap-1.5 flex-wrap items-center">
+            <input id="pf-date" oninput="REC.renderPickerList()" onfocus="this.select()" placeholder="입찰일자" class="w-20 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+            <input id="searchInput" oninput="REC.renderPickerList()" onfocus="this.select()" onclick="this.select()" placeholder="사건번호" class="w-32 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+            <input id="pf-court" oninput="REC.renderPickerList()" onfocus="this.select()" placeholder="법원" class="w-16 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+            <select id="pf-status" onchange="REC.renderPickerList()" class="w-16 px-1 py-1.5 border border-gray-300 rounded text-xs bg-white">
+              <option value="">상태</option><option value="상품">상품</option><option value="검증">검증</option><option value="미정">미정</option><option value="추천">추천</option><option value="입찰">입찰</option><option value="폐기">폐기</option><option value="불가">불가</option>
+            </select>
+            <input id="pf-member" oninput="REC.renderPickerList()" onfocus="this.select()" placeholder="회원" class="w-16 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+            <input id="pf-regdate" oninput="REC.renderPickerList()" onfocus="this.select()" placeholder="등록일자" class="w-20 px-1.5 py-1.5 border border-gray-300 rounded text-xs text-center">
+            <select id="pf-mgr" onchange="REC.renderPickerList()" class="w-24 px-1.5 py-1.5 border border-gray-300 rounded text-xs bg-white">
+              <option value="">담당자</option><option value="대표님">대표님</option><option value="전부쌤">전부쌤</option>
+            </select>
+          </div>
+          <div id="pickerSummary" class="px-2 py-1 bg-blue-50 border-b border-blue-100 text-xs flex flex-wrap gap-x-2 gap-y-0.5 items-center"></div>
+          <div class="flex-1 overflow-y-auto p-2">
+            <table class="min-w-full text-sm">
+              <thead class="bg-gray-50 sticky top-0"><tr class="text-gray-600 border-b border-gray-200">
+                <th class="text-center py-2 px-1 font-bold">일자</th><th class="text-center py-2 font-bold">IMG</th><th class="text-left py-2 font-bold">사건번호</th><th class="text-left py-2 font-bold">법원</th><th class="text-center py-2 font-bold">용도</th><th class="text-center py-2 font-bold">상태</th><th class="text-center py-2 font-bold">회원</th><th class="text-center py-2 font-bold">담당</th>
+              </tr></thead>
+              <tbody id="candBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <!-- 우: 선택된 물건 -->
+        <div class="bg-gray-50 flex flex-col flex-none" style="width:520px">
+          <div class="px-3 py-2 border-b border-gray-200 bg-white flex items-center justify-between gap-2">
+            <span class="text-xs font-bold text-gray-700">선택된 물건 <span id="cartCount" class="text-indigo-600 font-semibold"></span></span>
+            <div class="flex gap-1">
+              <button onclick="REC.confirmPicker()" class="px-2.5 py-1 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded">일괄 등록</button>
+              <button onclick="REC.closeModal()" class="px-2.5 py-1 text-xs border border-gray-300 rounded text-gray-600 hover:bg-gray-100">취소</button>
+            </div>
+          </div>
+          <div id="cartInfoBar" class="px-3 py-1.5 bg-indigo-50 border-b border-indigo-100 text-[11px] text-indigo-700 flex flex-nowrap gap-x-2 items-center overflow-x-auto whitespace-nowrap"></div>
+          <div class="px-2 py-1.5 bg-white border-b border-gray-100"><input id="cartSearch" oninput="REC.renderCart()" onfocus="this.select()" placeholder="사건번호 조회" class="w-full px-2 py-1 border border-gray-300 rounded text-xs"></div>
+          <div class="flex-1 overflow-y-auto p-2">
+            <table class="min-w-full text-[11px]">
+              <thead class="sticky top-0 bg-gray-100"><tr class="text-gray-600 border-b border-gray-200">
+                <th class="text-center py-2 px-1 font-bold">일자</th><th class="text-left py-2 font-bold">사건번호</th><th class="text-left py-2 font-bold">법원</th><th class="text-center py-2 font-bold">용도</th><th class="text-center py-2 font-bold">상태</th><th class="text-center py-2 font-bold">회원</th><th class="text-center py-2 font-bold">담당</th><th class="w-5"></th>
+              </tr></thead>
+              <tbody id="cartBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 회원 상태 일괄적용 모달 ===== -->
+  <div id="bulkModal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center" onclick="if(event.target===this)REC.closeBulkModal()">
+    <div class="card w-full mx-4 flex flex-col" style="max-width:440px;max-height:82vh;padding:0">
+      <div class="px-4 py-3 border-b border-gray-200 flex items-center">
+        <h3 class="text-base font-bold text-gray-800">회원 상태 일괄 변경</h3>
+        <button onclick="REC.closeBulkModal()" class="ml-auto text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+      </div>
+      <div class="px-4 py-3 border-b border-gray-100 flex items-center gap-2 text-sm bg-gray-50">
+        <span class="text-gray-500">변경할 상태</span>
+        <select id="bulkTarget" onchange="REC.onBulkTargetChange()" class="border border-gray-300 rounded px-2 py-1 text-sm font-semibold bg-white">
+          <option>진행</option><option>보류</option><option>종료</option>
+        </select>
+        <span id="bulkHoldWrap" class="hidden items-center gap-1 text-xs text-gray-500">해제일 <input id="bulkHold" placeholder="MM/DD" onfocus="this.select()" class="w-20 border border-gray-300 rounded px-1.5 py-1 text-center"></span>
+      </div>
+      <div class="flex-1 overflow-y-auto px-4 py-2.5">
+        <div class="text-[11px] text-gray-400 mb-1.5">선택 <b id="bulkCount" class="text-indigo-600">0</b>명 · 현재 상태 → 변경 후</div>
+        <div id="bulkList"></div>
+      </div>
+      <div class="px-4 py-3 border-t border-gray-200 flex justify-end gap-2">
+        <button onclick="REC.closeBulkModal()" class="px-3 py-1.5 text-sm border border-gray-300 rounded text-gray-600 hover:bg-gray-50">취소</button>
+        <button onclick="REC.applyBulk()" class="px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded">일괄적용</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 추천비고 풍선팝업 -->
+  <div id="calPop" class="cal-pop hidden"></div>
+  <!-- 토스트 -->
+  <div id="recToast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg hidden z-50"></div>
+
+  </div><!-- /max-w wrapper -->
+</div><!-- /#RecManagement -->
+
+<script>
+// 돈클 추천물건관리 — IIFE 격리 + window.REC 네임스페이스 (앱 전역과 충돌 방지)
+(function(){
+  const REC = window.REC = window.REC || {};
+  let TODAY = new Date(2026,5,8);  // 기준일 (목업 mock 데이터 기준 — 실연동 시 new Date())
+  let CYCLE = 14;
+  const parseMD = md => { const [m,d]=md.split('/').map(Number); return new Date(2026, m-1, d); };
+  const addDays = (dt,n) => { const x=new Date(dt); x.setDate(x.getDate()+n); return x; };
+  const fmtMD = dt => String(dt.getMonth()+1).padStart(2,'0')+'/'+String(dt.getDate()).padStart(2,'0');
+  const dayDiff = (a,b) => Math.round((a-b)/86400000);
+
+  // ── 목업 mock 데이터 (실연동 단계에서 GAS members_item_status/telegram_requests 로 교체) ──
+  const DK = [
+    {name:'조현우', sub:'월세',   cohort:3, phone:'010-2841-7763', status:'진행', hold:'', recNote:'카톡으로만 전달. 시세 대비 저렴함 강조 요망.', note:'월세 수익형 선호. 부산·경남권 위주. 대출 80%까지 가능.', hist:[{d:'03/05',q:1},{d:'03/20',q:1},{d:'04/05',q:1},{d:'04/20',q:1}]},
+    {name:'강태오', sub:'수익',   cohort:5, phone:'010-3392-1188', status:'진행', hold:'', recNote:'전화 통화 후 전달. 18시 이후 연락 가능.', note:'단기 차익형. 감정가 대비 저감률 큰 물건 선호.', hist:[{d:'05/16',q:1}]},
+    {name:'서지후', sub:'올인원', cohort:4, phone:'010-7755-2043', status:'진행', hold:'', note:'올인원. 종류 무관, 수도권 가점.', hist:[{d:'05/20',q:2}]},
+    {name:'윤재호', sub:'올인원', cohort:4, phone:'010-9021-6614', status:'보류', hold:'06/20', note:'6월 중순까지 해외출장. 6/20 이후 재개 요청.', hist:[{d:'05/27',q:1}]},
+    {name:'남도현', sub:'수익',   cohort:6, phone:'010-4480-3327', status:'진행', hold:'', note:'신규. 첫 추천 대기 중.', hist:[]},
+    {name:'한지영', sub:'수익',   cohort:1, phone:'010-2207-9985', status:'진행', hold:'', recNote:'권리분석 요약 함께 전달. 명도 난이도 낮은 건 우선.', note:'장기 회원. 2주 주기 꾸준히 진행.', hist:[{d:'03/03',q:1},{d:'03/17',q:1},{d:'03/31',q:1},{d:'04/14',q:1},{d:'04/28',q:1},{d:'05/12',q:1},{d:'05/26',q:1},{d:'06/07',q:1}]},
+    {name:'임채원', sub:'수익',   cohort:6, phone:'010-6613-0420', status:'진행', hold:'', note:'신규 가입. 텔레그램 미연결 상태.', hist:[]},
+    {name:'정민석', sub:'월세',   cohort:2, phone:'010-1188-5560', status:'종료', hold:'', note:'보장 충족으로 종료(낙찰 완료).', hist:[{d:'03/10',q:1},{d:'03/24',q:1},{d:'04/07',q:1}]},
+  ];
+  const CAND = [
+    {date:'260608', s:'2023타경110430(1)', court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'이서원',       mgr:'전부쌤'},
+    {date:'260608', s:'2023타경110430(2)', court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'이서원',       mgr:'전부쌤'},
+    {date:'260608', s:'2023타경110430(3)', court:'부산동부', youngdo:'등록전',   stu:'미정', member:'박성미',       mgr:'전부쌤'},
+    {date:'260608', s:'2023타경103746',    court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'김정희',       mgr:'전부쌤'},
+    {date:'260608', s:'2023타경110430',    court:'부산동부', youngdo:'등록전',   stu:'미정', member:'이서원심희정', mgr:'전부쌤'},
+    {date:'260608', s:'2024타경1670(2)',   court:'부산동부', youngdo:'등록전',   stu:'상품', member:'',             mgr:'전부쌤'},
+    {date:'260608', s:'2024타경11848',     court:'수원',     youngdo:'등록전',   stu:'입찰', member:'최정미',       mgr:'대표님'},
+    {date:'260608', s:'2024타경54944',     court:'춘천강릉', youngdo:'등록전',   stu:'불가', member:'김지영',       mgr:'대표님'},
+    {date:'260608', s:'2024타경104050',    court:'부산동부', youngdo:'돈클수익', stu:'입찰', member:'신혜진',       mgr:'대표님'},
+    {date:'260608', s:'2025타경4931(1)',   court:'부산동부', youngdo:'등록전',   stu:'미정', member:'안수정',       mgr:'대표님'},
+    {date:'260608', s:'2025타경4931(2)',   court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'이종진',       mgr:'대표님'},
+    {date:'260608', s:'2025타경20198(3)',  court:'대전논산', youngdo:'등록전',   stu:'폐기', member:'',             mgr:'대표님'},
+    {date:'260608', s:'2025타경51125(5)',  court:'서울동부', youngdo:'등록전',   stu:'입찰', member:'강성은',       mgr:'대표님'},
+    {date:'260608', s:'2025타경51125(7)',  court:'서울동부', youngdo:'등록전',   stu:'미정', member:'박예진',       mgr:'대표님'},
+    {date:'260608', s:'2025타경384',       court:'서울동부', youngdo:'등록전',   stu:'상품', member:'',             mgr:'전부쌤'},
+    {date:'260608', s:'2025타경1095',      court:'대구',     youngdo:'등록전',   stu:'상품', member:'',             mgr:'대표님'},
+    {date:'260608', s:'2025타경3768',      court:'대구포항', youngdo:'등록전',   stu:'미정', member:'박경우',       mgr:'전부쌤'},
+    {date:'260608', s:'2025타경3997',      court:'대구포항', youngdo:'등록전',   stu:'상품', member:'',             mgr:'전부쌤'},
+    {date:'260608', s:'2025타경5018',      court:'부산동부', youngdo:'등록전',   stu:'상품', member:'',             mgr:'대표님'},
+    {date:'260608', s:'2025타경20756',     court:'전주군산', youngdo:'등록전',   stu:'미정', member:'권윤찬',       mgr:'전부쌤'},
+    {date:'260608', s:'2025타경21459',     court:'창원통영', youngdo:'등록전',   stu:'불가', member:'신혜진',       mgr:'대표님'},
+    {date:'260608', s:'2025타경41887',     court:'수원평택', youngdo:'등록전',   stu:'미정', member:'최숙희',       mgr:'대표님'},
+  ];
+  const STU_PICK = ['상품','미정','추천'];
+  const statusTag = s => { const m={'상품':'stu-tag-product','입찰':'stu-tag-bid','추천':'stu-tag-recommend','검증':'stu-tag-verified','폐기':'stu-tag-discard','불가':'stu-tag-changed','취소':'stu-tag-changed','변경':'stu-tag-changed','미정':'stu-tag-default'}; return `<span class="stu-tag ${m[s]||'stu-tag-default'}">${s}</span>`; };
+  const yongdoTag = y => { const m={'돈클수익':'yongdo-tag-income','돈클월세':'yongdo-tag-rent','플래티넘':'yongdo-tag-platinum','블랙':'yongdo-tag-black','실버':'yongdo-tag-silver','PT, 단투':'yongdo-tag-other'}; return `<span class="yongdo-tag ${m[y]||'yongdo-tag-pre'}">${y||'등록전'}</span>`; };
+  CAND.forEach((c,i)=>{ c.bid=['06/12','06/16','06/18','06/20','06/23','06/25'][i%6]; });
+  let WAIT = [
+    {name:'조현우', sub:'월세', s:'2024타경59001', court:'부산지법', bidDate:'06/16', by:'대표님', regDate:'06/07', channel:'텔레그램'},
+    {name:'한지영', sub:'수익', s:'2024타경59112', court:'창원지법', bidDate:'06/18', by:'전부쌤', regDate:'06/08', channel:'텔레그램'},
+    {name:'강태오', sub:'수익', s:'2024타경59210', court:'부산지법', bidDate:'06/19', by:'대표님', regDate:'06/03', channel:'텔레그램'},
+    {name:'서지후', sub:'올인원', s:'2024타경59233', court:'수원', bidDate:'06/22', by:'대표님', regDate:'06/03', channel:'텔레그램'},
+    {name:'남도현', sub:'수익', s:'2024타경59301', court:'대구', bidDate:'06/24', by:'전부쌤', regDate:'06/03', channel:'텔레그램'},
+    {name:'임채원', sub:'수익', s:'2024타경59377', court:'서울동부', bidDate:'06/25', by:'대표님', regDate:'06/05', channel:'카카오톡'},
+    {name:'한지영', sub:'수익', s:'2024타경59401', court:'창원지법', bidDate:'06/26', by:'전부쌤', regDate:'06/08', channel:'텔레그램'},
+  ];
+  let DELIVERED = [
+    {name:'강태오', s:'2024타경58010', court:'부산지법', bidDate:'06/12', date:'05/16', by:'전부쌤'},
+    {name:'서지후', s:'2024타경58220', court:'창원지법', bidDate:'06/20', date:'05/20', by:'대표님'},
+    {name:'윤재호', s:'2024타경58330', court:'대구지법', bidDate:'06/23', date:'05/27', by:'대표님'},
+    {name:'조현우', s:'2024타경57801', court:'부산지법', bidDate:'06/11', date:'06/02', by:'대표님'},
+    {name:'한지영', s:'2024타경57820', court:'창원지법', bidDate:'06/13', date:'06/02', by:'전부쌤'},
+    {name:'강태오', s:'2024타경57930', court:'부산지법', bidDate:'06/15', date:'06/04', by:'대표님'},
+    {name:'서지후', s:'2024타경57955', court:'수원', bidDate:'06/16', date:'06/04', by:'대표님'},
+    {name:'조현우', s:'2024타경58002', court:'부산지법', bidDate:'06/17', date:'06/08', by:'대표님'},
+  ];
+
+  const subChip = s => { const m={'수익':'border-emerald-500 text-emerald-700','월세':'border-amber-500 text-amber-700','올인원':'border-violet-500 text-violet-700'}; return `<span class="inline-block w-[44px] text-center text-[10px] font-bold py-0.5 rounded border bg-white ${m[s]||'border-gray-400 text-gray-600'}">${s}</span>`; };
+  const TELE_OFF = new Set(['임채원']);
+  const teleBadge = name => `<span class="inline-grid place-items-center w-4 h-4 rounded-full text-[9px] font-bold align-middle mr-1 ${TELE_OFF.has(name)?'bg-gray-300 text-white':'bg-sky-500 text-white'}" title="${TELE_OFF.has(name)?'텔레그램 미연결':'텔레그램 연결됨'}">T</span>`;
+
+  function calc(m){
+    const total = m.hist.reduce((s,h)=>s+h.q,0);
+    const lastH = m.hist.length ? m.hist[m.hist.length-1] : null;
+    const last  = lastH ? lastH.d : null;
+    const lastQ = lastH ? lastH.q : 0;
+    if(m.status==='종료') return {total,last,lastQ,next:null,dleft:null,owed:0,ended:true};
+    if(m.status==='보류') return {total,last,lastQ,next:null,dleft:null,owed:0,held:true};
+    if(!last) return {total,last:null,lastQ:0,next:null,dleft:null,owed:0,fresh:true};
+    const base = parseMD(last);
+    const next = addDays(base, (lastQ||1)*CYCLE);
+    const dleft = dayDiff(next, TODAY);
+    const owed = dleft<0 ? Math.floor(-dleft/CYCLE)+1 : 0;
+    return {total,last,lastQ,next,dleft,owed};
+  }
+  function statusCell(k){
+    if(k.ended) return '<span class="chip bg-gray-200 text-gray-500">종료</span>';
+    if(k.held)  return '<span class="chip bg-violet-100 text-violet-700">보류</span>';
+    if(k.fresh) return '<span class="chip bg-cyan-100 text-cyan-700">신규</span>';
+    if(k.dleft<0) return `<span class="chip bg-red-100 text-red-700">긴급 · ${-k.dleft}일 지남</span>`;
+    if(k.dleft<=SOON) return `<span class="chip bg-amber-100 text-amber-700">임박 D-${k.dleft}</span>`;
+    return `<span class="chip bg-gray-100 text-gray-500">여유 D-${k.dleft}</span>`;
+  }
+  const waitCountFor = name => WAIT.filter(w=>w.name===name).length;
+
+  function renderQueue(){
+    renderStatBtns();
+    let list = DK.filter(passFilter).map(m=>({m,k:calc(m)}));
+    if(qSort.key){
+      const d=qSort.dir, g=o=>{switch(qSort.key){case 'name':return o.m.name;case 'life':return o.m.status;case 'sub':return o.m.sub;case 'total':return o.k.total;case 'last':return o.k.last||'';case 'next':return o.k.next?o.k.next.getTime():0;case 'status':return o.k.dleft==null?1e9:o.k.dleft;case 'wait':return waitCountFor(o.m.name);}};
+      list.sort((a,b)=>{const av=g(a),bv=g(b); return (typeof av==='string'?av.localeCompare(bv):av-bv)*d;});
+    } else { list.sort((a,b)=>{
+        const r=x=> x.k.ended?3 : x.k.held?2 : x.k.fresh?1 : 0;
+        const ra=r(a),rb=r(b); if(ra!==rb) return ra-rb;
+        return (b.k.owed-a.k.owed)||((a.k.dleft==null?1e9:a.k.dleft)-(b.k.dleft==null?1e9:b.k.dleft)); }); }
+    document.getElementById('queueBody').innerHTML = list.length ? list.map(({m,k},i)=>{
+      const sel = (m.name===curRecMember);
+      const rowSty = sel ? 'background:rgba(99,102,241,.10);box-shadow:inset 3px 0 0 #6366f1' : (k.ended ? 'opacity:.55' : (k.owed>=1 ? 'background:rgba(248,113,113,.07)' : ''));
+      const nextV = k.next?fmtMD(k.next):'—';
+      const nextC = (k.dleft!=null && k.dleft<0)?'text-red-600 font-bold':(k.dleft!=null && k.dleft<=SOON)?'text-amber-600 font-semibold':'text-gray-600';
+      const ps = progStateOf(m.name);
+      const waitTag = ps==='대기' ? `<span class="chip bg-amber-100 text-amber-700">대기 ${waitCountFor(m.name)}건</span>`
+                    : ps==='완료' ? '<span class="chip bg-gray-100 text-gray-500">완료</span>'
+                    : '<span class="chip bg-white text-gray-400 ring-1 ring-gray-200">없음</span>';
+      const canRec = !k.held && !k.ended;
+      const action = canRec ? `<button onclick="event.stopPropagation();REC.openModal('${m.name}')" class="btn-gold px-3 py-1 rounded-lg text-[12px]">${k.fresh?'신규 추천':'추천하기'}</button>` : '<span class="text-gray-300 text-[12px]">—</span>';
+      const lifeSel = `<select onclick="event.stopPropagation()" onchange="REC.setMemberStatus('${m.name}',this.value)" class="life-sel life-${m.status} focus:outline-none align-middle">
+          <option ${m.status==='진행'?'selected':''}>진행</option><option ${m.status==='보류'?'selected':''}>보류</option><option ${m.status==='종료'?'selected':''}>종료</option>
+        </select>`;
+      const holdNote = (k.held&&m.hold)?`<div class="text-[10px] text-violet-500 mt-0.5">~${m.hold}</div>`:'';
+      const checked = SELECTED.has(m.name) ? 'checked' : '';
+      return `<tr class="border-b border-gray-100 cursor-pointer hover:bg-gray-50/60" style="${rowSty}" onclick="REC.openMemberRecs('${m.name}')">
+        <td class="py-3 text-center"><input type="checkbox" ${checked} onclick="event.stopPropagation();REC.toggleSel('${m.name}',this.checked)"></td>
+        <td class="py-3 text-center text-gray-500 font-semibold">${i+1}</td>
+        <td class="py-3 text-center">${lifeSel}${holdNote}</td>
+        <td class="py-3 text-center font-semibold text-gray-800 whitespace-nowrap">${teleBadge(m.name)}${m.name}</td>
+        <td class="py-3 text-center">${subChip(m.sub)}</td>
+        <td class="py-3 text-center text-gray-700 font-semibold">${k.total}건</td>
+        <td class="py-3 text-center text-gray-500">${k.last||'—'}</td>
+        <td class="py-3 text-center ${nextC}">${nextV}</td>
+        <td class="py-3 text-center">${statusCell(k)}</td>
+        <td class="py-3 text-center">${waitTag}</td>
+        <td class="py-3 text-center">${action}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="11" class="py-6 text-center text-gray-400">선택한 상태의 회원이 없습니다</td></tr>';
+    document.getElementById('queueWait').innerHTML = '';
+    updateSortArrows();
+    renderLifeChips();
+    updateBulkBar();
+  }
+  function renderWait(){ const cv=document.getElementById('view-cal'); if(cv && !cv.classList.contains('hidden')) renderCalendar(); }
+
+  let modalMember = null;
+  let cart = [];
+  let qSort={key:null,dir:1};
+  let curStat='all', SOON=3, curLife='all';
+  REC._curLife = () => curLife;
+  function setLife(s){ curLife=(curLife===s)?'all':s; renderQueue(); }
+  function renderLifeChips(){
+    const cnt=s=>DK.filter(m=>m.status===s).length;
+    document.querySelectorAll('#lifeSummary .lifechip').forEach(b=>{ const s=b.dataset.life; const e=b.querySelector('b'); if(e)e.textContent=cnt(s); b.classList.toggle('on',curLife===s); });
+    const clr=document.getElementById('lifeClear'); if(clr) clr.classList.toggle('hidden',curLife==='all');
+  }
+  function passFilter(m){ return (!queueQuery||m.name.includes(queueQuery)) && matchStat(m) && (curLife==='all'||m.status===curLife); }
+  function progStateOf(name){ if(waitCountFor(name)>0) return '대기'; if(DELIVERED.some(d=>d.name===name)) return '완료'; return '없음'; }
+  function matchStat(m){
+    const k=calc(m);
+    if(curStat==='all') return true;
+    if(curStat==='new') return !!k.fresh;
+    if(curStat==='wait') return progStateOf(m.name)==='대기';
+    if(curStat==='done') return progStateOf(m.name)==='완료';
+    if(k.held||k.ended||k.fresh) return false;
+    if(curStat==='urgent') return k.dleft<0;
+    if(curStat==='soon') return k.dleft>=0 && k.dleft<=SOON;
+    return true;
+  }
+  function setStat(f){ curStat=f; document.querySelectorAll('#statBtns .sb').forEach(b=>b.classList.toggle('on', b.dataset.f===f)); renderQueue(); }
+  function setSoon(v){ SOON=Math.max(0, parseInt(v)||0); renderQueue(); }
+  function renderStatBtns(){
+    const A=DK.map(m=>calc(m));
+    const active=A.filter(k=>!k.held&&!k.ended&&!k.fresh);
+    const set=(f,v)=>{const b=document.querySelector('#statBtns .sb[data-f="'+f+'"] b'); if(b)b.textContent=v;};
+    set('all',DK.length);
+    set('new',A.filter(k=>k.fresh).length);
+    set('urgent',active.filter(k=>k.dleft<0).length);
+    set('soon',active.filter(k=>k.dleft>=0&&k.dleft<=SOON).length);
+    set('wait',DK.filter(m=>progStateOf(m.name)==='대기').length);
+    set('done',DK.filter(m=>progStateOf(m.name)==='완료').length);
+  }
+  function sortQueue(key){ if(qSort.key===key) qSort.dir*=-1; else { qSort.key=key; qSort.dir=1; } renderQueue(); }
+  function updateSortArrows(){ ['name','life','sub','total','last','next','status','wait'].forEach(k=>{ const e=document.getElementById('qa-'+k); if(e) e.textContent = (qSort.key===k)?(qSort.dir>0?' ▲':' ▼'):''; }); }
+
+  let SELECTED = new Set();
+  function setMemberStatus(name,st){
+    const m=DK.find(x=>x.name===name); if(!m) return;
+    if(st==='보류'){ const d=prompt(`${name} 보류 해제 예정일 (MM/DD, 미정이면 비워두기)`, m.hold||''); m.hold=(d||'').trim(); }
+    else m.hold='';
+    m.status=st; renderQueue(); if(name===curRecMember) openMemberRecs(name); toast(`${name} → ${st}`);
+  }
+  function visibleMembers(){ return DK.filter(passFilter).map(m=>m.name); }
+  function toggleSel(name,on){ if(on)SELECTED.add(name); else SELECTED.delete(name); updateBulkBar(); }
+  function toggleSelAll(on){ visibleMembers().forEach(n=>{ on?SELECTED.add(n):SELECTED.delete(n); }); renderQueue(); updateBulkBar(); }
+  function updateBulkBar(){ const bar=document.getElementById('bulkBar'); const n=SELECTED.size; const c=document.getElementById('selCount'); if(c)c.textContent=n; if(bar){ bar.classList.toggle('hidden',n===0); bar.classList.toggle('flex',n>0); } }
+  function v(id){ const e=document.getElementById(id); return e?(e.value||'').trim():''; }
+  function openModal(name){
+    modalMember=name; cart=[];
+    ['pf-date','searchInput','pf-court','pf-member','pf-regdate','cartSearch'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
+    document.getElementById('pf-status').value=''; document.getElementById('pf-mgr').value='';
+    const m=DK.find(x=>x.name===name); const sep='<span class="opacity-40">|</span>';
+    document.getElementById('cartInfoBar').innerHTML = m ? `<span><b>구분</b> 돈클</span>${sep}<span><b>회원</b> ${m.name}</span>${sep}<span><b>종목</b> ${m.sub}</span>${sep}<span><b>등록일</b> ${fmtMD(TODAY)}</span>${sep}<span><b>추천주기</b> ${CYCLE}일</span>` : '';
+    renderPickerList(); renderCart();
+    const md=document.getElementById('recPickModal'); md.classList.remove('hidden'); md.classList.add('flex');
+  }
+  function closeModal(){ const md=document.getElementById('recPickModal'); md.classList.add('hidden'); md.classList.remove('flex'); }
+  function pickerFiltered(){
+    const q=v('searchInput'),dt=v('pf-date'),ct=v('pf-court'),st=v('pf-status'),mb=v('pf-member'),rd=v('pf-regdate'),mg=v('pf-mgr');
+    return CAND.filter(c=> (!q||c.s.includes(q)) && (!dt||c.date.includes(dt)) && (!ct||c.court.includes(ct)) && (!st||c.stu===st) && (!mb||(c.member||'').includes(mb)) && (!rd||c.date.includes(rd)) && (!mg||c.mgr===mg));
+  }
+  function renderPickerSummary(){
+    const cnt=s=>CAND.filter(c=>c.stu===s).length;
+    document.getElementById('pickerSummary').innerHTML =
+      `<span class="font-semibold text-blue-800">전체 ${CAND.length}건</span>`+
+      ['상품','미정','추천','입찰','폐기','불가'].map(s=>`<span class="opacity-40">|</span><span class="text-gray-600">${s} ${cnt(s)}건</span>`).join('');
+  }
+  function renderPickerList(){
+    renderPickerSummary();
+    const list=pickerFiltered();
+    document.getElementById('candBody').innerHTML = list.length ? list.map(c=>{
+      const pickable=STU_PICK.includes(c.stu); const inCart=cart.includes(c.s);
+      const click = pickable ? `onclick="REC.addToCart('${c.s}')"` : '';
+      const cur = pickable ? 'cursor-pointer hover:bg-indigo-50/40' : 'cursor-not-allowed opacity-50';
+      return `<tr class="border-b border-gray-100 ${cur} ${inCart?'bg-indigo-50/60':''}" ${click}>
+        <td class="py-2 px-1 text-center text-gray-500">${c.date}</td>
+        <td class="py-2 text-center"><span class="inline-block w-2 h-2 rounded-full ${pickable?'bg-emerald-400':'bg-gray-300'}"></span></td>
+        <td class="py-2 font-medium ${pickable?'text-gray-800':'text-gray-400'}">${c.s}${inCart?' <span class="text-[10px] text-emerald-600 font-bold">담김</span>':''}</td>
+        <td class="py-2 ${pickable?'text-gray-600':'text-gray-400'}">${c.court}</td>
+        <td class="py-2 text-center">${yongdoTag(c.youngdo)}</td>
+        <td class="py-2 text-center">${statusTag(c.stu)}</td>
+        <td class="py-2 text-center text-gray-600">${c.member||'-'}</td>
+        <td class="py-2 text-center text-gray-500">${c.mgr||'-'}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="8" class="py-6 text-center text-gray-400">검색 결과 없음</td></tr>';
+  }
+  function addToCart(s){ if(!cart.includes(s)) cart.push(s); renderCart(); renderPickerList(); }
+  function removeFromCart(s){ cart=cart.filter(x=>x!==s); renderCart(); renderPickerList(); }
+  function renderCart(){
+    const q=v('cartSearch');
+    const items=cart.map(s=>CAND.find(c=>c.s===s)).filter(Boolean).filter(c=>!q||c.s.includes(q));
+    document.getElementById('cartCount').textContent = cart.length? cart.length+'건':'';
+    document.getElementById('cartBody').innerHTML = items.length ? items.map(c=>`
+      <tr class="border-b border-gray-100">
+        <td class="py-1.5 px-1 text-center text-gray-500">${c.date}</td>
+        <td class="py-1.5 font-medium text-gray-700">${c.s}</td>
+        <td class="py-1.5 text-gray-500">${c.court}</td>
+        <td class="py-1.5 text-center">${yongdoTag(c.youngdo)}</td>
+        <td class="py-1.5 text-center">${statusTag(c.stu)}</td>
+        <td class="py-1.5 text-center text-gray-600">${c.member||'-'}</td>
+        <td class="py-1.5 text-center text-gray-500">${c.mgr||'-'}</td>
+        <td class="py-1.5 text-center"><button onclick="REC.removeFromCart('${c.s}')" class="text-gray-400 hover:text-red-500 text-sm">&times;</button></td>
+      </tr>`).join('') : '<tr><td colspan="8" class="py-8 text-center text-gray-400">클릭하면 추가됩니다</td></tr>';
+  }
+  function confirmPicker(){
+    const m=DK.find(x=>x.name===modalMember); if(!m){ closeModal(); return; }
+    if(!cart.length){ toast('선택된 물건이 없습니다'); return; }
+    cart.forEach(s=>{ const c=CAND.find(x=>x.s===s); if(c) WAIT.push({name:m.name, sub:m.sub, s:c.s, court:c.court, bidDate:c.bid, by:'대표님', regDate:fmtMD(TODAY), channel:'텔레그램'}); });
+    const n=cart.length; cart=[]; closeModal(); renderQueue(); renderWait(); openMemberRecs(m.name);
+    toast(`${m.name} 앞으로 ${n}건 전달대기 등록`);
+  }
+  function deliver(idx, ch){
+    const w = WAIT[idx]; if(!w) return;
+    if(ch==='kakao'){ if(!confirm(`${w.s} 카드 이미지·텍스트를 복사했습니다.\n카톡에 붙여넣은 뒤 [확인]을 누르면 전달완료 처리됩니다.`)) return; }
+    const m = DK.find(x=>x.name===w.name); if(m){ const ds=fmtMD(TODAY); const lh=m.hist[m.hist.length-1]; if(lh&&lh.d===ds) lh.q+=1; else m.hist.push({d:ds,q:1}); }
+    DELIVERED.push({name:w.name, s:w.s, court:w.court, bidDate:w.bidDate, date:fmtMD(TODAY), by:w.by});
+    WAIT.splice(idx,1);
+    renderWait(); renderQueue();
+    toast(`${w.name} ${w.s} ${ch==='tele'?'텔레그램 발송':'카톡 전달'} → 추천완료 (큐 갱신)`);
+  }
+
+  function recsFor(name){
+    const w = WAIT.filter(x=>x.name===name).map(x=>({bid:x.bidDate||'—', req:x.regDate||'—', s:x.s, court:x.court, mgr:x.by||'-', status:'대기'}));
+    const d = DELIVERED.filter(x=>x.name===name).map(x=>({bid:x.bidDate||'—', req:x.date||'—', s:x.s, court:x.court, mgr:x.by||'-', status:'완료'}));
+    return w.concat(d);
+  }
+  let curRecMember = null;
+  function openMemberRecs(name){
+    curRecMember = name;
+    const m = DK.find(x=>x.name===name); const list = recsFor(name);
+    const recTag = s => s==='대기' ? '<span class="chip bg-amber-100 text-amber-700">전달대기</span>' : '<span class="chip bg-gray-100 text-gray-500">추천완료</span>';
+    const k = m ? calc(m) : {total:0,next:null,dleft:null};
+    const waitN = waitCountFor(name);
+    const doneN = DELIVERED.filter(d=>d.name===name).length;
+    const nextStr = k.next ? fmtMD(k.next) : '—';
+    const nextCls = (k.dleft==null) ? 'sb-all' : (k.dleft<0 ? 'sb-urgent' : (k.dleft<=SOON ? 'sb-soon' : 'sb-all'));
+    const lifeChip = m ? (m.status==='보류' ? `<span class="chip bg-violet-100 text-violet-700">보류${m.hold?` · ~${m.hold}`:''}</span>` : m.status==='종료' ? '<span class="chip bg-gray-200 text-gray-500">종료</span>' : (k.fresh?'<span class="chip bg-cyan-100 text-cyan-700">신규</span>':'<span class="chip bg-emerald-100 text-emerald-700">진행</span>')) : '';
+    document.getElementById('recBody').innerHTML = `
+      <div class="px-4 pt-4 pb-3 border-b border-gray-200">
+        <div class="text-[11px] text-gray-400 mb-2">회원 추천 요약</div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="sb sb-all" style="cursor:default">누적 <b>${k.total||0}</b></span>
+          <span class="sb sb-wait" style="cursor:default">전달대기 <b>${waitN}</b></span>
+          <span class="sb sb-done" style="cursor:default">추천완료 <b>${doneN}</b></span>
+          <span class="sb ${nextCls}" style="cursor:default">다음 <b>${nextStr}</b></span>
+        </div>
+      </div>
+      <div class="border-b border-gray-200 bg-white px-4 py-3">
+        <div class="text-[11px] text-gray-400 mb-1">선택한 추천 물건</div>
+        <div class="flex items-center gap-1.5 flex-wrap">${teleBadge(name)}<span class="text-base font-extrabold text-gray-800">${name}</span>${m?subChip(m.sub):''}${m?`<span class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-semibold border border-indigo-100">돈클 ${m.cohort}기</span>`:''}${lifeChip}</div>
+        ${m?`<div class="text-[12px] text-gray-500 mt-1.5 flex items-center gap-1"><span class="text-gray-400">📞</span>${m.phone}</div>`:''}
+      </div>
+      <div class="p-3">
+        <div class="text-xs font-bold text-gray-600 mb-2 px-1">물건 <span class="text-gray-400 font-normal">${list.length}건</span></div>
+        ${ list.length ? `<table class="w-full text-xs">
+          <thead><tr class="text-gray-500 border-b border-gray-200">
+            <th class="text-center py-2 font-semibold">추천요청</th><th class="text-center py-2 font-semibold">입찰일자</th><th class="text-left py-2 font-semibold">사건번호</th><th class="text-left py-2 font-semibold">법원</th><th class="text-center py-2 font-semibold">담당</th><th class="text-center py-2 font-semibold">진행상태</th>
+          </tr></thead><tbody>
+          ${list.map(r=>`<tr class="border-b border-gray-100">
+            <td class="py-2 text-center text-gray-500">${r.req}</td>
+            <td class="py-2 text-center text-gray-500">${r.bid}</td>
+            <td class="py-2 font-medium text-gray-800">${r.s}</td>
+            <td class="py-2 text-gray-500">${r.court}</td>
+            <td class="py-2 text-center text-gray-500">${r.mgr}</td>
+            <td class="py-2 text-center">${recTag(r.status)}</td>
+          </tr>`).join('')}
+          </tbody></table>` : '<div class="text-sm text-gray-400 py-8 text-center">선택된 추천 물건이 없습니다<br><span class="text-[11px]">왼쪽 회원 클릭 또는 추천하기로 등록</span></div>' }
+      </div>
+      <div class="px-3 pt-3 border-t border-gray-100">
+        <div class="flex items-center mb-1.5 px-1 gap-2">
+          <span class="text-xs font-bold text-amber-700">📝 물건 추천 비고</span>
+          <span class="text-[10px] text-gray-400">전달담당자 확인용</span>
+          <button onclick="REC.saveRecNote('${name}')" class="ml-auto px-2.5 py-0.5 rounded bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-semibold">저장</button>
+        </div>
+        <textarea id="recNote" class="w-full h-20 border border-amber-300 rounded-lg px-2.5 py-2 text-xs text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 bg-amber-50/40" placeholder="전달담당자에게 전할 메모 (예: 카톡으로만, 시세 강조 등)">${m?(m.recNote||''):''}</textarea>
+      </div>
+      <div class="px-3 pb-4 pt-3">
+        <div class="flex items-center mb-1.5 px-1 gap-2">
+          <span class="text-xs font-bold text-gray-600">회원 비고</span>
+          <span class="text-[10px] text-gray-400">member 시트</span>
+          <button onclick="REC.saveMemberNote('${name}')" class="ml-auto px-2.5 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold">저장</button>
+        </div>
+        <textarea id="memberNote" class="w-full h-20 border border-gray-300 rounded-lg px-2.5 py-2 text-xs text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="회원 비고를 입력하세요">${m?(m.note||''):''}</textarea>
+      </div>`;
+    renderQueue();
+  }
+  function saveMemberNote(name){ const m=DK.find(x=>x.name===name); const el=document.getElementById('memberNote'); if(m&&el){ m.note=el.value; toast(`${name} 회원 비고 저장`); } }
+  function saveRecNote(name){ const m=DK.find(x=>x.name===name); const el=document.getElementById('recNote'); if(m&&el){ m.recNote=el.value; renderWait(); toast(`${name} 물건추천비고 저장 (전달담당자 확인 가능)`); } }
+
+  const lifeChipMap={'진행':'bg-emerald-100 text-emerald-700','보류':'bg-violet-100 text-violet-700','종료':'bg-gray-200 text-gray-500','신규':'bg-cyan-100 text-cyan-700'};
+  const lifeChipOf = st => `<span class="chip ${lifeChipMap[st]||'bg-gray-100 text-gray-500'}">${st}</span>`;
+  function openBulkModal(){
+    if(!SELECTED.size){ toast('회원을 먼저 체크해주세요'); return; }
+    document.getElementById('bulkTarget').value = '진행';
+    onBulkTargetChange();
+    const md=document.getElementById('bulkModal'); md.classList.remove('hidden'); md.classList.add('flex');
+  }
+  function closeBulkModal(){ const md=document.getElementById('bulkModal'); md.classList.add('hidden'); md.classList.remove('flex'); }
+  function onBulkTargetChange(){
+    const tgt=document.getElementById('bulkTarget').value;
+    const hw=document.getElementById('bulkHoldWrap'); hw.classList.toggle('hidden',tgt!=='보류'); hw.classList.toggle('flex',tgt==='보류');
+    renderBulkModal();
+  }
+  function renderBulkModal(){
+    const tgt=document.getElementById('bulkTarget').value;
+    document.getElementById('bulkCount').textContent=SELECTED.size;
+    document.getElementById('bulkList').innerHTML=[...SELECTED].map(name=>{
+      const m=DK.find(x=>x.name===name); const cur=m?m.status:'-';
+      return `<div class="flex items-center gap-2 py-1.5 border-b border-gray-100 text-sm">
+        <span class="font-semibold text-gray-800 flex-1 truncate">${teleBadge(name)}${name}</span>
+        ${lifeChipOf(cur)}<span class="text-gray-300">→</span>${lifeChipOf(tgt)}
+      </div>`; }).join('');
+  }
+  function applyBulk(){
+    const tgt=document.getElementById('bulkTarget').value;
+    const hold = tgt==='보류' ? (document.getElementById('bulkHold').value||'').trim() : '';
+    let n=0; SELECTED.forEach(name=>{ const m=DK.find(x=>x.name===name); if(m){ m.status=tgt; m.hold=hold; n++; } });
+    SELECTED.clear(); const a=document.getElementById('selAll'); if(a)a.checked=false;
+    closeBulkModal(); renderQueue(); if(curRecMember) openMemberRecs(curRecMember);
+    toast(`${n}명 → ${tgt} 일괄적용 완료`);
+  }
+
+  function switchTab(t){
+    document.getElementById('view-queue').classList.toggle('hidden', t!=='queue');
+    document.getElementById('view-cal').classList.toggle('hidden', t!=='cal');
+    document.getElementById('tab-queue').classList.toggle('on', t==='queue');
+    document.getElementById('tab-cal').classList.toggle('on', t==='cal');
+    if(t==='cal') renderCalendar();
+  }
+  let calY=null, calM=null, calStatus='all', calQuery='';
+  function setCalStatus(s){ calStatus=(s==='all')?'all':(calStatus===s?'all':s); renderCalendar(); }
+  function setCalQuery(val){ calQuery=(val||'').trim(); renderCalendar(); }
+  function calData(year,month){
+    const byDay={};
+    const add=(md,name,status,scase)=>{
+      if(!md||(calQuery&&!name.includes(calQuery))) return;
+      const d=parseMD(md); if(d.getFullYear()!==year||d.getMonth()!==month) return;
+      const day=d.getDate(); byDay[day]=byDay[day]||[];
+      let e=byDay[day].find(x=>x.name===name&&x.status===status);
+      if(!e){ e={name,status,count:0,cases:[]}; byDay[day].push(e); }
+      e.count++; if(scase) e.cases.push(scase);
+    };
+    WAIT.forEach(w=> add(w.regDate, w.name, '대기', w.s));
+    DELIVERED.forEach(dv=> add(dv.date, dv.name, '완료', dv.s));
+    return byDay;
+  }
+  function gotoBid(s){ toast(`입찰물건관리로 이동 → ${s} 조회`); /* 실연동: navigateTo('ItemManagement') + 사건번호 검색 */ }
+  function escHtml(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function showCalPop(ev,name){
+    const m=DK.find(d=>d.name===name); if(!m||!m.recNote){ hideCalPop(); return; }
+    const pop=document.getElementById('calPop');
+    pop.innerHTML=`<div class="cp-title">📝 ${escHtml(name)} 추천비고</div><div class="cp-note">${escHtml(m.recNote)}</div>`;
+    pop.classList.remove('hidden');
+    const r=ev.currentTarget.getBoundingClientRect(), pw=pop.offsetWidth, ph=pop.offsetHeight;
+    let left=Math.min(r.left, window.innerWidth-pw-8);
+    let top=r.bottom+6; if(top+ph>window.innerHeight-8) top=r.top-ph-6;
+    pop.style.left=Math.max(8,left)+'px'; pop.style.top=Math.max(8,top)+'px';
+  }
+  function hideCalPop(){ document.getElementById('calPop').classList.add('hidden'); }
+  function renderCalendar(){
+    if(calY==null){ calY=TODAY.getFullYear(); calM=TODAY.getMonth(); }
+    const byDay=calData(calY,calM);
+    let monthW=0, monthC=0;
+    Object.values(byDay).forEach(arr=>arr.forEach(e=>{ if(e.status==='대기') monthW+=e.count; else monthC+=e.count; }));
+    const setBtn=(cs,val)=>{ const b=document.querySelector('#calFilter .lifechip[data-cs="'+cs+'"]'); if(b){ b.querySelector('b').textContent=val; b.classList.toggle('on', calStatus===cs||(calStatus==='all'&&cs==='all')); } };
+    setBtn('all',monthW+monthC); setBtn('대기',monthW); setBtn('완료',monthC);
+    document.getElementById('calTitle').textContent=`${calY}년 ${calM+1}월`;
+    const first=new Date(calY,calM,1).getDay();
+    const lead=(first+6)%7;
+    const days=new Date(calY,calM+1,0).getDate();
+    const todayIs=(TODAY.getFullYear()===calY&&TODAY.getMonth()===calM)?TODAY.getDate():-1;
+    let cells='';
+    for(let i=0;i<lead;i++) cells+='<div class="cal-cell cal-empty"></div>';
+    for(let d=1; d<=days; d++){
+      const dow=new Date(calY,calM,d).getDay();
+      const all=byDay[d]||[];
+      const entries=all.filter(e=>calStatus==='all'||e.status===calStatus);
+      const wN=all.filter(e=>e.status==='대기').reduce((a,e)=>a+e.count,0);
+      const cN=all.filter(e=>e.status==='완료').reduce((a,e)=>a+e.count,0);
+      const shown=entries.reduce((a,e)=>a+e.count,0);
+      const summary= shown? (calStatus==='all'
+          ? `<span class="cal-sum">${wN+cN}건 <span class="cal-sum-sub">(대기${wN}, 완료${cN})</span></span>`
+          : `<span class="cal-sum">${shown}건 <span class="cal-sum-sub">(${calStatus})</span></span>`) : '';
+      const chips=entries.map(e=>{
+        const mm=DK.find(d2=>d2.name===e.name); const hasNote=!!(mm&&mm.recNote);
+        const hover=hasNote?`onmouseenter="REC.showCalPop(event,'${e.name}')" onmouseleave="REC.hideCalPop()"`:'';
+        return `<div class="cal-mem cal-st-${e.status}" ${hover} onclick="event.stopPropagation();REC.gotoBid('${e.cases[0]||''}')" title="${e.name} ${e.count}건 ${e.status}${hasNote?' · 메모 있음':''}"><span class="cal-mbadge${hasNote?' note':''}">${e.count}</span><span class="truncate">${e.name}</span></div>`;
+      }).join('');
+      const dayCls=dow===0?'text-red-500':dow===6?'text-blue-500':'text-gray-600';
+      const dayMark=d===todayIs?'<span class="inline-grid place-items-center w-5 h-5 rounded-full bg-indigo-600 text-white">'+d+'</span>':d;
+      cells+=`<div class="cal-cell ${d===todayIs?'cal-today':''}"><div class="cal-day ${dayCls}">${dayMark}${summary}</div><div class="cal-mems">${chips}</div></div>`;
+    }
+    document.getElementById('calGrid').innerHTML=cells;
+  }
+  function calNav(delta){ if(calY==null){calY=TODAY.getFullYear();calM=TODAY.getMonth();} calM+=delta; if(calM<0){calM=11;calY--;} else if(calM>11){calM=0;calY++;} renderCalendar(); }
+  function calToday(){ calY=TODAY.getFullYear(); calM=TODAY.getMonth(); renderCalendar(); }
+  let toastT;
+  function toast(msg){ const el=document.getElementById('recToast'); if(!el) return; el.textContent=msg; el.classList.remove('hidden'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.add('hidden'),2200); }
+  let queueQuery='';
+  function setQueueQuery(val){ queueQuery=(val||'').trim(); renderQueue(); }
+
+  // 추천주기 / 기준일 입력
+  const csBtn=document.getElementById('cycleSave');
+  if(csBtn) csBtn.addEventListener('click',()=>{ CYCLE=Math.max(1,parseInt(document.getElementById('cycleInput').value)||14); renderQueue(); toast('추천 주기 '+CYCLE+'일 저장됨'); });
+  const dInput=document.getElementById('dateInput');
+  if(dInput) dInput.addEventListener('change',e=>{ const val=e.target.value; if(val){ const [y,mo,d]=val.split('-').map(Number); TODAY=new Date(y,mo-1,d); renderQueue(); renderWait(); } });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeBulkModal(); } });
+
+  // 그리드 열 너비 드래그 리사이즈 (PC별 localStorage)
+  const COLW_DEF=[5,5,9,17,7,6,8,9,12,9,13];
+  let colw=[...COLW_DEF];
+  function applyColw(){ const cols=document.querySelectorAll('#queueColgroup col'); cols.forEach((c,i)=>{ if(colw[i]!=null) c.style.width=colw[i]+'%'; }); }
+  function saveColw(){ try{localStorage.setItem('donkle_colw',JSON.stringify(colw));}catch(e){} }
+  function resetColw(){ colw=[...COLW_DEF]; applyColw(); saveColw(); toast('열 너비 기본값 복원'); }
+  function initColResize(){
+    const ths=document.querySelectorAll('#queueTable thead th');
+    ths.forEach((th,i)=>{
+      if(i>=colw.length-1) return;
+      const h=document.createElement('div'); h.className='colrz'; h.title='드래그: 열 너비 · 더블클릭: 기본값';
+      h.addEventListener('click',e=>e.stopPropagation());
+      h.addEventListener('dblclick',e=>{ e.stopPropagation(); resetColw(); });
+      h.addEventListener('mousedown',e=>{
+        e.preventDefault(); e.stopPropagation();
+        const startX=e.clientX, tableW=document.getElementById('queueTable').offsetWidth||1;
+        const a=colw[i], b=colw[i+1];
+        const move=ev=>{ let d=(ev.clientX-startX)/tableW*100; d=Math.max(-(a-3),Math.min(b-3,d)); colw[i]=a+d; colw[i+1]=b-d; applyColw(); };
+        const up=()=>{ document.removeEventListener('mousemove',move); document.removeEventListener('mouseup',up); document.body.style.userSelect=''; saveColw(); };
+        document.body.style.userSelect='none'; document.addEventListener('mousemove',move); document.addEventListener('mouseup',up);
+      });
+      th.appendChild(h);
+    });
+  }
+  (function(){ try{ const s=JSON.parse(localStorage.getItem('donkle_colw')||'null'); if(Array.isArray(s)&&s.length===COLW_DEF.length) colw=s; }catch(e){} })();
+
+  // 그리드↔패널 너비 드래그 조절 (PC별 localStorage)
+  (function(){
+    const divider=document.getElementById('recDivider'), panel=document.getElementById('recPanel');
+    if(!divider||!panel) return;
+    try{ const w=localStorage.getItem('donkle_recpanel_w'); if(w) panel.style.width=w+'px'; }catch(e){}
+    let drag=false;
+    divider.addEventListener('mousedown',e=>{ drag=true; document.body.style.userSelect='none'; e.preventDefault(); });
+    window.addEventListener('mousemove',e=>{ if(!drag)return; let w=panel.getBoundingClientRect().right-e.clientX; w=Math.max(280,Math.min(680,w)); panel.style.width=w+'px'; });
+    window.addEventListener('mouseup',()=>{ if(!drag)return; drag=false; document.body.style.userSelect=''; try{localStorage.setItem('donkle_recpanel_w',parseInt(panel.style.width)||360);}catch(e){} });
+  })();
+
+  // 인라인 핸들러용 노출 (네임스페이스)
+  Object.assign(REC, {
+    switchTab, setStat, setSoon, sortQueue, toggleSelAll, toggleSel, setLife,
+    openBulkModal, closeBulkModal, onBulkTargetChange, applyBulk,
+    openModal, closeModal, renderPickerList, addToCart, removeFromCart, confirmPicker, renderCart,
+    openMemberRecs, saveRecNote, saveMemberNote, setMemberStatus, setQueueQuery,
+    calNav, calToday, setCalStatus, setCalQuery, gotoBid, showCalPop, hideCalPop, deliver,
+    refresh: function(){ renderQueue(); renderWait(); applyColw(); }
+  });
+
+  // 초기 렌더 (화면이 hidden 이어도 DOM 존재 → 사전 렌더, navigateTo 시 그대로 표시)
+  renderQueue(); renderWait();
+  applyColw(); initColResize();
+  (function(){ const a=DK.map(m=>({m,k:calc(m)})).filter(x=>!x.k.held&&!x.k.ended&&!x.k.fresh).sort((x,y)=>(y.k.owed-x.k.owed)||((x.k.dleft==null?1e9:x.k.dleft)-(y.k.dleft==null?1e9:y.k.dleft)))[0]; openMemberRecs(a? a.m.name : (DK[0]&&DK[0].name)); })();
+})();
+</script>
