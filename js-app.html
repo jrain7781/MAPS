@@ -1758,6 +1758,7 @@
             case '상품': return 'stu-tag stu-tag-product';
             case '입찰': return 'stu-tag stu-tag-bid';
             case '추천': return 'stu-tag stu-tag-recommend';
+            case '낙찰': return 'stu-tag stu-tag-win';
             case '검증': return 'stu-tag stu-tag-verified';
             case '폐기': return 'stu-tag stu-tag-discard';
             case '취소':
@@ -8255,7 +8256,7 @@ MJ 이정우 팀장
     }
 
     // 드래그 리사이즈 초기화
-    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); initItemPaneResize(); initItemListColumnResize(); initMemberColumnResize(); try { applyBidStyle_('detail'); applyBidStyle_('modal'); } catch (e) {} });
+    document.addEventListener('DOMContentLoaded', () => { initDashboardResize(); initBidCardResize(); initItemPaneResize(); initItemListColumnResize(); initMemberColumnResize(); initColumnResizeByIndex('cancelHistoryTable', 'mj_cancelhist_col_widths'); try { applyBidStyle_('detail'); applyBidStyle_('modal'); } catch (e) {} });
 
     // 입찰물건 관리 리스트 — 컬럼 헤더 우측에 드래그 핸들 부착, 폭 저장
     function initItemListColumnResize() {
@@ -8350,6 +8351,44 @@ MJ 이정우 팀장
                 document.body.style.cursor = ''; document.body.style.userSelect = '';
                 saved[key] = Math.round(th.getBoundingClientRect().width);
                 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) { /* ignore */ }
+            });
+        });
+    }
+
+    // 범용 컬럼 너비 리사이즈 — 컬럼 인덱스를 키로 사용 (data-sort-key 없는 테이블용)
+    function initColumnResizeByIndex(tableId, storageKey) {
+        const MIN_VALID_PX = 30;
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(storageKey) || '{}') || {}; } catch (e) { saved = {}; }
+        const ths = table.querySelectorAll('thead th');
+        ths.forEach((th, idx) => {
+            const key = String(idx);
+            th.style.position = 'relative';
+            if (saved[key] && saved[key] >= MIN_VALID_PX) th.style.width = saved[key] + 'px';
+            if (th.querySelector('.col-resizer')) return;
+            const handle = document.createElement('span');
+            handle.className = 'col-resizer';
+            th.appendChild(handle);
+            let isDragging = false, startX = 0, startWidth = 0;
+            handle.addEventListener('mousedown', (e) => {
+                isDragging = true; handle.classList.add('dragging');
+                startX = e.clientX; startWidth = th.getBoundingClientRect().width;
+                document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+                e.preventDefault(); e.stopPropagation();
+            });
+            handle.addEventListener('click', (e) => { e.stopPropagation(); });
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                th.style.width = Math.max(MIN_VALID_PX, startWidth + (e.clientX - startX)) + 'px';
+            });
+            document.addEventListener('mouseup', () => {
+                if (!isDragging) return;
+                isDragging = false; handle.classList.remove('dragging');
+                document.body.style.cursor = ''; document.body.style.userSelect = '';
+                saved[key] = Math.round(th.getBoundingClientRect().width);
+                try { localStorage.setItem(storageKey, JSON.stringify(saved)); } catch (e) { /* ignore */ }
             });
         });
     }
@@ -13687,7 +13726,7 @@ MJ 이정우 팀장
             const telCell = telEnabled
                 ? `<span class="text-blue-600 font-bold">Y</span>`
                 : `<span class="text-gray-400">N</span>`;
-            return `<tr class="cursor-pointer hover:bg-indigo-50" onclick="selectMemberNew('${m.member_id}')">
+            return `<tr class="cursor-pointer hover:bg-indigo-50" data-mid="${escapeHtml(m.member_id)}" onclick="selectMemberNew('${m.member_id}')">
                 <td class="px-2 py-2 text-center text-sm">${escapeHtml(m.member_id)}</td>
                 <td class="px-2 py-2 text-center text-sm">${escapeHtml(m.gubun)}</td>
                 <td class="px-1 py-2 text-center text-sm">${escapeHtml(hasChatId)}</td>
@@ -13704,6 +13743,9 @@ MJ 이정우 팀장
                 <td class="px-2 py-2 text-center text-sm whitespace-nowrap">${m.kakao_name ? `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded inline-block max-w-[90px] truncate align-middle" title="${escapeHtml(m.kakao_name)}">${escapeHtml(m.kakao_name)}</span>` : '<span class="text-gray-300 text-xs">-</span>'}</td>
             </tr>`;
         }).join('');
+        // 재렌더(정렬/필터) 후에도 선택 회원 하이라이트 유지
+        const selId = (document.getElementById('mem-member_id') || {}).value || '';
+        if (selId) highlightMemberRow(selId);
     }
 
     function sortMemberList(key) {
@@ -13778,7 +13820,17 @@ MJ 이정우 팀장
     function selectMemberNew(memberId) {
         const member = allMembersNewData.find(m => String(m.member_id) === String(memberId));
         if (!member) return;
+        highlightMemberRow(memberId);
         showMemberFormNew('edit', member);
+    }
+
+    // 회원리스트 그리드에서 선택된 행 하이라이트 유지
+    function highlightMemberRow(memberId) {
+        const tbody = document.getElementById('memberDataTableBody');
+        if (!tbody) return;
+        tbody.querySelectorAll('tr.member-row-selected').forEach(tr => tr.classList.remove('member-row-selected'));
+        const row = tbody.querySelector('tr[data-mid="' + memberId + '"]');
+        if (row) row.classList.add('member-row-selected');
     }
 
     // ─── [PHASE 3-3] 회원 상세 탭 전환 ─────────────────────────────────────────
@@ -13801,11 +13853,26 @@ MJ 이정우 팀장
     window.MIS_STATUS_OPTIONS = ['추천', '입찰', '낙찰', '불가'];
     window.misRowsCache = [];
 
+    // 세로 마우스 휠 → 가로 스크롤 (명의 이후 컬럼 이동), 1회만 바인딩
+    function initMisHorizontalWheel() {
+        const wrap = document.getElementById('misTableWrap');
+        if (!wrap || wrap.dataset.wheelBound === '1') return;
+        wrap.dataset.wheelBound = '1';
+        wrap.addEventListener('wheel', function (e) {
+            if (e.deltaY === 0) return;
+            const canScroll = wrap.scrollWidth > wrap.clientWidth;
+            if (!canScroll) return;
+            wrap.scrollLeft += e.deltaY;
+            e.preventDefault();
+        }, { passive: false });
+    }
+
     function loadMemberItemStatus() {
         const tbody = document.getElementById('misTableBody');
         const statusEl = document.getElementById('misStatus');
         const countEl = document.getElementById('misRowCount');
         if (!tbody) return;
+        initMisHorizontalWheel();
         const memberId = (document.getElementById('mem-member_id') || {}).value || '';
         if (!memberId) {
             tbody.innerHTML = '<tr><td colspan="12" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td></tr>';
@@ -13827,13 +13894,9 @@ MJ 이정우 팀장
             .getMemberItemStatusRows(memberId);
     }
 
+    // 입찰물건관리와 동일한 stu-tag 배지 사용 (추천/입찰/낙찰/불가)
     function misStatusBadge(st) {
-        let cls = 'bg-gray-100 text-gray-600';
-        if (st === '추천') cls = 'bg-blue-100 text-blue-600';
-        else if (st === '입찰') cls = 'bg-green-100 text-green-600';
-        else if (st === '낙찰') cls = 'bg-amber-100 text-amber-700';
-        else if (st === '불가') cls = 'bg-red-100 text-red-500';
-        return '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold ' + cls + '">' + escapeHtml(st || '-') + '</span>';
+        return '<span class="' + getStatusTagClass(st) + '">' + escapeHtml(st || '-') + '</span>';
     }
 
     function renderMisRows() {
@@ -13847,19 +13910,25 @@ MJ 이정우 팀장
         }
         tbody.innerHTML = rows.map(function (r) {
             const rec = String(r.recorded_at || '').substring(0, 16).replace('T', ' ');
+            // 명의: myeongui(items.m_name2) + 회원명(m_name) 함께 노출 → 명의 확인용
+            const myeongui = String(r.myeongui || '').trim();
+            const mName = String(r.m_name || '').trim();
+            const nameCell = (myeongui ? `<div class="text-gray-800">${escapeHtml(myeongui)}</div>` : '')
+                + (mName ? `<div class="text-gray-400 text-[10px]">${escapeHtml(mName)}</div>` : '')
+                || '<span class="text-gray-300">-</span>';
             return `
                 <tr class="hover:bg-gray-50 transition-colors" data-mis="${escapeHtml(r.mis_id)}">
-                    <td class="px-2 py-1.5 text-center">${misStatusBadge(r.status)}</td>
-                    <td class="px-2 py-1.5 text-center font-mono text-gray-700">${escapeHtml(r.in_date)}</td>
-                    <td class="px-2 py-1.5 font-semibold text-gray-800">${escapeHtml(r.sakun_no)}</td>
-                    <td class="px-2 py-1.5 text-gray-600">${escapeHtml(r.court)}</td>
-                    <td class="px-2 py-1.5 text-gray-600">${escapeHtml(r.myeongui)}</td>
-                    <td class="px-2 py-1.5 text-right font-mono text-gray-600">${escapeHtml(r.lowest_price)}</td>
-                    <td class="px-2 py-1.5 text-right font-mono text-gray-600">${escapeHtml(r.bid_price)}</td>
-                    <td class="px-2 py-1.5 text-right font-mono text-gray-700">${escapeHtml(r.win_price)}</td>
-                    <td class="px-2 py-1.5 text-right font-mono text-gray-600">${escapeHtml(r.est_interior)}</td>
-                    <td class="px-2 py-1.5 text-right font-mono text-gray-600">${escapeHtml(r.est_resale)}</td>
-                    <td class="px-2 py-1.5 text-center font-mono text-gray-400 text-[10px]">${escapeHtml(rec)}</td>
+                    <td class="px-2 py-1.5 text-center whitespace-nowrap">${misStatusBadge(r.status)}</td>
+                    <td class="px-2 py-1.5 text-center font-mono text-gray-700 whitespace-nowrap">${escapeHtml(r.in_date)}</td>
+                    <td class="px-2 py-1.5 font-semibold text-gray-800 whitespace-nowrap">${escapeHtml(r.sakun_no)}</td>
+                    <td class="px-2 py-1.5 text-gray-600 whitespace-nowrap">${escapeHtml(r.court)}</td>
+                    <td class="px-2 py-1.5 whitespace-nowrap">${nameCell}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-600 whitespace-nowrap">${_josaNum(r.lowest_price)}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-600 whitespace-nowrap">${_josaNum(r.bid_price)}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-700 whitespace-nowrap">${_josaNum(r.win_price)}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-600 whitespace-nowrap">${_josaNum(r.est_interior)}</td>
+                    <td class="px-2 py-1.5 text-right font-mono text-gray-600 whitespace-nowrap">${_josaNum(r.est_resale)}</td>
+                    <td class="px-2 py-1.5 text-center font-mono text-gray-400 text-[10px] whitespace-nowrap">${escapeHtml(rec)}</td>
                     <td class="px-2 py-1.5 text-center whitespace-nowrap">
                         <button onclick="editMisRowUI('${escapeHtml(r.mis_id)}')" class="text-indigo-600 hover:text-indigo-800 mr-1">수정</button>
                         <button onclick="deleteMisRowUI('${escapeHtml(r.mis_id)}')" class="text-red-500 hover:text-red-700">삭제</button>
@@ -13885,8 +13954,8 @@ MJ 이정우 팀장
             <td class="px-1 py-1">${inp('sakun_no')}</td>
             <td class="px-1 py-1">${inp('court')}</td>
             <td class="px-1 py-1">${inp('myeongui')}</td>
-            <td class="px-1 py-1 text-gray-400 text-right font-mono">${v('lowest_price') || '-'}</td>
-            <td class="px-1 py-1 text-gray-400 text-right font-mono">${v('bid_price') || '-'}</td>
+            <td class="px-1 py-1 text-gray-400 text-right font-mono">${_josaNum(r && r.lowest_price) || '-'}</td>
+            <td class="px-1 py-1 text-gray-400 text-right font-mono">${_josaNum(r && r.bid_price) || '-'}</td>
             <td class="px-1 py-1">${num('win_price')}</td>
             <td class="px-1 py-1">${num('est_interior')}</td>
             <td class="px-1 py-1">${num('est_resale')}</td>
