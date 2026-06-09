@@ -297,6 +297,16 @@ function formatParamsDate(value, format = 'yyMMdd') {
  * 새로운 입찰 물건 데이터를 생성합니다.
  */
 function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId, itemsYongdo) {
+  // [동시성] 스크립트 락으로 중복 생성(같은 키 2행) 방지 — 중복검사~appendRow를 직렬화
+  var __lock = LockService.getScriptLock();
+  try { __lock.waitLock(20000); } catch (e) { return { success: false, message: '저장이 혼잡합니다. 잠시 후 다시 시도해 주세요.' }; }
+  try {
+    return _createDataImpl(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId, itemsYongdo);
+  } finally {
+    __lock.releaseLock();
+  }
+}
+function _createDataImpl(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, chuchenState, regMember, auctionId, itemsYongdo) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
 
   // 추천, 입찰만 회원명 필수 / 나머지 상태는 회원명 없어도 허용
@@ -395,6 +405,7 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
   });
 
   sheet.appendRow(newRow);
+  SpreadsheetApp.flush(); // 커밋 확정 (락 해제 전)
 
   // 생성된 데이터 객체 반환 (프론트엔드 로컬 캐시 갱신용)
   var createdItem = {};
@@ -412,7 +423,17 @@ function createData(inDate, sakunNo, court, stuMember, mNameId, mName, bidPrice,
 /**
  * 기존 입찰 물건 데이터를 수정합니다.
  */
-function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo) {
+function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo, stuReason, stuReasonDetail) {
+  // [동시성] 스크립트 락으로 read-modify-write 직렬화 — 동시 저장 유실/유령 중복 방지
+  var __lock = LockService.getScriptLock();
+  try { __lock.waitLock(20000); } catch (e) { return { success: false, message: '저장이 혼잡합니다. 잠시 후 다시 시도해 주세요.' }; }
+  try {
+    return _updateDataImpl(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo, stuReason, stuReasonDetail);
+  } finally {
+    __lock.releaseLock();
+  }
+}
+function _updateDataImpl(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo, stuReason, stuReasonDetail) {
   if (!isAllowedCourt_(court)) return { success: false, message: '허용되지 않은 법원입니다.' };
 
   // 추천, 입찰만 회원명 필수 / 나머지 상태는 회원명 없어도 허용
@@ -597,6 +618,13 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
     }
   }
 
+  // [통합] 불가/폐기 사유(Z=26/AA=27) — 클라이언트가 값을 넘긴 경우에만 기록 (undefined=보존)
+  //   기존 병렬 saveItemReason 호출 제거 → 한 저장 = 한 행 단일 쓰기(락 안에서 원자적)
+  if (typeof stuReason !== 'undefined' && stuReason !== null) {
+    ensureItemReasonColumns_();
+    sheet.getRange(realRowIndex, 26, 1, 2).setValues([[String(stuReason || ''), String(stuReasonDetail || '')]]);
+  }
+
   // [PHASE 1-4] 변경 감지 및 히스토리 기록 (배치 처리)
   const updateBatchTs = String(new Date().getTime());
   const historyEntries = [];
@@ -663,14 +691,22 @@ function updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNam
     }
   }
 
-  // 수정된 데이터 객체 반환 (프론트엔드 로컬 캐시 갱신용)
+  // [재조회] 저장 확정 후 시트 실제값을 다시 읽어 반환 — "의도값"이 아닌 "시트 진실"을 프론트에 전달
+  //   → 백엔드 파생필드 클리어/사유까지 화면=시트 100% 일치 보장 (잔재 구조적 제거)
+  SpreadsheetApp.flush();
+  var verifyRow = sheet.getRange(realRowIndex, 1, 1, ITEM_HEADERS.length).getValues()[0]; // A~W
   var updatedItem = {};
   ITEM_HEADERS.forEach((header, index) => {
-    updatedItem[header] = newRowValues[index];
+    updatedItem[header] = verifyRow[index];
   });
+  if (sheet.getMaxColumns() >= 27) {
+    var reasonRow = sheet.getRange(realRowIndex, 26, 1, 2).getValues()[0]; // Z/AA
+    updatedItem['stu_reason'] = reasonRow[0];
+    updatedItem['stu_reason_detail'] = reasonRow[1];
+  }
   if (typeof formatParamsDate === 'function') {
-    updatedItem['in-date'] = formatParamsDate(newRowValues[1]);
-    updatedItem['reg_date'] = formatParamsDate(newRowValues[9], 'yyyy-MM-dd');
+    updatedItem['in-date'] = formatParamsDate(verifyRow[1]);
+    updatedItem['reg_date'] = formatParamsDate(verifyRow[9], 'yyyy-MM-dd');
   }
 
   // 데이터 변경 → 해당 회원 캐시 무효화

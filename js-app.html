@@ -7302,6 +7302,16 @@ MJ 이정우 팀장
             showStatus('저장 중... (배경 데이터 동기화)', 'warning');
         }
 
+        // [통합] 모달 사유/상세 값 (updateData에 함께 전달)
+        //   [가드] 사유 입력요소가 둘 다 없으면 undefined 전달 → 서버가 기존값 보존 (빈값 덮어쓰기 방지)
+        var _modalStuReasonEl = document.getElementById('modal-stu-reason');
+        var _modalStuReasonDetailEl = document.getElementById('modal-stu-reason-detail');
+        var _modalStuReason, _modalStuReasonDetail;
+        if (_modalStuReasonEl || _modalStuReasonDetailEl) {
+            _modalStuReason = _modalStuReasonEl ? _modalStuReasonEl.value : '';
+            _modalStuReasonDetail = _modalStuReasonDetailEl ? _modalStuReasonDetailEl.value : '';
+        }
+
         google.script.run
             .withSuccessHandler(result => {
                 _isSavingItem = false;
@@ -7347,10 +7357,9 @@ MJ 이정우 팀장
                 showStatus(`수정 오류: ${error.message}`, 'error');
                 loadData(true); // Optimistic Update 오염 복구
             })
-            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo)
-            .updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo);
-        // [불가/폐기 사유] 모달 사유/상세도 함께 저장 (Z/AA열)
-        saveReasonFieldsFor_(id, 'modal-stu-reason', 'modal-stu-reason-detail');
+            // [통합] 사유(Z/AA)를 updateData 인자로 함께 전달 — 병렬 saveItemReason 제거(단일 원자적 쓰기)
+            // Server updateData signature: (..., itemsYongdo, stuReason, stuReasonDetail)
+            .updateData(id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo, _modalStuReason, _modalStuReasonDetail);
     }
 
     function handleModalDelete() {
@@ -7573,11 +7582,18 @@ MJ 이정우 팀장
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
                 .createData(processedInDate, sakunNo, court, stuMember, mNameId, mName, bidPrice, memberId, bidState, imageId, note, mName2, panelChuchenState, regMember, auctionId, itemsYongdo);
         } else if (currentMode === 'edit') {
-            // Server updateData signature: (id, inDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, chuchenState, imageId, regMember, mName2, auctionId, itemsYongdo)
+            // [통합] 사유(Z/AA)를 updateData 인자로 함께 전달 — 병렬 saveItemReason 제거(단일 원자적 쓰기)
+            //   [가드] 사유 입력요소가 둘 다 없으면 undefined 전달 → 서버가 기존값 보존 (빈값 덮어쓰기 방지)
+            var _stuReasonEl = document.getElementById('form-stu-reason');
+            var _stuReasonDetailEl = document.getElementById('form-stu-reason-detail');
+            var _stuReason, _stuReasonDetail;
+            if (_stuReasonEl || _stuReasonDetailEl) {
+                _stuReason = _stuReasonEl ? _stuReasonEl.value : '';
+                _stuReasonDetail = _stuReasonDetailEl ? _stuReasonDetailEl.value : '';
+            }
+            // Server updateData signature: (..., itemsYongdo, stuReason, stuReasonDetail)
             google.script.run.withSuccessHandler(successHandler).withFailureHandler(errorHandler)
-                .updateData(id, processedInDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, panelChuchenState, imageId, regMember, mName2, auctionId, itemsYongdo);
-            // [불가/폐기 사유] 상세탭 사유/상세도 함께 저장 (Z/AA열)
-            saveReasonFieldsFor_(id, 'form-stu-reason', 'form-stu-reason-detail');
+                .updateData(id, processedInDate, sakunNo, court, stuMember, mName, bidPrice, mNameId, note, memberId, bidState, panelChuchenState, imageId, regMember, mName2, auctionId, itemsYongdo, _stuReason, _stuReasonDetail);
         }
     }
 
