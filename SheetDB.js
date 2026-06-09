@@ -1986,6 +1986,116 @@ function menuDonkleTestAccrue_() {
     '\n\n※ 한 번 더 실행 시 false + 행수 동일이면 dedup 정상');
 }
 
+/**
+ * [돈클] 백필 — telegram_requests 1회 스캔으로 과거 추천/입찰/불가/낙찰을 members_item_status에 일괄 적재
+ *  · 판정조건은 ②(라이브 훅)과 동일: 추천=chuchen_state→전달완료, 불가/낙찰/입찰=stu_member→해당값
+ *  · 입찰만 추가 필터: 물건 in_date < 오늘(=어제 이전, 실제 입찰함). 추천/불가/낙찰은 즉시.
+ *  · member_id = 이벤트 시점값(col F) 스냅샷. 물건 스냅샷필드(명의/일자/사건/법원/최저가/입찰가)=현재 items.
+ *  · dedup: 기존 + 백필 내부 (member_id,item_id,status) 1건.
+ * @param {Object} opts { months: 0=전체|N개월, dryRun: bool }
+ */
+function backfillMembersItemStatus(opts) {
+  const months = (opts && opts.months) ? parseInt(opts.months, 10) : 0;
+  const dryRun = !!(opts && opts.dryRun);
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const now = new Date();
+  const todayYYMMDD = Utilities.formatDate(now, 'Asia/Seoul', 'yyMMdd');
+  const startDate = months > 0 ? new Date(now.getFullYear(), now.getMonth() - months, now.getDate()) : null;
+
+  // 1) items 맵 (1회 읽기)
+  const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
+  const itemMap = {};
+  if (itemSheet && itemSheet.getLastRow() >= 2) {
+    const idata = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, ITEM_HEADERS.length).getValues();
+    for (let i = 0; i < idata.length; i++) {
+      const r = idata[i]; const id = String(r[0] || '').trim();
+      if (id) itemMap[id] = {
+        inDate: String(r[1] || ''), sakunNo: String(r[2] || ''), court: String(r[3] || ''),
+        mNameId: String(r[5] || ''), mName: String(r[6] || ''), bidprice: String(r[7] || ''),
+        memberId: String(r[8] || ''), myeongui: String(r[14] || ''), lowest: String(r[22] || '')
+      };
+    }
+  }
+
+  // 2) telegram_requests 스캔 → (member,item,status) 튜플
+  const reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+  const tuples = [];
+  if (reqSheet && reqSheet.getLastRow() >= 2) {
+    const rdata = reqSheet.getRange(2, 1, reqSheet.getLastRow() - 1, 16).getValues();
+    for (let i = 0; i < rdata.length; i++) {
+      const row = rdata[i];
+      const at = row[1] instanceof Date ? row[1] : new Date(row[1]);
+      if (isNaN(at.getTime())) continue;
+      if (startDate && at < startDate) continue;
+      const itemId = String(row[4] || '').trim();
+      if (!itemId) continue;
+      const fn = String(row[13] || '').trim(), tv = String(row[12] || '').trim();
+      let status = '';
+      if (fn === 'chuchen_state' && tv === '전달완료') status = '추천';
+      else if (fn === 'stu_member' && tv === '불가') status = '불가';
+      else if (fn === 'stu_member' && tv === '낙찰') status = '낙찰';
+      else if (fn === 'stu_member' && tv === '입찰') status = '입찰';
+      if (!status) continue;
+      tuples.push({ memberId: String(row[5] || '').trim(), memberName: String(row[15] || '').trim(), itemId: itemId, status: status, at: at });
+    }
+  }
+
+  // 3) 기존 적립 set
+  const misSheet = ensureMembersItemStatusSheet_();
+  const seen = {};
+  if (misSheet.getLastRow() >= 2) {
+    const md = misSheet.getRange(2, 1, misSheet.getLastRow() - 1, MIS_HEADERS.length).getValues();
+    for (let i = 0; i < md.length; i++) seen[String(md[i][1]) + '|' + String(md[i][5]) + '|' + String(md[i][9])] = true;
+  }
+
+  // 4) 신규 행 빌드 (dedup)
+  const newRows = []; const stat = { '추천': 0, '입찰': 0, '불가': 0, '낙찰': 0 };
+  let skipNoMember = 0, skipBidFuture = 0;
+  for (let i = 0; i < tuples.length; i++) {
+    const t = tuples[i]; const item = itemMap[t.itemId];
+    let memberId = t.memberId, mName = t.memberName;
+    if (!memberId && item) memberId = item.memberId;
+    if (!mName && item) mName = item.mName;
+    if (!memberId) { skipNoMember++; continue; }
+    if (t.status === '입찰') {  // 입찰: in_date < 오늘(어제 이전)만
+      const inD = item ? item.inDate : '';
+      if (!inD || String(inD) >= todayYYMMDD) { skipBidFuture++; continue; }
+    }
+    const key = memberId + '|' + t.itemId + '|' + t.status;
+    if (seen[key]) continue;
+    seen[key] = true;
+    const misId = 'MIS' + t.at.getTime() + Math.floor(Math.random() * 1000) + newRows.length;
+    newRows.push([
+      misId, memberId, mName, item ? item.mNameId : '', item ? item.myeongui : '', t.itemId,
+      item ? item.inDate : '', item ? item.sakunNo : '', item ? item.court : '', t.status,
+      t.at.toISOString(), item ? item.lowest : '', item ? item.bidprice : '', '', '', ''
+    ]);
+    stat[t.status]++;
+  }
+
+  // 5) 쓰기
+  if (!dryRun && newRows.length) {
+    const lr = misSheet.getLastRow();
+    misSheet.getRange(lr + 1, 1, newRows.length, MIS_HEADERS.length).setValues(newRows);
+    SpreadsheetApp.flush();
+  }
+  Logger.log('[backfill] tuples=' + tuples.length + ' 신규=' + newRows.length + (dryRun ? ' (DRY RUN)' : ''));
+  Logger.log('[backfill] 추천 ' + stat['추천'] + ' / 입찰 ' + stat['입찰'] + ' / 불가 ' + stat['불가'] + ' / 낙찰 ' + stat['낙찰']);
+  Logger.log('[backfill] skip 회원없음=' + skipNoMember + ' 입찰미래=' + skipBidFuture);
+  return { tuples: tuples.length, inserted: newRows.length, byStatus: stat, dryRun: dryRun };
+}
+
+function menuDonkleBackfill_() {
+  const ui = SpreadsheetApp.getUi();
+  const dry = backfillMembersItemStatus({ months: 0, dryRun: true });
+  const msg = '백필 미리보기 (전체기간)\n\n후보 ' + dry.tuples + '건 → 신규 적립 예정 ' + dry.inserted + '건\n' +
+    '· 추천 ' + dry.byStatus['추천'] + ' / 입찰 ' + dry.byStatus['입찰'] + ' / 불가 ' + dry.byStatus['불가'] + ' / 낙찰 ' + dry.byStatus['낙찰'] +
+    '\n\n실제로 적재할까요?';
+  if (ui.alert('③ 백필', msg, ui.ButtonSet.YES_NO) !== ui.Button.YES) { ui.alert('취소됨 (적재 안 함)'); return; }
+  const run = backfillMembersItemStatus({ months: 0, dryRun: false });
+  ui.alert('✅ 백필 완료\n\n신규 적재 ' + run.inserted + '건\n· 추천 ' + run.byStatus['추천'] + ' / 입찰 ' + run.byStatus['입찰'] + ' / 불가 ' + run.byStatus['불가'] + ' / 낙찰 ' + run.byStatus['낙찰']);
+}
+
 function updateItemStuMemberById_(itemId, newStatus) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) throw new Error('items 시트를 찾을 수 없습니다.');
