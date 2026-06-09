@@ -4634,6 +4634,11 @@
         if (formSakunNo) formSakunNo.value = '';
         if (formCourt) formCourt.value = '';
         if (formBidPrice) formBidPrice.value = '';
+        // [수정] 분리 입력칸(억/만)도 비우고 표시 동기화 — 입찰가만 잔존하는 반쪽 초기화 방지
+        ['form-bid-eok', 'form-bid-man'].forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+        if (typeof bidSplitCompute_ === 'function') { try { bidSplitCompute_('detail'); } catch (e) { } }
+        // [수정] 회원비고도 함께 비움
+        { var _fmn = document.getElementById('form-member-note'); if (_fmn) _fmn.value = ''; }
         if (formMName) formMName.value = '';
         if (formYongdo) formYongdo.value = ''; // 신규 등록은 등록전(빈값)으로 시작
         if (formMemberId) formMemberId.value = '';
@@ -7524,7 +7529,16 @@ MJ 이정우 팀장
                         const bidStateEl = document.getElementById('form-bid-state');
                         if (bidStateEl) bidStateEl.value = '';
                     } else {
-                        goToCreateMode();
+                        // [수정 후 재조회] create 모드로 비우지 않고, 저장된 값으로 자기 물건을 다시 띄움
+                        //  → 화면=시트(서버 재조회값) 일치, 반쪽 초기화 혼선 제거
+                        //  → 이 분기는 currentFormId===id 가드 안이라, 그새 다른 물건을 보던 중이면 진입 안 함(충돌 없음)
+                        //  → currentDetailItem(위에서 result.data와 병합된 완전체) 우선, 없으면 result.data
+                        var _refreshItem = (currentDetailItem && String(currentDetailItem.id) === String(id)) ? currentDetailItem : result.data;
+                        if (_refreshItem && typeof showForm === 'function') {
+                            showForm('edit', _refreshItem);
+                        } else {
+                            goToCreateMode();
+                        }
                     }
                 }
             } else {
