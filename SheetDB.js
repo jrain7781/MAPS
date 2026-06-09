@@ -1873,6 +1873,104 @@ function initMembersItemStatusSheet() {
   return { sheet: sheet.getName(), cols: MIS_HEADERS.length, headers: headerRow, rows: Math.max(0, sheet.getLastRow() - 1) };
 }
 
+/**
+ * [돈클] members_item_status 적립(upsert) — 추천/입찰/낙찰/불가 마일스톤 도달 시 1건 추가
+ *  · dedup: (member_id, item_id, status) 이미 있으면 skip (append-only, 동일건 1건)
+ *  · 물건정보는 items에서 읽어 스냅샷 (myeongui=m_name2, 최저가/입찰가 연계)
+ *  · 회원 미지정(member_id 없음)이면 적립 안 함
+ * @param {string} itemId
+ * @param {string} memberIdHint  이벤트가 가진 member_id (없으면 items에서)
+ * @param {string} memberNameHint
+ * @param {string} status  '추천' | '입찰' | '낙찰' | '불가'
+ * @param {Object} extra   {win_price} 등 추가 필드(낙찰 push용, optional)
+ * @returns {boolean} 적립했으면 true, skip이면 false
+ */
+function accrueMembersItemStatus_(itemId, memberIdHint, memberNameHint, status, extra) {
+  try {
+    if (!itemId || !status) return false;
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // 1) 물건 정보 읽기 (id로 단일 행)
+    const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (!itemSheet || itemSheet.getLastRow() < 2) return false;
+    const itFinder = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true);
+    const itMatch = itFinder.findNext();
+    if (!itMatch) return false;
+    const r = itemSheet.getRange(itMatch.getRow(), 1, 1, ITEM_HEADERS.length).getValues()[0];
+    const itStu = String(r[4] || '').trim();      // E: stu_member
+    // 추천은 stu_member='추천' 확인(4키 룰). 불가/낙찰은 to_value가 곧 stu_member라 일치 보장.
+    if (status === '추천' && itStu !== '추천') return false;
+
+    const memberId = String(memberIdHint || r[8] || '').trim();   // I: member_id
+    const mName = String(memberNameHint || r[6] || '').trim();    // G: m_name
+    if (!memberId) return false;                                  // 회원 미지정 → 적립 안 함
+
+    // 2) dedup: (member_id, item_id, status) 존재 확인 (item_id 컬럼 F=6 finder)
+    const misSheet = ensureMembersItemStatusSheet_();
+    const misLast = misSheet.getLastRow();
+    if (misLast >= 2) {
+      const hits = misSheet.getRange(2, 6, misLast - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true).findAll();
+      for (let h = 0; h < hits.length; h++) {
+        const rr = misSheet.getRange(hits[h].getRow(), 1, 1, MIS_HEADERS.length).getValues()[0];
+        if (String(rr[1]) === memberId && String(rr[9]) === status) return false; // 이미 적립됨
+      }
+    }
+
+    // 3) append
+    const now = new Date();
+    const misId = 'MIS' + now.getTime() + Math.floor(Math.random() * 1000);
+    const winPrice = (extra && extra.win_price != null) ? String(extra.win_price) : '';
+    const row = [
+      misId,                    // A: mis_id
+      memberId,                 // B: member_id
+      mName,                    // C: m_name
+      String(r[5] || ''),       // D: m_name_id (F)
+      String(r[14] || ''),      // E: myeongui (m_name2, O)
+      String(itemId),           // F: item_id
+      String(r[1] || ''),       // G: in_date (in-date, B)
+      String(r[2] || ''),       // H: sakun_no (C)
+      String(r[3] || ''),       // I: court (D)
+      status,                   // J: status
+      now.toISOString(),        // K: recorded_at
+      String(r[22] || ''),      // L: lowest_price (W)
+      String(r[7] || ''),       // M: bid_price (bidprice, H)
+      winPrice,                 // N: win_price
+      '',                       // O: est_interior
+      ''                        // P: est_resale
+    ];
+    misSheet.appendRow(row);
+    return true;
+  } catch (e) {
+    Logger.log('[accrueMembersItemStatus_] 오류(' + status + ',' + itemId + '): ' + e.toString());
+    return false;
+  }
+}
+
+/**
+ * [돈클] 적립 자체 검증용 — 실제 추천물건 1건을 골라 적립 → 재실행 시 dedup 확인
+ * GAS 편집기에서 실행 후 로그 확인. (1회차: 적립 true/행수+1, 2회차: false/행수 동일)
+ */
+function testAccrueMembersItemStatus() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
+  if (!itemSheet || itemSheet.getLastRow() < 2) { Logger.log('[test] items 데이터 없음'); return; }
+  const data = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, ITEM_HEADERS.length).getValues();
+  let target = null;
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][4]).trim() === '추천' && String(data[i][8]).trim()) { target = data[i]; break; }
+  }
+  if (!target) { Logger.log('[test] stu_member=추천 & member_id 있는 물건이 없습니다.'); return; }
+  const itemId = String(target[0]);
+  const before = Math.max(0, ensureMembersItemStatusSheet_().getLastRow() - 1);
+  const ok = accrueMembersItemStatus_(itemId, '', '', '추천');
+  const after = Math.max(0, ensureMembersItemStatusSheet_().getLastRow() - 1);
+  Logger.log('[test] 대상 item_id=' + itemId + ' 회원=' + target[6] + '(' + target[8] + ') 명의=' + (target[14] || '-'));
+  Logger.log('[test] 적립결과=' + ok + '  (true=신규적립 / false=이미있음·조건불충족)');
+  Logger.log('[test] members_item_status 행수: ' + before + ' → ' + after);
+  Logger.log('[test] ▶ 이 함수를 한 번 더 실행하면 dedup으로 false + 행수 동일해야 정상');
+  return { itemId: itemId, accrued: ok, before: before, after: after };
+}
+
 function updateItemStuMemberById_(itemId, newStatus) {
   const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
   if (!sheet) throw new Error('items 시트를 찾을 수 없습니다.');
@@ -6046,6 +6144,23 @@ function writeItemHistoryBatch_(entries) {
     SpreadsheetApp.flush();
   } catch (e) {
     Logger.log('[writeItemHistoryBatch_] 오류: ' + e.toString());
+  }
+
+  // [돈클] 추천/불가/낙찰 마일스톤 → members_item_status 적립 (입찰은 일별 트리거에서)
+  //   · 히스토리 기록 실패와 무관하게 별도 try (적립 오류가 본 흐름 안 깸)
+  try {
+    for (let ai = 0; ai < entries.length; ai++) {
+      const ep = entries[ai];
+      const fn = String(ep.field_name || '').trim();
+      const tv = String(ep.to_value || '').trim();
+      let accStatus = '';
+      if (fn === 'chuchen_state' && tv === '전달완료') accStatus = '추천';
+      else if (fn === 'stu_member' && tv === '불가') accStatus = '불가';
+      else if (fn === 'stu_member' && tv === '낙찰') accStatus = '낙찰';
+      if (accStatus) accrueMembersItemStatus_(ep.item_id, ep.member_id, ep.member_name, accStatus);
+    }
+  } catch (e2) {
+    Logger.log('[writeItemHistoryBatch_/적립] 오류: ' + e2.toString());
   }
 }
 
