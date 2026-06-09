@@ -8889,6 +8889,67 @@ function getDonkleMemberCounts() {
   }
 }
 
+// ===== [돈클 ⑦] 회원별 물건상태 탭 CRUD (회원 상세화면용) =====
+/** 회원의 members_item_status 행들 (recorded_at 내림차순, 최근 위) */
+function getMemberItemStatusRows(memberId) {
+  try {
+    if (!memberId) return [];
+    const sheet = ensureMembersItemStatusSheet_();
+    const last = sheet.getLastRow();
+    if (last < 2) return [];
+    const data = sheet.getRange(2, 1, last - 1, MIS_HEADERS.length).getValues();
+    const rows = [];
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][1]).trim() !== String(memberId).trim()) continue;
+      const o = {};
+      MIS_HEADERS.forEach((h, j) => { o[h] = data[i][j]; });
+      rows.push(o);
+    }
+    rows.sort((a, b) => String(b.recorded_at).localeCompare(String(a.recorded_at)));
+    return rows;
+  } catch (e) { Logger.log('[getMemberItemStatusRows] ' + e.toString()); return []; }
+}
+/** mis_id 행 삭제 (사람이 UI에서 수동) */
+function deleteMisRow(misId) {
+  try {
+    const sheet = ensureMembersItemStatusSheet_();
+    const last = sheet.getLastRow();
+    if (last < 2) return { success: false, message: '데이터 없음' };
+    const ids = sheet.getRange(2, 1, last - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(misId)) {
+        const rn = i + 2;
+        if (last - 1 <= 1) sheet.getRange(rn, 1, 1, MIS_HEADERS.length).clearContent(); // 마지막 1행이면 내용만
+        else sheet.deleteRow(rn);
+        SpreadsheetApp.flush();
+        return { success: true };
+      }
+    }
+    return { success: false, message: 'mis_id 없음' };
+  } catch (e) { return { success: false, message: String(e) }; }
+}
+/** mis_id 행 필드 수정 (updates = {필드명:값}) */
+function updateMisRow(misId, updates) {
+  try {
+    const sheet = ensureMembersItemStatusSheet_();
+    const last = sheet.getLastRow();
+    if (last < 2) return { success: false, message: '데이터 없음' };
+    const ids = sheet.getRange(2, 1, last - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(misId)) {
+        const rn = i + 2;
+        Object.keys(updates || {}).forEach(k => {
+          const ci = MIS_HEADERS.indexOf(k);
+          if (ci >= 0 && k !== 'mis_id') sheet.getRange(rn, ci + 1).setValue(updates[k]);
+        });
+        SpreadsheetApp.flush();
+        return { success: true };
+      }
+    }
+    return { success: false, message: 'mis_id 없음' };
+  } catch (e) { return { success: false, message: String(e) }; }
+}
+
 /**
  * 불가확인용 — 오늘 ~ 오늘+7일 입찰건의 (사건번호, 입찰일자, 법원) 3키 리스트 반환.
  * 매니저 「불가확인」 탭의 "MAPS 7일 리스트 불러오기" 버튼이 호출.
