@@ -2104,10 +2104,11 @@ function menuDonkleClearMis_() {
   const sheet = ensureMembersItemStatusSheet_();
   const n = Math.max(0, sheet.getLastRow() - 1);
   if (n === 0) { ui.alert('비울 데이터가 없습니다 (헤더만 있음).'); return; }
-  if (ui.alert('데이터 비우기', n + '개 행을 모두 삭제합니다 (헤더 1행 유지).\n진행할까요?', ui.ButtonSet.YES_NO) !== ui.Button.YES) { ui.alert('취소됨'); return; }
-  sheet.deleteRows(2, n);
+  if (ui.alert('데이터 비우기', n + '개 행 내용을 모두 비웁니다 (헤더 1행 유지).\n진행할까요?', ui.ButtonSet.YES_NO) !== ui.Button.YES) { ui.alert('취소됨'); return; }
+  // deleteRows는 "고정 안 된 행 전부 삭제" 제한에 걸리므로 내용삭제(clearContent) 사용
+  sheet.getRange(2, 1, n, sheet.getMaxColumns()).clearContent();
   SpreadsheetApp.flush();
-  ui.alert('✅ ' + n + '개 행 삭제 완료 (헤더 유지)\n\n이제 ③ 백필을 다시 실행하면 깨끗하게 재적재됩니다.');
+  ui.alert('✅ ' + n + '개 행 비움 완료 (헤더 유지)\n\n이제 ③ 백필을 다시 실행하면 깨끗하게 재적재됩니다.');
 }
 
 function updateItemStuMemberById_(itemId, newStatus) {
