@@ -2050,12 +2050,13 @@ function backfillMembersItemStatus(opts) {
 
   // 4) 신규 행 빌드 (dedup)
   const newRows = []; const stat = { '추천': 0, '입찰': 0, '불가': 0, '낙찰': 0 };
-  let skipNoMember = 0, skipBidFuture = 0;
+  let skipNoMember = 0, skipBidFuture = 0, skipNoItem = 0;
   for (let i = 0; i < tuples.length; i++) {
     const t = tuples[i]; const item = itemMap[t.itemId];
+    if (!item) { skipNoItem++; continue; }   // items에 없는(삭제된) 물건 → 적립 안 함
     let memberId = t.memberId, mName = t.memberName;
-    if (!memberId && item) memberId = item.memberId;
-    if (!mName && item) mName = item.mName;
+    if (!memberId) memberId = item.memberId;
+    if (!mName) mName = item.mName;
     if (!memberId) { skipNoMember++; continue; }
     if (t.status === '입찰') {  // 입찰: in_date < 오늘(어제 이전)만
       const inD = item ? item.inDate : '';
@@ -2081,8 +2082,8 @@ function backfillMembersItemStatus(opts) {
   }
   Logger.log('[backfill] tuples=' + tuples.length + ' 신규=' + newRows.length + (dryRun ? ' (DRY RUN)' : ''));
   Logger.log('[backfill] 추천 ' + stat['추천'] + ' / 입찰 ' + stat['입찰'] + ' / 불가 ' + stat['불가'] + ' / 낙찰 ' + stat['낙찰']);
-  Logger.log('[backfill] skip 회원없음=' + skipNoMember + ' 입찰미래=' + skipBidFuture);
-  return { tuples: tuples.length, inserted: newRows.length, byStatus: stat, dryRun: dryRun };
+  Logger.log('[backfill] skip 삭제물건=' + skipNoItem + ' 회원없음=' + skipNoMember + ' 입찰미래=' + skipBidFuture);
+  return { tuples: tuples.length, inserted: newRows.length, byStatus: stat, dryRun: dryRun, skipNoItem: skipNoItem };
 }
 
 function menuDonkleBackfill_() {
@@ -2090,10 +2091,23 @@ function menuDonkleBackfill_() {
   const dry = backfillMembersItemStatus({ months: 0, dryRun: true });
   const msg = '백필 미리보기 (전체기간)\n\n후보 ' + dry.tuples + '건 → 신규 적립 예정 ' + dry.inserted + '건\n' +
     '· 추천 ' + dry.byStatus['추천'] + ' / 입찰 ' + dry.byStatus['입찰'] + ' / 불가 ' + dry.byStatus['불가'] + ' / 낙찰 ' + dry.byStatus['낙찰'] +
+    '\n· 제외: 삭제된물건 ' + (dry.skipNoItem || 0) + '건' +
     '\n\n실제로 적재할까요?';
   if (ui.alert('③ 백필', msg, ui.ButtonSet.YES_NO) !== ui.Button.YES) { ui.alert('취소됨 (적재 안 함)'); return; }
   const run = backfillMembersItemStatus({ months: 0, dryRun: false });
   ui.alert('✅ 백필 완료\n\n신규 적재 ' + run.inserted + '건\n· 추천 ' + run.byStatus['추천'] + ' / 입찰 ' + run.byStatus['입찰'] + ' / 불가 ' + run.byStatus['불가'] + ' / 낙찰 ' + run.byStatus['낙찰']);
+}
+
+/** [돈클] members_item_status 데이터 비우기(헤더 유지) — 메뉴 클릭용 */
+function menuDonkleClearMis_() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = ensureMembersItemStatusSheet_();
+  const n = Math.max(0, sheet.getLastRow() - 1);
+  if (n === 0) { ui.alert('비울 데이터가 없습니다 (헤더만 있음).'); return; }
+  if (ui.alert('데이터 비우기', n + '개 행을 모두 삭제합니다 (헤더 1행 유지).\n진행할까요?', ui.ButtonSet.YES_NO) !== ui.Button.YES) { ui.alert('취소됨'); return; }
+  sheet.deleteRows(2, n);
+  SpreadsheetApp.flush();
+  ui.alert('✅ ' + n + '개 행 삭제 완료 (헤더 유지)\n\n이제 ③ 백필을 다시 실행하면 깨끗하게 재적재됩니다.');
 }
 
 function updateItemStuMemberById_(itemId, newStatus) {
