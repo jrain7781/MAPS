@@ -12,6 +12,10 @@
   .card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
   .num{ cursor:pointer; border-radius:6px; padding:1px 6px; font-weight:700; transition:background .12s; }
   .num:hover{ background:#eef2ff; text-decoration:underline; }
+  /* 숫자 중앙 고정 + 비고 아이콘은 절대배치(정렬 영향 없음) */
+  .numwrap{ position:relative; display:inline-block; }
+  .note-ic{ position:absolute; left:100%; top:-2px; margin-left:2px; display:inline-flex; color:#f59e0b; cursor:help; line-height:0; }
+  .note-ic:hover{ color:#d97706; }
 </style>
 </head>
 <body class="p-6">
@@ -52,10 +56,11 @@
 
     <!-- ===== 드릴다운: 입찰물건관리(필터된 미리보기) ===== -->
     <div class="card p-5">
-      <div class="flex items-center mb-3">
+      <div class="flex items-center mb-1">
         <h2 class="text-base font-bold text-gray-800">입찰물건관리 <span class="text-[12px] font-normal text-indigo-600" id="drillTitle">— 숫자를 클릭하세요</span></h2>
         <span class="ml-auto text-xs text-gray-400" id="drillCount"></span>
       </div>
+      <div class="text-[11px] text-gray-400 mb-3">※ 기존 입찰물건관리 리스트를 필터해서 그대로 표시 (이 화면을 새로 디자인·컬럼 변경하지 않음)</div>
       <table class="w-full text-xs">
         <thead>
           <tr class="text-gray-500 border-b border-gray-200">
@@ -77,8 +82,8 @@
 // 전달대기 = stu_member='추천' & chuchen_state≠전달완료  /  추천완료 = chuchen_state='전달완료'
 const DATA = [
   { date:'오늘 06/08 (월)', key:'06/08',
-    wait:[ {s:'2024타경51023', m:'조현우', g:'월세', t:'전부쌤'}, {s:'2024타경48771', m:'강태오', g:'수익', t:'대표님'}, {s:'2024타경52310', m:'서지후', g:'올인원', t:'대표님'} ],
-    done:[ {s:'2024타경40021', m:'한지영', g:'수익', t:'대표님'}, {s:'2024타경40588', m:'조현우', g:'월세', t:'전부쌤'}, {s:'2024타경41200', m:'윤재호', g:'올인원', t:'대표님'}, {s:'2024타경41999', m:'한지영', g:'수익', t:'대표님'}, {s:'2024타경42050', m:'강태오', g:'수익', t:'전부쌤'} ] },
+    wait:[ {s:'2024타경51023', m:'조현우', g:'월세', t:'전부쌤', n:'카톡으로만 전달. 시세 대비 저렴함 강조 요망.'}, {s:'2024타경48771', m:'강태오', g:'수익', t:'대표님', n:'18시 이후 통화 후 전달.'}, {s:'2024타경52310', m:'서지후', g:'올인원', t:'대표님'} ],
+    done:[ {s:'2024타경40021', m:'한지영', g:'수익', t:'대표님', n:'권리분석 요약 함께 전달. 명도 난이도 낮은 건 우선.'}, {s:'2024타경40588', m:'조현우', g:'월세', t:'전부쌤'}, {s:'2024타경41200', m:'윤재호', g:'올인원', t:'대표님'}, {s:'2024타경41999', m:'한지영', g:'수익', t:'대표님'}, {s:'2024타경42050', m:'강태오', g:'수익', t:'전부쌤'} ] },
   { date:'06/07 (일)', key:'06/07', wait:[], done:[ {s:'2024타경39001', m:'서지후', g:'올인원', t:'대표님'}, {s:'2024타경39112', m:'조현우', g:'월세', t:'대표님'} ] },
   { date:'06/06 (토)', key:'06/06', wait:[ {s:'2024타경38020', m:'한지영', g:'수익', t:'대표님'} ], done:[ {s:'2024타경37001', m:'강태오', g:'수익', t:'전부쌤'}, {s:'2024타경37044', m:'윤재호', g:'올인원', t:'대표님'}, {s:'2024타경37200', m:'서지후', g:'올인원', t:'대표님'}, {s:'2024타경37260', m:'한지영', g:'수익', t:'대표님'} ] },
   { date:'06/05 (금)', key:'06/05', wait:[ {s:'2024타경36010', m:'조현우', g:'월세', t:'전부쌤'}, {s:'2024타경36077', m:'강태오', g:'수익', t:'대표님'} ], done:[ {s:'2024타경35001', m:'한지영', g:'수익', t:'대표님'}, {s:'2024타경35080', m:'서지후', g:'올인원', t:'대표님'}, {s:'2024타경35140', m:'조현우', g:'월세', t:'전부쌤'} ] },
@@ -86,12 +91,24 @@ const DATA = [
 ];
 const gChip = g => { const m={'수익':'bg-emerald-100 text-emerald-700','월세':'bg-amber-100 text-amber-700','올인원':'bg-violet-100 text-violet-700'}; return `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold ${m[g]||'bg-gray-100 text-gray-600'}">${g}</span>`; };
 
+// 비고 있는 물건이 포함된 셀에 📝 심볼 (전달담당자가 인지) — hover 시 회원·비고 표시
+// 비고 있는 셀에 절대배치 메모 아이콘 (숫자 정렬 안 깨짐). hover 시 회원·비고 표시.
+function noteSym(items){
+  const noted=items.filter(it=>it.n);
+  if(!noted.length) return '';
+  const tip=('추천비고 '+noted.length+'건\n'+noted.map(it=>`· ${it.m}: ${it.n}`).join('\n')).replace(/"/g,'&quot;').replace(/\n/g,'&#10;');
+  return `<span class="note-ic" title="${tip}"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M5 3h14a1 1 0 0 1 1 1v11.6L15.6 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm15 13.2V4.6H4.6v14.8h10.4v-3.2h5zM7 7.6h10v1.5H7V7.6zm0 3.4h10v1.5H7V11zm0 3.4h6v1.5H7v-1.5z"/></svg></span>`;
+}
+function numCell(count, items, color, key, kind){
+  if(!count) return '<span class="text-gray-300">0</span>';
+  return `<span class="numwrap"><span class="num ${color}" onclick="drill('${key}','${kind}')">${count}</span>${noteSym(items)}</span>`;
+}
 function render(){
   document.getElementById('cardBody').innerHTML = DATA.map((r,i)=>`
     <tr class="border-b border-gray-100 ${i===0?'bg-indigo-50/40':''}">
       <td class="py-2 pl-1 text-gray-700 ${i===0?'font-bold':''}">${r.date}</td>
-      <td class="text-center">${r.wait.length? `<span class="num text-amber-600" onclick="drill('${r.key}','wait')">${r.wait.length}</span>` : '<span class="text-gray-300">0</span>'}</td>
-      <td class="text-center">${r.done.length? `<span class="num text-indigo-600" onclick="drill('${r.key}','done')">${r.done.length}</span>` : '<span class="text-gray-300">0</span>'}</td>
+      <td class="text-center">${numCell(r.wait.length, r.wait, 'text-amber-600', r.key, 'wait')}</td>
+      <td class="text-center">${numCell(r.done.length, r.done, 'text-indigo-600', r.key, 'done')}</td>
     </tr>`).join('');
   document.getElementById('totWait').textContent = DATA.reduce((s,r)=>s+r.wait.length,0);
   document.getElementById('totDone').textContent = DATA.reduce((s,r)=>s+r.done.length,0);
