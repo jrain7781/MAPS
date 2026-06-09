@@ -7190,7 +7190,12 @@ MJ 이정우 팀장
         });
     }
 
+    // [이중저장 방지] 저장(updateData/createData) 진행 중 플래그 — 버튼/입찰가Enter/담당자Enter 모든 경로 공용
+    //  → 콜백(성공/실패)에서 반드시 해제. google.script.run 은 둘 중 하나는 반드시 호출되므로 stuck 안 됨
+    let _isSavingItem = false;
+
     function handleModalUpdate() {
+        if (_isSavingItem) { showStatus('저장 중입니다. 잠시만 기다려 주세요.', 'warning'); return; }
         if (!modalFormId || !modalFormInDate || !modalFormSakunNo || !modalFormCourt) {
             showStatus('필수 입력 항목을 확인해 주세요.', 'error');
             return;
@@ -7258,6 +7263,7 @@ MJ 이정우 팀장
             return;
         }
 
+        _isSavingItem = true;
         const modalSaveBtn = document.querySelector('#modal-detail button[onclick="handleModalUpdate()"]');
         if (modalSaveBtn) modalSaveBtn.disabled = true;
 
@@ -7298,6 +7304,7 @@ MJ 이정우 팀장
 
         google.script.run
             .withSuccessHandler(result => {
+                _isSavingItem = false;
                 if (modalSaveBtn) modalSaveBtn.disabled = false;
                 if (result.success) {
                     showStatus('저장이 최종 완료되었습니다.', 'success');
@@ -7335,6 +7342,7 @@ MJ 이정우 팀장
                 }
             })
             .withFailureHandler(error => {
+                _isSavingItem = false;
                 if (modalSaveBtn) modalSaveBtn.disabled = false;
                 showStatus(`수정 오류: ${error.message}`, 'error');
                 loadData(true); // Optimistic Update 오염 복구
@@ -7380,6 +7388,7 @@ MJ 이정우 팀장
     }
 
     function handleFormSubmit() {
+        if (_isSavingItem) { showStatus('저장 중입니다. 잠시만 기다려 주세요.', 'warning'); return; }
         if (!dataForm || !dataForm.reportValidity()) {
             showStatus('필수 입력 항목을 확인해 주세요.', 'error');
             return;
@@ -7459,11 +7468,13 @@ MJ 이정우 팀장
             bidState = '신규';
         }
 
+        _isSavingItem = true;
         const mainSaveBtn = document.querySelector('#data-form button[onclick="handleFormSubmit()"]');
         if (mainSaveBtn) mainSaveBtn.disabled = true;
 
         toggleLoading(true);
         const successHandler = (result) => {
+            _isSavingItem = false;
             if (mainSaveBtn) mainSaveBtn.disabled = false;
             if (result.success) {
                 showStatus('저장이 최종 완료되었습니다.', 'success');
@@ -7514,6 +7525,7 @@ MJ 이정우 팀장
             }
         };
         const errorHandler = (error) => {
+            _isSavingItem = false;
             if (mainSaveBtn) mainSaveBtn.disabled = false;
             toggleLoading(false);
             showStatus(`작업 처리 중 오류: ${error.message}`, 'error');
