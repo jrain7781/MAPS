@@ -4131,6 +4131,26 @@
                 widths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w; });
             }
         } catch (e) { }
+
+        // [회원관리] 좌(목록) ↔ 우(상세) 스플리터 드래그 — PC별 localStorage 저장
+        (function () {
+            const pane = document.getElementById('memberListPane');
+            const splitter = document.getElementById('memberSplitter');
+            const container = document.getElementById('MemberManagement');
+            if (!pane || !splitter || !container) return;
+            const isDesktop = () => window.matchMedia('(min-width: 768px)').matches;
+            const apply = w => { pane.style.flex = '0 0 ' + w + 'px'; };
+            try { const w = parseInt(localStorage.getItem('memberListW')); if (w && isDesktop()) apply(w); } catch (e) { }
+            let drag = false, lastW = 0;
+            splitter.addEventListener('mousedown', e => { if (!isDesktop()) return; drag = true; document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize'; e.preventDefault(); });
+            window.addEventListener('mousemove', e => {
+                if (!drag) return;
+                const rect = container.getBoundingClientRect();
+                lastW = Math.max(300, Math.min(rect.width - 340, e.clientX - rect.left));
+                apply(lastW);
+            });
+            window.addEventListener('mouseup', () => { if (!drag) return; drag = false; document.body.style.userSelect = ''; document.body.style.cursor = ''; if (lastW) { try { localStorage.setItem('memberListW', String(lastW)); } catch (e) { } } });
+        })();
     }
 
     function _saveDashLayout() {
