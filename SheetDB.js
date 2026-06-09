@@ -8863,6 +8863,33 @@ function setMisWinPrice_(memberId, itemId, winPrice) {
 }
 
 /**
+ * [돈클] 회원별 물건상태 카운트 — members_item_status GROUP BY (member_id, status)
+ * 회원관리 그리드 추천/입찰/낙찰/불가 카운트 컬럼용. 클라이언트 google.script.run 호출.
+ * @returns {Object} { member_id: {추천,입찰,낙찰,불가} }
+ */
+function getDonkleMemberCounts() {
+  try {
+    const sheet = ensureMembersItemStatusSheet_();
+    const last = sheet.getLastRow();
+    const out = {};
+    if (last >= 2) {
+      const data = sheet.getRange(2, 1, last - 1, MIS_HEADERS.length).getValues();
+      for (let i = 0; i < data.length; i++) {
+        const mid = String(data[i][1] || '').trim();   // member_id
+        const st = String(data[i][9] || '').trim();     // status
+        if (!mid || !st) continue;
+        if (!out[mid]) out[mid] = { '추천': 0, '입찰': 0, '낙찰': 0, '불가': 0 };
+        if (out[mid][st] != null) out[mid][st]++;
+      }
+    }
+    return out;
+  } catch (e) {
+    Logger.log('[getDonkleMemberCounts] ' + e.toString());
+    return {};
+  }
+}
+
+/**
  * 불가확인용 — 오늘 ~ 오늘+7일 입찰건의 (사건번호, 입찰일자, 법원) 3키 리스트 반환.
  * 매니저 「불가확인」 탭의 "MAPS 7일 리스트 불러오기" 버튼이 호출.
  * (js-app 의 handleDownload7DaysList 서버판 — 동일 필터/포맷)

@@ -13379,12 +13379,22 @@ MJ 이정우 팀장
                     window._pendingTelegramMemberIds = null;
                 }
                 filterMembersNew();
+                loadDonkleCounts();   // 회원별 추천/입찰/낙찰/불가 카운트 (members_item_status)
             })
             .withFailureHandler(err => {
                 showStatus('회원 데이터 로드 실패: ' + err.message, 'error');
-                if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-red-500">로드 실패</td></tr>';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="p-4 text-center text-red-500">로드 실패</td></tr>';
             })
             .readAllMembersNew();
+    }
+
+    // [돈클] 회원별 물건상태 카운트 로드 → window.donkleCounts → 재렌더
+    function loadDonkleCounts() {
+        if (!(window.google && google.script && google.script.run)) return;
+        google.script.run
+            .withSuccessHandler(c => { window.donkleCounts = c || {}; try { filterMembersNew(); } catch (e) { } })
+            .withFailureHandler(() => { })
+            .getDonkleMemberCounts();
     }
 
     function loadClassDropdownOptions() {
@@ -13665,11 +13675,13 @@ MJ 이정우 팀장
         const tbody = document.getElementById('memberDataTableBody');
         if (!tbody) return;
         if (members.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-gray-500">데이터가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" class="p-4 text-center text-gray-500">데이터가 없습니다.</td></tr>';
             return;
         }
         tbody.innerHTML = members.map(m => {
             const cls = classMap[String(m.class_id)] || {};
+            const dc = (window.donkleCounts || {})[String(m.member_id)] || {};
+            const cCell = (v, color) => v ? `<b class="${color}">${v}</b>` : '<span class="text-gray-300">0</span>';
             const hasChatId = m.telegram_chat_id ? 'O' : '';
             const telEnabled = (m.telegram_enabled || '').toUpperCase() === 'Y';
             const telCell = telEnabled
@@ -13685,7 +13697,11 @@ MJ 이정우 팀장
                 <td class="px-2 py-2 text-center text-sm">${escapeHtml(cls.class_type || '')}</td>
                 <td class="px-2 py-2 text-center text-sm">${escapeHtml(cls.class_name || '')}</td>
                 <td class="px-2 py-2 text-center text-sm">${escapeHtml(cls.class_loc || '')}</td>
-                <td class="px-2 py-2 text-center text-sm">${m.kakao_name ? `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded">${escapeHtml(m.kakao_name)}</span>` : '<span class="text-gray-300 text-xs">-</span>'}</td>
+                <td class="px-2 py-2 text-center text-sm whitespace-nowrap">${m.kakao_name ? `<span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded inline-block max-w-[90px] truncate align-middle" title="${escapeHtml(m.kakao_name)}">${escapeHtml(m.kakao_name)}</span>` : '<span class="text-gray-300 text-xs">-</span>'}</td>
+                <td class="px-1 py-2 text-center text-sm">${cCell(dc['추천'], 'text-amber-600')}</td>
+                <td class="px-1 py-2 text-center text-sm">${cCell(dc['입찰'], 'text-emerald-600')}</td>
+                <td class="px-1 py-2 text-center text-sm">${cCell(dc['낙찰'], 'text-blue-600')}</td>
+                <td class="px-1 py-2 text-center text-sm">${cCell(dc['불가'], 'text-gray-700')}</td>
             </tr>`;
         }).join('');
     }
