@@ -4438,6 +4438,61 @@
         }
     }
 
+    // [돈클] 대시보드 '돈클 추천요청 현황' 카드 — allBiddingData(items) 클라이언트 집계
+    //   전달대기 = stu_member='추천' & chuchen_state≠'전달완료' (reg_date 기준일)
+    //   추천완료 = chuchen_state='전달완료' (chuchen_date 기준일)
+    //   최근 7일(오늘 포함, 역순), 담당=m_name_id 필터. 숫자클릭 → 입찰물건관리 item_ids 드릴다운
+    function renderDonkleRequestDashboard() {
+        const body = document.getElementById('donkleReqBody');
+        if (!body) return;
+        const sel = document.getElementById('donkleReqFilterMember');
+        const fm = sel ? sel.value : '대표님';
+        const ymd = v => {
+            if (!v) return '';
+            let s = String(v).trim();
+            if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+            const d = s.replace(/[^0-9]/g, '');
+            if (d.length >= 8) return d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8);
+            if (d.length === 6) return '20' + d.slice(0, 2) + '-' + d.slice(2, 4) + '-' + d.slice(4, 6);
+            return '';
+        };
+        const memOk = it => { const m = it.m_name_id || ''; return (fm === 'All' || fm === '') || m === fm; };
+        const days = []; const t = new Date(); t.setHours(0, 0, 0, 0);
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(t); d.setDate(t.getDate() - i);
+            const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            days.push({ key, d, i });
+        }
+        const ids = {}; days.forEach(x => { ids[x.key + '_wait'] = []; ids[x.key + '_done'] = []; }); ids['all_wait'] = []; ids['all_done'] = [];
+        (allBiddingData || []).forEach(it => {
+            if (!memOk(it)) return;
+            const stu = String(it.stu_member || '').trim();
+            const cs = String(it.chuchen_state || '').trim();
+            if (stu === '추천' && cs !== '전달완료') { const k = ymd(it.reg_date); if (ids[k + '_wait']) { ids[k + '_wait'].push(it.id); ids['all_wait'].push(it.id); } }
+            if (cs === '전달완료') { const k = ymd(it.chuchen_date); if (ids[k + '_done']) { ids[k + '_done'].push(it.id); ids['all_done'].push(it.id); } }
+        });
+        window._donkleReqIds = ids;
+        const dn = ['일', '월', '화', '수', '목', '금', '토'];
+        body.innerHTML = days.map(x => {
+            const w = ids[x.key + '_wait'].length, done = ids[x.key + '_done'].length;
+            const mm = String(x.d.getMonth() + 1).padStart(2, '0'), dd = String(x.d.getDate()).padStart(2, '0');
+            const label = (x.i === 0 ? '오늘 ' : '') + mm + '/' + dd + ' (' + dn[x.d.getDay()] + ')';
+            const wc = w ? `<span class="text-amber-600 font-bold cursor-pointer hover:underline" onclick="drillDonkleRequest('${x.key}','wait')">${w}</span>` : '<span class="text-gray-300">0</span>';
+            const dc = done ? `<span class="text-indigo-600 font-bold cursor-pointer hover:underline" onclick="drillDonkleRequest('${x.key}','done')">${done}</span>` : '<span class="text-gray-300">0</span>';
+            return `<tr class="border-b border-gray-100 hover:bg-gray-50 ${x.i === 0 ? 'bg-indigo-50/40' : ''}"><td class="py-2 px-2 text-left ${x.i === 0 ? 'font-bold text-gray-800' : 'text-gray-600'}">${label}</td><td class="py-2 px-1 text-center">${wc}</td><td class="py-2 px-1 text-center">${dc}</td></tr>`;
+        }).join('');
+        const tw = document.getElementById('donkleReqTotWait'), tdn = document.getElementById('donkleReqTotDone');
+        if (tw) tw.textContent = ids['all_wait'].length;
+        if (tdn) tdn.textContent = ids['all_done'].length;
+    }
+    function drillDonkleRequest(dayKey, kind) {
+        const ids = (window._donkleReqIds || {})[dayKey + '_' + kind] || [];
+        if (!ids.length) return;
+        dashboardFilter = { active: true, date: '', type: 'item_ids', status: ids, manager: null, label: '돈클 ' + (kind === 'wait' ? '전달대기' : '추천완료') };
+        navigateTo('ItemManagement');
+        setTimeout(() => { if (typeof applyFilters === 'function') applyFilters(); }, 200);
+    }
+
     // ── 업무현황 ──────────────────────────────────────────
     var _autoApprovalStatsCache = null;
     function loadAutoApprovalStats(forceRefresh) {
