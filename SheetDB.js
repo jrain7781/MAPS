@@ -9376,24 +9376,30 @@ function registerDonkleRecommendation(memberId, memberName, itemIds) {
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, message: '물건 없음' };
     var allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
-    var todayIso = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var batchTs = 'REC' + (new Date().getTime());
+    var historyEntries = [];
     var cnt = 0;
     itemIds.forEach(function (id) {
       var idx = allIds.findIndex(function (v) { return String(v) === String(id); });
       if (idx < 0) return;
       var rowNum = idx + 2;
-      var curStu = String(sheet.getRange(rowNum, 5).getValue() || '').trim();
+      var oldStu = String(sheet.getRange(rowNum, 5).getValue() || '').trim();
+      var oldMid = String(sheet.getRange(rowNum, 9).getValue() || '').trim();
+      var newMid = String(memberId || ''), newMname = String(memberName || '');
       sheet.getRange(rowNum, 5).setValue('추천');                    // E: stu_member
-      sheet.getRange(rowNum, 9).setValue(String(memberId || ''));    // I: member_id
-      sheet.getRange(rowNum, 7).setValue(String(memberName || ''));  // G: m_name
-      sheet.getRange(rowNum, 10).setValue(todayIso);                 // J: reg_date = 추천요청일(오늘) → 대시보드 전달대기 버킷
-      if (curStu !== '추천') {
+      sheet.getRange(rowNum, 9).setValue(newMid);                    // I: member_id
+      sheet.getRange(rowNum, 7).setValue(newMname);                  // G: m_name
+      if (oldStu !== '추천') {
         sheet.getRange(rowNum, 17).setValue(''); // Q: chuchen_state
         sheet.getRange(rowNum, 18).setValue(''); // R: chuchen_date
         sheet.getRange(rowNum, 20).setValue(''); // T: bid_datetime_2
       }
+      // [핵심] 정상 수정 경로와 동일하게 히스토리(FIELD_CHANGE) 기록 → telegram_requests에 추천요청 시각 남김
+      if (oldStu !== '추천') historyEntries.push({ action: 'FIELD_CHANGE', item_id: String(id), member_id: newMid, member_name: newMname, field_name: 'stu_member', from_value: oldStu, to_value: '추천', trigger_type: 'web-rec', req_id: batchTs });
+      if (oldMid !== newMid) historyEntries.push({ action: 'FIELD_CHANGE', item_id: String(id), member_id: newMid, member_name: newMname, field_name: 'member_id', from_value: oldMid, to_value: newMid, trigger_type: 'web-rec', req_id: batchTs });
       cnt++;
     });
+    if (historyEntries.length > 0 && typeof writeItemHistoryBatch_ === 'function') writeItemHistoryBatch_(historyEntries);
     SpreadsheetApp.flush();
     return { success: true, count: cnt };
   } catch (e) { return { success: false, message: String(e) }; }
