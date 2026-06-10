@@ -9294,8 +9294,9 @@ function getDonkleRequestDashboard() {
     recEvents.forEach(function (e) { if (!deliveredKey[e.key]) emit(e.d, 'wait', e.itemId); });
     doneEvents.forEach(function (e) { emit(e.d, 'done', e.itemId); });
 
-    // ── 입찰등록: members_item_status status='입찰' (매일 오전 accrueBidsDaily 적립) — recorded_at(적립일) 기준 ──
-    //   event_date(=입찰일자)는 보통 미래라 최근7일 윈도우에 안 잡힘 → 배치가 돈 날(recorded_at)로 카운팅.
+    // ── 입찰등록: members_item_status status='입찰' (매일 오전 accrueBidsDaily가 in_date<오늘 적립) ──
+    //   ★날짜 기준 = event_date(=입찰일자 in_date), recorded_at(배치 돈 날) 아님.
+    //   배치는 어제까지의 입찰을 적립하므로 in_date는 과거(최근7일 윈도우에 들어옴) → 실제 입찰일에 카운팅.
     try {
       var misSheet = ensureMembersItemStatusSheet_();
       if (misSheet.getLastRow() >= 2) {
@@ -9305,8 +9306,11 @@ function getDonkleRequestDashboard() {
           if (String(r[SX['status']] || '').trim() !== '입찰') return;
           var mid = String(r[SX['member_id']] || '').trim();
           if (!mid || !donkleSet[mid]) return;
-          var bd = parseDate(r[SX['recorded_at']]);
-          if (bd && bd >= winStart) emit(bd, 'bid', String(r[SX['item_id']] || '').trim());
+          var bdIso = String(r[SX['event_date']] || '').trim() || _inDateToIso_(r[SX['in_date']]);
+          var mm = /^(\d{4})-(\d{2})-(\d{2})/.exec(bdIso);
+          if (!mm) return;
+          var bd = new Date(+mm[1], +mm[2] - 1, +mm[3]);   // 로컬 자정 (tz 안전)
+          if (bd >= winStart) emit(bd, 'bid', String(r[SX['item_id']] || '').trim());
         });
       }
     } catch (eMis) { Logger.log('[getDonkleRequestDashboard] MIS 입찰 스캔: ' + eMis); }
