@@ -8945,6 +8945,15 @@ function getMemberItemStatusRows(memberId) {
     return rows;
   } catch (e) { Logger.log('[getMemberItemStatusRows] ' + e.toString()); return []; }
 }
+/** [회원화면] 토큰으로 members_item_status 행 조회 — 회원 물건이력(추천/입찰/낙찰/불가) 연동 */
+function getMemberItemStatusRowsByToken(token) {
+  try {
+    var member = getMemberByToken(token);
+    if (!member || !member.member_id) return { success: false, list: [] };
+    var rows = getMemberItemStatusRows(String(member.member_id));
+    return { success: true, list: rows };
+  } catch (e) { Logger.log('[getMemberItemStatusRowsByToken] ' + e.toString()); return { success: false, list: [], message: String(e) }; }
+}
 /** mis_id 행 삭제 (사람이 UI에서 수동) */
 function deleteMisRow(misId) {
   try {

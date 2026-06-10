@@ -13958,11 +13958,13 @@ MJ 이정우 팀장
         }
         if (statusEl) statusEl.textContent = '조회 중...';
         tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
+        const _dcDbg = (window.donkleCounts || {})[String(memberId)] || {};
         google.script.run
             .withSuccessHandler(function (rows) {
                 window.misRowsCache = rows || [];
                 renderMisRows();
-                if (statusEl) statusEl.textContent = '';
+                // [임시 진단] 조회 member_id / 서버결과 / 그리드카운트 불일치 추적
+                if (statusEl) statusEl.textContent = `member_id=${memberId} · 결과 ${(rows||[]).length}건 · 그리드카운트(추천${_dcDbg['추천']||0}/입찰${_dcDbg['입찰']||0}/낙찰${_dcDbg['낙찰']||0}/불가${_dcDbg['불가']||0})`;
             })
             .withFailureHandler(function (err) {
                 if (statusEl) statusEl.textContent = '오류: ' + err.toString();
@@ -22200,7 +22202,7 @@ MJ 이정우 팀장
        ============================================= */
     var mD = new Date(); // 현재 캘린더 월
     var mS = [];         // [수정] 다중 선택을 위해 배열로 변경
-    var fS = ['입찰', '추천', '폐기', '불가']; // 활성 필터 (회원화면: 검증 숨김 / 폐기·불가 표시)
+    var fS = ['입찰', '추천', '낙찰', '폐기', '불가']; // 활성 필터 (회원화면: 검증 숨김 / 낙찰·폐기·불가 표시)
     var tR = 'today';    // 범위: 'today'(오늘부터) 또는 'all'(전체)
 
     // [전역 변수] 오늘 날짜 문자열 (YYMMDD) - rCal과 selD 공용
@@ -22281,7 +22283,7 @@ MJ 이정우 팀장
 
         // 데이터 요약: 숫자는 오늘부터/전체(tR)에만 반응하고 필터(fS)에는 반응하지 않음
         var counts = {};
-        var counts_month = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
+        var counts_month = { '입찰': 0, '추천': 0, '낙찰': 0, '폐기': 0, '불가': 0 };
 
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
@@ -22297,7 +22299,7 @@ MJ 이정우 팀장
                     counts_month[s]++;
                 }
 
-                if (!counts[dt]) counts[dt] = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
+                if (!counts[dt]) counts[dt] = { '입찰': 0, '추천': 0, '낙찰': 0, '폐기': 0, '불가': 0 };
                 if (counts[dt].hasOwnProperty(s)) counts[dt][s]++;
             }
         });
@@ -22309,6 +22311,7 @@ MJ 이정우 팀장
                 '(' +
                 '<span class="ms-it bid">입찰 ' + (counts_month['입찰'] || 0) + '</span>' +
                 ' <span class="ms-it rec">추천 ' + (counts_month['추천'] || 0) + '</span>' +
+                ' <span class="ms-it" style="color:#d97706">낙찰 ' + (counts_month['낙찰'] || 0) + '</span>' +
                 ' <span class="ms-it" style="color:#dc2626">폐기 ' + (counts_month['폐기'] || 0) + '</span>' +
                 ' <span class="ms-it chg">불가 ' + (counts_month['불가'] || 0) + '</span>' +
                 ')';
@@ -22339,7 +22342,7 @@ MJ 이정우 팀장
             var isPastToday = (tR === 'today' && dS < tS);
 
             var items = counts[dS] || {};
-            var has = (items['입찰'] > 0 || items['추천'] > 0 || items['폐기'] > 0 || items['불가'] > 0);
+            var has = (items['입찰'] > 0 || items['추천'] > 0 || items['낙찰'] > 0 || items['폐기'] > 0 || items['불가'] > 0);
             var isT = (dS === tS);
             var isS = (mS.indexOf(dS) > -1);
 
@@ -22348,7 +22351,7 @@ MJ 이정우 팀장
             if (!isPastToday) {
                 var sOrder = ['입찰', '추천', '폐기', '불가'];
                 var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '폐기': '#dc2626', '불가': '#1f2937' };
-                var shapes = { '입찰': '', '추천': 'tri', '폐기': 'cir', '불가': 'sq' };
+                var shapes = { '입찰': '', '추천': 'tri', '낙찰': 'cir', '폐기': 'cir', '불가': 'sq' };
 
                 var lastS = '';
                 sOrder.forEach(function (s) {
@@ -22396,8 +22399,8 @@ MJ 이정우 팀장
         var nY = String(nM.getFullYear()).slice(-2);
         var nM_s = String(nM.getMonth() + 1).padStart(2, '0');
 
-        var pC = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
-        var nC = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
+        var pC = { '입찰': 0, '추천': 0, '낙찰': 0, '폐기': 0, '불가': 0 };
+        var nC = { '입찰': 0, '추천': 0, '낙찰': 0, '폐기': 0, '불가': 0 };
 
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
@@ -22411,9 +22414,9 @@ MJ 이정우 팀장
 
         pEl.innerHTML = '';
         nEl.innerHTML = '';
-        var sOrder = ['입찰', '추천', '폐기', '불가'];
-        var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '폐기': '#dc2626', '불가': '#1f2937' };
-        var shapes = { '입찰': 'cir', '추천': 'tri', '폐기': 'cir', '불가': 'sq' };
+        var sOrder = ['입찰', '추천', '낙찰', '폐기', '불가'];
+        var colors = { '입찰': '#4f46e5', '추천': '#fb923c', '낙찰': '#d97706', '폐기': '#dc2626', '불가': '#1f2937' };
+        var shapes = { '입찰': 'cir', '추천': 'tri', '낙찰': 'cir', '폐기': 'cir', '불가': 'sq' };
 
         sOrder.forEach(function (s) {
             if (pC[s] > 0) {
@@ -22472,7 +22475,7 @@ MJ 이정우 팀장
     // 입찰리스트 (MemberItemList) - 상태 필터 버튼 + 카드 리스트
     // =============================================================================
 
-    var ilFS = ['입찰', '추천', '폐기', '불가']; // 입찰리스트 상태 필터 (회원화면: 검증 숨김 / 폐기·불가 표시)
+    var ilFS = ['입찰', '추천', '낙찰', '폐기', '불가']; // 입찰리스트 상태 필터 (회원화면: 검증 숨김 / 낙찰·폐기·불가 표시)
 
     /** 필터 버튼 토글 */
     function ilTogF(f) {
@@ -22517,7 +22520,7 @@ MJ 이정우 팀장
         if (!el) return;
 
         // 카운트 계산
-        var counts = { '입찰': 0, '추천': 0, '폐기': 0, '불가': 0 };
+        var counts = { '입찰': 0, '추천': 0, '낙찰': 0, '폐기': 0, '불가': 0 };
         allBiddingData.forEach(function (item) {
             var dt = String(item['in-date'] || '');
             if (dt < todayYYMMDD) return; // 오늘 이전 날짜 제외
@@ -22654,27 +22657,30 @@ MJ 이정우 팀장
         google.script.run
             .withSuccessHandler(function (res) {
                 _cancelHistoryLoaded = true;
-                var list = res.list || [];
-                if (statusEl) statusEl.textContent = '최근 1년 ' + list.length + '건';
+                var list = (res && res.list) || [];   // members_item_status 행 (추천/입찰/낙찰/불가)
+                if (statusEl) statusEl.textContent = '총 ' + list.length + '건';
                 if (!tbody) return;
                 if (list.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400 text-sm">이력이 없습니다.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-gray-400 text-sm">추천/낙찰 내역이 없습니다.</td></tr>';
                     return;
                 }
+                var _fmtYmd = function (v) { var d = String(v || '').replace(/[^0-9]/g, ''); return d.length >= 8 ? d.substring(2, 8) : (d.length === 6 ? d : (String(v || '').substring(2, 10).replace(/-/g, ''))); };
                 var html = '';
                 list.forEach(function (r, idx) {
-                    // 카테고리별 컬러
+                    var st = String(r.status || '');
                     var catClass = 'text-gray-500';
-                    if (r.category === '추천') catClass = 'text-blue-500';
-                    else if (r.category === '입찰') catClass = 'text-green-600';
-                    else if (r.category === '취소') catClass = 'text-red-500';
-
+                    if (st === '추천') catClass = 'text-blue-500';
+                    else if (st === '입찰') catClass = 'text-green-600';
+                    else if (st === '낙찰') catClass = 'text-amber-600 font-extrabold';
+                    else if (st === '불가') catClass = 'text-gray-700';
+                    var evd = _fmtYmd(r.event_date || r.recorded_at);
+                    var ind = _fmtYmd(r.in_date);
                     html += '<tr class="border-b border-gray-100 hover:bg-gray-50">'
                         + '<td class="px-3 py-2 text-center text-gray-400 text-xs">' + (idx + 1) + '</td>'
-                        + '<td class="px-3 py-2 text-center text-xs font-bold ' + catClass + '">' + r.category + '</td>'
-                        + '<td class="px-3 py-2 text-center text-xs text-gray-600 font-mono">' + String(r.date || '').substring(2, 10).replace(/-/g, '') + '</td>'
-                        + '<td class="px-3 py-2 text-center text-xs text-gray-600 font-mono">' + (r.in_date || '-') + '</td>'
-                        + '<td class="px-3 py-2 text-left text-xs font-medium text-gray-700">' + (r.sakun_no || '-') + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs font-bold ' + catClass + '">' + st + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs text-gray-600 font-mono">' + (evd || '-') + '</td>'
+                        + '<td class="px-3 py-2 text-center text-xs text-gray-600 font-mono">' + (ind || '-') + '</td>'
+                        + '<td class="px-3 py-2 text-left text-xs font-medium text-gray-700">' + (r.sakun_no || '-') + (st === '낙찰' && r.win_price ? ' <span class="text-amber-600 font-bold">· 낙찰가 ' + Number(String(r.win_price).replace(/[^0-9]/g, '') || 0).toLocaleString() + '</span>' : '') + '</td>'
                         + '<td class="px-3 py-2 text-center text-xs text-gray-500">' + (r.court || '-') + '</td>'
                         + '</tr>';
                 });
@@ -22684,7 +22690,7 @@ MJ 이정우 팀장
                 if (statusEl) statusEl.textContent = '로드 실패: ' + e;
                 if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-red-400">데이터 로드에 실패했습니다.</td></tr>';
             })
-            .getMemberItemHistoryByToken(APP_CTX.token, 12);
+            .getMemberItemStatusRowsByToken(APP_CTX.token);
     }
 
     /** 현재 활성 회원 뷰를 새로고침 */
