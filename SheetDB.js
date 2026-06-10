@@ -204,7 +204,15 @@ function readAllData() {
     }
   }
 
-  return values.map(row => {
+  // members_note(회원전달내용) — ITEM_HEADERS 외 끝열, 헤더명으로 위치 탐색 후 부착 (기존 매핑 불변)
+  let _mnCol = -1;
+  try {
+    const _hdr = sheet.getRange(1, 1, 1, maxCols).getValues()[0];
+    for (let _c = 0; _c < _hdr.length; _c++) { if (String(_hdr[_c]).trim() === 'members_note') { _mnCol = _c + 1; break; } }
+  } catch (e) {}
+  const _mnVals = (_mnCol > 0) ? sheet.getRange(2, _mnCol, lastRow - 1, 1).getValues() : null;
+
+  return values.map((row, _ri) => {
     let rowData = {};
 
     // 0~10번 인덱스 매핑
@@ -226,6 +234,8 @@ function readAllData() {
     rowData['image_id'] = (row.length > 12) ? (row[12] || '') : '';
     // [추가] 14번째 열(13번 인덱스) note(비고) 매핑
     rowData['note'] = (row.length > 13) ? (row[13] || '') : '';
+    // [추가] members_note(회원전달내용) — 끝열, 텔레그램/카카오 [물건전달사항]
+    rowData['members_note'] = _mnVals ? String((_mnVals[_ri] && _mnVals[_ri][0]) || '') : '';
     // [추가] 15번째 열(14번 인덱스) m_name2(명의 표시값) 매핑
     rowData['m_name2'] = (row.length > 14) ? (row[14] || '') : '';
     // [추가] 16번째 열(15번 인덱스) auction_id 매핑
@@ -7305,7 +7315,7 @@ function _ensureKakaoSheet_() {
     sheet = ss.insertSheet(KAKAO_TEMPLATES_SHEET_NAME);
     sheet.getRange(1, 1, 1, 5).setValues([['id', 'name', 'content', 'type', 'member_id']]);
     sheet.getRange(2, 1, 2, 5).setValues([
-      ['check', '추천물건안내', '안녕하세요?\n엠제이경매스쿨입니다.\n\n추천물건 전달드립니다.\n입찰 여부 회신 부탁드려요~ (48시간 이후 자동취소)\n\n====================================\n회 원 명:    {{이름}}\n입찰일자:   {{입찰일자}}\n사건번호:   {{사건번호}}\n법     원:   {{법원}}\n====================================', 'public', ''],
+      ['check', '추천물건안내', '안녕하세요?\n엠제이경매스쿨입니다.\n\n추천물건 전달드립니다.\n입찰 여부 회신 부탁드려요~ (48시간 이후 자동취소)\n\n====================================\n회 원 명:    {{이름}}\n입찰일자:   {{입찰일자}}\n사건번호:   {{사건번호}}\n법     원:   {{법원}}\n====================================\n[물건전달사항]\n{{물건전달사항}}', 'public', ''],
       ['guide', '입찰가 안내', '안녕하세요?\n엠제이경매스쿨입니다.\n\n입찰가 전달드립니다. 회원님의 낙찰을 기원드립니다!\n\n====================================\n회 원 명:    {{이름}}\n입찰일자:   {{입찰일자}}\n사건번호:   {{사건번호}}\n법     원:   {{법원}}\n====================================\n입 찰 가:    {{입찰가}}원\n====================================', 'public', '']
     ]);
     SpreadsheetApp.flush();
