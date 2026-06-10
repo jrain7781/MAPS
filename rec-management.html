@@ -208,12 +208,13 @@
       </div>
       <div class="flex-1 min-h-0 overflow-y-auto">
       <table id="queueTable" class="w-full text-sm" style="table-layout:fixed">
-        <colgroup id="queueColgroup"><col><col><col><col><col><col><col><col><col><col><col></colgroup>
+        <colgroup id="queueColgroup"><col><col><col><col><col><col><col><col><col><col><col><col></colgroup>
         <thead class="sticky top-0 z-10 bg-white"><tr class="text-gray-500 border-b border-gray-200 text-[12px] select-none">
           <th class="text-center py-2 font-semibold w-7"><input type="checkbox" id="selAll" onclick="REC.toggleSelAll(this.checked)" title="보이는 회원 전체 선택"></th>
           <th class="text-center py-2 font-semibold">순위</th>
           <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('life')">상태<span id="qa-life"></span></th>
-          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('name')">회원<span id="qa-name"></span></th>
+          <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('group')">그룹<span id="qa-group"></span></th>
+          <th class="text-left py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('name')">회원<span id="qa-name"></span></th>
           <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('sub')">구분<span id="qa-sub"></span></th>
           <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('total')">누적<span id="qa-total"></span></th>
           <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('last')">마지막<span id="qa-last"></span></th>
@@ -393,7 +394,7 @@
   let TELE_OFF = new Set();
   const teleBadge = name => `<span class="inline-grid place-items-center w-4 h-4 rounded-full text-[9px] font-bold align-middle mr-1 ${TELE_OFF.has(name)?'bg-gray-300 text-white':'bg-sky-500 text-white'}" title="${TELE_OFF.has(name)?'텔레그램 미연결':'텔레그램 연결됨'}">T</span>`;
   // 추천 A/B 그룹 드롭다운 (회원명 앞)
-  const groupSelect = m => `<select onclick="event.stopPropagation()" onchange="REC.setGroupSel('${m.name}',this.value)" title="추천 A/B 그룹" class="group-sel group-${m.group||'none'} focus:outline-none mr-1 align-middle">
+  const groupSelect = m => `<select onclick="event.stopPropagation()" onchange="REC.setGroupSel('${m.name}',this.value)" title="추천 A/B 그룹" class="group-sel group-${m.group||'none'} focus:outline-none align-middle">
       <option value="" ${!m.group?'selected':''}>·</option>
       <option value="A" ${m.group==='A'?'selected':''}>A</option>
       <option value="B" ${m.group==='B'?'selected':''}>B</option>
@@ -505,7 +506,7 @@
     renderGroupSummary();
     let list = DK.filter(passFilter).map(m=>({m,k:calc(m)}));
     if(qSort.key){
-      const d=qSort.dir, g=o=>{switch(qSort.key){case 'name':return o.m.name;case 'life':return o.m.status;case 'sub':return o.m.sub;case 'total':return o.k.total;case 'last':return o.k.last||'';case 'next':return o.k.next?o.k.next.getTime():0;case 'status':return o.k.dleft==null?1e9:o.k.dleft;case 'wait':return waitCountFor(o.m.name);}};
+      const d=qSort.dir, g=o=>{switch(qSort.key){case 'name':return o.m.name;case 'life':return o.m.status;case 'group':return o.m.group||'~';case 'sub':return o.m.sub;case 'total':return o.k.total;case 'last':return o.k.last||'';case 'next':return o.k.next?o.k.next.getTime():0;case 'status':return o.k.dleft==null?1e9:o.k.dleft;case 'wait':return waitCountFor(o.m.name);}};
       list.sort((a,b)=>{const av=g(a),bv=g(b); return (typeof av==='string'?av.localeCompare(bv):av-bv)*d;});
     } else { list.sort((a,b)=>{
         const r=x=> x.k.ended?3 : x.k.held?2 : x.k.fresh?1 : 0;
@@ -535,7 +536,8 @@
         <td class="py-3 text-center"><input type="checkbox" ${checked} onclick="event.stopPropagation();REC.toggleSel('${m.name}',this.checked)"></td>
         <td class="py-3 text-center text-gray-500 font-semibold">${i+1}</td>
         <td class="py-3 text-center">${lifeSel}${holdNote}</td>
-        <td class="py-3 text-center font-semibold text-gray-800 whitespace-nowrap">${groupSelect(m)}${teleBadge(m.name)}${m.name}</td>
+        <td class="py-3 text-center">${groupSelect(m)}</td>
+        <td class="py-3 text-left font-semibold text-gray-800 whitespace-nowrap pl-2">${teleBadge(m.name)}${m.name}</td>
         <td class="py-3 text-center">${subChip(m.sub)}</td>
         <td class="py-3 text-center text-gray-700 font-semibold">${k.total}건</td>
         <td class="py-3 text-center text-gray-500">${k.last||'—'}</td>
@@ -544,7 +546,7 @@
         <td class="py-3 text-center">${waitTag}</td>
         <td class="py-3 text-center">${action}</td>
       </tr>`;
-    }).join('') : '<tr><td colspan="11" class="py-6 text-center text-gray-400">선택한 상태의 회원이 없습니다</td></tr>';
+    }).join('') : '<tr><td colspan="12" class="py-6 text-center text-gray-400">선택한 상태의 회원이 없습니다</td></tr>';
     document.getElementById('queueWait').innerHTML = '';
     updateSortArrows();
     renderLifeChips();
@@ -603,7 +605,7 @@
     set('done',DK.filter(m=>progStateOf(m.name)==='완료').length);
   }
   function sortQueue(key){ if(qSort.key===key) qSort.dir*=-1; else { qSort.key=key; qSort.dir=1; } renderQueue(); }
-  function updateSortArrows(){ ['name','life','sub','total','last','next','status','wait'].forEach(k=>{ const e=document.getElementById('qa-'+k); if(e) e.textContent = (qSort.key===k)?(qSort.dir>0?' ▲':' ▼'):''; }); }
+  function updateSortArrows(){ ['name','life','group','sub','total','last','next','status','wait'].forEach(k=>{ const e=document.getElementById('qa-'+k); if(e) e.textContent = (qSort.key===k)?(qSort.dir>0?' ▲':' ▼'):''; }); }
 
   let SELECTED = new Set();
   function setMemberStatus(name,st){
@@ -920,7 +922,7 @@
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeBulkModal(); } });
 
   // 그리드 열 너비 드래그 리사이즈 (PC별 localStorage)
-  const COLW_DEF=[5,5,9,17,7,6,8,9,12,9,13];
+  const COLW_DEF=[5,5,9,6,14,7,6,8,9,11,9,11];
   let colw=[...COLW_DEF];
   function applyColw(){ const cols=document.querySelectorAll('#queueColgroup col'); cols.forEach((c,i)=>{ if(colw[i]!=null) c.style.width=colw[i]+'%'; }); }
   function saveColw(){ try{localStorage.setItem('donkle_colw',JSON.stringify(colw));}catch(e){} }
