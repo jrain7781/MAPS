@@ -9258,21 +9258,28 @@ function getDonkleRequestDashboard() {
     }
 
     // 전달완료(회원|물건) 키 — 전체 기간 스캔(대기 판정용). 추천/완료 이벤트는 윈도우 내만 수집.
+    // ★ 전달완료(=추천완료)는 2경로: ① 수작업 FIELD_CHANGE chuchen_state→전달완료
+    //    ② 텔레그램 전달 TELEGRAM_SENT note='card' (같은 행에 chuchen_state→전달완료 태그 포함, [TelegramService.js])
+    //   → action 으로 거르지 말고 (텔레전달=TELEGRAM_SENT 이므로) 두 경로 모두 인정. getAutoApprovalStats recommend(tele+web)와 동일.
     var deliveredKey = {};
     var recEvents = [], doneEvents = [];
     rows.forEach(function (row) {
-      if (String(row[2] || '').trim() !== 'FIELD_CHANGE') return;
       var itemId = String(row[4] || '').trim();
       var memberId = String(row[5] || '').trim();
       if (!itemId || !memberId || !donkleSet[memberId]) return;
+      var action = String(row[2] || '').trim();
+      var note = String(row[8] || '').trim();
       var toVal = String(row[12] || '').trim();
       var fieldName = String(row[13] || '').trim();
       var key = memberId + '|' + itemId;
-      if (fieldName === 'chuchen_state' && toVal === '전달완료') {
+      var isDelivery = (action === 'TELEGRAM_SENT' && note === 'card')
+        || (fieldName === 'chuchen_state' && toVal === '전달완료');
+      var isRecommend = (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '추천');
+      if (isDelivery) {
         deliveredKey[key] = true;
         var dd = parseDate(row[1]);
         if (dd && dd >= winStart) doneEvents.push({ d: dd, itemId: itemId, key: key });
-      } else if (fieldName === 'stu_member' && toVal === '추천') {
+      } else if (isRecommend) {
         var dr = parseDate(row[1]);
         if (dr && dr >= winStart) recEvents.push({ d: dr, itemId: itemId, key: key });
       }
