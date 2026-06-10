@@ -157,19 +157,6 @@ def mulgeon_no(sakun):
     return m.group(1) if m else ""
 
 
-def detail_mulgeon(detail_text):
-    """상세 페이지(ca_view) 에서 활성 물건번호 추출. '2023타경919 (31)' → '31'.
-    상단 '관련 물건번호' 탭(31 32 …)과 구분 위해 '타경<사건번호>(N)' 형태만 인정.
-    백업: '물건번호 31' 라벨."""
-    if not detail_text:
-        return ""
-    m = re.search(r"타경\s*\d+\s*[\(（]\s*(\d+)\s*[\)）]", detail_text)
-    if m:
-        return m.group(1)
-    m = re.search(r"물건\s*번호\s*[:：]?\s*(\d+)", detail_text)
-    return m.group(1) if m else ""
-
-
 # 진행상태 분류
 _BUGA_TOKENS = ["변경", "취소", "취하", "정지", "연기", "기각", "각하"]  # 법원 진행불가
 _MAEGAK_TOKENS = ["매각", "낙찰"]
@@ -292,6 +279,14 @@ def search_case(driver, wait, case, use_date=True):
             var st=document.querySelector('select[name="state"]'); if(st) st.value='';
             var b1=document.getElementById('next_biddate1'), b2=document.getElementById('next_biddate2');
             if(b1) b1.value=arguments[3]||''; if(b2) b2.value=arguments[3]||'';
+            // 목록수 100 (물건조사 탭과 동일: pageSize→scale). 다물건 사건이 20건/페이지를 넘어
+            // 뒤쪽 물건번호가 통째로 누락되던 문제 방지. (옥션원 최대 100)
+            var sc=document.querySelector('[name="scale"]');
+            if(sc){ sc.value='100'; try{ sc.dispatchEvent(new Event('change')); }catch(e){} }
+            else { var f=document.getElementById('fm_aulist'); if(f){ var h=document.createElement('input'); h.type='hidden'; h.name='scale'; h.value='100'; f.appendChild(h); } }
+            // 사건번호(물건번호 p_num)↑ 정렬 — 다물건 순서 안정화
+            var od=document.querySelector('select[name="order"]');
+            if(od){ od.value='num1,num2,p_num ASC'; try{ od.dispatchEvent(new Event('change')); }catch(e){} }
             """,
             year, num, lawsup, bid_full,
         )
@@ -452,6 +447,43 @@ def parse_result_rows(driver):
         except Exception:
             continue
     return out
+
+
+def collect_rows_paged(driver, max_pages=8):
+    """결과를 페이지네이션 따라가며 전부 수집. (다물건 사건이 20건/페이지를 넘으면
+    1페이지만 읽던 기존 방식은 뒤쪽 물건번호를 통째로 놓침 → 예: 2023타경919는 31건/2페이지,
+    (32)가 2페이지 첫 칸이라 누락되던 버그.)"""
+    rows = parse_result_rows(driver)
+    seen_starts = {0}
+    for _ in range(max_pages - 1):
+        next_url, next_start = None, None
+        try:
+            links = driver.find_elements(By.CSS_SELECTOR, "div.pagn a")
+        except Exception:
+            links = []
+        for a in links:
+            href = a.get_attribute("href") or ""
+            m = re.search(r"[?&]start=(\d+)", href)
+            if not m:
+                continue
+            s = int(m.group(1))
+            if s in seen_starts:
+                continue
+            if next_start is None or s < next_start:
+                next_start, next_url = s, href
+        if next_url is None:
+            break
+        seen_starts.add(next_start)
+        try:
+            driver.get(next_url)
+            WebDriverWait(driver, 10).until(lambda d:
+                d.find_elements(By.CSS_SELECTOR, "input[type=checkbox][value]")
+                or "없습니다" in (d.find_element(By.TAG_NAME, "body").text or ""))
+            time.sleep(0.3)
+        except Exception:
+            break
+        rows += parse_result_rows(driver)
+    return rows
 
 
 def build_view_url(driver, pid, line_num, line_tnum):
@@ -628,12 +660,12 @@ def process_case(driver, wait, case):
         print(f"RESULT|{json.dumps(dict(base, status='', is_buga=False, key_match=False, detail='', view_url='', fetched_court='', date_hit=False, court_hit=False), ensure_ascii=False)}")
         return
 
-    rows = parse_result_rows(driver)
+    rows = collect_rows_paged(driver)   # 페이지네이션 따라 전부 수집(다물건 20건↑ 누락 방지)
     # 매각기일까지 넣어 0건이면(변경/취하로 기일 바뀐 경우) 날짜 빼고 재검색
     if not rows:
         print("    ↻ 매각기일 일치 0건 → 날짜 제외 재검색")
         if search_case(driver, wait, case, use_date=False):
-            rows = parse_result_rows(driver)
+            rows = collect_rows_paged(driver)
     if not rows:
         print(f"RESULT|{json.dumps(dict(base, status='조회없음', is_buga=False, key_match=False, detail='', view_url='', fetched_court='', date_hit=False, court_hit=False), ensure_ascii=False)}")
         print("    ⚠ 결과 행 없음")
@@ -656,51 +688,19 @@ def process_case(driver, wait, case):
         if r["_court_hit"] and r["_date_hit"] and mul_ok:
             picked = r
             break
-    # 물건번호 일치 우선 fallback (행 텍스트 기반)
+    # 물건번호 일치 우선 fallback (기일 표기가 달라도 물건번호로 확정)
     if not picked and exp_mulgeon:
         for r in rows:
             if r.get("mulgeon", "") == exp_mulgeon:
                 picked = r
                 break
-    # ★ 다물건 사건: 행 텍스트에 물건번호가 안 실려 매칭 실패 → 후보 상세를 열어 물건번호 대조.
-    #   (같은 사건의 여러 호수가 같은 매각기일에 매각되면, 기일만 보고 첫 호수로 잘못 가져오던 버그 방지)
+    # ★ 다물건 사건인데 해당 물건번호 행이 결과에 없음 → 엉뚱한 호수 데이터 방지: 확인불가.
+    #   (예전엔 첫 행/기일일치 첫 행으로 잘못 가져왔음. 페이지네이션 수집 후에도 없으면 진짜 누락)
     if not picked and exp_mulgeon:
-        # 진단: 검색결과 행 구성 출력 (물건번호 추출/매각기일 일치 확인용)
-        print(f"    [mul-debug] exp_mulgeon={exp_mulgeon} rows={len(rows)} :: "
-              + " | ".join(f"mul={r.get('mulgeon','')!r} d6={r.get('date6','')} st={r.get('state','')[:6]} {r.get('addr','')[:14]}" for r in rows[:20]))
-
-        def _probe_mulgeon(cand_rows, ltnum):
-            # date_hit 우선, 그 외 행도 포함(매각기일 표기가 달라도 물건번호로 확정)
-            ordered = sorted(cand_rows, key=lambda r: 0 if r.get("_date_hit") else 1)
-            for r in ordered[:20]:
-                vu = build_view_url(driver, r["pid"], r["line_num"], ltnum)
-                if detail_mulgeon(open_detail_text(driver, vu)) == exp_mulgeon:
-                    return r
-            return None
-
-        picked = _probe_mulgeon(rows, line_tnum)
-        # 날짜 필터에 (해당 물건번호가) 탈락한 경우 → 매각기일 빼고 재검색 후 재대조
-        if not picked:
-            print(f"    ↻ 물건번호({exp_mulgeon}) 미발견 → 날짜 제외 재검색")
-            if search_case(driver, wait, case, use_date=False):
-                rows2 = parse_result_rows(driver)
-                if rows2:
-                    line_tnum = len(rows2)
-                    for r in rows2:
-                        fc = addr_to_court(r["addr"]); r["_fc"] = fc
-                        r["_court_hit"] = True if exp_lawsup else (bool(exp_court) and _norm_court(fc) == _norm_court(exp_court))
-                        r["_date_hit"] = bool(exp_d6) and (r["date6"] == exp_d6)
-                    # 재검색 결과에서 행 텍스트 물건번호 우선, 없으면 상세대조
-                    picked = next((r for r in rows2 if r.get("mulgeon", "") == exp_mulgeon), None) or _probe_mulgeon(rows2, line_tnum)
-                    if picked:
-                        rows = rows2
-        if picked:
-            print(f"    ✓ 물건번호 상세대조 일치: ({exp_mulgeon})")
-        else:
-            # 다물건인데 끝내 물건번호를 못 맞춤 → 엉뚱한 호수 데이터 방지: 확인불가 처리
-            print(f"    ⚠ 다물건 사건 물건번호({exp_mulgeon}) 매칭 실패 → 확인불가")
-            print(f"RESULT|{json.dumps(dict(base, status='확인불가', state_kind='확인불가', is_buga=False, key_match=False, detail='물건번호 불일치', view_url='', fetched_court='', date_hit=False, court_hit=False, sakun_hit=True, maegak_price='', buyer='', bidder_count=''), ensure_ascii=False)}")
-            return
+        found = sorted({r.get("mulgeon", "") for r in rows if r.get("mulgeon")}, key=lambda x: int(x) if x.isdigit() else 0)
+        print(f"    ⚠ 다물건 물건번호({exp_mulgeon}) 결과에 없음 (수집 {len(rows)}건, 물건번호 {found}) → 확인불가")
+        print(f"RESULT|{json.dumps(dict(base, status='확인불가', state_kind='확인불가', is_buga=False, key_match=False, detail='물건번호 미발견', view_url='', fetched_court='', date_hit=False, court_hit=False, sakun_hit=True, maegak_price='', buyer='', bidder_count=''), ensure_ascii=False)}")
+        return
     if not picked:
         for r in rows:
             if r["_date_hit"]:
