@@ -9294,6 +9294,23 @@ function getDonkleRequestDashboard() {
     recEvents.forEach(function (e) { if (!deliveredKey[e.key]) emit(e.d, 'wait', e.itemId); });
     doneEvents.forEach(function (e) { emit(e.d, 'done', e.itemId); });
 
+    // ── 입찰등록: members_item_status status='입찰' (매일 오전 accrueBidsDaily 적립) — recorded_at(적립일) 기준 ──
+    //   event_date(=입찰일자)는 보통 미래라 최근7일 윈도우에 안 잡힘 → 배치가 돈 날(recorded_at)로 카운팅.
+    try {
+      var misSheet = ensureMembersItemStatusSheet_();
+      if (misSheet.getLastRow() >= 2) {
+        var SX = {}; MIS_HEADERS.forEach(function (h, j) { SX[h] = j; });
+        var sdata = misSheet.getRange(2, 1, misSheet.getLastRow() - 1, MIS_HEADERS.length).getValues();
+        sdata.forEach(function (r) {
+          if (String(r[SX['status']] || '').trim() !== '입찰') return;
+          var mid = String(r[SX['member_id']] || '').trim();
+          if (!mid || !donkleSet[mid]) return;
+          var bd = parseDate(r[SX['recorded_at']]);
+          if (bd && bd >= winStart) emit(bd, 'bid', String(r[SX['item_id']] || '').trim());
+        });
+      }
+    } catch (eMis) { Logger.log('[getDonkleRequestDashboard] MIS 입찰 스캔: ' + eMis); }
+
     var days = [];
     for (var i = 0; i < 7; i++) {
       var dx = new Date(today); dx.setDate(today.getDate() - i);

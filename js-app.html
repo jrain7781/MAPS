@@ -4482,16 +4482,17 @@
             return arr;
         })();
         const dayIdx = {}; days.forEach(k => dayIdx[k] = true);
-        // map[date][manager] = {wait:[ids], done:[ids]}  + 드릴다운용 ids 버킷
+        // map[date][manager] = {bid:[ids], wait:[ids], done:[ids]}  + 드릴다운용 ids 버킷
         const map = {};
-        const ids = { all_wait: [], all_done: [] };
+        const ids = { all_bid: [], all_wait: [], all_done: [] };
         const pushU = (arr, v) => { if (arr.indexOf(v) < 0) arr.push(v); };
         (data.events || []).forEach(ev => {
             const mgr = ev.manager || '(미지정)';
             if (fm !== 'All' && fm !== '' && mgr !== fm) return;
             if (!dayIdx[ev.date]) return;   // 윈도우 밖
+            if (ev.kind !== 'bid' && ev.kind !== 'wait' && ev.kind !== 'done') return;
             (map[ev.date] = map[ev.date] || {});
-            (map[ev.date][mgr] = map[ev.date][mgr] || { wait: [], done: [] });
+            (map[ev.date][mgr] = map[ev.date][mgr] || { bid: [], wait: [], done: [] });
             pushU(map[ev.date][mgr][ev.kind], ev.itemId);
             pushU(ids[ev.date + '|' + mgr + '|' + ev.kind] = (ids[ev.date + '|' + mgr + '|' + ev.kind] || []), ev.itemId);
             pushU(ids['all_' + ev.kind], ev.itemId);
@@ -4511,17 +4512,19 @@
             const byMgr = map[key] || {};
             const mgrs = Object.keys(byMgr).sort();
             if (!mgrs.length) {
-                html += `<tr class="border-b border-gray-100 hover:bg-gray-50 ${todayBg}">${dateTd(label)}<td class="py-2 px-1 text-center"><span class="text-gray-300">0</span></td><td class="py-2 px-1 text-center"><span class="text-gray-300">0</span></td><td class="py-2 px-1 text-center"><span class="text-gray-300 text-xs">—</span></td></tr>`;
+                const zero = '<td class="py-2 px-1 text-center"><span class="text-gray-300">0</span></td>';
+                html += `<tr class="border-b border-gray-100 hover:bg-gray-50 ${todayBg}">${dateTd(label)}${zero}${zero}${zero}<td class="py-2 px-1 text-center"><span class="text-gray-300 text-xs">—</span></td></tr>`;
                 return;
             }
             mgrs.forEach((mgr, mi) => {
-                const w = byMgr[mgr].wait.length, done = byMgr[mgr].done.length;
+                const b = byMgr[mgr].bid.length, w = byMgr[mgr].wait.length, done = byMgr[mgr].done.length;
                 const mgrLabel = mgr === '(미지정)' ? '<span class="text-gray-300">미지정</span>' : mgr;
-                html += `<tr class="border-b border-gray-100 hover:bg-gray-50 ${todayBg}">${dateTd(mi === 0 ? label : '')}<td class="py-2 px-1 text-center">${numCell(w, key, mgr, 'wait', 'text-amber-600')}</td><td class="py-2 px-1 text-center">${numCell(done, key, mgr, 'done', 'text-indigo-600')}</td><td class="py-2 px-1 text-center text-gray-600 text-xs">${mgrLabel}</td></tr>`;
+                html += `<tr class="border-b border-gray-100 hover:bg-gray-50 ${todayBg}">${dateTd(mi === 0 ? label : '')}<td class="py-2 px-1 text-center">${numCell(b, key, mgr, 'bid', 'text-blue-600')}</td><td class="py-2 px-1 text-center">${numCell(w, key, mgr, 'wait', 'text-amber-600')}</td><td class="py-2 px-1 text-center">${numCell(done, key, mgr, 'done', 'text-indigo-600')}</td><td class="py-2 px-1 text-center text-gray-600 text-xs">${mgrLabel}</td></tr>`;
             });
         });
         body.innerHTML = html;
-        const tw = document.getElementById('donkleReqTotWait'), tdn = document.getElementById('donkleReqTotDone');
+        const tb = document.getElementById('donkleReqTotBid'), tw = document.getElementById('donkleReqTotWait'), tdn = document.getElementById('donkleReqTotDone');
+        if (tb) tb.textContent = ids['all_bid'].length;
         if (tw) tw.textContent = ids['all_wait'].length;
         if (tdn) tdn.textContent = ids['all_done'].length;
     }
@@ -4529,7 +4532,8 @@
         const store = window._donkleReqIds || {};
         const ids = (dayKey === 'all') ? (store['all_' + kind] || []) : (store[dayKey + '|' + (mgr || '') + '|' + kind] || []);
         if (!ids.length) return;
-        dashboardFilter = { active: true, date: '', type: 'item_ids', status: ids, manager: null, label: '돈클 ' + (kind === 'wait' ? '전달대기' : '추천완료') + (mgr && mgr !== '(미지정)' ? ' · ' + mgr : '') };
+        const kindLabel = kind === 'bid' ? '입찰등록' : (kind === 'wait' ? '전달대기' : '추천완료');
+        dashboardFilter = { active: true, date: '', type: 'item_ids', status: ids, manager: null, label: '돈클 ' + kindLabel + (mgr && mgr !== '(미지정)' ? ' · ' + mgr : '') };
         navigateTo('ItemManagement');
         setTimeout(() => { if (typeof applyFilters === 'function') applyFilters(); }, 200);
     }
