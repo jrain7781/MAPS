@@ -4450,6 +4450,16 @@
     function renderDonkleRequestDashboard() {
         const body = document.getElementById('donkleReqBody');
         if (!body) return;
+        // 돈클 회원 member_id 셋 (추천물건관리에서 넘어온 = 돈클 회원 추천만 카운팅). 미로드 시 1회 로드 후 재렌더.
+        if (!window.donkleMemberIdSet && !window._donkleIdsLoading && window.google && google.script && google.script.run) {
+            window._donkleIdsLoading = true;
+            google.script.run
+                .withSuccessHandler(ids => { window.donkleMemberIdSet = new Set((ids || []).map(String)); window._donkleIdsLoading = false; try { renderDonkleRequestDashboard(); } catch (e) { } })
+                .withFailureHandler(() => { window._donkleIdsLoading = false; })
+                .getDonkleMemberIds();
+        }
+        const donkleSet = window.donkleMemberIdSet;
+        const donkleOk = it => !donkleSet || donkleSet.has(String(it.member_id || ''));
         const sel = document.getElementById('donkleReqFilterMember');
         const fm = sel ? sel.value : '대표님';
         const ymd = v => {
@@ -4471,6 +4481,7 @@
         const ids = {}; days.forEach(x => { ids[x.key + '_wait'] = []; ids[x.key + '_done'] = []; }); ids['all_wait'] = []; ids['all_done'] = [];
         (allBiddingData || []).forEach(it => {
             if (!memOk(it)) return;
+            if (!donkleOk(it)) return;   // 돈클 회원 추천만 (추천물건관리 경유분)
             const stu = String(it.stu_member || '').trim();
             const cs = String(it.chuchen_state || '').trim();
             if (stu === '추천' && cs !== '전달완료') { const k = ymd(it.reg_date); if (ids[k + '_wait']) { ids[k + '_wait'].push(it.id); ids['all_wait'].push(it.id); } }

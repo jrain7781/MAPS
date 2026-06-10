@@ -9153,6 +9153,21 @@ function getRecManagementData() {
   }
 }
 
+/** [돈클] 돈클 회원 member_id 목록 (class_type='돈클'). 대시보드 카드가 돈클 추천만 카운팅하도록 필터용 */
+function getDonkleMemberIds() {
+  try {
+    var members = readAllMembersNew();
+    var classes = readAllClasses();
+    var classMap = {};
+    classes.forEach(function (c) { classMap[String(c.class_id)] = String(c.class_type || '').trim(); });
+    var ids = [];
+    members.forEach(function (m) {
+      if (classMap[String(m.class_id)] === '돈클') ids.push(String(m.member_id).trim());
+    });
+    return ids;
+  } catch (e) { Logger.log('[getDonkleMemberIds] ' + e.toString()); return []; }
+}
+
 /** members 시트 끝에 돈클 전용 컬럼(donkle_status, donkle_hold) 보장 — 없으면 생성. {statusCol, holdCol}(1-based) */
 function _ensureDonkleCols_(sheet) {
   var maxC = sheet.getMaxColumns();
