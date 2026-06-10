@@ -9011,6 +9011,244 @@ function addMisRow(memberId, fields) {
   } catch (e) { return { success: false, message: String(e) }; }
 }
 
+// ===== [돈클] 추천물건관리 화면(rec-management.html) 데이터 — 단일 호출 =====
+/**
+ * 추천 큐 + 월별 현황 1회 로드용. IIFE(window.REC)에서 google.script.run 으로 호출.
+ *  - members   : 돈클 회원 로스터 (class_type='돈클') + 상태/보류해제일/회원비고(note1) + 구분(items_youngdo 파생)
+ *  - delivered : members_item_status status='추천' (전달완료 추천 원장) → 큐 hist + 추천완료 표시 + 달력 완료
+ *  - wait      : items stu_member='추천' & chuchen_state≠'전달완료' (전달대기) — 물건추천비고=items.note
+ *  - candidates: items in-date≥오늘 (추천하기 모달 후보; 상품/미정/추천만 선택가능)
+ * @return {{success:boolean, today:string, members:Array, delivered:Array, wait:Array, candidates:Array}}
+ */
+function getRecManagementData() {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var tz = Session.getScriptTimeZone();
+    var now = new Date();
+    var todayStr = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    var todayNum = parseInt(Utilities.formatDate(now, tz, 'yyyyMMdd'), 10);
+
+    var toIso = function (v) {
+      if (v instanceof Date && !isNaN(v.getTime())) return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+      var s = String(v == null ? '' : v).trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      var d = s.replace(/[^0-9]/g, '');
+      if (d.length >= 8) return d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8);
+      if (d.length === 6) return '20' + d.slice(0, 2) + '-' + d.slice(2, 4) + '-' + d.slice(4, 6);
+      return '';
+    };
+    var isoToNum = function (iso) { return iso ? parseInt(iso.replace(/-/g, ''), 10) : 0; };
+
+    // ── 1) 회원 로스터 (돈클) ──
+    var members = readAllMembersNew();
+    var classes = readAllClasses();
+    var classMap = {};
+    classes.forEach(function (c) { classMap[String(c.class_id)] = c; });
+
+    var mSheet = ss.getSheetByName(DB_MEMBERS_SHEET_NAME);
+    var dc = _ensureDonkleCols_(mSheet); // {statusCol, holdCol} (1-based)
+    var lastRowM = mSheet.getLastRow();
+    var statusMap = {}, holdMap = {};
+    if (lastRowM >= 2) {
+      var idCol = mSheet.getRange(2, 1, lastRowM - 1, 1).getValues();
+      var sCol = mSheet.getRange(2, dc.statusCol, lastRowM - 1, 1).getValues();
+      var hCol = mSheet.getRange(2, dc.holdCol, lastRowM - 1, 1).getValues();
+      for (var i = 0; i < idCol.length; i++) {
+        var mid0 = String(idCol[i][0]).trim();
+        if (!mid0) continue;
+        statusMap[mid0] = String(sCol[i][0] || '').trim();
+        holdMap[mid0] = String(hCol[i][0] || '').trim();
+      }
+    }
+
+    var roster = [];
+    members.forEach(function (m) {
+      var cls = classMap[String(m.class_id)] || {};
+      if (String(cls.class_type || '').trim() !== '돈클') return; // 돈클만
+      var mid = String(m.member_id).trim();
+      roster.push({
+        id: mid,
+        name: String(m.member_name || ''),
+        phone: String(m.phone || ''),
+        classType: '돈클',
+        grade: String(cls.class_grade || ''),
+        className: String(cls.class_name || ''),
+        note: String(m.note1 || ''),
+        status: statusMap[mid] || '',
+        hold: holdMap[mid] || '',
+        telegram: String(m.telegram_enabled || '').toUpperCase() === 'Y',
+        sub: ''
+      });
+    });
+
+    // ── 2) items 스캔 → candidates + wait + 구분(youngdo) 집계 ──
+    var iSheet = ss.getSheetByName(DB_SHEET_NAME);
+    var candidates = [], wait = [];
+    var youngdoByMember = {};
+    if (iSheet && iSheet.getLastRow() >= 2) {
+      var IX = {};
+      ITEM_HEADERS.forEach(function (h, j) { IX[h] = j; });
+      var idata = iSheet.getRange(2, 1, iSheet.getLastRow() - 1, ITEM_HEADERS.length).getValues();
+      idata.forEach(function (r) {
+        var iso = toIso(r[IX['in-date']]);
+        var num = isoToNum(iso);
+        var stu = String(r[IX['stu_member']] || '').trim();
+        var cs = String(r[IX['chuchen_state']] || '').trim();
+        var mid = String(r[IX['member_id']] || '').trim();
+        var youngdo = String(r[IX['items_youngdo']] || '').trim();
+        if (mid && (youngdo === '돈클수익' || youngdo === '돈클월세')) {
+          youngdoByMember[mid] = youngdoByMember[mid] || { '돈클수익': 0, '돈클월세': 0 };
+          youngdoByMember[mid][youngdo]++;
+        }
+        if (num && num >= todayNum) {
+          candidates.push({
+            id: String(r[IX['id']]), inDate: iso, sakun_no: String(r[IX['sakun_no']] || ''),
+            court: String(r[IX['court']] || ''), youngdo: youngdo, stu: stu,
+            member: String(r[IX['m_name']] || ''), memberId: mid,
+            mgr: String(r[IX['m_name_id']] || ''), note: String(r[IX['note']] || '')
+          });
+        }
+        if (stu === '추천' && cs !== '전달완료') {
+          wait.push({
+            id: String(r[IX['id']]), memberId: mid, name: String(r[IX['m_name']] || ''),
+            sakun_no: String(r[IX['sakun_no']] || ''), court: String(r[IX['court']] || ''),
+            inDate: iso, regDate: toIso(r[IX['reg_date']]), by: String(r[IX['m_name_id']] || ''),
+            youngdo: youngdo, note: String(r[IX['note']] || '')
+          });
+        }
+      });
+    }
+
+    // 구분 파생: 회원별 우세 용도 (돈클월세 > 돈클수익 → 월세, 아니면 수익)
+    roster.forEach(function (m) {
+      var y = youngdoByMember[m.id];
+      if (y) m.sub = (y['돈클월세'] > y['돈클수익']) ? '월세' : '수익';
+    });
+
+    // ── 3) members_item_status status='추천' → delivered ──
+    var delivered = [];
+    var misSheet = ensureMembersItemStatusSheet_();
+    if (misSheet.getLastRow() >= 2) {
+      var SX = {};
+      MIS_HEADERS.forEach(function (h, j) { SX[h] = j; });
+      var sdata = misSheet.getRange(2, 1, misSheet.getLastRow() - 1, MIS_HEADERS.length).getValues();
+      sdata.forEach(function (r) {
+        if (String(r[SX['status']] || '').trim() !== '추천') return;
+        delivered.push({
+          memberId: String(r[SX['member_id']] || '').trim(),
+          name: String(r[SX['m_name']] || ''),
+          sakun_no: String(r[SX['sakun_no']] || ''),
+          court: String(r[SX['court']] || ''),
+          inDate: toIso(r[SX['in_date']]),
+          eventDate: toIso(r[SX['event_date']]) || toIso(r[SX['recorded_at']]),
+          by: String(r[SX['m_name_id']] || '')
+        });
+      });
+    }
+
+    return { success: true, today: todayStr, members: roster, delivered: delivered, wait: wait, candidates: candidates };
+  } catch (e) {
+    Logger.log('[getRecManagementData] ' + e.toString());
+    return { success: false, message: String(e), members: [], delivered: [], wait: [], candidates: [] };
+  }
+}
+
+/** members 시트 끝에 돈클 전용 컬럼(donkle_status, donkle_hold) 보장 — 없으면 생성. {statusCol, holdCol}(1-based) */
+function _ensureDonkleCols_(sheet) {
+  var maxC = sheet.getMaxColumns();
+  var headerRow = sheet.getRange(1, 1, 1, maxC).getValues()[0];
+  var find = function (name) {
+    for (var i = 0; i < headerRow.length; i++) if (String(headerRow[i]).trim() === name) return i + 1;
+    return -1;
+  };
+  var statusCol = find('donkle_status');
+  var holdCol = find('donkle_hold');
+  var lastCol = sheet.getLastColumn();
+  var addCol = function (name) {
+    var col = lastCol + 1;
+    if (sheet.getMaxColumns() < col) sheet.insertColumnsAfter(sheet.getMaxColumns(), col - sheet.getMaxColumns());
+    sheet.getRange(1, col).setValue(name);
+    lastCol = col;
+    return col;
+  };
+  if (statusCol < 0) statusCol = addCol('donkle_status');
+  if (holdCol < 0) holdCol = addCol('donkle_hold');
+  return { statusCol: statusCol, holdCol: holdCol };
+}
+
+/** 물건 추천비고 저장 — items.note (단일 필드). 추천물건관리 우측패널에서 호출 */
+function setItemNote(itemId, note) {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '물건 없음' };
+    var noteCol = ITEM_HEADERS.indexOf('note') + 1;
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === String(itemId).trim()) {
+        sheet.getRange(i + 2, noteCol).setValue(String(note || ''));
+        SpreadsheetApp.flush();
+        return { success: true };
+      }
+    }
+    return { success: false, message: 'item_id 없음' };
+  } catch (e) { return { success: false, message: String(e) }; }
+}
+
+/** 돈클 회원 상태(진행/보류/종료) + 보류해제일 저장 (members 끝 donkle_status/donkle_hold) */
+function setDonkleMemberStatus(memberId, status, hold) {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_MEMBERS_SHEET_NAME);
+    var dc = _ensureDonkleCols_(sheet);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '회원 없음' };
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === String(memberId).trim()) {
+        sheet.getRange(i + 2, dc.statusCol).setValue(String(status || ''));
+        sheet.getRange(i + 2, dc.holdCol).setValue(String(hold || ''));
+        SpreadsheetApp.flush();
+        return { success: true };
+      }
+    }
+    return { success: false, message: 'member_id 없음' };
+  } catch (e) { return { success: false, message: String(e) }; }
+}
+
+/**
+ * [돈클] 추천하기 — 선택 물건들을 해당 회원 앞으로 '추천' 등록 (전달대기).
+ *  · items: stu_member→'추천', member_id/m_name 세팅. 기존이 '추천'이 아니었으면 chuchen_state/date/bid_datetime_2 클리어(전달대기 보장).
+ *  · 적립(members_item_status)은 전달완료(chuchen→전달완료) 시점에 이뤄지므로 여기선 안 함.
+ * @return {{success:boolean, count:number}}
+ */
+function registerDonkleRecommendation(memberId, memberName, itemIds) {
+  try {
+    if (!itemIds || !itemIds.length) return { success: false, message: '선택된 물건이 없습니다.' };
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '물건 없음' };
+    var allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    var cnt = 0;
+    itemIds.forEach(function (id) {
+      var idx = allIds.findIndex(function (v) { return String(v) === String(id); });
+      if (idx < 0) return;
+      var rowNum = idx + 2;
+      var curStu = String(sheet.getRange(rowNum, 5).getValue() || '').trim();
+      sheet.getRange(rowNum, 5).setValue('추천');                    // E: stu_member
+      sheet.getRange(rowNum, 9).setValue(String(memberId || ''));    // I: member_id
+      sheet.getRange(rowNum, 7).setValue(String(memberName || ''));  // G: m_name
+      if (curStu !== '추천') {
+        sheet.getRange(rowNum, 17).setValue(''); // Q: chuchen_state
+        sheet.getRange(rowNum, 18).setValue(''); // R: chuchen_date
+        sheet.getRange(rowNum, 20).setValue(''); // T: bid_datetime_2
+      }
+      cnt++;
+    });
+    SpreadsheetApp.flush();
+    return { success: true, count: cnt };
+  } catch (e) { return { success: false, message: String(e) }; }
+}
+
 /**
  * 불가확인용 — 오늘 ~ 오늘+7일 입찰건의 (사건번호, 입찰일자, 법원) 3키 리스트 반환.
  * 매니저 「불가확인」 탭의 "MAPS 7일 리스트 불러오기" 버튼이 호출.

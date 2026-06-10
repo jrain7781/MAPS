@@ -229,7 +229,7 @@
     <div class="card w-full mx-4 flex flex-col" style="max-width:1320px;width:98vw;max-height:90vh;padding:0">
       <div class="px-4 py-3 border-b border-gray-200 flex items-center gap-2 relative">
         <h3 class="text-base font-bold text-gray-800 mx-auto">물건 선택</h3>
-        <button class="absolute left-4 text-xs px-2 py-0.5 rounded border bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-300">🔄 새로고침</button>
+        <button onclick="REC.load()" class="absolute left-4 text-xs px-2 py-0.5 rounded border bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-300">🔄 새로고침</button>
         <button onclick="REC.closeModal()" class="absolute right-3 text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
       </div>
       <div class="flex flex-1 min-h-0">
@@ -319,75 +319,83 @@
 // 돈클 추천물건관리 — IIFE 격리 + window.REC 네임스페이스 (앱 전역과 충돌 방지)
 (function(){
   const REC = window.REC = window.REC || {};
-  let TODAY = new Date(2026,5,8);  // 기준일 (목업 mock 데이터 기준 — 실연동 시 new Date())
+  let TODAY = new Date(); TODAY.setHours(0,0,0,0);  // 실제 오늘 (load 시 서버 today로 보정)
   let CYCLE = 14;
-  const parseMD = md => { const [m,d]=md.split('/').map(Number); return new Date(2026, m-1, d); };
+  // 'YYYY-MM-DD' 또는 'M/D' 모두 파싱 (M/D는 올해 기준)
+  const parseDate = s => {
+    if(!s) return null; s=String(s).trim();
+    if(/^\d{4}-\d{2}-\d{2}/.test(s)){ const a=s.slice(0,10).split('-').map(Number); return new Date(a[0],a[1]-1,a[2]); }
+    if(/^\d{1,2}\/\d{1,2}/.test(s)){ const a=s.split('/').map(Number); return new Date(TODAY.getFullYear(),a[0]-1,a[1]); }
+    return null;
+  };
+  const parseMD = parseDate;  // 호환 별칭 (기존 호출부 유지)
   const addDays = (dt,n) => { const x=new Date(dt); x.setDate(x.getDate()+n); return x; };
   const fmtMD = dt => String(dt.getMonth()+1).padStart(2,'0')+'/'+String(dt.getDate()).padStart(2,'0');
   const dayDiff = (a,b) => Math.round((a-b)/86400000);
 
-  // ── 목업 mock 데이터 (실연동 단계에서 GAS members_item_status/telegram_requests 로 교체) ──
-  const DK = [
-    {name:'조현우', sub:'월세',   cohort:3, phone:'010-2841-7763', status:'진행', hold:'', recNote:'카톡으로만 전달. 시세 대비 저렴함 강조 요망.', note:'월세 수익형 선호. 부산·경남권 위주. 대출 80%까지 가능.', hist:[{d:'03/05',q:1},{d:'03/20',q:1},{d:'04/05',q:1},{d:'04/20',q:1}]},
-    {name:'강태오', sub:'수익',   cohort:5, phone:'010-3392-1188', status:'진행', hold:'', recNote:'전화 통화 후 전달. 18시 이후 연락 가능.', note:'단기 차익형. 감정가 대비 저감률 큰 물건 선호.', hist:[{d:'05/16',q:1}]},
-    {name:'서지후', sub:'올인원', cohort:4, phone:'010-7755-2043', status:'진행', hold:'', note:'올인원. 종류 무관, 수도권 가점.', hist:[{d:'05/20',q:2}]},
-    {name:'윤재호', sub:'올인원', cohort:4, phone:'010-9021-6614', status:'보류', hold:'06/20', note:'6월 중순까지 해외출장. 6/20 이후 재개 요청.', hist:[{d:'05/27',q:1}]},
-    {name:'남도현', sub:'수익',   cohort:6, phone:'010-4480-3327', status:'진행', hold:'', note:'신규. 첫 추천 대기 중.', hist:[]},
-    {name:'한지영', sub:'수익',   cohort:1, phone:'010-2207-9985', status:'진행', hold:'', recNote:'권리분석 요약 함께 전달. 명도 난이도 낮은 건 우선.', note:'장기 회원. 2주 주기 꾸준히 진행.', hist:[{d:'03/03',q:1},{d:'03/17',q:1},{d:'03/31',q:1},{d:'04/14',q:1},{d:'04/28',q:1},{d:'05/12',q:1},{d:'05/26',q:1},{d:'06/07',q:1}]},
-    {name:'임채원', sub:'수익',   cohort:6, phone:'010-6613-0420', status:'진행', hold:'', note:'신규 가입. 텔레그램 미연결 상태.', hist:[]},
-    {name:'정민석', sub:'월세',   cohort:2, phone:'010-1188-5560', status:'종료', hold:'', note:'보장 충족으로 종료(낙찰 완료).', hist:[{d:'03/10',q:1},{d:'03/24',q:1},{d:'04/07',q:1}]},
-  ];
-  const CAND = [
-    {date:'260608', s:'2023타경110430(1)', court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'이서원',       mgr:'전부쌤'},
-    {date:'260608', s:'2023타경110430(2)', court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'이서원',       mgr:'전부쌤'},
-    {date:'260608', s:'2023타경110430(3)', court:'부산동부', youngdo:'등록전',   stu:'미정', member:'박성미',       mgr:'전부쌤'},
-    {date:'260608', s:'2023타경103746',    court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'김정희',       mgr:'전부쌤'},
-    {date:'260608', s:'2023타경110430',    court:'부산동부', youngdo:'등록전',   stu:'미정', member:'이서원심희정', mgr:'전부쌤'},
-    {date:'260608', s:'2024타경1670(2)',   court:'부산동부', youngdo:'등록전',   stu:'상품', member:'',             mgr:'전부쌤'},
-    {date:'260608', s:'2024타경11848',     court:'수원',     youngdo:'등록전',   stu:'입찰', member:'최정미',       mgr:'대표님'},
-    {date:'260608', s:'2024타경54944',     court:'춘천강릉', youngdo:'등록전',   stu:'불가', member:'김지영',       mgr:'대표님'},
-    {date:'260608', s:'2024타경104050',    court:'부산동부', youngdo:'돈클수익', stu:'입찰', member:'신혜진',       mgr:'대표님'},
-    {date:'260608', s:'2025타경4931(1)',   court:'부산동부', youngdo:'등록전',   stu:'미정', member:'안수정',       mgr:'대표님'},
-    {date:'260608', s:'2025타경4931(2)',   court:'부산동부', youngdo:'등록전',   stu:'입찰', member:'이종진',       mgr:'대표님'},
-    {date:'260608', s:'2025타경20198(3)',  court:'대전논산', youngdo:'등록전',   stu:'폐기', member:'',             mgr:'대표님'},
-    {date:'260608', s:'2025타경51125(5)',  court:'서울동부', youngdo:'등록전',   stu:'입찰', member:'강성은',       mgr:'대표님'},
-    {date:'260608', s:'2025타경51125(7)',  court:'서울동부', youngdo:'등록전',   stu:'미정', member:'박예진',       mgr:'대표님'},
-    {date:'260608', s:'2025타경384',       court:'서울동부', youngdo:'등록전',   stu:'상품', member:'',             mgr:'전부쌤'},
-    {date:'260608', s:'2025타경1095',      court:'대구',     youngdo:'등록전',   stu:'상품', member:'',             mgr:'대표님'},
-    {date:'260608', s:'2025타경3768',      court:'대구포항', youngdo:'등록전',   stu:'미정', member:'박경우',       mgr:'전부쌤'},
-    {date:'260608', s:'2025타경3997',      court:'대구포항', youngdo:'등록전',   stu:'상품', member:'',             mgr:'전부쌤'},
-    {date:'260608', s:'2025타경5018',      court:'부산동부', youngdo:'등록전',   stu:'상품', member:'',             mgr:'대표님'},
-    {date:'260608', s:'2025타경20756',     court:'전주군산', youngdo:'등록전',   stu:'미정', member:'권윤찬',       mgr:'전부쌤'},
-    {date:'260608', s:'2025타경21459',     court:'창원통영', youngdo:'등록전',   stu:'불가', member:'신혜진',       mgr:'대표님'},
-    {date:'260608', s:'2025타경41887',     court:'수원평택', youngdo:'등록전',   stu:'미정', member:'최숙희',       mgr:'대표님'},
-  ];
+  // ── 실데이터 (getRecManagementData 로 로드 — REC.load) ──
+  //   DK=돈클 회원 로스터+hist(추천완료), CAND=items 후보, WAIT=items 전달대기, DELIVERED=MIS 추천완료
+  let DK = [], CAND = [], WAIT = [], DELIVERED = [];
   const STU_PICK = ['상품','미정','추천'];
   const statusTag = s => { const m={'상품':'stu-tag-product','입찰':'stu-tag-bid','추천':'stu-tag-recommend','검증':'stu-tag-verified','폐기':'stu-tag-discard','불가':'stu-tag-changed','취소':'stu-tag-changed','변경':'stu-tag-changed','미정':'stu-tag-default'}; return `<span class="stu-tag ${m[s]||'stu-tag-default'}">${s}</span>`; };
   const yongdoTag = y => { const m={'돈클수익':'yongdo-tag-income','돈클월세':'yongdo-tag-rent','플래티넘':'yongdo-tag-platinum','블랙':'yongdo-tag-black','실버':'yongdo-tag-silver','PT, 단투':'yongdo-tag-other'}; return `<span class="yongdo-tag ${m[y]||'yongdo-tag-pre'}">${y||'등록전'}</span>`; };
-  CAND.forEach((c,i)=>{ c.bid=['06/12','06/16','06/18','06/20','06/23','06/25'][i%6]; });
-  let WAIT = [
-    {name:'조현우', sub:'월세', s:'2024타경59001', court:'부산지법', bidDate:'06/16', by:'대표님', regDate:'06/07', channel:'텔레그램'},
-    {name:'한지영', sub:'수익', s:'2024타경59112', court:'창원지법', bidDate:'06/18', by:'전부쌤', regDate:'06/08', channel:'텔레그램'},
-    {name:'강태오', sub:'수익', s:'2024타경59210', court:'부산지법', bidDate:'06/19', by:'대표님', regDate:'06/03', channel:'텔레그램'},
-    {name:'서지후', sub:'올인원', s:'2024타경59233', court:'수원', bidDate:'06/22', by:'대표님', regDate:'06/03', channel:'텔레그램'},
-    {name:'남도현', sub:'수익', s:'2024타경59301', court:'대구', bidDate:'06/24', by:'전부쌤', regDate:'06/03', channel:'텔레그램'},
-    {name:'임채원', sub:'수익', s:'2024타경59377', court:'서울동부', bidDate:'06/25', by:'대표님', regDate:'06/05', channel:'카카오톡'},
-    {name:'한지영', sub:'수익', s:'2024타경59401', court:'창원지법', bidDate:'06/26', by:'전부쌤', regDate:'06/08', channel:'텔레그램'},
-  ];
-  let DELIVERED = [
-    {name:'강태오', s:'2024타경58010', court:'부산지법', bidDate:'06/12', date:'05/16', by:'전부쌤'},
-    {name:'서지후', s:'2024타경58220', court:'창원지법', bidDate:'06/20', date:'05/20', by:'대표님'},
-    {name:'윤재호', s:'2024타경58330', court:'대구지법', bidDate:'06/23', date:'05/27', by:'대표님'},
-    {name:'조현우', s:'2024타경57801', court:'부산지법', bidDate:'06/11', date:'06/02', by:'대표님'},
-    {name:'한지영', s:'2024타경57820', court:'창원지법', bidDate:'06/13', date:'06/02', by:'전부쌤'},
-    {name:'강태오', s:'2024타경57930', court:'부산지법', bidDate:'06/15', date:'06/04', by:'대표님'},
-    {name:'서지후', s:'2024타경57955', court:'수원', bidDate:'06/16', date:'06/04', by:'대표님'},
-    {name:'조현우', s:'2024타경58002', court:'부산지법', bidDate:'06/17', date:'06/08', by:'대표님'},
-  ];
 
-  const subChip = s => { const m={'수익':'border-emerald-500 text-emerald-700','월세':'border-amber-500 text-amber-700','올인원':'border-violet-500 text-violet-700'}; return `<span class="inline-block w-[44px] text-center text-[10px] font-bold py-0.5 rounded border bg-white ${m[s]||'border-gray-400 text-gray-600'}">${s}</span>`; };
-  const TELE_OFF = new Set(['임채원']);
+  const subChip = s => { const m={'수익':'border-emerald-500 text-emerald-700','월세':'border-amber-500 text-amber-700','올인원':'border-violet-500 text-violet-700'}; return s? `<span class="inline-block w-[44px] text-center text-[10px] font-bold py-0.5 rounded border bg-white ${m[s]||'border-gray-400 text-gray-600'}">${s}</span>` : ''; };
+  let TELE_OFF = new Set();
   const teleBadge = name => `<span class="inline-grid place-items-center w-4 h-4 rounded-full text-[9px] font-bold align-middle mr-1 ${TELE_OFF.has(name)?'bg-gray-300 text-white':'bg-sky-500 text-white'}" title="${TELE_OFF.has(name)?'텔레그램 미연결':'텔레그램 연결됨'}">T</span>`;
+
+  // ── 서버 데이터 → 내부 구조(DK/CAND/WAIT/DELIVERED) 변환 ──
+  const parseCohort = (name,grade) => { const m=((name||'')+' '+(grade||'')).match(/(\d+)\s*기/); return m?Number(m[1]):''; };
+  const ymdToMD = iso => { const d=parseDate(iso); return d?fmtMD(d):'—'; };
+  function buildFromServer(data){
+    TODAY = parseDate(data.today) || new Date(); TODAY.setHours(0,0,0,0);
+    // 회원별 추천완료(hist) 집계: delivered eventDate(일자)별 건수
+    const histByMember = {};
+    (data.delivered||[]).forEach(d=>{
+      const ev=(d.eventDate||'').slice(0,10); if(!d.memberId||!ev) return;
+      (histByMember[d.memberId]=histByMember[d.memberId]||{})[ev]=(histByMember[d.memberId][ev]||0)+1;
+    });
+    DK = (data.members||[]).map(m=>{
+      const hm=histByMember[m.id]||{};
+      const hist=Object.keys(hm).sort().map(d=>({d,q:hm[d]}));
+      return { id:m.id, name:m.name, sub:m.sub||'', cohort:parseCohort(m.className,m.grade),
+               phone:m.phone||'', status:m.status||'진행', hold:m.hold||'', note:m.note||'', hist };
+    });
+    TELE_OFF = new Set((data.members||[]).filter(m=>!m.telegram).map(m=>m.name));
+    // 돈클 로스터 한정 + 이름은 로스터명으로 정규화 (MIS 백필 m_name에 명의 섞임 대비)
+    const rosterById={}; DK.forEach(m=>{ rosterById[m.id]=m; });
+    CAND = (data.candidates||[]).map(c=>({
+      id:c.id, date:(c.inDate||'').replace(/-/g,'').slice(2), bid:c.inDate, s:c.sakun_no, court:c.court,
+      youngdo:c.youngdo||'등록전', stu:c.stu, member:c.member, mgr:c.mgr, note:c.note||''
+    }));
+    WAIT = (data.wait||[]).filter(w=>rosterById[w.memberId]).map(w=>{ const mem=rosterById[w.memberId];
+      return { id:w.id, memberId:w.memberId, name:mem.name, sub:mem.sub, s:w.sakun_no, court:w.court,
+               bidDate:ymdToMD(w.inDate), by:w.by, regDate:(w.regDate||'').slice(0,10), note:w.note||'' }; });
+    DELIVERED = (data.delivered||[]).filter(d=>rosterById[d.memberId]).map(d=>({
+      memberId:d.memberId, name:rosterById[d.memberId].name, s:d.sakun_no, court:d.court,
+      bidDate:ymdToMD(d.inDate), date:(d.eventDate||'').slice(0,10), by:d.by }));
+  }
+  let _loading=false;
+  REC.load = function(){
+    if(_loading) return; _loading=true;
+    const body=document.getElementById('queueBody');
+    if(body) body.innerHTML='<tr><td colspan="11" class="py-6 text-center text-gray-400">불러오는 중…</td></tr>';
+    google.script.run
+      .withSuccessHandler(function(data){
+        _loading=false;
+        if(!data||!data.success){ toast('데이터 로드 실패'+(data&&data.message?': '+data.message:'')); return; }
+        buildFromServer(data);
+        const di=document.getElementById('dateInput'); if(di) di.value=data.today;
+        renderQueue(); renderWait();
+        const md=document.getElementById('recPickModal');
+        if(md && !md.classList.contains('hidden')){ renderPickerList(); renderCart(); }
+        const a=DK.map(m=>({m,k:calc(m)})).filter(x=>!x.k.held&&!x.k.ended&&!x.k.fresh)
+          .sort((x,y)=>(y.k.owed-x.k.owed)||((x.k.dleft==null?1e9:x.k.dleft)-(y.k.dleft==null?1e9:y.k.dleft)))[0];
+        openMemberRecs(a? a.m.name : (DK[0]&&DK[0].name));
+      })
+      .withFailureHandler(function(e){ _loading=false; toast('로드 오류: '+(e&&e.message||e)); })
+      .getRecManagementData();
+  };
 
   function calc(m){
     const total = m.hist.reduce((s,h)=>s+h.q,0);
@@ -506,6 +514,7 @@
     if(st==='보류'){ const d=prompt(`${name} 보류 해제 예정일 (MM/DD, 미정이면 비워두기)`, m.hold||''); m.hold=(d||'').trim(); }
     else m.hold='';
     m.status=st; renderQueue(); if(name===curRecMember) openMemberRecs(name); toast(`${name} → ${st}`);
+    if(m.id) google.script.run.setDonkleMemberStatus(m.id, st, m.hold||'');
   }
   function visibleMembers(){ return DK.filter(passFilter).map(m=>m.name); }
   function toggleSel(name,on){ if(on)SELECTED.add(name); else SELECTED.delete(name); updateBulkBar(); }
@@ -572,9 +581,18 @@
   function confirmPicker(){
     const m=DK.find(x=>x.name===modalMember); if(!m){ closeModal(); return; }
     if(!cart.length){ toast('선택된 물건이 없습니다'); return; }
-    cart.forEach(s=>{ const c=CAND.find(x=>x.s===s); if(c) WAIT.push({name:m.name, sub:m.sub, s:c.s, court:c.court, bidDate:c.bid, by:'대표님', regDate:fmtMD(TODAY), channel:'텔레그램'}); });
-    const n=cart.length; cart=[]; closeModal(); renderQueue(); renderWait(); openMemberRecs(m.name);
-    toast(`${m.name} 앞으로 ${n}건 전달대기 등록`);
+    const ids=cart.map(s=>{ const c=CAND.find(x=>x.s===s); return c?c.id:null; }).filter(Boolean);
+    if(!ids.length){ toast('물건 ID를 찾을 수 없습니다'); return; }
+    const n=ids.length; const mname=m.name;
+    closeModal(); toast(`${mname} 앞으로 ${n}건 등록 중…`);
+    google.script.run
+      .withSuccessHandler(function(res){
+        if(res&&res.success){ toast(`${mname} 앞으로 ${res.count}건 전달대기 등록`); REC.load(); }
+        else toast('등록 실패'+(res&&res.message?': '+res.message:''));
+      })
+      .withFailureHandler(function(e){ toast('등록 오류: '+(e&&e.message||e)); })
+      .registerDonkleRecommendation(m.id, mname, ids);
+    cart=[];
   }
   function deliver(idx, ch){
     const w = WAIT[idx]; if(!w) return;
@@ -587,8 +605,8 @@
   }
 
   function recsFor(name){
-    const w = WAIT.filter(x=>x.name===name).map(x=>({bid:x.bidDate||'—', req:x.regDate||'—', s:x.s, court:x.court, mgr:x.by||'-', status:'대기'}));
-    const d = DELIVERED.filter(x=>x.name===name).map(x=>({bid:x.bidDate||'—', req:x.date||'—', s:x.s, court:x.court, mgr:x.by||'-', status:'완료'}));
+    const w = WAIT.filter(x=>x.name===name).map(x=>({id:x.id, bid:x.bidDate||'—', req:(x.regDate?ymdToMD(x.regDate):'—'), s:x.s, court:x.court, mgr:x.by||'-', status:'대기', note:x.note||''}));
+    const d = DELIVERED.filter(x=>x.name===name).map(x=>({id:'', bid:x.bidDate||'—', req:(x.date?ymdToMD(x.date):'—'), s:x.s, court:x.court, mgr:x.by||'-', status:'완료', note:''}));
     return w.concat(d);
   }
   let curRecMember = null;
@@ -614,7 +632,7 @@
       </div>
       <div class="border-b border-gray-200 bg-white px-4 py-3">
         <div class="text-[11px] text-gray-400 mb-1">선택한 추천 물건</div>
-        <div class="flex items-center gap-1.5 flex-wrap">${teleBadge(name)}<span class="text-base font-extrabold text-gray-800">${name}</span>${m?subChip(m.sub):''}${m?`<span class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-semibold border border-indigo-100">돈클 ${m.cohort}기</span>`:''}${lifeChip}</div>
+        <div class="flex items-center gap-1.5 flex-wrap">${teleBadge(name)}<span class="text-base font-extrabold text-gray-800">${name}</span>${m?subChip(m.sub):''}${m&&m.cohort?`<span class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-semibold border border-indigo-100">돈클 ${m.cohort}기</span>`:''}${lifeChip}</div>
         ${m?`<div class="text-[12px] text-gray-500 mt-1.5 flex items-center gap-1"><span class="text-gray-400">📞</span>${m.phone}</div>`:''}
       </div>
       <div class="p-3">
@@ -623,25 +641,21 @@
           <thead><tr class="text-gray-500 border-b border-gray-200">
             <th class="text-center py-2 font-semibold">추천요청</th><th class="text-center py-2 font-semibold">입찰일자</th><th class="text-left py-2 font-semibold">사건번호</th><th class="text-left py-2 font-semibold">법원</th><th class="text-center py-2 font-semibold">담당</th><th class="text-center py-2 font-semibold">진행상태</th>
           </tr></thead><tbody>
-          ${list.map(r=>`<tr class="border-b border-gray-100">
+          ${list.map(r=>`<tr class="${r.status==='대기'?'':'border-b border-gray-100'}">
             <td class="py-2 text-center text-gray-500">${r.req}</td>
             <td class="py-2 text-center text-gray-500">${r.bid}</td>
             <td class="py-2 font-medium text-gray-800">${r.s}</td>
             <td class="py-2 text-gray-500">${r.court}</td>
             <td class="py-2 text-center text-gray-500">${r.mgr}</td>
             <td class="py-2 text-center">${recTag(r.status)}</td>
-          </tr>`).join('')}
+          </tr>${ r.status==='대기' ? `<tr class="border-b border-gray-100"><td colspan="6" class="pb-2 px-1">
+            <div class="flex items-center gap-1">
+              <span class="text-[10px] text-amber-700 font-bold flex-none">📝비고</span>
+              <input value="${escHtml(r.note)}" placeholder="물건 추천비고 (전달담당자용 · items.note)" onchange="REC.saveItemNote('${r.id}',this.value)" onfocus="this.select()" class="flex-1 min-w-0 text-[11px] border border-amber-300 rounded px-1.5 py-1 bg-amber-50/40 focus:outline-none focus:ring-1 focus:ring-amber-300">
+            </div></td></tr>` : '' }`).join('')}
           </tbody></table>` : '<div class="text-sm text-gray-400 py-8 text-center">선택된 추천 물건이 없습니다<br><span class="text-[11px]">왼쪽 회원 클릭 또는 추천하기로 등록</span></div>' }
       </div>
-      <div class="px-3 pt-3 border-t border-gray-100">
-        <div class="flex items-center mb-1.5 px-1 gap-2">
-          <span class="text-xs font-bold text-amber-700">📝 물건 추천 비고</span>
-          <span class="text-[10px] text-gray-400">전달담당자 확인용</span>
-          <button onclick="REC.saveRecNote('${name}')" class="ml-auto px-2.5 py-0.5 rounded bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-semibold">저장</button>
-        </div>
-        <textarea id="recNote" class="w-full h-20 border border-amber-300 rounded-lg px-2.5 py-2 text-xs text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 bg-amber-50/40" placeholder="전달담당자에게 전할 메모 (예: 카톡으로만, 시세 강조 등)">${m?(m.recNote||''):''}</textarea>
-      </div>
-      <div class="px-3 pb-4 pt-3">
+      <div class="px-3 pb-4 pt-3 border-t border-gray-100">
         <div class="flex items-center mb-1.5 px-1 gap-2">
           <span class="text-xs font-bold text-gray-600">회원 비고</span>
           <span class="text-[10px] text-gray-400">member 시트</span>
@@ -651,8 +665,8 @@
       </div>`;
     renderQueue();
   }
-  function saveMemberNote(name){ const m=DK.find(x=>x.name===name); const el=document.getElementById('memberNote'); if(m&&el){ m.note=el.value; toast(`${name} 회원 비고 저장`); } }
-  function saveRecNote(name){ const m=DK.find(x=>x.name===name); const el=document.getElementById('recNote'); if(m&&el){ m.recNote=el.value; renderWait(); toast(`${name} 물건추천비고 저장 (전달담당자 확인 가능)`); } }
+  function saveMemberNote(name){ const m=DK.find(x=>x.name===name); const el=document.getElementById('memberNote'); if(m&&el){ m.note=el.value; if(m.id) google.script.run.updateMemberField(m.id,'note1',el.value); toast(`${name} 회원 비고 저장`); } }
+  function saveItemNote(id,note){ if(!id) return; const w=WAIT.find(x=>String(x.id)===String(id)); if(w) w.note=note; google.script.run.setItemNote(id,note); toast('물건 추천비고 저장'); }
 
   const lifeChipMap={'진행':'bg-emerald-100 text-emerald-700','보류':'bg-violet-100 text-violet-700','종료':'bg-gray-200 text-gray-500','신규':'bg-cyan-100 text-cyan-700'};
   const lifeChipOf = st => `<span class="chip ${lifeChipMap[st]||'bg-gray-100 text-gray-500'}">${st}</span>`;
@@ -681,7 +695,7 @@
   function applyBulk(){
     const tgt=document.getElementById('bulkTarget').value;
     const hold = tgt==='보류' ? (document.getElementById('bulkHold').value||'').trim() : '';
-    let n=0; SELECTED.forEach(name=>{ const m=DK.find(x=>x.name===name); if(m){ m.status=tgt; m.hold=hold; n++; } });
+    let n=0; SELECTED.forEach(name=>{ const m=DK.find(x=>x.name===name); if(m){ m.status=tgt; m.hold=hold; n++; if(m.id) google.script.run.setDonkleMemberStatus(m.id, tgt, hold); } });
     SELECTED.clear(); const a=document.getElementById('selAll'); if(a)a.checked=false;
     closeBulkModal(); renderQueue(); if(curRecMember) openMemberRecs(curRecMember);
     toast(`${n}명 → ${tgt} 일괄적용 완료`);
@@ -830,15 +844,14 @@
     switchTab, setStat, setSoon, sortQueue, toggleSelAll, toggleSel, setLife,
     openBulkModal, closeBulkModal, onBulkTargetChange, applyBulk,
     openModal, closeModal, renderPickerList, addToCart, removeFromCart, confirmPicker, renderCart,
-    openMemberRecs, saveRecNote, saveMemberNote, setMemberStatus, setQueueQuery,
+    openMemberRecs, saveItemNote, saveMemberNote, setMemberStatus, setQueueQuery,
     calNav, calToday, setCalStatus, setCalQuery, gotoBid, showCalPop, hideCalPop, deliver,
     toggleTheme,
     refresh: function(){ renderQueue(); renderWait(); applyColw(); }
   });
 
-  // 초기 렌더 (화면이 hidden 이어도 DOM 존재 → 사전 렌더, navigateTo 시 그대로 표시)
+  // 초기: 빈 렌더만 (실데이터는 navigateTo('RecManagement') → REC.load() 가 채움)
   renderQueue(); renderWait();
   applyColw(); initColResize();
-  (function(){ const a=DK.map(m=>({m,k:calc(m)})).filter(x=>!x.k.held&&!x.k.ended&&!x.k.fresh).sort((x,y)=>(y.k.owed-x.k.owed)||((x.k.dleft==null?1e9:x.k.dleft)-(y.k.dleft==null?1e9:y.k.dleft)))[0]; openMemberRecs(a? a.m.name : (DK[0]&&DK[0].name)); })();
 })();
 </script>
