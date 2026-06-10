@@ -102,6 +102,50 @@ try:
 except Exception:
     pass
 
+# ── 서버 콘솔 로그를 메모리 링버퍼에 캡처 (매니저 UI '터미널' 탭에서 /api/server-logs 폴링 조회) ──
+import collections as _collections
+_LOG_BUF = _collections.deque(maxlen=3000)   # (seq, text) — 최근 3000줄
+_LOG_SEQ = [0]
+_LOG_LOCK = threading.Lock()
+
+class _TeeStream:
+    """원래 stream(stdout/stderr) 으로 그대로 출력하면서, 줄 단위로 _LOG_BUF 에도 적재."""
+    def __init__(self, real):
+        self._real = real
+        self._part = ""
+    def write(self, s):
+        try:
+            if self._real:
+                self._real.write(s)
+        except Exception:
+            pass
+        try:
+            with _LOG_LOCK:
+                self._part += s
+                while "\n" in self._part:
+                    line, self._part = self._part.split("\n", 1)
+                    _LOG_SEQ[0] += 1
+                    _LOG_BUF.append((_LOG_SEQ[0], line))
+        except Exception:
+            pass
+        return len(s)
+    def flush(self):
+        try:
+            if self._real:
+                self._real.flush()
+        except Exception:
+            pass
+    def isatty(self):
+        return False
+    def __getattr__(self, n):
+        return getattr(self._real, n)
+
+try:
+    sys.stdout = _TeeStream(sys.stdout)
+    sys.stderr = _TeeStream(sys.stderr)
+except Exception:
+    pass
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -1168,6 +1212,19 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
             self.wfile.write(b'{"ok":true,"cancelled":true}')
+            return
+        # 서버 콘솔 로그 조회 (터미널 탭 폴링) — since 이후 줄만 반환
+        if self.path.startswith("/api/server-logs"):
+            m = re.search(r"[?&]since=(\d+)", self.path)
+            since = int(m.group(1)) if m else 0
+            with _LOG_LOCK:
+                cur = _LOG_SEQ[0]
+                lines = [{"n": n, "t": t} for (n, t) in _LOG_BUF if n > since]
+            body = json.dumps({"seq": cur, "lines": lines}, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(body)
             return
         return super().do_GET()
 

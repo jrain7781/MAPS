@@ -10,6 +10,52 @@
     // 탭 진입 시 초기화 hook
     if (name === 'capture') { initCaptureTabOnce(); }
     if (name === 'kakao') { refreshKakaoStatus(); }
+    if (name === 'termlog') { startTermLog(); } else { stopTermLog(); }
+  }
+
+  // ========== 터미널 (서버 콘솔 로그) ==========
+  let _termTimer = null, _termSeq = 0, _termPaused = false;
+  function _termEl() { return document.getElementById('serverLogView'); }
+  function _termAppend(lines) {
+    const el = _termEl(); if (!el) return;
+    if (el.dataset.init !== '1') { el.textContent = ''; el.dataset.init = '1'; }
+    const auto = document.getElementById('termAutoScroll')?.checked;
+    const frag = lines.map(l => l.t).join('\n');
+    if (frag) el.textContent += (el.textContent ? '\n' : '') + frag;
+    const arr = el.textContent.split('\n');
+    if (arr.length > 4000) el.textContent = arr.slice(arr.length - 4000).join('\n');  // 화면 줄수 상한
+    if (auto) el.scrollTop = el.scrollHeight;
+  }
+  async function _termPoll() {
+    if (_termPaused) return;
+    try {
+      const r = await fetch('/api/server-logs?since=' + _termSeq);
+      if (!r.ok) return;
+      const j = await r.json();
+      if (typeof j.seq === 'number') _termSeq = j.seq;
+      if (j.lines && j.lines.length) _termAppend(j.lines);
+    } catch (e) {}
+  }
+  function _termBindOnce() {
+    if (_termBindOnce._done) return; _termBindOnce._done = true;
+    document.getElementById('termPauseBtn')?.addEventListener('click', () => {
+      _termPaused = !_termPaused;
+      const b = document.getElementById('termPauseBtn');
+      if (b) b.textContent = _termPaused ? '▶ 재개' : '⏸ 일시정지';
+    });
+    document.getElementById('termClearBtn')?.addEventListener('click', () => {
+      const el = _termEl(); if (el) { el.textContent = ''; el.dataset.init = '1'; }
+    });
+  }
+  function startTermLog() {
+    _termBindOnce();
+    const el = _termEl();
+    if (el && el.dataset.init !== '1') { _termSeq = 0; el.textContent = '로그 불러오는 중…'; }  // 최초 진입: 전체 버퍼부터
+    _termPoll();
+    if (!_termTimer) _termTimer = setInterval(_termPoll, 1500);
+  }
+  function stopTermLog() {
+    if (_termTimer) { clearInterval(_termTimer); _termTimer = null; }
   }
   document.addEventListener('click', e => {
     const b = e.target.closest('.mjTab');
