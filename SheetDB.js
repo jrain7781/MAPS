@@ -9056,18 +9056,20 @@ function getRecManagementData() {
     classes.forEach(function (c) { classMap[String(c.class_id)] = c; });
 
     var mSheet = ss.getSheetByName(DB_MEMBERS_SHEET_NAME);
-    var dc = _ensureMemberStatusCols_(mSheet); // {statusCol, holdCol} (1-based)
+    var dc = _ensureMemberStatusCols_(mSheet); // {statusCol, holdCol, groupCol} (1-based)
     var lastRowM = mSheet.getLastRow();
-    var statusMap = {}, holdMap = {};
+    var statusMap = {}, holdMap = {}, groupMap = {};
     if (lastRowM >= 2) {
       var idCol = mSheet.getRange(2, 1, lastRowM - 1, 1).getValues();
       var sCol = mSheet.getRange(2, dc.statusCol, lastRowM - 1, 1).getValues();
       var hCol = mSheet.getRange(2, dc.holdCol, lastRowM - 1, 1).getValues();
+      var gCol = mSheet.getRange(2, dc.groupCol, lastRowM - 1, 1).getValues();
       for (var i = 0; i < idCol.length; i++) {
         var mid0 = String(idCol[i][0]).trim();
         if (!mid0) continue;
         statusMap[mid0] = String(sCol[i][0] || '').trim();
         holdMap[mid0] = String(hCol[i][0] || '').trim();
+        groupMap[mid0] = String(gCol[i][0] || '').trim().toUpperCase();
       }
     }
 
@@ -9086,6 +9088,7 @@ function getRecManagementData() {
         note: String(m.note1 || ''),
         status: statusMap[mid] || '',
         hold: holdMap[mid] || '',
+        group: (groupMap[mid] === 'A' || groupMap[mid] === 'B') ? groupMap[mid] : '',
         telegram: String(m.telegram_enabled || '').toUpperCase() === 'Y',
         sub: ''
       });
@@ -9165,7 +9168,7 @@ function getRecManagementData() {
       });
     }
 
-    return { success: true, today: todayStr, members: roster, delivered: delivered, wait: wait, candidates: candidates };
+    return { success: true, today: todayStr, groupAnchor: getDonkleGroupAnchor_(), members: roster, delivered: delivered, wait: wait, candidates: candidates };
   } catch (e) {
     Logger.log('[getRecManagementData] ' + e.toString());
     return { success: false, message: String(e), members: [], delivered: [], wait: [], candidates: [] };
@@ -9204,6 +9207,7 @@ function _ensureMemberStatusCols_(sheet) {
   if ((leg = find('donkle_hold')) > 0) { sheet.getRange(1, leg).setValue('hold'); headerRow[leg - 1] = 'hold'; }
   var statusCol = find('status');
   var holdCol = find('hold');
+  var groupCol = find('rec_group');   // 추천 A/B 그룹
   var lastCol = sheet.getLastColumn();
   var addCol = function (name) {
     var col = lastCol + 1;
@@ -9214,7 +9218,43 @@ function _ensureMemberStatusCols_(sheet) {
   };
   if (statusCol < 0) statusCol = addCol('status');
   if (holdCol < 0) holdCol = addCol('hold');
-  return { statusCol: statusCol, holdCol: holdCol };
+  if (groupCol < 0) groupCol = addCol('rec_group');
+  return { statusCol: statusCol, holdCol: holdCol, groupCol: groupCol };
+}
+
+// ===== [돈클] 추천 A/B 그룹 격주 로테이션 =====
+/** 회원 추천그룹(A/B) 저장 (members 끝 rec_group). group='' 면 미지정(기존 14일 로직) */
+function setRecGroup(memberId, group) {
+  try {
+    var g = String(group || '').trim().toUpperCase();
+    if (g !== 'A' && g !== 'B') g = '';
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_MEMBERS_SHEET_NAME);
+    var dc = _ensureMemberStatusCols_(sheet);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '회원 없음' };
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === String(memberId).trim()) {
+        sheet.getRange(i + 2, dc.groupCol).setValue(g);
+        SpreadsheetApp.flush();
+        return { success: true, group: g };
+      }
+    }
+    return { success: false, message: 'member_id 없음' };
+  } catch (e) { return { success: false, message: String(e) }; }
+}
+
+/** 그룹 앵커(A주 월요일 ISO 'YYYY-MM-DD') 조회 — 없으면 '' */
+function getDonkleGroupAnchor_() {
+  try { return String(PropertiesService.getScriptProperties().getProperty('donkle_group_anchor') || ''); }
+  catch (e) { return ''; }
+}
+/** 그룹 앵커 저장 — mondayIso = 'A그룹 주'의 월요일 날짜 (프론트에서 계산해 전달) */
+function setDonkleGroupAnchor(mondayIso) {
+  try {
+    PropertiesService.getScriptProperties().setProperty('donkle_group_anchor', String(mondayIso || ''));
+    return { success: true };
+  } catch (e) { return { success: false, message: String(e) }; }
 }
 
 /** 물건 추천비고 저장 — items.note (단일 필드). 추천물건관리 우측패널에서 호출 */

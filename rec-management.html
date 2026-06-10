@@ -32,6 +32,11 @@
   #RecManagement .cal-cell{ min-height:80px; border:1px solid #eef0f4; border-radius:8px; padding:5px 6px; background:#fff; }
   #RecManagement .cal-empty{ border:none; background:transparent; }
   #RecManagement .cal-today{ border-color:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,.18); }
+  /* 추천 A/B 그룹 주 색칠 (상단 컬러 바 + 옅은 배경) */
+  #RecManagement .cal-grp-A{ border-top:3px solid rgba(99,102,241,.55); background:rgba(99,102,241,.045); }
+  #RecManagement .cal-grp-B{ border-top:3px solid rgba(245,158,11,.6); background:rgba(245,158,11,.05); }
+  #RecManagement.dark .cal-grp-A{ background:rgba(99,102,241,.12); }
+  #RecManagement.dark .cal-grp-B{ background:rgba(245,158,11,.12); }
   #RecManagement .cal-day{ font-size:12px; font-weight:700; margin-bottom:3px; }
   #RecManagement .cal-name{ font-size:10px; font-weight:600; border-radius:4px; padding:1px 5px; margin-top:2px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #RecManagement .cal-sum{ font-size:9.5px; font-weight:700; color:#64748b; margin-left:4px; }
@@ -133,6 +138,8 @@
       <input id="dateInput" type="date" value="2026-06-08" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700"> · 추천 주기
       <input id="cycleInput" type="number" min="1" value="14" onfocus="this.select()" onclick="this.select()" class="w-12 border border-gray-300 rounded px-1.5 py-0.5 text-center text-gray-700"> 일
       <button id="cycleSave" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-semibold">저장</button>
+      <span class="w-px h-4 bg-gray-200 mx-0.5"></span>그룹 이번주
+      <select id="groupAnchorSel" onchange="REC.setAnchorUI(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700 bg-white" title="이번 주를 어느 그룹 주로 둘지(격주 앵커)"><option value="A">A주</option><option value="B">B주</option></select>
       <span class="w-px h-4 bg-gray-200 mx-0.5"></span>
       <button id="recThemeBtn" onclick="REC.toggleTheme()" class="text-[11px] border border-gray-300 rounded-lg px-2.5 py-1 text-gray-600">나이트 모드</button></div>
   </div>
@@ -223,6 +230,9 @@
       <div class="flex items-center flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] text-gray-400">
         <span class="flex items-center gap-1"><span class="cal-mem cal-st-대기" style="cursor:default"><span class="cal-mbadge">N</span>대기</span> 전달 대기</span>
         <span class="flex items-center gap-1"><span class="cal-mem cal-st-완료" style="cursor:default"><span class="cal-mbadge">N</span>완료</span> 전달 완료</span>
+        <span class="text-gray-300">·</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="border-top:3px solid rgba(99,102,241,.55);background:rgba(99,102,241,.06)"></span>A주</span>
+        <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-sm" style="border-top:3px solid rgba(245,158,11,.6);background:rgba(245,158,11,.06)"></span>B주 <span class="text-gray-400">(격주 추천)</span></span>
         <span class="text-gray-300">·</span>
         <span>뱃지=당일 추천 물건수 · 색=진행여부 · 뱃지 <b class="text-gray-700">⬤</b> 검은점=추천비고 있음(hover) · 칩 클릭 시 입찰물건관리 이동</span>
       </div>
@@ -326,6 +336,10 @@
   const REC = window.REC = window.REC || {};
   let TODAY = new Date(); TODAY.setHours(0,0,0,0);  // 실제 오늘 (load 시 서버 today로 보정)
   let CYCLE = 14;
+  // 추천 A/B 그룹 격주 로테이션
+  let GROUP_ANCHOR = null;  // 'A그룹 주'의 월요일 Date (앵커). null이면 그룹로직 미적용
+  const weekMonday = d => { const x=new Date(d); const wd=(x.getDay()+6)%7; x.setDate(x.getDate()-wd); x.setHours(0,0,0,0); return x; };
+  const groupOfWeek = mon => { if(!GROUP_ANCHOR) return null; const diff=Math.round((mon-GROUP_ANCHOR)/(7*86400000)); return ((((diff%2)+2)%2)===0)?'A':'B'; };
   // 'YYYY-MM-DD' 또는 'M/D' 모두 파싱 (M/D는 올해 기준)
   const parseDate = s => {
     if(!s) return null; s=String(s).trim();
@@ -348,12 +362,16 @@
   const subChip = s => { const m={'수익':'border-emerald-500 text-emerald-700','월세':'border-amber-500 text-amber-700','올인원':'border-violet-500 text-violet-700'}; return s? `<span class="inline-block w-[44px] text-center text-[10px] font-bold py-0.5 rounded border bg-white ${m[s]||'border-gray-400 text-gray-600'}">${s}</span>` : ''; };
   let TELE_OFF = new Set();
   const teleBadge = name => `<span class="inline-grid place-items-center w-4 h-4 rounded-full text-[9px] font-bold align-middle mr-1 ${TELE_OFF.has(name)?'bg-gray-300 text-white':'bg-sky-500 text-white'}" title="${TELE_OFF.has(name)?'텔레그램 미연결':'텔레그램 연결됨'}">T</span>`;
+  // 추천 A/B 그룹 토글 배지 (회원명 앞). 클릭: 미지정→A→B→미지정
+  const groupBadge = m => { const g=m.group; const cls = g==='A'?'bg-indigo-100 text-indigo-700 border-indigo-300' : g==='B'?'bg-amber-100 text-amber-700 border-amber-300' : 'bg-gray-100 text-gray-400 border-gray-200'; return `<span onclick="event.stopPropagation();REC.cycleGroup('${m.name}')" title="추천그룹 (클릭: A→B→미지정)" class="inline-grid place-items-center w-5 h-5 rounded border text-[10px] font-extrabold cursor-pointer mr-1 align-middle ${cls}">${g||'·'}</span>`; };
 
   // ── 서버 데이터 → 내부 구조(DK/CAND/WAIT/DELIVERED) 변환 ──
   const parseCohort = (name,grade) => { const m=((name||'')+' '+(grade||'')).match(/(\d+)\s*기/); return m?Number(m[1]):''; };
   const ymdToMD = iso => { const d=parseDate(iso); return d?fmtMD(d):'—'; };
   function buildFromServer(data){
     TODAY = parseDate(data.today) || new Date(); TODAY.setHours(0,0,0,0);
+    // 그룹 앵커: 서버값(A주 월요일) 없으면 이번 주를 A로 기본 세팅
+    GROUP_ANCHOR = parseDate(data.groupAnchor) || weekMonday(TODAY);
     // 회원별 추천완료(hist) 집계: delivered eventDate(일자)별 건수
     const histByMember = {};
     (data.delivered||[]).forEach(d=>{
@@ -363,7 +381,7 @@
     DK = (data.members||[]).map(m=>{
       const hm=histByMember[m.id]||{};
       const hist=Object.keys(hm).sort().map(d=>({d,q:hm[d]}));
-      return { id:m.id, name:m.name, sub:m.sub||'', cohort:parseCohort(m.className,m.grade),
+      return { id:m.id, name:m.name, sub:m.sub||'', cohort:parseCohort(m.className,m.grade), group:(m.group==='A'||m.group==='B')?m.group:'',
                phone:m.phone||'', status:m.status||'진행', hold:m.hold||'', note:m.note||'', hist };
     });
     TELE_OFF = new Set((data.members||[]).filter(m=>!m.telegram).map(m=>m.name));
@@ -409,12 +427,32 @@
     const lastQ = lastH ? lastH.q : 0;
     if(m.status==='종료') return {total,last,lastQ,next:null,dleft:null,owed:0,ended:true};
     if(m.status==='보류') return {total,last,lastQ,next:null,dleft:null,owed:0,held:true};
+    // A/B 그룹 회원 + 앵커 있으면 격주 로테이션, 아니면 기존 14일
+    if((m.group==='A'||m.group==='B') && GROUP_ANCHOR) return calcGroup(m, total, last);
     if(!last) return {total,last:null,lastQ:0,next:null,dleft:null,owed:0,fresh:true};
     const base = parseMD(last);
     const next = addDays(base, (lastQ||1)*CYCLE);
     const dleft = dayDiff(next, TODAY);
     const owed = dleft<0 ? Math.floor(-dleft/CYCLE)+1 : 0;
     return {total,last,lastQ,next,dleft,owed};
+  }
+  // 그룹(A/B) 격주: 다음 의무 G주 일요일 기준 dleft 산출 → 기존 statusCell/정렬/표시 그대로 재사용
+  //  · 오프주 추천 = 다음 G주 선충족, 추천=긴급해제 (마지막추천일→채운슬롯→+2주 매핑으로 자동 처리)
+  function calcGroup(m, total, last){
+    let nextMon;
+    if(!last){
+      let wm = weekMonday(TODAY);
+      if(groupOfWeek(wm)!==m.group) wm = addDays(wm,7);   // 이번주가 내 그룹 아니면 다음 주가 의무주
+      nextMon = wm;
+    } else {
+      const lm = weekMonday(parseDate(last));
+      const filled = (groupOfWeek(lm)===m.group) ? lm : addDays(lm,7);  // 오프주 추천 → 다음 G주 선충족
+      nextMon = addDays(filled,14);                        // 그 다음 G주(2주 뒤)가 다음 의무
+    }
+    const sun = addDays(nextMon,6);                         // 의무주 일요일(마감)
+    const dleft = dayDiff(sun, TODAY);                      // 마감까지 남은(+)/지난(-) 일수
+    const owed = dleft<0 ? Math.floor(-dleft/14)+1 : 0;
+    return {total,last,lastQ:0,next:sun,dleft,owed,fresh:!last,group:m.group,nextMon};
   }
   function statusCell(k){
     if(k.ended) return '<span class="chip bg-gray-200 text-gray-500">종료</span>';
@@ -427,6 +465,7 @@
   const waitCountFor = name => WAIT.filter(w=>w.name===name).length;
 
   function renderQueue(){
+    updateAnchorSel();
     renderStatBtns();
     let list = DK.filter(passFilter).map(m=>({m,k:calc(m)}));
     if(qSort.key){
@@ -458,7 +497,7 @@
         <td class="py-3 text-center"><input type="checkbox" ${checked} onclick="event.stopPropagation();REC.toggleSel('${m.name}',this.checked)"></td>
         <td class="py-3 text-center text-gray-500 font-semibold">${i+1}</td>
         <td class="py-3 text-center">${lifeSel}${holdNote}</td>
-        <td class="py-3 text-center font-semibold text-gray-800 whitespace-nowrap">${teleBadge(m.name)}${m.name}</td>
+        <td class="py-3 text-center font-semibold text-gray-800 whitespace-nowrap">${groupBadge(m)}${teleBadge(m.name)}${m.name}</td>
         <td class="py-3 text-center">${subChip(m.sub)}</td>
         <td class="py-3 text-center text-gray-700 font-semibold">${k.total}건</td>
         <td class="py-3 text-center text-gray-500">${k.last||'—'}</td>
@@ -523,6 +562,22 @@
     m.status=st; renderQueue(); if(name===curRecMember) openMemberRecs(name); toast(`${name} → ${st}`);
     if(m.id) google.script.run.setDonkleMemberStatus(m.id, st, m.hold||'');
   }
+  function cycleGroup(name){
+    const m=DK.find(x=>x.name===name); if(!m) return;
+    m.group = m.group==='A' ? 'B' : m.group==='B' ? '' : 'A';
+    if(m.id) google.script.run.setRecGroup(m.id, m.group);
+    renderQueue(); if(name===curRecMember) openMemberRecs(name, true);
+    toast(`${name} 추천그룹 → ${m.group||'미지정'}`);
+  }
+  function setAnchorUI(val){
+    const thisMon = weekMonday(TODAY);
+    GROUP_ANCHOR = (val==='B') ? addDays(thisMon,-7) : thisMon;  // A주면 이번주=A(앵커=이번주월), B주면 이번주=B(앵커=지난주월)
+    const iso = GROUP_ANCHOR.getFullYear()+'-'+String(GROUP_ANCHOR.getMonth()+1).padStart(2,'0')+'-'+String(GROUP_ANCHOR.getDate()).padStart(2,'0');
+    google.script.run.setDonkleGroupAnchor(iso);
+    renderQueue(); renderWait(); if(curRecMember) openMemberRecs(curRecMember, true);
+    toast('그룹 앵커: 이번 주 = '+val+'주');
+  }
+  function updateAnchorSel(){ const s=document.getElementById('groupAnchorSel'); if(s && GROUP_ANCHOR){ const g=groupOfWeek(weekMonday(TODAY)); if(g) s.value=g; } }
   function visibleMembers(){ return DK.filter(passFilter).map(m=>m.name); }
   function toggleSel(name,on){ if(on)SELECTED.add(name); else SELECTED.delete(name); updateBulkBar(); }
   function toggleSelAll(on){ visibleMembers().forEach(n=>{ on?SELECTED.add(n):SELECTED.delete(n); }); renderQueue(); updateBulkBar(); }
@@ -787,7 +842,9 @@
       }).join('');
       const dayCls=dow===0?'text-red-500':dow===6?'text-blue-500':'text-gray-600';
       const dayMark=d===todayIs?'<span class="inline-grid place-items-center w-5 h-5 rounded-full bg-indigo-600 text-white">'+d+'</span>':d;
-      cells+=`<div class="cal-cell ${d===todayIs?'cal-today':''}"><div class="cal-day ${dayCls}">${dayMark}${summary}</div><div class="cal-mems">${chips}</div></div>`;
+      const wg=groupOfWeek(weekMonday(new Date(calY,calM,d)));   // 이 칸이 속한 주의 그룹
+      const grpCls=wg==='A'?'cal-grp-A':wg==='B'?'cal-grp-B':'';
+      cells+=`<div class="cal-cell ${grpCls} ${d===todayIs?'cal-today':''}"><div class="cal-day ${dayCls}">${dayMark}${summary}</div><div class="cal-mems">${chips}</div></div>`;
     }
     document.getElementById('calGrid').innerHTML=cells;
   }
@@ -862,7 +919,7 @@
     switchTab, setStat, setSoon, sortQueue, toggleSelAll, toggleSel, setLife,
     openBulkModal, closeBulkModal, onBulkTargetChange, applyBulk,
     openModal, closeModal, renderPickerList, addToCart, removeFromCart, confirmPicker, renderCart,
-    openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, setQueueQuery,
+    openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, cycleGroup, setAnchorUI, setQueueQuery,
     calNav, calToday, setCalStatus, setCalQuery, gotoBid, showCalPop, hideCalPop, deliver,
     toggleTheme,
     refresh: function(){ renderQueue(); renderWait(); applyColw(); }
