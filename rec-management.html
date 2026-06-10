@@ -85,6 +85,8 @@
   #RecManagement #groupSummary .grpchip-B .gp-lbl.on{ background:#d97706; }
   #RecManagement #groupSummary .gp-u.on{ background:#dc2626; }
   #RecManagement #groupSummary .gp-s.on{ background:#f59e0b; }
+  #RecManagement #groupSummary .gp-w.on{ background:#0ea5e9; }
+  #RecManagement #groupSummary .gp-d.on{ background:#16a34a; }
   #RecManagement #groupSummary .gp-all{ border:1px solid #e5e7eb; background:#f3f4f6; color:#374151; }
   #RecManagement #groupSummary .gp-all.on{ background:#4b5563; }
   #RecManagement #groupSummary .gp-none{ border:1px solid #e5e7eb; background:#f9fafb; color:#9ca3af; }
@@ -170,6 +172,8 @@
       <button id="cycleSave" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-semibold">저장</button>
       <span class="w-px h-4 bg-gray-200 mx-0.5"></span>A그룹 시작주
       <input id="groupAnchorDate" type="date" onchange="REC.setAnchorDate(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700" title="A그룹이 시작되는 주의 날짜 — 그 주부터 격주로 A·B 교대">
+      <span class="text-gray-300">·</span>B그룹 시작주
+      <input id="groupAnchorDateB" type="date" onchange="REC.setAnchorDateB(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700" title="B그룹이 시작되는 주의 날짜 — A 시작주 다음 주(자동). 변경하면 A 시작주도 역산됩니다">
       <span id="anchorThisWeek" class="text-[11px] text-gray-500"></span>
       <span class="w-px h-4 bg-gray-200 mx-0.5"></span>
       <button id="recThemeBtn" onclick="REC.toggleTheme()" class="text-[11px] border border-gray-300 rounded-lg px-2.5 py-1 text-gray-600">나이트 모드</button></div>
@@ -282,7 +286,7 @@
     <div class="card w-full mx-4 flex flex-col" style="max-width:1320px;width:98vw;max-height:90vh;padding:0">
       <div class="px-4 py-3 border-b border-gray-200 flex items-center gap-2 relative">
         <h3 class="text-base font-bold text-gray-800 mx-auto">물건 선택</h3>
-        <button onclick="REC.load()" class="absolute left-4 text-xs px-2 py-0.5 rounded border bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-300">🔄 새로고침</button>
+        <button onclick="REC.load(true)" class="absolute left-4 text-xs px-2 py-0.5 rounded border bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-300">🔄 새로고침</button>
         <button onclick="REC.closeModal()" class="absolute right-3 text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
       </div>
       <div class="flex flex-1 min-h-0">
@@ -440,14 +444,16 @@
       memberId:d.memberId, name:rosterById[d.memberId].name, id:d.itemId||'', membersNote:d.membersNote||'', s:d.sakun_no, court:d.court,
       bidDate:ymdToMD(d.inDate), date:(d.eventDate||'').slice(0,10), by:d.by }));
   }
-  let _loading=false;
-  REC.load = function(){
-    if(_loading) return; _loading=true;
+  let _loading=false, _loaded=false;
+  REC.load = function(force){
+    if(_loading) return;
+    if(_loaded && !force) return;   // 1회 로드 후 캐시 (입찰물건관리처럼) — 변경(등록/새로고침) 시 force=true
+    _loading=true;
     const body=document.getElementById('queueBody');
     if(body) body.innerHTML='<tr><td colspan="11" class="py-6 text-center text-gray-400">불러오는 중…</td></tr>';
     google.script.run
       .withSuccessHandler(function(data){
-        _loading=false;
+        _loading=false; _loaded=true;
         if(!data||!data.success){ toast('데이터 로드 실패'+(data&&data.message?': '+data.message:'')); return; }
         buildFromServer(data);
         const di=document.getElementById('dateInput'); if(di) di.value=data.today;
@@ -574,15 +580,16 @@
   }
   // 그룹별 회원수/긴급/임박 — 그룹별 긴급·임박을 개별 클릭(그룹+상태 동시 필터), 선택건만 대비
   function renderGroupSummary(){
-    const stat={A:{n:0,u:0,s:0},B:{n:0,u:0,s:0},none:{n:0,u:0,s:0},all:{n:0,u:0,s:0}};
+    const stat={A:{n:0,u:0,s:0,w:0,d:0},B:{n:0,u:0,s:0,w:0,d:0},none:{n:0,u:0,s:0,w:0,d:0},all:{n:0,u:0,s:0,w:0,d:0}};
     DK.forEach(m=>{ const key=(m.group==='A'||m.group==='B')?m.group:'none'; const k=calc(m);
       const act=!k.held&&!k.ended&&!k.fresh, u=act&&k.dleft<0, s=act&&k.dleft>=0&&k.dleft<=SOON;
-      stat[key].n++; if(u)stat[key].u++; if(s)stat[key].s++;
-      stat.all.n++; if(u)stat.all.u++; if(s)stat.all.s++; });
+      const ps=progStateOf(m.name), w=ps==='대기', d=ps==='완료';
+      stat[key].n++; if(u)stat[key].u++; if(s)stat[key].s++; if(w)stat[key].w++; if(d)stat[key].d++;
+      stat.all.n++; if(u)stat.all.u++; if(s)stat.all.s++; if(w)stat.all.w++; if(d)stat.all.d++; });
     const gs=document.getElementById('groupSummary'); if(!gs) return;
     const isOn=(g,st)=> curGroupFilter===g && curStat===st;
     const seg=(g,st,lbl,cnt,cls)=>`<span class="gp ${cls} ${isOn(g,st)?'on':''}" onclick="REC.setGroupStat('${g}','${st}')">${lbl} <b>${cnt}</b></span>`;
-    const cluster=(g,cls,lbl)=>`<span class="grpchip ${cls}">${seg(g,'all',lbl,stat[g].n,'gp-lbl')}${seg(g,'urgent','긴급',stat[g].u,'gp-u')}${seg(g,'soon','임박',stat[g].s,'gp-s')}</span>`;
+    const cluster=(g,cls,lbl)=>`<span class="grpchip ${cls}">${seg(g,'all',lbl,stat[g].n,'gp-lbl')}${seg(g,'urgent','긴급',stat[g].u,'gp-u')}${seg(g,'soon','임박',stat[g].s,'gp-s')}${seg(g,'wait','대기',stat[g].w,'gp-w')}${seg(g,'done','완료',stat[g].d,'gp-d')}</span>`;
     gs.innerHTML = `<span class="text-[13px] text-gray-400 mr-0.5 font-semibold">그룹</span>`
       + seg('all','all','전체',stat.all.n,'gp-lbl gp-all')
       + cluster('A','grpchip-A','A')
@@ -646,8 +653,16 @@
     renderQueue(); renderWait(); if(curRecMember) openMemberRecs(curRecMember, true);
     toast('A그룹 시작주 = '+fmtMD(GROUP_ANCHOR)+' 주');
   }
+  function setAnchorDateB(val){
+    const d = parseDate(val); if(!d){ return; }
+    GROUP_ANCHOR = addDays(weekMonday(d), -7);   // B시작주 - 1주 = A시작주(앵커)
+    google.script.run.setDonkleGroupAnchor(isoOf(GROUP_ANCHOR));
+    renderQueue(); renderWait(); if(curRecMember) openMemberRecs(curRecMember, true);
+    toast('B그룹 시작주 = '+fmtMD(weekMonday(d))+' 주 (A = '+fmtMD(GROUP_ANCHOR)+' 주)');
+  }
   function updateAnchorSel(){
     const di=document.getElementById('groupAnchorDate'); if(di && GROUP_ANCHOR) di.value=isoOf(GROUP_ANCHOR);
+    const diB=document.getElementById('groupAnchorDateB'); if(diB && GROUP_ANCHOR) diB.value=isoOf(addDays(GROUP_ANCHOR,7)); // B = A + 1주
     const tw=document.getElementById('anchorThisWeek'); if(tw){ const g=groupOfWeek(weekMonday(TODAY)); tw.textContent = g?('이번주 '+g+'주'):''; }
   }
   function visibleMembers(){ return DK.filter(passFilter).map(m=>m.name); }
@@ -721,7 +736,7 @@
     closeModal(); toast(`${mname} 앞으로 ${n}건 등록 중…`);
     google.script.run
       .withSuccessHandler(function(res){
-        if(res&&res.success){ toast(`${mname} 앞으로 ${res.count}건 전달대기 등록`); REC.load(); }
+        if(res&&res.success){ toast(`${mname} 앞으로 ${res.count}건 전달대기 등록`); REC.load(true); }
         else toast('등록 실패'+(res&&res.message?': '+res.message:''));
       })
       .withFailureHandler(function(e){ toast('등록 오류: '+(e&&e.message||e)); })
@@ -1017,7 +1032,7 @@
     switchTab, setStat, setSoon, sortQueue, toggleSelAll, toggleSel, setLife,
     openBulkModal, closeBulkModal, onBulkTargetChange, applyBulk,
     openModal, closeModal, renderPickerList, addToCart, removeFromCart, confirmPicker, renderCart,
-    openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, setGroupSel, setGroupStat, setAnchorDate, setQueueQuery,
+    openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, setGroupSel, setGroupStat, setAnchorDate, setAnchorDateB, setQueueQuery,
     calNav, calToday, setCalStatus, setCalQuery, gotoBid, showCalPop, hideCalPop, deliver,
     toggleTheme,
     refresh: function(){ renderQueue(); renderWait(); applyColw(); }
