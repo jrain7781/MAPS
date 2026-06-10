@@ -73,21 +73,27 @@
   /* 그리드 열 너비 드래그 리사이즈 */
   #RecManagement #queueTable thead th{ position:relative; overflow:hidden; }
   #RecManagement #queueTable td{ overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
-  /* 그룹별 요약/필터 칩 */
-  #RecManagement .grpchip{ font-size:11px; font-weight:700; padding:4px 12px; border-radius:9999px; border:1px solid; cursor:pointer; transition:.12s; }
-  /* 선택(on) = 강한 대비: 굵게+그림자+살짝 확대 / 미선택은 디밍 */
-  #RecManagement .grpchip.on{ font-weight:800; box-shadow:0 2px 6px rgba(0,0,0,.22); transform:translateY(-1px); }
-  #RecManagement #groupSummary.has-sel .grpchip:not(.on){ opacity:.45; filter:saturate(.7); }
-  #RecManagement .grpchip-all{ color:#374151; background:#f3f4f6; border-color:#e5e7eb; }
-  #RecManagement .grpchip-all.on{ color:#fff; background:#4b5563; border-color:#4b5563; }
-  #RecManagement .grpchip-A{ color:#4338ca; background:#eef2ff; border-color:#c7d2fe; }
-  #RecManagement .grpchip-A.on{ color:#fff; background:#4f46e5; border-color:#4f46e5; }
-  #RecManagement .grpchip-A.on b, #RecManagement .grpchip-A.on span{ color:#fff !important; }
-  #RecManagement .grpchip-B{ color:#b45309; background:#fffbeb; border-color:#fcd34d; }
-  #RecManagement .grpchip-B.on{ color:#fff; background:#d97706; border-color:#d97706; }
-  #RecManagement .grpchip-B.on b, #RecManagement .grpchip-B.on span{ color:#fff !important; }
-  #RecManagement .grpchip-none{ color:#9ca3af; background:#f9fafb; border-color:#e5e7eb; }
-  #RecManagement .grpchip-none.on{ color:#fff; background:#9ca3af; border-color:#9ca3af; }
+  /* 그룹별 요약/필터 — A/B는 묶음 칩 안에 [라벨][긴급][임박] 세그먼트, 각각 개별 클릭 */
+  #RecManagement #groupSummary .grpchip{ display:inline-flex; align-items:center; gap:2px; padding:2px 3px; border-radius:9999px; border:1px solid; }
+  #RecManagement #groupSummary .grpchip-A{ background:#eef2ff; border-color:#c7d2fe; }
+  #RecManagement #groupSummary .grpchip-B{ background:#fffbeb; border-color:#fcd34d; }
+  #RecManagement #groupSummary .gp{ font-size:13px; font-weight:700; padding:2px 9px; border-radius:9999px; cursor:pointer; white-space:nowrap; color:#4b5563; transition:.12s; }
+  #RecManagement #groupSummary .gp:hover{ background:rgba(0,0,0,.07); }
+  #RecManagement #groupSummary .gp.on{ color:#fff !important; box-shadow:0 1px 3px rgba(0,0,0,.28); }
+  #RecManagement #groupSummary .gp.on b{ color:#fff !important; }
+  #RecManagement #groupSummary .grpchip-A .gp-lbl.on{ background:#4f46e5; }
+  #RecManagement #groupSummary .grpchip-B .gp-lbl.on{ background:#d97706; }
+  #RecManagement #groupSummary .gp-u.on{ background:#dc2626; }
+  #RecManagement #groupSummary .gp-s.on{ background:#f59e0b; }
+  #RecManagement #groupSummary .gp-all{ border:1px solid #e5e7eb; background:#f3f4f6; color:#374151; }
+  #RecManagement #groupSummary .gp-all.on{ background:#4b5563; }
+  #RecManagement #groupSummary .gp-none{ border:1px solid #e5e7eb; background:#f9fafb; color:#9ca3af; }
+  #RecManagement #groupSummary .gp-none.on{ background:#9ca3af; }
+  /* 다크 */
+  #RecManagement.dark #groupSummary .grpchip-A{ background:rgba(99,102,241,.14); }
+  #RecManagement.dark #groupSummary .grpchip-B{ background:rgba(245,158,11,.14); }
+  #RecManagement.dark #groupSummary .gp{ color:#cbd5e1; }
+  #RecManagement.dark #groupSummary .gp-all, #RecManagement.dark #groupSummary .gp-none{ background:rgba(255,255,255,.05); }
   /* 추천 A/B 그룹 드롭다운 */
   #RecManagement .group-sel{ font-size:11px; font-weight:800; border-radius:6px; padding:2px 4px; border:1px solid; cursor:pointer; min-width:46px; text-align:center; }
   #RecManagement .group-sel.group-A{ color:#4338ca; background:#eef2ff; border-color:#c7d2fe; }
@@ -172,23 +178,21 @@
   <!-- ========== 탭1: 추천 큐 (추천담당자) ========== -->
   <div id="view-queue" class="flex items-stretch flex-1 min-h-0">
     <div class="card p-5 flex-1 min-w-0 flex flex-col min-h-0">
-      <!-- 그룹별 요약/필터 (회원수·긴급·임박) — 최상단 -->
-      <div class="flex items-center gap-1.5 mb-3 flex-wrap" id="groupSummary">
-        <span class="text-[11px] text-gray-400 mr-0.5 font-semibold">그룹</span>
-        <button data-g="all" onclick="REC.setGroupFilter('all')" class="grpchip grpchip-all on">전체</button>
-        <button data-g="A" onclick="REC.setGroupFilter('A')" class="grpchip grpchip-A">A</button>
-        <button data-g="B" onclick="REC.setGroupFilter('B')" class="grpchip grpchip-B">B</button>
-        <button data-g="none" onclick="REC.setGroupFilter('none')" class="grpchip grpchip-none">미지정</button>
-      </div>
-      <!-- 상단 필터 버튼 -->
-      <div class="flex items-center gap-1.5 mb-4 flex-wrap" id="statBtns">
-        <button data-f="all" class="sb sb-all on" onclick="REC.setStat('all')">전체 <b>0</b></button>
-        <button data-f="new" class="sb sb-new" onclick="REC.setStat('new')">0건 <b>0</b></button>
-        <button data-f="urgent" class="sb sb-urgent" onclick="REC.setStat('urgent')" title="다음예정일이 지난(14일 주기 초과) 전체">긴급 <b>0</b></button>
-        <button data-f="soon" class="sb sb-soon" onclick="REC.setStat('soon')">임박 <b>0</b></button>
-        <button data-f="wait" class="sb sb-wait" onclick="REC.setStat('wait')">대기 <b>0</b></button>
-        <button data-f="done" class="sb sb-done" onclick="REC.setStat('done')">완료 <b>0</b></button>
-        <label class="ml-2 text-xs text-gray-500 flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-12 border border-gray-300 rounded px-1.5 py-1 text-center text-gray-700"></label>
+      <!-- 그룹 카운팅(좌, 그룹별 긴급/임박 개별 클릭) + 상태 버튼(우) — 한 행 -->
+      <div class="flex items-start gap-2 mb-3 flex-wrap">
+        <div class="flex items-center gap-1.5 flex-wrap" id="groupSummary">
+          <span class="text-[13px] text-gray-400 mr-0.5 font-semibold">그룹</span>
+          <!-- renderGroupSummary 가 채움 -->
+        </div>
+        <div class="flex items-center gap-1.5 flex-wrap ml-auto" id="statBtns">
+          <button data-f="all" class="sb sb-all on" onclick="REC.setStat('all')">전체 <b>0</b></button>
+          <button data-f="new" class="sb sb-new" onclick="REC.setStat('new')">0건 <b>0</b></button>
+          <button data-f="urgent" class="sb sb-urgent" onclick="REC.setStat('urgent')" title="다음예정일이 지난(14일 주기 초과) 전체">긴급 <b>0</b></button>
+          <button data-f="soon" class="sb sb-soon" onclick="REC.setStat('soon')">임박 <b>0</b></button>
+          <button data-f="wait" class="sb sb-wait" onclick="REC.setStat('wait')">대기 <b>0</b></button>
+          <button data-f="done" class="sb sb-done" onclick="REC.setStat('done')">완료 <b>0</b></button>
+          <label class="ml-1 text-xs text-gray-500 flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-12 border border-gray-300 rounded px-1.5 py-1 text-center text-gray-700"></label>
+        </div>
       </div>
       <div class="flex items-center mb-3 gap-2 flex-wrap">
         <h2 class="text-base font-bold text-gray-800">추천 우선순위</h2>
@@ -563,24 +567,29 @@
   let curStat='all', SOON=3, curLife='all', curGroupFilter='all';
   REC._curLife = () => curLife;
   function setLife(s){ curLife=(curLife===s)?'all':s; renderQueue(); }
-  function setGroupFilter(g){ curGroupFilter=(curGroupFilter===g && g!=='all')?'all':g; renderQueue(); }
   function renderLifeChips(){
     const cnt=s=>DK.filter(m=>m.status===s).length;
     document.querySelectorAll('#lifeSummary .lifechip').forEach(b=>{ const s=b.dataset.life; const e=b.querySelector('b'); if(e)e.textContent=cnt(s); b.classList.toggle('on',curLife===s); });
     const clr=document.getElementById('lifeClear'); if(clr) clr.classList.toggle('hidden',curLife==='all');
   }
-  // 그룹별 회원수/긴급/임박 카운트 + 필터 선택표시
+  // 그룹별 회원수/긴급/임박 — 그룹별 긴급·임박을 개별 클릭(그룹+상태 동시 필터), 선택건만 대비
   function renderGroupSummary(){
-    const stat={A:{n:0,u:0,s:0},B:{n:0,u:0,s:0},none:{n:0,u:0,s:0}};
-    DK.forEach(m=>{ const key=(m.group==='A'||m.group==='B')?m.group:'none'; const g=stat[key]; g.n++;
-      const k=calc(m); if(!k.held&&!k.ended&&!k.fresh){ if(k.dleft<0) g.u++; else if(k.dleft<=SOON) g.s++; } });
-    const lbl=(name,g)=>`${name} · 회원 <b>${g.n}</b> · <span class="text-red-600">긴급 <b>${g.u}</b></span> · <span class="text-amber-600">임박 <b>${g.s}</b></span>`;
-    const A=document.querySelector('#groupSummary .grpchip-A'); if(A) A.innerHTML=lbl('A',stat.A);
-    const B=document.querySelector('#groupSummary .grpchip-B'); if(B) B.innerHTML=lbl('B',stat.B);
-    const N=document.querySelector('#groupSummary .grpchip-none'); if(N) N.innerHTML=`미지정 <b>${stat.none.n}</b>`;
-    document.querySelectorAll('#groupSummary .grpchip').forEach(b=>b.classList.toggle('on', b.dataset.g===curGroupFilter));
-    const gs=document.getElementById('groupSummary'); if(gs) gs.classList.toggle('has-sel', curGroupFilter!=='all');
+    const stat={A:{n:0,u:0,s:0},B:{n:0,u:0,s:0},none:{n:0,u:0,s:0},all:{n:0,u:0,s:0}};
+    DK.forEach(m=>{ const key=(m.group==='A'||m.group==='B')?m.group:'none'; const k=calc(m);
+      const act=!k.held&&!k.ended&&!k.fresh, u=act&&k.dleft<0, s=act&&k.dleft>=0&&k.dleft<=SOON;
+      stat[key].n++; if(u)stat[key].u++; if(s)stat[key].s++;
+      stat.all.n++; if(u)stat.all.u++; if(s)stat.all.s++; });
+    const gs=document.getElementById('groupSummary'); if(!gs) return;
+    const isOn=(g,st)=> curGroupFilter===g && curStat===st;
+    const seg=(g,st,lbl,cnt,cls)=>`<span class="gp ${cls} ${isOn(g,st)?'on':''}" onclick="REC.setGroupStat('${g}','${st}')">${lbl} <b>${cnt}</b></span>`;
+    const cluster=(g,cls,lbl)=>`<span class="grpchip ${cls}">${seg(g,'all',lbl,stat[g].n,'gp-lbl')}${seg(g,'urgent','긴급',stat[g].u,'gp-u')}${seg(g,'soon','임박',stat[g].s,'gp-s')}</span>`;
+    gs.innerHTML = `<span class="text-[13px] text-gray-400 mr-0.5 font-semibold">그룹</span>`
+      + seg('all','all','전체',stat.all.n,'gp-lbl gp-all')
+      + cluster('A','grpchip-A','A')
+      + cluster('B','grpchip-B','B')
+      + seg('none','all','미지정',stat.none.n,'gp-lbl gp-none');
   }
+  function setGroupStat(g, st){ curGroupFilter=g; curStat=st; renderQueue(); }
   function passFilter(m){ const gk=(m.group==='A'||m.group==='B')?m.group:'none'; const grpOk=(curGroupFilter==='all')||(gk===curGroupFilter);
     return (!queueQuery||m.name.includes(queueQuery)) && matchStat(m) && (curLife==='all'||m.status===curLife) && grpOk; }
   function progStateOf(name){ if(waitCountFor(name)>0) return '대기'; if(DELIVERED.some(d=>d.name===name)) return '완료'; return '없음'; }
@@ -595,7 +604,7 @@
     if(curStat==='soon') return k.dleft>=0 && k.dleft<=SOON;
     return true;
   }
-  function setStat(f){ curStat=f; document.querySelectorAll('#statBtns .sb').forEach(b=>b.classList.toggle('on', b.dataset.f===f)); renderQueue(); }
+  function setStat(f){ curStat=f; renderQueue(); }
   function setSoon(v){ SOON=Math.max(0, parseInt(v)||0); renderQueue(); }
   function renderStatBtns(){
     const A=DK.map(m=>calc(m));
@@ -607,6 +616,7 @@
     set('soon',active.filter(k=>k.dleft>=0&&k.dleft<=SOON).length);
     set('wait',DK.filter(m=>progStateOf(m.name)==='대기').length);
     set('done',DK.filter(m=>progStateOf(m.name)==='완료').length);
+    document.querySelectorAll('#statBtns .sb').forEach(b=>b.classList.toggle('on', b.dataset.f===curStat));
   }
   function sortQueue(key){ if(qSort.key===key) qSort.dir*=-1; else { qSort.key=key; qSort.dir=1; } renderQueue(); }
   function updateSortArrows(){ ['name','life','group','sub','total','last','next','status','wait'].forEach(k=>{ const e=document.getElementById('qa-'+k); if(e) e.textContent = (qSort.key===k)?(qSort.dir>0?' ▲':' ▼'):''; }); }
@@ -1007,7 +1017,7 @@
     switchTab, setStat, setSoon, sortQueue, toggleSelAll, toggleSel, setLife,
     openBulkModal, closeBulkModal, onBulkTargetChange, applyBulk,
     openModal, closeModal, renderPickerList, addToCart, removeFromCart, confirmPicker, renderCart,
-    openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, setGroupSel, setGroupFilter, setAnchorDate, setQueueQuery,
+    openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, setGroupSel, setGroupStat, setAnchorDate, setQueueQuery,
     calNav, calToday, setCalStatus, setCalQuery, gotoBid, showCalPop, hideCalPop, deliver,
     toggleTheme,
     refresh: function(){ renderQueue(); renderWait(); applyColw(); }
