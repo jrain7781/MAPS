@@ -121,11 +121,11 @@
   #RecManagement.dark .colrz:hover{ background:rgba(129,140,248,.45); }
 </style>
 
-<div id="RecManagement" class="tab-content content-hidden px-6 pt-3 pb-6 h-full overflow-y-auto">
-  <div class="w-full">
+<div id="RecManagement" class="tab-content content-hidden px-6 pt-3 pb-3 h-full flex flex-col overflow-hidden">
+  <div class="w-full flex-1 flex flex-col min-h-0">
 
   <!-- 탭 -->
-  <div class="flex items-center gap-1 border-b border-gray-200 mb-4">
+  <div class="flex items-center gap-1 border-b border-gray-200 mb-3 flex-none">
     <span class="flex items-center gap-1 mr-2 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-600 border border-rose-200 self-center" title="추천 큐 · 월별 현황은 돈클 회원 전용입니다">🏠 돈클 전용</span>
     <div class="tab on" id="tab-queue" onclick="REC.switchTab('queue')">추천 큐 <span class="text-[11px] text-gray-400 font-normal">(누구 먼저)</span></div>
     <div class="tab" id="tab-cal" onclick="REC.switchTab('cal')">월별 현황 <span class="text-[11px] text-gray-400 font-normal">(달력)</span></div>
@@ -138,8 +138,8 @@
   </div>
 
   <!-- ========== 탭1: 추천 큐 (추천담당자) ========== -->
-  <div id="view-queue" class="flex items-stretch">
-    <div class="card p-5 flex-1 min-w-0">
+  <div id="view-queue" class="flex items-stretch flex-1 min-h-0">
+    <div class="card p-5 flex-1 min-w-0 flex flex-col min-h-0">
       <!-- 상단 필터 버튼 -->
       <div class="flex items-center gap-1.5 mb-4 flex-wrap" id="statBtns">
         <button data-f="all" class="sb sb-all on" onclick="REC.setStat('all')">전체 <b>0</b></button>
@@ -150,25 +150,29 @@
         <button data-f="done" class="sb sb-done" onclick="REC.setStat('done')">완료 <b>0</b></button>
         <label class="ml-2 text-xs text-gray-500 flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-12 border border-gray-300 rounded px-1.5 py-1 text-center text-gray-700"></label>
       </div>
-      <div class="flex items-center mb-3 gap-2">
+      <div class="flex items-center mb-3 gap-2 flex-wrap">
         <h2 class="text-base font-bold text-gray-800">추천 우선순위</h2>
-        <input id="queueSearch" oninput="REC.setQueueQuery(this.value)" onfocus="this.select()" onclick="this.select()" placeholder="회원이름 조회" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs w-36 focus:outline-none focus:ring-2 focus:ring-indigo-300">
-        <span class="w-px h-5 bg-gray-200"></span>
-        <select id="bulkTargetTop" class="border border-gray-300 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white"><option value="status">상태값</option></select>
-        <button onclick="REC.openBulkModal()" class="text-xs font-semibold border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg px-3 py-1.5">✓ 일괄적용</button>
-        <span class="text-[12px] text-gray-400 ml-auto">정렬: 헤더 클릭</span>
+        <!-- 상태별 요약 (위로 올림 / 클릭 = 회원상태 필터) -->
+        <div class="flex items-center gap-1.5" id="lifeSummary">
+          <span class="text-[11px] text-gray-400 mr-0.5 ml-1">상태</span>
+          <button data-life="진행" onclick="REC.setLife('진행')" class="lifechip lifechip-진행">진행 <b>0</b></button>
+          <button data-life="보류" onclick="REC.setLife('보류')" class="lifechip lifechip-보류">보류 <b>0</b></button>
+          <button data-life="종료" onclick="REC.setLife('종료')" class="lifechip lifechip-종료">종료 <b>0</b></button>
+          <span id="lifeClear" class="hidden text-[11px] text-gray-400 underline cursor-pointer ml-1" onclick="REC.setLife(REC._curLife())">필터 해제</span>
+        </div>
+        <!-- 회원조회 + 일괄적용 (오른쪽으로) -->
+        <div class="ml-auto flex items-center gap-2">
+          <span class="text-[12px] text-gray-400">정렬: 헤더 클릭</span>
+          <span class="w-px h-5 bg-gray-200"></span>
+          <input id="queueSearch" oninput="REC.setQueueQuery(this.value)" onfocus="this.select()" onclick="this.select()" placeholder="회원이름 조회" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs w-36 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+          <select id="bulkTargetTop" class="border border-gray-300 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white"><option value="status">상태값</option></select>
+          <button onclick="REC.openBulkModal()" class="text-xs font-semibold border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg px-3 py-1.5">✓ 일괄적용</button>
+        </div>
       </div>
-      <!-- 상태별 요약 (클릭 = 회원상태 필터) -->
-      <div class="flex items-center gap-1.5 mb-3" id="lifeSummary">
-        <span class="text-[11px] text-gray-400 mr-0.5">상태</span>
-        <button data-life="진행" onclick="REC.setLife('진행')" class="lifechip lifechip-진행">진행 <b>0</b></button>
-        <button data-life="보류" onclick="REC.setLife('보류')" class="lifechip lifechip-보류">보류 <b>0</b></button>
-        <button data-life="종료" onclick="REC.setLife('종료')" class="lifechip lifechip-종료">종료 <b>0</b></button>
-        <span id="lifeClear" class="hidden text-[11px] text-gray-400 underline cursor-pointer ml-1" onclick="REC.setLife(REC._curLife())">필터 해제</span>
-      </div>
+      <div class="flex-1 min-h-0 overflow-y-auto">
       <table id="queueTable" class="w-full text-sm" style="table-layout:fixed">
         <colgroup id="queueColgroup"><col><col><col><col><col><col><col><col><col><col><col></colgroup>
-        <thead><tr class="text-gray-500 border-b border-gray-200 text-[12px] select-none">
+        <thead class="sticky top-0 z-10 bg-white"><tr class="text-gray-500 border-b border-gray-200 text-[12px] select-none">
           <th class="text-center py-2 font-semibold w-7"><input type="checkbox" id="selAll" onclick="REC.toggleSelAll(this.checked)" title="보이는 회원 전체 선택"></th>
           <th class="text-center py-2 font-semibold">순위</th>
           <th class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('life')">상태<span id="qa-life"></span></th>
@@ -183,16 +187,17 @@
         </tr></thead>
         <tbody id="queueBody"></tbody>
       </table>
-      <div id="queueWait" class="text-[12px] text-sky-600 mt-3"></div>
+      </div>
+      <div id="queueWait" class="text-[12px] text-sky-600 mt-2 flex-none"></div>
     </div>
     <!-- 드래그로 좌우 너비 조절 -->
     <div id="recDivider" class="w-1.5 mx-1.5 cursor-col-resize bg-gray-200 hover:bg-indigo-400 rounded transition-colors flex-none" title="드래그로 너비 조절"></div>
-    <!-- 우측 상시 패널: 선택한 추천 물건 -->
-    <div class="card flex-none overflow-hidden" id="recPanel" style="width:360px"><div id="recBody"></div></div>
+    <!-- 우측 상시 패널: 선택한 추천 물건 (고정 — 그리드만 스크롤) -->
+    <div class="card flex-none overflow-y-auto min-h-0" id="recPanel" style="width:360px"><div id="recBody"></div></div>
   </div>
 
   <!-- ========== 탭2: 월별 진행 현황 (달력) ========== -->
-  <div id="view-cal" class="hidden">
+  <div id="view-cal" class="hidden flex-1 min-h-0 overflow-y-auto">
     <div class="card p-5">
       <div class="flex items-center mb-4 gap-2 flex-wrap">
         <h2 class="text-base font-bold text-gray-800">월별 진행 현황</h2>
@@ -653,16 +658,19 @@
           </tr>`).join('')}
           </tbody></table>` : '<div class="text-sm text-gray-400 py-8 text-center">선택된 추천 물건이 없습니다<br><span class="text-[11px]">왼쪽 회원 클릭 또는 추천하기로 등록</span></div>' }
       </div>
-      ${ list.filter(r=>r.id).length ? `<div class="px-3 pt-3 border-t border-gray-100">
-        <div class="flex items-center mb-1.5 px-1 gap-2">
+      ${ (function(){ const il=list.filter(r=>r.id); if(!il.length) return '';
+        const single = il.length===1;
+        return `<div class="px-3 pt-3 border-t border-gray-100">
+        <div class="flex items-center mb-1.5 px-1 gap-1.5 flex-wrap">
           <span class="text-xs font-bold text-amber-700">📝 물건 비고</span>
-          <span class="text-[10px] text-gray-400">items.note · 전달담당자 확인용</span>
+          ${ single ? `<span class="text-[11px] font-semibold text-gray-700">${escHtml(il[0].s)}</span>${recTag(il[0].status)}` : '' }
+          <span class="text-[10px] text-gray-400 ml-auto">items.note</span>
         </div>
-        ${list.filter(r=>r.id).map(r=>`<div class="rec-itemwrap mb-2">
-          <div class="text-[10px] text-gray-500 mb-1 flex items-center gap-1"><span class="font-semibold text-gray-700">${escHtml(r.s)}</span>${recTag(r.status)}</div>
-          <textarea placeholder="물건 비고 입력 (items.note)" onchange="REC.saveItemNote('${r.id}',this.value)" onfocus="this.select()" class="w-full h-16 resize-none text-[11px] leading-snug border border-amber-300 rounded px-2 py-1.5 text-gray-700 bg-amber-50/40 focus:outline-none focus:ring-1 focus:ring-amber-300">${escHtml(r.note)}</textarea>
+        ${il.map(r=>`<div class="rec-itemwrap mb-2">
+          ${ single ? '' : `<div class="text-[10px] text-gray-500 mb-1 flex items-center gap-1"><span class="font-semibold text-gray-700">${escHtml(r.s)}</span>${recTag(r.status)}</div>` }
+          <textarea placeholder="물건 비고 입력 (items.note)" onchange="REC.saveItemNote('${r.id}',this.value)" onfocus="this.select()" class="w-full h-36 resize-none text-[11px] leading-relaxed border border-amber-300 rounded px-2 py-1.5 text-gray-700 bg-amber-50/40 focus:outline-none focus:ring-1 focus:ring-amber-300">${escHtml(r.note)}</textarea>
         </div>`).join('')}
-      </div>` : '' }
+      </div>`; })() }
       <div class="px-3 pb-4 pt-3 border-t border-gray-100">
         <div class="flex items-center mb-1.5 px-1 gap-2">
           <span class="text-xs font-bold text-gray-600">회원 비고</span>
