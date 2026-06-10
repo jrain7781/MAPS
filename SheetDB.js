@@ -9208,6 +9208,98 @@ function getDonkleMemberIds() {
 }
 
 /**
+ * [돈클] 대시보드 '돈클 추천요청 현황' — telegram_requests 히스토리 단일 출처 집계.
+ *  전달대기 = stu_member→'추천' FIELD_CHANGE 이벤트 중 (회원,물건) 아직 전달완료(chuchen_state→전달완료) 안 온 것. 날짜=추천 시각.
+ *  추천완료 = chuchen_state→'전달완료' FIELD_CHANGE 이벤트. 날짜=그 시각.
+ *  돈클 회원(member_id) 한정. 최근 7일(오늘 포함) 이벤트만 반환. 담당(m_name_id)은 items에서 조인.
+ *  반환 events 를 클라이언트가 날짜·담당·종류로 버킷팅(드릴다운/담당필터 그대로 재사용).
+ *  ★ items가 아니라 히스토리를 출처로 쓰는 이유: items는 물건당 member_id 1개라 같은 물건을
+ *    다른 회원에게 재추천하면 이전 회원 추천요청이 소실됨. 히스토리는 (회원,물건,시각) 별도 행이라 안전.
+ */
+function getDonkleRequestDashboard() {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+    if (!reqSheet || reqSheet.getLastRow() < 2) return { days: [], events: [], managers: [] };
+
+    // 돈클 회원 id 셋
+    var donkleSet = {};
+    getDonkleMemberIds().forEach(function (id) { donkleSet[String(id).trim()] = true; });
+
+    // itemId → m_name_id(담당) 맵
+    var mgrMap = {};
+    var iSheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (iSheet && iSheet.getLastRow() > 1) {
+      var iRows = iSheet.getRange(2, 1, iSheet.getLastRow() - 1, 6).getValues();
+      iRows.forEach(function (ir) { var id = String(ir[0] || '').trim(); if (id) mgrMap[id] = String(ir[5] || '').trim(); });
+    }
+
+    var tz = Session.getScriptTimeZone();
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var winStart = new Date(today); winStart.setDate(today.getDate() - 6);
+
+    var lastRow = reqSheet.getLastRow();
+    var totalCols = Math.min(reqSheet.getMaxColumns(), 16);
+    var rows = reqSheet.getRange(2, 1, lastRow - 1, totalCols).getValues();
+    // [0]req_id [1]requested_at [2]action [3]status [4]item_id [5]member_id ...
+    // [11]from_value [12]to_value [13]field_name [14]trigger_type
+
+    function parseDate(v) {
+      if (!v) return null;
+      if (v instanceof Date) return v;
+      var s = String(v).trim();
+      if (/^\d{6} \d{6}$/.test(s)) {
+        return new Date(2000 + parseInt(s.substring(0, 2), 10), parseInt(s.substring(2, 4), 10) - 1,
+          parseInt(s.substring(4, 6), 10), parseInt(s.substring(7, 9), 10),
+          parseInt(s.substring(9, 11), 10), parseInt(s.substring(11, 13), 10));
+      }
+      var d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // 전달완료(회원|물건) 키 — 전체 기간 스캔(대기 판정용). 추천/완료 이벤트는 윈도우 내만 수집.
+    var deliveredKey = {};
+    var recEvents = [], doneEvents = [];
+    rows.forEach(function (row) {
+      if (String(row[2] || '').trim() !== 'FIELD_CHANGE') return;
+      var itemId = String(row[4] || '').trim();
+      var memberId = String(row[5] || '').trim();
+      if (!itemId || !memberId || !donkleSet[memberId]) return;
+      var toVal = String(row[12] || '').trim();
+      var fieldName = String(row[13] || '').trim();
+      var key = memberId + '|' + itemId;
+      if (fieldName === 'chuchen_state' && toVal === '전달완료') {
+        deliveredKey[key] = true;
+        var dd = parseDate(row[1]);
+        if (dd && dd >= winStart) doneEvents.push({ d: dd, itemId: itemId, key: key });
+      } else if (fieldName === 'stu_member' && toVal === '추천') {
+        var dr = parseDate(row[1]);
+        if (dr && dr >= winStart) recEvents.push({ d: dr, itemId: itemId, key: key });
+      }
+    });
+
+    var events = [], mgrSet = {};
+    function emit(d, kind, itemId) {
+      var mgr = mgrMap[itemId] || '';
+      if (mgr) mgrSet[mgr] = true;
+      events.push({ date: Utilities.formatDate(d, tz, 'yyyy-MM-dd'), kind: kind, itemId: itemId, manager: mgr });
+    }
+    recEvents.forEach(function (e) { if (!deliveredKey[e.key]) emit(e.d, 'wait', e.itemId); });
+    doneEvents.forEach(function (e) { emit(e.d, 'done', e.itemId); });
+
+    var days = [];
+    for (var i = 0; i < 7; i++) {
+      var dx = new Date(today); dx.setDate(today.getDate() - i);
+      days.push(Utilities.formatDate(dx, tz, 'yyyy-MM-dd'));
+    }
+    return { days: days, events: events, managers: Object.keys(mgrSet).sort() };
+  } catch (e) {
+    Logger.log('[getDonkleRequestDashboard] ' + e.toString());
+    return { days: [], events: [], managers: [], error: String(e) };
+  }
+}
+
+/**
  * members 시트 끝에 회원 상태 컬럼(status, hold) 보장 — 없으면 생성. {statusCol, holdCol}(1-based)
  * 범용(모든 회원 종목 공용). 레거시 donkle_status/donkle_hold 는 이름만 status/hold 로 마이그레이션(데이터 보존).
  */

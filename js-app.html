@@ -4445,59 +4445,60 @@
         }
     }
 
-    // [돈클] 대시보드 '돈클 추천요청 현황' 카드 — allBiddingData(items) 클라이언트 집계
-    //   전달대기 = stu_member='추천' & chuchen_state≠'전달완료' (reg_date 기준일)
-    //   추천완료 = chuchen_state='전달완료' (chuchen_date 기준일)
-    //   최근 7일(오늘 포함, 역순), 담당=m_name_id 필터. 숫자클릭 → 입찰물건관리 item_ids 드릴다운
+    // [돈클] 대시보드 '돈클 추천요청 현황' 카드 — telegram_requests 히스토리 단일 출처(서버 getDonkleRequestDashboard).
+    //   전달대기 = stu_member→'추천' FIELD_CHANGE 중 (회원,물건) 아직 전달완료 안 온 것 (날짜=추천 시각)
+    //   추천완료 = chuchen_state→'전달완료' FIELD_CHANGE (날짜=그 시각)
+    //   돈클 회원 한정(서버 필터). 최근 7일(오늘 포함, 역순), 담당=m_name_id 필터(클라). 숫자클릭 → 입찰물건관리 드릴다운
+    function loadDonkleRequestDashboard(force) {
+        const body = document.getElementById('donkleReqBody');
+        if (window._donkleReqData && !force) { renderDonkleRequestDashboard(); return; }
+        if (!(window.google && google.script && google.script.run)) return;
+        if (window._donkleReqLoading) return;
+        window._donkleReqLoading = true;
+        if (body && !window._donkleReqData) body.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-gray-400">데이터 로딩 중...</td></tr>';
+        google.script.run
+            .withSuccessHandler(d => {
+                window._donkleReqData = d || { days: [], events: [], managers: [] };
+                window._donkleReqLoading = false;
+                renderDonkleRequestDashboard();
+            })
+            .withFailureHandler(() => {
+                window._donkleReqLoading = false;
+                if (body) body.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-red-400">로드 실패</td></tr>';
+            })
+            .getDonkleRequestDashboard();
+    }
     function renderDonkleRequestDashboard() {
         const body = document.getElementById('donkleReqBody');
         if (!body) return;
-        // 돈클 회원 member_id 셋 (추천물건관리에서 넘어온 = 돈클 회원 추천만 카운팅). 미로드 시 1회 로드 후 재렌더.
-        if (!window.donkleMemberIdSet && !window._donkleIdsLoading && window.google && google.script && google.script.run) {
-            window._donkleIdsLoading = true;
-            google.script.run
-                .withSuccessHandler(ids => { window.donkleMemberIdSet = new Set((ids || []).map(String)); window._donkleIdsLoading = false; try { renderDonkleRequestDashboard(); } catch (e) { } })
-                .withFailureHandler(() => { window._donkleIdsLoading = false; })
-                .getDonkleMemberIds();
-        }
-        const donkleSet = window.donkleMemberIdSet;
-        const donkleOk = it => !donkleSet || donkleSet.has(String(it.member_id || ''));
+        const data = window._donkleReqData;
+        if (!data) { loadDonkleRequestDashboard(false); return; }
         const sel = document.getElementById('donkleReqFilterMember');
         const fm = sel ? sel.value : '대표님';
-        const ymd = v => {
-            if (!v) return '';
-            let s = String(v).trim();
-            if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-            const d = s.replace(/[^0-9]/g, '');
-            if (d.length >= 8) return d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8);
-            if (d.length === 6) return '20' + d.slice(0, 2) + '-' + d.slice(2, 4) + '-' + d.slice(4, 6);
-            return '';
-        };
-        const memOk = it => { const m = it.m_name_id || ''; return (fm === 'All' || fm === '') || m === fm; };
-        const days = []; const t = new Date(); t.setHours(0, 0, 0, 0);
-        for (let i = 0; i < 7; i++) {
-            const d = new Date(t); d.setDate(t.getDate() - i);
-            const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-            days.push({ key, d, i });
-        }
-        const ids = {}; days.forEach(x => { ids[x.key + '_wait'] = []; ids[x.key + '_done'] = []; }); ids['all_wait'] = []; ids['all_done'] = [];
-        (allBiddingData || []).forEach(it => {
-            if (!memOk(it)) return;
-            if (!donkleOk(it)) return;   // 돈클 회원 추천만 (추천물건관리 경유분)
-            const stu = String(it.stu_member || '').trim();
-            const cs = String(it.chuchen_state || '').trim();
-            if (stu === '추천' && cs !== '전달완료') { const k = ymd(it.reg_date); if (ids[k + '_wait']) { ids[k + '_wait'].push(it.id); ids['all_wait'].push(it.id); } }
-            if (cs === '전달완료') { const k = ymd(it.chuchen_date); if (ids[k + '_done']) { ids[k + '_done'].push(it.id); ids['all_done'].push(it.id); } }
+        const mgrOk = m => (fm === 'All' || fm === '') ? true : (String(m || '') === fm);
+        const days = (data.days && data.days.length) ? data.days.slice() : (() => {
+            const arr = []; const t = new Date(); t.setHours(0, 0, 0, 0);
+            for (let i = 0; i < 7; i++) { const d = new Date(t); d.setDate(t.getDate() - i); arr.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')); }
+            return arr;
+        })();
+        const ids = {}; days.forEach(k => { ids[k + '_wait'] = []; ids[k + '_done'] = []; }); ids['all_wait'] = []; ids['all_done'] = [];
+        (data.events || []).forEach(ev => {
+            if (!mgrOk(ev.manager)) return;
+            const bk = ev.date + '_' + ev.kind;
+            if (!ids[bk]) return;   // 윈도우 밖
+            if (ids[bk].indexOf(ev.itemId) < 0) ids[bk].push(ev.itemId);
+            const ak = 'all_' + ev.kind;
+            if (ids[ak].indexOf(ev.itemId) < 0) ids[ak].push(ev.itemId);
         });
         window._donkleReqIds = ids;
         const dn = ['일', '월', '화', '수', '목', '금', '토'];
-        body.innerHTML = days.map(x => {
-            const w = ids[x.key + '_wait'].length, done = ids[x.key + '_done'].length;
-            const mm = String(x.d.getMonth() + 1).padStart(2, '0'), dd = String(x.d.getDate()).padStart(2, '0');
-            const label = (x.i === 0 ? '오늘 ' : '') + mm + '/' + dd + ' (' + dn[x.d.getDay()] + ')';
-            const wc = w ? `<span class="text-amber-600 font-bold cursor-pointer hover:underline" onclick="drillDonkleRequest('${x.key}','wait')">${w}</span>` : '<span class="text-gray-300">0</span>';
-            const dc = done ? `<span class="text-indigo-600 font-bold cursor-pointer hover:underline" onclick="drillDonkleRequest('${x.key}','done')">${done}</span>` : '<span class="text-gray-300">0</span>';
-            return `<tr class="border-b border-gray-100 hover:bg-gray-50 ${x.i === 0 ? 'bg-indigo-50/40' : ''}"><td class="py-2 px-2 text-left ${x.i === 0 ? 'font-bold text-gray-800' : 'text-gray-600'}">${label}</td><td class="py-2 px-1 text-center">${wc}</td><td class="py-2 px-1 text-center">${dc}</td></tr>`;
+        body.innerHTML = days.map((key, i) => {
+            const w = ids[key + '_wait'].length, done = ids[key + '_done'].length;
+            const p = key.split('-'); const d = new Date(+p[0], +p[1] - 1, +p[2]);
+            const label = (i === 0 ? '오늘 ' : '') + p[1] + '/' + p[2] + ' (' + dn[d.getDay()] + ')';
+            const wc = w ? `<span class="text-amber-600 font-bold cursor-pointer hover:underline" onclick="drillDonkleRequest('${key}','wait')">${w}</span>` : '<span class="text-gray-300">0</span>';
+            const dc = done ? `<span class="text-indigo-600 font-bold cursor-pointer hover:underline" onclick="drillDonkleRequest('${key}','done')">${done}</span>` : '<span class="text-gray-300">0</span>';
+            return `<tr class="border-b border-gray-100 hover:bg-gray-50 ${i === 0 ? 'bg-indigo-50/40' : ''}"><td class="py-2 px-2 text-left ${i === 0 ? 'font-bold text-gray-800' : 'text-gray-600'}">${label}</td><td class="py-2 px-1 text-center">${wc}</td><td class="py-2 px-1 text-center">${dc}</td></tr>`;
         }).join('');
         const tw = document.getElementById('donkleReqTotWait'), tdn = document.getElementById('donkleReqTotDone');
         if (tw) tw.textContent = ids['all_wait'].length;
@@ -7901,7 +7902,7 @@ MJ 이정우 팀장
                 renderMissingBidDashboard();
                 renderStatusManagementDashboard();
                 renderYongdoManagementDashboard();
-                renderDonkleRequestDashboard();
+                loadDonkleRequestDashboard(false);
                 renderMemberBidChart();
                 if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
             })
