@@ -1830,8 +1830,32 @@
   }
 
   // ── 편집 모드 진입 ──────────────────────────────────────
+  // ── 비고(리스트별 메모) ──
+  const LS_MEMO_COLLAPSED = 'auction1_memo_collapsed';
+  function _memoEl() { return document.getElementById('presetMemo'); }
+  function getMemoValue() { const e = _memoEl(); return e ? e.value : ''; }
+  function setMemoValue(v) { const e = _memoEl(); if (e) e.value = v || ''; }
+  function isMemoCollapsed() { try { return localStorage.getItem(LS_MEMO_COLLAPSED) === '1'; } catch (_) { return false; } }
+  function updateMemoBadge() {
+    const badge = document.getElementById('memoBadge');
+    if (badge) badge.style.display = (isMemoCollapsed() && getMemoValue().trim()) ? '' : 'none';
+  }
+  function applyMemoCollapse() {
+    const collapsed = isMemoCollapsed();
+    const body = document.getElementById('memoBody');
+    const arrow = document.getElementById('memoArrow');
+    if (body) body.style.display = collapsed ? 'none' : '';
+    if (arrow) arrow.textContent = collapsed ? '▶' : '▼';
+    updateMemoBadge();
+  }
+  function toggleMemo() {
+    try { localStorage.setItem(LS_MEMO_COLLAPSED, isMemoCollapsed() ? '0' : '1'); } catch (_) {}
+    applyMemoCollapse();
+  }
+
   function newPreset() {
     currentPresetId = null;
+    setMemoValue(''); applyMemoCollapse();
     document.getElementById('editorMode').textContent = '새 크롤링 등록';
     document.getElementById('editorIdBadge').textContent = '';
     document.getElementById('btnDelete').classList.add('hidden');
@@ -1854,6 +1878,7 @@
     applyFormData(p.formData || {});
     custRows = (p.customFilters || []).map(c => ({ ...c }));
     renderCustRows();
+    setMemoValue(p.memo || ''); applyMemoCollapse();
     showEditor();
     renderSidebar();
     // 캐시된 결과 자동 복원 (있으면)
@@ -1941,17 +1966,19 @@
       setStatus(`중복 — [${dup.title}] 와 동일한 조건`, true);
       return;
     }
+    const memo = getMemoValue();
     if (currentPresetId) {
       const idx = presets.findIndex(p => p.id === currentPresetId);
       if (idx >= 0) {
-        presets[idx] = { ...presets[idx], title, formData, customFilters, updatedAt: Date.now() };
+        presets[idx] = { ...presets[idx], title, formData, customFilters, memo, updatedAt: Date.now() };
       }
     } else {
-      const np = { id: uid('p'), title, formData, customFilters, updatedAt: Date.now() };
+      const np = { id: uid('p'), title, formData, customFilters, memo, updatedAt: Date.now() };
       presets.push(np);
       currentPresetId = np.id;
     }
     savePresets();
+    updateMemoBadge();
     setStatus('저장 완료');
     renderSidebar();
     document.getElementById('editorMode').textContent = '크롤링 수정';
@@ -2151,6 +2178,10 @@
     });
     document.getElementById('btnManageTypes').addEventListener('click', openManageTypes);
     document.getElementById('btnRefilter').addEventListener('click', refilterFromCache);
+    // 비고 접기/펴기 + 내용 변경 시 배지 갱신
+    document.getElementById('memoHead')?.addEventListener('click', toggleMemo);
+    document.getElementById('presetMemo')?.addEventListener('input', updateMemoBadge);
+    applyMemoCollapse();
 
     // 결과 뷰 탭: 필터링 / 전체
     document.getElementById('viewTabFiltered')?.addEventListener('click', () => setViewMode('filtered'));
