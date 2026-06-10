@@ -9046,7 +9046,7 @@ function getRecManagementData() {
     classes.forEach(function (c) { classMap[String(c.class_id)] = c; });
 
     var mSheet = ss.getSheetByName(DB_MEMBERS_SHEET_NAME);
-    var dc = _ensureDonkleCols_(mSheet); // {statusCol, holdCol} (1-based)
+    var dc = _ensureMemberStatusCols_(mSheet); // {statusCol, holdCol} (1-based)
     var lastRowM = mSheet.getLastRow();
     var statusMap = {}, holdMap = {};
     if (lastRowM >= 2) {
@@ -9173,16 +9173,23 @@ function getDonkleMemberIds() {
   } catch (e) { Logger.log('[getDonkleMemberIds] ' + e.toString()); return []; }
 }
 
-/** members 시트 끝에 돈클 전용 컬럼(donkle_status, donkle_hold) 보장 — 없으면 생성. {statusCol, holdCol}(1-based) */
-function _ensureDonkleCols_(sheet) {
+/**
+ * members 시트 끝에 회원 상태 컬럼(status, hold) 보장 — 없으면 생성. {statusCol, holdCol}(1-based)
+ * 범용(모든 회원 종목 공용). 레거시 donkle_status/donkle_hold 는 이름만 status/hold 로 마이그레이션(데이터 보존).
+ */
+function _ensureMemberStatusCols_(sheet) {
   var maxC = sheet.getMaxColumns();
   var headerRow = sheet.getRange(1, 1, 1, maxC).getValues()[0];
   var find = function (name) {
     for (var i = 0; i < headerRow.length; i++) if (String(headerRow[i]).trim() === name) return i + 1;
     return -1;
   };
-  var statusCol = find('donkle_status');
-  var holdCol = find('donkle_hold');
+  // 레거시 donkle_* → status/hold 헤더명 변경 (열 위치/데이터 유지)
+  var leg;
+  if ((leg = find('donkle_status')) > 0) { sheet.getRange(1, leg).setValue('status'); headerRow[leg - 1] = 'status'; }
+  if ((leg = find('donkle_hold')) > 0) { sheet.getRange(1, leg).setValue('hold'); headerRow[leg - 1] = 'hold'; }
+  var statusCol = find('status');
+  var holdCol = find('hold');
   var lastCol = sheet.getLastColumn();
   var addCol = function (name) {
     var col = lastCol + 1;
@@ -9191,8 +9198,8 @@ function _ensureDonkleCols_(sheet) {
     lastCol = col;
     return col;
   };
-  if (statusCol < 0) statusCol = addCol('donkle_status');
-  if (holdCol < 0) holdCol = addCol('donkle_hold');
+  if (statusCol < 0) statusCol = addCol('status');
+  if (holdCol < 0) holdCol = addCol('hold');
   return { statusCol: statusCol, holdCol: holdCol };
 }
 
@@ -9219,7 +9226,7 @@ function setItemNote(itemId, note) {
 function setDonkleMemberStatus(memberId, status, hold) {
   try {
     var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_MEMBERS_SHEET_NAME);
-    var dc = _ensureDonkleCols_(sheet);
+    var dc = _ensureMemberStatusCols_(sheet);
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, message: '회원 없음' };
     var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
