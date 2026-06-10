@@ -2104,6 +2104,8 @@
     document.getElementById('settingsModalReset')?.addEventListener('click', resetSettingsModal);
     document.getElementById('setActiveAccount')?.addEventListener('change', renderAccountSlots);
     document.getElementById('btnUploadMaps')?.addEventListener('click', uploadSelectedItemsToMaps);
+    document.getElementById('btnClearResult')?.addEventListener('click', clearCurrentResult);
+    document.getElementById('btnClearChecked')?.addEventListener('click', clearCheckedCaches);
     // 결과 테이블 헤더 [전체] 체크박스 (사진 옆) — 모든 행 체크박스 토글
     document.getElementById('resColCheckAll')?.addEventListener('change', (e) => {
       const checked = !!e.target.checked;
@@ -2418,6 +2420,13 @@
 
   // ── 크롤링 실행 (백엔드 /api/crawl 호출) ─────────────────────
   async function runCrawl() {
+    // ★ 미저장(신규) 리스트는 결과를 보관할 캐시 키(currentPresetId)가 없어 저장이 안 됨 → 크롤 차단.
+    //   (저장된 리스트라야 IndexedDB 캐시에 보관되고 새로고침/재접속에도 유지됨)
+    if (!currentPresetId) {
+      alert('이 리스트는 아직 저장되지 않아 크롤링 결과를 보관할 수 없습니다.\n\n먼저 [저장] 으로 리스트를 저장한 뒤 크롤링하세요.');
+      setStatus('미저장 리스트 — 저장 후 크롤링하세요', true);
+      return;
+    }
     const formData = collectFormData();
     const customFilters = custRows.slice();
     const titleEl = document.getElementById('presetTitle');
@@ -2619,6 +2628,40 @@
     const preset = presets.find(p => p.id === presetId);
     applyAndRender(cache.items, (preset?.customFilters) || [], cache.ts);
     return true;
+  }
+
+  // 결과 화면 비우기 (공통)
+  function blankResultPanel(noteText) {
+    lastRawItems = [];
+    const resBody = document.getElementById('resBody');
+    if (resBody) resBody.innerHTML = `<tr><td colspan="8" class="center" style="padding:40px 0;color:#9ca3af;">${noteText || '초기화됨 — [크롤링 실행] 으로 다시 가져오세요'}</td></tr>`;
+    setResultCounts(0, 0, 0);
+  }
+
+  // [초기화] 현재 결과 패널의 열린 리스트 = currentPresetId 의 크롤링 캐시 삭제 + 화면 비움. (확인 팝업)
+  function clearCurrentResult() {
+    if (!currentPresetId) { setStatus('선택/저장된 리스트가 없습니다.', true); return; }
+    const preset = presets.find(p => p.id === currentPresetId);
+    const nm = preset ? (preset.title || preset.id) : currentPresetId;
+    if (!confirm(`"${nm}" 리스트의 가져온 결과를 초기화합니다.\n(크롤링 캐시 삭제 — 다시 [크롤링 실행] 하면 복구)\n\n진행할까요?`)) return;
+    cacheDel(currentPresetId);
+    blankResultPanel();
+    renderSidebar();
+    setStatus('결과 초기화 완료 — 다시 크롤링하세요');
+  }
+
+  // [초기화] 사이드바에서 체크된 리스트들의 크롤링 캐시 삭제. (확인 팝업)
+  function clearCheckedCaches() {
+    if (!selectedSyncIds.size) { alert('초기화할 리스트를 사이드바 체크박스로 선택하세요.'); return; }
+    const ids = Array.from(selectedSyncIds);
+    const names = ids.map(id => { const p = presets.find(x => x.id === id); return p ? (p.title || p.id) : id; });
+    const shown = names.slice(0, 10).join(', ') + (names.length > 10 ? ` 외 ${names.length - 10}개` : '');
+    if (!confirm(`체크된 ${ids.length}개 리스트의 크롤링 결과(캐시)를 초기화합니다.\n\n${shown}\n\n다시 크롤링하면 복구됩니다. 진행할까요?`)) return;
+    ids.forEach(id => cacheDel(id));
+    // 현재 열린 리스트가 초기화 대상이면 화면도 비움
+    if (currentPresetId && ids.includes(currentPresetId)) blankResultPanel();
+    renderSidebar();
+    setStatus(`${ids.length}개 리스트 결과 초기화 완료`);
   }
 
   // 옥션원 셀 HTML 후처리: 상대 URL 절대화, onclick 제거, a 태그 새창 강제

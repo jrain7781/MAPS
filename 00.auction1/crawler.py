@@ -712,6 +712,11 @@ def parse_results(d, max_rows: int = 200):
     line_tnum = len(valid_rows)
     items = []
     for _dbg_idx, (r, tds) in enumerate(valid_rows):
+        # ★ 페이지 내 아이템 루프에서도 중지 신호 확인 — 목록수 100 + 이미지 다운로드(건당 최대 8s)로
+        #   한 페이지가 길어서, 기존엔 페이지 끝까지 가야 중지가 먹었음. 이제 현재 1건만 끝나면 즉시 중단.
+        if _cancel_event.is_set():
+            print(f"[parse] cancelled mid-page at item {_dbg_idx}/{line_tnum} — {len(items)}건까지 반환")
+            break
         try:
             if len(tds) < 8:
                 continue
