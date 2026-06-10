@@ -617,9 +617,14 @@
     return w.concat(d);
   }
   let curRecMember = null;
-  function openMemberRecs(name){
+  let curItemId = null;   // 우측 리스트에서 선택한 물건(비고 표시 대상)
+  function selItem(id){ curItemId=id; openMemberRecs(curRecMember, true); }
+  function openMemberRecs(name, skipQueue){
+    if(name!==curRecMember) curItemId=null;   // 회원 바뀌면 선택 초기화
     curRecMember = name;
     const m = DK.find(x=>x.name===name); const list = recsFor(name);
+    const idItems = list.filter(r=>r.id);
+    if(!idItems.some(r=>String(r.id)===String(curItemId))) curItemId = idItems.length ? idItems[0].id : null;
     const recTag = s => s==='대기' ? '<span class="chip bg-amber-100 text-amber-700">전달대기</span>' : '<span class="chip bg-gray-100 text-gray-500">추천완료</span>';
     const k = m ? calc(m) : {total:0,next:null,dleft:null};
     const waitN = waitCountFor(name);
@@ -648,28 +653,25 @@
           <thead><tr class="text-gray-500 border-b border-gray-200">
             <th class="text-center py-2 font-semibold">추천요청</th><th class="text-center py-2 font-semibold">입찰일자</th><th class="text-left py-2 font-semibold">사건번호</th><th class="text-left py-2 font-semibold">법원</th><th class="text-center py-2 font-semibold">담당</th><th class="text-center py-2 font-semibold">진행상태</th>
           </tr></thead><tbody>
-          ${list.map(r=>`<tr class="border-b border-gray-100">
+          ${list.map(r=>{ const seld = r.id && String(r.id)===String(curItemId);
+            return `<tr class="border-b border-gray-100 ${r.id?'cursor-pointer hover:bg-amber-50/40':''}" ${r.id?`onclick="REC.selItem('${r.id}')"`:''} style="${seld?'background:rgba(245,158,11,.12);box-shadow:inset 3px 0 0 #f59e0b':''}" title="${r.id?'클릭 시 이 물건의 비고 표시':''}">
             <td class="py-2 text-center text-gray-500">${r.req}</td>
             <td class="py-2 text-center text-gray-500">${r.bid}</td>
             <td class="py-2 font-medium text-gray-800">${r.s}</td>
             <td class="py-2 text-gray-500">${r.court}</td>
             <td class="py-2 text-center text-gray-500">${r.mgr}</td>
             <td class="py-2 text-center">${recTag(r.status)}</td>
-          </tr>`).join('')}
+          </tr>`; }).join('')}
           </tbody></table>` : '<div class="text-sm text-gray-400 py-8 text-center">선택된 추천 물건이 없습니다<br><span class="text-[11px]">왼쪽 회원 클릭 또는 추천하기로 등록</span></div>' }
       </div>
-      ${ (function(){ const il=list.filter(r=>r.id); if(!il.length) return '';
-        const single = il.length===1;
+      ${ (function(){ const sel=list.find(r=>r.id && String(r.id)===String(curItemId)); if(!sel) return '';
         return `<div class="px-3 pt-3 border-t border-gray-100">
         <div class="flex items-center mb-1.5 px-1 gap-1.5 flex-wrap">
           <span class="text-xs font-bold text-amber-700">📝 물건 비고</span>
-          ${ single ? `<span class="text-[11px] font-semibold text-gray-700">${escHtml(il[0].s)}</span>${recTag(il[0].status)}` : '' }
+          <span class="text-[11px] font-semibold text-gray-700">${escHtml(sel.s)}</span>${recTag(sel.status)}
           <span class="text-[10px] text-gray-400 ml-auto">items.note</span>
         </div>
-        ${il.map(r=>`<div class="rec-itemwrap mb-2">
-          ${ single ? '' : `<div class="text-[10px] text-gray-500 mb-1 flex items-center gap-1"><span class="font-semibold text-gray-700">${escHtml(r.s)}</span>${recTag(r.status)}</div>` }
-          <textarea placeholder="물건 비고 입력 (items.note)" onchange="REC.saveItemNote('${r.id}',this.value)" onfocus="this.select()" class="w-full h-36 resize-none text-[11px] leading-relaxed border border-amber-300 rounded px-2 py-1.5 text-gray-700 bg-amber-50/40 focus:outline-none focus:ring-1 focus:ring-amber-300">${escHtml(r.note)}</textarea>
-        </div>`).join('')}
+        <textarea placeholder="물건 비고 입력 (items.note)" onchange="REC.saveItemNote('${sel.id}',this.value)" onfocus="this.select()" class="w-full h-36 resize-none text-[11px] leading-relaxed border border-amber-300 rounded px-2 py-1.5 text-gray-700 bg-amber-50/40 focus:outline-none focus:ring-1 focus:ring-amber-300">${escHtml(sel.note)}</textarea>
       </div>`; })() }
       <div class="px-3 pb-4 pt-3 border-t border-gray-100">
         <div class="flex items-center mb-1.5 px-1 gap-2">
@@ -679,7 +681,7 @@
         </div>
         <textarea id="memberNote" class="w-full h-36 border border-gray-300 rounded-lg px-2.5 py-2 text-xs text-gray-700 leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="회원 비고를 입력하세요">${m?(m.note||''):''}</textarea>
       </div>`;
-    renderQueue();
+    if(!skipQueue) renderQueue();
   }
   function saveMemberNote(name){ const m=DK.find(x=>x.name===name); const el=document.getElementById('memberNote'); if(m&&el){ m.note=el.value; if(m.id) google.script.run.updateMemberField(m.id,'note1',el.value); toast(`${name} 회원 비고 저장`); } }
   function saveItemNote(id,note){ if(!id) return; const w=WAIT.find(x=>String(x.id)===String(id)); if(w) w.note=note; const dv=DELIVERED.find(x=>String(x.id)===String(id)); if(dv) dv.note=note; google.script.run.setItemNote(id,note); toast('물건 비고 저장'); }
@@ -860,7 +862,7 @@
     switchTab, setStat, setSoon, sortQueue, toggleSelAll, toggleSel, setLife,
     openBulkModal, closeBulkModal, onBulkTargetChange, applyBulk,
     openModal, closeModal, renderPickerList, addToCart, removeFromCart, confirmPicker, renderCart,
-    openMemberRecs, saveItemNote, saveMemberNote, setMemberStatus, setQueueQuery,
+    openMemberRecs, selItem, saveItemNote, saveMemberNote, setMemberStatus, setQueueQuery,
     calNav, calToday, setCalStatus, setCalQuery, gotoBid, showCalPop, hideCalPop, deliver,
     toggleTheme,
     refresh: function(){ renderQueue(); renderWait(); applyColw(); }
