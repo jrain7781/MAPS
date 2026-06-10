@@ -72,7 +72,28 @@
   #RecManagement .life-종료{ color:#6b7280; background:#f3f4f6; border-color:#d1d5db; }
   /* 그리드 열 너비 드래그 리사이즈 */
   #RecManagement #queueTable thead th{ position:relative; overflow:hidden; }
-  #RecManagement #queueTable td{ overflow:hidden; text-overflow:ellipsis; }
+  #RecManagement #queueTable td{ overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+  /* 그룹별 요약/필터 칩 */
+  #RecManagement .grpchip{ font-size:11px; font-weight:600; padding:3px 10px; border-radius:9999px; border:1px solid; cursor:pointer; transition:.12s; }
+  #RecManagement .grpchip-all{ color:#374151; background:#f3f4f6; border-color:#e5e7eb; }
+  #RecManagement .grpchip-all.on{ color:#fff; background:#4b5563; border-color:#4b5563; }
+  #RecManagement .grpchip-A{ color:#4338ca; background:#eef2ff; border-color:#c7d2fe; }
+  #RecManagement .grpchip-A.on{ color:#fff; background:#4f46e5; border-color:#4f46e5; }
+  #RecManagement .grpchip-A.on b, #RecManagement .grpchip-A.on span{ color:#fff !important; }
+  #RecManagement .grpchip-B{ color:#b45309; background:#fffbeb; border-color:#fcd34d; }
+  #RecManagement .grpchip-B.on{ color:#fff; background:#d97706; border-color:#d97706; }
+  #RecManagement .grpchip-B.on b, #RecManagement .grpchip-B.on span{ color:#fff !important; }
+  #RecManagement .grpchip-none{ color:#9ca3af; background:#f9fafb; border-color:#e5e7eb; }
+  #RecManagement .grpchip-none.on{ color:#fff; background:#9ca3af; border-color:#9ca3af; }
+  /* 추천 A/B 그룹 드롭다운 */
+  #RecManagement .group-sel{ font-size:11px; font-weight:800; border-radius:6px; padding:1px 2px; border:1px solid; cursor:pointer; }
+  #RecManagement .group-sel.group-A{ color:#4338ca; background:#eef2ff; border-color:#c7d2fe; }
+  #RecManagement .group-sel.group-B{ color:#b45309; background:#fffbeb; border-color:#fcd34d; }
+  #RecManagement .group-sel.group-none{ color:#9ca3af; background:#f9fafb; border-color:#e5e7eb; }
+  /* 달력 월요일 A/B 주 라벨 */
+  #RecManagement .cal-wgrp{ display:inline-grid; place-items:center; min-width:16px; height:15px; border-radius:4px; font-size:10px; font-weight:800; margin-right:3px; vertical-align:middle; }
+  #RecManagement .cal-wgrp-A{ color:#fff; background:#6366f1; }
+  #RecManagement .cal-wgrp-B{ color:#fff; background:#f59e0b; }
   #RecManagement .colrz{ position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:5; }
   #RecManagement .colrz:hover{ background:rgba(99,102,241,.35); }
   /* 물건비고 항목 — 선택(포커스) 시 하이라이트 */
@@ -138,8 +159,9 @@
       <input id="dateInput" type="date" value="2026-06-08" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700"> · 추천 주기
       <input id="cycleInput" type="number" min="1" value="14" onfocus="this.select()" onclick="this.select()" class="w-12 border border-gray-300 rounded px-1.5 py-0.5 text-center text-gray-700"> 일
       <button id="cycleSave" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-semibold">저장</button>
-      <span class="w-px h-4 bg-gray-200 mx-0.5"></span>그룹 이번주
-      <select id="groupAnchorSel" onchange="REC.setAnchorUI(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700 bg-white" title="이번 주를 어느 그룹 주로 둘지(격주 앵커)"><option value="A">A주</option><option value="B">B주</option></select>
+      <span class="w-px h-4 bg-gray-200 mx-0.5"></span>A그룹 시작주
+      <input id="groupAnchorDate" type="date" onchange="REC.setAnchorDate(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700" title="A그룹이 시작되는 주의 날짜 — 그 주부터 격주로 A·B 교대">
+      <span id="anchorThisWeek" class="text-[11px] text-gray-500"></span>
       <span class="w-px h-4 bg-gray-200 mx-0.5"></span>
       <button id="recThemeBtn" onclick="REC.toggleTheme()" class="text-[11px] border border-gray-300 rounded-lg px-2.5 py-1 text-gray-600">나이트 모드</button></div>
   </div>
@@ -156,6 +178,14 @@
         <button data-f="wait" class="sb sb-wait" onclick="REC.setStat('wait')">대기 <b>0</b></button>
         <button data-f="done" class="sb sb-done" onclick="REC.setStat('done')">완료 <b>0</b></button>
         <label class="ml-2 text-xs text-gray-500 flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-12 border border-gray-300 rounded px-1.5 py-1 text-center text-gray-700"></label>
+      </div>
+      <!-- 그룹별 요약/필터 (회원수·긴급·임박) -->
+      <div class="flex items-center gap-1.5 mb-3 flex-wrap" id="groupSummary">
+        <span class="text-[11px] text-gray-400 mr-0.5">그룹</span>
+        <button data-g="all" onclick="REC.setGroupFilter('all')" class="grpchip grpchip-all on">전체</button>
+        <button data-g="A" onclick="REC.setGroupFilter('A')" class="grpchip grpchip-A">A</button>
+        <button data-g="B" onclick="REC.setGroupFilter('B')" class="grpchip grpchip-B">B</button>
+        <button data-g="none" onclick="REC.setGroupFilter('none')" class="grpchip grpchip-none">미지정</button>
       </div>
       <div class="flex items-center mb-3 gap-2 flex-wrap">
         <h2 class="text-base font-bold text-gray-800">추천 우선순위</h2>
@@ -362,8 +392,12 @@
   const subChip = s => { const m={'수익':'border-emerald-500 text-emerald-700','월세':'border-amber-500 text-amber-700','올인원':'border-violet-500 text-violet-700'}; return s? `<span class="inline-block w-[44px] text-center text-[10px] font-bold py-0.5 rounded border bg-white ${m[s]||'border-gray-400 text-gray-600'}">${s}</span>` : ''; };
   let TELE_OFF = new Set();
   const teleBadge = name => `<span class="inline-grid place-items-center w-4 h-4 rounded-full text-[9px] font-bold align-middle mr-1 ${TELE_OFF.has(name)?'bg-gray-300 text-white':'bg-sky-500 text-white'}" title="${TELE_OFF.has(name)?'텔레그램 미연결':'텔레그램 연결됨'}">T</span>`;
-  // 추천 A/B 그룹 토글 배지 (회원명 앞). 클릭: 미지정→A→B→미지정
-  const groupBadge = m => { const g=m.group; const cls = g==='A'?'bg-indigo-100 text-indigo-700 border-indigo-300' : g==='B'?'bg-amber-100 text-amber-700 border-amber-300' : 'bg-gray-100 text-gray-400 border-gray-200'; return `<span onclick="event.stopPropagation();REC.cycleGroup('${m.name}')" title="추천그룹 (클릭: A→B→미지정)" class="inline-grid place-items-center w-5 h-5 rounded border text-[10px] font-extrabold cursor-pointer mr-1 align-middle ${cls}">${g||'·'}</span>`; };
+  // 추천 A/B 그룹 드롭다운 (회원명 앞)
+  const groupSelect = m => `<select onclick="event.stopPropagation()" onchange="REC.setGroupSel('${m.name}',this.value)" title="추천 A/B 그룹" class="group-sel group-${m.group||'none'} focus:outline-none mr-1 align-middle">
+      <option value="" ${!m.group?'selected':''}>·</option>
+      <option value="A" ${m.group==='A'?'selected':''}>A</option>
+      <option value="B" ${m.group==='B'?'selected':''}>B</option>
+    </select>`;
 
   // ── 서버 데이터 → 내부 구조(DK/CAND/WAIT/DELIVERED) 변환 ──
   const parseCohort = (name,grade) => { const m=((name||'')+' '+(grade||'')).match(/(\d+)\s*기/); return m?Number(m[1]):''; };
@@ -464,9 +498,11 @@
   }
   const waitCountFor = name => WAIT.filter(w=>w.name===name).length;
 
-  function renderQueue(){
+  let _lastOrder = [];   // 직전 표시 순서(회원명) — 그룹 편집 시 정렬 고정용
+  function renderQueue(keepOrder){
     updateAnchorSel();
     renderStatBtns();
+    renderGroupSummary();
     let list = DK.filter(passFilter).map(m=>({m,k:calc(m)}));
     if(qSort.key){
       const d=qSort.dir, g=o=>{switch(qSort.key){case 'name':return o.m.name;case 'life':return o.m.status;case 'sub':return o.m.sub;case 'total':return o.k.total;case 'last':return o.k.last||'';case 'next':return o.k.next?o.k.next.getTime():0;case 'status':return o.k.dleft==null?1e9:o.k.dleft;case 'wait':return waitCountFor(o.m.name);}};
@@ -475,6 +511,8 @@
         const r=x=> x.k.ended?3 : x.k.held?2 : x.k.fresh?1 : 0;
         const ra=r(a),rb=r(b); if(ra!==rb) return ra-rb;
         return (b.k.owed-a.k.owed)||((a.k.dleft==null?1e9:a.k.dleft)-(b.k.dleft==null?1e9:b.k.dleft)); }); }
+    if(keepOrder && _lastOrder.length){ const oi=n=>{const i=_lastOrder.indexOf(n); return i<0?1e9:i;}; list.sort((a,b)=>oi(a.m.name)-oi(b.m.name)); }
+    _lastOrder = list.map(x=>x.m.name);
     document.getElementById('queueBody').innerHTML = list.length ? list.map(({m,k},i)=>{
       const sel = (m.name===curRecMember);
       const rowSty = sel ? 'background:rgba(99,102,241,.10);box-shadow:inset 3px 0 0 #6366f1' : (k.ended ? 'opacity:.55' : (k.owed>=1 ? 'background:rgba(248,113,113,.07)' : ''));
@@ -497,7 +535,7 @@
         <td class="py-3 text-center"><input type="checkbox" ${checked} onclick="event.stopPropagation();REC.toggleSel('${m.name}',this.checked)"></td>
         <td class="py-3 text-center text-gray-500 font-semibold">${i+1}</td>
         <td class="py-3 text-center">${lifeSel}${holdNote}</td>
-        <td class="py-3 text-center font-semibold text-gray-800 whitespace-nowrap">${groupBadge(m)}${teleBadge(m.name)}${m.name}</td>
+        <td class="py-3 text-center font-semibold text-gray-800 whitespace-nowrap">${groupSelect(m)}${teleBadge(m.name)}${m.name}</td>
         <td class="py-3 text-center">${subChip(m.sub)}</td>
         <td class="py-3 text-center text-gray-700 font-semibold">${k.total}건</td>
         <td class="py-3 text-center text-gray-500">${k.last||'—'}</td>
@@ -517,15 +555,28 @@
   let modalMember = null;
   let cart = [];
   let qSort={key:null,dir:1};
-  let curStat='all', SOON=3, curLife='all';
+  let curStat='all', SOON=3, curLife='all', curGroupFilter='all';
   REC._curLife = () => curLife;
   function setLife(s){ curLife=(curLife===s)?'all':s; renderQueue(); }
+  function setGroupFilter(g){ curGroupFilter=(curGroupFilter===g && g!=='all')?'all':g; renderQueue(); }
   function renderLifeChips(){
     const cnt=s=>DK.filter(m=>m.status===s).length;
     document.querySelectorAll('#lifeSummary .lifechip').forEach(b=>{ const s=b.dataset.life; const e=b.querySelector('b'); if(e)e.textContent=cnt(s); b.classList.toggle('on',curLife===s); });
     const clr=document.getElementById('lifeClear'); if(clr) clr.classList.toggle('hidden',curLife==='all');
   }
-  function passFilter(m){ return (!queueQuery||m.name.includes(queueQuery)) && matchStat(m) && (curLife==='all'||m.status===curLife); }
+  // 그룹별 회원수/긴급/임박 카운트 + 필터 선택표시
+  function renderGroupSummary(){
+    const stat={A:{n:0,u:0,s:0},B:{n:0,u:0,s:0},none:{n:0,u:0,s:0}};
+    DK.forEach(m=>{ const key=(m.group==='A'||m.group==='B')?m.group:'none'; const g=stat[key]; g.n++;
+      const k=calc(m); if(!k.held&&!k.ended&&!k.fresh){ if(k.dleft<0) g.u++; else if(k.dleft<=SOON) g.s++; } });
+    const lbl=(name,g)=>`${name} · 회원 <b>${g.n}</b> · <span class="text-red-600">긴급 <b>${g.u}</b></span> · <span class="text-amber-600">임박 <b>${g.s}</b></span>`;
+    const A=document.querySelector('#groupSummary .grpchip-A'); if(A) A.innerHTML=lbl('A',stat.A);
+    const B=document.querySelector('#groupSummary .grpchip-B'); if(B) B.innerHTML=lbl('B',stat.B);
+    const N=document.querySelector('#groupSummary .grpchip-none'); if(N) N.innerHTML=`미지정 <b>${stat.none.n}</b>`;
+    document.querySelectorAll('#groupSummary .grpchip').forEach(b=>b.classList.toggle('on', b.dataset.g===curGroupFilter));
+  }
+  function passFilter(m){ const gk=(m.group==='A'||m.group==='B')?m.group:'none'; const grpOk=(curGroupFilter==='all')||(gk===curGroupFilter);
+    return (!queueQuery||m.name.includes(queueQuery)) && matchStat(m) && (curLife==='all'||m.status===curLife) && grpOk; }
   function progStateOf(name){ if(waitCountFor(name)>0) return '대기'; if(DELIVERED.some(d=>d.name===name)) return '완료'; return '없음'; }
   function matchStat(m){
     const k=calc(m);
@@ -562,22 +613,27 @@
     m.status=st; renderQueue(); if(name===curRecMember) openMemberRecs(name); toast(`${name} → ${st}`);
     if(m.id) google.script.run.setDonkleMemberStatus(m.id, st, m.hold||'');
   }
-  function cycleGroup(name){
+  function setGroupSel(name, val){
     const m=DK.find(x=>x.name===name); if(!m) return;
-    m.group = m.group==='A' ? 'B' : m.group==='B' ? '' : 'A';
-    if(m.id) google.script.run.setRecGroup(m.id, m.group);
-    renderQueue(); if(name===curRecMember) openMemberRecs(name, true);
-    toast(`${name} 추천그룹 → ${m.group||'미지정'}`);
+    const g=(val==='A'||val==='B')?val:'';
+    m.group=g;
+    if(m.id) google.script.run.setRecGroup(m.id, g);
+    renderQueue(true);  // 정렬 고정 → 편집 중 행이 사라지지 않게
+    if(name===curRecMember) openMemberRecs(name, true);
+    toast(`${name} 추천그룹 → ${g||'미지정'}`);
   }
-  function setAnchorUI(val){
-    const thisMon = weekMonday(TODAY);
-    GROUP_ANCHOR = (val==='B') ? addDays(thisMon,-7) : thisMon;  // A주면 이번주=A(앵커=이번주월), B주면 이번주=B(앵커=지난주월)
-    const iso = GROUP_ANCHOR.getFullYear()+'-'+String(GROUP_ANCHOR.getMonth()+1).padStart(2,'0')+'-'+String(GROUP_ANCHOR.getDate()).padStart(2,'0');
-    google.script.run.setDonkleGroupAnchor(iso);
+  const isoOf = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  function setAnchorDate(val){
+    const d = parseDate(val); if(!d){ return; }
+    GROUP_ANCHOR = weekMonday(d);   // 선택한 날짜가 속한 주(월요일) = A그룹 시작주
+    google.script.run.setDonkleGroupAnchor(isoOf(GROUP_ANCHOR));
     renderQueue(); renderWait(); if(curRecMember) openMemberRecs(curRecMember, true);
-    toast('그룹 앵커: 이번 주 = '+val+'주');
+    toast('A그룹 시작주 = '+fmtMD(GROUP_ANCHOR)+' 주');
   }
-  function updateAnchorSel(){ const s=document.getElementById('groupAnchorSel'); if(s && GROUP_ANCHOR){ const g=groupOfWeek(weekMonday(TODAY)); if(g) s.value=g; } }
+  function updateAnchorSel(){
+    const di=document.getElementById('groupAnchorDate'); if(di && GROUP_ANCHOR) di.value=isoOf(GROUP_ANCHOR);
+    const tw=document.getElementById('anchorThisWeek'); if(tw){ const g=groupOfWeek(weekMonday(TODAY)); tw.textContent = g?('이번주 '+g+'주'):''; }
+  }
   function visibleMembers(){ return DK.filter(passFilter).map(m=>m.name); }
   function toggleSel(name,on){ if(on)SELECTED.add(name); else SELECTED.delete(name); updateBulkBar(); }
   function toggleSelAll(on){ visibleMembers().forEach(n=>{ on?SELECTED.add(n):SELECTED.delete(n); }); renderQueue(); updateBulkBar(); }
@@ -844,7 +900,8 @@
       const dayMark=d===todayIs?'<span class="inline-grid place-items-center w-5 h-5 rounded-full bg-indigo-600 text-white">'+d+'</span>':d;
       const wg=groupOfWeek(weekMonday(new Date(calY,calM,d)));   // 이 칸이 속한 주의 그룹
       const grpCls=wg==='A'?'cal-grp-A':wg==='B'?'cal-grp-B':'';
-      cells+=`<div class="cal-cell ${grpCls} ${d===todayIs?'cal-today':''}"><div class="cal-day ${dayCls}">${dayMark}${summary}</div><div class="cal-mems">${chips}</div></div>`;
+      const wgBadge=(dow===1&&wg)?`<span class="cal-wgrp cal-wgrp-${wg}" title="${wg}그룹 주">${wg}</span>`:'';  // 월요일 앞 A/B
+      cells+=`<div class="cal-cell ${grpCls} ${d===todayIs?'cal-today':''}"><div class="cal-day ${dayCls}">${wgBadge}${dayMark}${summary}</div><div class="cal-mems">${chips}</div></div>`;
     }
     document.getElementById('calGrid').innerHTML=cells;
   }
@@ -919,7 +976,7 @@
     switchTab, setStat, setSoon, sortQueue, toggleSelAll, toggleSel, setLife,
     openBulkModal, closeBulkModal, onBulkTargetChange, applyBulk,
     openModal, closeModal, renderPickerList, addToCart, removeFromCart, confirmPicker, renderCart,
-    openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, cycleGroup, setAnchorUI, setQueueQuery,
+    openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, setGroupSel, setGroupFilter, setAnchorDate, setQueueQuery,
     calNav, calToday, setCalStatus, setCalQuery, gotoBid, showCalPop, hideCalPop, deliver,
     toggleTheme,
     refresh: function(){ renderQueue(); renderWait(); applyColw(); }
