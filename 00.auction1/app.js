@@ -930,6 +930,7 @@
     retryCount: 2,
     retryBackoffSec: [5, 15], // 길이=retryCount, 부족하면 마지막 값 반복
     batchIntervalSec: 3,      // 일괄 크롤 매 프리셋 사이 대기 (초)
+    headless: false,          // 크롤링 Selenium 창 숨김(헤드리스)
   };
   function getCrawlSettings() {
     try {
@@ -963,6 +964,7 @@
     document.getElementById('setRetryCount').value = Number(s.retryCount) || 0;
     document.getElementById('setRetryBackoff').value = (s.retryBackoffSec || []).join(', ');
     document.getElementById('setBatchInterval').value = Number(s.batchIntervalSec) || 0;
+    const hd = document.getElementById('setHeadless'); if (hd) hd.checked = !!s.headless;
     m.classList.remove('hidden');
   }
   function closeSettingsModal() {
@@ -990,6 +992,7 @@
       retryCount:      Math.max(0, Number(document.getElementById('setRetryCount').value) || 0),
       retryBackoffSec: _parseBackoffStr(document.getElementById('setRetryBackoff').value),
       batchIntervalSec: Math.max(0, Number(document.getElementById('setBatchInterval').value) || 0),
+      headless:        !!document.getElementById('setHeadless')?.checked,
     };
     setCrawlSettings(s);
     // 모달 유지 — 사용자가 PW 저장 후 바로 [검증하기] 누를 수 있게. 닫기는 [✕]/[취소]/[닫기] 로만.
@@ -1014,6 +1017,7 @@
     document.getElementById('setRetryCount').value = s.retryCount;
     document.getElementById('setRetryBackoff').value = s.retryBackoffSec.join(', ');
     document.getElementById('setBatchInterval').value = s.batchIntervalSec;
+    const hd = document.getElementById('setHeadless'); if (hd) hd.checked = s.headless;
   }
 
   function onMsCheckAllChange(e) {

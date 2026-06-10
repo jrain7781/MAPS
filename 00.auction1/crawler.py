@@ -223,6 +223,8 @@ BUILD_TAG = "2026-06-02 보고서+미리보기+재시작+상태"
 _STARTED_AT = time.time()
 
 _driver = None
+_driver_headless = None      # 현재 _driver 가 생성된 headless 모드 (모드 바뀌면 재생성)
+_want_headless = False       # 다음 get_driver() 가 쓸 headless 여부 (crawl settings 에서 갱신)
 _lock = threading.Lock()
 _last_login_at = 0.0
 LOGIN_TTL_SEC = 30 * 60  # 30분 — 옥션원 세션 안에서 재로그인 안 하고 빠르게 처리
@@ -235,6 +237,7 @@ DEFAULT_SETTINGS = {
     "retryEnabled":    True,    # 0건 + 비로그인 감지 시 백오프 재시도 활성
     "retryCount":      2,
     "retryBackoffSec": [5, 15], # 부족하면 마지막 값 반복
+    "headless":        False,   # True 면 크롤링 Selenium 창 숨김(헤드리스). 물건캡쳐 '조사창 숨김'과 동일 개념
 }
 
 def _coerce_settings(s):
@@ -251,6 +254,7 @@ def _coerce_settings(s):
     out["retryBackoffSec"] = [max(0, int(x)) for x in out["retryBackoffSec"] if isinstance(x, (int, float))]
     if not out["retryBackoffSec"]:
         out["retryBackoffSec"] = [5]
+    out["headless"] = bool(out["headless"])
     return out
 
 # 크롤링 진행상황 (프론트 폴링용)
@@ -303,20 +307,35 @@ def _looks_like_login(html: str) -> bool:
 
 
 def get_driver():
-    global _driver
+    global _driver, _driver_headless
+    want = bool(_want_headless)
     if _driver is not None:
-        try:
-            _ = _driver.title
-            return _driver
-        except Exception:
+        if _driver_headless != want:
+            # 숨김 모드가 바뀜 → 기존 드라이버 종료 후 재생성
+            print(f"[driver] headless 모드 변경 {_driver_headless}→{want} — 드라이버 재생성")
+            try: _driver.quit()
+            except Exception: pass
             _driver = None
+        else:
+            try:
+                _ = _driver.title
+                return _driver
+            except Exception:
+                _driver = None
     opts = webdriver.ChromeOptions()
     opts.add_argument("--window-size=1480,920")
-    opts.add_experimental_option("detach", True)
+    if want:
+        # 헤드리스(숨김) — 창 안 띄움. detach 는 의미 없어 생략.
+        opts.add_argument("--headless=new")
+        opts.add_argument("--disable-gpu")
+    else:
+        opts.add_experimental_option("detach", True)
     _driver = webdriver.Chrome(
         service=Service(ChromeDriverManager().install()),
         options=opts,
     )
+    _driver_headless = want
+    print(f"[driver] 생성 완료 (headless={want})")
     return _driver
 
 
@@ -956,7 +975,9 @@ def verify_account(account: dict) -> dict:
 
 
 def crawl(form_data: dict, custom_filters: list | None = None, settings: dict | None = None, account: dict | None = None):
+    global _want_headless
     s = _coerce_settings(settings)
+    _want_headless = s["headless"]   # 다음 get_driver() 가 이 값으로 (재)생성
     creds = _resolve_account(account)
     print(f"[crawl] settings={s} account={creds['label']}")
     # 새 크롤링 시작 — 이전 cancel 신호 초기화
