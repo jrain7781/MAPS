@@ -74,7 +74,10 @@
   #RecManagement #queueTable thead th{ position:relative; overflow:hidden; }
   #RecManagement #queueTable td{ overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
   /* 그룹별 요약/필터 칩 */
-  #RecManagement .grpchip{ font-size:11px; font-weight:600; padding:3px 10px; border-radius:9999px; border:1px solid; cursor:pointer; transition:.12s; }
+  #RecManagement .grpchip{ font-size:11px; font-weight:700; padding:4px 12px; border-radius:9999px; border:1px solid; cursor:pointer; transition:.12s; }
+  /* 선택(on) = 강한 대비: 굵게+그림자+살짝 확대 / 미선택은 디밍 */
+  #RecManagement .grpchip.on{ font-weight:800; box-shadow:0 2px 6px rgba(0,0,0,.22); transform:translateY(-1px); }
+  #RecManagement #groupSummary.has-sel .grpchip:not(.on){ opacity:.45; filter:saturate(.7); }
   #RecManagement .grpchip-all{ color:#374151; background:#f3f4f6; border-color:#e5e7eb; }
   #RecManagement .grpchip-all.on{ color:#fff; background:#4b5563; border-color:#4b5563; }
   #RecManagement .grpchip-A{ color:#4338ca; background:#eef2ff; border-color:#c7d2fe; }
@@ -86,7 +89,7 @@
   #RecManagement .grpchip-none{ color:#9ca3af; background:#f9fafb; border-color:#e5e7eb; }
   #RecManagement .grpchip-none.on{ color:#fff; background:#9ca3af; border-color:#9ca3af; }
   /* 추천 A/B 그룹 드롭다운 */
-  #RecManagement .group-sel{ font-size:11px; font-weight:800; border-radius:6px; padding:1px 2px; border:1px solid; cursor:pointer; }
+  #RecManagement .group-sel{ font-size:11px; font-weight:800; border-radius:6px; padding:2px 4px; border:1px solid; cursor:pointer; min-width:46px; text-align:center; }
   #RecManagement .group-sel.group-A{ color:#4338ca; background:#eef2ff; border-color:#c7d2fe; }
   #RecManagement .group-sel.group-B{ color:#b45309; background:#fffbeb; border-color:#fcd34d; }
   #RecManagement .group-sel.group-none{ color:#9ca3af; background:#f9fafb; border-color:#e5e7eb; }
@@ -169,6 +172,14 @@
   <!-- ========== 탭1: 추천 큐 (추천담당자) ========== -->
   <div id="view-queue" class="flex items-stretch flex-1 min-h-0">
     <div class="card p-5 flex-1 min-w-0 flex flex-col min-h-0">
+      <!-- 그룹별 요약/필터 (회원수·긴급·임박) — 최상단 -->
+      <div class="flex items-center gap-1.5 mb-3 flex-wrap" id="groupSummary">
+        <span class="text-[11px] text-gray-400 mr-0.5 font-semibold">그룹</span>
+        <button data-g="all" onclick="REC.setGroupFilter('all')" class="grpchip grpchip-all on">전체</button>
+        <button data-g="A" onclick="REC.setGroupFilter('A')" class="grpchip grpchip-A">A</button>
+        <button data-g="B" onclick="REC.setGroupFilter('B')" class="grpchip grpchip-B">B</button>
+        <button data-g="none" onclick="REC.setGroupFilter('none')" class="grpchip grpchip-none">미지정</button>
+      </div>
       <!-- 상단 필터 버튼 -->
       <div class="flex items-center gap-1.5 mb-4 flex-wrap" id="statBtns">
         <button data-f="all" class="sb sb-all on" onclick="REC.setStat('all')">전체 <b>0</b></button>
@@ -178,14 +189,6 @@
         <button data-f="wait" class="sb sb-wait" onclick="REC.setStat('wait')">대기 <b>0</b></button>
         <button data-f="done" class="sb sb-done" onclick="REC.setStat('done')">완료 <b>0</b></button>
         <label class="ml-2 text-xs text-gray-500 flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-12 border border-gray-300 rounded px-1.5 py-1 text-center text-gray-700"></label>
-      </div>
-      <!-- 그룹별 요약/필터 (회원수·긴급·임박) -->
-      <div class="flex items-center gap-1.5 mb-3 flex-wrap" id="groupSummary">
-        <span class="text-[11px] text-gray-400 mr-0.5">그룹</span>
-        <button data-g="all" onclick="REC.setGroupFilter('all')" class="grpchip grpchip-all on">전체</button>
-        <button data-g="A" onclick="REC.setGroupFilter('A')" class="grpchip grpchip-A">A</button>
-        <button data-g="B" onclick="REC.setGroupFilter('B')" class="grpchip grpchip-B">B</button>
-        <button data-g="none" onclick="REC.setGroupFilter('none')" class="grpchip grpchip-none">미지정</button>
       </div>
       <div class="flex items-center mb-3 gap-2 flex-wrap">
         <h2 class="text-base font-bold text-gray-800">추천 우선순위</h2>
@@ -202,7 +205,7 @@
           <span class="text-[12px] text-gray-400">정렬: 헤더 클릭</span>
           <span class="w-px h-5 bg-gray-200"></span>
           <input id="queueSearch" oninput="REC.setQueueQuery(this.value)" onfocus="this.select()" onclick="this.select()" placeholder="회원이름 조회" class="border border-gray-300 rounded-lg px-3 py-1.5 text-xs w-36 focus:outline-none focus:ring-2 focus:ring-indigo-300">
-          <select id="bulkTargetTop" class="border border-gray-300 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white"><option value="status">상태값</option></select>
+          <select id="bulkTargetTop" class="border border-gray-300 rounded-lg px-2 py-1.5 text-xs text-gray-700 bg-white"><option value="status">상태값</option><option value="group">그룹</option></select>
           <button onclick="REC.openBulkModal()" class="text-xs font-semibold border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg px-3 py-1.5">✓ 일괄적용</button>
         </div>
       </div>
@@ -332,11 +335,11 @@
   <div id="bulkModal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center" onclick="if(event.target===this)REC.closeBulkModal()">
     <div class="card w-full mx-4 flex flex-col" style="max-width:440px;max-height:82vh;padding:0">
       <div class="px-4 py-3 border-b border-gray-200 flex items-center">
-        <h3 class="text-base font-bold text-gray-800">회원 상태 일괄 변경</h3>
+        <h3 id="bulkModalTitle" class="text-base font-bold text-gray-800">회원 상태 일괄 변경</h3>
         <button onclick="REC.closeBulkModal()" class="ml-auto text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
       </div>
       <div class="px-4 py-3 border-b border-gray-100 flex items-center gap-2 text-sm bg-gray-50">
-        <span class="text-gray-500">변경할 상태</span>
+        <span id="bulkTargetLabel" class="text-gray-500">변경할 상태</span>
         <select id="bulkTarget" onchange="REC.onBulkTargetChange()" class="border border-gray-300 rounded px-2 py-1 text-sm font-semibold bg-white">
           <option>진행</option><option>보류</option><option>종료</option>
         </select>
@@ -576,6 +579,7 @@
     const B=document.querySelector('#groupSummary .grpchip-B'); if(B) B.innerHTML=lbl('B',stat.B);
     const N=document.querySelector('#groupSummary .grpchip-none'); if(N) N.innerHTML=`미지정 <b>${stat.none.n}</b>`;
     document.querySelectorAll('#groupSummary .grpchip').forEach(b=>b.classList.toggle('on', b.dataset.g===curGroupFilter));
+    const gs=document.getElementById('groupSummary'); if(gs) gs.classList.toggle('has-sel', curGroupFilter!=='all');
   }
   function passFilter(m){ const gk=(m.group==='A'||m.group==='B')?m.group:'none'; const grpOk=(curGroupFilter==='all')||(gk===curGroupFilter);
     return (!queueQuery||m.name.includes(queueQuery)) && matchStat(m) && (curLife==='all'||m.status===curLife) && grpOk; }
@@ -801,35 +805,60 @@
 
   const lifeChipMap={'진행':'bg-emerald-100 text-emerald-700','보류':'bg-violet-100 text-violet-700','종료':'bg-gray-200 text-gray-500','신규':'bg-cyan-100 text-cyan-700'};
   const lifeChipOf = st => `<span class="chip ${lifeChipMap[st]||'bg-gray-100 text-gray-500'}">${st}</span>`;
+  const groupChipOf = g => `<span class="chip ${g==='A'?'bg-indigo-100 text-indigo-700':g==='B'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-400'}">${g||'미지정'}</span>`;
+  let bulkMode='status';   // 'status' | 'group' (일괄적용 대상)
   function openBulkModal(){
     if(!SELECTED.size){ toast('회원을 먼저 체크해주세요'); return; }
-    document.getElementById('bulkTarget').value = '진행';
+    bulkMode = (document.getElementById('bulkTargetTop')||{}).value || 'status';
+    const sel=document.getElementById('bulkTarget');
+    const title=document.getElementById('bulkModalTitle');
+    const label=document.getElementById('bulkTargetLabel');
+    if(bulkMode==='group'){
+      sel.innerHTML='<option value="A">A</option><option value="B">B</option><option value="">미지정</option>'; sel.value='A';
+      if(title) title.textContent='회원 그룹 일괄 변경'; if(label) label.textContent='변경할 그룹';
+    } else {
+      sel.innerHTML='<option>진행</option><option>보류</option><option>종료</option>'; sel.value='진행';
+      if(title) title.textContent='회원 상태 일괄 변경'; if(label) label.textContent='변경할 상태';
+    }
     onBulkTargetChange();
     const md=document.getElementById('bulkModal'); md.classList.remove('hidden'); md.classList.add('flex');
   }
   function closeBulkModal(){ const md=document.getElementById('bulkModal'); md.classList.add('hidden'); md.classList.remove('flex'); }
   function onBulkTargetChange(){
     const tgt=document.getElementById('bulkTarget').value;
-    const hw=document.getElementById('bulkHoldWrap'); hw.classList.toggle('hidden',tgt!=='보류'); hw.classList.toggle('flex',tgt==='보류');
+    const hw=document.getElementById('bulkHoldWrap'); const showHold=(bulkMode==='status'&&tgt==='보류');
+    hw.classList.toggle('hidden',!showHold); hw.classList.toggle('flex',showHold);
     renderBulkModal();
   }
   function renderBulkModal(){
     const tgt=document.getElementById('bulkTarget').value;
     document.getElementById('bulkCount').textContent=SELECTED.size;
+    const chipNew = bulkMode==='group' ? groupChipOf(tgt) : lifeChipOf(tgt);
     document.getElementById('bulkList').innerHTML=[...SELECTED].map(name=>{
-      const m=DK.find(x=>x.name===name); const cur=m?m.status:'-';
+      const m=DK.find(x=>x.name===name);
+      const cur = bulkMode==='group' ? (m?m.group:'') : (m?m.status:'-');
+      const chipCur = bulkMode==='group' ? groupChipOf(cur) : lifeChipOf(cur);
       return `<div class="flex items-center gap-2 py-1.5 border-b border-gray-100 text-sm">
         <span class="font-semibold text-gray-800 flex-1 truncate">${teleBadge(name)}${name}</span>
-        ${lifeChipOf(cur)}<span class="text-gray-300">→</span>${lifeChipOf(tgt)}
+        ${chipCur}<span class="text-gray-300">→</span>${chipNew}
       </div>`; }).join('');
   }
   function applyBulk(){
     const tgt=document.getElementById('bulkTarget').value;
-    const hold = tgt==='보류' ? (document.getElementById('bulkHold').value||'').trim() : '';
-    let n=0; SELECTED.forEach(name=>{ const m=DK.find(x=>x.name===name); if(m){ m.status=tgt; m.hold=hold; n++; if(m.id) google.script.run.setDonkleMemberStatus(m.id, tgt, hold); } });
-    SELECTED.clear(); const a=document.getElementById('selAll'); if(a)a.checked=false;
-    closeBulkModal(); renderQueue(); if(curRecMember) openMemberRecs(curRecMember);
-    toast(`${n}명 → ${tgt} 일괄적용 완료`);
+    let n=0;
+    if(bulkMode==='group'){
+      const g=(tgt==='A'||tgt==='B')?tgt:'';
+      SELECTED.forEach(name=>{ const m=DK.find(x=>x.name===name); if(m){ m.group=g; n++; if(m.id) google.script.run.setRecGroup(m.id,g); } });
+      SELECTED.clear(); const a=document.getElementById('selAll'); if(a)a.checked=false;
+      closeBulkModal(); renderQueue(); if(curRecMember) openMemberRecs(curRecMember, true);
+      toast(`${n}명 → 그룹 ${g||'미지정'} 일괄적용 완료`);
+    } else {
+      const hold = tgt==='보류' ? (document.getElementById('bulkHold').value||'').trim() : '';
+      SELECTED.forEach(name=>{ const m=DK.find(x=>x.name===name); if(m){ m.status=tgt; m.hold=hold; n++; if(m.id) google.script.run.setDonkleMemberStatus(m.id, tgt, hold); } });
+      SELECTED.clear(); const a=document.getElementById('selAll'); if(a)a.checked=false;
+      closeBulkModal(); renderQueue(); if(curRecMember) openMemberRecs(curRecMember);
+      toast(`${n}명 → ${tgt} 일괄적용 완료`);
+    }
   }
 
   function switchTab(t){
@@ -922,7 +951,7 @@
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeBulkModal(); } });
 
   // 그리드 열 너비 드래그 리사이즈 (PC별 localStorage)
-  const COLW_DEF=[5,5,9,6,14,7,6,8,9,11,9,11];
+  const COLW_DEF=[5,5,9,9,11,7,6,8,9,11,9,11];
   let colw=[...COLW_DEF];
   function applyColw(){ const cols=document.querySelectorAll('#queueColgroup col'); cols.forEach((c,i)=>{ if(colw[i]!=null) c.style.width=colw[i]+'%'; }); }
   function saveColw(){ try{localStorage.setItem('donkle_colw',JSON.stringify(colw));}catch(e){} }
