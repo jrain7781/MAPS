@@ -9085,6 +9085,7 @@ function getRecManagementData() {
     var iSheet = ss.getSheetByName(DB_SHEET_NAME);
     var candidates = [], wait = [];
     var youngdoByMember = {};
+    var noteById = {};   // item_id → note (전달완료 물건 비고 조회용)
     if (iSheet && iSheet.getLastRow() >= 2) {
       var IX = {};
       ITEM_HEADERS.forEach(function (h, j) { IX[h] = j; });
@@ -9096,6 +9097,7 @@ function getRecManagementData() {
         var cs = String(r[IX['chuchen_state']] || '').trim();
         var mid = String(r[IX['member_id']] || '').trim();
         var youngdo = String(r[IX['items_youngdo']] || '').trim();
+        noteById[String(r[IX['id']])] = String(r[IX['note']] || '');
         if (mid && (youngdo === '돈클수익' || youngdo === '돈클월세')) {
           youngdoByMember[mid] = youngdoByMember[mid] || { '돈클수익': 0, '돈클월세': 0 };
           youngdoByMember[mid][youngdo]++;
@@ -9134,14 +9136,17 @@ function getRecManagementData() {
       var sdata = misSheet.getRange(2, 1, misSheet.getLastRow() - 1, MIS_HEADERS.length).getValues();
       sdata.forEach(function (r) {
         if (String(r[SX['status']] || '').trim() !== '추천') return;
+        var itemId = String(r[SX['item_id']] || '').trim();
         delivered.push({
           memberId: String(r[SX['member_id']] || '').trim(),
           name: String(r[SX['m_name']] || ''),
+          itemId: itemId,
           sakun_no: String(r[SX['sakun_no']] || ''),
           court: String(r[SX['court']] || ''),
           inDate: toIso(r[SX['in_date']]),
           eventDate: toIso(r[SX['event_date']]) || toIso(r[SX['recorded_at']]),
-          by: String(r[SX['m_name_id']] || '')
+          by: String(r[SX['m_name_id']] || ''),
+          note: (noteById[itemId] != null ? noteById[itemId] : '')
         });
       });
     }
