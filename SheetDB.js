@@ -8953,30 +8953,6 @@ function getMemberItemStatusRows(memberId) {
     return rows;
   } catch (e) { Logger.log('[getMemberItemStatusRows] ' + e.toString()); return []; }
 }
-/** [진단] MIS에서 member_id별/이름별 건수 — 그리드 카운트 vs 탭 불일치 원인 추적 */
-function debugMisMember(memberId, memberName) {
-  try {
-    var sheet = ensureMembersItemStatusSheet_();
-    var last = sheet.getLastRow();
-    var res = { total: 0, forId: 0, forName: 0, distinctIds: 0, idForName: '' };
-    if (last < 2) return res;
-    var data = sheet.getRange(2, 1, last - 1, MIS_HEADERS.length).getValues();
-    res.total = data.length;
-    var idSet = {}; var idsForName = {};
-    var tid = String(memberId || '').trim(), tnm = String(memberName || '').trim();
-    for (var i = 0; i < data.length; i++) {
-      var mid = String(data[i][1] || '').trim();
-      var mn = String(data[i][2] || '').trim();
-      if (mid) idSet[mid] = 1;
-      if (mid === tid) res.forId++;
-      if (tnm && mn === tnm) { res.forName++; if (mid) idsForName[mid] = (idsForName[mid] || 0) + 1; }
-    }
-    res.distinctIds = Object.keys(idSet).length;
-    res.idForName = Object.keys(idsForName).map(function (k) { return k + '(' + idsForName[k] + ')'; }).join(',');
-    return res;
-  } catch (e) { return { error: String(e) }; }
-}
-
 /** [회원화면] 토큰으로 members_item_status 행 조회 — 회원 물건이력(추천/입찰/낙찰/불가) 연동 */
 function getMemberItemStatusRowsByToken(token) {
   try {

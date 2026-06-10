@@ -13958,17 +13958,11 @@ MJ 이정우 팀장
         }
         if (statusEl) statusEl.textContent = '조회 중...';
         tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
-        const _dcDbg = (window.donkleCounts || {})[String(memberId)] || {};
-        const _memName = (document.getElementById('mem-member_name') || {}).value || '';
         google.script.run
             .withSuccessHandler(function (rows) {
                 window.misRowsCache = rows || [];
                 renderMisRows();
-                // [임시 진단] 조회 member_id / 서버결과 / 그리드카운트(캐시) — + 이름기준 MIS 실조회
-                if (statusEl) statusEl.textContent = `member_id=${memberId} · 결과 ${(rows||[]).length}건 · 그리드카운트(추천${_dcDbg['추천']||0}/입찰${_dcDbg['입찰']||0}/낙찰${_dcDbg['낙찰']||0}/불가${_dcDbg['불가']||0})`;
-                google.script.run.withSuccessHandler(function (d) {
-                    if (statusEl && d) statusEl.textContent += ` · [MIS실데이터] id매칭=${d.forId} 이름매칭=${d.forName}${d.idForName ? '(id:'+d.idForName+')' : ''} 총${d.total}행`;
-                }).debugMisMember(memberId, _memName);
+                if (statusEl) statusEl.textContent = '';
             })
             .withFailureHandler(function (err) {
                 if (statusEl) statusEl.textContent = '오류: ' + err.toString();
