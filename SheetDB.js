@@ -9376,6 +9376,7 @@ function registerDonkleRecommendation(memberId, memberName, itemIds) {
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, message: '물건 없음' };
     var allIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    var todayIso = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
     var cnt = 0;
     itemIds.forEach(function (id) {
       var idx = allIds.findIndex(function (v) { return String(v) === String(id); });
@@ -9385,6 +9386,7 @@ function registerDonkleRecommendation(memberId, memberName, itemIds) {
       sheet.getRange(rowNum, 5).setValue('추천');                    // E: stu_member
       sheet.getRange(rowNum, 9).setValue(String(memberId || ''));    // I: member_id
       sheet.getRange(rowNum, 7).setValue(String(memberName || ''));  // G: m_name
+      sheet.getRange(rowNum, 10).setValue(todayIso);                 // J: reg_date = 추천요청일(오늘) → 대시보드 전달대기 버킷
       if (curStu !== '추천') {
         sheet.getRange(rowNum, 17).setValue(''); // Q: chuchen_state
         sheet.getRange(rowNum, 18).setValue(''); // R: chuchen_date
