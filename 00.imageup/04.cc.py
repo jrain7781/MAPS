@@ -157,6 +157,19 @@ def mulgeon_no(sakun):
     return m.group(1) if m else ""
 
 
+def detail_mulgeon(detail_text):
+    """상세 페이지(ca_view) 에서 활성 물건번호 추출. '2023타경919 (31)' → '31'.
+    상단 '관련 물건번호' 탭(31 32 …)과 구분 위해 '타경<사건번호>(N)' 형태만 인정.
+    백업: '물건번호 31' 라벨."""
+    if not detail_text:
+        return ""
+    m = re.search(r"타경\s*\d+\s*[\(（]\s*(\d+)\s*[\)）]", detail_text)
+    if m:
+        return m.group(1)
+    m = re.search(r"물건\s*번호\s*[:：]?\s*(\d+)", detail_text)
+    return m.group(1) if m else ""
+
+
 # 진행상태 분류
 _BUGA_TOKENS = ["변경", "취소", "취하", "정지", "연기", "기각", "각하"]  # 법원 진행불가
 _MAEGAK_TOKENS = ["매각", "낙찰"]
@@ -643,12 +656,28 @@ def process_case(driver, wait, case):
         if r["_court_hit"] and r["_date_hit"] and mul_ok:
             picked = r
             break
-    # 물건번호 일치 우선 fallback
+    # 물건번호 일치 우선 fallback (행 텍스트 기반)
     if not picked and exp_mulgeon:
         for r in rows:
             if r.get("mulgeon", "") == exp_mulgeon:
                 picked = r
                 break
+    # ★ 다물건 사건: 행 텍스트에 물건번호가 안 실려 매칭 실패 → 후보 상세를 열어 물건번호 대조.
+    #   (같은 사건의 여러 호수가 같은 매각기일에 매각되면, 기일만 보고 첫 호수로 잘못 가져오던 버그 방지)
+    if not picked and exp_mulgeon:
+        cands = [r for r in rows if r["_date_hit"]] or rows
+        for r in cands[:15]:
+            vu = build_view_url(driver, r["pid"], r["line_num"], line_tnum)
+            got = detail_mulgeon(open_detail_text(driver, vu))
+            if got == exp_mulgeon:
+                picked = r
+                print(f"    ✓ 물건번호 상세대조 일치: ({exp_mulgeon})")
+                break
+        # 다물건인데 끝내 물건번호를 못 맞춤 → 엉뚱한 호수 데이터 방지: 확인불가 처리
+        if not picked:
+            print(f"    ⚠ 다물건 사건 물건번호({exp_mulgeon}) 매칭 실패 → 확인불가")
+            print(f"RESULT|{json.dumps(dict(base, status='확인불가', state_kind='확인불가', is_buga=False, key_match=False, detail='물건번호 불일치', view_url='', fetched_court='', date_hit=False, court_hit=False, sakun_hit=True, maegak_price='', buyer='', bidder_count=''), ensure_ascii=False)}")
+            return
     if not picked:
         for r in rows:
             if r["_date_hit"]:
