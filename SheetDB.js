@@ -9085,19 +9085,23 @@ function getRecManagementData() {
     var iSheet = ss.getSheetByName(DB_SHEET_NAME);
     var candidates = [], wait = [];
     var youngdoByMember = {};
-    var noteById = {};   // item_id → note (전달완료 물건 비고 조회용)
+    var mnoteById = {};   // item_id → members_note (회원전달내용)
     if (iSheet && iSheet.getLastRow() >= 2) {
       var IX = {};
       ITEM_HEADERS.forEach(function (h, j) { IX[h] = j; });
-      var idata = iSheet.getRange(2, 1, iSheet.getLastRow() - 1, ITEM_HEADERS.length).getValues();
-      idata.forEach(function (r) {
+      var nRows = iSheet.getLastRow() - 1;
+      var idata = iSheet.getRange(2, 1, nRows, ITEM_HEADERS.length).getValues();
+      var mnCol = _ensureItemMembersNoteCol_(iSheet);
+      var mnVals = iSheet.getRange(2, mnCol, nRows, 1).getValues();
+      idata.forEach(function (r, ri) {
         var iso = toIso(r[IX['in-date']]);
         var num = isoToNum(iso);
         var stu = String(r[IX['stu_member']] || '').trim();
         var cs = String(r[IX['chuchen_state']] || '').trim();
         var mid = String(r[IX['member_id']] || '').trim();
         var youngdo = String(r[IX['items_youngdo']] || '').trim();
-        noteById[String(r[IX['id']])] = String(r[IX['note']] || '');
+        var mnote = String((mnVals[ri] && mnVals[ri][0]) || '');
+        mnoteById[String(r[IX['id']])] = mnote;
         if (mid && (youngdo === '돈클수익' || youngdo === '돈클월세')) {
           youngdoByMember[mid] = youngdoByMember[mid] || { '돈클수익': 0, '돈클월세': 0 };
           youngdoByMember[mid][youngdo]++;
@@ -9107,7 +9111,7 @@ function getRecManagementData() {
             id: String(r[IX['id']]), inDate: iso, sakun_no: String(r[IX['sakun_no']] || ''),
             court: String(r[IX['court']] || ''), youngdo: youngdo, stu: stu,
             member: String(r[IX['m_name']] || ''), memberId: mid,
-            mgr: String(r[IX['m_name_id']] || ''), note: String(r[IX['note']] || '')
+            mgr: String(r[IX['m_name_id']] || ''), membersNote: mnote
           });
         }
         if (stu === '추천' && cs !== '전달완료') {
@@ -9115,7 +9119,7 @@ function getRecManagementData() {
             id: String(r[IX['id']]), memberId: mid, name: String(r[IX['m_name']] || ''),
             sakun_no: String(r[IX['sakun_no']] || ''), court: String(r[IX['court']] || ''),
             inDate: iso, regDate: toIso(r[IX['reg_date']]), by: String(r[IX['m_name_id']] || ''),
-            youngdo: youngdo, note: String(r[IX['note']] || '')
+            youngdo: youngdo, membersNote: mnote
           });
         }
       });
@@ -9146,7 +9150,7 @@ function getRecManagementData() {
           inDate: toIso(r[SX['in_date']]),
           eventDate: toIso(r[SX['event_date']]) || toIso(r[SX['recorded_at']]),
           by: String(r[SX['m_name_id']] || ''),
-          note: (noteById[itemId] != null ? noteById[itemId] : '')
+          membersNote: (mnoteById[itemId] != null ? mnoteById[itemId] : '')
         });
       });
     }
@@ -9220,6 +9224,56 @@ function setItemNote(itemId, note) {
     }
     return { success: false, message: 'item_id 없음' };
   } catch (e) { return { success: false, message: String(e) }; }
+}
+
+/**
+ * items 시트 끝에 'members_note'(회원전달내용) 컬럼 보장 — ITEM_HEADERS는 건드리지 않고 헤더명으로 관리.
+ * (ITEM_HEADERS.length 기반 일반 reads를 깨지 않기 위해 by-name 방식). 1-based 컬럼 반환.
+ */
+function _ensureItemMembersNoteCol_(sheet) {
+  var maxC = sheet.getMaxColumns();
+  var headerRow = sheet.getRange(1, 1, 1, maxC).getValues()[0];
+  for (var i = 0; i < headerRow.length; i++) if (String(headerRow[i]).trim() === 'members_note') return i + 1;
+  var col = sheet.getLastColumn() + 1;
+  if (sheet.getMaxColumns() < col) sheet.insertColumnsAfter(sheet.getMaxColumns(), col - sheet.getMaxColumns());
+  sheet.getRange(1, col).setValue('members_note');
+  return col;
+}
+
+/** 회원전달내용 저장 — items.members_note. 추천물건관리 우측패널 "회원전달내용" 박스에서 호출 */
+function setItemMembersNote(itemId, value) {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, message: '물건 없음' };
+    var col = _ensureItemMembersNoteCol_(sheet);
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === String(itemId).trim()) {
+        sheet.getRange(i + 2, col).setValue(String(value || ''));
+        SpreadsheetApp.flush();
+        return { success: true };
+      }
+    }
+    return { success: false, message: 'item_id 없음' };
+  } catch (e) { return { success: false, message: String(e) }; }
+}
+
+/** items.members_note(회원전달내용) 단건 조회 — 텔레그램/카카오 발송 시 [물건전달사항] 삽입용 */
+function getItemMembersNote_(itemId) {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return '';
+    var col = _ensureItemMembersNoteCol_(sheet);
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === String(itemId).trim()) {
+        return String(sheet.getRange(i + 2, col).getValue() || '');
+      }
+    }
+    return '';
+  } catch (e) { Logger.log('[getItemMembersNote_] ' + e); return ''; }
 }
 
 /** 돈클 회원 상태(진행/보류/종료) + 보류해제일 저장 (members 끝 donkle_status/donkle_hold) */

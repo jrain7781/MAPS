@@ -967,6 +967,14 @@ function telegramBuildItemMessage_(item, member, styleKey) {
     lines.push('💰 입찰가: ' + bidPriceFormatted);
   }
 
+  // [물건전달사항] 회원전달내용(items.members_note) — 하단 메세지 위 (추천 'card' 스타일만)
+  if (style === 'card') {
+    var _mNote = (typeof getItemMembersNote_ === 'function') ? String(getItemMembersNote_(itemId) || '').trim() : '';
+    lines.push('');
+    lines.push('📌 [물건전달사항]');
+    lines.push(_mNote ? telegramEscapeHtml_(_mNote) : '없습니다.');
+  }
+
   lines.push('');
   bottomTpl.split('\n').forEach(function(l) { lines.push(telegramEscapeHtml_(l)); });
 

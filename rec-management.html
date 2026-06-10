@@ -371,13 +371,13 @@
     const rosterById={}; DK.forEach(m=>{ rosterById[m.id]=m; });
     CAND = (data.candidates||[]).map(c=>({
       id:c.id, date:(c.inDate||'').replace(/-/g,'').slice(2), bid:c.inDate, s:c.sakun_no, court:c.court,
-      youngdo:c.youngdo||'등록전', stu:c.stu, member:c.member, mgr:c.mgr, note:c.note||''
+      youngdo:c.youngdo||'등록전', stu:c.stu, member:c.member, mgr:c.mgr, membersNote:c.membersNote||''
     }));
     WAIT = (data.wait||[]).filter(w=>rosterById[w.memberId]).map(w=>{ const mem=rosterById[w.memberId];
       return { id:w.id, memberId:w.memberId, name:mem.name, sub:mem.sub, s:w.sakun_no, court:w.court,
-               bidDate:ymdToMD(w.inDate), by:w.by, regDate:(w.regDate||'').slice(0,10), note:w.note||'' }; });
+               bidDate:ymdToMD(w.inDate), by:w.by, regDate:(w.regDate||'').slice(0,10), membersNote:w.membersNote||'' }; });
     DELIVERED = (data.delivered||[]).filter(d=>rosterById[d.memberId]).map(d=>({
-      memberId:d.memberId, name:rosterById[d.memberId].name, id:d.itemId||'', note:d.note||'', s:d.sakun_no, court:d.court,
+      memberId:d.memberId, name:rosterById[d.memberId].name, id:d.itemId||'', membersNote:d.membersNote||'', s:d.sakun_no, court:d.court,
       bidDate:ymdToMD(d.inDate), date:(d.eventDate||'').slice(0,10), by:d.by }));
   }
   let _loading=false;
@@ -612,9 +612,9 @@
   }
 
   function recsFor(name){
-    const w = WAIT.filter(x=>x.name===name).map(x=>({id:x.id, bid:x.bidDate||'—', req:(x.regDate?ymdToMD(x.regDate):'—'), s:x.s, court:x.court, mgr:x.by||'-', status:'대기', note:x.note||''}));
-    const d = DELIVERED.filter(x=>x.name===name).map(x=>({id:x.id||'', bid:x.bidDate||'—', req:(x.date?ymdToMD(x.date):'—'), s:x.s, court:x.court, mgr:x.by||'-', status:'완료', note:x.note||''}));
-    return w.concat(d);
+    const w = WAIT.filter(x=>x.name===name).map(x=>({id:x.id, _d:x.regDate||'', bid:x.bidDate||'—', req:(x.regDate?ymdToMD(x.regDate):'—'), s:x.s, court:x.court, mgr:x.by||'-', status:'대기', membersNote:x.membersNote||''}));
+    const d = DELIVERED.filter(x=>x.name===name).map(x=>({id:x.id||'', _d:x.date||'', bid:x.bidDate||'—', req:(x.date?ymdToMD(x.date):'—'), s:x.s, court:x.court, mgr:x.by||'-', status:'완료', membersNote:x.membersNote||''}));
+    return w.concat(d).sort((a,b)=>String(b._d).localeCompare(String(a._d)));  // 최신이 위로
   }
   let curRecMember = null;
   let curItemId = null;   // 우측 리스트에서 선택한 물건(비고 표시 대상)
@@ -667,11 +667,11 @@
       ${ (function(){ const sel=list.find(r=>r.id && String(r.id)===String(curItemId)); if(!sel) return '';
         return `<div class="px-3 pt-3 border-t border-gray-100">
         <div class="flex items-center mb-1.5 px-1 gap-1.5 flex-wrap">
-          <span class="text-xs font-bold text-amber-700">📝 물건 비고</span>
+          <span class="text-xs font-bold text-amber-700">📨 회원전달내용</span>
           <span class="text-[11px] font-semibold text-gray-700">${escHtml(sel.s)}</span>${recTag(sel.status)}
-          <span class="text-[10px] text-gray-400 ml-auto">items.note</span>
+          <span class="text-[10px] text-gray-400 ml-auto">items.members_note · 텔레그램/카톡 [물건전달사항]</span>
         </div>
-        <textarea placeholder="물건 비고 입력 (items.note)" onchange="REC.saveItemNote('${sel.id}',this.value)" onfocus="this.select()" class="w-full h-36 resize-none text-[11px] leading-relaxed border border-amber-300 rounded px-2 py-1.5 text-gray-700 bg-amber-50/40 focus:outline-none focus:ring-1 focus:ring-amber-300">${escHtml(sel.note)}</textarea>
+        <textarea placeholder="회원에게 전달할 내용 (비우면 '없습니다'로 전송)" onchange="REC.saveMembersNote('${sel.id}',this.value)" onfocus="this.select()" class="w-full h-36 resize-none text-[11px] leading-relaxed border border-amber-300 rounded px-2 py-1.5 text-gray-700 bg-amber-50/40 focus:outline-none focus:ring-1 focus:ring-amber-300">${escHtml(sel.membersNote)}</textarea>
       </div>`; })() }
       <div class="px-3 pb-4 pt-3 border-t border-gray-100">
         <div class="flex items-center mb-1.5 px-1 gap-2">
@@ -684,7 +684,7 @@
     if(!skipQueue) renderQueue();
   }
   function saveMemberNote(name){ const m=DK.find(x=>x.name===name); const el=document.getElementById('memberNote'); if(m&&el){ m.note=el.value; if(m.id) google.script.run.updateMemberField(m.id,'note1',el.value); toast(`${name} 회원 비고 저장`); } }
-  function saveItemNote(id,note){ if(!id) return; const w=WAIT.find(x=>String(x.id)===String(id)); if(w) w.note=note; const dv=DELIVERED.find(x=>String(x.id)===String(id)); if(dv) dv.note=note; google.script.run.setItemNote(id,note); toast('물건 비고 저장'); }
+  function saveMembersNote(id,val){ if(!id) return; const w=WAIT.find(x=>String(x.id)===String(id)); if(w) w.membersNote=val; const dv=DELIVERED.find(x=>String(x.id)===String(id)); if(dv) dv.membersNote=val; google.script.run.setItemMembersNote(id,val); toast('회원전달내용 저장'); }
 
   const lifeChipMap={'진행':'bg-emerald-100 text-emerald-700','보류':'bg-violet-100 text-violet-700','종료':'bg-gray-200 text-gray-500','신규':'bg-cyan-100 text-cyan-700'};
   const lifeChipOf = st => `<span class="chip ${lifeChipMap[st]||'bg-gray-100 text-gray-500'}">${st}</span>`;
@@ -862,7 +862,7 @@
     switchTab, setStat, setSoon, sortQueue, toggleSelAll, toggleSel, setLife,
     openBulkModal, closeBulkModal, onBulkTargetChange, applyBulk,
     openModal, closeModal, renderPickerList, addToCart, removeFromCart, confirmPicker, renderCart,
-    openMemberRecs, selItem, saveItemNote, saveMemberNote, setMemberStatus, setQueueQuery,
+    openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, setQueueQuery,
     calNav, calToday, setCalStatus, setCalQuery, gotoBid, showCalPop, hideCalPop, deliver,
     toggleTheme,
     refresh: function(){ renderQueue(); renderWait(); applyColw(); }
