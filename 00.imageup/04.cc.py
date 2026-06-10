@@ -665,16 +665,39 @@ def process_case(driver, wait, case):
     # ★ 다물건 사건: 행 텍스트에 물건번호가 안 실려 매칭 실패 → 후보 상세를 열어 물건번호 대조.
     #   (같은 사건의 여러 호수가 같은 매각기일에 매각되면, 기일만 보고 첫 호수로 잘못 가져오던 버그 방지)
     if not picked and exp_mulgeon:
-        cands = [r for r in rows if r["_date_hit"]] or rows
-        for r in cands[:15]:
-            vu = build_view_url(driver, r["pid"], r["line_num"], line_tnum)
-            got = detail_mulgeon(open_detail_text(driver, vu))
-            if got == exp_mulgeon:
-                picked = r
-                print(f"    ✓ 물건번호 상세대조 일치: ({exp_mulgeon})")
-                break
-        # 다물건인데 끝내 물건번호를 못 맞춤 → 엉뚱한 호수 데이터 방지: 확인불가 처리
+        # 진단: 검색결과 행 구성 출력 (물건번호 추출/매각기일 일치 확인용)
+        print(f"    [mul-debug] exp_mulgeon={exp_mulgeon} rows={len(rows)} :: "
+              + " | ".join(f"mul={r.get('mulgeon','')!r} d6={r.get('date6','')} st={r.get('state','')[:6]} {r.get('addr','')[:14]}" for r in rows[:20]))
+
+        def _probe_mulgeon(cand_rows, ltnum):
+            # date_hit 우선, 그 외 행도 포함(매각기일 표기가 달라도 물건번호로 확정)
+            ordered = sorted(cand_rows, key=lambda r: 0 if r.get("_date_hit") else 1)
+            for r in ordered[:20]:
+                vu = build_view_url(driver, r["pid"], r["line_num"], ltnum)
+                if detail_mulgeon(open_detail_text(driver, vu)) == exp_mulgeon:
+                    return r
+            return None
+
+        picked = _probe_mulgeon(rows, line_tnum)
+        # 날짜 필터에 (해당 물건번호가) 탈락한 경우 → 매각기일 빼고 재검색 후 재대조
         if not picked:
+            print(f"    ↻ 물건번호({exp_mulgeon}) 미발견 → 날짜 제외 재검색")
+            if search_case(driver, wait, case, use_date=False):
+                rows2 = parse_result_rows(driver)
+                if rows2:
+                    line_tnum = len(rows2)
+                    for r in rows2:
+                        fc = addr_to_court(r["addr"]); r["_fc"] = fc
+                        r["_court_hit"] = True if exp_lawsup else (bool(exp_court) and _norm_court(fc) == _norm_court(exp_court))
+                        r["_date_hit"] = bool(exp_d6) and (r["date6"] == exp_d6)
+                    # 재검색 결과에서 행 텍스트 물건번호 우선, 없으면 상세대조
+                    picked = next((r for r in rows2 if r.get("mulgeon", "") == exp_mulgeon), None) or _probe_mulgeon(rows2, line_tnum)
+                    if picked:
+                        rows = rows2
+        if picked:
+            print(f"    ✓ 물건번호 상세대조 일치: ({exp_mulgeon})")
+        else:
+            # 다물건인데 끝내 물건번호를 못 맞춤 → 엉뚱한 호수 데이터 방지: 확인불가 처리
             print(f"    ⚠ 다물건 사건 물건번호({exp_mulgeon}) 매칭 실패 → 확인불가")
             print(f"RESULT|{json.dumps(dict(base, status='확인불가', state_kind='확인불가', is_buga=False, key_match=False, detail='물건번호 불일치', view_url='', fetched_court='', date_hit=False, court_hit=False, sakun_hit=True, maegak_price='', buyer='', bidder_count=''), ensure_ascii=False)}")
             return
