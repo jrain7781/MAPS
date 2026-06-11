@@ -13493,6 +13493,7 @@ MJ 이정우 팀장
     let _summaryCache = {};           // batchKey → summaryMemberData_ 클라이언트 캐시
     let _batchMembersCache = {};      // classId → { fullBatchKey: {firstName, count} } — 수업리스트 회원명 표시용
     let _classBatchCounts = {};       // classId → 배치 수 (수업수 컬럼 빠른 표시용)
+    let _classBatchCountsFromLS_ = false; // 수업수가 localStorage 복원값인지 (서버 값 도착 시 교체)
     let _classMemberIndex = {};       // classId → "이름1|이름2|..." (lowercased) — 회원명 검색용
     let _currentD1DetailTab = 'member'; // 현재 선택된 상세 탭(회원/물건) — 수업 전환 시 유지
     let _currentGenD1Type = 'CLASS';    // 수업생성 모달의 현재 종목 구분 탭 (CLASS/PT/돈클)
@@ -14654,7 +14655,17 @@ ${token}
         // ②~⑤ 통합 선로드: 1회 GAS 호출 (호출당 고정 오버헤드 4회분 절감) — 실패 시 기존 개별 호출 폴백
         const needD1_ = !hasD1Cache_;
         const needBM_ = Object.keys(_batchMembersCache).length === 0;
-        const needBC_ = Object.keys(_classBatchCounts).length === 0;
+        // 수업수: 직전 세션 값(localStorage) 즉시 표시 → 서버 값 도착 시 교체
+        if (Object.keys(_classBatchCounts).length === 0) {
+            try {
+                const lsCounts = JSON.parse(localStorage.getItem('csd_batch_counts_v1') || 'null');
+                if (lsCounts && typeof lsCounts === 'object' && Object.keys(lsCounts).length > 0) {
+                    _classBatchCounts = lsCounts;
+                    _classBatchCountsFromLS_ = true;
+                }
+            } catch (e) {}
+        }
+        const needBC_ = Object.keys(_classBatchCounts).length === 0 || _classBatchCountsFromLS_;
         const needMI_ = Object.keys(_classMemberIndex).length === 0;
         if (needD1_ || needBM_ || needBC_ || needMI_) {
             google.script.run
@@ -14722,6 +14733,8 @@ ${token}
     }
     function _applyCsdBatchCounts_(counts) {
         _classBatchCounts = counts || {};
+        _classBatchCountsFromLS_ = false;
+        try { localStorage.setItem('csd_batch_counts_v1', JSON.stringify(_classBatchCounts)); } catch (e) {}
         filterClassScheduleList(); // 수업수 즉시 반영 재렌더
     }
     function _applyCsdMemberIndex_(index) {
@@ -15069,6 +15082,8 @@ ${token}
 
     function reloadClassD1Grid(classId, onComplete) {
         delete _d1CacheMap[classId];
+        // 수업수 캐시 무효화 → 새 회차 데이터 기반 재계산 (생성/삭제 직후 수업수 즉시 반영)
+        delete _classBatchCounts[String(classId)];
         loadClassD1Grid(classId, onComplete);
     }
 
