@@ -2424,12 +2424,12 @@ function listTelegramRequests(status) {
     }
 
     var out = [];
+    var tz_ = Session.getScriptTimeZone(); // [속도] 루프 밖 1회 (행마다 호출 시 수 ms씩 누적)
     for (var j = 0; j < rows.length; j++) {
       var r = rows[j];
       var st = String(r[3] || '').trim().toUpperCase();
       if (!st) st = 'PENDING';
-      Logger.log('[listTelegramRequests] row ' + j + ' status=' + st + ' filter=' + s);
-      // PENDING 필터: 빈값도 PENDING 취급
+      // PENDING 필터: 빈값도 PENDING 취급 ([속도] 행별 Logger.log 제거 — 수천 행 시 10초+ 소모)
       if (s && s !== 'ALL' && st !== s) continue;
 
       var itemId = String(r[4] || '').trim();
@@ -2437,7 +2437,7 @@ function listTelegramRequests(status) {
 
       out.push({
         req_id: r[0],
-        requested_at: (r[1] instanceof Date) ? Utilities.formatDate(r[1], Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : String(r[1] || ''),
+        requested_at: (r[1] instanceof Date) ? Utilities.formatDate(r[1], tz_, "yyyy-MM-dd HH:mm:ss") : String(r[1] || ''),
         action: r[2],
         status: st,
         item_id: itemId,
@@ -2446,7 +2446,7 @@ function listTelegramRequests(status) {
         telegram_username: r[7],
         sakun_no: String(item.sakun_no || ''),
         court: String(item.court || ''),
-        in_date: (item['in-date'] instanceof Date) ? Utilities.formatDate(item['in-date'], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(item['in-date'] || ''),
+        in_date: (item['in-date'] instanceof Date) ? Utilities.formatDate(item['in-date'], tz_, "yyyy-MM-dd") : String(item['in-date'] || ''),
         stu_member: String(item.stu_member || ''),
         m_name: String(item.m_name || '')
       });
@@ -5349,6 +5349,7 @@ function getAutoApprovalStats(testMode) {
     return arr.filter(function (id) { return removeArr.indexOf(id) < 0; });
   }
 
+  var tzStats_ = Session.getScriptTimeZone(); // [속도] 루프 밖 1회 (행마다 호출 시 27초까지 누적되던 원인)
   rows.forEach(function (row) {
     var action = String(row[2] || '').trim();
     var status = String(row[3] || '').trim();
@@ -5389,7 +5390,7 @@ function getAutoApprovalStats(testMode) {
     }
     if (!d || isNaN(d.getTime())) return;
 
-    var dateKey = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yy/MM/dd');
+    var dateKey = Utilities.formatDate(d, tzStats_, 'yy/MM/dd');
     var ds = getOrCreate(dateKey);
 
     // ── 물건추천 ─────────────────────────────────────────────────────
