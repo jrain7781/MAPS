@@ -3858,11 +3858,6 @@
         const targetDates = getWorkingDaysFromToday();
         const filterMember = document.getElementById('missingBidFilterMember') ? document.getElementById('missingBidFilterMember').value : '';
         let totalMissing = 0;
-        // [임시 진단 — 확인 후 삭제]
-        console.log('[진단:미입력] 날짜수=', targetDates.length, '| 데이터수=', allBiddingData.length,
-            '| 첫 in-date=', allBiddingData[0] ? allBiddingData[0]['in-date'] : '(없음)',
-            '| tbody 연결=', !!missingBidTableBody && missingBidTableBody.isConnected,
-            '| 담당자필터=', filterMember);
 
         targetDates.forEach((dateObj, index) => {
             const year = String(dateObj.getFullYear()).slice(-2);
@@ -3932,8 +3927,6 @@
             }
             missingBidTableFoot.appendChild(totalRow);
         }
-        // [임시 진단 — 확인 후 삭제]
-        console.log('[진단:미입력] 렌더 완료, tbody 행수=', missingBidTableBody.children.length, '| 시각=', new Date().toLocaleTimeString());
     }
 
     // ── 물건카드 Div 컬럼 드래그 리사이즈 ──────────────────────
@@ -4666,7 +4659,8 @@
 
     // 차트 그리기
     function renderMemberBidChart() {
-        if (!memberBidChartCanvas || !summaryText) return;
+        // 차트 섹션 제거됨(@1379) — 단, 로딩 해제(tbody 표시 복원)는 반드시 실행 후 반환
+        if (!memberBidChartCanvas || !summaryText) { toggleDashboardLoading(false); return; }
 
         const memberData = {};
         const uniqueMembers = new Set();
@@ -7917,20 +7911,13 @@ MJ 이정우 팀장
             if (typeof loadDashboardCalendar === 'function') loadDashboardCalendar(false);
         }
 
-        // [임시 진단 — 확인 후 삭제] 렌더 단계별 예외 가시화
-        function _dashStep_(name, fn) {
-            try { fn(); console.log('[진단:대쉬]', name, 'OK'); }
-            catch (e) { console.error('[진단:대쉬] ★예외★', name, e); }
-        }
-
         // 데이터 캐싱: 회원 전용 링크에서는 대시보드 사용 안 함 (혹시 호출되면 재사용 금지)
         if (!IS_MEMBER_VIEW && !forceRefresh && allBiddingData && allBiddingData.length > 0) {
-            console.log('[진단:대쉬] 캐시히트 렌더 시작');
-            _dashStep_('updateDashboardFilterOptions', updateDashboardFilterOptions);
-            _dashStep_('renderMissingBidDashboard', renderMissingBidDashboard);
-            _dashStep_('renderStatusManagementDashboard', renderStatusManagementDashboard);
-            _dashStep_('renderYongdoManagementDashboard', renderYongdoManagementDashboard);
-            _dashStep_('renderMemberBidChart', renderMemberBidChart);
+            updateDashboardFilterOptions();
+            renderMissingBidDashboard();
+            renderStatusManagementDashboard();
+            renderYongdoManagementDashboard();
+            renderMemberBidChart();
             return;
         }
         toggleDashboardLoading(true);
@@ -7938,14 +7925,13 @@ MJ 이정우 팀장
             .withSuccessHandler(data => {
                 allBiddingData = data.sort(dataComparator);
                 dataCache = { data: allBiddingData, timestamp: Date.now() };
-                console.log('[진단:대쉬] 서버응답 렌더 시작, 건수=', allBiddingData.length);
-                _dashStep_('updateDashboardFilterOptions', updateDashboardFilterOptions);
-                _dashStep_('renderMissingBidDashboard', renderMissingBidDashboard);
-                _dashStep_('renderStatusManagementDashboard', renderStatusManagementDashboard);
-                _dashStep_('renderYongdoManagementDashboard', renderYongdoManagementDashboard);
-                _dashStep_('loadDonkleRequestDashboard', () => loadDonkleRequestDashboard(false));
-                _dashStep_('renderMemberBidChart', renderMemberBidChart);
-                if (typeof renderMemberDashboardSummary === 'function') _dashStep_('renderMemberDashboardSummary', renderMemberDashboardSummary); // [추가] 초기 대시보드 요약 갱신
+                updateDashboardFilterOptions();
+                renderMissingBidDashboard();
+                renderStatusManagementDashboard();
+                renderYongdoManagementDashboard();
+                loadDonkleRequestDashboard(false);
+                renderMemberBidChart();
+                if (typeof renderMemberDashboardSummary === 'function') renderMemberDashboardSummary(); // [추가] 초기 대시보드 요약 갱신
             })
             .withFailureHandler(error => {
                 toggleDashboardLoading(false);
