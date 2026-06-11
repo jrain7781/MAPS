@@ -13322,7 +13322,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const el = document.getElementById(id);
             if (el) layout[id] = el.offsetWidth;
         });
-        ['missingBidCard', 'yongdoManagementCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
+        ['missingBidCard', 'donkleReqCard', 'yongdoManagementCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
             const el = document.getElementById(id);
             if (el) layout[id + '_h'] = el.offsetHeight;
         });
@@ -13343,7 +13343,13 @@ window.addEventListener('DOMContentLoaded', () => {
                     if (el) { el.style.flex = `0 0 ${layout[id]}px`; el.style.width = layout[id] + 'px'; }
                 }
             });
-            ['missingBidCard', 'yongdoManagementCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
+            // 기존에 donkleReqCard_h가 없었다면 statusManagementCard_h 와 missingBidCard_h를 이용해 맞추거나 
+            // 또는 아예 donkleReqCard_h가 없으면 V2 레이아웃의 높이 복원을 무시하고 기본값으로 정렬되게 초기화해 줌.
+            if (layout['statusManagementCard_h'] && !layout['donkleReqCard_h']) {
+                delete layout['statusManagementCard_h'];
+                delete layout['missingBidCard_h'];
+            }
+            ['missingBidCard', 'donkleReqCard', 'yongdoManagementCard', 'statusManagementCard', 'auto-approval-panel', 'telegram-join-panel', 'imageStatCard'].forEach(id => {
                 if (layout[id + '_h']) {
                     const el = document.getElementById(id);
                     if (el) el.style.height = layout[id + '_h'] + 'px';
