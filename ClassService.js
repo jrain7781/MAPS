@@ -855,6 +855,157 @@ function verifyStep3_getClassScheduleHeavyData() {
 }
 
 /**
+ * [4단계] 수업관리 상세 번들 선로드 (배치별 회원탭 데이터 + 회차별 물건 데이터)
+ * - 출력 형식은 기존 readMemberClassDetailsByBatchKey / getItemsByClassD1Id 와 완전 동일
+ * - 진입 시 백그라운드 1회 호출 → 이후 수업/회차 클릭 시 서버 호출 없이 즉시 표시
+ * - JSON 문자열 반환 (google.script.run null 수신 문제 회피)
+ */
+function getClassScheduleDetailBundle() {
+    var tz = Session.getScriptTimeZone();
+
+    // ── itemsByD1: items 시트 1-pass 그룹핑 (getItemsByClassD1Id 출력과 동일) ──
+    var itemsByD1 = {};
+    var itemSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (itemSheet && itemSheet.getLastRow() >= 2) {
+        var iLastRow = itemSheet.getLastRow();
+        var iLastCol = itemSheet.getLastColumn();
+        var iHeaders = itemSheet.getRange(1, 1, 1, iLastCol).getValues()[0].map(function(v) { return String(v || '').trim(); });
+        var d1Col = iHeaders.indexOf('class_d1_id');
+        if (d1Col < 0) d1Col = ITEM_HEADERS.indexOf('class_d1_id');
+        if (d1Col < iLastCol) {
+            var iColMap = ITEM_HEADERS.map(function(h, idx) {
+                var col = iHeaders.indexOf(h);
+                return (col < 0) ? idx : col;
+            });
+            var iData = itemSheet.getRange(2, 1, iLastRow - 1, iLastCol).getValues();
+            iData.forEach(function(row) {
+                var key = String(row[d1Col] || '').trim();
+                if (!key) return;
+                var obj = {};
+                ITEM_HEADERS.forEach(function(h, idx) {
+                    var col = iColMap[idx];
+                    var v = (col >= 0 && col < row.length && row[col] != null) ? row[col] : '';
+                    if (v instanceof Date) {
+                        v = isNaN(v.getTime()) ? '' : Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm:ss');
+                    }
+                    obj[h] = v;
+                });
+                if (!itemsByD1[key]) itemsByD1[key] = [];
+                itemsByD1[key].push(obj);
+            });
+        }
+    }
+
+    // ── mcdByBatch: member_class_details 1-pass 그룹핑 (readMemberClassDetailsByBatchKey 출력과 동일) ──
+    var mcdByBatch = {};
+    var mcdSheet = ensureMemberClassDetailsSheet_();
+    var mLastRow = mcdSheet ? mcdSheet.getLastRow() : 0;
+    if (mcdSheet && mLastRow >= 2) {
+        var mData = mcdSheet.getRange(2, 1, mLastRow - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+        var d1IdIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id');
+
+        // 배치별 raw 객체 수집 (시트 행 순서 보존)
+        var rawByBatch = {};
+        mData.forEach(function(row) {
+            var bk = String(row[d1IdIdx] || '');
+            if (!bk) return;
+            var d = {};
+            MEMBER_CLASS_DETAILS_HEADERS.forEach(function(h, i) {
+                var val = row[i];
+                d[h] = (val instanceof Date) ? Utilities.formatDate(val, tz, 'yyMMdd')
+                                             : (val !== undefined && val !== null ? val : '');
+            });
+            if (!rawByBatch[bk]) rawByBatch[bk] = [];
+            rawByBatch[bk].push(d);
+        });
+
+        var allMembers = readAllMembersNew();
+        var memberMap = {};
+        allMembers.forEach(function(m) { memberMap[String(m.member_id)] = m; });
+
+        // class_id → class_loop 맵 (contract_loop fallback — 기존 함수와 동일 규칙)
+        var classLoopMap = {};
+        try {
+            var classSh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_SHEET_NAME_DB);
+            if (classSh && classSh.getLastRow() >= 2) {
+                var cidIdx = CLASS_HEADERS.indexOf('class_id');
+                var clpIdx = CLASS_HEADERS.indexOf('class_loop');
+                var cData = classSh.getRange(2, 1, classSh.getLastRow() - 1, CLASS_HEADERS.length).getValues();
+                cData.forEach(function(r) { classLoopMap[String(r[cidIdx])] = parseInt(r[clpIdx], 10) || 0; });
+            }
+        } catch (e) { /* ignore */ }
+
+        Object.keys(rawByBatch).forEach(function(bk) {
+            var rows = rawByBatch[bk];
+            var firstRow = rows.find(function(r) { return r.class_id; });
+            var classLoopFallback = firstRow ? (classLoopMap[String(firstRow.class_id)] || 0) : 0;
+            mcdByBatch[bk] = rows.map(function(d) {
+                var member = memberMap[String(d.member_id)] || {};
+                var cl = d.contract_loop;
+                if (cl === '' || cl === null || cl === undefined) {
+                    d.contract_loop = classLoopFallback || '';
+                }
+                return Object.assign({}, d, {
+                    member_name: member.member_name || '',
+                    phone:       member.phone       || '',
+                    gubun:       member.gubun       || '',
+                    name1: member.name1 || '', name1_gubun: member.name1_gubun || '',
+                    name2: member.name2 || '', name2_gubun: member.name2_gubun || '',
+                    name3: member.name3 || '', name3_gubun: member.name3_gubun || ''
+                });
+            });
+        });
+    }
+
+    return JSON.stringify({ itemsByD1: itemsByD1, mcdByBatch: mcdByBatch });
+}
+
+/**
+ * [4단계 검증용 임시 함수 — 검증 완료 후 삭제 예정]
+ * 번들 결과가 기존 개별 함수(getItemsByClassD1Id / readMemberClassDetailsByBatchKey)와 동일한지 비교.
+ */
+function verifyStep4_getClassScheduleDetailBundle() {
+    var t0 = Date.now();
+    var bundle = JSON.parse(getClassScheduleDetailBundle());
+    var genMs = Date.now() - t0;
+    var itemKeys = Object.keys(bundle.itemsByD1 || {});
+    var mcdKeys = Object.keys(bundle.mcdByBatch || {});
+    var cache = CacheService.getScriptCache();
+
+    var okItems = true;
+    itemKeys.slice(-3).forEach(function(id) {
+        var direct = getItemsByClassD1Id(id);
+        var same = JSON.stringify(direct) === JSON.stringify(bundle.itemsByD1[id]);
+        if (!same) okItems = false;
+        Logger.log('[verifyStep4-items] d1=' + id + ' | 동일=' + (same ? 'O' : 'X ★불일치★') +
+                   ' | 건수 직접=' + direct.length + '/번들=' + bundle.itemsByD1[id].length);
+        if (!same) {
+            Logger.log('  직접: ' + JSON.stringify(direct).substring(0, 1500));
+            Logger.log('  번들: ' + JSON.stringify(bundle.itemsByD1[id]).substring(0, 1500));
+        }
+    });
+
+    var okMcd = true;
+    mcdKeys.slice(-3).forEach(function(bk) {
+        cache.remove('mcd_' + bk);
+        var direct = readMemberClassDetailsByBatchKey(bk);
+        cache.remove('mcd_' + bk);
+        var same = JSON.stringify(direct) === JSON.stringify(bundle.mcdByBatch[bk]);
+        if (!same) okMcd = false;
+        Logger.log('[verifyStep4-mcd] bk=' + bk + ' | 동일=' + (same ? 'O' : 'X ★불일치★') +
+                   ' | 건수 직접=' + direct.length + '/번들=' + bundle.mcdByBatch[bk].length);
+        if (!same) {
+            Logger.log('  직접: ' + JSON.stringify(direct).substring(0, 1500));
+            Logger.log('  번들: ' + JSON.stringify(bundle.mcdByBatch[bk]).substring(0, 1500));
+        }
+    });
+
+    Logger.log('[verifyStep4] 생성=' + genMs + 'ms | 회차수=' + itemKeys.length + ' | 배치수=' + mcdKeys.length +
+               ' | JSON크기=' + Math.round(JSON.stringify(bundle).length / 1024) + 'KB' +
+               ' | items검증=' + (okItems ? 'O' : 'X') + ' | mcd검증=' + (okMcd ? 'O' : 'X'));
+}
+
+/**
  * 프론트엔드용 래퍼: 회차 생성 + 회원 등록
  * @param {string} classId
  * @param {string} startDateStr (YYYYMMDD)

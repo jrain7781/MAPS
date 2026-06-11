@@ -1557,7 +1557,7 @@
                     closeExtendDeadlineModal_();
                     // 화면 갱신: 현재 컨텍스트에 따라 재로드
                     if (typeof selectedClassD1Id !== 'undefined' && selectedClassD1Id && typeof loadD1Items === 'function') {
-                        loadD1Items(selectedClassD1Id);
+                        loadD1Items(selectedClassD1Id, true); // 변경 후 서버 재조회
                     }
                     if (typeof loadAllBids === 'function') loadAllBids();
                 } else {
@@ -14670,6 +14670,29 @@ ${token}
                 .withFailureHandler(() => _loadCsdHeavyFallback_(needD1_, needBM_, needBC_, needMI_))
                 .getClassScheduleHeavyData();
         }
+        // ⑥ 상세 번들 선로드 (배치별 회원탭 + 회차별 물건) — 수업/회차 클릭 시 0초 표시용
+        if (!_d1BundleLoaded_ && !_d1BundleLoading_) {
+            _d1BundleLoading_ = true;
+            google.script.run
+                .withSuccessHandler(bundleJson => {
+                    _d1BundleLoading_ = false;
+                    let bundle = null;
+                    try { bundle = bundleJson ? JSON.parse(bundleJson) : null; } catch (e) { bundle = null; }
+                    if (!bundle) return; // 실패 시 기존 동작 유지 (클릭 시 서버 호출)
+                    const itemsByD1 = bundle.itemsByD1 || {};
+                    Object.keys(itemsByD1).forEach(k => {
+                        // 이미 서버에서 새로 받았거나(dirty 포함) 키가 있으면 덮어쓰지 않음 (최신 우선)
+                        if (!(k in _d1ItemsPrefetch_)) _d1ItemsPrefetch_[k] = itemsByD1[k];
+                    });
+                    const mcdByBatch = bundle.mcdByBatch || {};
+                    Object.keys(mcdByBatch).forEach(bk => {
+                        if (!_summaryCache[bk]) _summaryCache[bk] = mcdByBatch[bk];
+                    });
+                    _d1BundleLoaded_ = true;
+                })
+                .withFailureHandler(() => { _d1BundleLoading_ = false; })
+                .getClassScheduleDetailBundle();
+        }
     }
 
     // ── 수업관리 백그라운드 선로드 적용 헬퍼 (기존 ②~⑤ 핸들러 본문 그대로 이동) ──
@@ -14984,6 +15007,11 @@ ${token}
         }
     }
     let _d1LoadCallback_ = null;
+
+    // [4단계] 상세 번들 선로드 캐시 — 회차별 물건 (null = 변경 직후 dirty → 서버 재조회)
+    let _d1ItemsPrefetch_ = {};
+    let _d1BundleLoaded_ = false;
+    let _d1BundleLoading_ = false;
 
     function loadClassD1Grid(classId, onComplete) {
         const grid = document.getElementById('classD1Grid');
@@ -19988,7 +20016,7 @@ ${token}
         google.script.run
             .withSuccessHandler(r => {
                 showStatus(r.success ? (r.message || '등록 완료') : (r.message||'등록 실패'), r.success ? 'success' : 'error');
-                if (r.success) loadD1Items(selectedClassD1Id);
+                if (r.success) loadD1Items(selectedClassD1Id, true); // 변경 후 서버 재조회
             })
             .withFailureHandler(e => showStatus(e.message||'등록 실패', 'error'))
             .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate, classLoop);
@@ -20089,7 +20117,7 @@ ${token}
                     d1PendingItems = [];
                     renderD1PendingItems_();
                     document.getElementById('d1ItemRegisterPanel')?.classList.add('content-hidden');
-                    loadD1Items(selectedClassD1Id);
+                    loadD1Items(selectedClassD1Id, true); // 변경 후 서버 재조회
                 } else {
                     showStatus(r.message, 'error');
                 }
@@ -20098,9 +20126,18 @@ ${token}
             .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate, classLoop);
     }
 
-    function loadD1Items(classD1Id) {
+    function loadD1Items(classD1Id, forceServer) {
         const el = document.getElementById('d1-item-list');
         if (!el) return;
+        // [4단계] 선로드 번들 적중 시 즉시 표시 (서버 호출 생략) — null(dirty)은 서버 재조회
+        if (!forceServer && _d1BundleLoaded_ && classD1Id) {
+            const pre = _d1ItemsPrefetch_[String(classD1Id)];
+            if (pre !== null && (Array.isArray(pre) || pre === undefined)) {
+                console.log('[loadD1Items] 선로드 적중:', classD1Id, '/ 건수:', Array.isArray(pre) ? pre.length : 0);
+                _applyD1ItemsData_(classD1Id, Array.isArray(pre) ? pre : [], el);
+                return;
+            }
+        }
         el.innerHTML = `<div class="text-gray-400 py-2 text-xs text-center">조회 중... (${classD1Id || '미선택'})</div>`;
         console.log('[loadD1Items] 요청 ID:', classD1Id);
 
@@ -20108,21 +20145,28 @@ ${token}
             .withSuccessHandler(data => {
                 const cnt = Array.isArray(data) ? data.length : '배열아님';
                 console.log('[loadD1Items] 응답 건수:', cnt, '/ ID:', classD1Id);
-                d1ItemsData = Array.isArray(data) ? data : [];
-                d1ItemsSelectedIds_.clear();
-                d1ItemsFilteredData_ = null;
-                d1ItemsUpdateDeleteBtn_();
-                if (d1ItemsData.length === 0 && classD1Id) {
-                    el.innerHTML = `<div class="text-amber-500 py-2 text-xs text-center">조회키: ${classD1Id} | 결과: 0건</div>`;
-                } else {
-                    renderD1Items();
-                }
+                const arr = Array.isArray(data) ? data : [];
+                if (classD1Id) _d1ItemsPrefetch_[String(classD1Id)] = arr; // 선로드 갱신 (dirty 해제)
+                _applyD1ItemsData_(classD1Id, arr, el);
             })
             .withFailureHandler(e => {
                 console.error('[loadD1Items] 오류:', e);
                 el.innerHTML = `<div class="text-red-400 py-2 text-xs text-center">로드 실패: ${e.message||e}</div>`;
             })
             .getItemsByClassD1Id(classD1Id);
+    }
+
+    // loadD1Items 응답/선로드 공용 적용 (기존 success 핸들러 본문 그대로)
+    function _applyD1ItemsData_(classD1Id, arr, el) {
+        d1ItemsData = arr;
+        d1ItemsSelectedIds_.clear();
+        d1ItemsFilteredData_ = null;
+        d1ItemsUpdateDeleteBtn_();
+        if (d1ItemsData.length === 0 && classD1Id) {
+            el.innerHTML = `<div class="text-amber-500 py-2 text-xs text-center">조회키: ${classD1Id} | 결과: 0건</div>`;
+        } else {
+            renderD1Items();
+        }
     }
 
     // 남은 시간 → "1일 13시" / "13시" (0일은 생략)
@@ -20420,7 +20464,7 @@ ${token}
                     if (done === ids.length) {
                         d1ItemsSelectedIds_.clear();
                         showStatus(`${ids.length}개 취소 완료`, 'success');
-                        loadD1Items(selectedClassD1Id);
+                        loadD1Items(selectedClassD1Id, true); // 변경 후 서버 재조회
                     }
                 })
                 .withFailureHandler(e => {
@@ -20741,7 +20785,7 @@ ${token}
             .withSuccessHandler(r => {
                 showStatus(r.success ? r.message : (r.message||'등록 실패'), r.success ? 'success' : 'error');
                 if (r.success) {
-                    loadD1Items(selectedClassD1Id);
+                    loadD1Items(selectedClassD1Id, true); // 변경 후 서버 재조회
                     document.getElementById('d1new-in-date')?.focus();
                     // PT/돈클은 대표 회원 재동기화 (자동 연동 유지)
                     applyD1NewItemClassTypeUI_();
@@ -20798,7 +20842,7 @@ ${token}
             .withSuccessHandler(r => {
                 if (r.success) {
                     showStatus(r.message, 'success');
-                    loadD1Items(selectedClassD1Id);
+                    loadD1Items(selectedClassD1Id, true); // 변경 후 서버 재조회
                 } else {
                     showStatus(r.message, 'error');
                 }
