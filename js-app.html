@@ -8039,9 +8039,12 @@ MJ 이정우 팀장
                         if (typeof updateDashboardFilterOptions === 'function') updateDashboardFilterOptions();
                         renderCalendar();
                         if (_savedScroll !== null) {
+                            // 즉시 복원 (150ms 지연 복원이 화면 덜컥임의 원인) + 150ms 백업 보정
+                            const v0 = document.getElementById('calendar-week-view');
+                            if (v0) v0.scrollTop = _savedScroll;
                             setTimeout(() => {
                                 const v = document.getElementById('calendar-week-view');
-                                if (v) v.scrollTop = _savedScroll;
+                                if (v && Math.abs(v.scrollTop - _savedScroll) > 2) v.scrollTop = _savedScroll;
                             }, 150);
                         }
                     })
