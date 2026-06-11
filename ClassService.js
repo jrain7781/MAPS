@@ -146,10 +146,25 @@ function getClassSessions(classId) {
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) return [];
 
-    const data = sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+    // [속도 개선] 전체 행 객체 변환 후 필터 → class_id 열만 스캔해 매칭 행 블록만 읽고 변환
+    const classIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
+    const idColVals = sheet.getRange(2, classIdIdx + 1, lastRow - 1, 1).getValues();
+    const matchedRowNums = [];
+    for (let i = 0; i < idColVals.length; i++) {
+        if (String(idColVals[i][0]) === String(classId)) matchedRowNums.push(i + 2);
+    }
+    if (matchedRowNums.length === 0) {
+        cache.put(cacheKey, JSON.stringify([]), 180);
+        return [];
+    }
+
+    const firstRow = matchedRowNums[0];
+    const lastMatchedRow = matchedRowNums[matchedRowNums.length - 1];
+    const block = sheet.getRange(firstRow, 1, lastMatchedRow - firstRow + 1, CLASS_D1_HEADERS.length).getValues();
     const sessions = [];
 
-    data.forEach(row => {
+    matchedRowNums.forEach(rowNum => {
+        const row = block[rowNum - firstRow];
         let sess = {};
         CLASS_D1_HEADERS.forEach((h, i) => {
             let val = (i < row.length) ? row[i] : '';
@@ -159,14 +174,74 @@ function getClassSessions(classId) {
                 sess[h] = val;
             }
         });
-
-        if (String(sess.class_id) === String(classId)) {
-            sessions.push(sess);
-        }
+        sessions.push(sess);
     });
 
     cache.put(cacheKey, JSON.stringify(sessions), 180);
     return sessions;
+}
+
+/**
+ * [2단계 검증용 임시 함수 — 검증 완료 후 삭제 예정]
+ * getClassSessions 신(열 스캔+블록)/구(전체 변환 후 필터) 결과 동일성 + 시간 비교.
+ * GAS 편집기에서 실행 → Logger 확인. 인자 없으면 CLASS_D1에서 class_id 3개 자동 선택.
+ */
+function verifyStep2_getClassSessions(classId) {
+    ensureClassD1Sheet();
+    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_D1_SHEET_NAME_DB);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) { Logger.log('CLASS_D1 데이터 없음'); return; }
+
+    const classIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
+    let ids = [];
+    if (classId) {
+        ids = [classId];
+    } else {
+        const vals = sheet.getRange(2, classIdIdx + 1, lastRow - 1, 1).getValues();
+        const seen = {};
+        for (let i = vals.length - 1; i >= 0 && ids.length < 3; i--) {
+            const v = String(vals[i][0] || '').trim();
+            if (v && !seen[v]) { seen[v] = true; ids.push(v); }
+        }
+    }
+    if (ids.length === 0) { Logger.log('class_id 값이 없습니다.'); return; }
+
+    const cache = CacheService.getScriptCache();
+    ids.forEach(id => {
+        // 구 로직 (기존 코드 그대로 인라인)
+        const t0 = Date.now();
+        const data = sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
+        const oldSessions = [];
+        data.forEach(row => {
+            let sess = {};
+            CLASS_D1_HEADERS.forEach((h, i) => {
+                let val = (i < row.length) ? row[i] : '';
+                if ((h.includes('date') || h === 'reg_date') && val instanceof Date) {
+                    sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                } else {
+                    sess[h] = val;
+                }
+            });
+            if (String(sess.class_id) === String(id)) oldSessions.push(sess);
+        });
+        const oldMs = Date.now() - t0;
+
+        // 신 로직 (캐시 제거 후 미스 경로 측정)
+        cache.remove('sessions_' + String(id));
+        const t1 = Date.now();
+        const newSessions = getClassSessions(id);
+        const newMs = Date.now() - t1;
+        cache.remove('sessions_' + String(id)); // 검증용 캐시 잔존 방지
+
+        const same = JSON.stringify(oldSessions) === JSON.stringify(newSessions);
+        Logger.log('[verifyStep2] class_id=' + id + ' | 결과동일=' + (same ? 'O' : 'X ★불일치★') +
+                   ' | 건수 구=' + oldSessions.length + '/신=' + newSessions.length +
+                   ' | 시간 구=' + oldMs + 'ms / 신=' + newMs + 'ms | 전체행=' + (lastRow - 1));
+        if (!same) {
+            Logger.log('[verifyStep2] 구결과: ' + JSON.stringify(oldSessions).substring(0, 2000));
+            Logger.log('[verifyStep2] 신결과: ' + JSON.stringify(newSessions).substring(0, 2000));
+        }
+    });
 }
 
 /**
