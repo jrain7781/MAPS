@@ -820,12 +820,13 @@ function getClassScheduleInitData() {
  * - 효과: google.script.run 호출당 고정 오버헤드(콜드스타트+왕복) 4회분 → 1회분
  */
 function getClassScheduleHeavyData() {
-    return {
+    // JSON 문자열로 반환: google.script.run이 직렬화 불가 값 포함 시 null을 반환하는 문제 회피
+    return JSON.stringify({
         d1Sessions: getAllClassD1Sessions(),
         batchMembers: getAllBatchMembersInfo(),
         batchCounts: getClassBatchCounts(),
         memberIndex: getClassMemberIndex()
-    };
+    });
 }
 
 /**
@@ -836,10 +837,10 @@ function verifyStep3_getClassScheduleHeavyData() {
     var cache = CacheService.getScriptCache();
     ['all_class_d1_sessions', 'all_batch_members', 'class_batch_counts', 'class_member_index'].forEach(function(k) { cache.remove(k); });
     var t0 = Date.now();
-    var r = getClassScheduleHeavyData();
+    var r = JSON.parse(getClassScheduleHeavyData());
     var coldMs = Date.now() - t0;
     var t1 = Date.now();
-    var r2 = getClassScheduleHeavyData();
+    var r2 = JSON.parse(getClassScheduleHeavyData());
     var warmMs = Date.now() - t1;
     var same = JSON.stringify(r2.d1Sessions) === JSON.stringify(getAllClassD1Sessions()) &&
                JSON.stringify(r2.batchMembers) === JSON.stringify(getAllBatchMembersInfo()) &&

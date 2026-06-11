@@ -14658,7 +14658,9 @@ ${token}
         const needMI_ = Object.keys(_classMemberIndex).length === 0;
         if (needD1_ || needBM_ || needBC_ || needMI_) {
             google.script.run
-                .withSuccessHandler(heavy => {
+                .withSuccessHandler(heavyJson => {
+                    let heavy = null;
+                    try { heavy = heavyJson ? JSON.parse(heavyJson) : null; } catch (e) { heavy = null; }
                     if (!heavy) { _loadCsdHeavyFallback_(needD1_, needBM_, needBC_, needMI_); return; }
                     if (needD1_) _applyCsdD1Sessions_(heavy.d1Sessions);
                     if (needBM_) _applyCsdBatchMembers_(heavy.batchMembers);
