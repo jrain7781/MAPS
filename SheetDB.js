@@ -5349,7 +5349,6 @@ function getAutoApprovalStats(testMode) {
     return arr.filter(function (id) { return removeArr.indexOf(id) < 0; });
   }
 
-  var tzStats_ = Session.getScriptTimeZone(); // [속도] 루프 밖 1회 (행마다 호출 시 27초까지 누적되던 원인)
   rows.forEach(function (row) {
     var action = String(row[2] || '').trim();
     var status = String(row[3] || '').trim();
@@ -5390,7 +5389,10 @@ function getAutoApprovalStats(testMode) {
     }
     if (!d || isNaN(d.getTime())) return;
 
-    var dateKey = Utilities.formatDate(d, tzStats_, 'yy/MM/dd');
+    // [속도] Utilities.formatDate(행당 ~0.3ms × 1.2만행 = 수 초) → 수동 포맷 (V8 Date 게터는 스크립트 타임존 기준 — 출력 동일)
+    var dateKey = String(d.getFullYear()).slice(2) + '/' +
+                  ('0' + (d.getMonth() + 1)).slice(-2) + '/' +
+                  ('0' + d.getDate()).slice(-2);
     var ds = getOrCreate(dateKey);
 
     // ── 물건추천 ─────────────────────────────────────────────────────
