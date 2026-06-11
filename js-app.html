@@ -14651,61 +14651,83 @@ ${token}
         } else {
             filterClassScheduleList();
         }
-        // ② 전체 D1 세션 (백그라운드) — 완료 시 수업수 채움
-        if (!hasD1Cache_) {
+        // ②~⑤ 통합 선로드: 1회 GAS 호출 (호출당 고정 오버헤드 4회분 절감) — 실패 시 기존 개별 호출 폴백
+        const needD1_ = !hasD1Cache_;
+        const needBM_ = Object.keys(_batchMembersCache).length === 0;
+        const needBC_ = Object.keys(_classBatchCounts).length === 0;
+        const needMI_ = Object.keys(_classMemberIndex).length === 0;
+        if (needD1_ || needBM_ || needBC_ || needMI_) {
             google.script.run
-                .withSuccessHandler(d1Sessions => {
-                    if (!d1Sessions || !d1Sessions.length) return;
-                    const byClass = {};
-                    d1Sessions.forEach(s => {
-                        const cid = String(s.class_id);
-                        if (!byClass[cid]) byClass[cid] = [];
-                        byClass[cid].push(s);
-                    });
-                    Object.keys(byClass).forEach(cid => {
-                        if (!_d1CacheMap[cid]) _d1CacheMap[cid] = byClass[cid];
-                    });
-                    filterClassScheduleList(); // 수업수 반영 재렌더 (선택 상태 유지)
-                    // 현재 선택된 종목이 있고 D1 그리드가 로딩 상태면 즉시 반영
-                    if (selectedClassId && _d1CacheMap[String(selectedClassId)] && (!allClassD1Data || allClassD1Data.length === 0)) {
-                        _applyD1Data_(_d1CacheMap[String(selectedClassId)]);
-                    }
+                .withSuccessHandler(heavy => {
+                    if (!heavy) { _loadCsdHeavyFallback_(needD1_, needBM_, needBC_, needMI_); return; }
+                    if (needD1_) _applyCsdD1Sessions_(heavy.d1Sessions);
+                    if (needBM_) _applyCsdBatchMembers_(heavy.batchMembers);
+                    if (needBC_) _applyCsdBatchCounts_(heavy.batchCounts);
+                    if (needMI_) _applyCsdMemberIndex_(heavy.memberIndex);
                 })
+                .withFailureHandler(() => _loadCsdHeavyFallback_(needD1_, needBM_, needBC_, needMI_))
+                .getClassScheduleHeavyData();
+        }
+    }
+
+    // ── 수업관리 백그라운드 선로드 적용 헬퍼 (기존 ②~⑤ 핸들러 본문 그대로 이동) ──
+    function _applyCsdD1Sessions_(d1Sessions) {
+        if (!d1Sessions || !d1Sessions.length) return;
+        const byClass = {};
+        d1Sessions.forEach(s => {
+            const cid = String(s.class_id);
+            if (!byClass[cid]) byClass[cid] = [];
+            byClass[cid].push(s);
+        });
+        Object.keys(byClass).forEach(cid => {
+            if (!_d1CacheMap[cid]) _d1CacheMap[cid] = byClass[cid];
+        });
+        filterClassScheduleList(); // 수업수 반영 재렌더 (선택 상태 유지)
+        // 현재 선택된 종목이 있고 D1 그리드가 로딩 상태면 즉시 반영
+        if (selectedClassId && _d1CacheMap[String(selectedClassId)] && (!allClassD1Data || allClassD1Data.length === 0)) {
+            _applyD1Data_(_d1CacheMap[String(selectedClassId)]);
+        }
+    }
+    function _applyCsdBatchMembers_(allMembersInfo) {
+        Object.assign(_batchMembersCache, allMembersInfo || {});
+        // 현재 수업리스트가 렌더된 상태면 회원명 즉시 반영
+        if (selectedClassId && d1Batches && d1Batches.length > 0) {
+            renderD1BatchListGrid_();
+        }
+    }
+    function _applyCsdBatchCounts_(counts) {
+        _classBatchCounts = counts || {};
+        filterClassScheduleList(); // 수업수 즉시 반영 재렌더
+    }
+    function _applyCsdMemberIndex_(index) {
+        _classMemberIndex = index || {};
+        // 사용자가 이미 회원명 입력한 상태면 즉시 재필터
+        const memInput = document.getElementById('csd-search-member');
+        if (memInput && memInput.value.trim()) filterClassScheduleList();
+    }
+    // 통합 호출 실패 시: 기존 ②~⑤ 개별 호출 경로 (이전 동작 그대로)
+    function _loadCsdHeavyFallback_(needD1, needBM, needBC, needMI) {
+        if (needD1) {
+            google.script.run
+                .withSuccessHandler(d1Sessions => _applyCsdD1Sessions_(d1Sessions))
                 .withFailureHandler(() => { /* 백그라운드 실패는 조용히 */ })
                 .getAllClassD1Sessions();
         }
-        // ③ 전체 배치 회원 정보 (백그라운드) — 수업리스트 회원명 즉시 표시용 선로드
-        if (Object.keys(_batchMembersCache).length === 0) {
+        if (needBM) {
             google.script.run
-                .withSuccessHandler(allMembersInfo => {
-                    Object.assign(_batchMembersCache, allMembersInfo || {});
-                    // 현재 수업리스트가 렌더된 상태면 회원명 즉시 반영
-                    if (selectedClassId && d1Batches && d1Batches.length > 0) {
-                        renderD1BatchListGrid_();
-                    }
-                })
+                .withSuccessHandler(info => _applyCsdBatchMembers_(info))
                 .withFailureHandler(() => {})
                 .getAllBatchMembersInfo();
         }
-        // ④ 수업수(배치 개수) 경량 조회 (가장 빠름) — 종목리스트 수업수 컬럼 우선 채움
-        if (Object.keys(_classBatchCounts).length === 0) {
+        if (needBC) {
             google.script.run
-                .withSuccessHandler(counts => {
-                    _classBatchCounts = counts || {};
-                    filterClassScheduleList(); // 수업수 즉시 반영 재렌더
-                })
+                .withSuccessHandler(counts => _applyCsdBatchCounts_(counts))
                 .withFailureHandler(() => {})
                 .getClassBatchCounts();
         }
-        // ⑤ 회원명 검색 인덱스 (백그라운드) — { classId: "이름1|이름2|..." }
-        if (Object.keys(_classMemberIndex).length === 0) {
+        if (needMI) {
             google.script.run
-                .withSuccessHandler(index => {
-                    _classMemberIndex = index || {};
-                    // 사용자가 이미 회원명 입력한 상태면 즉시 재필터
-                    const memInput = document.getElementById('csd-search-member');
-                    if (memInput && memInput.value.trim()) filterClassScheduleList();
-                })
+                .withSuccessHandler(index => _applyCsdMemberIndex_(index))
                 .withFailureHandler(() => {})
                 .getClassMemberIndex();
         }

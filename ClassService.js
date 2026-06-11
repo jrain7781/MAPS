@@ -815,6 +815,45 @@ function getClassScheduleInitData() {
 }
 
 /**
+ * [3단계] 수업관리 진입 시 백그라운드 선로드 통합 (기존 ②~⑤ 개별 호출 → 1회 호출)
+ * - 각 하위 함수는 기존 CacheService 캐시를 그대로 사용 → 데이터/캐시 동작 불변
+ * - 효과: google.script.run 호출당 고정 오버헤드(콜드스타트+왕복) 4회분 → 1회분
+ */
+function getClassScheduleHeavyData() {
+    return {
+        d1Sessions: getAllClassD1Sessions(),
+        batchMembers: getAllBatchMembersInfo(),
+        batchCounts: getClassBatchCounts(),
+        memberIndex: getClassMemberIndex()
+    };
+}
+
+/**
+ * [3단계 검증용 임시 함수 — 검증 완료 후 삭제 예정]
+ * 통합 응답이 기존 개별 함수 결과와 동일한지 + 캐시미스/히트 시간 측정.
+ */
+function verifyStep3_getClassScheduleHeavyData() {
+    var cache = CacheService.getScriptCache();
+    ['all_class_d1_sessions', 'all_batch_members', 'class_batch_counts', 'class_member_index'].forEach(function(k) { cache.remove(k); });
+    var t0 = Date.now();
+    var r = getClassScheduleHeavyData();
+    var coldMs = Date.now() - t0;
+    var t1 = Date.now();
+    var r2 = getClassScheduleHeavyData();
+    var warmMs = Date.now() - t1;
+    var same = JSON.stringify(r2.d1Sessions) === JSON.stringify(getAllClassD1Sessions()) &&
+               JSON.stringify(r2.batchMembers) === JSON.stringify(getAllBatchMembersInfo()) &&
+               JSON.stringify(r2.batchCounts) === JSON.stringify(getClassBatchCounts()) &&
+               JSON.stringify(r2.memberIndex) === JSON.stringify(getClassMemberIndex());
+    Logger.log('[verifyStep3] d1Sessions=' + (r.d1Sessions || []).length + '건' +
+               ' | batchMembers종목=' + Object.keys(r.batchMembers || {}).length +
+               ' | batchCounts종목=' + Object.keys(r.batchCounts || {}).length +
+               ' | memberIndex종목=' + Object.keys(r.memberIndex || {}).length +
+               ' | 개별함수와 동일=' + (same ? 'O' : 'X ★불일치★') +
+               ' | 시간 캐시미스=' + coldMs + 'ms / 캐시히트=' + warmMs + 'ms');
+}
+
+/**
  * 프론트엔드용 래퍼: 회차 생성 + 회원 등록
  * @param {string} classId
  * @param {string} startDateStr (YYYYMMDD)
