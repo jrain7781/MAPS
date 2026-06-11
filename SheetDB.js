@@ -34,7 +34,8 @@ const MIS_HEADERS = [
   'win_price',     // 낙찰가 (크롤러 매각가)
   'est_interior',  // 예상 인테리어비용 (낙찰건, 수동입력)
   'est_resale',    // 예상 매도가 (낙찰건, 수동입력)
-  'event_date'     // 상태 실제 발생일: 추천=전달완료 시점(telegram B/chuchen_date) / 입찰=in_date / 불가·낙찰=이벤트 시점. recorded_at(적립시각)과 별개
+  'event_date',    // 상태 실제 발생일: 추천=전달완료 시점(telegram B/chuchen_date) / 입찰=in_date / 불가·낙찰=이벤트 시점. recorded_at(적립시각)과 별개
+  'items_youngdo'  // 용도 (추천)
 ];
 
 /** in_date(YYMMDD/YYYYMMDD 등) → 'YYYY-MM-DD' 정규화 (event_date 입찰용) */
@@ -1963,7 +1964,8 @@ function accrueMembersItemStatus_(itemId, memberIdHint, memberNameHint, status, 
       winPrice,                 // N: win_price
       '',                       // O: est_interior
       '',                       // P: est_resale
-      eventDate                 // Q: event_date (상태 실제 발생일)
+      eventDate,                // Q: event_date (상태 실제 발생일)
+      String(r[20] || '')       // R: items_youngdo (용도)
     ];
     misSheet.appendRow(row);
     return true;
@@ -9152,6 +9154,7 @@ function getRecManagementData() {
     var iSheet = ss.getSheetByName(DB_SHEET_NAME);
     var candidates = [], wait = [];
     var youngdoByMember = {};
+    var itemYoungdoMap = {}; // item_id -> items_youngdo 매핑
     var mnoteById = {};   // item_id → members_note (회원전달내용)
     if (iSheet && iSheet.getLastRow() >= 2) {
       var IX = {};
@@ -9161,21 +9164,23 @@ function getRecManagementData() {
       var mnCol = _ensureItemMembersNoteCol_(iSheet);
       var mnVals = iSheet.getRange(2, mnCol, nRows, 1).getValues();
       idata.forEach(function (r, ri) {
+        var itemId = String(r[IX['id']]);
         var iso = toIso(r[IX['in-date']]);
         var num = isoToNum(iso);
         var stu = String(r[IX['stu_member']] || '').trim();
         var cs = String(r[IX['chuchen_state']] || '').trim();
         var mid = String(r[IX['member_id']] || '').trim();
         var youngdo = String(r[IX['items_youngdo']] || '').trim();
+        itemYoungdoMap[itemId] = youngdo;
         var mnote = String((mnVals[ri] && mnVals[ri][0]) || '');
-        mnoteById[String(r[IX['id']])] = mnote;
+        mnoteById[itemId] = mnote;
         if (mid && (youngdo === '돈클수익' || youngdo === '돈클월세')) {
           youngdoByMember[mid] = youngdoByMember[mid] || { '돈클수익': 0, '돈클월세': 0 };
           youngdoByMember[mid][youngdo]++;
         }
         if (num && num >= todayNum) {
           candidates.push({
-            id: String(r[IX['id']]), inDate: iso, sakun_no: String(r[IX['sakun_no']] || ''),
+            id: itemId, inDate: iso, sakun_no: String(r[IX['sakun_no']] || ''),
             court: String(r[IX['court']] || ''), youngdo: youngdo, stu: stu,
             member: String(r[IX['m_name']] || ''), memberId: mid,
             mgr: String(r[IX['m_name_id']] || ''), membersNote: mnote
@@ -9183,7 +9188,7 @@ function getRecManagementData() {
         }
         if (stu === '추천' && cs !== '전달완료') {
           wait.push({
-            id: String(r[IX['id']]), memberId: mid, name: String(r[IX['m_name']] || ''),
+            id: itemId, memberId: mid, name: String(r[IX['m_name']] || ''),
             sakun_no: String(r[IX['sakun_no']] || ''), court: String(r[IX['court']] || ''),
             inDate: iso, regDate: toIso(r[IX['reg_date']]), by: String(r[IX['m_name_id']] || ''),
             youngdo: youngdo, membersNote: mnote
@@ -9200,27 +9205,48 @@ function getRecManagementData() {
 
     // ── 3) members_item_status status='추천' → delivered ──
     var delivered = [];
+    var winCountByMember = {}; // member_id -> { income: 0, rent: 0 }
     var misSheet = ensureMembersItemStatusSheet_();
     if (misSheet.getLastRow() >= 2) {
       var SX = {};
       MIS_HEADERS.forEach(function (h, j) { SX[h] = j; });
       var sdata = misSheet.getRange(2, 1, misSheet.getLastRow() - 1, MIS_HEADERS.length).getValues();
       sdata.forEach(function (r) {
-        if (String(r[SX['status']] || '').trim() !== '추천') return;
+        var status = String(r[SX['status']] || '').trim();
+        var memberId = String(r[SX['member_id']] || '').trim();
         var itemId = String(r[SX['item_id']] || '').trim();
-        delivered.push({
-          memberId: String(r[SX['member_id']] || '').trim(),
-          name: String(r[SX['m_name']] || ''),
-          itemId: itemId,
-          sakun_no: String(r[SX['sakun_no']] || ''),
-          court: String(r[SX['court']] || ''),
-          inDate: toIso(r[SX['in_date']]),
-          eventDate: toIso(r[SX['event_date']]) || toIso(r[SX['recorded_at']]),
-          by: String(r[SX['m_name_id']] || ''),
-          membersNote: (mnoteById[itemId] != null ? mnoteById[itemId] : '')
-        });
+        if (status === '추천' || status === '낙찰' || status === '불가') {
+          delivered.push({
+            memberId: memberId,
+            name: String(r[SX['m_name']] || ''),
+            itemId: itemId,
+            sakun_no: String(r[SX['sakun_no']] || ''),
+            court: String(r[SX['court']] || ''),
+            inDate: toIso(r[SX['in_date']]),
+            eventDate: toIso(r[SX['event_date']]) || toIso(r[SX['recorded_at']]),
+            by: String(r[SX['m_name_id']] || ''),
+            status: status,
+            membersNote: (mnoteById[itemId] != null ? mnoteById[itemId] : '')
+          });
+        }
+        if (status === '낙찰') {
+          var y = itemYoungdoMap[itemId] || '';
+          if (y === '돈클수익') {
+            winCountByMember[memberId] = winCountByMember[memberId] || { income: 0, rent: 0 };
+            winCountByMember[memberId].income++;
+          } else if (y === '돈클월세') {
+            winCountByMember[memberId] = winCountByMember[memberId] || { income: 0, rent: 0 };
+            winCountByMember[memberId].rent++;
+          }
+        }
       });
     }
+
+    roster.forEach(function (m) {
+      var w = winCountByMember[m.id] || { income: 0, rent: 0 };
+      m.incomeWinCount = w.income;
+      m.rentWinCount = w.rent;
+    });
 
     return { success: true, today: todayStr, groupAnchor: getDonkleGroupAnchor_(), members: roster, delivered: delivered, wait: wait, candidates: candidates };
   } catch (e) {
@@ -9524,9 +9550,9 @@ function setDonkleMemberStatus(memberId, status, hold) {
  *  · 적립(members_item_status)은 전달완료(chuchen→전달완료) 시점에 이뤄지므로 여기선 안 함.
  * @return {{success:boolean, count:number}}
  */
-function registerDonkleRecommendation(memberId, memberName, itemIds) {
+function registerDonkleRecommendation(memberId, memberName, recommendations) {
   try {
-    if (!itemIds || !itemIds.length) return { success: false, message: '선택된 물건이 없습니다.' };
+    if (!recommendations || !recommendations.length) return { success: false, message: '선택된 물건이 없습니다.' };
     var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return { success: false, message: '물건 없음' };
@@ -9534,16 +9560,26 @@ function registerDonkleRecommendation(memberId, memberName, itemIds) {
     var batchTs = 'REC' + (new Date().getTime());
     var historyEntries = [];
     var cnt = 0;
-    itemIds.forEach(function (id) {
+
+    var IX = {};
+    ITEM_HEADERS.forEach(function (h, j) { IX[h] = j; });
+    var youngdoCol = IX['items_youngdo'] + 1; // 21
+
+    recommendations.forEach(function (rec) {
+      var id = rec.id;
+      var youngdoVal = rec.youngdo || '돈클수익';
       var idx = allIds.findIndex(function (v) { return String(v) === String(id); });
       if (idx < 0) return;
       var rowNum = idx + 2;
       var oldStu = String(sheet.getRange(rowNum, 5).getValue() || '').trim();
       var oldMid = String(sheet.getRange(rowNum, 9).getValue() || '').trim();
       var newMid = String(memberId || ''), newMname = String(memberName || '');
+      
       sheet.getRange(rowNum, 5).setValue('추천');                    // E: stu_member
       sheet.getRange(rowNum, 9).setValue(newMid);                    // I: member_id
       sheet.getRange(rowNum, 7).setValue(newMname);                  // G: m_name
+      sheet.getRange(rowNum, youngdoCol).setValue(youngdoVal);      // U: items_youngdo
+      
       if (oldStu !== '추천') {
         sheet.getRange(rowNum, 17).setValue(''); // Q: chuchen_state
         sheet.getRange(rowNum, 18).setValue(''); // R: chuchen_date
