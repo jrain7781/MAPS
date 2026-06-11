@@ -13256,48 +13256,58 @@ MJ 이정우 팀장
                 applyMemberViewUiGuards_();
 
                 // 회원 데이터 자동 로드 (입찰물건 등록 시 회원 자동검색용 - 새 구조 우선)
+                // [페이지 로드 다이어트] 폭주 시간대(0~5초) 밖으로 지연 — 대쉬보드 메인 로드 경합 방지
                 if (!IS_MEMBER_VIEW && typeof google !== 'undefined' && google.script && google.script.run) {
-                    try {
-                        // 새 회원 데이터 구조 우선 로드 (등록된 회원만 자동검색에 표시)
-                        google.script.run
-                            .withSuccessHandler(data => {
-                                allMembersNewData = Array.isArray(data) ? data : [];
-                                console.log('[초기화] 신규 회원 데이터 로드 완료:', allMembersNewData.length, '명');
-                                // datalist 업데이트 (등록된 회원만 표시 - 신규 포맷)
-                                updateMemberNameDatalistNew();
-                                populateMNameIdDropdowns_();
-                            })
-                            .withFailureHandler(err => {
-                                console.error('[초기화] 신규 회원 데이터 로드 실패:', err.message);
-                                // 실패 시 기존 함수로 폴백
-                                google.script.run
-                                    .withSuccessHandler(data => {
-                                        allMembersData = Array.isArray(data) ? data : [];
-                                        updateMemberNameDatalistNew();
-                                    })
-                                    .readAllMembers();
-                            })
-                            .readAllMembersNew();
-                    } catch (e) {
-                        console.error('[초기화] 회원 데이터 로드 오류:', e);
-                    }
+                    setTimeout(() => {
+                        if (allMembersNewData.length > 0) return; // 이미 다른 경로(회원관리 등)로 로드됨
+                        try {
+                            // 새 회원 데이터 구조 우선 로드 (등록된 회원만 자동검색에 표시)
+                            google.script.run
+                                .withSuccessHandler(data => {
+                                    if (allMembersNewData.length > 0) return; // 그 사이 로드된 최신 데이터 보존
+                                    allMembersNewData = Array.isArray(data) ? data : [];
+                                    console.log('[초기화] 신규 회원 데이터 로드 완료:', allMembersNewData.length, '명');
+                                    // datalist 업데이트 (등록된 회원만 표시 - 신규 포맷)
+                                    updateMemberNameDatalistNew();
+                                    populateMNameIdDropdowns_();
+                                })
+                                .withFailureHandler(err => {
+                                    console.error('[초기화] 신규 회원 데이터 로드 실패:', err.message);
+                                    // 실패 시 기존 함수로 폴백
+                                    google.script.run
+                                        .withSuccessHandler(data => {
+                                            allMembersData = Array.isArray(data) ? data : [];
+                                            updateMemberNameDatalistNew();
+                                        })
+                                        .readAllMembers();
+                                })
+                                .readAllMembersNew();
+                        } catch (e) {
+                            console.error('[초기화] 회원 데이터 로드 오류:', e);
+                        }
+                    }, 6000);
                 }
 
                 // 수업 데이터 자동 로드 (입찰물건 상세탭 회원정보에 수업명 표시용)
+                // [페이지 로드 다이어트] 지연 로드
                 if (!IS_MEMBER_VIEW && typeof google !== 'undefined' && google.script && google.script.run) {
-                    try {
-                        google.script.run
-                            .withSuccessHandler(data => {
-                                allClassesData = Array.isArray(data) ? data : [];
-                                console.log('[초기화] 수업 데이터 로드 완료:', allClassesData.length, '개');
-                            })
-                            .withFailureHandler(err => {
-                                console.error('[초기화] 수업 데이터 로드 실패:', err.message);
-                            })
-                            .readAllClasses();
-                    } catch (e) {
-                        console.error('[초기화] 수업 데이터 로드 오류:', e);
-                    }
+                    setTimeout(() => {
+                        if (allClassesData.length > 0) return; // 이미 다른 경로로 로드됨
+                        try {
+                            google.script.run
+                                .withSuccessHandler(data => {
+                                    if (allClassesData.length > 0) return;
+                                    allClassesData = Array.isArray(data) ? data : [];
+                                    console.log('[초기화] 수업 데이터 로드 완료:', allClassesData.length, '개');
+                                })
+                                .withFailureHandler(err => {
+                                    console.error('[초기화] 수업 데이터 로드 실패:', err.message);
+                                })
+                                .readAllClasses();
+                        } catch (e) {
+                            console.error('[초기화] 수업 데이터 로드 오류:', e);
+                        }
+                    }, 6500);
                 }
 
                 if (IS_MEMBER_VIEW) {
@@ -13323,8 +13333,8 @@ MJ 이정우 팀장
                     navigateTo('Dashboard');
                 }
 
-                // 옥션 설정 로드
-                loadAuctionSettings();
+                // 옥션 설정 로드 — [페이지 로드 다이어트] 지연 (미로드 시 기본 URL 폴백 있음)
+                setTimeout(loadAuctionSettings, 7000);
             });
         });
 
@@ -23312,10 +23322,10 @@ MJ 이정우 팀장
             toggle.checked = saved;
             updateAutoApproveUI_(saved);
         }
-        // 모든 설정 한 번에 사전 로딩
-        loadAllPrefSettings_();
-        // 카카오 템플릿 사전 로딩
-        loadKakaoTemplatesFromServer();
+        // 모든 설정 한 번에 사전 로딩 — [페이지 로드 다이어트] 지연 (토글은 localStorage로 즉시 표시됨)
+        setTimeout(loadAllPrefSettings_, 7500);
+        // 카카오 템플릿 사전 로딩 — [페이지 로드 다이어트] 지연 (로드 완료 시 열린 패널 자동 갱신됨)
+        setTimeout(loadKakaoTemplatesFromServer, 8000);
     });
 
     // =====================================================================
