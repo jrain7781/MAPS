@@ -182,69 +182,6 @@ function getClassSessions(classId) {
 }
 
 /**
- * [2단계 검증용 임시 함수 — 검증 완료 후 삭제 예정]
- * getClassSessions 신(열 스캔+블록)/구(전체 변환 후 필터) 결과 동일성 + 시간 비교.
- * GAS 편집기에서 실행 → Logger 확인. 인자 없으면 CLASS_D1에서 class_id 3개 자동 선택.
- */
-function verifyStep2_getClassSessions(classId) {
-    ensureClassD1Sheet();
-    const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_D1_SHEET_NAME_DB);
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) { Logger.log('CLASS_D1 데이터 없음'); return; }
-
-    const classIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
-    let ids = [];
-    if (classId) {
-        ids = [classId];
-    } else {
-        const vals = sheet.getRange(2, classIdIdx + 1, lastRow - 1, 1).getValues();
-        const seen = {};
-        for (let i = vals.length - 1; i >= 0 && ids.length < 3; i--) {
-            const v = String(vals[i][0] || '').trim();
-            if (v && !seen[v]) { seen[v] = true; ids.push(v); }
-        }
-    }
-    if (ids.length === 0) { Logger.log('class_id 값이 없습니다.'); return; }
-
-    const cache = CacheService.getScriptCache();
-    ids.forEach(id => {
-        // 구 로직 (기존 코드 그대로 인라인)
-        const t0 = Date.now();
-        const data = sheet.getRange(2, 1, lastRow - 1, CLASS_D1_HEADERS.length).getValues();
-        const oldSessions = [];
-        data.forEach(row => {
-            let sess = {};
-            CLASS_D1_HEADERS.forEach((h, i) => {
-                let val = (i < row.length) ? row[i] : '';
-                if ((h.includes('date') || h === 'reg_date') && val instanceof Date) {
-                    sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-                } else {
-                    sess[h] = val;
-                }
-            });
-            if (String(sess.class_id) === String(id)) oldSessions.push(sess);
-        });
-        const oldMs = Date.now() - t0;
-
-        // 신 로직 (캐시 제거 후 미스 경로 측정)
-        cache.remove('sessions_' + String(id));
-        const t1 = Date.now();
-        const newSessions = getClassSessions(id);
-        const newMs = Date.now() - t1;
-        cache.remove('sessions_' + String(id)); // 검증용 캐시 잔존 방지
-
-        const same = JSON.stringify(oldSessions) === JSON.stringify(newSessions);
-        Logger.log('[verifyStep2] class_id=' + id + ' | 결과동일=' + (same ? 'O' : 'X ★불일치★') +
-                   ' | 건수 구=' + oldSessions.length + '/신=' + newSessions.length +
-                   ' | 시간 구=' + oldMs + 'ms / 신=' + newMs + 'ms | 전체행=' + (lastRow - 1));
-        if (!same) {
-            Logger.log('[verifyStep2] 구결과: ' + JSON.stringify(oldSessions).substring(0, 2000));
-            Logger.log('[verifyStep2] 신결과: ' + JSON.stringify(newSessions).substring(0, 2000));
-        }
-    });
-}
-
-/**
  * 회차 자동 생성 로직
  * - 입력: class_id, 시작일(startDate), 반복 횟수(totalWeeks)
  * - 요일에 맞춰서 N주차 데이터 생성
@@ -830,31 +767,6 @@ function getClassScheduleHeavyData() {
 }
 
 /**
- * [3단계 검증용 임시 함수 — 검증 완료 후 삭제 예정]
- * 통합 응답이 기존 개별 함수 결과와 동일한지 + 캐시미스/히트 시간 측정.
- */
-function verifyStep3_getClassScheduleHeavyData() {
-    var cache = CacheService.getScriptCache();
-    ['all_class_d1_sessions', 'all_batch_members', 'class_batch_counts', 'class_member_index'].forEach(function(k) { cache.remove(k); });
-    var t0 = Date.now();
-    var r = JSON.parse(getClassScheduleHeavyData());
-    var coldMs = Date.now() - t0;
-    var t1 = Date.now();
-    var r2 = JSON.parse(getClassScheduleHeavyData());
-    var warmMs = Date.now() - t1;
-    var same = JSON.stringify(r2.d1Sessions) === JSON.stringify(getAllClassD1Sessions()) &&
-               JSON.stringify(r2.batchMembers) === JSON.stringify(getAllBatchMembersInfo()) &&
-               JSON.stringify(r2.batchCounts) === JSON.stringify(getClassBatchCounts()) &&
-               JSON.stringify(r2.memberIndex) === JSON.stringify(getClassMemberIndex());
-    Logger.log('[verifyStep3] d1Sessions=' + (r.d1Sessions || []).length + '건' +
-               ' | batchMembers종목=' + Object.keys(r.batchMembers || {}).length +
-               ' | batchCounts종목=' + Object.keys(r.batchCounts || {}).length +
-               ' | memberIndex종목=' + Object.keys(r.memberIndex || {}).length +
-               ' | 개별함수와 동일=' + (same ? 'O' : 'X ★불일치★') +
-               ' | 시간 캐시미스=' + coldMs + 'ms / 캐시히트=' + warmMs + 'ms');
-}
-
-/**
  * [4단계] 수업관리 상세 번들 선로드 (배치별 회원탭 데이터 + 회차별 물건 데이터)
  * - 출력 형식은 기존 readMemberClassDetailsByBatchKey / getItemsByClassD1Id 와 완전 동일
  * - 진입 시 백그라운드 1회 호출 → 이후 수업/회차 클릭 시 서버 호출 없이 즉시 표시
@@ -958,51 +870,6 @@ function getClassScheduleDetailBundle() {
     }
 
     return JSON.stringify({ itemsByD1: itemsByD1, mcdByBatch: mcdByBatch });
-}
-
-/**
- * [4단계 검증용 임시 함수 — 검증 완료 후 삭제 예정]
- * 번들 결과가 기존 개별 함수(getItemsByClassD1Id / readMemberClassDetailsByBatchKey)와 동일한지 비교.
- */
-function verifyStep4_getClassScheduleDetailBundle() {
-    var t0 = Date.now();
-    var bundle = JSON.parse(getClassScheduleDetailBundle());
-    var genMs = Date.now() - t0;
-    var itemKeys = Object.keys(bundle.itemsByD1 || {});
-    var mcdKeys = Object.keys(bundle.mcdByBatch || {});
-    var cache = CacheService.getScriptCache();
-
-    var okItems = true;
-    itemKeys.slice(-3).forEach(function(id) {
-        var direct = getItemsByClassD1Id(id);
-        var same = JSON.stringify(direct) === JSON.stringify(bundle.itemsByD1[id]);
-        if (!same) okItems = false;
-        Logger.log('[verifyStep4-items] d1=' + id + ' | 동일=' + (same ? 'O' : 'X ★불일치★') +
-                   ' | 건수 직접=' + direct.length + '/번들=' + bundle.itemsByD1[id].length);
-        if (!same) {
-            Logger.log('  직접: ' + JSON.stringify(direct).substring(0, 1500));
-            Logger.log('  번들: ' + JSON.stringify(bundle.itemsByD1[id]).substring(0, 1500));
-        }
-    });
-
-    var okMcd = true;
-    mcdKeys.slice(-3).forEach(function(bk) {
-        cache.remove('mcd_' + bk);
-        var direct = readMemberClassDetailsByBatchKey(bk);
-        cache.remove('mcd_' + bk);
-        var same = JSON.stringify(direct) === JSON.stringify(bundle.mcdByBatch[bk]);
-        if (!same) okMcd = false;
-        Logger.log('[verifyStep4-mcd] bk=' + bk + ' | 동일=' + (same ? 'O' : 'X ★불일치★') +
-                   ' | 건수 직접=' + direct.length + '/번들=' + bundle.mcdByBatch[bk].length);
-        if (!same) {
-            Logger.log('  직접: ' + JSON.stringify(direct).substring(0, 1500));
-            Logger.log('  번들: ' + JSON.stringify(bundle.mcdByBatch[bk]).substring(0, 1500));
-        }
-    });
-
-    Logger.log('[verifyStep4] 생성=' + genMs + 'ms | 회차수=' + itemKeys.length + ' | 배치수=' + mcdKeys.length +
-               ' | JSON크기=' + Math.round(JSON.stringify(bundle).length / 1024) + 'KB' +
-               ' | items검증=' + (okItems ? 'O' : 'X') + ' | mcd검증=' + (okMcd ? 'O' : 'X'));
 }
 
 /**
