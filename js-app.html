@@ -10917,24 +10917,37 @@ MJ 이정우 팀장
 
         grid.innerHTML = '<div class="col-span-7 py-8 text-center text-gray-400 text-xs">불러오는 중...</div>';
 
+        // [속도] 앞/뒤 1주 포함 한 번에 로드 후 주차별 슬라이스 캐시
+        // (기존: 본 범위 1회 + 인접 주 prefetch 2회 = iCal 전체 다운로드 3회 → 1회)
+        var wideStart = new Date(weekStart);
+        wideStart.setDate(weekStart.getDate() - 7);
+        var wideEnd = new Date(weekStart);
+        wideEnd.setDate(weekStart.getDate() + 21);
         google.script.run
             .withSuccessHandler(function (res) {
                 if (!res || !res.success) {
                     if (grid) grid.innerHTML = '<div class="col-span-7 py-4 text-center text-red-400 text-xs">캘린더 오류: ' + (res && res.error ? res.error : '알 수 없음') + '</div>';
                     return;
                 }
-                _calEventsCache[cacheKey] = res.events || [];
-                _renderCalGrid(weekStart, res.events || []);
-                // 현재 뷰 로드 완료 후 인접 주 백그라운드 pre-fetch
-                setTimeout(function () {
-                    _calPrefetch(_calWeekOffset - 1);
-                    _calPrefetch(_calWeekOffset + 1);
-                }, 200);
+                var all = res.events || [];
+                // 서버 필터(parseIcal_)와 동일한 겹침 판정으로 주차별 슬라이스 → 결과 동일
+                [-1, 0, 1].forEach(function (d) {
+                    var ws2 = new Date(weekStart);
+                    ws2.setDate(weekStart.getDate() + d * 7);
+                    var we2 = new Date(ws2);
+                    we2.setDate(ws2.getDate() + 14);
+                    var sMs = ws2.getTime(), eMs = we2.getTime();
+                    _calEventsCache[ws2.getTime()] = all.filter(function (ev) {
+                        var evEnd = (ev.end != null) ? ev.end : ev.start;
+                        return evEnd >= sMs && ev.start <= eMs;
+                    });
+                });
+                _renderCalGrid(weekStart, _calEventsCache[cacheKey] || []);
             })
             .withFailureHandler(function (err) {
                 if (grid) grid.innerHTML = '<div class="col-span-7 py-4 text-center text-red-400 text-xs">오류: ' + err.message + '</div>';
             })
-            .getCalendarEvents(weekStart.getTime(), weekEnd.getTime());
+            .getCalendarEvents(wideStart.getTime(), wideEnd.getTime());
     }
 
     function _calPrefetch(offset) {
