@@ -177,6 +177,7 @@
     { id: 'ft_specials_multi', name: '특수물건 다중',       valueType: 'specials' },
     { id: 'ft_propkind',  name: '물건종류',                valueType: 'text'   },
     { id: 'ft_keyword',   name: '비고/특이사항 키워드 포함', valueType: 'text'   },
+    { id: 'ft_jicheung',  name: '지층 제거',               valueType: 'text'   },
     { id: 'ft_dae_hug_inc', name: '대항력(HUG포함)',       valueType: 'text'   }
   ];
 
@@ -1643,7 +1644,13 @@
     '대항력(HUG포함)':                     { op: 'ncontains', value: '제거대상' },
     '대항력(HUG제외)':                     { op: 'ncontains', value: '제거대상' },
     '대항력 (HUG제외)':                    { op: 'ncontains', value: '제거대상' },
-    '대항력 제거':                         { op: 'ncontains', value: '대항력' }
+    '대항력 제거':                         { op: 'ncontains', value: '대항력' },
+    '지층 제거':                           { op: 'ncontains', value: '지*층' }
+  };
+
+  // 값이 고정되어 수정 불가한 필터 종류 (선택만 하면 동작) — { 종류명: 고정값 }
+  const LOCKED_FILTER_VALUES = {
+    '지층 제거': '지*층'
   };
 
   // 종류별 동작 설명 (행에 인라인 표시)
@@ -1664,7 +1671,8 @@
     '대항력(HUG포함)':                     '대항력+HUG 같이 있으면 살림. 대항력만 있으면 제거 (미포함 "제거대상")',
     '대항력(HUG제외)':                     '대항력+HUG 같이 있으면 살림. 대항력만 있으면 제거 (미포함 "제거대상")',
     '대항력 (HUG제외)':                    '대항력+HUG 같이 있으면 살림. 대항력만 있으면 제거 (미포함 "제거대상")',
-    '대항력 제거':                         '대항력 있는 행 무조건 제거 (HUG 여부 무관). 미포함 "대항력"'
+    '대항력 제거':                         '대항력 있는 행 무조건 제거 (HUG 여부 무관). 미포함 "대항력"',
+    '지층 제거':                           '주소에 지N층/지하N층 있으면 제거 (값 고정 "지*층", 수정 불가)'
   };
 
   // ── 추가 필터 행 렌더링 ───────────────────────────────────
@@ -1682,6 +1690,7 @@
       const t = ftypes.find(x => x.id === r.typeId);
       const hint = (t && TYPE_HINTS[t.name]) || '';
       const isSpecials = t && t.valueType === 'specials';
+      const lockedVal = t && LOCKED_FILTER_VALUES[t.name];
       let valHtml;
       if (isSpecials) {
         const tags = String(r.value || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -1690,6 +1699,10 @@
           : `<span class="f10 gray">선택된 항목 없음</span>`;
         valHtml = `<button type="button" class="btn_box_sss btn_white fval-specials" title="특수물건 항목 선택">선택 ▾</button>
                    <span class="fval-specials-tags">${tagsHtml}</span>`;
+      } else if (lockedVal) {
+        // 값 고정 — 사용자가 수정할 수 없음 (선택만 하면 동작)
+        r.value = lockedVal;
+        valHtml = `<input type="text" class="inp fval-inp" value="${escAttr(lockedVal)}" readonly title="이 필터는 값이 고정되어 수정할 수 없습니다" style="background:#f1f5f9;color:#64748b;cursor:not-allowed;">`;
       } else {
         valHtml = `<input type="text" class="inp fval-inp" value="${escAttr(r.value || '')}" placeholder="값">`;
       }
@@ -1915,9 +1928,24 @@
     renderSidebar();
     setStatus('복사 — 새 제목 입력 후 [저장], 결과는 [크롤링 실행]');
   }
+  // 상단 영역(툴바·패널헤드·제목) 스크롤 고정 — 위 요소들의 실제 높이를 측정해 stacking top 설정
+  function freezeHeaderSync_() {
+    const topShell = document.getElementById('topShell');
+    const topBar   = document.getElementById('topBar');
+    const head     = document.querySelector('#editorPanel .panel-head');
+    const title    = document.querySelector('#editorPanel .title-row');
+    const base = topShell ? topShell.offsetHeight : 0;           // 파란 상단바(46px)
+    if (topBar) topBar.style.top = base + 'px';
+    const h1 = base + (topBar ? topBar.offsetHeight : 0);
+    if (head)  head.style.top = h1 + 'px';
+    const h2 = h1 + (head ? head.offsetHeight : 0);
+    if (title) title.style.top = h2 + 'px';
+  }
+
   function showEditor() {
     document.getElementById('editorPanel').classList.remove('hidden');
     document.getElementById('emptyHint').classList.add('hidden');
+    freezeHeaderSync_(); // 패널 표시 후 높이 측정 가능
   }
   function hideEditor() {
     document.getElementById('editorPanel').classList.add('hidden');
@@ -1985,6 +2013,7 @@
     document.getElementById('editorIdBadge').textContent = '· ID: ' + currentPresetId;
     document.getElementById('btnDelete').classList.remove('hidden');
     document.getElementById('btnDuplicate').classList.remove('hidden');
+    freezeHeaderSync_(); // 저장 후 버튼 노출로 패널헤드 높이 변동 가능 → 재계산
   }
   function deletePreset() {
     if (!currentPresetId) return;
@@ -2154,6 +2183,9 @@
       else                        { all.checked = false; all.indeterminate = true; }
     });
     document.getElementById('btnSave').addEventListener('click', savePreset);
+    document.getElementById('btnSaveBottom')?.addEventListener('click', savePreset);
+    window.addEventListener('resize', freezeHeaderSync_);
+    freezeHeaderSync_(); // 초기 topBar 고정 위치 설정
     document.getElementById('btnDelete').addEventListener('click', deletePreset);
     document.getElementById('btnDuplicate').addEventListener('click', duplicatePreset);
     document.getElementById('btnCancel').addEventListener('click', hideEditor);
@@ -2345,6 +2377,8 @@
     '특수권리':                it => it.specials || it.address || '',
     '특수물건 다중':           it => it.specials || it.address || '',
     '물건종류':                it => it.prop_kind || '',
+    // 지층(지하) 제거 — 주소에 '지N층'/'지하N층' 있으면 '지*층' 마크. 값 고정(미포함 '지*층')
+    '지층 제거':               it => /지하?\d+층/.test(it.address || '') ? '지*층' : '',
     // ── 대항력 관련 필터 ──────────────────────────
     // (1) '대항력 제거' — 대항력 있으면 무조건 '대항력' (HUG 여부 무관). 사용 예) 미포함 '대항력'
     '대항력 제거':             it => /대항력/.test(it.specials || it.address || '') ? '대항력' : '',
