@@ -5489,6 +5489,18 @@ function getAutoApprovalStats(testMode) {
 }
 
 /**
+ * [속도] 회원관리 진입 통합 로드 — 기존 3개 직렬 호출(readAllMembersNew → getClassDropdownOptions + getDonkleMemberCounts)을 1회로
+ * - 각 하위 함수 출력 그대로 묶음 / JSON 문자열 반환 (google.script.run null 수신 문제 회피)
+ */
+function getMemberManagementData() {
+  return JSON.stringify({
+    members: readAllMembersNew(),
+    classOptions: getClassDropdownOptions(),
+    donkleCounts: getDonkleMemberCounts()
+  });
+}
+
+/**
  * 회원 중복 검사 (이름 + 전화번호)
  */
 function checkMemberDuplicate_(memberName, phone, excludeId) {

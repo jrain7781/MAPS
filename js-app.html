@@ -13521,23 +13521,47 @@ MJ 이정우 팀장
         const tbody = document.getElementById('memberDataTableBody');
         if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-gray-500">데이터를 불러오는 중...</td></tr>';
 
+        // [속도] 회원+드롭다운+돈클카운트 1회 통합 호출 (기존: 직렬 3회) — 실패 시 기존 개별 호출 폴백
+        google.script.run
+            .withSuccessHandler(json => {
+                let res = null;
+                try { res = json ? JSON.parse(json) : null; } catch (e) { res = null; }
+                if (!res) { _loadMembersNewLegacy_(tbody); return; }
+                allMembersNewData = Array.isArray(res.members) ? res.members : [];
+                populateMNameIdDropdowns_();
+                _applyClassDropdownOptions_(res.classOptions);
+                _applyPendingMemberFilters_();
+                window.donkleCounts = res.donkleCounts || {};
+                filterMembersNew();
+            })
+            .withFailureHandler(() => _loadMembersNewLegacy_(tbody))
+            .getMemberManagementData();
+    }
+
+    // 텔레그램 가입현황 → 회원관리 이동 시 대기 필터 적용 (기존 loadMembersNew 본문 그대로)
+    function _applyPendingMemberFilters_() {
+        // 텔레그램 가입현황(회원 모드) → class_type + telegramFilter 기반 필터
+        if (window._pendingTelegramNavFilter) {
+            var f = window._pendingTelegramNavFilter;
+            window._pendingTelegramNavFilter = null;
+            window._memberMgmtTelegramFilter = f.telegramFilter;
+            window._memberMgmtPendingClassType = f.classType;
+        }
+        // 텔레그램 가입현황(물건 모드) → member_id 배열 기반 필터
+        if (window._pendingTelegramMemberIds) {
+            window._memberMgmtPendingMemberIds = window._pendingTelegramMemberIds;
+            window._pendingTelegramMemberIds = null;
+        }
+    }
+
+    // 통합 호출 실패 시: 기존 개별 호출 경로 (이전 동작 그대로)
+    function _loadMembersNewLegacy_(tbody) {
         google.script.run
             .withSuccessHandler(data => {
                 allMembersNewData = Array.isArray(data) ? data : [];
                 populateMNameIdDropdowns_();
                 loadClassDropdownOptions();
-                // 텔레그램 가입현황(회원 모드) → class_type + telegramFilter 기반 필터
-                if (window._pendingTelegramNavFilter) {
-                    var f = window._pendingTelegramNavFilter;
-                    window._pendingTelegramNavFilter = null;
-                    window._memberMgmtTelegramFilter = f.telegramFilter;
-                    window._memberMgmtPendingClassType = f.classType;
-                }
-                // 텔레그램 가입현황(물건 모드) → member_id 배열 기반 필터
-                if (window._pendingTelegramMemberIds) {
-                    window._memberMgmtPendingMemberIds = window._pendingTelegramMemberIds;
-                    window._pendingTelegramMemberIds = null;
-                }
+                _applyPendingMemberFilters_();
                 filterMembersNew();
                 loadDonkleCounts();   // 회원별 추천/입찰/낙찰/불가 카운트 (members_item_status)
             })
@@ -13557,16 +13581,19 @@ MJ 이정우 팀장
             .getDonkleMemberCounts();
     }
 
+    // 드롭다운 옵션 적용 (기존 loadClassDropdownOptions 핸들러 본문 그대로 — 통합 호출에서도 재사용)
+    function _applyClassDropdownOptions_(opts) {
+        classDropdownOptions = opts || { class_types: [], class_names: [], class_grades: [], class_locs: [] };
+        updateMemberSearchDropdowns();
+        updateClassSearchDropdowns();
+        updateClassScheduleDropdowns();
+        loadClassSelectForMember();
+        updateBidCalClassTypeDropdowns();  // 입찰일정/입찰물건관리 수업구분 드롭다운 업데이트
+    }
+
     function loadClassDropdownOptions() {
         google.script.run
-            .withSuccessHandler(opts => {
-                classDropdownOptions = opts || { class_types: [], class_names: [], class_grades: [], class_locs: [] };
-                updateMemberSearchDropdowns();
-                updateClassSearchDropdowns();
-                updateClassScheduleDropdowns();
-                loadClassSelectForMember();
-                updateBidCalClassTypeDropdowns();  // 입찰일정/입찰물건관리 수업구분 드롭다운 업데이트
-            })
+            .withSuccessHandler(opts => _applyClassDropdownOptions_(opts))
             .withFailureHandler(err => console.error('드롭다운 옵션 로드 실패:', err))
             .getClassDropdownOptions();
     }
