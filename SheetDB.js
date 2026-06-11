@@ -4125,36 +4125,124 @@ function getItemsByClassD1Id(classD1Id) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  var allData = sheet.getDataRange().getValues();
-  var headers = allData[0].map(function(v){ return String(v||'').trim(); });
+  // [속도 개선] 전체 시트(getDataRange) 대신 헤더 1행 + class_d1_id 열만 스캔 후 매칭 행만 읽기
+  var lastCol = sheet.getLastColumn();
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(v){ return String(v||'').trim(); });
 
   // class_d1_id 컬럼 탐지: 헤더명 → 고정인덱스 폴백
   var d1Col = headers.indexOf('class_d1_id');
   if (d1Col < 0) d1Col = ITEM_HEADERS.indexOf('class_d1_id'); // = 18
+  if (d1Col >= lastCol) {
+    Logger.log('[getItemsByClassD1Id] id=' + String(classD1Id).trim() + ' | d1Col=' + d1Col + ' (시트 범위 밖) | matched=0');
+    return [];
+  }
 
   var searchId = String(classD1Id).trim();
+  var d1ColVals = sheet.getRange(2, d1Col + 1, lastRow - 1, 1).getValues();
+  var matchedRowNums = [];
+  for (var i = 0; i < d1ColVals.length; i++) {
+    if (String(d1ColVals[i][0]||'').trim() === searchId) matchedRowNums.push(i + 2);
+  }
+
+  // 헤더 → 컬럼 인덱스 매핑 (기존: 행마다 indexOf → 동일 결과를 1회만 계산)
+  var colMap = ITEM_HEADERS.map(function(h, idx) {
+    var col = headers.indexOf(h);
+    return (col < 0) ? idx : col;
+  });
+
   var tz = Session.getScriptTimeZone();
   var result = [];
 
-  for (var i = 1; i < allData.length; i++) {
-    var row = allData[i];
-    if (String(row[d1Col]||'').trim() !== searchId) continue;
-    var obj = {};
-    ITEM_HEADERS.forEach(function(h, idx) {
-      var col = headers.indexOf(h);
-      if (col < 0) col = idx;
-      var v = (col >= 0 && col < row.length && row[col] != null) ? row[col] : '';
-      // Date 객체 → 문자열 변환 (직렬화 오류 방지)
-      if (v instanceof Date) {
-        v = isNaN(v.getTime()) ? '' : Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm:ss');
-      }
-      obj[h] = v;
+  // 첫~끝 매칭 행을 한 블록으로 1회 읽기 (getRange 호출 수 고정 → 흩어진 행도 기존보다 느려지지 않음)
+  if (matchedRowNums.length > 0) {
+    var firstRow = matchedRowNums[0];
+    var lastMatchedRow = matchedRowNums[matchedRowNums.length - 1];
+    var block = sheet.getRange(firstRow, 1, lastMatchedRow - firstRow + 1, lastCol).getValues();
+    matchedRowNums.forEach(function(rowNum) {
+      var row = block[rowNum - firstRow];
+      var obj = {};
+      ITEM_HEADERS.forEach(function(h, idx) {
+        var col = colMap[idx];
+        var v = (col >= 0 && col < row.length && row[col] != null) ? row[col] : '';
+        // Date 객체 → 문자열 변환 (직렬화 오류 방지)
+        if (v instanceof Date) {
+          v = isNaN(v.getTime()) ? '' : Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm:ss');
+        }
+        obj[h] = v;
+      });
+      result.push(obj);
     });
-    result.push(obj);
   }
 
-  Logger.log('[getItemsByClassD1Id] id=' + searchId + ' | d1Col=' + d1Col + ' | hdr=' + (headers[d1Col]||'?') + ' | totalRows=' + (allData.length-1) + ' | matched=' + result.length);
+  Logger.log('[getItemsByClassD1Id] id=' + searchId + ' | d1Col=' + d1Col + ' | hdr=' + (headers[d1Col]||'?') + ' | totalRows=' + (lastRow-1) + ' | matched=' + result.length);
   return result;
+}
+
+/**
+ * [1단계 검증용 임시 함수 — 검증 완료 후 삭제 예정]
+ * 신(최적화)/구(전체읽기) 로직 결과 동일성 + 소요시간 비교.
+ * GAS 편집기에서 실행 → Logger 확인. 인자 없이 실행하면 items 시트에서 class_d1_id가 있는 행을 자동 선택.
+ */
+function verifyStep1_getItemsByClassD1Id(classD1Id) {
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  // 자동 샘플 선택: class_d1_id 값이 있는 행 중 마지막 3개의 고유값
+  var headers0 = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(function(v){ return String(v||'').trim(); });
+  var d1Col0 = headers0.indexOf('class_d1_id');
+  if (d1Col0 < 0) d1Col0 = ITEM_HEADERS.indexOf('class_d1_id');
+  var ids = [];
+  if (classD1Id) {
+    ids = [classD1Id];
+  } else {
+    var vals = sheet.getRange(2, d1Col0 + 1, sheet.getLastRow() - 1, 1).getValues();
+    var seen = {};
+    for (var i = vals.length - 1; i >= 0 && ids.length < 3; i--) {
+      var v = String(vals[i][0]||'').trim();
+      if (v && !seen[v]) { seen[v] = true; ids.push(v); }
+    }
+  }
+  if (ids.length === 0) { Logger.log('class_d1_id 값이 있는 물건이 없습니다.'); return; }
+
+  ids.forEach(function(id) {
+    // 구 로직 (기존 코드 그대로 인라인)
+    var t0 = Date.now();
+    var allData = sheet.getDataRange().getValues();
+    var headers = allData[0].map(function(v){ return String(v||'').trim(); });
+    var d1Col = headers.indexOf('class_d1_id');
+    if (d1Col < 0) d1Col = ITEM_HEADERS.indexOf('class_d1_id');
+    var searchId = String(id).trim();
+    var tz = Session.getScriptTimeZone();
+    var oldResult = [];
+    for (var i = 1; i < allData.length; i++) {
+      var row = allData[i];
+      if (String(row[d1Col]||'').trim() !== searchId) continue;
+      var obj = {};
+      ITEM_HEADERS.forEach(function(h, idx) {
+        var col = headers.indexOf(h);
+        if (col < 0) col = idx;
+        var v = (col >= 0 && col < row.length && row[col] != null) ? row[col] : '';
+        if (v instanceof Date) {
+          v = isNaN(v.getTime()) ? '' : Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm:ss');
+        }
+        obj[h] = v;
+      });
+      oldResult.push(obj);
+    }
+    var oldMs = Date.now() - t0;
+
+    // 신 로직
+    var t1 = Date.now();
+    var newResult = getItemsByClassD1Id(id);
+    var newMs = Date.now() - t1;
+
+    var same = JSON.stringify(oldResult) === JSON.stringify(newResult);
+    Logger.log('[verifyStep1] id=' + id + ' | 결과동일=' + (same ? 'O' : 'X ★불일치★') +
+               ' | 건수 구=' + oldResult.length + '/신=' + newResult.length +
+               ' | 시간 구=' + oldMs + 'ms / 신=' + newMs + 'ms');
+    if (!same) {
+      Logger.log('[verifyStep1] 구결과: ' + JSON.stringify(oldResult).substring(0, 2000));
+      Logger.log('[verifyStep1] 신결과: ' + JSON.stringify(newResult).substring(0, 2000));
+    }
+  });
 }
 
 // ================================================================================================
