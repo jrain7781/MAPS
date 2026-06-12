@@ -393,6 +393,12 @@
   let GROUP_ANCHOR = null;  // 'A그룹 주'의 월요일 Date (앵커). null이면 그룹로직 미적용
   const weekMonday = d => { const x=new Date(d); const wd=(x.getDay()+6)%7; x.setDate(x.getDate()-wd); x.setHours(0,0,0,0); return x; };
   const groupOfWeek = mon => { if(!GROUP_ANCHOR) return null; const diff=Math.round((mon-GROUP_ANCHOR)/(7*86400000)); return ((((diff%2)+2)%2)===0)?'A':'B'; };
+  // [주 히스토리] 보고 있는 기준 주(월). null=현재 주. ◀▶로 과거/미래 작업주 이동.
+  let VIEW_MON = null;
+  const curViewMon = () => VIEW_MON || weekMonday(TODAY);
+  const isHistWeek = () => curViewMon().getTime() !== weekMonday(TODAY).getTime();
+  // 마감 판정용 'as-of' 날짜: 현재주=실제오늘 / 과거주=그 주 끝(일) / 미래주=그 주 시작 전날
+  function viewNowDate(){ const vm=curViewMon(), rm=weekMonday(TODAY); if(vm.getTime()===rm.getTime()) return TODAY; return (vm<rm) ? addDays(vm,6) : addDays(vm,-1); }
   // 'YYYY-MM-DD' 또는 'M/D' 모두 파싱 (M/D는 올해 기준)
   const parseDate = s => {
     if(!s) return null; s=String(s).trim();
@@ -546,7 +552,7 @@
       // 다음예정 = 작업주(그 회원 그룹의 작업주) 금요일. 형식 "~ MM/DD"
       const ob = recBuckets(m);
       const nextV = '~ ' + fmtMD(ob.oblFri);
-      const nextC = (ob.oblFri < TODAY && ob.none) ? 'text-red-600 font-bold' : 'text-gray-600';
+      const nextC = (ob.oblFri < viewNowDate() && ob.none) ? 'text-red-600 font-bold' : 'text-gray-600';
       const nextDelta = '';
       const ps = progStateOf(m.name);
       const waitTag = ps==='대기' ? `<span class="chip bg-amber-100 text-amber-700">대기 ${waitCountFor(m.name)}건</span>`
@@ -566,7 +572,7 @@
         <td class="py-3 text-center">${groupSelect(m)}</td>
         <td class="py-3 text-center">${subChip(m.sub)}</td>
         <td class="py-3 text-left font-semibold text-gray-800 whitespace-nowrap pl-2">${teleBadge(m.name)}${m.name}</td>
-        <td class="py-3 text-center text-amber-600 font-semibold border-l-2 border-gray-200">${waitCountFor(m.name) || ''}</td>
+        <td class="py-3 text-center text-amber-600 font-semibold border-l-2 border-gray-200">${isHistWeek() ? '<span class="text-gray-300">–</span>' : (waitCountFor(m.name) || '')}</td>
         <td class="py-3 text-center text-gray-700 font-semibold">${k.total || ''}</td>
         <td class="py-3 text-center font-bold border-r-2 border-gray-200 ${ob.owed>=1?'text-red-600':'text-gray-300'}">${ob.owed || ''}</td>
         <td class="py-3 text-center text-slate-500 font-semibold border-l-2 border-r-2 border-gray-200">${midCountFor(m.name) || ''}</td>
@@ -610,7 +616,7 @@
   // ── [신규] 의무주(작업주) 기준 회원 버킷 분류 ───────────────────────────────
   // 그룹 g의 '현재 작업주' 월요일 (A 시작주 앵커 기준). 이번주가 g면 이번주, 아니면 다음주.
   function oblMondayFor(g){
-    const wm = weekMonday(TODAY);
+    const wm = curViewMon();
     if(!g || !GROUP_ANCHOR) return wm;
     return (groupOfWeek(wm)===g) ? wm : addDays(wm,7);
   }
@@ -621,7 +627,7 @@
     let wmon = weekMonday((g==='A') ? new Date(GROUP_ANCHOR) : addDays(GROUP_ANCHOR,7));
     let cnt=0, guard=0;
     while(wmon <= curOblMon && guard++ < 520){
-      if(addDays(wmon,4) < TODAY && !_recInWeek(name, wmon)) cnt++;  // 작업주 금요일 지난 주만
+      if(addDays(wmon,4) < viewNowDate() && !_recInWeek(name, wmon)) cnt++;  // 작업주 금요일이 기준시점 지난 주만
       wmon = addDays(wmon,14);
     }
     return cnt;
@@ -636,7 +642,7 @@
     const cancPrev = DELIVERED.some(x=>x.name===m.name && x.status==='미정' && (function(){const d=parseDate(x.date);return !!d && d>=pMon && d<=pSun;})());
     const penalty = !!cancPrev;
     const isTarget = !penalty;
-    const waiting = waitCountFor(m.name)>0;
+    const waiting = !isHistWeek() && waitCountFor(m.name)>0;  // 대기는 현재 스냅샷 — 과거/미래 주에선 복원 불가
     const done = isTarget && recsThis;
     const none = isTarget && !recsThis && !waiting;
     const owed = isTarget ? owedCyclesFor(m.name, g, oblMon) : 0;
@@ -659,7 +665,7 @@
 
     const gs=document.getElementById('groupSummaryContainer'); if(!gs) return;
 
-    const wm = weekMonday(TODAY);
+    const wm = curViewMon();
     const thisGroup = groupOfWeek(wm) || 'A';
     const nextGroup = thisGroup === 'A' ? 'B' : 'A';
 
@@ -720,8 +726,20 @@
       `;
     };
 
+    const _hist = isHistWeek();
+    const _rm = weekMonday(TODAY);
+    const _wkLabel = (wm.getTime()===_rm.getTime()) ? '이번주' : (wm<_rm ? '과거' : '미래');
+    const navBar = `
+      <div class="flex items-center gap-2 mb-1">
+        <button onclick="REC.navWeek(-1)" class="px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-bold" title="이전 주">◀</button>
+        <span class="text-xs font-bold ${_hist?'text-amber-600':'text-gray-700'}">${fmtMD(wm)} ~ ${fmtMD(addDays(wm,6))} 주 · ${_wkLabel}</span>
+        <button onclick="REC.navWeek(1)" class="px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 text-xs font-bold" title="다음 주">▶</button>
+        ${_hist?`<button onclick="REC.navWeekToday()" class="px-2 py-0.5 rounded bg-indigo-600 text-white text-xs font-bold">오늘로</button>`:''}
+        ${_hist?'<span class="text-[11px] text-amber-600">※ 과거/미래 주 보기 — 대기는 현재 스냅샷이라 표시 안 함</span>':''}
+      </div>`;
     gs.innerHTML = `
       <div class="flex flex-col gap-2">
+        ${navBar}
         <div class="flex gap-4">
           ${renderCard(thisGroup, true)}
           ${renderCard(nextGroup, false)}
@@ -735,6 +753,9 @@
     else { curGroupFilter=g; curStat=st; }
     renderQueue();
   }
+  // [주 히스토리] 기준 주 이동(◀▶) / 오늘로 복귀
+  function navWeek(d){ VIEW_MON = addDays(curViewMon(), d*7); renderGroupSummary(); renderQueue(); }
+  function navWeekToday(){ VIEW_MON = null; renderGroupSummary(); renderQueue(); }
   function passFilter(m){
     const gk=(m.group==='A'||m.group==='B')?m.group:'none';
     const grpOk=(curGroupFilter==='all')||(gk===curGroupFilter);
@@ -1218,7 +1239,7 @@
     openModal, closeModal, renderPickerList, addToCart, removeFromCart, confirmPicker, renderCart,
     openMemberRecs, selItem, saveMembersNote, saveMemberNote, setMemberStatus, setGroupSel, setGroupStat, setAnchorDate, setAnchorDateB, setQueueQuery, updateCartYoungdo,
     calNav, calToday, setCalStatus, setCalQuery, gotoBid, showCalPop, hideCalPop, deliver,
-    toggleTheme, switchRecTab,
+    toggleTheme, switchRecTab, navWeek, navWeekToday,
     refresh: function(){ renderQueue(); renderWait(); applyColw(); }
   });
 
