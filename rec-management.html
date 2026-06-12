@@ -178,10 +178,7 @@
     <span class="flex items-center gap-1 mr-2 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-600 border border-rose-200 self-center" title="추천 큐 · 월별 현황은 돈클 회원 전용입니다">🏠 돈클 전용</span>
     <div class="tab on" id="tab-queue" onclick="REC.switchTab('queue')">추천 큐 <span class="text-[11px] text-gray-400 font-normal">(누구 먼저)</span></div>
     <div class="tab" id="tab-cal" onclick="REC.switchTab('cal')">월별 현황 <span class="text-[11px] text-gray-400 font-normal">(달력)</span></div>
-    <div class="ml-auto flex items-center gap-2 text-[11px] text-gray-400 pb-2"><input id="dateInput" type="date" value="2026-06-08" style="display:none">추천 주기
-      <input id="cycleInput" type="number" min="1" value="14" onfocus="this.select()" onclick="this.select()" class="w-12 border border-gray-300 rounded px-1.5 py-0.5 text-center text-gray-700"> 일
-      <button id="cycleSave" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-semibold">저장</button>
-      <span class="w-px h-4 bg-gray-200 mx-0.5"></span><label class="flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-10 border border-gray-300 rounded px-1 py-0.5 text-center text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300 font-bold bg-white"></label>
+    <div class="ml-auto flex items-center gap-2 text-[11px] text-gray-400 pb-2"><input id="dateInput" type="date" value="2026-06-08" style="display:none"><label class="flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-10 border border-gray-300 rounded px-1 py-0.5 text-center text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300 font-bold bg-white"></label>
       <span class="w-px h-4 bg-gray-200 mx-0.5"></span>A그룹 시작주
       <input id="groupAnchorDate" type="date" onchange="REC.setAnchorDate(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700" title="A그룹이 시작되는 주의 날짜 — 그 주부터 격주로 A·B 교대">
       <span class="text-gray-300">·</span>B그룹 시작주
@@ -219,7 +216,7 @@
       </div>
       <div class="flex-1 min-h-0 overflow-y-auto">
       <table id="queueTable" class="w-full text-sm" style="table-layout:fixed">
-        <colgroup id="queueColgroup"><col><col><col><col><col><col><col style="background:rgba(99,102,241,.06)"><col style="background:rgba(99,102,241,.06)"><col style="background:rgba(99,102,241,.06)"><col style="background:rgba(100,116,139,.11)"><col style="background:rgba(16,185,129,.06)"><col style="background:rgba(16,185,129,.06)"><col style="background:rgba(16,185,129,.06)"><col><col><col><col></colgroup>
+        <colgroup id="queueColgroup"><col><col><col><col><col><col><col style="background:rgba(99,102,241,.06)"><col style="background:rgba(99,102,241,.06)"><col style="background:rgba(99,102,241,.06)"><col style="background:rgba(100,116,139,.10)"><col style="background:rgba(100,116,139,.10)"><col style="background:rgba(16,185,129,.06)"><col style="background:rgba(16,185,129,.06)"><col style="background:rgba(16,185,129,.06)"><col><col><col><col></colgroup>
         <thead class="sticky top-0 z-10 bg-white">
           <tr class="text-gray-500 text-[12px] select-none">
             <th rowspan="2" data-col-idx="0" class="text-center py-2 font-semibold w-7"><input type="checkbox" id="selAll" onclick="REC.toggleSelAll(this.checked)" title="보이는 회원 전체 선택"></th>
@@ -229,20 +226,22 @@
             <th rowspan="2" data-col-idx="4" class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('sub')">구분<span id="qa-sub"></span></th>
             <th rowspan="2" data-col-idx="5" class="text-left py-2 font-semibold cursor-pointer hover:text-gray-700 pl-2" onclick="REC.sortQueue('name')">회원<span id="qa-name"></span></th>
             <th colspan="3" class="text-center py-1 font-bold text-indigo-700 border-t-2 border-b-2 border-l-2 border-r-2 border-gray-300 bg-indigo-100">추천건수</th>
-            <th rowspan="2" data-col-idx="9" class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700 border-t-2 border-l-2 border-r-2 border-gray-300 bg-slate-200/70 text-slate-700" onclick="REC.sortQueue('mid')">미정<span id="qa-mid"></span></th>
+            <th colspan="2" class="text-center py-1 font-bold text-slate-700 border-t-2 border-b-2 border-l-2 border-r-2 border-gray-300 bg-slate-200/70">미정</th>
             <th colspan="3" class="text-center py-1 font-bold text-emerald-700 border-t-2 border-b-2 border-l-2 border-r-2 border-gray-300 bg-emerald-100">낙찰건수</th>
-            <th rowspan="2" data-col-idx="13" class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('last')">마지막<span id="qa-last"></span></th>
-            <th rowspan="2" data-col-idx="14" class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('next')">다음예정<span id="qa-next"></span></th>
-            <th rowspan="2" data-col-idx="15" class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('status')">추천상태<span id="qa-status"></span></th>
-            <th rowspan="2" data-col-idx="16" class="text-center py-2 font-semibold">액션</th>
+            <th rowspan="2" data-col-idx="14" class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('last')">마지막<span id="qa-last"></span></th>
+            <th rowspan="2" data-col-idx="15" class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('next')">다음예정<span id="qa-next"></span></th>
+            <th rowspan="2" data-col-idx="16" class="text-center py-2 font-semibold cursor-pointer hover:text-gray-700" onclick="REC.sortQueue('status')">추천상태<span id="qa-status"></span></th>
+            <th rowspan="2" data-col-idx="17" class="text-center py-2 font-semibold">액션</th>
           </tr>
           <tr class="text-gray-500 text-[11px] select-none border-b border-gray-200">
-            <th data-col-idx="6" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-l-2 border-gray-300 bg-indigo-50" onclick="REC.sortQueue('wait')">대기<span id="qa-wait"></span></th>
-            <th data-col-idx="7" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 bg-indigo-50" onclick="REC.sortQueue('total')">완료<span id="qa-total"></span></th>
-            <th data-col-idx="8" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-r-2 border-gray-300 bg-indigo-50" onclick="REC.sortQueue('owed')">예정<span id="qa-owed"></span></th>
-            <th data-col-idx="10" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-l-2 border-gray-300 bg-emerald-50" onclick="REC.sortQueue('winTotal')">전체<span id="qa-winTotal"></span></th>
-            <th data-col-idx="11" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 bg-emerald-50" onclick="REC.sortQueue('income')">수익<span id="qa-income"></span></th>
-            <th data-col-idx="12" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-r-2 border-gray-300 bg-emerald-50" onclick="REC.sortQueue('rent')">월세<span id="qa-rent"></span></th>
+            <th data-col-idx="6" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-l-2 border-gray-300 bg-indigo-50" onclick="REC.sortQueue('owed')">예정<span id="qa-owed"></span></th>
+            <th data-col-idx="7" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 bg-indigo-50" onclick="REC.sortQueue('wait')">대기<span id="qa-wait"></span></th>
+            <th data-col-idx="8" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-r-2 border-gray-300 bg-indigo-50" onclick="REC.sortQueue('total')">완료<span id="qa-total"></span></th>
+            <th data-col-idx="9" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-l-2 border-gray-300 bg-slate-100" onclick="REC.sortQueue('mid')">누적<span id="qa-mid"></span></th>
+            <th data-col-idx="10" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-r-2 border-gray-300 bg-slate-100" onclick="REC.sortQueue('midPrev')">직전<span id="qa-midPrev"></span></th>
+            <th data-col-idx="11" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-l-2 border-gray-300 bg-emerald-50" onclick="REC.sortQueue('winTotal')">전체<span id="qa-winTotal"></span></th>
+            <th data-col-idx="12" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 bg-emerald-50" onclick="REC.sortQueue('income')">수익<span id="qa-income"></span></th>
+            <th data-col-idx="13" class="text-center py-1.5 font-semibold cursor-pointer hover:text-gray-700 border-r-2 border-gray-300 bg-emerald-50" onclick="REC.sortQueue('rent')">월세<span id="qa-rent"></span></th>
           </tr>
         </thead>
         <tbody id="queueBody"></tbody>
@@ -538,7 +537,7 @@
     renderGroupSummary();
     let list = DK.filter(passFilter).map(m=>({m,k:calc(m)}));
     if(qSort.key){
-      const d=qSort.dir, g=o=>{switch(qSort.key){case 'name':return o.m.name;case 'life':return o.m.status;case 'group':return o.m.group||'~';case 'winTotal':return (o.m.incomeWinCount||0)+(o.m.rentWinCount||0);case 'income':return o.m.incomeWinCount||0;case 'rent':return o.m.rentWinCount||0;case 'sub':return o.m.sub;case 'total':return o.k.total;case 'owed':return recBuckets(o.m).owed;case 'mid':return midCountFor(o.m.name);case 'last':return o.k.last||'';case 'next':return o.k.next?o.k.next.getTime():0;case 'status':return o.k.dleft==null?1e9:o.k.dleft;case 'wait':return waitCountFor(o.m.name);}};
+      const d=qSort.dir, g=o=>{switch(qSort.key){case 'name':return o.m.name;case 'life':return o.m.status;case 'group':return o.m.group||'~';case 'winTotal':return (o.m.incomeWinCount||0)+(o.m.rentWinCount||0);case 'income':return o.m.incomeWinCount||0;case 'rent':return o.m.rentWinCount||0;case 'sub':return o.m.sub;case 'total':return o.k.total;case 'owed':return recBuckets(o.m).owed;case 'mid':return midCountFor(o.m.name);case 'midPrev':return recBuckets(o.m).midPrev;case 'last':return o.k.last||'';case 'next':return o.k.next?o.k.next.getTime():0;case 'status':return o.k.dleft==null?1e9:o.k.dleft;case 'wait':return waitCountFor(o.m.name);}};
       list.sort((a,b)=>{const av=g(a),bv=g(b); return (typeof av==='string'?av.localeCompare(bv):av-bv)*d;});
     } else { list.sort((a,b)=>{
         const r=x=> x.k.ended?3 : x.k.held?2 : x.k.fresh?1 : 0;
@@ -572,10 +571,11 @@
         <td class="py-3 text-center">${groupSelect(m)}</td>
         <td class="py-3 text-center">${subChip(m.sub)}</td>
         <td class="py-3 text-left font-semibold text-gray-800 whitespace-nowrap pl-2">${teleBadge(m.name)}${m.name}</td>
-        <td class="py-3 text-center text-amber-600 font-semibold border-l-2 border-gray-200">${isHistWeek() ? '<span class="text-gray-300">–</span>' : (waitCountFor(m.name) || '')}</td>
-        <td class="py-3 text-center text-gray-700 font-semibold">${k.total || ''}</td>
-        <td class="py-3 text-center font-bold border-r-2 border-gray-200 ${ob.owed>=1?'text-red-600':'text-gray-300'}">${ob.owed || ''}</td>
-        <td class="py-3 text-center text-slate-500 font-semibold border-l-2 border-r-2 border-gray-200">${midCountFor(m.name) || ''}</td>
+        <td class="py-3 text-center font-bold border-l-2 border-gray-200 ${ob.owed>=1?'text-red-600':'text-gray-300'}">${ob.owed || ''}</td>
+        <td class="py-3 text-center text-amber-600 font-semibold">${isHistWeek() ? '<span class="text-gray-300">–</span>' : (waitCountFor(m.name) || '')}</td>
+        <td class="py-3 text-center text-gray-700 font-semibold border-r-2 border-gray-200">${k.total || ''}</td>
+        <td class="py-3 text-center text-slate-500 font-semibold border-l-2 border-gray-200">${ob.midCum || ''}</td>
+        <td class="py-3 text-center font-semibold border-r-2 border-gray-200 ${ob.midPrev>=1?'text-purple-600':'text-gray-300'}">${ob.midPrev || ''}</td>
         <td class="py-3 text-center text-blue-700 font-bold border-l-2 border-gray-200">${((m.incomeWinCount||0)+(m.rentWinCount||0)) || ''}</td>
         <td class="py-3 text-center text-emerald-700 font-semibold">${m.incomeWinCount ? m.incomeWinCount : ''}</td>
         <td class="py-3 text-center text-amber-700 font-semibold border-r-2 border-gray-200">${m.rentWinCount ? m.rentWinCount : ''}</td>
@@ -584,7 +584,7 @@
         <td class="py-3 text-center">${statusCell(k)}</td>
         <td class="py-3 text-center">${action}</td>
       </tr>`;
-    }).join('') : '<tr><td colspan="17" class="py-6 text-center text-gray-400">선택한 상태의 회원이 없습니다</td></tr>';
+    }).join('') : '<tr><td colspan="18" class="py-6 text-center text-gray-400">선택한 상태의 회원이 없습니다</td></tr>';
     document.getElementById('queueWait').innerHTML = '';
     updateSortArrows();
     renderLifeChips();
@@ -637,10 +637,11 @@
     const g = (m.group==='A'||m.group==='B') ? m.group : null;
     const oblMon = oblMondayFor(g), oblFri = addDays(oblMon,4);
     const recsThis = _recInWeek(m.name, oblMon);
-    // 패널티: 직전 작업주(2주전)에 미정(추천취소) 있었으면 이번 회차 추천 제외 (1회차 후 자동해제)
+    // 직전 작업주(2주전) 미정 수 → 패널티(직전 회차 미정이면 이번 추천 제외, 1회차 후 자동해제)
     const pMon=addDays(oblMon,-14), pSun=addDays(pMon,6);
-    const cancPrev = DELIVERED.some(x=>x.name===m.name && x.status==='미정' && (function(){const d=parseDate(x.date);return !!d && d>=pMon && d<=pSun;})());
-    const penalty = !!cancPrev;
+    const midPrev = DELIVERED.filter(x=>x.name===m.name && x.status==='미정' && (function(){const d=parseDate(x.date);return !!d && d>=pMon && d<=pSun;})()).length;
+    const midCum = DELIVERED.filter(x=>x.name===m.name && x.status==='미정').length;  // 누적 미정(전체)
+    const penalty = midPrev>0;
     const isTarget = !penalty;
     const waiting = !isHistWeek() && waitCountFor(m.name)>0;  // 대기는 현재 스냅샷 — 과거/미래 주에선 복원 불가
     const done = isTarget && recsThis;
@@ -648,7 +649,7 @@
     const owed = isTarget ? owedCyclesFor(m.name, g, oblMon) : 0;
     const urgent = none && owed===1;       // 이번 작업주만 밀림
     const cumurgent = none && owed>=1;      // 누적(이번+과거 전부)
-    return {penalty, isTarget, waiting, done, none, urgent, cumurgent, owed, oblFri};
+    return {penalty, isTarget, waiting, done, none, urgent, cumurgent, owed, oblFri, midPrev, midCum};
   }
   REC._recBuckets = recBuckets;
 
@@ -690,12 +691,13 @@
       const restMon = isActive ? nextMon : thisMon;
       const rangeStr = `<span class="text-emerald-600 dark:text-emerald-400">작업주 ${wkStr(workMon)}</span> · <span class="text-gray-400">휴게주 ${wkStr(restMon)}</span>`;
 
-      const metric = (lbl, val, filterVal, colorClass, highlightCond) => {
+      const metric = (lbl, val, filterVal, colorClass, highlightCond, boxBorder) => {
         const isSel = curGroupFilter === g && curStat === filterVal;
-        const hl = highlightCond ? 'bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 font-bold border border-red-200 dark:border-red-900/50' : '';
-        const activeSel = isSel ? 'bg-indigo-600 text-white font-bold border-indigo-600' : 'hover:bg-gray-100 dark:hover:bg-gray-800';
+        const hl = highlightCond ? 'bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 font-bold' : '';
+        const bd = isSel ? 'border-indigo-600' : (boxBorder || 'border-transparent');
+        const activeSel = isSel ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-gray-100 dark:hover:bg-gray-800';
         return `
-          <div class="flex-1 p-1.5 rounded border border-transparent transition-all cursor-pointer text-center ${activeSel} ${hl}" onclick="REC.setGroupStat('${g}','${filterVal}')">
+          <div class="flex-1 p-1.5 rounded border ${bd} transition-all cursor-pointer text-center ${activeSel} ${hl}" onclick="REC.setGroupStat('${g}','${filterVal}')">
             <div class="grp-metric-lbl ${isSel ? 'text-white !important' : ''} mb-0.5">${lbl}</div>
             <div class="grp-metric-val ${isSel ? 'text-white !important' : colorClass}">${val}</div>
           </div>
@@ -718,8 +720,8 @@
             ${metric('완료', gStat.d, 'done', 'text-emerald-600')}
             ${metric('대기', gStat.w, 'wait', 'text-amber-600')}
             ${metric('미추천', gStat.r, 'none', 'text-gray-700 dark:text-gray-300')}
-            ${metric('긴급', gStat.u, 'urgent', 'text-red-600', gStat.u > 0)}
-            ${metric('누적긴급', gStat.cu, 'cumurgent', 'text-red-700', gStat.cu > 0)}
+            ${metric('긴급', gStat.u, 'urgent', 'text-red-600', gStat.u > 0, 'border-red-400')}
+            ${metric('누적긴급', gStat.cu, 'cumurgent', 'text-red-700', gStat.cu > 0, 'border-red-300')}
             ${metric('패널티', gStat.p, 'penalty', 'text-purple-600', gStat.p > 0)}
           </div>
         </div>
@@ -780,7 +782,7 @@
   function setStat(f){ curStat=f; renderQueue(); }
   function setSoon(v){ SOON=Math.max(0, parseInt(v)||0); renderQueue(); }
   function sortQueue(key){ if(qSort.key===key) qSort.dir*=-1; else { qSort.key=key; qSort.dir=1; } renderQueue(); }
-  function updateSortArrows(){ ['name','life','group','winTotal','income','rent','sub','total','owed','mid','last','next','status','wait'].forEach(k=>{ const e=document.getElementById('qa-'+k); if(e) e.textContent = (qSort.key===k)?(qSort.dir>0?' ▲':' ▼'):''; }); }
+  function updateSortArrows(){ ['name','life','group','winTotal','income','rent','sub','total','owed','mid','midPrev','last','next','status','wait'].forEach(k=>{ const e=document.getElementById('qa-'+k); if(e) e.textContent = (qSort.key===k)?(qSort.dir>0?' ▲':' ▼'):''; }); }
 
   let SELECTED = new Set();
   function setMemberStatus(name,st){
@@ -1177,7 +1179,7 @@
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeBulkModal(); } });
 
   // 그리드 열 너비 드래그 리사이즈 (PC별 localStorage)
-  const COLW_DEF=[4,4,7,6,6,9,5,5,5,6,5,5,5,6,7,8,7];
+  const COLW_DEF=[4,4,6,6,6,9,5,5,5,5,5,4,4,4,6,8,7,7];
   let colw=[...COLW_DEF];
   function applyColw(){ const cols=document.querySelectorAll('#queueColgroup col'); cols.forEach((c,i)=>{ if(colw[i]!=null) c.style.width=colw[i]+'%'; }); }
   function saveColw(){ try{localStorage.setItem('donkle_colw',JSON.stringify(colw));}catch(e){} }
