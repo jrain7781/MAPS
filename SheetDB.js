@@ -2041,7 +2041,8 @@ function backfillMembersItemStatus(opts) {
       if (id) itemMap[id] = {
         inDate: String(r[1] || ''), sakunNo: String(r[2] || ''), court: String(r[3] || ''),
         mNameId: String(r[5] || ''), mName: String(r[6] || ''), bidprice: String(r[7] || ''),
-        memberId: String(r[8] || ''), myeongui: String(r[14] || ''), lowest: String(r[22] || '')
+        memberId: String(r[8] || ''), myeongui: String(r[14] || ''), lowest: String(r[22] || ''),
+        youngdo: String(r[20] || '')
       };
     }
   }
@@ -2106,7 +2107,8 @@ function backfillMembersItemStatus(opts) {
       misId, a.memberId, a.mName, item.mNameId, item.myeongui, t.itemId,
       item.inDate, item.sakunNo, item.court, t.status,
       t.at.toISOString(), item.lowest, item.bidprice, '', '', '',
-      eventDate   // Q: event_date
+      eventDate,           // Q: event_date
+      String(item.youngdo || '')  // R: items_youngdo (용도)
     ]);
     stat[t.status]++;
   });
@@ -2190,7 +2192,8 @@ function accrueBidsDaily() {
       misId, memberId, String(r[6] || ''), String(r[5] || ''), String(r[14] || ''), itemId,
       inD, String(r[2] || ''), String(r[3] || ''), '입찰', now.toISOString(),
       String(r[22] || ''), String(r[7] || ''), '', '', '',
-      _inDateToIso_(inD)   // Q: event_date = 입찰일(in_date)
+      _inDateToIso_(inD),  // Q: event_date = 입찰일(in_date)
+      String(r[20] || '')  // R: items_youngdo (용도)
     ]);
   }
   if (newRows.length) {
@@ -9369,7 +9372,7 @@ function getDonkleRequestDashboard() {
         sdata.forEach(function (r) {
           if (String(r[SX['status']] || '').trim() !== '입찰') return;
           var mid = String(r[SX['member_id']] || '').trim();
-          if (!mid || !donkleSet[mid]) return;
+          if (!mid) return;   // ★입찰등록은 돈클회원 한정 아님 — 전체 회원 집계
           var bd = parseDate(r[SX['recorded_at']]);
           if (bd && bd >= winStart) emit(bd, 'bid', String(r[SX['item_id']] || '').trim());
         });
