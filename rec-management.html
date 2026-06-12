@@ -178,8 +178,7 @@
     <span class="flex items-center gap-1 mr-2 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-600 border border-rose-200 self-center" title="추천 큐 · 월별 현황은 돈클 회원 전용입니다">🏠 돈클 전용</span>
     <div class="tab on" id="tab-queue" onclick="REC.switchTab('queue')">추천 큐 <span class="text-[11px] text-gray-400 font-normal">(누구 먼저)</span></div>
     <div class="tab" id="tab-cal" onclick="REC.switchTab('cal')">월별 현황 <span class="text-[11px] text-gray-400 font-normal">(달력)</span></div>
-    <div class="ml-auto flex items-center gap-2 text-[11px] text-gray-400 pb-2">기준일
-      <input id="dateInput" type="date" value="2026-06-08" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700"> · 추천 주기
+    <div class="ml-auto flex items-center gap-2 text-[11px] text-gray-400 pb-2"><input id="dateInput" type="date" value="2026-06-08" style="display:none">추천 주기
       <input id="cycleInput" type="number" min="1" value="14" onfocus="this.select()" onclick="this.select()" class="w-12 border border-gray-300 rounded px-1.5 py-0.5 text-center text-gray-700"> 일
       <button id="cycleSave" class="px-2 py-0.5 rounded bg-indigo-600 text-white font-semibold">저장</button>
       <span class="w-px h-4 bg-gray-200 mx-0.5"></span><label class="flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-10 border border-gray-300 rounded px-1 py-0.5 text-center text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300 font-bold bg-white"></label>
@@ -543,10 +542,11 @@
     document.getElementById('queueBody').innerHTML = list.length ? list.map(({m,k},i)=>{
       const sel = (m.name===curRecMember);
       const rowSty = sel ? 'background:rgba(99,102,241,.10);box-shadow:inset 3px 0 0 #6366f1' : (k.ended ? 'opacity:.55' : (k.owed>=1 ? 'background:rgba(248,113,113,.07)' : ''));
-      const nextV = k.next?fmtMD(k.next):'—';
-      const nextC = (k.dleft!=null && k.dleft<0)?'text-red-600 font-bold':(k.dleft!=null && k.dleft<=SOON)?'text-amber-600 font-semibold':'text-gray-600';
-      // 다음예정 옆 경과/잔여: +N=지남(빨강), -N=남음(회색)
-      const nextDelta = (k.dleft==null) ? '' : (k.dleft<0 ? `<span class="text-[10px] text-red-500 font-semibold ml-0.5">(+${-k.dleft})</span>` : k.dleft>0 ? `<span class="text-[10px] text-gray-400 ml-0.5">(-${k.dleft})</span>` : `<span class="text-[10px] text-amber-500 font-semibold ml-0.5">(0)</span>`);
+      // 다음예정 = 작업주(그 회원 그룹의 작업주) 금요일. 형식 "~ MM/DD"
+      const ob = recBuckets(m);
+      const nextV = '~ ' + fmtMD(ob.oblFri);
+      const nextC = (ob.oblFri < TODAY && ob.none) ? 'text-red-600 font-bold' : 'text-gray-600';
+      const nextDelta = '';
       const ps = progStateOf(m.name);
       const waitTag = ps==='대기' ? `<span class="chip bg-amber-100 text-amber-700">대기 ${waitCountFor(m.name)}건</span>`
                     : ps==='완료' ? '<span class="chip bg-gray-100 text-gray-500">완료</span>'
@@ -605,26 +605,54 @@
     });
   }
   // 그룹별 회원 추천 현황 대시보드 렌더링
-  function renderGroupSummary(){
-    const stat={
-      A:{n:0,u:0,s:0,w:0,d:0,r:0},
-      B:{n:0,u:0,s:0,w:0,d:0,r:0},
-      none:{n:0,u:0,s:0,w:0,d:0,r:0},
-      all:{n:0,u:0,s:0,w:0,d:0,r:0}
-    };
-    DK.forEach(m=>{
-      if (m.status !== '진행') return; // 오직 '진행' 상태인 액티브 회원만 요약 대상
-      const key=(m.group==='A'||m.group==='B')?m.group:'none';
-      const k=calc(m);
-      const ps=progStateOf(m.name);
-      const w=ps==='대기';
-      const d=ps==='완료';
-      const r=ps==='없음'; // 미추천 회원 (대기/완료 모두 없는 상태)
-      const u = r && k.dleft!=null && k.dleft<0; // 미추천이면서 마감 기한이 지난 회원만 긴급 처리
-      const s = r && k.dleft!=null && k.dleft>=0 && k.dleft<=SOON; // 미추천이면서 기한 임박 회원
+  // ── [신규] 의무주(작업주) 기준 회원 버킷 분류 ───────────────────────────────
+  // 그룹 g의 '현재 작업주' 월요일 (A 시작주 앵커 기준). 이번주가 g면 이번주, 아니면 다음주.
+  function oblMondayFor(g){
+    const wm = weekMonday(TODAY);
+    if(!g || !GROUP_ANCHOR) return wm;
+    return (groupOfWeek(wm)===g) ? wm : addDays(wm,7);
+  }
+  const _recInWeek = (name, mon) => { const sun=addDays(mon,6); return DELIVERED.some(x=>x.name===name && x.status==='추천' && (function(){const d=parseDate(x.date);return !!d && d>=mon && d<=sun;})()); };
+  // 누적 밀림(추천대기예정): 그룹 첫 작업주~현재 작업주 중 '마감 지났는데 추천 0건'인 작업주 수
+  function owedCyclesFor(name, g, curOblMon){
+    if(!g || !GROUP_ANCHOR) return 0;
+    let wmon = weekMonday((g==='A') ? new Date(GROUP_ANCHOR) : addDays(GROUP_ANCHOR,7));
+    let cnt=0, guard=0;
+    while(wmon <= curOblMon && guard++ < 520){
+      if(addDays(wmon,4) < TODAY && !_recInWeek(name, wmon)) cnt++;  // 작업주 금요일 지난 주만
+      wmon = addDays(wmon,14);
+    }
+    return cnt;
+  }
+  // 회원 1명을 버킷으로 분류 (카드=distinct, 그리드 owed는 누적수)
+  function recBuckets(m){
+    const g = (m.group==='A'||m.group==='B') ? m.group : null;
+    const oblMon = oblMondayFor(g), oblFri = addDays(oblMon,4);
+    const recsThis = _recInWeek(m.name, oblMon);
+    // 패널티: 직전 작업주(2주전)에 미정(추천취소) 있었으면 이번 회차 추천 제외 (1회차 후 자동해제)
+    const pMon=addDays(oblMon,-14), pSun=addDays(pMon,6);
+    const cancPrev = DELIVERED.some(x=>x.name===m.name && x.status==='미정' && (function(){const d=parseDate(x.date);return !!d && d>=pMon && d<=pSun;})());
+    const penalty = !!cancPrev;
+    const isTarget = !penalty;
+    const waiting = waitCountFor(m.name)>0;
+    const done = isTarget && recsThis;
+    const none = isTarget && !recsThis && !waiting;
+    const owed = isTarget ? owedCyclesFor(m.name, g, oblMon) : 0;
+    const urgent = none && owed===1;       // 이번 작업주만 밀림
+    const cumurgent = none && owed>=1;      // 누적(이번+과거 전부)
+    return {penalty, isTarget, waiting, done, none, urgent, cumurgent, owed, oblFri};
+  }
+  REC._recBuckets = recBuckets;
 
-      stat[key].n++; if(u)stat[key].u++; if(s)stat[key].s++; if(w)stat[key].w++; if(d)stat[key].d++; if(r)stat[key].r++;
-      stat.all.n++; if(u)stat.all.u++; if(s)stat.all.s++; if(w)stat.all.w++; if(d)stat.all.d++; if(r)stat.all.r++;
+  function renderGroupSummary(){
+    const blank=()=>({n:0,target:0,d:0,w:0,r:0,u:0,cu:0,p:0});
+    const stat={ A:blank(), B:blank(), none:blank(), all:blank() };
+    DK.forEach(m=>{
+      if (m.status !== '진행') return; // '진행' 회원만 요약 대상
+      const key=(m.group==='A'||m.group==='B')?m.group:'none';
+      const b=recBuckets(m);
+      const add=o=>{ o.n++; if(b.isTarget)o.target++; if(b.done)o.d++; if(b.waiting)o.w++; if(b.none)o.r++; if(b.urgent)o.u++; if(b.cumurgent)o.cu++; if(b.penalty)o.p++; };
+      add(stat[key]); add(stat.all);
     });
 
     const gs=document.getElementById('groupSummaryContainer'); if(!gs) return;
@@ -633,13 +661,9 @@
     const thisGroup = groupOfWeek(wm) || 'A';
     const nextGroup = thisGroup === 'A' ? 'B' : 'A';
 
-    const thisMon = wm;
-    const thisSun = addDays(wm, 6);
-    const nextMon = addDays(wm, 7);
-    const nextSun = addDays(nextMon, 6);
-
-    const thisRangeStr = `${fmtMD(thisMon)} ~ ${fmtMD(thisSun)}`;
-    const nextRangeStr = `${fmtMD(nextMon)} ~ ${fmtMD(nextSun)}`;
+    const thisMon = wm, nextMon = addDays(wm, 7);
+    // 작업주/휴게주 범위 (월~금)
+    const wkStr = mon => `${fmtMD(mon)}~${fmtMD(addDays(mon,4))}`;
 
     const renderCard = (g, isActive) => {
       const gStat = stat[g];
@@ -650,10 +674,13 @@
       const activeBg = isActive 
         ? 'bg-gradient-to-br from-indigo-50/20 to-transparent dark:from-indigo-950/10' 
         : 'bg-gray-50/20';
-      const activeBadge = isActive 
+      const activeBadge = isActive
         ? `<span class="px-2 py-0.5 text-[10px] font-bold bg-indigo-600 text-white rounded-full">이번주</span>`
         : `<span class="px-2 py-0.5 text-[10px] font-bold bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400 rounded-full">다음주</span>`;
-      const rangeStr = isActive ? thisRangeStr : nextRangeStr;
+      // 작업주 = 그 그룹이 추천 내보내는 주, 휴게주 = 쉬는 주 (월~금)
+      const workMon = isActive ? thisMon : nextMon;
+      const restMon = isActive ? nextMon : thisMon;
+      const rangeStr = `<span class="text-emerald-600 dark:text-emerald-400">작업주 ${wkStr(workMon)}</span> · <span class="text-gray-400">휴게주 ${wkStr(restMon)}</span>`;
 
       const metric = (lbl, val, filterVal, colorClass, highlightCond) => {
         const isSel = curGroupFilter === g && curStat === filterVal;
@@ -674,15 +701,18 @@
             <div class="flex items-center gap-1.5 flex-wrap">
               <span class="grp-card-title">${g}그룹</span>
               ${activeBadge}
-              <span class="text-[11px] text-gray-400 dark:text-gray-500 font-bold ml-1">${rangeStr}</span>
+              <span class="text-[11px] font-bold ml-1">${rangeStr}</span>
             </div>
           </div>
-          <div class="flex gap-1.5">
+          <div class="flex gap-1">
             ${metric('전체', gStat.n, 'all', 'text-gray-800 dark:text-gray-200')}
+            ${metric('추천대상', gStat.target, 'target', 'text-indigo-600')}
             ${metric('완료', gStat.d, 'done', 'text-emerald-600')}
             ${metric('대기', gStat.w, 'wait', 'text-amber-600')}
-            ${metric('미추천', gStat.r, 'none', 'text-gray-700 dark:text-gray-300', gStat.s > 0)}
+            ${metric('미추천', gStat.r, 'none', 'text-gray-700 dark:text-gray-300')}
             ${metric('긴급', gStat.u, 'urgent', 'text-red-600', gStat.u > 0)}
+            ${metric('누적긴급', gStat.cu, 'cumurgent', 'text-red-700', gStat.cu > 0)}
+            ${metric('패널티', gStat.p, 'penalty', 'text-purple-600', gStat.p > 0)}
           </div>
         </div>
       `;
@@ -711,15 +741,17 @@
   }
   function progStateOf(name){ if(waitCountFor(name)>0) return '대기'; if(DELIVERED.some(d=>d.name===name && d.status==='추천')) return '완료'; return '없음'; }
   function matchStat(m){
-    const k=calc(m);
     if(curStat==='all') return true;
-    if(curStat==='new') return !!k.fresh;
-    if(curStat==='wait') return progStateOf(m.name)==='대기';
-    if(curStat==='done') return progStateOf(m.name)==='완료';
-    if(curStat==='none') return progStateOf(m.name)==='없음';
-    if(k.held||k.ended||k.fresh) return false;
-    if(curStat==='urgent') return k.dleft<0;
-    if(curStat==='soon') return k.dleft>=0 && k.dleft<=SOON;
+    const b=recBuckets(m);
+    switch(curStat){
+      case 'target': return b.isTarget;
+      case 'done': return !!b.done;
+      case 'wait': return b.waiting;
+      case 'none': return b.none;
+      case 'urgent': return b.urgent;
+      case 'cumurgent': return b.cumurgent;
+      case 'penalty': return b.penalty;
+    }
     return true;
   }
   function setStat(f){ curStat=f; renderQueue(); }
