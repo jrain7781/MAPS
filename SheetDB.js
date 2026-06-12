@@ -1976,6 +1976,25 @@ function accrueMembersItemStatus_(itemId, memberIdHint, memberNameHint, status, 
 }
 
 /**
+ * [돈클] (member_id, item_id, status) MIS 행이 있으면 그 회원명(m_name)을 반환, 없으면 null.
+ *  · 미정 적립 게이트용 — status='추천' 행 존재 여부 + 이전 회원명 확보를 한 번에.
+ */
+function _misMemberNameForStatus_(itemId, memberId, status) {
+  try {
+    if (!itemId || !memberId) return null;
+    const misSheet = ensureMembersItemStatusSheet_();
+    const last = misSheet.getLastRow();
+    if (last < 2) return null;
+    const hits = misSheet.getRange(2, 6, last - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true).findAll();
+    for (let h = 0; h < hits.length; h++) {
+      const rr = misSheet.getRange(hits[h].getRow(), 1, 1, MIS_HEADERS.length).getValues()[0];
+      if (String(rr[1]) === String(memberId) && String(rr[9]) === String(status)) return String(rr[2] || '');
+    }
+    return null;
+  } catch (e) { Logger.log('[_misMemberNameForStatus_] ' + e.toString()); return null; }
+}
+
+/**
  * [돈클] 적립 자체 검증용 — 실제 추천물건 1건을 골라 적립 → 재실행 시 dedup 확인
  * GAS 편집기에서 실행 후 로그 확인. (1회차: 적립 true/행수+1, 2회차: false/행수 동일)
  */
@@ -2237,6 +2256,48 @@ function menuDonkleBidTrigger_() {
   saveSetting_(DONKLE_BID_HOUR_KEY, String(h));
   const setH = setupBidAccrualTrigger();
   ui.alert('✅ 입찰 적립 트리거 설치 완료\n\n매일 ' + setH + '시에 자동 실행됩니다.');
+}
+
+/**
+ * [돈클] '미정' 과거분 소급 적립 — telegram_requests 이력으로 전달완료 추천을 잃은 회원에게 미정 행 생성.
+ *  · ① stu_member 추천→미정 (자동만료 AUTO_EXPIRE / 수동) → 해당 회원
+ *  · ② member_id 변경(재추천) → 이전 회원(from_value)
+ *  · 게이트: 그 (회원,물건)에 '추천' MIS행이 있을 때만. dedup(member,item,미정)로 중복 없음 → 재실행 안전.
+ *  · event_date = 전환 시각(requested_at). 수동 메뉴 실행.
+ */
+function backfillMisUndecided() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+  if (!reqSheet || reqSheet.getLastRow() < 2) return { scanned: 0, accrued: 0 };
+  const data = reqSheet.getRange(2, 1, reqSheet.getLastRow() - 1, 16).getValues(); // A..P
+  let scanned = 0, accrued = 0;
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const reqAt = row[1];                        // B: requested_at
+    const itemId = String(row[4] || '').trim();  // E: item_id
+    const memberId = String(row[5] || '').trim();// F: member_id
+    const fromV = String(row[11] || '').trim();  // L: from_value
+    const toV = String(row[12] || '').trim();    // M: to_value
+    const fn = String(row[13] || '').trim();     // N: field_name
+    if (!itemId) continue;
+    let undMid = '';
+    if (fn === 'stu_member' && toV === '미정' && fromV === '추천') undMid = memberId;
+    else if (fn === 'member_id' && fromV) undMid = fromV;   // 이전 회원
+    if (!undMid) continue;
+    scanned++;
+    const recName = _misMemberNameForStatus_(itemId, undMid, '추천');
+    if (recName === null) continue;              // 전달완료 추천 안 받은 회원 → skip
+    const ev = (reqAt instanceof Date) ? reqAt.toISOString() : String(reqAt || '');
+    if (accrueMembersItemStatus_(itemId, undMid, recName, '미정', { event_date: ev })) accrued++;
+  }
+  Logger.log('[미정백필] 대상 ' + scanned + ' → 신규 적립 ' + accrued);
+  return { scanned: scanned, accrued: accrued };
+}
+
+// 메뉴: 미정 과거분 백필 실행
+function menuDonkleBackfillUndecided_() {
+  const r = backfillMisUndecided();
+  SpreadsheetApp.getUi().alert('미정 과거분 백필 결과\n\n대상(추천→미정/재추천): ' + r.scanned + '건\n신규 적립: ' + r.accrued + '건');
 }
 
 function updateItemStuMemberById_(itemId, newStatus) {
@@ -6458,11 +6519,27 @@ function writeItemHistoryBatch_(entries) {
       const ep = entries[ai];
       const fn = String(ep.field_name || '').trim();
       const tv = String(ep.to_value || '').trim();
+      const fv = String(ep.from_value || '').trim();
       let accStatus = '';
       if (fn === 'chuchen_state' && tv === '전달완료') accStatus = '추천';
       else if (fn === 'stu_member' && tv === '불가') accStatus = '불가';
       else if (fn === 'stu_member' && tv === '낙찰') accStatus = '낙찰';
-      if (accStatus) accrueMembersItemStatus_(ep.item_id, ep.member_id, ep.member_name, accStatus);
+      if (accStatus) { accrueMembersItemStatus_(ep.item_id, ep.member_id, ep.member_name, accStatus); continue; }
+
+      // [돈클] 미정 적립 — 전달완료된 추천을 잃은 회원에게만 (해당 회원·물건에 '추천' MIS행 존재 시)
+      //   ① 단순 미정(같은 회원): stu_member 추천→미정 (자동만료/수동) → 그 회원
+      //   ② 회원 변경 재추천: member_id 변경 → 이전 회원(from_value)
+      try {
+        let undMid = '';
+        if (fn === 'stu_member' && tv === '미정' && fv === '추천') undMid = String(ep.member_id || '').trim();
+        else if (fn === 'member_id' && fv) undMid = fv;   // 이전 회원
+        if (undMid) {
+          const recName = _misMemberNameForStatus_(ep.item_id, undMid, '추천');  // 추천행 있으면 그 회원명, 없으면 null
+          if (recName !== null) {
+            accrueMembersItemStatus_(ep.item_id, undMid, recName, '미정', { event_date: new Date().toISOString() });
+          }
+        }
+      } catch (e3) { Logger.log('[writeItemHistoryBatch_/미정적립] ' + e3.toString()); }
     }
   } catch (e2) {
     Logger.log('[writeItemHistoryBatch_/적립] 오류: ' + e2.toString());

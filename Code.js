@@ -218,6 +218,7 @@ function onOpen() {
       .addItem('③ 백필(미리보기→실행)', 'menuDonkleBackfill_')
       .addItem('④ 입찰 적립 지금 실행', 'menuDonkleBidAccrueNow_')
       .addItem('④ 입찰 일별 트리거 설치/시각설정', 'menuDonkleBidTrigger_')
+      .addItem('⑤ 미정 과거분 백필', 'menuDonkleBackfillUndecided_')
       .addItem('🧹 데이터 비우기(헤더 유지)', 'menuDonkleClearMis_'))
     .addToUi();
 }
