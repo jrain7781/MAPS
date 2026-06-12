@@ -178,8 +178,7 @@
     <span class="flex items-center gap-1 mr-2 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-600 border border-rose-200 self-center" title="추천 큐 · 월별 현황은 돈클 회원 전용입니다">🏠 돈클 전용</span>
     <div class="tab on" id="tab-queue" onclick="REC.switchTab('queue')">추천 큐 <span class="text-[11px] text-gray-400 font-normal">(누구 먼저)</span></div>
     <div class="tab" id="tab-cal" onclick="REC.switchTab('cal')">월별 현황 <span class="text-[11px] text-gray-400 font-normal">(달력)</span></div>
-    <div class="ml-auto flex items-center gap-2 text-[11px] text-gray-400 pb-2"><input id="dateInput" type="date" value="2026-06-08" style="display:none"><label class="flex items-center gap-1">임박 D-<input id="soonDays" type="number" value="3" min="0" onfocus="this.select()" oninput="REC.setSoon(this.value)" class="w-10 border border-gray-300 rounded px-1 py-0.5 text-center text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300 font-bold bg-white"></label>
-      <span class="w-px h-4 bg-gray-200 mx-0.5"></span>A그룹 시작주
+    <div class="ml-auto flex items-center gap-2 text-[11px] text-gray-400 pb-2"><input id="dateInput" type="date" value="2026-06-08" style="display:none">A그룹 시작주
       <input id="groupAnchorDate" type="date" onchange="REC.setAnchorDate(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700" title="A그룹이 시작되는 주의 날짜 — 그 주부터 격주로 A·B 교대">
       <span class="text-gray-300">·</span>B그룹 시작주
       <input id="groupAnchorDateB" type="date" onchange="REC.setAnchorDateB(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700" title="B그룹이 시작되는 주의 날짜 — A 시작주 다음 주(자동). 변경하면 A 시작주도 역산됩니다">
@@ -598,7 +597,7 @@
   let curStat='all', SOON=3, curLife='all', curGroupFilter='all';
   let curRecTab = '물건';
   REC._curLife = () => curLife;
-  function setLife(s){ curLife=(curLife===s && s!=='all')?'all':s; renderQueue(); }
+  function setLife(s){ curLife=(curLife===s && s!=='all')?'all':s; curGroupFilter='all'; curStat='all'; renderQueue(); }
   function renderLifeChips(){
     const cnt=s=>{
       if (s === 'all') return DK.length;
@@ -691,15 +690,19 @@
       const restMon = isActive ? nextMon : thisMon;
       const rangeStr = `<span class="text-emerald-600 dark:text-emerald-400">작업주 ${wkStr(workMon)}</span> · <span class="text-gray-400">휴게주 ${wkStr(restMon)}</span>`;
 
-      const metric = (lbl, val, filterVal, colorClass, highlightCond, boxBorder) => {
+      // valHex=값 글자색(hex), red=긴급류(빨강 박스+빨강 글씨, 테두리 없음)
+      const metric = (lbl, val, filterVal, valHex, red) => {
         const isSel = curGroupFilter === g && curStat === filterVal;
-        const hl = highlightCond ? 'bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 font-bold' : '';
-        const bd = isSel ? 'border-indigo-600' : (boxBorder || 'border-transparent');
-        const activeSel = isSel ? 'bg-indigo-600 text-white font-bold' : 'hover:bg-gray-100 dark:hover:bg-gray-800';
+        // inline !important — .grp-metric-lbl/val 의 CSS !important 를 덮어 선택/색 적용
+        const lblHex = isSel ? '#ffffff' : (red ? '#dc2626' : '#475569');
+        const vHex   = isSel ? '#ffffff' : (red ? '#dc2626' : valHex);
+        const box = isSel ? 'bg-indigo-600 border-indigo-600'
+                  : red   ? 'bg-red-50 border-transparent hover:bg-red-100'
+                          : 'bg-transparent border-transparent hover:bg-gray-100 dark:hover:bg-gray-800';
         return `
-          <div class="flex-1 p-1.5 rounded border ${bd} transition-all cursor-pointer text-center ${activeSel} ${hl}" onclick="REC.setGroupStat('${g}','${filterVal}')">
-            <div class="grp-metric-lbl ${isSel ? 'text-white !important' : ''} mb-0.5">${lbl}</div>
-            <div class="grp-metric-val ${isSel ? 'text-white !important' : colorClass}">${val}</div>
+          <div class="flex-1 p-1.5 rounded border transition-all cursor-pointer text-center ${box}" onclick="REC.setGroupStat('${g}','${filterVal}')">
+            <div class="grp-metric-lbl mb-0.5" style="color:${lblHex} !important">${lbl}</div>
+            <div class="grp-metric-val" style="color:${vHex} !important">${val}</div>
           </div>
         `;
       };
@@ -715,14 +718,14 @@
             </div>
           </div>
           <div class="flex gap-1">
-            ${metric('전체', gStat.n, 'all', 'text-gray-800 dark:text-gray-200')}
-            ${metric('추천대상', gStat.target, 'target', 'text-indigo-600')}
-            ${metric('완료', gStat.d, 'done', 'text-emerald-600')}
-            ${metric('대기', gStat.w, 'wait', 'text-amber-600')}
-            ${metric('미추천', gStat.r, 'none', 'text-gray-700 dark:text-gray-300')}
-            ${metric('긴급', gStat.u, 'urgent', 'text-red-600', gStat.u > 0, 'border-red-400')}
-            ${metric('누적긴급', gStat.cu, 'cumurgent', 'text-red-700', gStat.cu > 0, 'border-red-300')}
-            ${metric('패널티', gStat.p, 'penalty', 'text-purple-600', gStat.p > 0)}
+            ${metric('전체', gStat.n, 'all', '#0f172a')}
+            ${metric('추천대상', gStat.target, 'target', '#4f46e5')}
+            ${metric('대기', gStat.w, 'wait', '#d97706')}
+            ${metric('완료', gStat.d, 'done', '#059669')}
+            ${metric('미추천', gStat.r, 'none', '#374151')}
+            ${metric('긴급', gStat.u, 'urgent', '#dc2626', true)}
+            ${metric('누적긴급', gStat.cu, 'cumurgent', '#dc2626', true)}
+            ${metric('패널티', gStat.p, 'penalty', '#9333ea')}
           </div>
         </div>
       `;
@@ -750,9 +753,9 @@
     `;
   }
   function setGroupStat(g, st){
-    // 토글: 이미 선택된 같은 칸을 다시 누르면 필터 해제
-    if(curGroupFilter===g && curStat===st){ curGroupFilter='all'; curStat='all'; }
-    else { curGroupFilter=g; curStat=st; }
+    // 토글: 같은 칸 재클릭=해제(전체). 썸머리는 '진행' 기준이라 선택 시 라이프=진행으로 한정.
+    if(curGroupFilter===g && curStat===st){ curGroupFilter='all'; curStat='all'; curLife='all'; }
+    else { curGroupFilter=g; curStat=st; curLife='진행'; }
     renderQueue();
   }
   // [주 히스토리] 기준 주 이동(◀▶) / 오늘로 복귀
