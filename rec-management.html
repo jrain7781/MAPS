@@ -534,7 +534,7 @@
     renderGroupSummary();
     let list = DK.filter(passFilter).map(m=>({m,k:calc(m)}));
     if(qSort.key){
-      const d=qSort.dir, g=o=>{switch(qSort.key){case 'name':return o.m.name;case 'life':return o.m.status;case 'group':return o.m.group||'~';case 'winTotal':return (o.m.incomeWinCount||0)+(o.m.rentWinCount||0);case 'income':return o.m.incomeWinCount||0;case 'rent':return o.m.rentWinCount||0;case 'sub':return o.m.sub;case 'total':return o.k.total;case 'owed':return recBuckets(o.m).owed;case 'mid':return midCountFor(o.m.name);case 'midPrev':return recBuckets(o.m).midPrev;case 'last':return o.k.last||'';case 'next':return o.k.next?o.k.next.getTime():0;case 'status':return o.k.dleft==null?1e9:o.k.dleft;case 'wait':return waitCountFor(o.m.name);}};
+      const d=qSort.dir, g=o=>{switch(qSort.key){case 'name':return o.m.name;case 'life':return o.m.status;case 'group':return o.m.group||'~';case 'winTotal':return (o.m.incomeWinCount||0)+(o.m.rentWinCount||0);case 'income':return o.m.incomeWinCount||0;case 'rent':return o.m.rentWinCount||0;case 'sub':return o.m.sub;case 'total':return recBuckets(o.m).doneCnt;case 'owed':return recBuckets(o.m).owed;case 'mid':return midCountFor(o.m.name);case 'midPrev':return recBuckets(o.m).midPrev;case 'last':return o.k.last||'';case 'next':return o.k.next?o.k.next.getTime():0;case 'status':return o.k.dleft==null?1e9:o.k.dleft;case 'wait':return waitCountFor(o.m.name);}};
       list.sort((a,b)=>{const av=g(a),bv=g(b); return (typeof av==='string'?av.localeCompare(bv):av-bv)*d;});
     } else { list.sort((a,b)=>{
         const r=x=> x.k.ended?3 : x.k.held?2 : x.k.fresh?1 : 0;
@@ -570,7 +570,7 @@
         <td class="py-3 text-left font-semibold text-gray-800 whitespace-nowrap pl-2">${teleBadge(m.name)}${m.name}</td>
         <td class="py-3 text-center font-bold border-l-2 border-gray-200 ${ob.owed>=1?'text-red-600':'text-gray-300'}">${ob.owed || ''}</td>
         <td class="py-3 text-center text-amber-600 font-semibold">${isHistWeek() ? '<span class="text-gray-300">–</span>' : (waitCountFor(m.name) || '')}</td>
-        <td class="py-3 text-center text-gray-700 font-semibold border-r-2 border-gray-200">${k.total || ''}</td>
+        <td class="py-3 text-center text-emerald-700 font-semibold border-r-2 border-gray-200">${ob.doneCnt || ''}</td>
         <td class="py-3 text-center text-slate-500 font-semibold border-l-2 border-gray-200">${ob.midCum || ''}</td>
         <td class="py-3 text-center font-semibold border-r-2 border-gray-200 ${ob.midPrev>=1?'text-purple-600':'text-gray-300'}">${ob.midPrev || ''}</td>
         <td class="py-3 text-center text-blue-700 font-bold border-l-2 border-gray-200">${((m.incomeWinCount||0)+(m.rentWinCount||0)) || ''}</td>
@@ -632,8 +632,10 @@
   // 회원 1명을 버킷으로 분류 (카드=distinct, 그리드 owed는 누적수)
   function recBuckets(m){
     const g = (m.group==='A'||m.group==='B') ? m.group : null;
-    const oblMon = oblMondayFor(g), oblFri = addDays(oblMon,4);
-    const recsThis = _recInWeek(m.name, oblMon);
+    const oblMon = oblMondayFor(g), oblFri = addDays(oblMon,4), oblSun = addDays(oblMon,6);
+    // 이번 작업주 추천 건수(완료) — 누적 아님
+    const doneCnt = DELIVERED.filter(x=>x.name===m.name && x.status==='추천' && (function(){const d=parseDate(x.date);return !!d && d>=oblMon && d<=oblSun;})()).length;
+    const recsThis = doneCnt>0;
     // 직전 작업주(2주전) 미정 수 → 패널티(직전 회차 미정이면 이번 추천 제외, 1회차 후 자동해제)
     const pMon=addDays(oblMon,-14), pSun=addDays(pMon,6);
     const midPrev = DELIVERED.filter(x=>x.name===m.name && x.status==='미정' && (function(){const d=parseDate(x.date);return !!d && d>=pMon && d<=pSun;})()).length;
@@ -646,7 +648,7 @@
     const owed = isTarget ? owedCyclesFor(m.name, g, oblMon) : 0;
     const urgent = none && owed===1;       // 이번 작업주만 밀림
     const cumurgent = none && owed>=1;      // 누적(이번+과거 전부)
-    return {penalty, isTarget, waiting, done, none, urgent, cumurgent, owed, oblFri, midPrev, midCum};
+    return {penalty, isTarget, waiting, done, doneCnt, none, urgent, cumurgent, owed, oblFri, midPrev, midCum};
   }
   REC._recBuckets = recBuckets;
 
