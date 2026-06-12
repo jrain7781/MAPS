@@ -2268,11 +2268,34 @@ function menuDonkleBidTrigger_() {
 function backfillMisUndecided() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const reqSheet = ss.getSheetByName(TELEGRAM_REQUESTS_SHEET_NAME);
+  const misSheet = ensureMembersItemStatusSheet_();
+  const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
   if (!reqSheet || reqSheet.getLastRow() < 2) return { scanned: 0, accrued: 0 };
-  const data = reqSheet.getRange(2, 1, reqSheet.getLastRow() - 1, 16).getValues(); // A..P
-  let scanned = 0, accrued = 0;
-  for (let i = 0; i < data.length; i++) {
-    const row = data[i];
+
+  // 1) items 1회 읽기 → id별 행 맵 (TextFinder 반복 제거)
+  const itemMap = {};
+  if (itemSheet && itemSheet.getLastRow() >= 2) {
+    const idata = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, ITEM_HEADERS.length).getValues();
+    for (let i = 0; i < idata.length; i++) { const r = idata[i]; const id = String(r[0] || '').trim(); if (id) itemMap[id] = r; }
+  }
+
+  // 2) MIS 1회 읽기 → 추천행 회원명 맵(member|item) + 기존 미정 set(member|item)
+  const recNameMap = {}, undSeen = {};
+  if (misSheet.getLastRow() >= 2) {
+    const md = misSheet.getRange(2, 1, misSheet.getLastRow() - 1, MIS_HEADERS.length).getValues();
+    for (let i = 0; i < md.length; i++) {
+      const k = String(md[i][1] || '') + '|' + String(md[i][5] || ''); const st = String(md[i][9] || '');
+      if (st === '추천') recNameMap[k] = String(md[i][2] || '');
+      else if (st === '미정') undSeen[k] = true;
+    }
+  }
+
+  // 3) telegram_requests 1회 스캔 → 메모리에서 신규 미정 행 빌드, 마지막에 1회 일괄 append
+  const rdata = reqSheet.getRange(2, 1, reqSheet.getLastRow() - 1, 16).getValues(); // A..P
+  const now = new Date();
+  const newRows = []; const builtKey = {}; let scanned = 0;
+  for (let i = 0; i < rdata.length; i++) {
+    const row = rdata[i];
     const reqAt = row[1];                        // B: requested_at
     const itemId = String(row[4] || '').trim();  // E: item_id
     const memberId = String(row[5] || '').trim();// F: member_id
@@ -2285,13 +2308,27 @@ function backfillMisUndecided() {
     else if (fn === 'member_id' && fromV) undMid = fromV;   // 이전 회원
     if (!undMid) continue;
     scanned++;
-    const recName = _misMemberNameForStatus_(itemId, undMid, '추천');
-    if (recName === null) continue;              // 전달완료 추천 안 받은 회원 → skip
+    const key = undMid + '|' + itemId;
+    if (undSeen[key] || builtKey[key]) continue;           // 이미 미정 적립됨
+    const recName = recNameMap[key];
+    if (recName == null) continue;                         // 추천행 없음(전달완료 안 받음) → skip
+    const it = itemMap[itemId]; if (!it) continue;         // 삭제된 물건 → skip
+    builtKey[key] = true;
     const ev = (reqAt instanceof Date) ? reqAt.toISOString() : String(reqAt || '');
-    if (accrueMembersItemStatus_(itemId, undMid, recName, '미정', { event_date: ev })) accrued++;
+    const misId = 'MIS' + now.getTime() + Math.floor(Math.random() * 1000) + newRows.length;
+    newRows.push([
+      misId, undMid, recName, String(it[5] || ''), String(it[14] || ''), itemId,
+      String(it[1] || ''), String(it[2] || ''), String(it[3] || ''), '미정', now.toISOString(),
+      String(it[22] || ''), String(it[7] || ''), '', '', '', ev, String(it[20] || '')
+    ]);
   }
-  Logger.log('[미정백필] 대상 ' + scanned + ' → 신규 적립 ' + accrued);
-  return { scanned: scanned, accrued: accrued };
+  if (newRows.length) {
+    const lr = misSheet.getLastRow();
+    misSheet.getRange(lr + 1, 1, newRows.length, MIS_HEADERS.length).setValues(newRows);
+    SpreadsheetApp.flush();
+  }
+  Logger.log('[미정백필] 대상 ' + scanned + ' → 신규 적립 ' + newRows.length);
+  return { scanned: scanned, accrued: newRows.length };
 }
 
 // 메뉴: 미정 과거분 백필 실행
