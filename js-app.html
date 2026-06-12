@@ -13889,6 +13889,8 @@ MJ 이정우 팀장
 
         // 정렬
         const CLASS_SORT_KEYS = ['class_type', 'class_name', 'class_loc'];
+        // 돈클 카운트 컬럼(추천/입찰/낙찰/불가) 정렬키 → donkleCounts 라벨 매핑
+        const DK_SORT_KEYS = { dk_chuchen: '추천', dk_bid: '입찰', dk_win: '낙찰', dk_buga: '불가' };
         filtered.sort((a, b) => {
             let va, vb;
             if (CLASS_SORT_KEYS.includes(memberSortKey)) {
@@ -13896,6 +13898,11 @@ MJ 이정우 팀장
                 const clsB = classMap[String(b.class_id)] || {};
                 va = clsA[memberSortKey] || '';
                 vb = clsB[memberSortKey] || '';
+            } else if (DK_SORT_KEYS[memberSortKey]) {
+                const label = DK_SORT_KEYS[memberSortKey];
+                const dc = window.donkleCounts || {};
+                va = Number((dc[String(a.member_id)] || {})[label] || 0);
+                vb = Number((dc[String(b.member_id)] || {})[label] || 0);
             } else {
                 va = a[memberSortKey] ?? '';
                 vb = b[memberSortKey] ?? '';
@@ -14143,12 +14150,12 @@ MJ 이정우 팀장
         initMisHorizontalWheel();
         const memberId = (document.getElementById('mem-member_id') || {}).value || '';
         if (!memberId) {
-            tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" class="p-4 text-center text-gray-400">회원을 선택하면 조회됩니다.</td></tr>';
             if (countEl) countEl.textContent = '';
             return;
         }
         if (statusEl) statusEl.textContent = '조회 중...';
-        tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" class="p-4 text-center text-gray-400">불러오는 중...</td></tr>';
         google.script.run
             .withSuccessHandler(function (rows) {
                 window.misRowsCache = rows || [];
@@ -14157,7 +14164,7 @@ MJ 이정우 팀장
             })
             .withFailureHandler(function (err) {
                 if (statusEl) statusEl.textContent = '오류: ' + err.toString();
-                tbody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-red-400">로드 중 오류가 발생했습니다.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="14" class="p-4 text-center text-red-400">로드 중 오류가 발생했습니다.</td></tr>';
             })
             .getMemberItemStatusRows(memberId);
     }
@@ -14178,11 +14185,11 @@ MJ 이정우 팀장
             : allRows;
         if (countEl) countEl.textContent = sakunKw ? ('총 ' + allRows.length + '건 중 ' + rows.length + '건') : ('총 ' + allRows.length + '건');
         if (!allRows.length) {
-            tbody.innerHTML = '<tr><td colspan="13" class="p-6 text-center text-gray-400">적립된 물건상태가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" class="p-6 text-center text-gray-400">적립된 물건상태가 없습니다.</td></tr>';
             return;
         }
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="13" class="p-6 text-center text-gray-400">사건번호 "' + escapeHtml(sakunKw) + '" 조회 결과가 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="14" class="p-6 text-center text-gray-400">사건번호 "' + escapeHtml(sakunKw) + '" 조회 결과가 없습니다.</td></tr>';
             return;
         }
         const selId = String(window.misSelectedId || '');
@@ -14199,6 +14206,7 @@ MJ 이정우 팀장
             return `
                 <tr class="hover:bg-gray-50 transition-colors cursor-pointer${selCls}" data-mis="${escapeHtml(r.mis_id)}" onclick="selectMisRow('${escapeHtml(r.mis_id)}')">
                     <td class="px-2 py-1.5 text-center whitespace-nowrap">${misStatusBadge(r.status)}</td>
+                    <td class="px-2 py-1.5 text-center whitespace-nowrap"><span class="${getYongdoTagClass(r.items_youngdo)}">${escapeHtml(getYongdoDisplayLabel(r.items_youngdo))}</span></td>
                     <td class="px-2 py-1.5 text-center font-mono text-indigo-700 font-semibold whitespace-nowrap">${escapeHtml(evd) || '<span class=\"text-gray-300\">-</span>'}</td>
                     <td class="px-2 py-1.5 text-center font-mono text-gray-700 whitespace-nowrap">${escapeHtml(r.in_date)}</td>
                     <td class="px-2 py-1.5 font-semibold text-gray-800 whitespace-nowrap">${escapeHtml(r.sakun_no)}</td>
@@ -14242,6 +14250,9 @@ MJ 이정우 팀장
         }
         // 체크박스 기본: 낙찰만 체크
         document.querySelectorAll('.mis-copy-status').forEach(function (cb) { cb.checked = (cb.value === '낙찰'); });
+        // 용도 기본값 = 돈클수익
+        const _yd = document.getElementById('misCopyYongdo');
+        if (_yd) _yd.value = '돈클수익';
         document.getElementById('misCopyModal').classList.remove('hidden');
     }
 
@@ -14256,13 +14267,14 @@ MJ 이정우 팀장
         if (!memberId || !r) { alert('선택된 행이 없습니다.'); return; }
         const statuses = [].slice.call(document.querySelectorAll('.mis-copy-status:checked')).map(function (cb) { return cb.value; });
         if (!statuses.length) { alert('추가할 상태를 1개 이상 선택해 주세요.'); return; }
-        // 선택 행의 정보를 그대로 복사 (상태만 변경)
+        const yongdo = (document.getElementById('misCopyYongdo') || {}).value || '';
+        // 선택 행의 정보를 그대로 복사 (상태·용도만 지정)
         const base = {
             item_id: r.item_id, m_name: r.m_name, m_name_id: r.m_name_id, myeongui: r.myeongui,
             in_date: r.in_date, sakun_no: r.sakun_no, court: r.court,
             lowest_price: r.lowest_price, bid_price: r.bid_price, win_price: r.win_price,
             est_interior: r.est_interior, est_resale: r.est_resale, event_date: r.event_date,
-            items_youngdo: r.items_youngdo
+            items_youngdo: yongdo
         };
         const btn = document.getElementById('misCopyConfirmBtn');
         if (btn) { btn.disabled = true; btn.textContent = '추가중...'; }
@@ -14286,19 +14298,25 @@ MJ 이정우 팀장
         });
     }
 
-    // 편집 가능 필드 정의
-    window.MIS_EDIT_FIELDS = ['status', 'event_date', 'in_date', 'sakun_no', 'court', 'myeongui', 'win_price', 'est_interior', 'est_resale'];
+    // 편집 가능 필드 정의 (용도 items_youngdo 포함)
+    window.MIS_EDIT_FIELDS = ['status', 'items_youngdo', 'event_date', 'in_date', 'sakun_no', 'court', 'myeongui', 'win_price', 'est_interior', 'est_resale'];
+    // 용도 드롭다운 옵션 (돈클 계열 + 빈값)
+    window.MIS_YONGDO_OPTIONS = ['', '돈클수익', '돈클월세', 'PT, 단투'];
 
     function misEditRowHtml(r, isNew) {
         const v = function (k) { return escapeHtml((r && r[k] != null) ? r[k] : ''); };
         const sel = (window.MIS_STATUS_OPTIONS || []).map(function (o) {
             return '<option value="' + o + '"' + ((r && r.status === o) ? ' selected' : '') + '>' + o + '</option>';
         }).join('');
+        const yongdoSel = (window.MIS_YONGDO_OPTIONS || []).map(function (o) {
+            return '<option value="' + o + '"' + ((r && String(r.items_youngdo || '') === o) ? ' selected' : '') + '>' + (o || '등록전') + '</option>';
+        }).join('');
         const inp = function (k, ph) { return '<input data-f="' + k + '" value="' + v(k) + '" placeholder="' + (ph || '') + '" class="w-full border border-gray-300 rounded px-1 py-0.5 text-xs">'; };
         const num = function (k) { return '<input data-f="' + k + '" value="' + v(k) + '" inputmode="numeric" class="w-full border border-gray-300 rounded px-1 py-0.5 text-xs text-right">'; };
         const misId = isNew ? '__new__' : escapeHtml(r.mis_id);
         return `
             <td class="px-1 py-1"><select data-f="status" class="w-full border border-gray-300 rounded px-1 py-0.5 text-xs">${sel}</select></td>
+            <td class="px-1 py-1"><select data-f="items_youngdo" class="w-full border border-gray-300 rounded px-1 py-0.5 text-xs">${yongdoSel}</select></td>
             <td class="px-1 py-1">${inp('event_date', 'YYYY-MM-DD')}</td>
             <td class="px-1 py-1">${inp('in_date', 'YYMMDD')}</td>
             <td class="px-1 py-1">${inp('sakun_no')}</td>
@@ -14559,7 +14577,7 @@ MJ 이정우 팀장
         const cancelBody = document.getElementById('cancelHistoryTableBody');
         if (cancelBody) cancelBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">취소건 조회 탭을 클릭하세요.</td></tr>';
         const misBody = document.getElementById('misTableBody');
-        if (misBody) misBody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">물건상태 탭을 클릭하세요.</td></tr>';
+        if (misBody) misBody.innerHTML = '<tr><td colspan="14" class="p-4 text-center text-gray-400">물건상태 탭을 클릭하세요.</td></tr>';
         window.misRowsCache = [];
         window.misSelectedId = '';
         const _misSakun = document.getElementById('misSearchSakun');
