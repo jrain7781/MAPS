@@ -1028,7 +1028,12 @@
             } else if (tabId === 'MemberManagement') {
                 initMemberDOM();
                 loadMembersNew(); // 새 회원관리 함수 사용
-
+                // 빈 화면(회원 미선택)일 때 가입일 기본값 = 오늘
+                const _selMid = (document.getElementById('mem-member_id') || {}).value || '';
+                if (!_selMid) {
+                    const _kdEl = document.getElementById('mem-kaib_date');
+                    if (_kdEl && !_kdEl.value) _kdEl.value = _todayYmd_();
+                }
             } else if (tabId === 'BiddingSchedule') {
                 if (allBiddingData && allBiddingData.length > 0) {
                     updateDashboardFilterOptions();
@@ -14165,13 +14170,24 @@ MJ 이정우 팀장
     function renderMisRows() {
         const tbody = document.getElementById('misTableBody');
         const countEl = document.getElementById('misRowCount');
-        const rows = window.misRowsCache || [];
-        if (countEl) countEl.textContent = '총 ' + rows.length + '건';
-        if (!rows.length) {
+        const allRows = window.misRowsCache || [];
+        // 사건번호 조회 필터
+        const sakunKw = (document.getElementById('misSearchSakun')?.value || '').trim().toLowerCase();
+        const rows = sakunKw
+            ? allRows.filter(function (r) { return String(r.sakun_no || '').toLowerCase().includes(sakunKw); })
+            : allRows;
+        if (countEl) countEl.textContent = sakunKw ? ('총 ' + allRows.length + '건 중 ' + rows.length + '건') : ('총 ' + allRows.length + '건');
+        if (!allRows.length) {
             tbody.innerHTML = '<tr><td colspan="13" class="p-6 text-center text-gray-400">적립된 물건상태가 없습니다.</td></tr>';
             return;
         }
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="13" class="p-6 text-center text-gray-400">사건번호 "' + escapeHtml(sakunKw) + '" 조회 결과가 없습니다.</td></tr>';
+            return;
+        }
+        const selId = String(window.misSelectedId || '');
         tbody.innerHTML = rows.map(function (r) {
+            const selCls = (selId && String(r.mis_id) === selId) ? ' mis-row-selected' : '';
             const rec = String(r.recorded_at || '').substring(0, 16).replace('T', ' ');
             // 명의: myeongui(items.m_name2) + 회원명(m_name) 함께 노출 → 명의 확인용
             const myeongui = String(r.myeongui || '').trim();
@@ -14181,7 +14197,7 @@ MJ 이정우 팀장
                 || '<span class="text-gray-300">-</span>';
             const evd = String(r.event_date || '').substring(0, 10).replace('T', ' ');
             return `
-                <tr class="hover:bg-gray-50 transition-colors" data-mis="${escapeHtml(r.mis_id)}">
+                <tr class="hover:bg-gray-50 transition-colors cursor-pointer${selCls}" data-mis="${escapeHtml(r.mis_id)}" onclick="selectMisRow('${escapeHtml(r.mis_id)}')">
                     <td class="px-2 py-1.5 text-center whitespace-nowrap">${misStatusBadge(r.status)}</td>
                     <td class="px-2 py-1.5 text-center font-mono text-indigo-700 font-semibold whitespace-nowrap">${escapeHtml(evd) || '<span class=\"text-gray-300\">-</span>'}</td>
                     <td class="px-2 py-1.5 text-center font-mono text-gray-700 whitespace-nowrap">${escapeHtml(r.in_date)}</td>
@@ -14200,6 +14216,74 @@ MJ 이정우 팀장
                     </td>
                 </tr>`;
         }).join('');
+    }
+
+    // 물건상태 행 선택 (복사 대상). 전체 재렌더 없이 클래스만 토글 → 편집 중 행과 충돌 방지.
+    function selectMisRow(misId) {
+        window.misSelectedId = String(misId);
+        const tbody = document.getElementById('misTableBody');
+        if (!tbody) return;
+        tbody.querySelectorAll('tr.mis-row-selected').forEach(function (tr) { tr.classList.remove('mis-row-selected'); });
+        const row = tbody.querySelector('tr[data-mis="' + misId + '"]');
+        if (row) row.classList.add('mis-row-selected');
+    }
+
+    // 낙찰건 추가하기(복사) 모달 열기 — 선택 행을 동일정보 + 상태변경으로 추가
+    function openMisCopyModal() {
+        const memberId = (document.getElementById('mem-member_id') || {}).value || '';
+        if (!memberId) { alert('먼저 회원을 선택해 주세요.'); return; }
+        const selId = String(window.misSelectedId || '');
+        const r = (window.misRowsCache || []).find(function (x) { return String(x.mis_id) === selId; });
+        if (!r) { alert('먼저 복사할 물건 행을 선택해 주세요.'); return; }
+        const summary = document.getElementById('misCopySummary');
+        if (summary) {
+            summary.innerHTML = '<div><b>사건번호</b> ' + escapeHtml(r.sakun_no || '-') + ' / <b>법원</b> ' + escapeHtml(r.court || '-') + '</div>'
+                + '<div><b>명의</b> ' + escapeHtml(r.myeongui || '-') + ' &nbsp; <b>현재상태</b> ' + escapeHtml(r.status || '-') + '</div>';
+        }
+        // 체크박스 기본: 낙찰만 체크
+        document.querySelectorAll('.mis-copy-status').forEach(function (cb) { cb.checked = (cb.value === '낙찰'); });
+        document.getElementById('misCopyModal').classList.remove('hidden');
+    }
+
+    function closeMisCopyModal() {
+        document.getElementById('misCopyModal').classList.add('hidden');
+    }
+
+    function doMisCopy() {
+        const memberId = (document.getElementById('mem-member_id') || {}).value || '';
+        const selId = String(window.misSelectedId || '');
+        const r = (window.misRowsCache || []).find(function (x) { return String(x.mis_id) === selId; });
+        if (!memberId || !r) { alert('선택된 행이 없습니다.'); return; }
+        const statuses = [].slice.call(document.querySelectorAll('.mis-copy-status:checked')).map(function (cb) { return cb.value; });
+        if (!statuses.length) { alert('추가할 상태를 1개 이상 선택해 주세요.'); return; }
+        // 선택 행의 정보를 그대로 복사 (상태만 변경)
+        const base = {
+            item_id: r.item_id, m_name: r.m_name, m_name_id: r.m_name_id, myeongui: r.myeongui,
+            in_date: r.in_date, sakun_no: r.sakun_no, court: r.court,
+            lowest_price: r.lowest_price, bid_price: r.bid_price, win_price: r.win_price,
+            est_interior: r.est_interior, est_resale: r.est_resale, event_date: r.event_date,
+            items_youngdo: r.items_youngdo
+        };
+        const btn = document.getElementById('misCopyConfirmBtn');
+        if (btn) { btn.disabled = true; btn.textContent = '추가중...'; }
+        let remaining = statuses.length, failed = 0;
+        const done = function () {
+            remaining--;
+            if (remaining <= 0) {
+                if (btn) { btn.disabled = false; btn.textContent = '복사하기'; }
+                closeMisCopyModal();
+                loadMemberItemStatus();
+                if (failed) showStatus(failed + '건 추가 실패', 'error');
+                else showStatus(statuses.length + '건 추가되었습니다.', 'success');
+            }
+        };
+        statuses.forEach(function (st) {
+            const fields = Object.assign({}, base, { status: st });
+            google.script.run
+                .withSuccessHandler(function (res) { if (!(res && res.success)) failed++; done(); })
+                .withFailureHandler(function () { failed++; done(); })
+                .addMisRow(memberId, fields);
+        });
     }
 
     // 편집 가능 필드 정의
@@ -14408,6 +14492,12 @@ MJ 이정우 팀장
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // 오늘 날짜 YYYY-MM-DD (가입일 기본값 등)
+    function _todayYmd_() {
+        const t = new Date();
+        return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+    }
+
     function showMemberFormNew(mode, member) {
         const form = document.getElementById('memberForm');
         const title = document.getElementById('memberFormTitle');
@@ -14422,10 +14512,7 @@ MJ 이정우 팀장
             document.getElementById('mem-member_id').value = '';
             // 가입일 기본값 = 오늘 (수정 가능)
             const _kd = document.getElementById('mem-kaib_date');
-            if (_kd) {
-                const _t = new Date();
-                _kd.value = _t.getFullYear() + '-' + String(_t.getMonth() + 1).padStart(2, '0') + '-' + String(_t.getDate()).padStart(2, '0');
-            }
+            if (_kd) _kd.value = _todayYmd_();
             // 구분 체크박스 초기화
             if (typeof setGubunCheckboxes === 'function') setGubunCheckboxes('');
             btnCreate.classList.remove('content-hidden');
@@ -14474,6 +14561,9 @@ MJ 이정우 팀장
         const misBody = document.getElementById('misTableBody');
         if (misBody) misBody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">물건상태 탭을 클릭하세요.</td></tr>';
         window.misRowsCache = [];
+        window.misSelectedId = '';
+        const _misSakun = document.getElementById('misSearchSakun');
+        if (_misSakun) _misSakun.value = '';
     }
 
     function handleMemberFormSubmitNew() {

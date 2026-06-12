@@ -819,8 +819,19 @@
   /* 회원리스트 그리드: 선택된 행 하이라이트 (hover 보다 진하게 유지) */
   #memberDataTableBody tr.member-row-selected,
   #memberDataTableBody tr.member-row-selected:hover {
-    background-color: #c7d2fe !important;
-    box-shadow: inset 3px 0 0 #4338ca;
+    background-color: #a5b4fc !important;
+    box-shadow: inset 5px 0 0 #4338ca;
+    outline: 2px solid #6366f1;
+    outline-offset: -2px;
+  }
+
+  /* 물건상태(MIS) 탭 선택 행 강조 — 복사 대상 식별용 */
+  #misTableBody tr.mis-row-selected,
+  #misTableBody tr.mis-row-selected:hover {
+    background-color: #fde68a !important;
+    box-shadow: inset 5px 0 0 #d97706;
+    outline: 2px solid #f59e0b;
+    outline-offset: -2px;
   }
 
   /* 물건 용도 (items_youngdo) Badge Styles
@@ -6669,14 +6680,19 @@
                     <!-- 탭 패널: 물건상태 (members_item_status 회원별 적립 원장) -->
                     <div id="memberTabPanel-status" class="detail-tab-panel hidden">
                         <div class="bg-white rounded-xl shadow-lg p-5">
-                            <div class="flex justify-between items-center mb-3 border-b pb-3">
+                            <div class="flex justify-between items-center mb-3 border-b pb-3 flex-wrap gap-2">
                                 <div class="flex items-center gap-2">
                                     <h3 class="text-base font-semibold text-gray-800">물건상태</h3>
                                     <span id="misRowCount" class="text-xs text-gray-400"></span>
                                 </div>
-                                <div class="flex gap-2">
+                                <div class="flex gap-2 items-center flex-wrap">
+                                    <input type="text" id="misSearchSakun" oninput="renderMisRows()" placeholder="사건번호 조회"
+                                        class="px-2 py-1.5 border border-gray-300 rounded-md text-sm w-32" onfocus="this.select()">
                                     <button type="button" onclick="addMisRowUI()"
                                         class="text-sm text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md">+ 행 추가</button>
+                                    <button type="button" onclick="openMisCopyModal()"
+                                        title="특정 물건을 선택하시고 클릭하시면 해당 물건을 추천,입찰,낙찰 건으로 추가 생성 합니다."
+                                        class="text-sm text-white bg-amber-500 hover:bg-amber-600 px-3 py-1.5 rounded-md">＋ 낙찰건 추가하기</button>
                                     <button type="button" onclick="loadMemberItemStatus()"
                                         class="text-sm text-gray-600 hover:text-gray-800 border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50">새로고침</button>
                                 </div>
@@ -10186,7 +10202,12 @@ window.addEventListener('DOMContentLoaded', () => {
             } else if (tabId === 'MemberManagement') {
                 initMemberDOM();
                 loadMembersNew(); // 새 회원관리 함수 사용
-
+                // 빈 화면(회원 미선택)일 때 가입일 기본값 = 오늘
+                const _selMid = (document.getElementById('mem-member_id') || {}).value || '';
+                if (!_selMid) {
+                    const _kdEl = document.getElementById('mem-kaib_date');
+                    if (_kdEl && !_kdEl.value) _kdEl.value = _todayYmd_();
+                }
             } else if (tabId === 'BiddingSchedule') {
                 if (allBiddingData && allBiddingData.length > 0) {
                     updateDashboardFilterOptions();
@@ -23323,13 +23344,24 @@ MJ 이정우 팀장
     function renderMisRows() {
         const tbody = document.getElementById('misTableBody');
         const countEl = document.getElementById('misRowCount');
-        const rows = window.misRowsCache || [];
-        if (countEl) countEl.textContent = '총 ' + rows.length + '건';
-        if (!rows.length) {
+        const allRows = window.misRowsCache || [];
+        // 사건번호 조회 필터
+        const sakunKw = (document.getElementById('misSearchSakun')?.value || '').trim().toLowerCase();
+        const rows = sakunKw
+            ? allRows.filter(function (r) { return String(r.sakun_no || '').toLowerCase().includes(sakunKw); })
+            : allRows;
+        if (countEl) countEl.textContent = sakunKw ? ('총 ' + allRows.length + '건 중 ' + rows.length + '건') : ('총 ' + allRows.length + '건');
+        if (!allRows.length) {
             tbody.innerHTML = '<tr><td colspan="13" class="p-6 text-center text-gray-400">적립된 물건상태가 없습니다.</td></tr>';
             return;
         }
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="13" class="p-6 text-center text-gray-400">사건번호 "' + escapeHtml(sakunKw) + '" 조회 결과가 없습니다.</td></tr>';
+            return;
+        }
+        const selId = String(window.misSelectedId || '');
         tbody.innerHTML = rows.map(function (r) {
+            const selCls = (selId && String(r.mis_id) === selId) ? ' mis-row-selected' : '';
             const rec = String(r.recorded_at || '').substring(0, 16).replace('T', ' ');
             // 명의: myeongui(items.m_name2) + 회원명(m_name) 함께 노출 → 명의 확인용
             const myeongui = String(r.myeongui || '').trim();
@@ -23339,7 +23371,7 @@ MJ 이정우 팀장
                 || '<span class="text-gray-300">-</span>';
             const evd = String(r.event_date || '').substring(0, 10).replace('T', ' ');
             return `
-                <tr class="hover:bg-gray-50 transition-colors" data-mis="${escapeHtml(r.mis_id)}">
+                <tr class="hover:bg-gray-50 transition-colors cursor-pointer${selCls}" data-mis="${escapeHtml(r.mis_id)}" onclick="selectMisRow('${escapeHtml(r.mis_id)}')">
                     <td class="px-2 py-1.5 text-center whitespace-nowrap">${misStatusBadge(r.status)}</td>
                     <td class="px-2 py-1.5 text-center font-mono text-indigo-700 font-semibold whitespace-nowrap">${escapeHtml(evd) || '<span class=\"text-gray-300\">-</span>'}</td>
                     <td class="px-2 py-1.5 text-center font-mono text-gray-700 whitespace-nowrap">${escapeHtml(r.in_date)}</td>
@@ -23358,6 +23390,74 @@ MJ 이정우 팀장
                     </td>
                 </tr>`;
         }).join('');
+    }
+
+    // 물건상태 행 선택 (복사 대상). 전체 재렌더 없이 클래스만 토글 → 편집 중 행과 충돌 방지.
+    function selectMisRow(misId) {
+        window.misSelectedId = String(misId);
+        const tbody = document.getElementById('misTableBody');
+        if (!tbody) return;
+        tbody.querySelectorAll('tr.mis-row-selected').forEach(function (tr) { tr.classList.remove('mis-row-selected'); });
+        const row = tbody.querySelector('tr[data-mis="' + misId + '"]');
+        if (row) row.classList.add('mis-row-selected');
+    }
+
+    // 낙찰건 추가하기(복사) 모달 열기 — 선택 행을 동일정보 + 상태변경으로 추가
+    function openMisCopyModal() {
+        const memberId = (document.getElementById('mem-member_id') || {}).value || '';
+        if (!memberId) { alert('먼저 회원을 선택해 주세요.'); return; }
+        const selId = String(window.misSelectedId || '');
+        const r = (window.misRowsCache || []).find(function (x) { return String(x.mis_id) === selId; });
+        if (!r) { alert('먼저 복사할 물건 행을 선택해 주세요.'); return; }
+        const summary = document.getElementById('misCopySummary');
+        if (summary) {
+            summary.innerHTML = '<div><b>사건번호</b> ' + escapeHtml(r.sakun_no || '-') + ' / <b>법원</b> ' + escapeHtml(r.court || '-') + '</div>'
+                + '<div><b>명의</b> ' + escapeHtml(r.myeongui || '-') + ' &nbsp; <b>현재상태</b> ' + escapeHtml(r.status || '-') + '</div>';
+        }
+        // 체크박스 기본: 낙찰만 체크
+        document.querySelectorAll('.mis-copy-status').forEach(function (cb) { cb.checked = (cb.value === '낙찰'); });
+        document.getElementById('misCopyModal').classList.remove('hidden');
+    }
+
+    function closeMisCopyModal() {
+        document.getElementById('misCopyModal').classList.add('hidden');
+    }
+
+    function doMisCopy() {
+        const memberId = (document.getElementById('mem-member_id') || {}).value || '';
+        const selId = String(window.misSelectedId || '');
+        const r = (window.misRowsCache || []).find(function (x) { return String(x.mis_id) === selId; });
+        if (!memberId || !r) { alert('선택된 행이 없습니다.'); return; }
+        const statuses = [].slice.call(document.querySelectorAll('.mis-copy-status:checked')).map(function (cb) { return cb.value; });
+        if (!statuses.length) { alert('추가할 상태를 1개 이상 선택해 주세요.'); return; }
+        // 선택 행의 정보를 그대로 복사 (상태만 변경)
+        const base = {
+            item_id: r.item_id, m_name: r.m_name, m_name_id: r.m_name_id, myeongui: r.myeongui,
+            in_date: r.in_date, sakun_no: r.sakun_no, court: r.court,
+            lowest_price: r.lowest_price, bid_price: r.bid_price, win_price: r.win_price,
+            est_interior: r.est_interior, est_resale: r.est_resale, event_date: r.event_date,
+            items_youngdo: r.items_youngdo
+        };
+        const btn = document.getElementById('misCopyConfirmBtn');
+        if (btn) { btn.disabled = true; btn.textContent = '추가중...'; }
+        let remaining = statuses.length, failed = 0;
+        const done = function () {
+            remaining--;
+            if (remaining <= 0) {
+                if (btn) { btn.disabled = false; btn.textContent = '복사하기'; }
+                closeMisCopyModal();
+                loadMemberItemStatus();
+                if (failed) showStatus(failed + '건 추가 실패', 'error');
+                else showStatus(statuses.length + '건 추가되었습니다.', 'success');
+            }
+        };
+        statuses.forEach(function (st) {
+            const fields = Object.assign({}, base, { status: st });
+            google.script.run
+                .withSuccessHandler(function (res) { if (!(res && res.success)) failed++; done(); })
+                .withFailureHandler(function () { failed++; done(); })
+                .addMisRow(memberId, fields);
+        });
     }
 
     // 편집 가능 필드 정의
@@ -23566,6 +23666,12 @@ MJ 이정우 팀장
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // 오늘 날짜 YYYY-MM-DD (가입일 기본값 등)
+    function _todayYmd_() {
+        const t = new Date();
+        return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+    }
+
     function showMemberFormNew(mode, member) {
         const form = document.getElementById('memberForm');
         const title = document.getElementById('memberFormTitle');
@@ -23580,10 +23686,7 @@ MJ 이정우 팀장
             document.getElementById('mem-member_id').value = '';
             // 가입일 기본값 = 오늘 (수정 가능)
             const _kd = document.getElementById('mem-kaib_date');
-            if (_kd) {
-                const _t = new Date();
-                _kd.value = _t.getFullYear() + '-' + String(_t.getMonth() + 1).padStart(2, '0') + '-' + String(_t.getDate()).padStart(2, '0');
-            }
+            if (_kd) _kd.value = _todayYmd_();
             // 구분 체크박스 초기화
             if (typeof setGubunCheckboxes === 'function') setGubunCheckboxes('');
             btnCreate.classList.remove('content-hidden');
@@ -23632,6 +23735,9 @@ MJ 이정우 팀장
         const misBody = document.getElementById('misTableBody');
         if (misBody) misBody.innerHTML = '<tr><td colspan="13" class="p-4 text-center text-gray-400">물건상태 탭을 클릭하세요.</td></tr>';
         window.misRowsCache = [];
+        window.misSelectedId = '';
+        const _misSakun = document.getElementById('misSearchSakun');
+        if (_misSakun) _misSakun.value = '';
     }
 
     function handleMemberFormSubmitNew() {
@@ -37281,6 +37387,34 @@ MJ 이정우 팀장
                         class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                         닫기
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 물건상태 복사(추천/입찰/낙찰 건 추가) 모달 -->
+    <div id="misCopyModal" class="fixed inset-0 z-[1001] hidden overflow-y-auto" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75" onclick="closeMisCopyModal()"></div>
+            <div class="relative inline-block bg-white rounded-lg text-left shadow-xl w-full max-w-md">
+                <div class="px-5 pt-5 pb-3 border-b">
+                    <h3 class="text-lg font-bold text-gray-900">물건상태 복사 추가</h3>
+                    <p class="text-xs text-gray-500 mt-1">선택한 물건을 동일 정보로 두고 상태만 바꿔 새 행을 추가합니다.</p>
+                </div>
+                <div class="px-5 py-4">
+                    <div id="misCopySummary" class="text-sm bg-gray-50 border border-gray-200 rounded-md p-3 mb-4 text-gray-700"></div>
+                    <p class="text-xs font-semibold text-gray-600 mb-2">추가할 상태 선택 (복수 선택 가능)</p>
+                    <div class="flex gap-4">
+                        <label class="flex items-center gap-1.5 cursor-pointer text-sm"><input type="checkbox" class="mis-copy-status rounded" value="추천"> 추천</label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-sm"><input type="checkbox" class="mis-copy-status rounded" value="입찰"> 입찰</label>
+                        <label class="flex items-center gap-1.5 cursor-pointer text-sm"><input type="checkbox" class="mis-copy-status rounded" value="낙찰" checked> 낙찰</label>
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-5 py-3 flex flex-row-reverse gap-2">
+                    <button type="button" id="misCopyConfirmBtn" onclick="doMisCopy()"
+                        class="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-amber-500 text-sm font-medium text-white hover:bg-amber-600">복사하기</button>
+                    <button type="button" onclick="closeMisCopyModal()"
+                        class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">닫기</button>
                 </div>
             </div>
         </div>

@@ -2089,9 +2089,9 @@ function backfillMembersItemStatus(opts) {
     if (!memberId) memberId = item.memberId;
     if (!mName) mName = item.mName;
     if (!memberId) { skipNoMember++; continue; }
-    if (t.status === '입찰') {  // 입찰: in_date < 오늘(어제 이전)만
+    if (t.status === '입찰') {  // 입찰: in_date <= 오늘(당일 포함, 미래 예정만 제외)
       const inD = item.inDate;
-      if (!inD || String(inD) >= todayYYMMDD) { skipBidFuture++; continue; }
+      if (!inD || String(inD) > todayYYMMDD) { skipBidFuture++; continue; }
     }
     const key = memberId + '|' + t.itemId + '|' + t.status;
     if (seen[key]) continue;                   // 이미 MIS에 적립됨
@@ -2154,8 +2154,9 @@ function menuDonkleClearMis_() {
 const DONKLE_BID_HOUR_KEY = 'donkle_bid_accrual_hour'; // 입찰 적립 트리거 실행 시각(0~23), 기본 4시
 
 /**
- * [돈클] 입찰 일별 적립 — items에서 stu_member=입찰 AND in_date<오늘(어제 이전) AND 미적립 → 입찰 적립
- *  · 입찰일 전(예정)은 제외, 입찰일 지난 실제 입찰건만. 영구 보존(dedup).
+ * [돈클] 입찰 일별 적립 — items에서 stu_member=입찰 AND in_date<=오늘(당일 포함) AND 미적립 → 입찰 적립
+ *  · 당일 적립: 낙찰 시 입찰→낙찰로 바꾸면 전일 적립으로는 입찰이 누락되므로, 입찰일 당일에 입찰 기록을 남김.
+ *    (통계용으로 입찰 원장 보존 — 이후 낙찰 적립은 별도 행으로 추가)
  *  · 매일 1회 시간 트리거가 호출. 수동 실행도 가능.
  */
 function accrueBidsDaily() {
@@ -2179,7 +2180,7 @@ function accrueBidsDaily() {
     const r = idata[i];
     if (String(r[4] || '').trim() !== '입찰') continue;        // stu_member=입찰
     const inD = String(r[1] || '');
-    if (!inD || inD >= todayYYMMDD) continue;                 // in_date < 오늘(어제 이전)
+    if (!inD || inD > todayYYMMDD) continue;                  // in_date <= 오늘(당일 포함, 미래 예정만 제외)
     const memberId = String(r[8] || '').trim();
     if (!memberId) continue;
     scanned++;
@@ -9084,7 +9085,8 @@ function addMisRow(memberId, fields) {
       String(f.win_price || ''),          // N: win_price
       String(f.est_interior || ''),       // O: est_interior
       String(f.est_resale || ''),         // P: est_resale
-      eventDate                           // Q: event_date
+      eventDate,                          // Q: event_date
+      String(f.items_youngdo || '')       // R: items_youngdo (용도) — 복사 시 보존
     ];
     sheet.appendRow(row);
     SpreadsheetApp.flush();
@@ -9372,9 +9374,9 @@ function getDonkleRequestDashboard() {
     recEvents.forEach(function (e) { if (!deliveredKey[e.key]) emit(e.d, 'wait', e.itemId); });
     doneEvents.forEach(function (e) { emit(e.d, 'done', e.itemId); });
 
-    // ── 입찰등록(전일): members_item_status status='입찰' (매일 오전 accrueBidsDaily가 in_date<오늘 적립) ──
-    //   ★날짜 기준 = recorded_at(배치가 돈 날 = 적립일). 배치는 in_date<오늘(전일까지)의 입찰을 그날 적립하므로
-    //   "그날 배치가 등록한 전일 입찰 건수"가 그 날짜 행에 잡힘. (event_date=매각기일은 대부분 7일보다 과거라 부적합.)
+    // ── 입찰등록: members_item_status status='입찰' (매일 accrueBidsDaily가 in_date<=오늘(당일 포함) 적립) ──
+    //   ★날짜 기준 = recorded_at(배치가 돈 날 = 적립일). 당일 적립이라 그날 입찰을 그날 등록.
+    //   (event_date=매각기일은 대부분 7일보다 과거라 부적합.)
     //   ※ 과거 백필분은 백필 실행일에 몰림(일시적 스파이크) — 윈도우 밖으로 자연히 빠짐.
     try {
       var misSheet = ensureMembersItemStatusSheet_();
