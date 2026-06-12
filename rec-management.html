@@ -182,9 +182,7 @@
       <input id="groupAnchorDate" type="date" onchange="REC.setAnchorDate(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700" title="A그룹이 시작되는 주의 날짜 — 그 주부터 격주로 A·B 교대">
       <span class="text-gray-300">·</span>B그룹 시작주
       <input id="groupAnchorDateB" type="date" onchange="REC.setAnchorDateB(this.value)" class="border border-gray-300 rounded px-1.5 py-0.5 text-gray-700" title="B그룹이 시작되는 주의 날짜 — A 시작주 다음 주(자동). 변경하면 A 시작주도 역산됩니다">
-      <span id="anchorThisWeek" class="text-[11px] text-gray-500"></span>
-      <span class="w-px h-4 bg-gray-200 mx-0.5"></span>
-      <button id="recThemeBtn" onclick="REC.toggleTheme()" class="text-[11px] border border-gray-300 rounded-lg px-2.5 py-1 text-gray-600">나이트 모드</button></div>
+      <span id="anchorThisWeek" class="text-[11px] text-gray-500"></span></div>
   </div>
 
   <!-- ========== 탭1: 추천 큐 (추천담당자) ========== -->
@@ -213,7 +211,7 @@
           <button onclick="REC.openBulkModal()" class="text-xs font-semibold border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg px-3 py-1.5">✓ 일괄적용</button>
         </div>
       </div>
-      <div class="flex-1 min-h-0 overflow-y-auto">
+      <div class="flex-1 min-h-0 overflow-y-auto border-2 border-gray-300 rounded-lg">
       <table id="queueTable" class="w-full text-sm" style="table-layout:fixed">
         <colgroup id="queueColgroup"><col><col><col><col><col><col><col style="background:rgba(99,102,241,.06)"><col style="background:rgba(99,102,241,.06)"><col style="background:rgba(99,102,241,.06)"><col style="background:rgba(100,116,139,.10)"><col style="background:rgba(100,116,139,.10)"><col style="background:rgba(16,185,129,.06)"><col style="background:rgba(16,185,129,.06)"><col style="background:rgba(16,185,129,.06)"><col><col><col><col></colgroup>
         <thead class="sticky top-0 z-10 bg-white">
@@ -679,16 +677,14 @@
       const activeBorder = isActive 
         ? 'border-indigo-500 shadow-md ring-1 ring-indigo-500/15' 
         : 'border-gray-200';
-      const activeBg = isActive 
-        ? 'bg-gradient-to-br from-indigo-50/20 to-transparent dark:from-indigo-950/10' 
-        : 'bg-gray-50/20';
+      const activeBg = isActive ? 'bg-gradient-to-br from-indigo-50/20 to-transparent' : 'bg-gray-50/20';
       const activeBadge = isActive
         ? `<span class="px-2 py-0.5 text-[10px] font-bold bg-indigo-600 text-white rounded-full">이번주</span>`
-        : `<span class="px-2 py-0.5 text-[10px] font-bold bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-400 rounded-full">다음주</span>`;
+        : `<span class="px-2 py-0.5 text-[10px] font-bold bg-gray-200 text-gray-600 rounded-full">다음주</span>`;
       // 작업주 = 그 그룹이 추천 내보내는 주, 휴게주 = 쉬는 주 (월~금)
       const workMon = isActive ? thisMon : nextMon;
       const restMon = isActive ? nextMon : thisMon;
-      const rangeStr = `<span class="text-emerald-600 dark:text-emerald-400">작업주 ${wkStr(workMon)}</span> · <span class="text-gray-400">휴게주 ${wkStr(restMon)}</span>`;
+      const rangeStr = `<span class="text-emerald-600">작업주 ${wkStr(workMon)}</span> · <span class="text-gray-400">휴게주 ${wkStr(restMon)}</span>`;
 
       // valHex=값 글자색(hex), red=긴급류(빨강 박스+빨강 글씨, 테두리 없음)
       const metric = (lbl, val, filterVal, valHex, red) => {
@@ -697,8 +693,8 @@
         const lblHex = isSel ? '#ffffff' : (red ? '#dc2626' : '#475569');
         const vHex   = isSel ? '#ffffff' : (red ? '#dc2626' : valHex);
         const box = isSel ? 'bg-indigo-600 border-indigo-600'
-                  : red   ? 'bg-red-50 border-transparent hover:bg-red-100'
-                          : 'bg-transparent border-transparent hover:bg-gray-100 dark:hover:bg-gray-800';
+                  : red   ? 'bg-red-100 border-transparent hover:bg-red-300'
+                          : 'bg-transparent border-transparent hover:bg-gray-100';
         return `
           <div class="flex-1 p-1.5 rounded border transition-all cursor-pointer text-center ${box}" onclick="REC.setGroupStat('${g}','${filterVal}')">
             <div class="grp-metric-lbl mb-0.5" style="color:${lblHex} !important">${lbl}</div>
@@ -1235,7 +1231,7 @@
     try{ localStorage.setItem('donkle_theme', next); }catch(e){}
     applyTheme(next);
   }
-  (function(){ let t='light'; try{ t=localStorage.getItem('donkle_theme')||'light'; }catch(e){} applyTheme(t); })();
+  (function(){ try{ localStorage.removeItem('donkle_theme'); }catch(e){} applyTheme('light'); })();  // 다크모드 제거 — 항상 라이트 고정
 
   // 인라인 핸들러용 노출 (네임스페이스)
   Object.assign(REC, {
