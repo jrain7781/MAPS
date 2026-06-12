@@ -9711,7 +9711,10 @@ function registerDonkleRecommendation(memberId, memberName, recommendations) {
       sheet.getRange(rowNum, 7).setValue(newMname);                  // G: m_name
       sheet.getRange(rowNum, youngdoCol).setValue(youngdoVal);      // U: items_youngdo
       
-      if (oldStu !== '추천') {
+      // 추천이 아니었거나 회원이 바뀌면 전달상태 초기화(전달대기로 리셋).
+      //  · 회원 변경 시 chuchen_state(전달완료)를 비워야 새 회원이 다시 전달완료를 거쳐 추천(MIS) 적립됨.
+      //  · 이전 회원은 member_id 변경 이력으로 '미정' 자동 적립(전달완료 추천행 있던 경우).
+      if (oldStu !== '추천' || oldMid !== newMid) {
         sheet.getRange(rowNum, 17).setValue(''); // Q: chuchen_state
         sheet.getRange(rowNum, 18).setValue(''); // R: chuchen_date
         sheet.getRange(rowNum, 20).setValue(''); // T: bid_datetime_2
