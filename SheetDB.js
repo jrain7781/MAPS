@@ -9083,7 +9083,7 @@ function getDonkleMemberCounts() {
         const mid = String(data[i][1] || '').trim();   // member_id
         const st = String(data[i][9] || '').trim();     // status
         if (!mid || !st) continue;
-        if (!out[mid]) out[mid] = { '추천': 0, '입찰': 0, '낙찰': 0, '불가': 0 };
+        if (!out[mid]) out[mid] = { '추천': 0, '미정': 0, '입찰': 0, '낙찰': 0, '불가': 0 };
         if (out[mid][st] != null) out[mid][st]++;
       }
     }
@@ -9346,7 +9346,7 @@ function getRecManagementData() {
         var status = String(r[SX['status']] || '').trim();
         var memberId = String(r[SX['member_id']] || '').trim();
         var itemId = String(r[SX['item_id']] || '').trim();
-        if (status === '추천' || status === '낙찰' || status === '불가') {
+        if (status === '추천' || status === '미정' || status === '낙찰' || status === '불가') {
           delivered.push({
             memberId: memberId,
             name: String(r[SX['m_name']] || ''),
