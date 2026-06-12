@@ -4319,7 +4319,7 @@
                                 <div class="bg-white border-b border-gray-200 px-4 py-3 flex-shrink-0">
                                     <div class="flex justify-between items-center">
                                         <div class="flex items-center gap-2">
-                                            <h2 class="text-sm font-bold text-gray-800">돈클 추천요청 현황</h2>
+                                            <h2 class="text-sm font-bold text-gray-800">추천요청현황</h2>
                                             <span class="text-[11px] text-gray-400">전달대기 → 추천완료</span>
                                         </div>
                                         <div class="flex items-center gap-2">
@@ -6202,15 +6202,15 @@
                             <input type="text" id="mem-search-name" oninput="filterMembersNew()" placeholder="회원이름"
                                 class="flex-1 min-w-[100px] px-3 py-2 border border-gray-300 rounded-lg text-sm"
                                 onfocus="this.select()">
-                            <select id="mem-search-class-type" onchange="filterMembersNew()"
+                            <select id="mem-search-class-type" onchange="refreshMemberSearchCascade(); filterMembersNew()"
                                 class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                                 <option value="">종목구분</option>
                             </select>
-                            <select id="mem-search-class-name" onchange="filterMembersNew()"
+                            <select id="mem-search-class-name" onchange="refreshMemberSearchCascade(); filterMembersNew()"
                                 class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                                 <option value="">종목이름</option>
                             </select>
-                            <select id="mem-search-class-grade" onchange="filterMembersNew()"
+                            <select id="mem-search-class-grade" onchange="refreshMemberSearchCascade(); filterMembersNew()"
                                 class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                                 <option value="">종목등급</option>
                             </select>
@@ -6299,7 +6299,7 @@
                         <button onclick="switchMemberDetailTab('info')" id="memberTab-info"
                             class="detail-tab-btn active" data-tab="info">회원정보</button>
                         <button onclick="switchMemberDetailTab('cancel')" id="memberTab-cancel" class="detail-tab-btn"
-                            data-tab="cancel">물건이력</button>
+                            data-tab="cancel" style="display:none">물건이력</button>
                         <button onclick="switchMemberDetailTab('status')" id="memberTab-status" class="detail-tab-btn"
                             data-tab="status">물건상태</button>
                     </div>
@@ -6507,27 +6507,29 @@
                                     </div>
                                     <!-- 우측 컬럼 -->
                                     <div class="space-y-3">
-                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업구분</label>
-                                            <select id="mem-class_type_display"
-                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
-                                                disabled>
-                                                <option value="">수업 선택시 자동</option>
+                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업구분 <span class="text-red-500">*</span></label>
+                                            <select id="mem-sel-class-type" onchange="onMemberClassCascade('type')"
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                                <option value="">선택</option>
                                             </select>
                                         </div>
-                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업이름</label>
-                                            <select id="mem-class_id_select" onchange="onMemberClassSelect()"
-                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                                                <option value="">수업 선택</option>
+                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업이름 <span class="text-red-500">*</span></label>
+                                            <select id="mem-sel-class-name" onchange="onMemberClassCascade('name')" disabled
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400">
+                                                <option value="">수업구분 먼저 선택</option>
                                             </select>
                                         </div>
-                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업등급</label>
-                                            <input type="text" id="mem-class_grade_display" readonly
-                                                placeholder="수업 선택시 자동"
-                                                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50">
+                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업등급 <span class="text-red-500">*</span></label>
+                                            <select id="mem-sel-class-grade" onchange="onMemberClassCascade('grade')" disabled
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400">
+                                                <option value="">수업이름 먼저 선택</option>
+                                            </select>
                                         </div>
-                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">지역</label>
-                                            <input type="text" id="mem-class_loc_display" readonly
-                                                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50">
+                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">지역 <span class="text-red-500">*</span></label>
+                                            <select id="mem-sel-class-loc" onchange="onMemberClassCascade('loc')" disabled
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400">
+                                                <option value="">수업등급 먼저 선택</option>
+                                            </select>
                                         </div>
                                         <div><label class="block text-xs font-medium text-gray-600 mb-1">주소</label>
                                             <input type="text" id="mem-address" name="address" placeholder="주소 입력"
@@ -22945,10 +22947,40 @@ MJ 이정우 팀장
 
     function updateMemberSearchDropdowns() {
         const opts = classDropdownOptions;
-        fillSelectOptions('mem-search-class-type', opts.class_types, '수업구분');
-        fillSelectOptions('mem-search-class-name', opts.class_names, '수업이름');
-        fillSelectOptions('mem-search-class-grade', opts.class_grades, '수업등급');
+        fillSelectOptions('mem-search-class-type', opts.class_types, '종목구분');
+        fillSelectOptions('mem-search-class-name', opts.class_names, '종목이름');
+        fillSelectOptions('mem-search-class-grade', opts.class_grades, '종목등급');
         fillSelectOptions('mem-search-class-loc', opts.class_locs, '지역');
+    }
+
+    // 회원 조회 필터 연동(cascading): 상위(종목구분→이름→등급) 선택 시 하위 옵션을 해당 값만 표시.
+    // 상위가 비어있으면(선택 안 함) 하위는 전체 표시 — 기존 동작 유지.
+    function refreshMemberSearchCascade() {
+        const typeEl = document.getElementById('mem-search-class-type');
+        const nameEl = document.getElementById('mem-search-class-name');
+        const gradeEl = document.getElementById('mem-search-class-grade');
+        const locEl = document.getElementById('mem-search-class-loc');
+        const tVal = typeEl ? typeEl.value : '';
+
+        const rebuild = (el, placeholder, valueGetter, filterFn) => {
+            if (!el) return;
+            const keep = el.value;
+            const vals = [...new Set((allClassesData || []).filter(filterFn).map(valueGetter).filter(v => v))].sort();
+            el.innerHTML = '<option value="">' + placeholder + '</option>' +
+                vals.map(v => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
+            el.value = vals.includes(keep) ? keep : '';
+        };
+
+        // 수업이름: 종목구분으로만 필터
+        rebuild(nameEl, '종목이름', c => c.class_name, c => (!tVal || c.class_type === tVal));
+        const nVal = nameEl ? nameEl.value : '';
+        // 수업등급: 종목구분 + 이름으로 필터
+        rebuild(gradeEl, '종목등급', c => c.class_grade,
+            c => (!tVal || c.class_type === tVal) && (!nVal || c.class_name === nVal));
+        const gVal = gradeEl ? gradeEl.value : '';
+        // 지역: 종목구분 + 이름 + 등급으로 필터
+        rebuild(locEl, '지역', c => c.class_loc,
+            c => (!tVal || c.class_type === tVal) && (!nVal || c.class_name === nVal) && (!gVal || c.class_grade === gVal));
     }
 
     function fillSelectOptions(selectId, options, placeholder) {
@@ -23105,37 +23137,105 @@ MJ 이정우 팀장
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
+        refreshMemberSearchCascade();   // 하위 드롭다운 전체 목록으로 복원
         filterMembersNew();
     }
 
     function loadClassSelectForMember() {
-        const fillClassSelect_ = () => {
-            const sel = document.getElementById('mem-class_id_select');
-            if (!sel) return;
-            sel.innerHTML = '<option value="">수업 선택</option>';
-            (allClassesData || []).forEach(c => {
-                const grade = c.class_grade ? ` [${escapeHtml(c.class_grade)}]` : '';
-                sel.innerHTML += `<option value="${c.class_id}">${escapeHtml(c.class_type)} - ${escapeHtml(c.class_name)}${grade} (${escapeHtml(c.class_loc)})</option>`;
-            });
-        };
         if (allClassesData && allClassesData.length > 0) {
-            fillClassSelect_();
+            populateMemberClassTypeSelect();
             return;
         }
         google.script.run
-            .withSuccessHandler(data => { allClassesData = Array.isArray(data) ? data : []; fillClassSelect_(); })
+            .withSuccessHandler(data => { allClassesData = Array.isArray(data) ? data : []; populateMemberClassTypeSelect(); })
             .withFailureHandler(err => console.error('수업 목록 로드 실패:', err))
             .readAllClasses();
     }
 
-    function onMemberClassSelect() {
-        const classId = document.getElementById('mem-class_id_select')?.value || '';
-        document.getElementById('mem-class_id').value = classId;
+    // 상세화면 수업 선택 1단계(수업구분) 드롭다운 채우기
+    function populateMemberClassTypeSelect() {
+        const sel = document.getElementById('mem-sel-class-type');
+        if (!sel) return;
+        const keep = sel.value;
+        const types = [...new Set((allClassesData || []).map(c => c.class_type).filter(v => v))].sort();
+        sel.innerHTML = '<option value="">선택</option>' +
+            types.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+        sel.value = types.includes(keep) ? keep : '';
+    }
 
-        const cls = allClassesData.find(c => String(c.class_id) === classId) || {};
-        document.getElementById('mem-class_type_display').innerHTML = `<option>${escapeHtml(cls.class_type || '-')}</option>`;
-        document.getElementById('mem-class_grade_display').value = cls.class_grade || '';
-        document.getElementById('mem-class_loc_display').value = cls.class_loc || '';
+    // cascade 단계별 옵션 채우기 헬퍼. enabled=false 면 비활성 + 안내문구.
+    function fillCascadeSelect_(el, valueGetter, filterFn, enabled, disabledLabel) {
+        if (!el) return;
+        const keep = el.value;
+        if (!enabled) {
+            el.innerHTML = '<option value="">' + disabledLabel + '</option>';
+            el.value = '';
+            el.disabled = true;
+            return;
+        }
+        const vals = [...new Set((allClassesData || []).filter(filterFn).map(valueGetter).filter(v => v))].sort();
+        el.innerHTML = '<option value="">선택</option>' +
+            vals.map(v => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
+        el.value = vals.includes(keep) ? keep : '';
+        el.disabled = false;
+    }
+
+    // 상세화면 수업 선택 연동: 수업구분→수업이름→수업등급→지역 순서. 상위 선택 전 하위 비활성.
+    function onMemberClassCascade(level) {
+        const typeEl = document.getElementById('mem-sel-class-type');
+        const nameEl = document.getElementById('mem-sel-class-name');
+        const gradeEl = document.getElementById('mem-sel-class-grade');
+        const locEl = document.getElementById('mem-sel-class-loc');
+        const tVal = typeEl ? typeEl.value : '';
+
+        // 상위가 바뀌면 하위 선택값 초기화
+        if (level === 'type') { if (nameEl) nameEl.value = ''; if (gradeEl) gradeEl.value = ''; if (locEl) locEl.value = ''; }
+        else if (level === 'name') { if (gradeEl) gradeEl.value = ''; if (locEl) locEl.value = ''; }
+        else if (level === 'grade') { if (locEl) locEl.value = ''; }
+
+        const nVal = nameEl ? nameEl.value : '';
+        fillCascadeSelect_(nameEl, c => c.class_name, c => c.class_type === tVal, !!tVal, '수업구분 먼저 선택');
+        const nVal2 = nameEl ? nameEl.value : '';
+        fillCascadeSelect_(gradeEl, c => c.class_grade, c => c.class_type === tVal && c.class_name === nVal2, !!nVal2, '수업이름 먼저 선택');
+        const gVal2 = gradeEl ? gradeEl.value : '';
+        fillCascadeSelect_(locEl, c => c.class_loc, c => c.class_type === tVal && c.class_name === nVal2 && c.class_grade === gVal2, !!gVal2, '수업등급 먼저 선택');
+
+        resolveMemberClassId_();
+    }
+
+    // 4개(구분·이름·등급·지역) 모두 선택되면 일치하는 class_id 를 hidden 필드에 해석
+    function resolveMemberClassId_() {
+        const tVal = (document.getElementById('mem-sel-class-type') || {}).value || '';
+        const nVal = (document.getElementById('mem-sel-class-name') || {}).value || '';
+        const gVal = (document.getElementById('mem-sel-class-grade') || {}).value || '';
+        const lVal = (document.getElementById('mem-sel-class-loc') || {}).value || '';
+        let classId = '';
+        if (tVal && nVal && gVal && lVal) {
+            const match = (allClassesData || []).find(c =>
+                c.class_type === tVal && c.class_name === nVal && c.class_grade === gVal && c.class_loc === lVal);
+            if (match) classId = String(match.class_id);
+        }
+        const hid = document.getElementById('mem-class_id');
+        if (hid) hid.value = classId;
+    }
+
+    // 편집 모드: class_id 로 4개 선택값 복원
+    function setMemberClassSelects(classId) {
+        const typeEl = document.getElementById('mem-sel-class-type');
+        const nameEl = document.getElementById('mem-sel-class-name');
+        const gradeEl = document.getElementById('mem-sel-class-grade');
+        const locEl = document.getElementById('mem-sel-class-loc');
+        const cls = (allClassesData || []).find(c => String(c.class_id) === String(classId));
+        if (!cls) { if (typeEl) typeEl.value = ''; onMemberClassCascade('type'); return; }
+        if (typeEl) typeEl.value = cls.class_type || '';
+        fillCascadeSelect_(nameEl, c => c.class_name, c => c.class_type === cls.class_type, !!cls.class_type, '수업구분 먼저 선택');
+        if (nameEl) nameEl.value = cls.class_name || '';
+        fillCascadeSelect_(gradeEl, c => c.class_grade, c => c.class_type === cls.class_type && c.class_name === cls.class_name, !!cls.class_name, '수업이름 먼저 선택');
+        if (gradeEl) gradeEl.value = cls.class_grade || '';
+        fillCascadeSelect_(locEl, c => c.class_loc, c => c.class_type === cls.class_type && c.class_name === cls.class_name && c.class_grade === cls.class_grade, !!cls.class_grade, '수업등급 먼저 선택');
+        if (locEl) locEl.value = cls.class_loc || '';
+        const hid = document.getElementById('mem-class_id');
+        if (hid) hid.value = String(cls.class_id);
     }
 
     function selectMemberNew(memberId) {
@@ -23478,16 +23578,22 @@ MJ 이정우 팀장
             title.textContent = '새 회원 등록';
             form.reset();
             document.getElementById('mem-member_id').value = '';
+            // 가입일 기본값 = 오늘 (수정 가능)
+            const _kd = document.getElementById('mem-kaib_date');
+            if (_kd) {
+                const _t = new Date();
+                _kd.value = _t.getFullYear() + '-' + String(_t.getMonth() + 1).padStart(2, '0') + '-' + String(_t.getDate()).padStart(2, '0');
+            }
             // 구분 체크박스 초기화
             if (typeof setGubunCheckboxes === 'function') setGubunCheckboxes('');
             btnCreate.classList.remove('content-hidden');
             btnUpdate.classList.add('content-hidden');
             btnDelete.classList.add('content-hidden');
             btnBack.classList.add('content-hidden');
-            document.getElementById('mem-class_type_display').innerHTML = '<option>수업 선택시 자동</option>';
-            document.getElementById('mem-class_grade_display').value = '';
-            document.getElementById('mem-class_loc_display').value = '';
-            document.getElementById('mem-class_id_select').value = '';
+            populateMemberClassTypeSelect();
+            const _tEl = document.getElementById('mem-sel-class-type');
+            if (_tEl) _tEl.value = '';
+            onMemberClassCascade('type');   // 하위(이름/등급/지역) 비활성 초기화 + class_id 비움
         } else {
             title.textContent = '회원 수정';
             btnCreate.classList.add('content-hidden');
@@ -23510,10 +23616,9 @@ MJ 이정우 팀장
             // 구분 체크박스 복원
             if (typeof setGubunCheckboxes === 'function') setGubunCheckboxes(member.gubun || '');
 
-            // 수업 선택
-            const classSelect = document.getElementById('mem-class_id_select');
-            if (classSelect) classSelect.value = member.class_id || '';
-            onMemberClassSelect();
+            // 수업 선택 복원 (구분·이름·등급·지역 4단 cascade)
+            populateMemberClassTypeSelect();
+            setMemberClassSelects(member.class_id || '');
         }
 
         // 모바일에서 상세 패널 표시
@@ -23550,6 +23655,10 @@ MJ 이정우 팀장
 
         if (!data.member_name || !data.gubun) {
             showStatus('이름과 구분은 필수입니다.', 'error');
+            return;
+        }
+        if (!data.class_id) {
+            showStatus('수업구분·수업이름·수업등급·지역을 모두 선택하세요.', 'error');
             return;
         }
 
@@ -23615,12 +23724,9 @@ MJ 이정우 팀장
     }
 
     // --- 텔레그램 연동 안내 메세지 관련 ---
-    function openTelegramGuideModal() {
-        const name = document.getElementById('mem-member_name')?.value || '회원';
-        const token = document.getElementById('mem-member_token')?.value || '(생성된 토큰이 없습니다)';
-
-        const template = `안녕하세요~ "${name}"님
-텔레그램 간단한 연동 방법 입니다. 
+    // 기본 양식 ({name}=회원이름, {token}=member_token 치환자). 저장된 양식이 있으면 그것을 우선 사용.
+    const TG_GUIDE_DEFAULT = `안녕하세요~ "{name}"님
+텔레그램 간단한 연동 방법 입니다.
 
 [필독]
 소통은 카카오톡으로 해요
@@ -23631,15 +23737,73 @@ MJ 이정우 팀장
 2. KEY 입력 후 엔터
 3. 스케줄 입력 후 엔터
 =============================================
-${token}
+{token}
 =============================================
 3. 채팅방에 스케줄 이라고 입력 하시면 어플 활성화 되세요
 * 키입력후 제가 승인을 해야 해서 시간이 조금 필요 합니다~
 
 감사합니다.`;
 
-        document.getElementById('telegramGuideMessage').value = template;
+    function openTelegramGuideModal() {
+        window._tgGuideEditing = false;
         document.getElementById('telegramGuideModal').classList.remove('hidden');
+        if (window._tgGuideTemplate == null) {
+            // 최초 1회만 서버에서 저장된 양식 로드 후 캐시
+            google.script.run
+                .withSuccessHandler(t => { window._tgGuideTemplate = t || TG_GUIDE_DEFAULT; _renderTelegramGuide(); })
+                .withFailureHandler(() => { window._tgGuideTemplate = TG_GUIDE_DEFAULT; _renderTelegramGuide(); })
+                .getTelegramGuideTemplate();
+        } else {
+            _renderTelegramGuide();
+        }
+    }
+
+    // 현재 모드(미리보기/편집)에 맞춰 textarea 렌더
+    function _renderTelegramGuide() {
+        const name = document.getElementById('mem-member_name')?.value || '회원';
+        const token = document.getElementById('mem-member_token')?.value || '(생성된 토큰이 없습니다)';
+        const tpl = window._tgGuideTemplate || TG_GUIDE_DEFAULT;
+        const ta = document.getElementById('telegramGuideMessage');
+        if (window._tgGuideEditing) {
+            ta.value = tpl;                       // 편집: 치환자 포함 원문
+            ta.readOnly = false;
+        } else {
+            ta.value = tpl.replace(/\{name\}/g, name).replace(/\{token\}/g, token);  // 미리보기: 치환 적용
+            ta.readOnly = false;                  // 미리보기에서도 한 번 복사용 임시수정 허용
+        }
+        _updateTgGuideButtons();
+    }
+
+    function _updateTgGuideButtons() {
+        const editing = !!window._tgGuideEditing;
+        const editBtn = document.getElementById('tgGuideEditBtn');
+        const saveBtn = document.getElementById('tgGuideSaveBtn');
+        const copyBtn = document.getElementById('tgGuideCopyBtn');
+        const hint = document.getElementById('tgGuideEditHint');
+        const desc = document.getElementById('tgGuideDesc');
+        if (editBtn) editBtn.textContent = editing ? '미리보기' : '✏️ 양식편집';
+        if (saveBtn) saveBtn.classList.toggle('hidden', !editing);
+        if (copyBtn) copyBtn.classList.toggle('hidden', editing);
+        if (hint) hint.classList.toggle('hidden', !editing);
+        if (desc) desc.classList.toggle('hidden', editing);
+    }
+
+    function toggleTelegramGuideEdit() {
+        window._tgGuideEditing = !window._tgGuideEditing;
+        _renderTelegramGuide();
+    }
+
+    function saveTelegramGuideTemplateNew() {
+        const raw = document.getElementById('telegramGuideMessage').value;
+        google.script.run
+            .withSuccessHandler(() => {
+                window._tgGuideTemplate = raw;
+                window._tgGuideEditing = false;
+                _renderTelegramGuide();
+                showStatus('안내 메세지 양식이 저장되었습니다.', 'success');
+            })
+            .withFailureHandler(e => showStatus('저장 실패: ' + (e && e.message || e), 'error'))
+            .saveTelegramGuideTemplate(raw);
     }
 
     function closeTelegramGuideModal() {
@@ -37092,20 +37256,29 @@ MJ 이정우 팀장
                                 텔레그램 연동 안내 메세지
                             </h3>
                             <div class="mt-4">
-                                <p class="text-xs text-gray-500 mb-2">아래 내용을 복사해서 회원님께 전달해주세요.</p>
+                                <p id="tgGuideDesc" class="text-xs text-gray-500 mb-2">아래 내용을 복사해서 회원님께 전달해주세요.</p>
+                                <p id="tgGuideEditHint" class="text-xs text-amber-600 mb-2 hidden">양식 편집 모드입니다. <code class="bg-amber-50 px-1 rounded">{name}</code> 은 회원 이름, <code class="bg-amber-50 px-1 rounded">{token}</code> 은 토큰으로 자동 치환됩니다. 저장하면 다음부터 이 양식이 적용됩니다.</p>
                                 <textarea id="telegramGuideMessage" rows="15"
-                                    class="w-full px-3 py-2 border border-indogo-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 font-sans leading-relaxed"></textarea>
+                                    class="w-full px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 font-sans leading-relaxed"></textarea>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
-                    <button type="button" onclick="copyTelegramGuide()"
+                    <button type="button" id="tgGuideCopyBtn" onclick="copyTelegramGuide()"
                         class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
                         복사하기
                     </button>
+                    <button type="button" id="tgGuideSaveBtn" onclick="saveTelegramGuideTemplateNew()"
+                        class="hidden w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        💾 양식저장
+                    </button>
+                    <button type="button" id="tgGuideEditBtn" onclick="toggleTelegramGuideEdit()"
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        ✏️ 양식편집
+                    </button>
                     <button type="button" onclick="closeTelegramGuideModal()"
-                        class="mt-3 bunk-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                         닫기
                     </button>
                 </div>

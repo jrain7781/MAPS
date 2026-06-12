@@ -2453,15 +2453,15 @@
                             <input type="text" id="mem-search-name" oninput="filterMembersNew()" placeholder="회원이름"
                                 class="flex-1 min-w-[100px] px-3 py-2 border border-gray-300 rounded-lg text-sm"
                                 onfocus="this.select()">
-                            <select id="mem-search-class-type" onchange="filterMembersNew()"
+                            <select id="mem-search-class-type" onchange="refreshMemberSearchCascade(); filterMembersNew()"
                                 class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                                 <option value="">종목구분</option>
                             </select>
-                            <select id="mem-search-class-name" onchange="filterMembersNew()"
+                            <select id="mem-search-class-name" onchange="refreshMemberSearchCascade(); filterMembersNew()"
                                 class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                                 <option value="">종목이름</option>
                             </select>
-                            <select id="mem-search-class-grade" onchange="filterMembersNew()"
+                            <select id="mem-search-class-grade" onchange="refreshMemberSearchCascade(); filterMembersNew()"
                                 class="flex-1 min-w-[80px] px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                                 <option value="">종목등급</option>
                             </select>
@@ -2550,7 +2550,7 @@
                         <button onclick="switchMemberDetailTab('info')" id="memberTab-info"
                             class="detail-tab-btn active" data-tab="info">회원정보</button>
                         <button onclick="switchMemberDetailTab('cancel')" id="memberTab-cancel" class="detail-tab-btn"
-                            data-tab="cancel">물건이력</button>
+                            data-tab="cancel" style="display:none">물건이력</button>
                         <button onclick="switchMemberDetailTab('status')" id="memberTab-status" class="detail-tab-btn"
                             data-tab="status">물건상태</button>
                     </div>
@@ -2758,27 +2758,29 @@
                                     </div>
                                     <!-- 우측 컬럼 -->
                                     <div class="space-y-3">
-                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업구분</label>
-                                            <select id="mem-class_type_display"
-                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
-                                                disabled>
-                                                <option value="">수업 선택시 자동</option>
+                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업구분 <span class="text-red-500">*</span></label>
+                                            <select id="mem-sel-class-type" onchange="onMemberClassCascade('type')"
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                                <option value="">선택</option>
                                             </select>
                                         </div>
-                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업이름</label>
-                                            <select id="mem-class_id_select" onchange="onMemberClassSelect()"
-                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                                                <option value="">수업 선택</option>
+                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업이름 <span class="text-red-500">*</span></label>
+                                            <select id="mem-sel-class-name" onchange="onMemberClassCascade('name')" disabled
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400">
+                                                <option value="">수업구분 먼저 선택</option>
                                             </select>
                                         </div>
-                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업등급</label>
-                                            <input type="text" id="mem-class_grade_display" readonly
-                                                placeholder="수업 선택시 자동"
-                                                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50">
+                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">수업등급 <span class="text-red-500">*</span></label>
+                                            <select id="mem-sel-class-grade" onchange="onMemberClassCascade('grade')" disabled
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400">
+                                                <option value="">수업이름 먼저 선택</option>
+                                            </select>
                                         </div>
-                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">지역</label>
-                                            <input type="text" id="mem-class_loc_display" readonly
-                                                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50">
+                                        <div><label class="block text-xs font-medium text-gray-600 mb-1">지역 <span class="text-red-500">*</span></label>
+                                            <select id="mem-sel-class-loc" onchange="onMemberClassCascade('loc')" disabled
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400">
+                                                <option value="">수업등급 먼저 선택</option>
+                                            </select>
                                         </div>
                                         <div><label class="block text-xs font-medium text-gray-600 mb-1">주소</label>
                                             <input type="text" id="mem-address" name="address" placeholder="주소 입력"
@@ -5750,20 +5752,29 @@
                                 텔레그램 연동 안내 메세지
                             </h3>
                             <div class="mt-4">
-                                <p class="text-xs text-gray-500 mb-2">아래 내용을 복사해서 회원님께 전달해주세요.</p>
+                                <p id="tgGuideDesc" class="text-xs text-gray-500 mb-2">아래 내용을 복사해서 회원님께 전달해주세요.</p>
+                                <p id="tgGuideEditHint" class="text-xs text-amber-600 mb-2 hidden">양식 편집 모드입니다. <code class="bg-amber-50 px-1 rounded">{name}</code> 은 회원 이름, <code class="bg-amber-50 px-1 rounded">{token}</code> 은 토큰으로 자동 치환됩니다. 저장하면 다음부터 이 양식이 적용됩니다.</p>
                                 <textarea id="telegramGuideMessage" rows="15"
-                                    class="w-full px-3 py-2 border border-indogo-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 font-sans leading-relaxed"></textarea>
+                                    class="w-full px-3 py-2 border border-indigo-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 font-sans leading-relaxed"></textarea>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
-                    <button type="button" onclick="copyTelegramGuide()"
+                    <button type="button" id="tgGuideCopyBtn" onclick="copyTelegramGuide()"
                         class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
                         복사하기
                     </button>
+                    <button type="button" id="tgGuideSaveBtn" onclick="saveTelegramGuideTemplateNew()"
+                        class="hidden w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">
+                        💾 양식저장
+                    </button>
+                    <button type="button" id="tgGuideEditBtn" onclick="toggleTelegramGuideEdit()"
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        ✏️ 양식편집
+                    </button>
                     <button type="button" onclick="closeTelegramGuideModal()"
-                        class="mt-3 bunk-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                        class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                         닫기
                     </button>
                 </div>

@@ -6555,6 +6555,18 @@ function saveSetting_(key, value) {
   }
 }
 
+// ===== [텔레그램 연동 안내 메세지 양식] settings 저장/조회 (클라이언트 호출용) =====
+const TELEGRAM_GUIDE_KEY = 'telegram_guide_template';
+// 저장된 양식 반환(없으면 빈 문자열 → 클라이언트가 기본 양식 사용). {name}/{token} 치환자 포함.
+function getTelegramGuideTemplate() {
+  return getSetting_(TELEGRAM_GUIDE_KEY, '');
+}
+// 양식 저장 ({name}/{token} 치환자 포함된 원문 그대로)
+function saveTelegramGuideTemplate(text) {
+  saveSetting_(TELEGRAM_GUIDE_KEY, String(text == null ? '' : text));
+  return { success: true };
+}
+
 // ------------------------------------------------------------------------------------------------
 // [PHASE 2-1] 추천 자동 만료 + 알림
 // ------------------------------------------------------------------------------------------------
