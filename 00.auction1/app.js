@@ -1697,7 +1697,12 @@
         const tagsHtml = tags.length
           ? tags.map(tg => `<span class="multi-tag">${escHtml(tg)}</span>`).join(' ')
           : `<span class="f10 gray">선택된 항목 없음</span>`;
+        const lg = r.logic === 'and' ? 'and' : 'or';
         valHtml = `<button type="button" class="btn_box_sss btn_white fval-specials" title="특수물건 항목 선택">선택 ▾</button>
+                   <select class="sel flogic-sel" title="여러 항목일 때 — OR: 하나라도 / AND: 모두 동시 (미포함이면 OR=하나라도 있으면 제외, AND=모두 동시에 있을 때만 제외)">
+                     <option value="or"${lg === 'or' ? ' selected' : ''}>OR(하나)</option>
+                     <option value="and"${lg === 'and' ? ' selected' : ''}>AND(모두)</option>
+                   </select>
                    <span class="fval-specials-tags">${tagsHtml}</span>`;
       } else if (lockedVal) {
         // 값 고정 — 사용자가 수정할 수 없음 (선택만 하면 동작)
@@ -1722,6 +1727,8 @@
       if (inp) inp.addEventListener('input', e => { custRows[i].value = e.target.value; });
       const btn = row.querySelector('.fval-specials');
       if (btn) btn.addEventListener('click', () => openSpecialsFilterModal(i));
+      const logicSel = row.querySelector('.flogic-sel');
+      if (logicSel) logicSel.addEventListener('change', e => { custRows[i].logic = e.target.value; });
       row.querySelector('.row-del').addEventListener('click', () => { custRows.splice(i, 1); renderCustRows(); });
     });
   }
@@ -1969,8 +1976,8 @@
   }
   function normalizeCustomFilters(rows) {
     return (rows || []).filter(r => r && r.typeId && String(r.value || '').trim() !== '')
-      .map(r => ({ typeId: r.typeId, op: r.op || 'eq', value: String(r.value).trim() }))
-      .sort((a, b) => (a.typeId + a.op + a.value).localeCompare(b.typeId + b.op + b.value));
+      .map(r => ({ typeId: r.typeId, op: r.op || 'eq', value: String(r.value).trim(), logic: r.logic || 'or' }))
+      .sort((a, b) => (a.typeId + a.op + a.value + a.logic).localeCompare(b.typeId + b.op + b.value + b.logic));
   }
   function presetSignature(formData, customFilters) {
     return JSON.stringify({
@@ -1984,7 +1991,7 @@
     if (!title) { setStatus('제목을 입력해 주세요.', true); return; }
     const formData = collectFormData();
     const customFilters = custRows.filter(r => r.typeId).map(r => ({
-      typeId: r.typeId, op: r.op || 'eq', value: r.value || ''
+      typeId: r.typeId, op: r.op || 'eq', value: r.value || '', logic: r.logic || 'or'
     }));
     // 중복 체크: 같은 formData + customFilters 인 다른 프리셋 존재 여부
     const sig = presetSignature(formData, customFilters);
@@ -2205,7 +2212,7 @@
 
     // 추가 필터 조건
     document.getElementById('btnAddCustRow').addEventListener('click', () => {
-      custRows.push({ typeId: ftypes[0]?.id || '', op: 'eq', value: '' });
+      custRows.push({ typeId: ftypes[0]?.id || '', op: 'eq', value: '', logic: 'or' });
       renderCustRows();
     });
     document.getElementById('btnManageTypes').addEventListener('click', openManageTypes);
@@ -2331,15 +2338,16 @@
     return null;
   }
   // 비교 연산. contains/ncontains 는 콤마 구분 다중 키워드 지원.
-  // 예) "서울,경기,인천" + 미포함 → 셋 다 미포함이어야 통과 (every !includes)
-  // 예) "서울,경기"     + 포함   → 둘 중 하나라도 포함이면 통과 (some includes)
-  function cmp(itemVal, op, ref) {
+  // logic='or'(기본): 포함=하나라도(some), 미포함=하나라도 있으면 제외(every !includes)
+  // logic='and'     : 포함=모두(every),   미포함=모두 동시에 있을 때만 제외(some !includes)
+  function cmp(itemVal, op, ref, logic) {
     if (itemVal == null) return false;
     const isNum = typeof itemVal === 'number';
     const refRaw = String(ref || '');
     const refNum = parseFloat(refRaw.replace(/,/g, ''));
     const refStr = refRaw.trim();
     const itemStr = String(itemVal);
+    const isAnd = logic === 'and';
     switch (op) {
       case 'eq':        return isNum ? itemVal === refNum : itemStr === refStr;
       case 'ne':        return isNum ? itemVal !== refNum : itemStr !== refStr;
@@ -2349,15 +2357,41 @@
       case 'lt':        return isNum && itemVal <  refNum;
       case 'contains': {
         const tokens = refStr.split(',').map(s => s.trim()).filter(Boolean);
-        return tokens.length ? tokens.some(t => itemStr.includes(t)) : false;
+        if (!tokens.length) return false;
+        return isAnd ? tokens.every(t => itemStr.includes(t)) : tokens.some(t => itemStr.includes(t));
       }
       case 'ncontains': {
         const tokens = refStr.split(',').map(s => s.trim()).filter(Boolean);
-        return tokens.length ? tokens.every(t => !itemStr.includes(t)) : true;
+        if (!tokens.length) return true;
+        // AND: 모두 동시에 있을 때만 제외 → 하나라도 없으면 통과(some !includes)
+        return isAnd ? tokens.some(t => !itemStr.includes(t)) : tokens.every(t => !itemStr.includes(t));
       }
       case 'regex':     try { return new RegExp(refStr).test(itemStr); } catch (e) { return false; }
       default:          return true;
     }
+  }
+  // 특수물건 다중 전용 비교 — 라벨별 키워드 그룹을 1단위로 보고 AND/OR 판정.
+  //  · 라벨 1개는 동의어(키워드) 여러 개를 가질 수 있어, "그 라벨 보유"=동의어 중 하나라도 포함.
+  //  · groups = [[labelA 키워드들], [labelB 키워드들], ...]
+  function cmpSpecials(itemVal, op, groups, logic) {
+    if (itemVal == null) return false;
+    const s = String(itemVal);
+    const present = (groups || []).map(g => g.some(k => s.includes(k))); // 라벨별 보유 여부
+    if (!present.length) return op === 'ncontains'; // 선택 없음: 미포함=통과, 포함=제외
+    const isAnd = logic === 'and';
+    const cond = isAnd ? present.every(Boolean) : present.some(Boolean);
+    if (op === 'contains')  return cond;            // 포함: AND=모두 보유 / OR=하나라도
+    if (op === 'ncontains') return !cond;           // 미포함: AND=모두 보유 시 제외 / OR=하나라도 보유 시 제외
+    return true;
+  }
+  // 라벨 CSV → 라벨별 키워드 그룹 배열
+  function specialsGroupsFor(labelsCSV) {
+    const labels = String(labelsCSV || '').split(',').map(s => s.trim()).filter(Boolean);
+    return labels.map(lab => {
+      const o = (D.SPECIAL || []).find(x => x.t === lab);
+      const src = o ? ((o.kw && o.kw.length) ? o.kw : o.t) : lab;
+      return src.split(',').map(k => k.trim()).filter(Boolean);
+    }).filter(g => g.length);
   }
   // 필터 종류 이름 → item 에서 비교값 추출
   // 새 종류 추가 시 여기에 핸들러를 등록.
@@ -2419,13 +2453,20 @@
       if (!t) return;
       const fn = FILTER_FIELDS[t.name];
       if (!fn) { skipped.push(t.name); return; }
-      // 특수물건 다중 — 라벨을 결과 텍스트의 단축 키워드로 변환
-      const value = (t.valueType === 'specials') ? expandSpecialsLabels(r.value) : r.value;
-      if (!value) return; // 변환 결과 빈값(매핑 없음) 이면 무시
-      handlers.push({ name: t.name, fn, op: r.op || 'eq', value });
+      if (t.valueType === 'specials') {
+        // 특수물건 다중 — 라벨별 키워드 그룹으로 평가 (AND/OR 토글 반영)
+        const groups = specialsGroupsFor(r.value);
+        if (!groups.length) return; // 매핑 가능한 항목 없음 → 무시
+        handlers.push({ name: t.name, fn, op: r.op || 'eq', groups, logic: r.logic || 'or', isSpecials: true });
+      } else {
+        if (!r.value) return; // 빈 값은 무시
+        handlers.push({ name: t.name, fn, op: r.op || 'eq', value: r.value });
+      }
     });
     if (!handlers.length) return { items, applied: 0, skipped };
-    const filtered = items.filter(it => handlers.every(h => cmp(h.fn(it), h.op, h.value)));
+    const filtered = items.filter(it => handlers.every(h =>
+      h.isSpecials ? cmpSpecials(h.fn(it), h.op, h.groups, h.logic) : cmp(h.fn(it), h.op, h.value)
+    ));
     return { items: filtered, applied: handlers.length, skipped };
   }
 
@@ -3131,7 +3172,12 @@
     const t = ftypes.find(x => x.id === filter.typeId);
     const name = t ? t.name : '(알 수 없는 종류)';
     const opMap = { eq:'=', ne:'≠', gte:'≥', gt:'>', lte:'≤', lt:'<', contains:'포함', ncontains:'미포함', regex:'정규식' };
-    return { name, op: opMap[filter.op] || filter.op || '', v: filter.value || '' };
+    let op = opMap[filter.op] || filter.op || '';
+    // 특수물건 다중 + 값 2개 이상이면 AND/OR 표시 (모두 동시 / 하나라도)
+    if (t && t.valueType === 'specials' && String(filter.value || '').split(',').filter(s => s.trim()).length > 1) {
+      op += (filter.logic === 'and') ? ' (모두)' : ' (하나라도)';
+    }
+    return { name, op, v: filter.value || '' };
   }
   // 자동 분류 — 짧은 항목 2-col 페어, 긴 항목은 카드 아래쪽 full-row
   const _RPT_SHORT_LEN = 22;

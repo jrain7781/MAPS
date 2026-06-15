@@ -149,7 +149,7 @@
     '대항력(HUG제외)': _daeNoHugMark,
     '대항력 (HUG제외)': _daeNoHugMark
   };
-  function cmp(itemVal, op, ref) {
+  function cmp(itemVal, op, ref, logic) {
     if (itemVal == null) return false;
     const isNum = typeof itemVal === 'number';
     const refRaw = String(ref || '');
@@ -163,11 +163,30 @@
       case 'gt': return isNum && itemVal > refNum;
       case 'lte': return isNum && itemVal <= refNum;
       case 'lt': return isNum && itemVal < refNum;
-      case 'contains': { const tk = refStr.split(',').map(s=>s.trim()).filter(Boolean); return tk.length ? tk.some(t => itemStr.includes(t)) : false; }
-      case 'ncontains': { const tk = refStr.split(',').map(s=>s.trim()).filter(Boolean); return tk.length ? tk.every(t => !itemStr.includes(t)) : true; }
+      case 'contains': { const tk = refStr.split(',').map(s=>s.trim()).filter(Boolean); if (!tk.length) return false; return logic === 'and' ? tk.every(t => itemStr.includes(t)) : tk.some(t => itemStr.includes(t)); }
+      case 'ncontains': { const tk = refStr.split(',').map(s=>s.trim()).filter(Boolean); if (!tk.length) return true; return logic === 'and' ? tk.some(t => !itemStr.includes(t)) : tk.every(t => !itemStr.includes(t)); }
       case 'regex': try { return new RegExp(refStr).test(itemStr); } catch (_) { return false; }
       default: return true;
     }
+  }
+  // 특수물건 다중 — 라벨별 키워드 그룹 단위 AND/OR (app.js cmpSpecials 와 동일 규칙)
+  function specialsGroupsFor(labelsCSV) {
+    const labels = String(labelsCSV || '').split(',').map(s => s.trim()).filter(Boolean);
+    return labels.map(lab => {
+      const o = (D.SPECIAL || []).find(x => x.t === lab);
+      const src = o ? ((o.kw && o.kw.length) ? o.kw : o.t) : lab;
+      return src.split(',').map(k => k.trim()).filter(Boolean);
+    }).filter(g => g.length);
+  }
+  function cmpSpecials(itemVal, op, groups, logic) {
+    if (itemVal == null) return false;
+    const s = String(itemVal);
+    const present = (groups || []).map(g => g.some(k => s.includes(k)));
+    if (!present.length) return op === 'ncontains';
+    const cond = logic === 'and' ? present.every(Boolean) : present.some(Boolean);
+    if (op === 'contains')  return cond;
+    if (op === 'ncontains') return !cond;
+    return true;
   }
   function applyFilters(items, rows, ftypes) {
     if (!rows || !rows.length) return items;
@@ -178,13 +197,18 @@
       if (!t) return;
       const fn = FILTER_FIELDS[t.name];
       if (!fn) return;
-      let value = r.value;
-      if (t.valueType === 'specials') value = expandSpecialsLabels(value);
-      if (!value) return;
-      handlers.push({ fn, op: r.op || 'eq', value });
+      if (t.valueType === 'specials') {
+        const groups = specialsGroupsFor(r.value);
+        if (!groups.length) return;
+        handlers.push({ fn, op: r.op || 'eq', groups, logic: r.logic || 'or', isSpecials: true });
+      } else {
+        handlers.push({ fn, op: r.op || 'eq', value: r.value });
+      }
     });
     if (!handlers.length) return items;
-    return items.filter(it => handlers.every(h => cmp(h.fn(it), h.op, h.value)));
+    return items.filter(it => handlers.every(h =>
+      h.isSpecials ? cmpSpecials(h.fn(it), h.op, h.groups, h.logic) : cmp(h.fn(it), h.op, h.value)
+    ));
   }
 
   // 자동 분류: 라벨+값 합계 글자수가 임계치 이하면 짧음(2-col 페어), 초과면 김(full-row 아래로)
