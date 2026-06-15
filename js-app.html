@@ -16154,11 +16154,11 @@ MJ 이정우 팀장
         const visO = new Set(), visX = new Set();
         let lastO = -1, placedO = 0;
         if (!isInactive && remaining > 0) {
-            let intents = 0;
-            for (let k = 0; k < futureSlots.length && intents < remaining; k++) {
+            // [결석 X는 예산 소비 안 함] 미래 슬롯을 앞에서부터 보되 placedO(실제 ●)만 remaining까지 채움.
+            //   X는 칸만 건너뛰고(✕ 표시) 다음 슬롯으로 미룸 → 배치(총 회차) 안에서는 이월되지 않음.
+            for (let k = 0; k < futureSlots.length && placedO < remaining; k++) {
                 if (futureSlots[k].val === 'X') { visX.add(futureSlots[k].loop); }
                 else { visO.add(futureSlots[k].loop); lastO = futureSlots[k].loop; placedO++; }
-                intents++;
             }
         }
         const carry = isInactive ? 0 : Math.max(0, remaining - placedO);
@@ -16463,13 +16463,11 @@ MJ 이정우 팀장
             const rem = Math.max(0, contract - used);
             memberContractMap_[String(m.member_id)] = contract;
             memberRemainingMap_[String(m.member_id)] = rem;
-            // [이월 = 남은회차 기반 + 결석] 미래 슬롯 앞에서부터 rem칸 사용, X는 ●아님(이월) → renderRow_ 와 동일
+            // [이월 = 남은회차 기반] 결석 X는 예산 소비 안 함 — 다음 슬롯으로 미룸 → 배치 안에서는 이월 안 됨. renderRow_ 와 동일
             let placedO_ = 0;
             if (!isInactive_ && rem > 0) {
-                let intents_ = 0;
-                for (let k = 0; k < futureVals_.length && intents_ < rem; k++) {
+                for (let k = 0; k < futureVals_.length && placedO_ < rem; k++) {
                     if (futureVals_[k] !== 'X') placedO_++;
-                    intents_++;
                 }
             }
             memberCarryMap_[String(m.member_id)] = isInactive_ ? 0 : Math.max(0, rem - placedO_);
@@ -16659,21 +16657,21 @@ MJ 이정우 팀장
             let _visibleFutureLastLoop_ = -1; // 마지막 ● loop (검정 판정용)
             let _placedFutureO_ = 0;
             if (!_isInactiveMember_ && remaining > 0) {
-                let _intents_ = 0;
-                for (let _i = 0; _i < d1List.length && _intents_ < remaining; _i++) {
+                // [결석 X는 예산 소비 안 함] placedO(실제 ●)만 remaining까지 채움. X는 ✕만 찍고 다음 슬롯으로 미룸
+                //   → 배치(총 회차) 안에서는 결석해도 이월되지 않고 다음 회차에 ●가 살아남음.
+                for (let _i = 0; _i < d1List.length && _placedFutureO_ < remaining; _i++) {
                     const _d = d1List[_i];
                     if (String(_d.holiday || '') === 'Y') continue;
                     const _raw = String(_d.class_date || '').replace(/-/g, '');
                     if (_raw !== '' && _raw <= todayStr) continue; // 과거/오늘 제외
                     const _v = String(m['no_' + _d.class_loop] || '').trim().toUpperCase();
                     if (_v === 'X') {
-                        _visibleFutureXSet_.add(Number(_d.class_loop)); // 결석: 칸 소비, ● 아님 → 이월
+                        _visibleFutureXSet_.add(Number(_d.class_loop)); // 결석: ✕만 표시, 예산 소비 X
                     } else {
                         _visibleFutureOSet_.add(Number(_d.class_loop));
                         _visibleFutureLastLoop_ = Number(_d.class_loop);
                         _placedFutureO_++;
                     }
-                    _intents_++;
                 }
             }
             // 검정 = remaining 을 이번 배치 안에서 전부 ●로 소화 (이월=0)
