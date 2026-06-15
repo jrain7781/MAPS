@@ -168,7 +168,10 @@ function getClassSessions(classId) {
         let sess = {};
         CLASS_D1_HEADERS.forEach((h, i) => {
             let val = (i < row.length) ? row[i] : '';
-            if ((h.includes('date') || h === 'reg_date') && val instanceof Date) {
+            if ((h === 'class_time_from' || h === 'class_time_to') && val instanceof Date) {
+                // 수업시간 Date → 'HH:mm' (readClassD1ByClassId 와 통일, 새로고침 후 시간 틀어짐 방지)
+                sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
+            } else if ((h.includes('date') || h === 'reg_date') && val instanceof Date) {
                 sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
             } else {
                 sess[h] = val;
@@ -690,8 +693,12 @@ function getAllClassD1Sessions() {
             CLASS_D1_HEADERS.forEach(function(h, i) {
                 var val = (i < row.length) ? row[i] : '';
                 if (val instanceof Date) {
-                    // datetime/starttime 필드는 시각 포함 (offset 계산용), 그 외 date 필드는 날짜만
-                    if (h.includes('datetime') || h === 'bid_starttime') {
+                    // 수업시간(class_time_from/to)은 시각만 'HH:mm' — Date 원본을 그대로 넘기면
+                    //   JSON 직렬화 시 타임존 보정으로 어긋난 ISO가 되어 새로고침 후 시간이 틀어짐
+                    //   (authoritative reader readClassD1ByClassId 와 동일 규칙으로 통일)
+                    if (h === 'class_time_from' || h === 'class_time_to') {
+                        sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
+                    } else if (h.includes('datetime') || h === 'bid_starttime') {
                         sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm");
                     } else if (h.includes('date') || h === 'reg_date') {
                         sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
@@ -732,8 +739,10 @@ function getClassScheduleInitData() {
             CLASS_D1_HEADERS.forEach(function(h, i) {
                 var val = (i < row.length) ? row[i] : '';
                 if (val instanceof Date) {
-                    // datetime/starttime 필드는 시각 포함 (offset 계산용), 그 외 date 필드는 날짜만
-                    if (h.includes('datetime') || h === 'bid_starttime') {
+                    // 수업시간은 시각만 'HH:mm' (getAllClassD1Sessions / readClassD1ByClassId 와 통일)
+                    if (h === 'class_time_from' || h === 'class_time_to') {
+                        sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'HH:mm');
+                    } else if (h.includes('datetime') || h === 'bid_starttime') {
                         sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm");
                     } else if (h.includes('date') || h === 'reg_date') {
                         sess[h] = Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
