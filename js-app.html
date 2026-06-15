@@ -26796,15 +26796,41 @@ MJ 이정우 팀장
         if (!n) return '';
         return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     }
+    // 리스트창 안내바(jmsvSub)에 상세창 팝업차단 경고 표시/해제
+    function _jmSvShowBlockedHint() {
+        if (!_jmSvLW || _jmSvLW.closed) return;
+        var sub = _jmSvLW.document.getElementById('jmsvSub');
+        if (!sub) return;
+        sub.innerHTML = '⚠ 상세창 팝업이 차단됨 — 주소창 오른쪽 <b>팝업 차단 아이콘</b>에서 이 사이트 팝업을 <b>항상 허용</b>한 뒤, 행을 클릭하면 상세창이 열립니다.';
+        sub.style.background = '#fef2f2'; sub.style.borderBottomColor = '#fecaca'; sub.style.color = '#b91c1c'; sub.style.fontWeight = '700';
+    }
+    function _jmSvClearBlockedHint() {
+        if (!_jmSvLW || _jmSvLW.closed) return;
+        var sub = _jmSvLW.document.getElementById('jmsvSub');
+        if (!sub) return;
+        sub.innerHTML = '상세창을 원하는 모니터/위치로 한 번 끌어두면 그 자리에서 계속 갱신됩니다.';
+        sub.style.background = ''; sub.style.borderBottomColor = ''; sub.style.color = ''; sub.style.fontWeight = '';
+    }
     // 상세창: 처음 한 번만 연다(고정 크기). 이후엔 URL 만 교체 — 사용자가 둔 위치/모니터 유지.
-    function _jmSvOpenDetail(url) {
+    //  · isAuto=true(시작 시 첫행 자동오픈): 차단돼도 alert 안 띄우고 안내바 힌트만 (한 클릭에 팝업 2개라 2번째가 막히는 정상 케이스)
+    //  · isAuto=false(행 클릭/이전·다음): 직접 제스처라 열려야 정상 → 막히면 alert 로 팝업 허용 안내
+    function _jmSvOpenDetail(url, isAuto) {
         if (!url) { alert('옥션원 view_url 없음 (옛 데이터 — 다시 크롤하면 채워집니다).'); return; }
         if (_jmSvDet && !_jmSvDet.closed) {
-            try { _jmSvDet.location.href = url; _jmSvDet.focus(); return; } catch (e) {}
+            try { _jmSvDet.location.href = url; _jmSvDet.focus(); _jmSvClearBlockedHint(); return; } catch (e) {}
         }
         _jmSvDet = window.open(url, 'jm_sv_detail',
             'width=' + JM_SV_DET_W + ',height=' + JM_SV_DET_H +
             ',left=' + JM_SV_DET_L + ',top=' + JM_SV_DET_T + ',resizable=yes,scrollbars=yes');
+        if (!_jmSvDet) {
+            // 팝업 차단됨 → 안내바 경고 + (수동 클릭이면) alert
+            _jmSvShowBlockedHint();
+            if (!isAuto) {
+                alert('상세창 팝업이 차단되었습니다.\n\n주소창 오른쪽의 팝업 차단 아이콘을 눌러 이 사이트의 팝업을 "항상 허용"으로 바꾼 뒤,\n행을 다시 클릭하면 상세창이 열립니다.');
+            }
+        } else {
+            _jmSvClearBlockedHint();
+        }
     }
     function _jmSvPaint() {
         if (!_jmSvLW || _jmSvLW.closed) return;
@@ -26817,11 +26843,11 @@ MJ 이정우 팀장
             if (a && r.scrollIntoView) r.scrollIntoView({ block: 'nearest' });
         });
     }
-    function _jmSvSelect(i) {
+    function _jmSvSelect(i, isAuto) {
         if (i < 0 || i >= _jmSvItems.length) return;
         _jmSvIdx = i;
         _jmSvPaint();
-        _jmSvOpenDetail(_jmSvItems[i].view_url);
+        _jmSvOpenDetail(_jmSvItems[i].view_url, isAuto);
     }
     function _jmSvPrev() { _jmSvSelect(_jmSvIdx - 1); }
     function _jmSvNext() { _jmSvSelect(_jmSvIdx + 1); }
@@ -27044,7 +27070,7 @@ MJ 이정우 팀장
                     '<button type="button" class="jm-sv-navbtn" id="jmsvNext">다음 ▶</button>' +
                 '</div>' +
             '</div>' +
-            '<div class="jm-sv-subbar">상세창을 원하는 모니터/위치로 한 번 끌어두면 그 자리에서 계속 갱신됩니다.</div>' +
+            '<div class="jm-sv-subbar" id="jmsvSub">상세창을 원하는 모니터/위치로 한 번 끌어두면 그 자리에서 계속 갱신됩니다.</div>' +
             '<div class="jm-sv-colhead">' +
                 '<div class="jm-sv-ico"></div>' +
                 '<div class="jm-sv-st">상태</div>' +
@@ -27090,7 +27116,7 @@ MJ 이정우 팀장
         });
         _jmSvSetupResizers(d);   // 컬럼 가로폭 드래그 리사이즈 + 저장
 
-        _jmSvSelect(0);   // 첫 행 자동 선택 + 상세창 동시 오픈 (선택보기 클릭 제스처라 팝업 허용)
+        _jmSvSelect(0, true);   // 첫 행 자동 선택 + 상세창 자동오픈(isAuto): 차단 시 alert 없이 안내바 힌트만
         _jmSvLW.focus();
     }
     // 선택보기 컬럼 가로폭 — localStorage 저장/복원 (key 단일 객체)
