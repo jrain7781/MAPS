@@ -26848,6 +26848,16 @@ MJ 이정우 팀장
         _jmSvIdx = i;
         _jmSvPaint();
         _jmSvOpenDetail(_jmSvItems[i].view_url, isAuto);
+        // 키보드 화살표가 항상 리스트창에서 위/아래 이동하도록 — 상세창(옥션원, cross-origin)이
+        // 가져간 포커스를 리스트창으로 되돌림. 안 그러면 화살표가 상세창을 스크롤(휠)만 함.
+        _jmSvRefocusList();
+    }
+    // 상세창이 (window.open / location 교체로) 가져간 키보드 포커스를 리스트창으로 환원.
+    // 새 창 오픈은 비동기로 포커스를 늦게 가져가므로 다음 틱에 한 번 더 환원한다.
+    function _jmSvRefocusList() {
+        if (!_jmSvLW || _jmSvLW.closed) return;
+        try { _jmSvLW.focus(); } catch (e) {}
+        try { _jmSvLW.setTimeout(function () { try { _jmSvLW.focus(); } catch (e) {} }, 60); } catch (e) {}
     }
     function _jmSvPrev() { _jmSvSelect(_jmSvIdx - 1); }
     function _jmSvNext() { _jmSvSelect(_jmSvIdx + 1); }
