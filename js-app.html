@@ -4461,22 +4461,28 @@
     //   전달대기 = stu_member→'추천' FIELD_CHANGE 중 (회원,물건) 아직 전달완료 안 온 것 (날짜=추천 시각)
     //   추천완료 = chuchen_state→'전달완료' FIELD_CHANGE (날짜=그 시각)
     //   돈클 회원 한정(서버 필터). 최근 7일(오늘 포함, 역순), 담당=m_name_id 필터(클라). 숫자클릭 → 입찰물건관리 드릴다운
-    function loadDonkleRequestDashboard(force) {
+    function loadDonkleRequestDashboard(force, btn) {
         const body = document.getElementById('donkleReqBody');
         if (window._donkleReqData && !force) { renderDonkleRequestDashboard(); return; }
         if (!(window.google && google.script && google.script.run)) return;
-        if (window._donkleReqLoading) return;
+        // force(수동 새로고침)는 stale 로딩 플래그에 막히지 않게 통과 — 서버 호출이 핸들러 없이 끊겨
+        // 플래그가 true로 갇히면 이후 새로고침이 영구히 무시되던 버그 방지.
+        if (window._donkleReqLoading && !force) return;
         window._donkleReqLoading = true;
-        if (body && !window._donkleReqData) body.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-gray-400">데이터 로딩 중...</td></tr>';
+        const restoreBtn = () => { if (btn) { btn.textContent = btn.dataset.origText || '새로고침'; btn.disabled = false; } };
+        if (btn) { btn.dataset.origText = btn.textContent; btn.textContent = '갱신 중…'; btn.disabled = true; }
+        if (body && !window._donkleReqData) body.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-400">데이터 로딩 중...</td></tr>';
         google.script.run
             .withSuccessHandler(d => {
                 window._donkleReqData = d || { days: [], events: [], managers: [] };
                 window._donkleReqLoading = false;
                 renderDonkleRequestDashboard();
+                restoreBtn();
             })
             .withFailureHandler(() => {
                 window._donkleReqLoading = false;
-                if (body) body.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-red-400">로드 실패</td></tr>';
+                restoreBtn();
+                if (body) body.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-red-400">로드 실패</td></tr>';
             })
             .getDonkleRequestDashboard();
     }
