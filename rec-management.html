@@ -618,16 +618,27 @@
     return (groupOfWeek(wm)===g) ? wm : addDays(wm,7);
   }
   const _recInWeek = (name, mon) => { const sun=addDays(mon,6); return DELIVERED.some(x=>x.name===name && x.status==='추천' && (function(){const d=parseDate(x.date);return !!d && d>=mon && d<=sun;})()); };
-  // 누적 밀림(추천대기예정): 그룹 첫 작업주~현재 작업주 중 '마감 지났는데 추천 0건'인 작업주 수
+  // 누적 밀림(추천대기예정) = (마감 지난 의무주 수) − (기준일까지 실제 추천한 distinct 주 수)
+  //  · 오프주/늦은 추천 1건 = 가장 오래된 밀린 긴급 1건 해소 (작업주 안에서만 세던 옛 방식 → 오프주 처리 반영 안 되던 버그 수정)
+  //  · 기준일=viewNowDate(): 직전주 보기엔 그 주 일요일 → 이후 추천 제외(과거 3 유지), 오늘 보기엔 오늘까지 추천 포함(처리분 차감)
   function owedCyclesFor(name, g, curOblMon){
     if(!g || !GROUP_ANCHOR) return 0;
-    let wmon = weekMonday((g==='A') ? new Date(GROUP_ANCHOR) : addDays(GROUP_ANCHOR,7));
-    let cnt=0, guard=0;
+    const firstMon = weekMonday((g==='A') ? new Date(GROUP_ANCHOR) : addDays(GROUP_ANCHOR,7));
+    const vnow = viewNowDate();
+    // (1) 마감(금요일) 지난 의무주 수 — firstMon부터 14일 간격, curOblMon 이내
+    let due=0, wmon=new Date(firstMon), guard=0;
     while(wmon <= curOblMon && guard++ < 520){
-      if(addDays(wmon,4) < viewNowDate() && !_recInWeek(name, wmon)) cnt++;  // 작업주 금요일이 기준시점 지난 주만
+      if(addDays(wmon,4) < vnow) due++;
       wmon = addDays(wmon,14);
     }
-    return cnt;
+    // (2) firstMon~기준일 사이 실제 추천한 distinct 주(월요일) 수 — 오프주/늦은 추천도 슬롯 해소로 인정
+    const recWeeks={};
+    DELIVERED.forEach(x=>{
+      if(x.name!==name || x.status!=='추천') return;
+      const d=parseDate(x.date); if(!d || d>vnow || d<firstMon) return;
+      recWeeks[weekMonday(d).getTime()]=true;
+    });
+    return Math.max(0, due - Object.keys(recWeeks).length);
   }
   // 회원 1명을 버킷으로 분류 (카드=distinct, 그리드 owed는 누적수)
   function recBuckets(m){
