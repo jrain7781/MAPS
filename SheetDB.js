@@ -2186,15 +2186,20 @@ function accrueBidsDaily() {
   if (!itemSheet || itemSheet.getLastRow() < 2) return { scanned: 0, accrued: 0 };
   const idata = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, ITEM_HEADERS.length).getValues();
 
-  // 기존 (member,item) 입찰 적립 set
+  // 기존 (member,item) 적립 set — 입찰 + 추천(상위 보강용)
   const misSheet = ensureMembersItemStatusSheet_();
-  const seen = {};
+  const seen = {};       // 입찰 적립됨
+  const seenRec = {};    // 추천 적립됨 (입찰 시 추천 자동보강 판정용)
   if (misSheet.getLastRow() >= 2) {
     const md = misSheet.getRange(2, 1, misSheet.getLastRow() - 1, MIS_HEADERS.length).getValues();
-    for (let i = 0; i < md.length; i++) if (String(md[i][9]) === '입찰') seen[String(md[i][1]) + '|' + String(md[i][5])] = true;
+    for (let i = 0; i < md.length; i++) {
+      const k = String(md[i][1]) + '|' + String(md[i][5]);
+      if (String(md[i][9]) === '입찰') seen[k] = true;
+      else if (String(md[i][9]) === '추천') seenRec[k] = true;
+    }
   }
 
-  const newRows = []; let scanned = 0;
+  const newRows = []; let scanned = 0, recAdded = 0;
   for (let i = 0; i < idata.length; i++) {
     const r = idata[i];
     if (String(r[4] || '').trim() !== '입찰') continue;        // stu_member=입찰
@@ -2215,14 +2220,27 @@ function accrueBidsDaily() {
       _inDateToIso_(inD),  // Q: event_date = 입찰일(in_date)
       String(r[20] || '')  // R: items_youngdo (용도)
     ]);
+    // [상위보강] 입찰 적립 시 (회원,물건) 추천 없으면 추천도 자동 등록 (event_date = in_date)
+    if (!seenRec[key]) {
+      seenRec[key] = true;
+      const recId = 'MIS' + now.getTime() + Math.floor(Math.random() * 1000) + newRows.length;
+      newRows.push([
+        recId, memberId, String(r[6] || ''), String(r[5] || ''), String(r[14] || ''), itemId,
+        inD, String(r[2] || ''), String(r[3] || ''), '추천', now.toISOString(),
+        String(r[22] || ''), String(r[7] || ''), '', '', '',
+        _inDateToIso_(inD),  // Q: event_date = in_date (추천도 동일)
+        String(r[20] || '')
+      ]);
+      recAdded++;
+    }
   }
   if (newRows.length) {
     const lr = misSheet.getLastRow();
     misSheet.getRange(lr + 1, 1, newRows.length, MIS_HEADERS.length).setValues(newRows);
     SpreadsheetApp.flush();
   }
-  Logger.log('[입찰적립] 대상(입찰&지난) ' + scanned + ' → 신규 적립 ' + newRows.length);
-  return { scanned: scanned, accrued: newRows.length };
+  Logger.log('[입찰적립] 대상(입찰&지난) ' + scanned + ' → 신규 입찰 ' + (newRows.length - recAdded) + ' + 추천보강 ' + recAdded);
+  return { scanned: scanned, accrued: newRows.length, recAdded: recAdded };
 }
 
 /**
@@ -2243,7 +2261,8 @@ function setupBidAccrualTrigger() {
 // 메뉴: 입찰 적립 지금 실행
 function menuDonkleBidAccrueNow_() {
   const r = accrueBidsDaily();
-  SpreadsheetApp.getUi().alert('입찰 적립 실행 결과\n\n대상(입찰 & 입찰일 지남): ' + r.scanned + '건\n신규 적립: ' + r.accrued + '건');
+  const recAdded = r.recAdded || 0;
+  SpreadsheetApp.getUi().alert('입찰 적립 실행 결과\n\n대상(입찰 & 입찰일 지남): ' + r.scanned + '건\n신규 입찰: ' + (r.accrued - recAdded) + '건\n추천 자동보강: ' + recAdded + '건');
 }
 // 메뉴: 실행 시각 설정 + 트리거 설치
 function menuDonkleBidTrigger_() {
@@ -2256,6 +2275,125 @@ function menuDonkleBidTrigger_() {
   saveSetting_(DONKLE_BID_HOUR_KEY, String(h));
   const setH = setupBidAccrualTrigger();
   ui.alert('✅ 입찰 적립 트리거 설치 완료\n\n매일 ' + setH + '시에 자동 실행됩니다.');
+}
+
+/**
+ * [돈클] 상위 상태 자동보강 — 입찰/낙찰 적립 시 누락된 상위 상태(추천·입찰)를 (회원,물건)에 등록.
+ *  · 입찰 → 추천 없으면 추천 1건
+ *  · 낙찰 → 추천·입찰 없으면 각각
+ *  · 보강 행 event_date = items.in_date(요청일자), recorded_at = now. 추천 가드(stu='추천') 우회(합성 보강).
+ *  · dedup: 기존 (회원,물건,상태) 있으면 skip. append-only.
+ * @returns {number} 추가 행 수
+ */
+function backfillUpstreamStatus_(itemId, memberId, memberName, triggerStatus) {
+  try {
+    if (!itemId || !memberId) return 0;
+    const need = triggerStatus === '낙찰' ? ['추천', '입찰'] : (triggerStatus === '입찰' ? ['추천'] : []);
+    if (!need.length) return 0;
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const itemSheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (!itemSheet || itemSheet.getLastRow() < 2) return 0;
+    const itMatch = itemSheet.getRange(2, 1, itemSheet.getLastRow() - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true).findNext();
+    if (!itMatch) return 0;
+    const r = itemSheet.getRange(itMatch.getRow(), 1, 1, ITEM_HEADERS.length).getValues()[0];
+
+    // 해당 (회원,물건) 기존 상태 set
+    const misSheet = ensureMembersItemStatusSheet_();
+    const have = {};
+    if (misSheet.getLastRow() >= 2) {
+      const hits = misSheet.getRange(2, 6, misSheet.getLastRow() - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true).findAll();
+      for (let h = 0; h < hits.length; h++) {
+        const rr = misSheet.getRange(hits[h].getRow(), 1, 1, MIS_HEADERS.length).getValues()[0];
+        if (String(rr[1]) === String(memberId)) have[String(rr[9])] = true;
+      }
+    }
+    const now = new Date();
+    const evDate = _inDateToIso_(r[1]);    // in_date → ISO
+    const mName = String(memberName || r[6] || '');
+    const newRows = [];
+    for (let n = 0; n < need.length; n++) {
+      const st = need[n];
+      if (have[st]) continue;
+      have[st] = true;
+      const misId = 'MIS' + now.getTime() + Math.floor(Math.random() * 1000) + newRows.length;
+      newRows.push([
+        misId, String(memberId), mName, String(r[5] || ''), String(r[14] || ''), String(itemId),
+        String(r[1] || ''), String(r[2] || ''), String(r[3] || ''), st, now.toISOString(),
+        String(r[22] || ''), String(r[7] || ''), '', '', '',
+        evDate, String(r[20] || '')
+      ]);
+    }
+    if (newRows.length) {
+      const lr = misSheet.getLastRow();
+      misSheet.getRange(lr + 1, 1, newRows.length, MIS_HEADERS.length).setValues(newRows);
+    }
+    return newRows.length;
+  } catch (e) { Logger.log('[backfillUpstreamStatus_] (' + triggerStatus + ',' + itemId + '): ' + e.toString()); return 0; }
+}
+
+/**
+ * [돈클] 일회성 백필 — 기존 members_item_status의 입찰/낙찰 행 기준으로 누락된 상위 상태를 보강.
+ *  · 입찰 행 → (회원,물건) 추천 없으면 추천 추가
+ *  · 낙찰 행 → 추천·입찰 없으면 각각 추가
+ *  · 기존 행은 수정/삭제 안 함(append-only). 보강 행 event_date = 그 행의 in_date(G), recorded_at = now.
+ *  · 재실행 안전: dedup(회원,물건,상태). dryRun 지원.
+ * @param {Object} opts {dryRun:bool}
+ */
+function backfillUpstreamFromExistingMis(opts) {
+  const dryRun = !!(opts && opts.dryRun);
+  const misSheet = ensureMembersItemStatusSheet_();
+  const last = misSheet.getLastRow();
+  if (last < 2) return { scanned: 0, added: 0, byStatus: { '추천': 0, '입찰': 0 }, dryRun: dryRun };
+  const md = misSheet.getRange(2, 1, last - 1, MIS_HEADERS.length).getValues();
+
+  // 기존 (회원|물건|상태) 존재 set
+  const have = {};
+  for (let i = 0; i < md.length; i++) have[String(md[i][1]) + '|' + String(md[i][5]) + '|' + String(md[i][9])] = true;
+
+  const now = new Date();
+  const newRows = []; const addedKey = {};
+  const byStatus = { '추천': 0, '입찰': 0 };
+  for (let i = 0; i < md.length; i++) {
+    const row = md[i];
+    const st = String(row[9]);
+    if (st !== '입찰' && st !== '낙찰') continue;
+    const member = String(row[1]), item = String(row[5]);
+    if (!member || !item) continue;
+    const need = st === '낙찰' ? ['추천', '입찰'] : ['추천'];
+    for (let n = 0; n < need.length; n++) {
+      const want = need[n];
+      const key = member + '|' + item + '|' + want;
+      if (have[key] || addedKey[key]) continue;
+      addedKey[key] = true; byStatus[want]++;
+      const misId = 'MIS' + now.getTime() + Math.floor(Math.random() * 1000) + newRows.length;
+      const evDate = _inDateToIso_(row[6]);   // G: in_date
+      newRows.push([
+        misId, member, String(row[2] || ''), String(row[3] || ''), String(row[4] || ''),
+        item, String(row[6] || ''), String(row[7] || ''), String(row[8] || ''), want,
+        now.toISOString(), String(row[11] || ''), String(row[12] || ''), '', '', '',
+        evDate, String(row[17] || '')
+      ]);
+    }
+  }
+  if (!dryRun && newRows.length) {
+    const lr = misSheet.getLastRow();
+    misSheet.getRange(lr + 1, 1, newRows.length, MIS_HEADERS.length).setValues(newRows);
+    SpreadsheetApp.flush();
+  }
+  Logger.log('[상위보강백필] 스캔 ' + md.length + '행 → 추천+' + byStatus['추천'] + ' 입찰+' + byStatus['입찰'] + (dryRun ? ' (dryRun)' : ''));
+  return { scanned: md.length, added: newRows.length, byStatus: byStatus, dryRun: dryRun };
+}
+
+// 메뉴: 일회성 상위보강 백필 (미리보기 → 실행)
+function menuDonkleBackfillUpstream_() {
+  const ui = SpreadsheetApp.getUi();
+  const dry = backfillUpstreamFromExistingMis({ dryRun: true });
+  const msg = '기존 입찰/낙찰 행 기준 누락 상위상태 보강 (기존행은 안 건드림)\n\n'
+    + '추가될 추천: ' + dry.byStatus['추천'] + '건\n추가될 입찰: ' + dry.byStatus['입찰'] + '건\n합계: ' + dry.added + '건\n\n실행할까요?';
+  const resp = ui.alert('상위보강 백필 미리보기', msg, ui.ButtonSet.OK_CANCEL);
+  if (resp !== ui.Button.OK) { ui.alert('취소됨'); return; }
+  const r = backfillUpstreamFromExistingMis({ dryRun: false });
+  ui.alert('✅ 상위보강 백필 완료\n\n추천 +' + r.byStatus['추천'] + ' / 입찰 +' + r.byStatus['입찰'] + '\n총 ' + r.added + '건 추가');
 }
 
 /**
@@ -6561,7 +6699,12 @@ function writeItemHistoryBatch_(entries) {
       if (fn === 'chuchen_state' && tv === '전달완료') accStatus = '추천';
       else if (fn === 'stu_member' && tv === '불가') accStatus = '불가';
       else if (fn === 'stu_member' && tv === '낙찰') accStatus = '낙찰';
-      if (accStatus) { accrueMembersItemStatus_(ep.item_id, ep.member_id, ep.member_name, accStatus); continue; }
+      if (accStatus) {
+        accrueMembersItemStatus_(ep.item_id, ep.member_id, ep.member_name, accStatus);
+        // [상위보강] 낙찰 적립 시 (회원,물건) 추천·입찰 없으면 자동 등록 (event_date = in_date)
+        if (accStatus === '낙찰') backfillUpstreamStatus_(ep.item_id, ep.member_id, ep.member_name, '낙찰');
+        continue;
+      }
 
       // [돈클] 미정 적립 — 전달완료된 추천을 잃은 회원에게만 (해당 회원·물건에 '추천' MIS행 존재 시)
       //   ① 단순 미정(같은 회원): stu_member 추천→미정 (자동만료/수동) → 그 회원
