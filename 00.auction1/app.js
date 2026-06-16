@@ -1738,7 +1738,17 @@
       } else {
         valHtml = `<input type="text" class="inp fval-inp" value="${escAttr(r.value || '')}" placeholder="값">`;
       }
+      // 이 필터로 '빠진(제외)' 건수 (앞쪽 배지) — 캐시(raw) 있을 때만. 클릭 시 전체탭에 제외 건만 표시.
+      let cfCountHtml = '<span class="cf-count cf-count-empty" title="크롤링 후 표시">–</span>';
+      try {
+        if (lastRawItems && lastRawItems.length && r.typeId && String(r.value || '').trim() !== '') {
+          const { items: passed } = applyCustomFilters(lastRawItems, [r]);
+          const ex = lastRawItems.length - passed.length;
+          cfCountHtml = `<span class="cf-count" data-i="${i}" title="이 필터로 제외된 건수 — 클릭 시 전체탭에 그 건들만 표시">${ex}</span>`;
+        }
+      } catch (_) {}
       return `<div class="cust-row" data-i="${i}">
+        ${cfCountHtml}
         <select class="sel ftype-sel">${typeOpts}</select>
         <select class="sel fop-sel">${opOpts}</select>
         ${valHtml}
@@ -1748,6 +1758,8 @@
     }).join('');
     wrap.querySelectorAll('.cust-row').forEach(row => {
       const i = parseInt(row.dataset.i, 10);
+      const cfBadge = row.querySelector('.cf-count');
+      if (cfBadge) cfBadge.addEventListener('click', () => { if (!cfBadge.classList.contains('cf-count-empty')) showFilterExcluded(i); });
       row.querySelector('.ftype-sel').addEventListener('change', e => onCustTypeChange(i, e.target));
       row.querySelector('.fop-sel').addEventListener('change', e => { custRows[i].op = e.target.value; refilterFromCache({ quiet: true }); });
       const inp = row.querySelector('.fval-inp');
@@ -1759,6 +1771,48 @@
       const logicSel = row.querySelector('.flogic-sel');
       if (logicSel) logicSel.addEventListener('change', e => { custRows[i].logic = e.target.value; refilterFromCache({ quiet: true }); });
       row.querySelector('.row-del').addEventListener('click', () => { custRows.splice(i, 1); renderCustRows(); });
+    });
+  }
+
+  // 배지 클릭 → 이 필터로 '빠진(제외)' 건들만 하단 그리드 전체탭에 표시
+  function showFilterExcluded(i) {
+    const r = custRows[i];
+    if (!r || !r.typeId || String(r.value || '').trim() === '') return;
+    if (!lastRawItems || !lastRawItems.length) return;
+    const { items: passed } = applyCustomFilters(lastRawItems, [r]);
+    const passSet = new Set(passed);
+    const excluded = lastRawItems.filter(it => !passSet.has(it));
+    // 전체 탭 활성 표시 + 제외 목록만 렌더
+    viewMode = 'all';
+    document.getElementById('viewTabFiltered')?.classList.remove('active');
+    document.getElementById('viewTabAll')?.classList.add('active');
+    renderResults(excluded);
+    const panel = document.getElementById('resultPanel');
+    if (panel) { panel.classList.remove('hidden'); panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  }
+
+  // 추가필터 각 행 앞 '제외 건수' 배지 갱신 (재렌더 없이 in-place — 콤보 포커스/입력 유지)
+  function updateCustRowCounts() {
+    const wrap = document.getElementById('custFilterRows');
+    if (!wrap) return;
+    wrap.querySelectorAll('.cust-row').forEach(row => {
+      const i = parseInt(row.dataset.i, 10);
+      const badge = row.querySelector('.cf-count');
+      const r = custRows[i];
+      if (!badge || !r) return;
+      if (lastRawItems && lastRawItems.length && r.typeId && String(r.value || '').trim() !== '') {
+        try {
+          const { items: passed } = applyCustomFilters(lastRawItems, [r]);
+          badge.classList.remove('cf-count-empty');
+          badge.textContent = lastRawItems.length - passed.length;   // 제외(빠진) 건수
+          badge.title = '이 필터로 제외된 건수 — 클릭 시 전체탭에 그 건들만 표시';
+          badge.dataset.i = i;
+        } catch (_) {}
+      } else {
+        badge.classList.add('cf-count-empty');
+        badge.textContent = '–';
+        badge.title = '크롤링 후 표시';
+      }
     });
   }
 
@@ -2766,6 +2820,9 @@
     const elLegacy   = document.getElementById('resCount');
     if (elFiltered) elFiltered.textContent = filteredN;
     if (elAll)      elAll.textContent      = rawN;
+    // '전체' 옆에 필터로 제외된 건수 표시 (보고 빼기 안 하게)
+    const elExcluded = document.getElementById('resCountExcluded');
+    if (elExcluded) { const ex = Math.max(0, rawN - filteredN); elExcluded.textContent = (applied && ex > 0) ? ` (제외 ${ex})` : ''; }
     // 호환성: 기존 resCount 도 업데이트 (안 보이지만 데이터 바인딩 코드 있을 수 있음)
     if (elLegacy)   elLegacy.textContent   = applied ? `${rawN} → ${filteredN} (필터 ${applied}개 적용)` : rawN;
   }
@@ -2786,6 +2843,7 @@
     lastFilteredItems = filtered;
     lastFilterApplied = applied;
     setResultCounts(rawItems.length, filtered.length, applied);
+    updateCustRowCounts();   // 추가필터 행별 단독 통과 건수 갱신
     showResTimestamp(ts);
     document.getElementById('resultPanel').classList.remove('hidden');
     applySort(); // 현재 정렬 키 있으면 적용
