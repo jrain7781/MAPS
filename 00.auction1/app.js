@@ -2307,6 +2307,31 @@
     renderAddrTags();
   }
 
+  // ── 주소 제거 ─ 선택 시/도만 빼고 나머지 시/도 전부 추가. 이미 추가됐으면 그 시/도만 제거. ──
+  function removeAddress() {
+    const sido = document.getElementById('f_addrSido');
+    const gugun = document.getElementById('f_addrGugun');
+    const dong = document.getElementById('f_addrDong');
+    const selSido = sido.value;
+    const selText = sido.options[sido.selectedIndex]?.text || '';
+    if (!selSido) { setStatus('제거할 시/도를 먼저 선택하세요.', true); return; }
+    if (addrTags.length > 0) {
+      // 이미 채워져 있음 → 그 시/도만 제거
+      const before = addrTags.length;
+      addrTags = addrTags.filter(a => String(a.sido) !== String(selSido));
+      if (addrTags.length === before) setStatus(`추가주소에 '${selText}' 가 없습니다.`, true);
+      else setStatus(`'${selText}' 제외 — 추가주소 ${addrTags.length}개`);
+    } else {
+      // 비어있음 → 선택 시/도 빼고 전체 시/도 추가
+      const others = (D.SIDO || []).filter(o => o.v && String(o.v) !== String(selSido)).slice(0, 20);
+      others.forEach(o => addrTags.push({ text: o.t, sido: o.v, gugun: '', dong: '' }));
+      setStatus(`'${selText}' 만 빼고 ${addrTags.length}개 시/도 추가`);
+    }
+    sido.value = ''; gugun.value = ''; dong.value = '';
+    try { sido.dispatchEvent(new Event('change')); } catch (e) {}
+    renderAddrTags();
+  }
+
   // ── 필터 종류 관리 (이름 변경/삭제) ─────────────────────────
   function openManageTypes() {
     if (!ftypes.length) { alert('등록된 필터 종류가 없습니다.'); return; }
@@ -2421,6 +2446,7 @@
 
     // 주소 추가
     document.getElementById('btnAddrAdd').addEventListener('click', addAddress);
+    document.getElementById('btnAddrRemove')?.addEventListener('click', removeAddress);
 
     // 추가 필터 조건
     document.getElementById('btnAddCustRow').addEventListener('click', () => {
