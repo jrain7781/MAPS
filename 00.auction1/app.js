@@ -2307,25 +2307,36 @@
     renderAddrTags();
   }
 
-  // ── 주소 제거 ─ 선택 시/도만 빼고 나머지 시/도 전부 추가. 이미 추가됐으면 그 시/도만 제거. ──
+  // 태그의 시/도 value 추출 (객체 sido 우선, 없으면 텍스트 첫 단어 → value). 저장값 형식 무관 매칭.
+  function _tagSido(a) {
+    if (a && a.sido) return String(a.sido);
+    const w = String(_addrTagText(a)).trim().split(/\s+/)[0];
+    const o = (D.SIDO || []).find(x => x.t === w);
+    return o ? String(o.v) : '';
+  }
+  // ── 주소 제거 ─ X가 목록에 있으면 그것만 제거, 없으면 (X 빼고) 목록에 없는 나머지 시/도를 전부 채움.
+  //   → 빈 목록/작은 목록/전체-일부 어떤 상태든 "X만 빼고 전부" 가 직관대로 됨.
   function removeAddress() {
     const sido = document.getElementById('f_addrSido');
     const gugun = document.getElementById('f_addrGugun');
     const dong = document.getElementById('f_addrDong');
-    const selSido = sido.value;
+    const selSido = String(sido.value || '');
     const selText = sido.options[sido.selectedIndex]?.text || '';
     if (!selSido) { setStatus('제거할 시/도를 먼저 선택하세요.', true); return; }
-    if (addrTags.length > 0) {
-      // 이미 채워져 있음 → 그 시/도만 제거
-      const before = addrTags.length;
-      addrTags = addrTags.filter(a => String(a.sido) !== String(selSido));
-      if (addrTags.length === before) setStatus(`추가주소에 '${selText}' 가 없습니다.`, true);
-      else setStatus(`'${selText}' 제외 — 추가주소 ${addrTags.length}개`);
+    const hasX = addrTags.some(a => _tagSido(a) === selSido);
+    if (hasX) {
+      // 이미 있으면 그 시/도만 제거 (또 누르면 그것만 빠짐)
+      addrTags = addrTags.filter(a => _tagSido(a) !== selSido);
+      setStatus(`'${selText}' 제외 — 추가주소 ${addrTags.length}개`);
     } else {
-      // 비어있음 → 선택 시/도 빼고 전체 시/도 추가
-      const others = (D.SIDO || []).filter(o => o.v && String(o.v) !== String(selSido)).slice(0, 20);
-      others.forEach(o => addrTags.push({ text: o.t, sido: o.v, gugun: '', dong: '' }));
-      setStatus(`'${selText}' 만 빼고 ${addrTags.length}개 시/도 추가`);
+      // 없으면: X 빼고, 목록에 아직 없는 나머지 시/도를 전부 채움 (= X만 빼고 전국)
+      const present = new Set(addrTags.map(_tagSido).filter(Boolean));
+      (D.SIDO || []).forEach(o => {
+        if (o.v && String(o.v) !== selSido && !present.has(String(o.v)) && addrTags.length < 20) {
+          addrTags.push({ text: o.t, sido: o.v, gugun: '', dong: '' });
+        }
+      });
+      setStatus(`'${selText}' 만 빼고 채움 — 추가주소 ${addrTags.length}개`);
     }
     sido.value = ''; gugun.value = ''; dong.value = '';
     try { sido.dispatchEvent(new Event('change')); } catch (e) {}
