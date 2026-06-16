@@ -9609,12 +9609,11 @@ function getDonkleRequestDashboard() {
       return isNaN(d.getTime()) ? null : d;
     }
 
-    // 전달완료(회원|물건) 키 — 전체 기간 스캔(대기 판정용). 추천/완료 이벤트는 윈도우 내만 수집.
-    // ★ 전달완료(=추천완료)는 2경로: ① 수작업 FIELD_CHANGE chuchen_state→전달완료
-    //    ② 텔레그램 전달 TELEGRAM_SENT note='card' (같은 행에 chuchen_state→전달완료 태그 포함, [TelegramService.js])
-    //   → action 으로 거르지 말고 (텔레전달=TELEGRAM_SENT 이므로) 두 경로 모두 인정. getAutoApprovalStats recommend(tele+web)와 동일.
-    var deliveredKey = {};
-    var recEvents = [], doneEvents = [];
+    // (회원|물건)별 시간순 마지막 상태로 '전달대기/추천완료' 판정.
+    //   추천(stu_member→추천)=대기 시작 / 전달완료=대기 해소+완료 / 미정(취소)=대기 해소.
+    //   → 한 번 전달된 건은 (이후 미정이어도) 대기 아님. 미정 후 '재추천'만 다시 대기로 잡힘.
+    // ★ 전달완료(=추천완료) 2경로: ① FIELD_CHANGE chuchen_state→전달완료 ② TELEGRAM_SENT note='card'([TelegramService.js]).
+    var evs = [];   // {d, type:'rec'|'del'|'und', itemId, key}
     rows.forEach(function (row) {
       var itemId = String(row[4] || '').trim();
       var memberId = String(row[5] || '').trim();
@@ -9623,24 +9622,18 @@ function getDonkleRequestDashboard() {
       var note = String(row[8] || '').trim();
       var toVal = String(row[12] || '').trim();
       var fieldName = String(row[13] || '').trim();
+      var dEv = parseDate(row[1]);
       var key = memberId + '|' + itemId;
-      var isDelivery = (action === 'TELEGRAM_SENT' && note === 'card')
-        || (fieldName === 'chuchen_state' && toVal === '전달완료');
-      var isRecommend = (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '추천');
-      var isUndecided = (fieldName === 'stu_member' && toVal === '미정');   // 미정=취소
-      if (isDelivery) {
-        deliveredKey[key] = true;
-        var dd = parseDate(row[1]);
-        if (dd && dd >= winStart) doneEvents.push({ d: dd, itemId: itemId, key: key });
-      } else if (isRecommend) {
-        var dr = parseDate(row[1]);
-        if (dr && dr >= winStart) recEvents.push({ d: dr, itemId: itemId, key: key });
-      } else if (isUndecided) {
-        // 미정(취소) → 전달완료 상태 해제. (행 시간순 처리라 마지막 상태가 반영됨)
-        //   이후 재추천이 다시 '대기'로 잡히고, 재전달완료되면 다시 deliveredKey=true.
-        deliveredKey[key] = false;
+      if ((action === 'TELEGRAM_SENT' && note === 'card') || (fieldName === 'chuchen_state' && toVal === '전달완료')) {
+        evs.push({ d: dEv, type: 'del', itemId: itemId, key: key });
+      } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '추천') {
+        evs.push({ d: dEv, type: 'rec', itemId: itemId, key: key });
+      } else if (fieldName === 'stu_member' && toVal === '미정') {
+        evs.push({ d: dEv, type: 'und', itemId: itemId, key: key });
       }
     });
+    // 시간순 정렬 (백필 등으로 행 순서가 시간순이 아닐 수 있어 안전하게 정렬 후 상태 전이)
+    evs.sort(function (a, b) { return (a.d ? a.d.getTime() : 0) - (b.d ? b.d.getTime() : 0); });
 
     var events = [], mgrSet = {};
     function emit(d, kind, itemId) {
@@ -9648,7 +9641,15 @@ function getDonkleRequestDashboard() {
       if (mgr) mgrSet[mgr] = true;
       events.push({ date: Utilities.formatDate(d, tz, 'yyyy-MM-dd'), kind: kind, itemId: itemId, manager: mgr });
     }
-    recEvents.forEach(function (e) { if (!deliveredKey[e.key]) emit(e.d, 'wait', e.itemId); });
+    var pendingRec = {};   // key → 아직 전달 안 된 추천 {d, itemId}
+    var doneEvents = [];
+    evs.forEach(function (e) {
+      if (e.type === 'del') { delete pendingRec[e.key]; if (e.d && e.d >= winStart) doneEvents.push(e); }
+      else if (e.type === 'rec') { pendingRec[e.key] = e; }     // 새 추천 → 대기 (미전달 추천 날짜 갱신)
+      else if (e.type === 'und') { delete pendingRec[e.key]; }  // 미정(취소) → 대기 해소
+    });
+    // 대기 = 끝까지 전달 안 된 추천(윈도우 내). 완료 = 전달완료 이벤트(윈도우 내).
+    Object.keys(pendingRec).forEach(function (k) { var p = pendingRec[k]; if (p.d && p.d >= winStart) emit(p.d, 'wait', p.itemId); });
     doneEvents.forEach(function (e) { emit(e.d, 'done', e.itemId); });
 
     // ── 입찰등록: members_item_status status='입찰' (매일 accrueBidsDaily가 in_date<=오늘(당일 포함) 적립) ──
