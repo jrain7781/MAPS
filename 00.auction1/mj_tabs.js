@@ -303,7 +303,15 @@
       payload.headless = capHeadlessOn(key);   // i/d/k 탭별 조사숨김
     }
     $log(key).textContent = '';
-    if (key === 'cc') { ccResults.length = 0; renderCcResults(); }
+    if (key === 'cc') {
+      // 이번에 실행하는 건들의 기존 결과만 제거(재조회로 갱신) — 나머지 건(일별 결과)은 보존.
+      // (예전엔 ccResults 전체를 비워, 일별 실행 후 1건만 개별 실행하면 나머지 결과가 날아가 새로고침 시 사라졌음)
+      const _runKeys = new Set((payload.cases || []).map(c => ccKeyOf(c)));
+      for (let _i = ccResults.length - 1; _i >= 0; _i--) {
+        if (_runKeys.has(ccKeyOf(ccResults[_i]))) ccResults.splice(_i, 1);
+      }
+      renderCcResults();
+    }
     log(key, '▶ ' + CAP_SPEC[key].script + ' 시작 (활성 계정 ' + accounts.length + '개)', 'log-ok');
     setStatus(key, '실행중', 'running');
     setRunning(key, true);
@@ -486,7 +494,7 @@
       date: bidToYMD(r.bid_date), item_id: r.item_id || '', sakun_no: r.sakun_no || '', court: r.court || '',
       bid_date: r.bid_date || '', m_name: r.m_name || '', m_name_id: r.m_name_id || '',
       m_name_id_disp: r.m_name_id_disp || '', m_name_id_color: r.m_name_id_color || '', mid_member_id: r.mid_member_id || '',
-      bidprice: r.bidprice || '', maegak_price: r.maegak_price || '', buyer: r.buyer || '',
+      bidprice: r.bidprice || '', maegak_price: r.maegak_price || '', maegak_date: r.maegak_date || '', buyer: r.buyer || '',
       state_kind: r.state_kind || '', status: r.status || '', category: ccCategory(r), is_buga: !!r.is_buga,
       detail: r.detail || '', view_url: r.view_url || '', screenshot_path: r.screenshot_path || '', stu_member: r.stu_member || '',
       load_ts: loadMap[bidToYMD(r.bid_date)] || '', match_ts: matchTs
@@ -530,7 +538,19 @@
       const map = loadCcByDate();
       const groups = {};
       rows.forEach(r => { const ymd = bidToYMD(r.bid_date); if (!ymd) return; (groups[ymd] = groups[ymd] || []).push(r); });
-      Object.keys(groups).forEach(ymd => { map[ymd] = { rows: groups[ymd], ts: Date.now() }; });
+      Object.keys(groups).forEach(ymd => {
+        // 기존 날짜 자료와 key(사건) 기준 병합(upsert) — 개별 실행이 같은 날짜의 다른 건을 덮어쓰지 않게.
+        // 단, 결과 없는(대기) 행이 기존에 저장된 결과를 지우지 않도록 결과 있는 행만 덮어씀.
+        const existing = (map[ymd] && Array.isArray(map[ymd].rows)) ? map[ymd].rows : [];
+        const byKey = {};
+        existing.forEach(r => { byKey[ccKeyOf(r)] = r; });
+        groups[ymd].forEach(r => {
+          const k = ccKeyOf(r);
+          const hasResult = !!(r.state_kind || r.status || r.is_buga);
+          if (hasResult || !byKey[k]) byKey[k] = r;
+        });
+        map[ymd] = { rows: Object.values(byKey), ts: Date.now() };
+      });
       writeCcByDate(map);
       const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]');
       if (cont && cont.style.display !== 'none') renderCcCalendar(ccCalYM ? ccCalYM.y : null, ccCalYM ? ccCalYM.m : null);
@@ -563,7 +583,8 @@
     }).catch(() => fallback());
   }
   let ccCalYM = null;            // {y, m(0-based)}
-  const ccCalChecked = new Set(); // 다중 선택된 날짜(ymd)
+  const ccCalChecked = new Set(); // 체크박스로 다중 선택된 날짜(ymd) — 배치 불러오기용 (하이라이트 X)
+  let ccCalViewed = null;         // 카드 클릭으로 불러와(보고 있는) 하이라이트되는 날짜(ymd) — 단일
   function _todayYMD() { return ymd(new Date()); }
   function toggleCcCalendar() {
     const cont = $card('cc')?.querySelector('[data-role="cc-calendar"]'); if (!cont) return;
@@ -631,7 +652,7 @@
       <b style="min-width:96px;text-align:center;font-size:15px">${y}년 ${m + 1}월</b>
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="1">›</button>
       <button type="button" class="btn_box_sss btn_white" data-cal-nav="today">오늘</button>
-      <span style="margin-left:6px;font-size:13px;display:inline-flex;align-items:center;gap:5px"><b style="color:#1f2937">입찰 ${mN}</b>${mkPill('낙찰', mNak, '#2563eb', null, 12)}${mkPill('불가', mBuga, '#111827', null, 12)}${mkPill('미입찰', mMiss, '#dc2626', null, 12)}${mkPill('확인불가', mUnk, '#9ca3af', '#111827', 12)}</span>
+      <span style="margin-left:6px;font-size:13px;display:inline-flex;align-items:center;gap:5px"><b style="color:#1f2937">입찰 ${mN}</b>${mkPill('낙찰', mNak, '#2563eb', null, 12)}${mkPill('불가', mBuga, '#111827', null, 12)}${mkPill('미입찰', mMiss, '#dc2626', null, 12)}${mkPill('매각', mUnk, '#64748b', '#fff', 12)}</span>
       <span style="flex:1"></span>
       <button type="button" class="btn_box_sss btn_blue bold" data-act="cal-load-sel">📥 선택 날짜 불러오기 (<span data-role="cal-sel-cnt">${ccCalChecked.size}</span>)</button>
     </div>`;
@@ -643,22 +664,26 @@
       const ym = ymd2(d);
       const c = _ccCellInfo(ym, map);
       const isToday = ym === today;
-      const checked = ccCalChecked.has(ym);
-      const border = isToday ? '2px solid #dc2626' : '1px solid #e5e7eb';
-      const bg = (c && c.n) ? '#eff6ff' : '#fff';
+      const checked = ccCalChecked.has(ym);   // 체크박스(배치 선택)
+      const viewed = (ccCalViewed === ym);    // 카드 클릭으로 불러온(보고 있는) 날짜만 하이라이트
+      // 하이라이트는 '보고 있는 날짜'에만 — 파랑 굵은 테두리 + 진한 파랑 바탕 + 글로우 (오늘보다 우선)
+      const border = viewed ? '2.5px solid #2563eb' : (isToday ? '2px solid #dc2626' : '1px solid #e5e7eb');
+      const bg = viewed ? '#bfdbfe' : ((c && c.n) ? '#eff6ff' : '#fff');
+      const selShadow = viewed ? 'box-shadow:0 0 0 3px rgba(37,99,235,.30);' : '';
       const circle = `<span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:${isToday ? '#dc2626' : '#e5e7eb'};color:${isToday ? '#fff' : '#374151'};font-weight:700;font-size:12px">${d}</span>`;
-      const cb = `<input type="checkbox" class="cal-cb" data-ymd="${ym}" ${checked ? 'checked' : ''} title="다중 선택" style="width:15px;height:15px;cursor:pointer">`;
+      // 체크박스 = 배치 선택('선택 날짜 불러오기'용). 카드 클릭과 별개로 직접 체크.
+      const cb = `<input type="checkbox" class="cal-cb" data-ymd="${ym}" ${checked ? 'checked' : ''} title="다중 선택 (체크 후 '선택 날짜 불러오기')" style="width:15px;height:15px;cursor:pointer">`;
       let body = '';
       if (c && c.n) {
         const tsLine = c.match_ts
           ? `<div style="margin-top:3px;font-size:10px;color:#6b7280;line-height:1.4">🎯 실행 ${_shortTs(c.match_ts)}</div>`
           : '';
-        body = `<div data-cal-day="${ym}" title="클릭: ${ym} 결과 보기" style="margin-top:4px;cursor:pointer;line-height:1.45;font-size:11px">
+        body = `<div data-cal-day="${ym}" style="margin-top:4px;line-height:1.45;font-size:11px">
           <div style="font-weight:700;color:#1f2937">입찰 ${c.n}건</div>
           <div style="font-weight:700;color:#2563eb">낙찰 ${c.nak}건 <span style="font-weight:600;color:#6b7280;font-size:10px">(패찰 ${c.maegak}건 유찰 ${c.jinhaeng}건)</span></div>
-          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">${mkPill('불가', c.buga, '#111827')}${mkPill('미입찰', c.miss, '#dc2626')}${mkPill('확인불가', c.unk, '#9ca3af', '#111827')}</div>${tsLine}</div>`;
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px">${mkPill('불가', c.buga, '#111827')}${mkPill('미입찰', c.miss, '#dc2626')}${mkPill('매각', c.unk, '#64748b', '#fff')}</div>${tsLine}</div>`;
       }
-      h += `<div style="min-height:84px;border:${border};border-radius:8px;padding:5px;background:${bg}">
+      h += `<div class="cc-cal-cell" data-cal-cell="${ym}" data-hasdata="${(c && c.n) ? 1 : 0}" data-today="${isToday ? 1 : 0}" title="카드 클릭: 이 날짜 결과 불러오기 · 체크박스: 다중 선택" style="min-height:84px;border:${border};border-radius:8px;padding:5px;background:${bg};${selShadow}cursor:pointer">
         <div style="display:flex;align-items:flex-start;justify-content:space-between">${circle}${cb}</div>${body}</div>`;
     }
     h += `</div>`;
@@ -670,11 +695,25 @@
       if (mm < 0) { mm = 11; yy--; } if (mm > 11) { mm = 0; yy++; }
       renderCcCalendar(yy, mm);
     }));
-    cont.querySelectorAll('[data-cal-day]').forEach(el => el.addEventListener('click', () => restoreCcDate(el.dataset.calDay)));
-    cont.querySelectorAll('.cal-cb').forEach(cb => cb.addEventListener('change', () => {
-      if (cb.checked) ccCalChecked.add(cb.dataset.ymd); else ccCalChecked.delete(cb.dataset.ymd);
-      const cnt = cont.querySelector('[data-role="cal-sel-cnt"]'); if (cnt) cnt.textContent = ccCalChecked.size;
-    }));
+    // 카드 클릭(체크박스 제외) → 그 날짜 결과 불러오기 + 그 카드만 하이라이트.
+    cont.querySelectorAll('[data-cal-cell]').forEach(cell => {
+      const cymd = cell.dataset.calCell;
+      cell.addEventListener('click', (e) => {
+        if (e.target.closest('.cal-cb')) return;     // 체크박스 클릭은 선택 토글만 (아래 change 핸들러)
+        if (cell.dataset.hasdata !== '1') return;     // 자료 없는 날짜는 불러올 것 없음
+        ccCalViewed = cymd;
+        renderCcCalendar(ccCalYM.y, ccCalYM.m);       // 하이라이트를 클릭한 카드로 이동
+        restoreCcDate(cymd);                          // 그날 저장 결과 불러오기
+      });
+    });
+    // 체크박스 = 배치 선택(하이라이트 없음). 카드 클릭 핸들러로 버블 안 되게 stopPropagation.
+    cont.querySelectorAll('.cal-cb').forEach(cb => {
+      cb.addEventListener('click', (e) => e.stopPropagation());
+      cb.addEventListener('change', () => {
+        if (cb.checked) ccCalChecked.add(cb.dataset.ymd); else ccCalChecked.delete(cb.dataset.ymd);
+        const cnt = cont.querySelector('[data-role="cal-sel-cnt"]'); if (cnt) cnt.textContent = ccCalChecked.size;
+      });
+    });
     cont.querySelector('[data-act="cal-load-sel"]')?.addEventListener('click', loadProgressSelectedDates);
   }
   // 달력에서 다중 체크한 날짜들을 MAPS에서 불러오기 (범위 조회 후 선택일만 필터)
@@ -818,6 +857,21 @@
     return isNaN(n) ? '' : n.toLocaleString('ko-KR');
   }
   function ccStateKind(r) { return String(r.state_kind || r.status || '').trim() || (r.status === '조회없음' ? '조회없음' : '진행중'); }
+  // 현재상태(stu_member) 배지 클래스 — MAPS getStatusTagClass 와 동일 매핑 (.stu-tag* CSS)
+  function mapsStuClass(status) {
+    switch (String(status || '').trim()) {
+      case '상품': return 'stu-tag stu-tag-product';
+      case '입찰': return 'stu-tag stu-tag-bid';
+      case '추천': return 'stu-tag stu-tag-recommend';
+      case '낙찰': return 'stu-tag stu-tag-win';
+      case '검증': return 'stu-tag stu-tag-verified';
+      case '폐기': return 'stu-tag stu-tag-discard';
+      case '취소':
+      case '변경':
+      case '불가': return 'stu-tag stu-tag-changed';
+      default: return 'stu-tag stu-tag-default';   // 미정/등록전 등
+    }
+  }
 
   const _won = (v) => parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10) || 0;
   function ccKeyOf(o) { return (o && o.item_id && String(o.item_id)) || (String(o.sakun_no || '') + '|' + String(o.bid_date || '') + '|' + String(o.court || '')); }
@@ -868,19 +922,36 @@
       const cat = pending ? '' : ccCategory(r);
       // 실행 전(pending)엔 ✓/✗ 대신 무표시
       const keyCell = (v, hit) => pending ? escapeHtml(v || '') : ccKeyCell(v, hit);
-      // 결과 라벨: 낙찰(파랑)/미입찰(빨강)/패찰=매각가>입찰가(회색)/확인불가/불가. 그 외=진행중·조회없음·매각
-      const _catStyle = { '낙찰': 'background:#2563eb;color:#fff', '미입찰': 'background:#dc2626;color:#fff', '일반': 'background:#6b7280;color:#fff', '확인불가': 'background:#9ca3af;color:#fff', '불가': 'background:#111827;color:#fff' };
-      const _catLabel = { '낙찰': '낙찰', '미입찰': '미입찰', '일반': '패찰', '확인불가': '확인불가', '불가': '불가' };
+      // 결과 라벨: 낙찰(파랑)/미입찰(빨강)/패찰=매각가>입찰가(회색)/매각(타인 낙찰·입찰가없음)/불가/매칭X(매칭실패·붉은). 그 외=진행중
+      const _catStyle = { '낙찰': 'background:#2563eb;color:#fff', '미입찰': 'background:#dc2626;color:#fff', '일반': 'background:#6b7280;color:#fff', '확인불가': 'background:#64748b;color:#fff', '불가': 'background:#111827;color:#fff', '매칭X': 'background:#fee2e2;color:#b91c1c;border:1px solid #f87171' };
+      const _catLabel = { '낙찰': '낙찰', '미입찰': '미입찰', '일반': '패찰', '확인불가': '매각', '불가': '불가', '매칭X': '매칭X' };
       const resBadge = (!pending && _catStyle[cat])
         ? `<span style="${_catStyle[cat]};padding:1px 8px;border-radius:4px;font-weight:700;font-size:12px">${_catLabel[cat]}</span>`
         : `<span class="cc-badge ${pending ? 'cc-pend' : (stateKind === '조회없음' || stateKind === '오류' ? 'cc-warn' : 'cc-ok')}">${escapeHtml(stateKind)}</span>`;
       const dtl = String(r.detail || '');
       const detail = dtl ? `<span title="${escapeAttr(dtl)}">${escapeHtml(dtl.length > 20 ? dtl.slice(0, 20) + '…' : dtl)}</span>` : '';
       const url = r.view_url ? ` <a href="#" class="cc-link" data-act="cc-view" data-url="${escapeAttr(r.view_url)}">옥션원</a>` : '';
-      // 업데이트 예정 = 결과 카테고리 라벨 (패찰=매각가>입찰가, 진행중과 구분). 불가는 MAPS 반영 대상
-      const willUpdate = (!pending && _catStyle[cat])
-        ? `<span style="${_catStyle[cat]};padding:1px 8px;border-radius:4px;font-weight:700">${_catLabel[cat]}</span>`
-        : '<span style="color:#9ca3af">-</span>';
+      // 타인 매각(category '확인불가' = 매각·우리 입찰가 없음) → MAPS 업데이트 예정 = '불가',
+      //   사유 = "YY년MM월DD일 매각" (백엔드 maegak_date = 옥션 상단표 입찰마감일=낙찰일). 날짜 없으면 "이전차수 매각".
+      const _fmtMaegakDate = (v) => {
+        const s = String(v || '').replace(/[^0-9]/g, '');
+        if (s.length === 8) return `${s.slice(2, 4)}년${s.slice(4, 6)}월${s.slice(6, 8)}일`;
+        if (s.length === 6) return `${s.slice(0, 2)}년${s.slice(2, 4)}월${s.slice(4, 6)}일`;
+        return '';
+      };
+      const isOtherMaegak = (cat === '확인불가');   // 타인 낙찰(매각) — 우리 입찰가 없음
+      const maegakDate = _fmtMaegakDate(r.maegak_date);
+      const bugaReasonText = isOtherMaegak ? (maegakDate ? `${maegakDate} 매각` : '이전차수 매각') : '';
+      // 업데이트 예정 = MAPS 반영 상태. 타인 매각 → '불가'(사유: 매각), 불가 → '불가', 그 외 결과는 카테고리 라벨.
+      // 매칭X(매칭 실패)는 MAPS 반영 대상 아님 → '-'.
+      let willUpdate;
+      if (pending || !_catStyle[cat] || cat === '매칭X') {
+        willUpdate = '<span style="color:#9ca3af">-</span>';
+      } else if (isOtherMaegak) {
+        willUpdate = `<span style="background:#111827;color:#fff;padding:1px 8px;border-radius:4px;font-weight:700" title="타인 낙찰(매각) → MAPS 불가 처리 예정">불가</span>`;
+      } else {
+        willUpdate = `<span style="${_catStyle[cat]};padding:1px 8px;border-radius:4px;font-weight:700">${_catLabel[cat]}</span>`;
+      }
       // 매각가 색: 매각가<입찰가=빨강, 매각가>입찰가=검정, 같으면 파랑
       const bid = _won(r.bidprice), mae = _won(r.maegak_price);
       let maeCell = mae ? fmtWon(r.maegak_price) : '';
@@ -896,8 +967,8 @@
       const midDisp = String(r.m_name_id_disp || r.m_name_id || '');
       const midCol = String(r.m_name_id_color || '');
       const midCell = midDisp ? (midCol ? `<b style="color:${midCol}">${escapeHtml(midDisp)}</b>` : escapeHtml(midDisp)) : '';
-      // 비고: 불가 사유(변경=빨강) + 상세값. (물건상태는 업데이트예정 칸, 사유/상세는 여기)
-      const noteReason = isBuga ? String(r.status || '') : '';
+      // 비고: 불가 사유(변경=빨강) / 타인 매각 → 폐기 사유 "{날짜} 낙찰" + 상세값. (물건상태는 업데이트예정 칸)
+      const noteReason = isBuga ? String(r.status || '') : (isOtherMaegak ? bugaReasonText : '');
       const noteDetail = isBuga ? String(r.detail || '') : '';
       const noteCell = (noteReason || noteDetail)
         ? `<span title="${escapeAttr([noteReason, noteDetail].filter(Boolean).join(' · '))}">`
@@ -921,9 +992,10 @@
         <td style="text-align:right">${maeCell}</td>
         <td style="text-align:center">${resBadge}</td>
         <td style="text-align:center">${viewLink}</td>
-        <td style="text-align:center">${stu ? `<span class="cc-badge cc-ok"${stu === '불가' ? ' style="background:#111827;color:#fff;border-color:#111827"' : ''}>${escapeHtml(stu)}</span>` : ''}</td>
+        <td style="text-align:center">${stu ? `<span class="${mapsStuClass(stu)}">${escapeHtml(stu)}</span>` : ''}</td>
         <td>${willUpdate}</td>
-        <td class="cc-note">${noteCell}${(['낙찰', '미입찰', '불가'].indexOf(cat) >= 0) ? `<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:nowrap;white-space:nowrap">
+        <td class="cc-note">${noteCell}</td>
+        <td class="cc-actions" style="text-align:center;white-space:nowrap">${(['낙찰', '미입찰', '불가'].indexOf(cat) >= 0) ? `<div style="display:flex;gap:4px;flex-wrap:nowrap;white-space:nowrap;justify-content:center">
           <button type="button" class="cc-row-send btn_box_sss" data-key="${escapeAttr(rkey)}" title="이 건을 담당자에게 즉시 텔레그램 전송" style="padding:1px 6px;font-size:11px;white-space:nowrap">📤전송</button>
           <button type="button" class="cc-row-copy btn_box_sss" data-key="${escapeAttr(rkey)}" title="카드 이미지만 복사(카톡 붙여넣기)" style="padding:1px 6px;font-size:11px;white-space:nowrap">📋이미지</button>
           <button type="button" class="cc-row-text btn_box_sss" data-key="${escapeAttr(rkey)}" title="제목 텍스트 복사(카톡에 별도 붙여넣기)" style="padding:1px 6px;font-size:11px;white-space:nowrap">📝제목</button></div>` : ''}</td>
@@ -931,11 +1003,11 @@
     }).join('');
     const doneCnt = merged.filter(r => !r._pending).length;
     const catCnt = (c) => merged.filter(r => ccCategory(r) === c).length;
-    const winCnt = catCnt('낙찰'), missCnt = catCnt('미입찰'), bugaCnt = catCnt('불가'), unkCnt = catCnt('확인불가');
+    const winCnt = catCnt('낙찰'), missCnt = catCnt('미입찰'), bugaCnt = catCnt('불가'), unkCnt = catCnt('확인불가'), failCnt = catCnt('매칭X');
     wrap.innerHTML = `
       <div class="cc-results-head" style="display:flex;flex-direction:column;gap:6px;align-items:stretch">
         <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px">
-          <span>입찰(전체) <b>${merged.length}</b> (조회완료 ${doneCnt}) · <b style="color:#2563eb">낙찰 ${winCnt}</b> · <b style="color:#dc2626">미입찰 ${missCnt}</b> · <b style="color:#111827">불가 ${bugaCnt}</b>${unkCnt ? ` · <span style="color:#6b7280">확인불가 ${unkCnt}</span>` : ''}</span>
+          <span>입찰(전체) <b>${merged.length}</b> (조회완료 ${doneCnt}) · <b style="color:#2563eb">낙찰 ${winCnt}</b> · <b style="color:#dc2626">미입찰 ${missCnt}</b> · <b style="color:#111827">불가 ${bugaCnt}</b>${unkCnt ? ` · <span style="color:#64748b">매각 ${unkCnt}</span>` : ''}${failCnt ? ` · <span style="color:#dc2626;font-weight:700">매칭X ${failCnt}</span>` : ''}</span>
           <span style="flex:1"></span>
           <span style="font-size:12px;color:#374151">📨 수신: <b>${escapeHtml(recipientsLabel())}</b> <a href="#" data-act="cc-recipients" style="color:#2563eb;text-decoration:none">설정</a></span>
           <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="매칭(실행) 완료 시 일일보고를 설정 대상에게 자동 전송">
@@ -974,6 +1046,7 @@
           <th class="cc-sort" data-sort="stu">현재상태${arrow('stu')}</th>
           <th>업데이트 예정</th>
           <th>비고</th>
+          <th>메세지 전송</th>
         </tr>
       </thead><tbody>${rows}</tbody></table>
       </div>
@@ -1145,16 +1218,29 @@
     const mae = _won(r.maegak_price), bid = _won(r.bidprice);
     return !!(mae && bid && mae === bid);
   }
-  // 일일보고 분류: 불가 / 낙찰(매각&매각가==입찰가) / 미입찰(매각&매각가<입찰가) /
-  //   확인불가(매각&입찰가없음) / 일반(매각&매각가>입찰가) / ''(대기·기타)
-  const CC_CAT_COLOR = { '낙찰': '#2563eb', '미입찰': '#dc2626', '불가': '#111827', '확인불가': '#6b7280', '일반': '#9ca3af' };
+  // 일일보고 분류: 매칭X(옥션 조회/매칭 실패) / 불가 / 낙찰(매각&매각가==입찰가) / 미입찰(매각&매각가<입찰가) /
+  //   확인불가(매각&입찰가없음 — 표시는 '매각') / 일반(매각&매각가>입찰가) / ''(대기·진행중)
+  const CC_CAT_COLOR = { '낙찰': '#2563eb', '미입찰': '#dc2626', '불가': '#111827', '확인불가': '#64748b', '일반': '#9ca3af', '매칭X': '#dc2626' };
+  // 옥션 종합검색에서 사건/행을 못 찾음(조회없음·오류·검색실패) 또는 다물건 물건번호 미발견 → 매칭 실패.
+  // 정상 매칭된 진행중(state_kind='진행')·매각·불가는 해당 안 됨.
+  function ccMatchFailed(r) {
+    if (!r || r._pending) return false;
+    const sk = String(r.state_kind || '').trim();
+    const st = String(r.status || '').trim();
+    if (sk === '확인불가') return true;                 // 백엔드: 다물건 물건번호 미발견
+    if (sk === '조회없음' || st === '조회없음') return true;
+    if (sk === '오류' || st === '오류') return true;
+    if (!sk && !st && !r.is_buga) return true;          // 종합검색 실패 등 상태 판정 자체 불가
+    return false;
+  }
   function ccCategory(r) {
     if (!r || r._pending) return '';
+    if (ccMatchFailed(r)) return '매칭X';
     if (r.is_buga || ccStateKind(r) === '불가') return '불가';
     if (ccStateKind(r) !== '매각') return '';
     const bid = _won(r.bidprice), mae = _won(r.maegak_price);
     if (!mae) return '';
-    if (!bid) return '확인불가';
+    if (!bid) return '확인불가';   // 매각됐으나 우리 입찰가 없음 → 표시 라벨은 '매각'
     if (mae === bid) return '낙찰';
     if (mae < bid) return '미입찰';
     return '일반';   // 매각가 > 입찰가 (우리보다 높게 팔림)

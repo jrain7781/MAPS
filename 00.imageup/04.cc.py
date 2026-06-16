@@ -322,10 +322,14 @@ def search_case(driver, wait, case, use_date=True):
 def parse_gongmae_detail(detail_text):
     """공매 상세(pubauct/view.php) — 입찰결과 표(낙찰가) + 낙찰자.
     경매와 포맷 다름(경매='매각:금액 매수인:이름', 공매='낙찰가' 표 + '낙찰자' 필드).
-    return: {maegak_price, buyer, bidder_count}."""
-    res = {"maegak_price": "", "buyer": "", "bidder_count": ""}
+    return: {maegak_price, buyer, bidder_count, maegak_date}."""
+    res = {"maegak_price": "", "buyer": "", "bidder_count": "", "maegak_date": ""}
     if not detail_text:
         return res
+    # 낙찰일(=입찰마감일): 상단표 '입찰시간 : 2026-06-01 14:00~ 2026-06-02 17:00' 의 종료(우측) 날짜.
+    dm = re.search(r"입찰시간[^0-9]*\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}[^~]*~[^0-9]*(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})", detail_text)
+    if dm:
+        res["maegak_date"] = dm.group(1)[2:] + dm.group(2).zfill(2) + dm.group(3).zfill(2)
     # 낙찰자(매수인): '낙찰자' 뒤 이름. 비어있거나 조사일자면 미낙찰(진행중/유찰)
     m = re.search(r"낙찰자\s*[\t: ]*([가-힣A-Za-z(][가-힣A-Za-z0-9().주\s]{1,18})", detail_text)
     if m:
@@ -605,6 +609,7 @@ def process_gongmae(driver, wait, case, base, exp_d6):
     view_url = URL_GONGMAE_VIEW + picked["pid"]
     reason = sentence = ""
     maegak_price = buyer = bidder_count = ""
+    maegak_date = ""
     screenshot_path = ""
     if state_kind in ("불가", "매각"):
         detail_txt = open_detail_text(driver, view_url)
@@ -618,6 +623,7 @@ def process_gongmae(driver, wait, case, base, exp_d6):
         else:
             md = parse_gongmae_detail(detail_txt)   # 공매 전용 파서
             maegak_price, buyer, bidder_count = md["maegak_price"], md["buyer"], md["bidder_count"]
+            maegak_date = md.get("maegak_date", "")   # 낙찰일(입찰마감일) — '이전차수 매각' 사유 날짜
 
     rec = dict(base,
                status=reason if is_buga else (state_kind if state_kind == "매각" else ""),
@@ -629,7 +635,7 @@ def process_gongmae(driver, wait, case, base, exp_d6):
                sakun_hit=True, court_hit=True, date_hit=True,
                fetched_court="공매",
                fetched_date=picked.get("date_txt", ""),
-               maegak_price=maegak_price, buyer=buyer, bidder_count=bidder_count,
+               maegak_price=maegak_price, buyer=buyer, bidder_count=bidder_count, maegak_date=maegak_date,
                addr=picked.get("addr", ""),
                screenshot_path=screenshot_path,
                view_url=view_url)
@@ -720,6 +726,7 @@ def process_case(driver, wait, case):
     maegak_price = ""
     buyer = ""
     bidder_count = ""
+    maegak_date = ""
     # 옥션원 링크는 모든 건(진행/매각/불가)에 대해 생성
     view_url = build_view_url(driver, picked["pid"], picked["line_num"], line_tnum)
     screenshot_path = ""
@@ -738,6 +745,7 @@ def process_case(driver, wait, case):
             maegak_price = md["maegak_price"]
             buyer = md["buyer"]
             bidder_count = md["bidder_count"]
+            maegak_date = exp_d6   # 경매 매각일 = 매칭된 매각기일(YYMMDD)
 
     is_buga = (state_kind == "불가")
     rec = dict(base,
@@ -755,6 +763,7 @@ def process_case(driver, wait, case):
                maegak_price=maegak_price,
                buyer=buyer,
                bidder_count=bidder_count,
+               maegak_date=maegak_date,
                addr=picked.get("addr", ""),
                screenshot_path=screenshot_path,
                view_url=view_url)

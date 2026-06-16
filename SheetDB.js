@@ -10008,7 +10008,7 @@ var CC_DAILY_SHEET_NAME = 'cc_daily';
 var CC_DAILY_HEADERS = ['date', 'item_id', 'sakun_no', 'court', 'bid_date', 'm_name', 'm_name_id',
   'm_name_id_disp', 'm_name_id_color', 'mid_member_id', 'bidprice', 'maegak_price', 'buyer',
   'state_kind', 'status', 'category', 'is_buga', 'detail', 'view_url', 'screenshot_path', 'stu_member', 'ts',
-  'load_ts', 'match_ts'];
+  'load_ts', 'match_ts', 'maegak_date'];   // maegak_date: 신규 — 맨 끝 append (기존 행 정렬 보존)
 
 // 날짜 셀 정규화: 시트가 'YYYY-MM-DD'를 Date로 자동변환해도 항상 'yyyy-MM-dd' 문자열로 비교
 function normDate_(v) {

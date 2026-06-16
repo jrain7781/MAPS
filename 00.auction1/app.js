@@ -404,6 +404,11 @@
     node.children.forEach(c => { ids.push(..._collectSubtreeIds(c)); });
     return ids;
   }
+  function _collectSubtreePresetObjs(node) {
+    const arr = node.presets.slice();
+    node.children.forEach(c => { arr.push(..._collectSubtreePresetObjs(c)); });
+    return arr;
+  }
   function _branchCheckState(ids) {
     if (!ids.length) return 'none';
     let n = 0;
@@ -436,7 +441,7 @@
     });
     return { total, filtered };
   }
-  function _renderLeafLi(p, depth, isLast) {
+  function _renderLeafLi(p, depth, isLast, fullLabel) {
     const active = p.id === currentPresetId ? ' active' : '';
     const checked = selectedSyncIds.has(p.id) ? ' checked' : '';
     let countInline = '', lastCrawl = '';
@@ -462,9 +467,11 @@
       if (ts) lastUpload = new Date(ts).toLocaleString('ko-KR', { hour12: false });
     } catch (_) {}
     const uploadLine = lastUpload ? `<div class="it-sub it-upload" title="MAPS 마지막 전송 시각">최근 전송: ${lastUpload}</div>` : '';
-    // leaf 라벨 = 제목의 마지막 hyphen 부분만 (간결)
+    // leaf 라벨 = 제목의 마지막 hyphen 부분만 (간결). fullLabel=평면 단일 항목은 전체 제목.
     const parts = String(p.title || '').split('-').map(s => s.trim()).filter(Boolean);
-    const leafLabel = parts.length ? parts[parts.length - 1] : (p.title || '(제목없음)');
+    const leafLabel = fullLabel
+      ? (parts.length ? parts.join(' - ') : (p.title || '(제목없음)'))
+      : (parts.length ? parts[parts.length - 1] : (p.title || '(제목없음)'));
     return `<li class="snb_item${active}" data-id="${p.id}" data-kind="leaf" data-depth="${depth}" draggable="true" style="padding-left:${depth * 16 + 8}px">
       <span class="drag-handle" title="드래그로 순서 변경">⋮⋮</span>
       <input type="checkbox" class="ms-row-chk" data-id="${p.id}"${checked} title="MAPS 동기화 선택">
@@ -559,8 +566,15 @@
     const tree = _buildPresetTree(ordered);
     const collapsed = _loadCollapsed();
     // 최상단 그룹별 카드 렌더 (root.children 의 각 직속 자식 = 1 카드)
+    // 단, 그 그룹에 속한 리스트가 1개뿐이면 폴더 카드 없이 1단계 평면 항목으로 표시.
     let html = '';
-    tree.children.forEach(top => { html += _renderTopCard(top, collapsed); });
+    tree.children.forEach(top => {
+      if (_countSubtreePresets(top) === 1) {
+        html += _renderLeafLi(_collectSubtreePresetObjs(top)[0], 0, true, true);
+      } else {
+        html += _renderTopCard(top, collapsed);
+      }
+    });
     list.innerHTML = html;
     // leaf 클릭/체크박스/드래그
     list.querySelectorAll('.snb_item').forEach(el => {
@@ -1722,13 +1736,13 @@
     wrap.querySelectorAll('.cust-row').forEach(row => {
       const i = parseInt(row.dataset.i, 10);
       row.querySelector('.ftype-sel').addEventListener('change', e => onCustTypeChange(i, e.target));
-      row.querySelector('.fop-sel').addEventListener('change', e => { custRows[i].op = e.target.value; });
+      row.querySelector('.fop-sel').addEventListener('change', e => { custRows[i].op = e.target.value; refilterFromCache({ quiet: true }); });
       const inp = row.querySelector('.fval-inp');
       if (inp) inp.addEventListener('input', e => { custRows[i].value = e.target.value; });
       const btn = row.querySelector('.fval-specials');
       if (btn) btn.addEventListener('click', () => openSpecialsFilterModal(i));
       const logicSel = row.querySelector('.flogic-sel');
-      if (logicSel) logicSel.addEventListener('change', e => { custRows[i].logic = e.target.value; });
+      if (logicSel) logicSel.addEventListener('change', e => { custRows[i].logic = e.target.value; refilterFromCache({ quiet: true }); });
       row.querySelector('.row-del').addEventListener('click', () => { custRows.splice(i, 1); renderCustRows(); });
     });
   }
@@ -1797,6 +1811,7 @@
     custRows[_specialsFilterRowIdx].value = labels.join(',');
     closeSpecialsFilterModal();
     renderCustRows();
+    refilterFromCache({ quiet: true }); // 항목 선택 변경 즉시 결과/카운트 반영
   }
   function bindSpecialsFilterModal() {
     document.getElementById('specialsFilterClose')?.addEventListener('click', closeSpecialsFilterModal);
@@ -2707,8 +2722,10 @@
 
   // 캐시된 raw 에 현재 편집 중인 custRows 적용 (셀레니움 안 돌림).
   // 메모리(lastRawItems) 가 있으면 우선 사용 — full *_html 보존 (캐시는 lite 일 수도)
-  function refilterFromCache() {
-    if (!currentPresetId) { setStatus('프리셋을 먼저 선택/저장하세요.', true); return; }
+  // quiet=true: 캐시 없음/프리셋 미선택 에러·미지원 알림을 띄우지 않음 (필터 토글 시 라이브 재적용용)
+  function refilterFromCache(opts) {
+    const quiet = !!(opts && opts.quiet);
+    if (!currentPresetId) { if (!quiet) setStatus('프리셋을 먼저 선택/저장하세요.', true); return; }
     let raw, ts;
     if (lastRawItems && lastRawItems.length) {
       raw = lastRawItems;
@@ -2716,7 +2733,7 @@
     } else {
       let cache;
       try { cache = cacheGetSync(currentPresetId); } catch (e) { cache = null; }
-      if (!cache || !Array.isArray(cache.items)) { setStatus('캐시 없음 — 먼저 [크롤링 실행] 한 번 필요', true); return; }
+      if (!cache || !Array.isArray(cache.items)) { if (!quiet) setStatus('캐시 없음 — 먼저 [크롤링 실행] 한 번 필요', true); return; }
       raw = cache.items;
       ts = cache.ts;
     }
@@ -2724,7 +2741,7 @@
     let msg = `재필터링: 옥션원 ${raw.length}건 → ${filtered.length}건`;
     if (skipped.length) {
       msg += ` · 미지원 필터 무시: ${skipped.join(', ')}`;
-      alert(`아래 필터 종류는 매핑이 없어 무시됐습니다:\n\n${skipped.join(', ')}\n\n[필터 종류 관리]에서 이름을 정확히 (예: "특수물건", "주소 시도") 사용하세요.`);
+      if (!quiet) alert(`아래 필터 종류는 매핑이 없어 무시됐습니다:\n\n${skipped.join(', ')}\n\n[필터 종류 관리]에서 이름을 정확히 (예: "특수물건", "주소 시도") 사용하세요.`);
     }
     setStatus(msg, skipped.length > 0);
   }
