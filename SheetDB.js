@@ -1931,8 +1931,17 @@ function accrueMembersItemStatus_(itemId, memberIdHint, memberNameHint, status, 
     if (misLast >= 2) {
       const hits = misSheet.getRange(2, 6, misLast - 1, 1).createTextFinder(String(itemId)).matchEntireCell(true).findAll();
       for (let h = 0; h < hits.length; h++) {
-        const rr = misSheet.getRange(hits[h].getRow(), 1, 1, MIS_HEADERS.length).getValues()[0];
-        if (String(rr[1]) === memberId && String(rr[9]) === status) return false; // 이미 적립됨
+        const rowNum = hits[h].getRow();
+        const rr = misSheet.getRange(rowNum, 1, 1, MIS_HEADERS.length).getValues()[0];
+        if (String(rr[1]) === memberId && String(rr[9]) === status) {
+          // 이미 적립됨. 단, 추천 재적립(미정 후 재추천 등)이면 1건 유지하되 요청일자(event_date)·적립시각만 갱신.
+          if (status === '추천') {
+            const newEv = (extra && extra.event_date) ? String(extra.event_date) : (String(r[17] || '') || new Date().toISOString());
+            misSheet.getRange(rowNum, 17).setValue(newEv);                  // Q: event_date(요청일자)
+            misSheet.getRange(rowNum, 11).setValue(new Date().toISOString()); // K: recorded_at
+          }
+          return false;
+        }
       }
     }
 
@@ -2285,7 +2294,7 @@ function menuDonkleBidTrigger_() {
  *  · dedup: 기존 (회원,물건,상태) 있으면 skip. append-only.
  * @returns {number} 추가 행 수
  */
-function backfillUpstreamStatus_(itemId, memberId, memberName, triggerStatus) {
+function backfillUpstreamStatus_(itemId, memberId, memberName, triggerStatus, eventDateOverride) {
   try {
     if (!itemId || !memberId) return 0;
     const need = triggerStatus === '낙찰' ? ['추천', '입찰'] : (triggerStatus === '입찰' ? ['추천'] : []);
@@ -2308,7 +2317,7 @@ function backfillUpstreamStatus_(itemId, memberId, memberName, triggerStatus) {
       }
     }
     const now = new Date();
-    const evDate = _inDateToIso_(r[1]);    // in_date → ISO
+    const evDate = eventDateOverride ? String(eventDateOverride) : _inDateToIso_(r[1]);    // override 우선, 없으면 in_date → ISO
     const mName = String(memberName || r[6] || '');
     const newRows = [];
     for (let n = 0; n < need.length; n++) {
@@ -6706,6 +6715,12 @@ function writeItemHistoryBatch_(entries) {
         continue;
       }
 
+      // [입찰저장 시] stu_member→입찰 순간 (회원,물건) 추천 없으면 추천 즉시 생성 — 입찰 전에 추천 관리 가능하게.
+      //   event_date = 지금(입찰저장 시점). 입찰 적립 자체는 기존대로 일별 트리거(accrueBidsDaily)에서.
+      if (fn === 'stu_member' && tv === '입찰' && ep.member_id) {
+        backfillUpstreamStatus_(ep.item_id, ep.member_id, ep.member_name, '입찰', new Date().toISOString());
+      }
+
       // [돈클] 미정 적립 — 전달완료된 추천을 잃은 회원에게만 (해당 회원·물건에 '추천' MIS행 존재 시)
       //   ① 단순 미정(같은 회원): stu_member 추천→미정 (자동만료/수동) → 그 회원
       //   ② 회원 변경 재추천: member_id 변경 → 이전 회원(from_value)
@@ -9612,6 +9627,7 @@ function getDonkleRequestDashboard() {
       var isDelivery = (action === 'TELEGRAM_SENT' && note === 'card')
         || (fieldName === 'chuchen_state' && toVal === '전달완료');
       var isRecommend = (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && toVal === '추천');
+      var isUndecided = (fieldName === 'stu_member' && toVal === '미정');   // 미정=취소
       if (isDelivery) {
         deliveredKey[key] = true;
         var dd = parseDate(row[1]);
@@ -9619,6 +9635,10 @@ function getDonkleRequestDashboard() {
       } else if (isRecommend) {
         var dr = parseDate(row[1]);
         if (dr && dr >= winStart) recEvents.push({ d: dr, itemId: itemId, key: key });
+      } else if (isUndecided) {
+        // 미정(취소) → 전달완료 상태 해제. (행 시간순 처리라 마지막 상태가 반영됨)
+        //   이후 재추천이 다시 '대기'로 잡히고, 재전달완료되면 다시 deliveredKey=true.
+        deliveredKey[key] = false;
       }
     });
 
