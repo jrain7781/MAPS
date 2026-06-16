@@ -566,21 +566,21 @@
     const info = $card('cc')?.querySelector('[data-role="cc-loaded"]');
     if (info) info.textContent = `📅 ${ymd} 저장 자료 복원 ${rows.length}건 (${src})`;
   }
+  // 로컬 byDate(무손실: maegak_date 등 모든 필드 보존)를 '우선' 복원. 시트는 고정 컬럼이라
+  // maegak_date 같은 신규 필드가 round-trip 시 손실 → 시트로 덮어쓰면 비고가 '이전차수 매각'으로 되돌아감.
+  // 그래서 로컬이 있으면 로컬만 쓰고, 없을 때만 시트로 폴백.
   function restoreCcDate(ymd) {
+    const e = loadCcByDate()[ymd];
+    if (e && Array.isArray(e.rows) && e.rows.length) { _applyRestoredRows(ymd, e.rows, '로컬'); return; }
     const apiKey = getMapsAdminKeyMj();
-    const fallback = () => {
-      const e = loadCcByDate()[ymd];
-      if (!e || !Array.isArray(e.rows) || !e.rows.length) { alert(ymd + ' 저장된 자료가 없습니다.'); return; }
-      _applyRestoredRows(ymd, e.rows, '로컬');
-    };
-    if (!apiKey) { fallback(); return; }
+    if (!apiKey) { alert(ymd + ' 저장된 자료가 없습니다.'); return; }
     fetch('/api/maps-gas', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ api_key: apiKey, api_action: 'getProgressMatchByDate', date: ymd })
     }).then(r => r.json()).then(j => {
       if (j && j.success && Array.isArray(j.rows) && j.rows.length) _applyRestoredRows(ymd, j.rows, '시트');
-      else fallback();
-    }).catch(() => fallback());
+      else alert(ymd + ' 저장된 자료가 없습니다.');
+    }).catch(() => alert(ymd + ' 저장된 자료가 없습니다.'));
   }
   let ccCalYM = null;            // {y, m(0-based)}
   const ccCalChecked = new Set(); // 체크박스로 다중 선택된 날짜(ymd) — 배치 불러오기용 (하이라이트 X)
