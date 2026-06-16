@@ -197,7 +197,7 @@
       if (!t) return;
       const fn = FILTER_FIELDS[t.name];
       if (!fn) return;
-      if (t.valueType === 'specials') {
+      if (t.valueType === 'specials' || t.valueType === 'special1') {
         const groups = specialsGroupsFor(r.value);
         if (!groups.length) return;
         handlers.push({ fn, op: r.op || 'eq', groups, logic: r.logic || 'or', isSpecials: true });

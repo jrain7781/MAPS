@@ -173,7 +173,7 @@
     { id: 'ft_address',   name: '주소',                    valueType: 'text'   },
     { id: 'ft_addrsido',  name: '주소 시도',               valueType: 'text'   },
     { id: 'ft_addrgugun', name: '주소 구군',               valueType: 'text'   },
-    { id: 'ft_specials',  name: '특수물건',                valueType: 'text'   },
+    { id: 'ft_specials',  name: '특수물건',                valueType: 'special1' },
     { id: 'ft_specials_multi', name: '특수물건 다중',       valueType: 'specials' },
     { id: 'ft_propkind',  name: '물건종류',                valueType: 'text'   },
     { id: 'ft_keyword',   name: '비고/특이사항 키워드 포함', valueType: 'text'   },
@@ -206,6 +206,10 @@
             arr.push({ id: uid('ft'), name: d.name, valueType: d.valueType });
             changed = true;
           }
+        });
+        // 마이그레이션: 단일 '특수물건'을 text → special1 (단일 콤보) 로 승격
+        arr.forEach(t => {
+          if (t.name === '특수물건' && t.valueType !== 'special1') { t.valueType = 'special1'; changed = true; }
         });
         if (changed) localStorage.setItem(LS_FTYPES, JSON.stringify(arr));
         return arr;
@@ -1704,9 +1708,18 @@
       const t = ftypes.find(x => x.id === r.typeId);
       const hint = (t && TYPE_HINTS[t.name]) || '';
       const isSpecials = t && t.valueType === 'specials';
+      const isSingleSpecial = t && t.valueType === 'special1';
       const lockedVal = t && LOCKED_FILTER_VALUES[t.name];
       let valHtml;
-      if (isSpecials) {
+      if (isSingleSpecial) {
+        // 단일 특수물건 — 위 데이터필터링 특수물건과 동일한 자동완성+드롭다운(1개 선택)
+        const curLabel = String(r.value || '').trim();
+        valHtml = `<div class="combo-box fspecial1-combo" data-i="${i}" style="width:240px;flex:0 0 auto;">
+                     <input type="text" class="combo-input fspecial1-input" value="${escAttr(curLabel)}" placeholder="설정안함(선택해제)" autocomplete="off">
+                     <button type="button" class="combo-caret fspecial1-caret" tabindex="-1" title="펼치기">▾</button>
+                     <ul class="combo-pop fspecial1-pop hidden"></ul>
+                   </div>`;
+      } else if (isSpecials) {
         const tags = String(r.value || '').split(',').map(s => s.trim()).filter(Boolean);
         const tagsHtml = tags.length
           ? tags.map(tg => `<span class="multi-tag">${escHtml(tg)}</span>`).join(' ')
@@ -1741,9 +1754,71 @@
       if (inp) inp.addEventListener('input', e => { custRows[i].value = e.target.value; });
       const btn = row.querySelector('.fval-specials');
       if (btn) btn.addEventListener('click', () => openSpecialsFilterModal(i));
+      const sp1 = row.querySelector('.fspecial1-combo');
+      if (sp1) _initSpecial1Combo(sp1, i);
       const logicSel = row.querySelector('.flogic-sel');
       if (logicSel) logicSel.addEventListener('change', e => { custRows[i].logic = e.target.value; refilterFromCache({ quiet: true }); });
       row.querySelector('.row-del').addEventListener('click', () => { custRows.splice(i, 1); renderCustRows(); });
+    });
+  }
+
+  // ── 단일 특수물건 콤보 (추가필터 '특수물건') — 데이터필터링 특수물건과 동일 동작(1개 선택) ──
+  function _initSpecial1Combo(box, i) {
+    const inp = box.querySelector('.fspecial1-input');
+    const caret = box.querySelector('.fspecial1-caret');
+    const list = box.querySelector('.fspecial1-pop');
+    if (!inp || !list) return;
+    const items = (D.SPECIAL || []).filter(o => String(o.v) !== '');
+    let filtered = items.slice(), activeIdx = -1;
+    function render(q) {
+      const qq = (q || '').replace(/\s+/g, '').toLowerCase();
+      filtered = qq
+        ? items.filter(o => ((o.t || '') + (o.kw || '')).replace(/\s+/g, '').toLowerCase().includes(qq))
+        : items.slice();
+      const cur = String(custRows[i] ? custRows[i].value : '').trim();
+      list.innerHTML = filtered.map((o, idx) => {
+        const kwHtml = o.kw ? ' <span class="combo-kw">[' + escHtml(o.kw) + ']</span>' : '';
+        return '<li class="combo-item' + (o.t === cur ? ' selected' : '') + '" data-t="' + escAttr(o.t) + '" data-i="' + idx + '">' + escHtml(o.t) + kwHtml + '</li>';
+      }).join('') || '<li class="combo-empty">결과 없음</li>';
+      activeIdx = filtered.length ? 0 : -1;
+      paintActive();
+    }
+    function paintActive() {
+      list.querySelectorAll('.combo-item').forEach((el, idx) => el.classList.toggle('active', idx === activeIdx));
+      const cur = list.querySelector('.combo-item.active');
+      if (cur && !list.classList.contains('hidden')) cur.scrollIntoView({ block: 'nearest' });
+    }
+    function open() { list.classList.remove('hidden'); render(inp.value); }
+    function close() { list.classList.add('hidden'); }
+    function pick(label) {
+      if (!custRows[i]) return;
+      custRows[i].value = label;
+      inp.value = label;
+      close();
+      refilterFromCache({ quiet: true });
+    }
+    inp.addEventListener('focus', () => { inp.select(); open(); });
+    inp.addEventListener('click', () => { inp.select(); open(); });
+    inp.addEventListener('input', () => {
+      if (inp.value.trim() === '' && custRows[i]) { custRows[i].value = ''; refilterFromCache({ quiet: true }); }  // 비우면 설정안함
+      open(); render(inp.value);
+    });
+    inp.addEventListener('keydown', (e) => {
+      if (list.classList.contains('hidden')) { if (e.key === 'ArrowDown' || e.key === 'Enter') { open(); e.preventDefault(); return; } }
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (filtered.length) { activeIdx = (activeIdx + 1) % filtered.length; paintActive(); } }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (filtered.length) { activeIdx = (activeIdx - 1 + filtered.length) % filtered.length; paintActive(); } }
+      else if (e.key === 'Enter') { e.preventDefault(); if (activeIdx >= 0 && filtered[activeIdx]) pick(filtered[activeIdx].t); }
+      else if (e.key === 'Escape') { close(); inp.blur(); }
+    });
+    caret.addEventListener('mousedown', (e) => { e.preventDefault(); if (list.classList.contains('hidden')) { inp.focus(); open(); } else close(); });
+    list.addEventListener('mousedown', (e) => {
+      const li = e.target.closest('.combo-item'); if (!li) return;
+      e.preventDefault(); pick(li.getAttribute('data-t'));
+    });
+    document.addEventListener('mousedown', (e) => {
+      if (e.target === inp || e.target === caret) return;
+      if (box.contains(e.target)) return;
+      close();
     });
   }
 
@@ -2468,8 +2543,8 @@
       if (!t) return;
       const fn = FILTER_FIELDS[t.name];
       if (!fn) { skipped.push(t.name); return; }
-      if (t.valueType === 'specials') {
-        // 특수물건 다중 — 라벨별 키워드 그룹으로 평가 (AND/OR 토글 반영)
+      if (t.valueType === 'specials' || t.valueType === 'special1') {
+        // 특수물건(단일 special1 / 다중 specials) — 라벨→키워드 그룹으로 평가 (다중은 AND/OR 토글)
         const groups = specialsGroupsFor(r.value);
         if (!groups.length) return; // 매핑 가능한 항목 없음 → 무시
         handlers.push({ name: t.name, fn, op: r.op || 'eq', groups, logic: r.logic || 'or', isSpecials: true });
