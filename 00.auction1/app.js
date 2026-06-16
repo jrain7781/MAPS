@@ -1703,7 +1703,9 @@
       return;
     }
     wrap.innerHTML = custRows.map((r, i) => {
-      const typeOpts = ftypes.map(t => `<option value="${t.id}"${t.id === r.typeId ? ' selected' : ''}>${escHtml(t.name)}</option>`).join('')
+      // 종류 드롭다운 — 이름순(한글) 정렬해 비슷한 항목이 모이게 ('+새 종류'는 항상 맨끝)
+      const typeOpts = ftypes.slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko'))
+                       .map(t => `<option value="${t.id}"${t.id === r.typeId ? ' selected' : ''}>${escHtml(t.name)}</option>`).join('')
                        + `<option value="__new__">+ 새 필터 종류 추가...</option>`;
       const opOpts = D.CUSTOM_OPS.map(o => `<option value="${o.v}"${o.v === r.op ? ' selected' : ''}>${o.t}</option>`).join('');
       const t = ftypes.find(x => x.id === r.typeId);
@@ -1814,7 +1816,8 @@
   function openCfFavMenu() { renderCfFavMenu(); document.getElementById('cfFavMenu')?.classList.remove('hidden'); setTimeout(() => document.addEventListener('mousedown', _cfFavOutside), 0); }
   function renderCfFavMenu() {
     const menu = document.getElementById('cfFavMenu'); if (!menu) return;
-    const favs = loadCfFavs();
+    // 라벨순(한글) 정렬 — 비슷한 글자끼리 모이게
+    const favs = loadCfFavs().slice().sort((a, b) => cfFilterLabel(a).localeCompare(cfFilterLabel(b), 'ko'));
     if (!favs.length) {
       menu.innerHTML = `<div class="cf-fav-empty">즐겨찾기한 조건이 없습니다.<br><span class="f10 gray">각 필터 행 끝의 ♥ 로 추가하세요.</span></div>`;
       return;
