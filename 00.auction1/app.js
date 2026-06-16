@@ -12,6 +12,7 @@
   // localStorage keys
   const LS_PRESETS  = 'auction1_presets_v1';   // [{id, title, formData, customFilters, updatedAt}]
   const LS_FTYPES   = 'auction1_ftypes_v1';    // [{id, name, valueType: 'text'|'number'|'date'}]
+  const LS_CF_FAV   = 'auction1_cf_favorites_v1'; // 추가필터 즐겨찾기 [{id, typeId, op, value, logic}]
   const LS_CACHE_PFX  = 'auction1_cache_';      // (구) localStorage 옛 키 — IndexedDB 마이그레이션 후엔 메모리 + IndexedDB 사용
 
   // ── IndexedDB 캐시 (수백 MB 가능, localStorage 5MB quota 회피) ─────
@@ -1747,12 +1748,17 @@
           cfCountHtml = `<span class="cf-count" data-i="${i}" title="이 필터로 제외된 건수 — 클릭 시 전체탭에 그 건들만 표시">${ex}</span>`;
         }
       } catch (_) {}
+      // 즐겨찾기 하트 (× 앞) — 값 있을 때만 활성, 이미 즐겨찾기면 채워진 ♥
+      const favable = !!(r.typeId && String(r.value || '').trim() !== '');
+      const faved = favable && isCfFaved(r);
+      const heartHtml = `<button type="button" class="cf-fav-heart${faved ? ' on' : ''}${favable ? '' : ' disabled'}" title="${favable ? '이 조건 즐겨찾기 ' + (faved ? '해제' : '추가') : '값 입력 후 즐겨찾기 가능'}">${faved ? '♥' : '♡'}</button>`;
       return `<div class="cust-row" data-i="${i}">
         ${cfCountHtml}
         <select class="sel ftype-sel">${typeOpts}</select>
         <select class="sel fop-sel">${opOpts}</select>
         ${valHtml}
         <span class="cust-hint">${escHtml(hint)}</span>
+        ${heartHtml}
         <button class="row-del" title="이 행 삭제">×</button>
       </div>`;
     }).join('');
@@ -1760,6 +1766,13 @@
       const i = parseInt(row.dataset.i, 10);
       const cfBadge = row.querySelector('.cf-count');
       if (cfBadge) cfBadge.addEventListener('click', () => { if (!cfBadge.classList.contains('cf-count-empty')) showFilterExcluded(i); });
+      const heart = row.querySelector('.cf-fav-heart');
+      if (heart) heart.addEventListener('click', () => {
+        const rr = custRows[i];
+        if (!rr || !rr.typeId || String(rr.value || '').trim() === '') { alert('값을 입력한 뒤 ♥ 로 즐겨찾기에 추가하세요.'); return; }
+        toggleCfFav(rr);
+        renderCustRows();   // 하트 상태 갱신
+      });
       row.querySelector('.ftype-sel').addEventListener('change', e => onCustTypeChange(i, e.target));
       row.querySelector('.fop-sel').addEventListener('change', e => { custRows[i].op = e.target.value; refilterFromCache({ quiet: true }); });
       const inp = row.querySelector('.fval-inp');
@@ -1772,6 +1785,61 @@
       if (logicSel) logicSel.addEventListener('change', e => { custRows[i].logic = e.target.value; refilterFromCache({ quiet: true }); });
       row.querySelector('.row-del').addEventListener('click', () => { custRows.splice(i, 1); renderCustRows(); });
     });
+  }
+
+  // ── 추가필터 즐겨찾기 ─────────────────────────────────────
+  function loadCfFavs() { try { return JSON.parse(localStorage.getItem(LS_CF_FAV) || '[]') || []; } catch (e) { return []; } }
+  function saveCfFavs(arr) { try { localStorage.setItem(LS_CF_FAV, JSON.stringify(arr)); } catch (e) {} }
+  function _cfKey(f) { return [f.typeId, f.op || 'eq', String(f.value || '').trim(), f.logic || 'or'].join('|'); }
+  function isCfFaved(r) { const k = _cfKey(r); return loadCfFavs().some(f => _cfKey(f) === k); }
+  function toggleCfFav(r) {
+    const favs = loadCfFavs(); const k = _cfKey(r);
+    const idx = favs.findIndex(f => _cfKey(f) === k);
+    if (idx >= 0) favs.splice(idx, 1);
+    else favs.push({ id: uid('cffav'), typeId: r.typeId, op: r.op || 'eq', value: String(r.value || '').trim(), logic: r.logic || 'or' });
+    saveCfFavs(favs);
+    return idx < 0;
+  }
+  function cfFilterLabel(f) {
+    const t = ftypes.find(x => x.id === f.typeId);
+    const name = t ? t.name : '(종류?)';
+    const opMap = { eq: '=', ne: '≠', gte: '≥', gt: '>', lte: '≤', lt: '<', contains: '포함', ncontains: '미포함', regex: '정규식' };
+    const op = opMap[f.op] || f.op || '';
+    let s = (name + ' ' + op + ' ' + (f.value || '')).trim();
+    if (t && t.valueType === 'specials' && String(f.value || '').split(',').filter(x => x.trim()).length > 1) s += (f.logic === 'and' ? ' (모두)' : ' (하나라도)');
+    return s;
+  }
+  function _cfFavOutside(e) { const wrap = document.querySelector('.cf-fav-wrap'); if (wrap && !wrap.contains(e.target)) closeCfFavMenu(); }
+  function closeCfFavMenu() { document.getElementById('cfFavMenu')?.classList.add('hidden'); document.removeEventListener('mousedown', _cfFavOutside); }
+  function openCfFavMenu() { renderCfFavMenu(); document.getElementById('cfFavMenu')?.classList.remove('hidden'); setTimeout(() => document.addEventListener('mousedown', _cfFavOutside), 0); }
+  function renderCfFavMenu() {
+    const menu = document.getElementById('cfFavMenu'); if (!menu) return;
+    const favs = loadCfFavs();
+    if (!favs.length) {
+      menu.innerHTML = `<div class="cf-fav-empty">즐겨찾기한 조건이 없습니다.<br><span class="f10 gray">각 필터 행 끝의 ♥ 로 추가하세요.</span></div>`;
+      return;
+    }
+    menu.innerHTML = `<div class="cf-fav-head">즐겨찾기 필터 — 체크 후 [선택 추가]</div>
+      <div class="cf-fav-list">${favs.map(f => `<label class="cf-fav-item"><input type="checkbox" class="cf-fav-cb" data-fid="${f.id}"><span class="cf-fav-label" title="${escAttr(cfFilterLabel(f))}">${escHtml(cfFilterLabel(f))}</span><button type="button" class="cf-fav-del" data-fid="${f.id}" title="즐겨찾기에서 삭제">×</button></label>`).join('')}</div>
+      <div class="cf-fav-foot"><button type="button" class="btn_box_sss btn_white" id="cfFavCancel">닫기</button><button type="button" class="btn_box_sss btn_blue bold" id="cfFavAdd">선택 추가</button></div>`;
+    menu.querySelector('#cfFavAdd').addEventListener('click', () => {
+      const ids = [...menu.querySelectorAll('.cf-fav-cb:checked')].map(c => c.dataset.fid);
+      if (!ids.length) { alert('추가할 즐겨찾기를 1개 이상 체크하세요.'); return; }
+      const favs2 = loadCfFavs();
+      const existing = new Set(custRows.map(_cfKey));
+      let added = 0;
+      ids.forEach(id => { const f = favs2.find(x => x.id === id); if (f && !existing.has(_cfKey(f))) { custRows.push({ typeId: f.typeId, op: f.op, value: f.value, logic: f.logic }); existing.add(_cfKey(f)); added++; } });
+      closeCfFavMenu();
+      renderCustRows();
+      if (added) refilterFromCache({ quiet: true });
+      else alert('선택한 조건은 이미 추가되어 있습니다.');
+    });
+    menu.querySelector('#cfFavCancel').addEventListener('click', closeCfFavMenu);
+    menu.querySelectorAll('.cf-fav-del').forEach(b => b.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      saveCfFavs(loadCfFavs().filter(f => f.id !== b.dataset.fid));
+      renderCfFavMenu(); renderCustRows();
+    }));
   }
 
   // 배지 클릭 → 이 필터로 '빠진(제외)' 건들만 하단 그리드 전체탭에 표시
@@ -2360,6 +2428,10 @@
       renderCustRows();
     });
     document.getElementById('btnManageTypes').addEventListener('click', openManageTypes);
+    document.getElementById('btnCfFav')?.addEventListener('click', () => {
+      const menu = document.getElementById('cfFavMenu');
+      if (menu && menu.classList.contains('hidden')) openCfFavMenu(); else closeCfFavMenu();
+    });
     document.getElementById('btnRefilter').addEventListener('click', refilterFromCache);
     // 비고 접기/펴기 + 내용 변경 시 배지 갱신
     document.getElementById('memoHead')?.addEventListener('click', toggleMemo);
@@ -2369,6 +2441,7 @@
     // 결과 뷰 탭: 필터링 / 전체
     document.getElementById('viewTabFiltered')?.addEventListener('click', () => setViewMode('filtered'));
     document.getElementById('viewTabAll')?.addEventListener('click', () => setViewMode('all'));
+    document.getElementById('viewTabExcluded')?.addEventListener('click', () => setViewMode('excluded'));
 
     // 정렬바 — 단일 키 버튼 + 다중 키 select + 해제
     document.querySelectorAll('#sortBar .sort-tab[data-sort]').forEach(b => {
@@ -2820,19 +2893,25 @@
     const elLegacy   = document.getElementById('resCount');
     if (elFiltered) elFiltered.textContent = filteredN;
     if (elAll)      elAll.textContent      = rawN;
-    // '전체' 옆에 필터로 제외된 건수 표시 (보고 빼기 안 하게)
+    // '제외' 버튼 카운트 = 필터로 빠진 건수 (전체 - 필터링)
     const elExcluded = document.getElementById('resCountExcluded');
-    if (elExcluded) { const ex = Math.max(0, rawN - filteredN); elExcluded.textContent = (applied && ex > 0) ? ` (제외 ${ex})` : ''; }
+    if (elExcluded) elExcluded.textContent = Math.max(0, rawN - filteredN);
     // 호환성: 기존 resCount 도 업데이트 (안 보이지만 데이터 바인딩 코드 있을 수 있음)
     if (elLegacy)   elLegacy.textContent   = applied ? `${rawN} → ${filteredN} (필터 ${applied}개 적용)` : rawN;
   }
 
-  // 뷰 전환: '필터링'/'전체' 탭 클릭 시 동일 데이터에서 표시만 토글
+  // 뷰 전환: '필터링'/'전체'/'제외' 탭 클릭 시 동일 데이터에서 표시만 토글
   function setViewMode(mode) {
-    viewMode = mode === 'all' ? 'all' : 'filtered';
+    viewMode = (mode === 'all') ? 'all' : (mode === 'excluded') ? 'excluded' : 'filtered';
     document.getElementById('viewTabFiltered')?.classList.toggle('active', viewMode === 'filtered');
     document.getElementById('viewTabAll')?.classList.toggle('active', viewMode === 'all');
-    const items = viewMode === 'all' ? lastRawItems : lastFilteredItems;
+    document.getElementById('viewTabExcluded')?.classList.toggle('active', viewMode === 'excluded');
+    let items;
+    if (viewMode === 'all') items = lastRawItems;
+    else if (viewMode === 'excluded') {
+      const passSet = new Set(lastFilteredItems || []);
+      items = (lastRawItems || []).filter(it => !passSet.has(it));   // 필터로 빠진 건만
+    } else items = lastFilteredItems;
     renderResults(items);
   }
 
