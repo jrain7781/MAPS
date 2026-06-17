@@ -5700,8 +5700,8 @@ function getAutoApprovalStats(testMode) {
       else if (stCur === '불가') addId(ds.unable_tele, itemId);
     } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && (toVal === '폐기' || toVal === '취소')) {
       addId(ds.discard_web, itemId);                                             // 8번 폐기(옛 취소 포함)
-    } else if (action === 'FIELD_CHANGE' && fieldName === 'stu_member' && (toVal === '불가' || toVal === '변경')) {
-      addId(ds.unable_web, itemId);                                              // 8번 불가(옛 변경 포함)
+    } else if ((action === 'FIELD_CHANGE' || action === 'AUCTION_CHANGE_CANCEL') && fieldName === 'stu_member' && (toVal === '불가' || toVal === '변경')) {
+      addId(ds.unable_web, itemId);                                              // 8번 불가(옛 변경 포함) + auction1 크롤 불가확인(action=AUCTION_CHANGE_CANCEL, uploadChangeCancel)
     }
   });
 
