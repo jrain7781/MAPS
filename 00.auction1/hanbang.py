@@ -1,0 +1,313 @@
+# -*- coding: utf-8 -*-
+"""
+hanbang.py — 한방(karhanbang.com) 중개사무소 리스트 크롤러
+- 대상: https://www.karhanbang.com/office/?topM=09  (페이지당 10개, 기본 2498페이지)
+- 리스트에서: 지역 / 상호 / 대표자 / 신주소 / 사무실번호(02)
+- 상세 진입해서: 부가주소 / 핸드폰번호(010)   ← 핸드폰은 리스트에 없음
+- 사무실번호와 핸드폰번호는 분리 컬럼으로 저장
+- 결과: xlsx 내보내기 (openpyxl)
+
+주의: 사이트에 dotDefender WAF 가 있어 봇처럼 빠르게 연속요청하면 차단됨.
+      → requests 세션(쿠키) + 브라우저 헤더 + Referer + 요청 간 지연 으로 사람처럼 천천히.
+"""
+from __future__ import annotations
+import os, re, time, uuid, threading, html as _html
+
+import requests
+
+_DIR_HERE = os.path.dirname(os.path.abspath(__file__))
+_EXPORT_DIR = os.path.join(_DIR_HERE, "hanbang_exports")
+
+BASE = "https://www.karhanbang.com"
+LIST_BASE = BASE + "/office/"
+DETAIL_BASE = BASE + "/office/office_detail.asp"
+
+_HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+# 컬럼 순서 (사용자 사양) — 사무실번호/핸드폰번호 분리
+COLUMNS = ["지역", "상호", "대표자", "신주소", "부가주소", "사무실번호", "핸드폰번호"]
+
+# ── 작업 레지스트리 (run_id -> state) ───────────────────────────
+_runs = {}            # run_id -> dict
+_runs_lock = threading.Lock()
+
+
+# ============================================================
+# 파싱 유틸
+# ============================================================
+def _text(s: str) -> str:
+    """태그 제거 + 엔티티 복원 + 공백 정리."""
+    if not s:
+        return ""
+    s = re.sub(r"<[^>]+>", " ", s)
+    s = _html.unescape(s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
+def parse_list(html_text: str):
+    """리스트 페이지 → [{region, name, rep, office_tel, new_addr, mem_no, param}]"""
+    out = []
+    m = re.search(r"<tbody>(.*?)</tbody>", html_text, re.S)
+    scope = m.group(1) if m else html_text
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", scope, re.S):
+        tds = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
+        if len(tds) < 5:
+            continue
+        mv = re.search(r"moveDetail\('(\d+)'\s*,\s*'([^']*)'\)", tds[1])
+        if not mv:
+            continue
+        mem_no, param = mv.group(1), mv.group(2)
+        # 상호 = 앵커 텍스트에서 span(viewnum/date) 제거 후
+        sub = re.sub(r"<span.*?</span>", "", tds[1], flags=re.S)
+        name = _text(sub)
+        # 사무실 전화 (02 등) = td3 의 tel: 링크
+        mt = re.search(r"tel:([0-9\-]+)", tds[3])
+        office_tel = mt.group(1) if mt else _text(tds[3])
+        out.append({
+            "region": _text(tds[0]),
+            "name": name,
+            "rep": _text(tds[2]),
+            "office_tel": office_tel,
+            "new_addr": _text(tds[4]),
+            "mem_no": mem_no,
+            "param": param,
+        })
+    return out
+
+
+def parse_detail(html_text: str):
+    """상세 페이지 → (부가주소, 핸드폰, 사무실(상세))"""
+    buga = ""
+    m = re.search(r"부가주소\s*</span>\s*<em[^>]*>(.*?)</em>", html_text, re.S)
+    if m:
+        buga = _text(m.group(1))
+    office = ""
+    mobile = ""
+    mr = re.search(r"전화걸기\s*</span>\s*<em[^>]*>(.*?)</em>", html_text, re.S)
+    if mr:
+        tels = re.findall(r"tel:([0-9\-]+)", mr.group(1))
+        for t in tels:
+            digits = re.sub(r"[^0-9]", "", t)
+            if not digits or digits == "000":
+                continue
+            if digits.startswith("01"):
+                mobile = t            # 핸드폰 (010 등)
+            elif not office:
+                office = t            # 사무실 (02/지역번호)
+    return buga, mobile, office
+
+
+def detect_block(html_text: str) -> bool:
+    return "dotDefender" in html_text or "Blocked Your Request" in html_text
+
+
+# ============================================================
+# 크롤 작업 (스레드)
+# ============================================================
+def _log(state, msg):
+    with state["lock"]:
+        state["lines"].append(msg)
+
+
+def _list_page_url(page: int) -> str:
+    # 사이트 기본 리스트(=사용자가 준 URL)와 동일 + page 파라미터
+    return f"{LIST_BASE}?topM=09&page={page}"
+
+
+def _detail_url(mem_no: str, param: str) -> str:
+    return f"{DETAIL_BASE}?topM=09&mem_no={mem_no}&{param}"
+
+
+def _detect_total_pages(html_text: str) -> int:
+    pages = [int(x) for x in re.findall(r"[?&]page=(\d+)", html_text)]
+    return max(pages) if pages else 0
+
+
+def _fetch(session, url, referer, delay, state, tries=3):
+    """지연 후 GET. dotDefender 차단 감지 시 백오프 재시도. (text, blocked)"""
+    last = ""
+    for attempt in range(tries):
+        if state.get("cancel"):
+            return "", False
+        time.sleep(delay if attempt == 0 else delay * (attempt + 2))
+        try:
+            h = dict(_HEADERS)
+            if referer:
+                h["Referer"] = referer
+            r = session.get(url, headers=h, timeout=20)
+            r.encoding = "utf-8"
+            txt = r.text
+            if detect_block(txt):
+                last = txt
+                _log(state, f"  ⚠ WAF 차단 감지 — {(attempt+1)}/{tries} 백오프 재시도")
+                continue
+            return txt, False
+        except Exception as e:
+            last = ""
+            _log(state, f"  ⚠ 요청 오류({attempt+1}/{tries}): {e}")
+    return last, detect_block(last)
+
+
+def _run(state, start_page, end_page, delay):
+    rows_all = []
+    try:
+        os.makedirs(_EXPORT_DIR, exist_ok=True)
+        session = requests.Session()
+        session.headers.update(_HEADERS)
+        # 세션 워밍 — 기본 리스트 1회 (쿠키 획득)
+        _log(state, "세션 준비 중… (리스트 첫 페이지 워밍)")
+        warm, blocked = _fetch(session, _list_page_url(1), BASE + "/", delay, state)
+        if blocked or not warm:
+            _log(state, "❌ 시작 실패: 첫 요청이 WAF 차단되었습니다. 잠시 후 다시 시도하세요.")
+            state["status"] = "error"
+            return
+        total = _detect_total_pages(warm)
+        state["total_pages_site"] = total
+        _log(state, f"사이트 전체 페이지 감지: {total or '?'}쪽")
+        _log(state, f"크롤 범위: {start_page}~{end_page}쪽  (지연 {delay}s)")
+
+        for page in range(start_page, end_page + 1):
+            if state.get("cancel"):
+                _log(state, "⏹ 사용자 중지")
+                break
+            state["cur_page"] = page
+            list_html = warm if page == 1 and warm else None
+            if list_html is None:
+                list_html, blocked = _fetch(session, _list_page_url(page), _list_page_url(max(1, page - 1)), delay, state)
+                if blocked or not list_html:
+                    _log(state, f"❌ {page}쪽 리스트 가져오기 실패(차단/오류) — 건너뜀")
+                    continue
+            offices = parse_list(list_html)
+            _log(state, f"[{page}쪽] 사무소 {len(offices)}건")
+            warm = None  # 1쪽 워밍 캐시는 1회만 사용
+            for i, off in enumerate(offices, 1):
+                if state.get("cancel"):
+                    break
+                d_html, blocked = _fetch(session, _detail_url(off["mem_no"], off["param"]),
+                                         _list_page_url(page), delay, state)
+                buga, mobile, office2 = ("", "", "")
+                if blocked or not d_html:
+                    _log(state, f"    - {off['name']}: 상세 차단/오류 → 핸드폰·부가주소 누락")
+                else:
+                    buga, mobile, office2 = parse_detail(d_html)
+                row = {
+                    "지역": off["region"],
+                    "상호": off["name"],
+                    "대표자": off["rep"],
+                    "신주소": off["new_addr"],
+                    "부가주소": buga,
+                    "사무실번호": off["office_tel"] or office2,
+                    "핸드폰번호": mobile,
+                }
+                rows_all.append(row)
+                state["count"] = len(rows_all)
+                _log(state, f"    {page}-{i} {off['name']} | 사무실 {row['사무실번호'] or '-'} | 핸드폰 {mobile or '없음'}")
+
+        # 엑셀 저장
+        if rows_all:
+            fname = _write_xlsx(rows_all, start_page, end_page)
+            state["file"] = fname
+            _log(state, f"✅ 완료 — {len(rows_all)}건 저장: {os.path.basename(fname)}")
+            state["status"] = "done"
+        else:
+            _log(state, "결과 0건 — 저장할 데이터 없음")
+            state["status"] = "done"
+    except Exception as e:
+        import traceback
+        _log(state, "❌ 예외: " + str(e))
+        _log(state, traceback.format_exc())
+        state["status"] = "error"
+    finally:
+        if state["status"] not in ("done", "error"):
+            state["status"] = "done"
+
+
+def _write_xlsx(rows, start_page, end_page) -> str:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "한방 중개사무소"
+    # 헤더
+    head_fill = PatternFill("solid", fgColor="D9E1F2")
+    for c, name in enumerate(COLUMNS, 1):
+        cell = ws.cell(row=1, column=c, value=name)
+        cell.font = Font(bold=True)
+        cell.fill = head_fill
+        cell.alignment = Alignment(horizontal="center")
+    # 데이터
+    for r, row in enumerate(rows, 2):
+        for c, name in enumerate(COLUMNS, 1):
+            ws.cell(row=r, column=c, value=row.get(name, ""))
+    # 열 너비
+    widths = [12, 30, 10, 38, 16, 16, 16]
+    for c, w in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(c)].width = w
+    ws.freeze_panes = "A2"
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    fname = os.path.join(_EXPORT_DIR, f"한방_{start_page}-{end_page}p_{stamp}.xlsx")
+    wb.save(fname)
+    return fname
+
+
+# ============================================================
+# 공개 API (mj_extensions 라우터에서 호출)
+# ============================================================
+def start(start_page: int, end_page: int, delay: float):
+    start_page = max(1, int(start_page))
+    end_page = max(start_page, int(end_page))
+    delay = max(0.3, float(delay))
+    run_id = uuid.uuid4().hex[:12]
+    state = {
+        "lines": [], "status": "running", "lock": threading.Lock(),
+        "cancel": False, "count": 0, "cur_page": start_page,
+        "start_page": start_page, "end_page": end_page,
+        "total_pages_site": 0, "file": None,
+    }
+    with _runs_lock:
+        _runs[run_id] = state
+    t = threading.Thread(target=_run, args=(state, start_page, end_page, delay), daemon=True)
+    t.start()
+    return run_id
+
+
+def logs(run_id: str, offset: int = 0):
+    state = _runs.get(run_id)
+    if not state:
+        return None
+    with state["lock"]:
+        lines = state["lines"][offset:]
+    return {
+        "lines": lines,
+        "status": state["status"],
+        "count": state["count"],
+        "cur_page": state["cur_page"],
+        "start_page": state["start_page"],
+        "end_page": state["end_page"],
+        "total_pages_site": state["total_pages_site"],
+        "has_file": bool(state["file"]),
+        "file_name": os.path.basename(state["file"]) if state["file"] else "",
+    }
+
+
+def stop(run_id: str) -> bool:
+    state = _runs.get(run_id)
+    if not state:
+        return False
+    state["cancel"] = True
+    return True
+
+
+def file_path(run_id: str):
+    state = _runs.get(run_id)
+    if state and state.get("file") and os.path.isfile(state["file"]):
+        return state["file"]
+    return None

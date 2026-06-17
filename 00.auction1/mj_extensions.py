@@ -587,6 +587,43 @@ def handle_get(handler) -> bool:
         _send_json(handler, 200, kakao_status())
         return True
 
+    # ---- 한방(karhanbang) 크롤러 ----
+    if path == "/api/hanbang/logs":
+        import hanbang
+        run_id = qs.get("run_id", "")
+        offset = int(qs.get("offset", "0") or "0")
+        r = hanbang.logs(run_id, offset)
+        if r is None:
+            _send_json(handler, 404, {"ok": False, "error": "unknown run_id"})
+        else:
+            _send_json(handler, 200, {"ok": True, **r})
+        return True
+    if path == "/api/hanbang/download":
+        import hanbang
+        run_id = qs.get("run_id", "")
+        fp = hanbang.file_path(run_id)
+        if not fp:
+            handler.send_response(404)
+            handler.end_headers()
+            handler.wfile.write(b"file not found")
+            return True
+        try:
+            with open(fp, "rb") as f:
+                data = f.read()
+            import urllib.parse as _up
+            fn = _up.quote(os.path.basename(fp))
+            handler.send_response(200)
+            handler.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            handler.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{fn}")
+            handler.send_header("Content-Length", str(len(data)))
+            handler.end_headers()
+            handler.wfile.write(data)
+        except Exception as e:
+            handler.send_response(500)
+            handler.end_headers()
+            handler.wfile.write(str(e).encode("utf-8"))
+        return True
+
     return False
 
 
@@ -649,6 +686,33 @@ def handle_post(handler) -> bool:
         return True
     if path == "/api/kakao/stop":
         _send_json(handler, 200, kakao_stop())
+        return True
+
+    # ---- 한방(karhanbang) 크롤러 ----
+    if path == "/api/hanbang/run":
+        import hanbang
+        try:
+            length = int(handler.headers.get("Content-Length", "0"))
+            raw = handler.rfile.read(length).decode("utf-8") if length else "{}"
+            payload = json.loads(raw or "{}")
+            sp = int(payload.get("start_page", 1) or 1)
+            ep = int(payload.get("end_page", sp) or sp)
+            delay = float(payload.get("delay", 1.0) or 1.0)
+            run_id = hanbang.start(sp, ep, delay)
+            _send_json(handler, 200, {"ok": True, "run_id": run_id})
+        except Exception as e:
+            _send_json(handler, 500, {"ok": False, "error": str(e)})
+        return True
+    if path == "/api/hanbang/stop":
+        import hanbang
+        try:
+            length = int(handler.headers.get("Content-Length", "0"))
+            raw = handler.rfile.read(length).decode("utf-8") if length else "{}"
+            payload = json.loads(raw or "{}")
+            ok = hanbang.stop(payload.get("run_id", ""))
+            _send_json(handler, 200, {"ok": ok})
+        except Exception as e:
+            _send_json(handler, 500, {"ok": False, "error": str(e)})
         return True
 
     return False

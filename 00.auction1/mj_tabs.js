@@ -10,7 +10,82 @@
     // 탭 진입 시 초기화 hook
     if (name === 'capture') { initCaptureTabOnce(); }
     if (name === 'kakao') { refreshKakaoStatus(); }
+    if (name === 'hanbang') { initHanbangOnce(); }
     if (name === 'termlog') { startTermLog(); } else { stopTermLog(); }
+  }
+
+  // ========== 한방(karhanbang) 크롤러 ==========
+  let _hanRunId = null, _hanLastRunId = null, _hanOffset = 0, _hanBound = false;
+  function _hanEl(id) { return document.getElementById(id); }
+  function _hanLogLine(text) {
+    const el = _hanEl('hanLog'); if (!el) return;
+    if (el.dataset.init !== '1') { el.textContent = ''; el.dataset.init = '1'; }
+    el.textContent += (el.textContent ? '\n' : '') + text;
+    const arr = el.textContent.split('\n');
+    if (arr.length > 5000) el.textContent = arr.slice(arr.length - 5000).join('\n');
+    el.scrollTop = el.scrollHeight;
+  }
+  function _hanSetRunning(running) {
+    const r = _hanEl('hanRunBtn'), s = _hanEl('hanStopBtn');
+    if (r) r.disabled = running;
+    if (s) s.disabled = !running;
+  }
+  function initHanbangOnce() {
+    if (_hanBound) return; _hanBound = true;
+    _hanEl('hanRunBtn')?.addEventListener('click', hanRun);
+    _hanEl('hanStopBtn')?.addEventListener('click', hanStop);
+    _hanEl('hanDownloadBtn')?.addEventListener('click', hanDownload);
+  }
+  function hanRun() {
+    if (_hanRunId) { alert('이미 실행 중입니다. 먼저 중지하세요.'); return; }
+    const sp = parseInt(_hanEl('hanStartPage').value, 10) || 1;
+    const ep = parseInt(_hanEl('hanEndPage').value, 10) || sp;
+    const delay = parseFloat(_hanEl('hanDelay').value) || 1.0;
+    if (ep < sp) { alert('끝 페이지가 시작 페이지보다 작습니다.'); return; }
+    const cnt = (ep - sp + 1);
+    if (cnt > 50 && !confirm(`${cnt}쪽(~${cnt * 10}건) 크롤합니다.\n상세 진입까지 시간이 오래 걸릴 수 있습니다(쪽당 ~20초+). 진행할까요?`)) return;
+    const el = _hanEl('hanLog'); if (el) { el.textContent = ''; el.dataset.init = '1'; }
+    _hanOffset = 0;
+    _hanEl('hanDownloadBtn').disabled = true;
+    _hanEl('hanProgress').textContent = '시작 중…';
+    _hanSetRunning(true);
+    fetch('/api/hanbang/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_page: sp, end_page: ep, delay: delay })
+    }).then(r => r.json()).then(j => {
+      if (j.ok) { _hanRunId = j.run_id; _hanLastRunId = j.run_id; _hanPoll(); }
+      else { _hanLogLine('[시작 실패] ' + (j.error || '?')); _hanSetRunning(false); _hanEl('hanProgress').textContent = '오류'; }
+    }).catch(e => { _hanLogLine('[요청 오류] ' + e); _hanSetRunning(false); });
+  }
+  function _hanPoll() {
+    if (!_hanRunId) return;
+    fetch('/api/hanbang/logs?run_id=' + encodeURIComponent(_hanRunId) + '&offset=' + _hanOffset)
+      .then(r => r.json()).then(j => {
+        if (!j.ok) { _hanLogLine('[로그 오류] ' + (j.error || '?')); _hanSetRunning(false); _hanRunId = null; return; }
+        if (j.lines && j.lines.length) { j.lines.forEach(_hanLogLine); _hanOffset += j.lines.length; }
+        const range = j.start_page + '~' + j.end_page + '쪽';
+        _hanEl('hanProgress').textContent =
+          `진행: ${range} 중 현재 ${j.cur_page}쪽 · 수집 ${j.count}건` +
+          (j.status === 'running' ? ' …' : (j.status === 'done' ? ' · 완료' : ' · 오류'));
+        if (j.status === 'running') { setTimeout(_hanPoll, 1000); }
+        else {
+          _hanSetRunning(false);
+          if (j.has_file) { _hanEl('hanDownloadBtn').disabled = false; }
+          _hanRunId = null;
+        }
+      }).catch(e => { _hanLogLine('[polling 오류] ' + e); setTimeout(_hanPoll, 2000); });
+  }
+  function hanStop() {
+    if (!_hanRunId) return;
+    fetch('/api/hanbang/stop', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_id: _hanRunId })
+    }).catch(() => {});
+    _hanLogLine('⏹ 중지 요청 — 현재 항목까지 마치고 멈춥니다.');
+  }
+  function hanDownload() {
+    if (!_hanLastRunId) { alert('다운로드할 결과가 없습니다.'); return; }
+    window.location.href = '/api/hanbang/download?run_id=' + encodeURIComponent(_hanLastRunId);
   }
 
   // ========== 터미널 (서버 콘솔 로그) ==========
