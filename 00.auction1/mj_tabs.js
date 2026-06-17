@@ -26,15 +26,31 @@
     el.scrollTop = el.scrollHeight;
   }
   function _hanSetRunning(running) {
-    const r = _hanEl('hanRunBtn'), s = _hanEl('hanStopBtn');
+    const r = _hanEl('hanRunBtn'), g = _hanEl('hanRegionBtn'), s = _hanEl('hanStopBtn');
     if (r) r.disabled = running;
+    if (g) g.disabled = running;
     if (s) s.disabled = !running;
   }
   function initHanbangOnce() {
     if (_hanBound) return; _hanBound = true;
     _hanEl('hanRunBtn')?.addEventListener('click', hanRun);
+    _hanEl('hanRegionBtn')?.addEventListener('click', hanRunRegions);
     _hanEl('hanStopBtn')?.addEventListener('click', hanStop);
     _hanEl('hanDownloadBtn')?.addEventListener('click', hanDownload);
+  }
+  function _hanLaunch(payload) {
+    const el = _hanEl('hanLog'); if (el) { el.textContent = ''; el.dataset.init = '1'; }
+    _hanOffset = 0;
+    _hanEl('hanDownloadBtn').disabled = true;
+    _hanEl('hanProgress').textContent = '시작 중…';
+    _hanSetRunning(true);
+    fetch('/api/hanbang/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(r => r.json()).then(j => {
+      if (j.ok) { _hanRunId = j.run_id; _hanLastRunId = j.run_id; _hanPoll(); }
+      else { _hanLogLine('[시작 실패] ' + (j.error || '?')); _hanSetRunning(false); _hanEl('hanProgress').textContent = '오류'; }
+    }).catch(e => { _hanLogLine('[요청 오류] ' + e); _hanSetRunning(false); });
   }
   function hanRun() {
     if (_hanRunId) { alert('이미 실행 중입니다. 먼저 중지하세요.'); return; }
@@ -44,18 +60,13 @@
     if (ep < sp) { alert('끝 페이지가 시작 페이지보다 작습니다.'); return; }
     const cnt = (ep - sp + 1);
     if (cnt > 50 && !confirm(`${cnt}쪽(~${cnt * 10}건) 크롤합니다.\n상세 진입까지 시간이 오래 걸릴 수 있습니다(쪽당 ~20초+). 진행할까요?`)) return;
-    const el = _hanEl('hanLog'); if (el) { el.textContent = ''; el.dataset.init = '1'; }
-    _hanOffset = 0;
-    _hanEl('hanDownloadBtn').disabled = true;
-    _hanEl('hanProgress').textContent = '시작 중…';
-    _hanSetRunning(true);
-    fetch('/api/hanbang/run', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start_page: sp, end_page: ep, delay: delay })
-    }).then(r => r.json()).then(j => {
-      if (j.ok) { _hanRunId = j.run_id; _hanLastRunId = j.run_id; _hanPoll(); }
-      else { _hanLogLine('[시작 실패] ' + (j.error || '?')); _hanSetRunning(false); _hanEl('hanProgress').textContent = '오류'; }
-    }).catch(e => { _hanLogLine('[요청 오류] ' + e); _hanSetRunning(false); });
+    _hanLaunch({ start_page: sp, end_page: ep, delay: delay, mode: 'single' });
+  }
+  function hanRunRegions() {
+    if (_hanRunId) { alert('이미 실행 중입니다. 먼저 중지하세요.'); return; }
+    const delay = parseFloat(_hanEl('hanDelay').value) || 1.0;
+    if (!confirm('전국 17개 시도를 지역별로 자동 크롤합니다.\n\n· 시도마다 엑셀 1개씩 저장 폴더에 자동 저장\n· 25쪽마다 중간저장 + 끊겨도 이어서 재개(완료 지역은 건너뜀)\n· 전체 ~25,000건이라 반나절~하루 소요. PC 절전/재부팅 안 되게 해주세요.\n\n시작할까요?')) return;
+    _hanLaunch({ delay: delay, mode: 'regions' });
   }
   function _hanPoll() {
     if (!_hanRunId) return;
@@ -63,10 +74,14 @@
       .then(r => r.json()).then(j => {
         if (!j.ok) { _hanLogLine('[로그 오류] ' + (j.error || '?')); _hanSetRunning(false); _hanRunId = null; return; }
         if (j.lines && j.lines.length) { j.lines.forEach(_hanLogLine); _hanOffset += j.lines.length; }
-        const range = j.start_page + '~' + j.end_page + '쪽';
-        _hanEl('hanProgress').textContent =
-          `진행: ${range} 중 현재 ${j.cur_page}쪽 · 수집 ${j.count}건` +
-          (j.status === 'running' ? ' …' : (j.status === 'done' ? ' · 완료' : ' · 오류'));
+        const tail = (j.status === 'running' ? ' …' : (j.status === 'done' ? ' · 완료' : ' · 오류'));
+        if (j.mode === 'regions') {
+          _hanEl('hanProgress').textContent =
+            `지역별 진행: ${j.region_done}/${j.region_total} 지역 완료 · 현재 [${j.cur_region || '-'}] ${j.cur_page}쪽 · 누적 ${j.count}건` + tail;
+        } else {
+          _hanEl('hanProgress').textContent =
+            `진행: ${j.start_page}~${j.end_page}쪽 중 현재 ${j.cur_page}쪽 · 수집 ${j.count}건` + tail;
+        }
         if (j.status === 'running') { setTimeout(_hanPoll, 1000); }
         else {
           _hanSetRunning(false);

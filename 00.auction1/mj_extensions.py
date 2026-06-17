@@ -698,7 +698,8 @@ def handle_post(handler) -> bool:
             sp = int(payload.get("start_page", 1) or 1)
             ep = int(payload.get("end_page", sp) or sp)
             delay = float(payload.get("delay", 1.0) or 1.0)
-            run_id = hanbang.start(sp, ep, delay)
+            mode = payload.get("mode", "single")
+            run_id = hanbang.start(sp, ep, delay, mode=mode)
             _send_json(handler, 200, {"ok": True, "run_id": run_id})
         except Exception as e:
             _send_json(handler, 500, {"ok": False, "error": str(e)})
