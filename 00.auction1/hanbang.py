@@ -228,7 +228,7 @@ def _run(state, start_page, end_page, delay):
                 }
                 rows_all.append(row)
                 state["count"] = len(rows_all)
-                _log(state, f"    {page}-{i} {full_name} | 신주소 {sin_addr or '-'} | 사무실 {row['사무실'] or '-'} | 핸드폰 {row['핸드폰'] or '없음'}")
+                _log(state, f"    {page}-{i} {full_name} | {sin_addr or '-'} | {row['사무실'] or '-'} | {row['핸드폰'] or '없음'}")
 
         # 엑셀 저장
         if rows_all:
