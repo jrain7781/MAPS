@@ -31,11 +31,11 @@ _HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 
-# 컬럼 순서 (사용자 사양)
+# 컬럼 순서 (사용자 사양) — 상호 / 핸드폰 / 신주소 3개만
+# - 상호 = 앞 괄호 제거 (예: (가락)학사공인중개사사무소 → 학사공인중개사사무소)
+# - 핸드폰 = 상세의 010 (없으면 공란)
 # - 신주소 = 상세의 소재지(풀 도로명주소). 리스트엔 동 레벨만 있어 상세에서 보강
-# - 상호구분 = 상호 앞 괄호 안 텍스트 (예: (가락) → 가락) — 신주소 뒤에 위치
-# - 사무실/핸드폰 = 분리, 제목만 사무실/핸드폰 (셀은 번호만)
-COLUMNS = ["지역", "상호", "대표자", "신주소", "상호구분", "부가주소", "사무실", "핸드폰"]
+COLUMNS = ["상호", "핸드폰", "신주소"]
 
 # ── 작업 레지스트리 (run_id -> state) ───────────────────────────
 _runs = {}            # run_id -> dict
@@ -114,10 +114,9 @@ def parse_detail(html_text: str) -> dict:
     return {"sojae": sojae, "buga": buga, "jibun": jibun, "mobile": mobile, "office": office}
 
 
-def split_name_paren(name: str):
-    """상호 앞 괄호 추출. '(가락)학사공인중개사사무소' → ('가락', 원래 상호 유지)."""
-    m = re.match(r"\s*\(([^)]*)\)\s*", name or "")
-    return (m.group(1).strip() if m else ""), (name or "")
+def strip_name_paren(name: str) -> str:
+    """상호 앞 괄호 제거. '(가락)학사공인중개사사무소' → '학사공인중개사사무소'."""
+    return re.sub(r"^\s*\([^)]*\)\s*", "", name or "").strip()
 
 
 def detect_block(html_text: str) -> bool:
@@ -213,22 +212,18 @@ def _run(state, start_page, end_page, delay):
                     _log(state, f"    - {off['name']}: 상세 차단/오류 → 신주소(동레벨 폴백)·핸드폰·부가주소 누락")
                 else:
                     det = parse_detail(d_html)
-                paren, full_name = split_name_paren(off["name"])
+                name2 = strip_name_paren(off["name"])
                 # 신주소 = 상세 소재지(풀 도로명) 우선, 없으면 리스트 동 레벨 폴백
                 sin_addr = det.get("sojae") or off["new_addr"]
+                mobile = det.get("mobile", "")
                 row = {
-                    "지역": off["region"],
-                    "상호": full_name,
-                    "대표자": off["rep"],
+                    "상호": name2,
+                    "핸드폰": mobile,
                     "신주소": sin_addr,
-                    "상호구분": paren,
-                    "부가주소": det.get("buga", ""),
-                    "사무실": off["office_tel"] or det.get("office", ""),
-                    "핸드폰": det.get("mobile", ""),
                 }
                 rows_all.append(row)
                 state["count"] = len(rows_all)
-                _log(state, f"    {page}-{i} {full_name} | {sin_addr or '-'} | {row['사무실'] or '-'} | {row['핸드폰'] or '없음'}")
+                _log(state, f"    {page}-{i} {name2} | {mobile or '없음'} | {sin_addr or '-'}")
 
         # 엑셀 저장
         if rows_all:
@@ -266,8 +261,8 @@ def _write_xlsx(rows, start_page, end_page) -> str:
     for r, row in enumerate(rows, 2):
         for c, name in enumerate(COLUMNS, 1):
             ws.cell(row=r, column=c, value=row.get(name, ""))
-    # 열 너비 (지역,상호,대표자,신주소,상호구분,부가주소,사무실,핸드폰)
-    widths = [12, 30, 10, 40, 12, 16, 16, 16]
+    # 열 너비 (상호, 핸드폰, 신주소)
+    widths = [34, 16, 42]
     for c, w in enumerate(widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(c)].width = w
     ws.freeze_panes = "A2"
