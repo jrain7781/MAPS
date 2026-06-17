@@ -256,9 +256,60 @@ def _run(state, start_page, end_page, delay):
             state["status"] = "done"
 
 
+def _do_region(state, session, idx, sido, name, delay, ck, label, force=False):
+    """시도 1개 크롤 — 체크포인트/재개/중간저장. 반환 'done'|'cancelled'|'skipped'|'error'."""
+    key = str(idx)
+    info = {} if force else ck.get(key, {})
+    state["cur_region"] = name
+    fpath = _region_file(idx, name)
+    if info.get("done"):
+        state["region_done"] = max(state.get("region_done", 0), idx)
+        _log(state, f"⏭ {label} {name} — 이미 완료, 건너뜀 (다시 받으려면 파일 삭제 후 실행)")
+        return "skipped"
+    first, blocked = _fetch(session, _list_page_url(1, sido), BASE + "/", delay, state)
+    if blocked or not first:
+        _log(state, f"❌ {label} {name} 시작 실패(차단) — 잠시 후 재시도")
+        return "error"
+    total = int(info.get("total") or _detect_total_pages(first))
+    rows = _load_xlsx_rows(fpath) if (os.path.exists(fpath) and not force) else []
+    done_page = 0 if force else int(info.get("last_page") or 0)
+    if done_page > 0:
+        _log(state, f"↻ {label} {name} — {done_page}/{total}쪽까지 완료, 이어서 (기존 {len(rows)}건)")
+    else:
+        _log(state, f"▶ {label} {name} — 총 {total}쪽 시작")
+    for page in range(done_page + 1, total + 1):
+        if state.get("cancel"):
+            break
+        before = len(rows)
+        _crawl_one_page(state, session, page, total, sido, delay, rows)
+        if state.get("cancel"):
+            del rows[before:]   # 중단된 페이지의 부분 데이터 제거(재개 시 중복 방지)
+            break
+        done_page = page
+        if page % SAVE_EVERY_PAGES == 0:
+            _save_rows(rows, fpath)
+            ck[key] = {"done": False, "last_page": done_page, "total": total}
+            _save_ckpt(ck)
+            _log(state, f"  💾 중간저장 {name} {done_page}/{total}쪽 ({len(rows)}건)")
+    if rows:
+        _save_rows(rows, fpath)
+        state["file"] = fpath
+        if os.path.basename(fpath) not in state["region_files"]:
+            state["region_files"].append(os.path.basename(fpath))
+    if state.get("cancel"):
+        ck[key] = {"done": False, "last_page": done_page, "total": total}
+        _save_ckpt(ck)
+        _log(state, f"⏹ {name} 중단 — {done_page}/{total}쪽까지 저장({len(rows)}건). 다음 실행 때 이어서.")
+        return "cancelled"
+    ck[key] = {"done": True, "last_page": total, "total": total}
+    _save_ckpt(ck)
+    state["region_done"] = max(state.get("region_done", 0), idx)
+    _log(state, f"✅ {label} {name} 완료 — {len(rows)}건: {os.path.basename(fpath)}")
+    return "done"
+
+
 def _run_regions(state, delay):
-    """지역별 자동 모드 — 17개 시도 순회. 시도마다 엑셀 1개.
-    SAVE_EVERY_PAGES 쪽마다 중간저장 + 체크포인트. 완료 지역은 재실행 시 건너뜀(끊겨도 이어서 재개)."""
+    """지역별 자동 모드 — 17개 시도 순회. 시도마다 엑셀 1개. 완료 지역은 재실행 시 건너뜀."""
     try:
         os.makedirs(_EXPORT_DIR, exist_ok=True)
         session = _session()
@@ -272,55 +323,41 @@ def _run_regions(state, delay):
             if state.get("cancel"):
                 _log(state, "⏹ 사용자 중지")
                 break
-            key = str(idx)
-            info = ck.get(key, {})
-            state["cur_region"] = name
-            fpath = _region_file(idx, name)
-            if info.get("done"):
-                state["region_done"] = idx
-                _log(state, f"⏭ [{idx}/{len(SIDO)}] {name} — 이미 완료, 건너뜀")
-                continue
-            first, blocked = _fetch(session, _list_page_url(1, sido), BASE + "/", delay, state)
-            if blocked or not first:
-                _log(state, f"❌ [{idx}/{len(SIDO)}] {name} 시작 실패(차단) — 다음 실행 때 재시도")
-                continue
-            total = int(info.get("total") or _detect_total_pages(first))
-            rows = _load_xlsx_rows(fpath) if os.path.exists(fpath) else []
-            done_page = int(info.get("last_page") or 0)
-            if done_page > 0:
-                _log(state, f"↻ [{idx}/{len(SIDO)}] {name} — {done_page}/{total}쪽까지 완료, 이어서 (기존 {len(rows)}건)")
-            else:
-                _log(state, f"▶ [{idx}/{len(SIDO)}] {name} — 총 {total}쪽 시작")
-            for page in range(done_page + 1, total + 1):
-                if state.get("cancel"):
-                    break
-                before = len(rows)
-                _crawl_one_page(state, session, page, total, sido, delay, rows)
-                if state.get("cancel"):
-                    del rows[before:]   # 중단된 페이지의 부분 데이터 제거(재개 시 중복 방지)
-                    break
-                done_page = page
-                if page % SAVE_EVERY_PAGES == 0:
-                    _save_rows(rows, fpath)
-                    ck[key] = {"done": False, "last_page": done_page, "total": total}
-                    _save_ckpt(ck)
-                    _log(state, f"  💾 중간저장 {name} {done_page}/{total}쪽 ({len(rows)}건)")
-            if rows:
-                _save_rows(rows, fpath)
-            if state.get("cancel"):
-                ck[key] = {"done": False, "last_page": done_page, "total": total}
-                _save_ckpt(ck)
-                _log(state, f"⏹ {name} 중단 — {done_page}/{total}쪽까지 저장({len(rows)}건). 다음 실행 때 이어서.")
+            res = _do_region(state, session, idx, sido, name, delay, ck, f"[{idx}/{len(SIDO)}]")
+            if res == "cancelled":
                 break
-            ck[key] = {"done": True, "last_page": total, "total": total}
-            _save_ckpt(ck)
-            state["region_done"] = idx
-            state["file"] = fpath
-            if os.path.basename(fpath) not in state["region_files"]:
-                state["region_files"].append(os.path.basename(fpath))
-            _log(state, f"✅ [{idx}/{len(SIDO)}] {name} 완료 — {len(rows)}건: {os.path.basename(fpath)}")
         state["status"] = "done"
         _log(state, f"🏁 종료 — 완료 {state.get('region_done', 0)}/{len(SIDO)} 지역")
+    except Exception as e:
+        import traceback
+        _log(state, "❌ 예외: " + str(e))
+        _log(state, traceback.format_exc())
+        state["status"] = "error"
+    finally:
+        if state["status"] not in ("done", "error"):
+            state["status"] = "done"
+
+
+def _run_one_region(state, sido_code, delay):
+    """특정 시도 1개만 크롤. 사용자가 지역 선택 후 실행."""
+    try:
+        os.makedirs(_EXPORT_DIR, exist_ok=True)
+        match = [(i, s, n) for i, (s, n) in enumerate(SIDO, 1) if s == int(sido_code)]
+        if not match:
+            _log(state, f"❌ 알 수 없는 지역 코드: {sido_code}")
+            state["status"] = "error"
+            return
+        idx, sido, name = match[0]
+        state["region_total"] = 1
+        session = _session()
+        if not _warm(state, session, delay, sido):
+            state["status"] = "error"
+            return
+        _log(state, f"📍 지역 지정 크롤 — {name} (지연 {delay}s · {SAVE_EVERY_PAGES}쪽마다 중간저장)")
+        ck = _load_ckpt()
+        _do_region(state, session, idx, sido, name, delay, ck, "📍")
+        state["status"] = "done"
+        _log(state, "🏁 종료")
     except Exception as e:
         import traceback
         _log(state, "❌ 예외: " + str(e))
@@ -358,6 +395,8 @@ def _region_file(idx: int, name: str) -> str:
 def _save_rows(rows, path) -> str:
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
+    # 정렬: 주소(신주소) 순. 동률이면 상호.
+    rows = sorted(rows, key=lambda r: (str(r.get("신주소") or ""), str(r.get("상호") or "")))
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "한방"
@@ -395,7 +434,11 @@ def _load_xlsx_rows(path):
 # ============================================================
 # 공개 API (mj_extensions 라우터에서 호출)
 # ============================================================
-def start(start_page: int = 1, end_page: int = 1, delay: float = 1.0, mode: str = "single"):
+def start(start_page: int = 1, end_page: int = 1, delay: float = 1.0, mode: str = "single", sido=None):
+    # 동시 실행 방지 — 진행 중 작업(전국/지역/단일) 있으면 거부 (체크포인트 파일 경쟁 방지)
+    with _runs_lock:
+        if any(s.get("status") == "running" for s in _runs.values()):
+            raise RuntimeError("이미 다른 한방 크롤이 실행 중입니다. 먼저 중지하세요.")
     delay = max(0.3, float(delay))
     sp = max(1, int(start_page))
     ep = max(sp, int(end_page))
@@ -411,6 +454,8 @@ def start(start_page: int = 1, end_page: int = 1, delay: float = 1.0, mode: str 
         _runs[run_id] = state
     if mode == "regions":
         t = threading.Thread(target=_run_regions, args=(state, delay), daemon=True)
+    elif mode == "region_one":
+        t = threading.Thread(target=_run_one_region, args=(state, int(sido or 1), delay), daemon=True)
     else:
         t = threading.Thread(target=_run, args=(state, sp, ep, delay), daemon=True)
     t.start()

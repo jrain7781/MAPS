@@ -26,15 +26,17 @@
     el.scrollTop = el.scrollHeight;
   }
   function _hanSetRunning(running) {
-    const r = _hanEl('hanRunBtn'), g = _hanEl('hanRegionBtn'), s = _hanEl('hanStopBtn');
+    const r = _hanEl('hanRunBtn'), g = _hanEl('hanRegionBtn'), o = _hanEl('hanRegionOneBtn'), s = _hanEl('hanStopBtn');
     if (r) r.disabled = running;
     if (g) g.disabled = running;
+    if (o) o.disabled = running;
     if (s) s.disabled = !running;
   }
   function initHanbangOnce() {
     if (_hanBound) return; _hanBound = true;
     _hanEl('hanRunBtn')?.addEventListener('click', hanRun);
     _hanEl('hanRegionBtn')?.addEventListener('click', hanRunRegions);
+    _hanEl('hanRegionOneBtn')?.addEventListener('click', hanRunOneRegion);
     _hanEl('hanStopBtn')?.addEventListener('click', hanStop);
     _hanEl('hanDownloadBtn')?.addEventListener('click', hanDownload);
   }
@@ -67,6 +69,15 @@
     const delay = parseFloat(_hanEl('hanDelay').value) || 1.0;
     if (!confirm('전국 17개 시도를 지역별로 자동 크롤합니다.\n\n· 시도마다 엑셀 1개씩 저장 폴더에 자동 저장\n· 25쪽마다 중간저장 + 끊겨도 이어서 재개(완료 지역은 건너뜀)\n· 전체 ~25,000건이라 반나절~하루 소요. PC 절전/재부팅 안 되게 해주세요.\n\n시작할까요?')) return;
     _hanLaunch({ delay: delay, mode: 'regions' });
+  }
+  function hanRunOneRegion() {
+    if (_hanRunId) { alert('이미 실행 중입니다. 먼저 중지하세요.'); return; }
+    const sel = _hanEl('hanSido');
+    const sido = sel ? sel.value : '1';
+    const name = sel ? sel.options[sel.selectedIndex].text : '';
+    const delay = parseFloat(_hanEl('hanDelay').value) || 1.0;
+    if (!confirm(`[${name}] 지역만 전체 크롤합니다.\n그 지역 엑셀 1개로 저장 폴더에 저장됩니다.\n(이미 완료된 지역이면 건너뜁니다 — 다시 받으려면 해당 파일 삭제 후 실행)\n\n시작할까요?`)) return;
+    _hanLaunch({ delay: delay, mode: 'region_one', sido: sido });
   }
   function _hanPoll() {
     if (!_hanRunId) return;
