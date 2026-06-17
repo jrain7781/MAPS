@@ -31,8 +31,11 @@ _HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 
-# 컬럼 순서 (사용자 사양) — 사무실번호/핸드폰번호 분리
-COLUMNS = ["지역", "상호", "대표자", "신주소", "부가주소", "사무실번호", "핸드폰번호"]
+# 컬럼 순서 (사용자 사양)
+# - 신주소 = 상세의 소재지(풀 도로명주소). 리스트엔 동 레벨만 있어 상세에서 보강
+# - 상호구분 = 상호 앞 괄호 안 텍스트 (예: (가락) → 가락) — 신주소 뒤에 위치
+# - 사무실/핸드폰 = 분리, 제목만 사무실/핸드폰 (셀은 번호만)
+COLUMNS = ["지역", "상호", "대표자", "신주소", "상호구분", "부가주소", "사무실", "핸드폰"]
 
 # ── 작업 레지스트리 (run_id -> state) ───────────────────────────
 _runs = {}            # run_id -> dict
@@ -83,12 +86,18 @@ def parse_list(html_text: str):
     return out
 
 
-def parse_detail(html_text: str):
-    """상세 페이지 → (부가주소, 핸드폰, 사무실(상세))"""
-    buga = ""
-    m = re.search(r"부가주소\s*</span>\s*<em[^>]*>(.*?)</em>", html_text, re.S)
-    if m:
-        buga = _text(m.group(1))
+def _detail_li(html_text: str, label: str) -> str:
+    """상세 <li><span>라벨</span><em>값</em></li> 에서 값 추출."""
+    m = re.search(r"<li[^>]*>\s*<span[^>]*>\s*" + re.escape(label) + r"\s*</span>\s*<em[^>]*>(.*?)</em>",
+                  html_text, re.S)
+    return _text(m.group(1)) if m else ""
+
+
+def parse_detail(html_text: str) -> dict:
+    """상세 페이지 → {sojae(신주소·도로명), buga(부가주소), jibun(지번주소), mobile, office}"""
+    sojae = _detail_li(html_text, "소재지")   # 도로명주소 = 신주소(풀)
+    buga = _detail_li(html_text, "부가주소")
+    jibun = _detail_li(html_text, "지번주소")
     office = ""
     mobile = ""
     mr = re.search(r"전화걸기\s*</span>\s*<em[^>]*>(.*?)</em>", html_text, re.S)
@@ -102,7 +111,13 @@ def parse_detail(html_text: str):
                 mobile = t            # 핸드폰 (010 등)
             elif not office:
                 office = t            # 사무실 (02/지역번호)
-    return buga, mobile, office
+    return {"sojae": sojae, "buga": buga, "jibun": jibun, "mobile": mobile, "office": office}
+
+
+def split_name_paren(name: str):
+    """상호 앞 괄호 추출. '(가락)학사공인중개사사무소' → ('가락', 원래 상호 유지)."""
+    m = re.match(r"\s*\(([^)]*)\)\s*", name or "")
+    return (m.group(1).strip() if m else ""), (name or "")
 
 
 def detect_block(html_text: str) -> bool:
@@ -193,23 +208,27 @@ def _run(state, start_page, end_page, delay):
                     break
                 d_html, blocked = _fetch(session, _detail_url(off["mem_no"], off["param"]),
                                          _list_page_url(page), delay, state)
-                buga, mobile, office2 = ("", "", "")
+                det = {}
                 if blocked or not d_html:
-                    _log(state, f"    - {off['name']}: 상세 차단/오류 → 핸드폰·부가주소 누락")
+                    _log(state, f"    - {off['name']}: 상세 차단/오류 → 신주소(동레벨 폴백)·핸드폰·부가주소 누락")
                 else:
-                    buga, mobile, office2 = parse_detail(d_html)
+                    det = parse_detail(d_html)
+                paren, full_name = split_name_paren(off["name"])
+                # 신주소 = 상세 소재지(풀 도로명) 우선, 없으면 리스트 동 레벨 폴백
+                sin_addr = det.get("sojae") or off["new_addr"]
                 row = {
                     "지역": off["region"],
-                    "상호": off["name"],
+                    "상호": full_name,
                     "대표자": off["rep"],
-                    "신주소": off["new_addr"],
-                    "부가주소": buga,
-                    "사무실번호": off["office_tel"] or office2,
-                    "핸드폰번호": mobile,
+                    "신주소": sin_addr,
+                    "상호구분": paren,
+                    "부가주소": det.get("buga", ""),
+                    "사무실": off["office_tel"] or det.get("office", ""),
+                    "핸드폰": det.get("mobile", ""),
                 }
                 rows_all.append(row)
                 state["count"] = len(rows_all)
-                _log(state, f"    {page}-{i} {off['name']} | 사무실 {row['사무실번호'] or '-'} | 핸드폰 {mobile or '없음'}")
+                _log(state, f"    {page}-{i} {full_name} | 신주소 {sin_addr or '-'} | 사무실 {row['사무실'] or '-'} | 핸드폰 {row['핸드폰'] or '없음'}")
 
         # 엑셀 저장
         if rows_all:
@@ -247,8 +266,8 @@ def _write_xlsx(rows, start_page, end_page) -> str:
     for r, row in enumerate(rows, 2):
         for c, name in enumerate(COLUMNS, 1):
             ws.cell(row=r, column=c, value=row.get(name, ""))
-    # 열 너비
-    widths = [12, 30, 10, 38, 16, 16, 16]
+    # 열 너비 (지역,상호,대표자,신주소,상호구분,부가주소,사무실,핸드폰)
+    widths = [12, 30, 10, 40, 12, 16, 16, 16]
     for c, w in enumerate(widths, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(c)].width = w
     ws.freeze_panes = "A2"
