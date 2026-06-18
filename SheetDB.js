@@ -523,6 +523,20 @@ function _normSakunBase_(s) {
 }
 
 /**
+ * [다물건] in-date 정규화 키 — Date / '2024-01-01' / '240101' 모두 yyMMdd(6자리)로 통일.
+ * ⚠️ 중복검사 핵심: appendRow 로 넣은 '2024-01-01' 문자열을 Sheets 가 Date 로 자동변환 →
+ *    재읽기 시 String(Date)='Mon Jan 01 2024…' 가 되어 원본 문자열과 안 맞아 중복검사가
+ *    매번 실패(=전건 중복 등록)하던 버그를 막는다. 양쪽 키를 이 함수로 정규화해 비교.
+ */
+function _dmDateKey6_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyMMdd');
+  var s = String(v == null ? '' : v).replace(/[^0-9]/g, '');
+  if (s.length >= 8 && s.slice(0, 2) === '20') s = s.slice(2);   // 20240101 → 240101
+  if (s.length > 6) s = s.slice(-6);
+  return s;
+}
+
+/**
  * [다물건] 입력 사건번호로 items 기등록 행을 조회 (물건번호 변형 포함). 불러오기/대조용.
  */
 function getItemsBySakun(sakunNo) {
@@ -595,7 +609,7 @@ function registerDamulgeon(items, mNameId) {
     var lastRow = sheet.getLastRow();
     if (lastRow > 1) {
       sheet.getRange(2, 1, lastRow - 1, 4).getValues().forEach(function (r, i) {
-        existing[[String(r[1]), String(r[2]).trim(), String(r[3]).trim()].join('|')] = i + 2;
+        existing[[_dmDateKey6_(r[1]), String(r[2]).trim(), String(r[3]).trim()].join('|')] = i + 2;
       });
     }
     var auctionIdCol = ITEM_HEADERS.indexOf('auction_id') + 1;   // P열(16) — 고정 위치
@@ -608,7 +622,7 @@ function registerDamulgeon(items, mNameId) {
       var aid = String(it.auction_id || it.pid || '').trim();   // 크롤한 옥션 ID (product_id)
       if (!sakun || !court) { results.push({ sakun_no: sakun, ok: false, msg: '사건번호/법원 누락' }); skipped++; return; }
       if (!isAllowedCourt_(court)) { results.push({ sakun_no: sakun, ok: false, msg: '허용되지 않은 법원' }); skipped++; return; }
-      var key = [inDate, sakun, court].join('|');
+      var key = [_dmDateKey6_(inDate), sakun, court].join('|');
       if (existing[key]) {
         // [옥션ID 갱신] 이미 MAPS 에 있는 건도 크롤한 옥션 ID 를 items.auction_id 에 업데이트(기존 값과 다를 때만)
         var dupMsg = '이미 등록됨';
@@ -669,6 +683,60 @@ function registerDamulgeon(items, mNameId) {
   } finally {
     __lock.releaseLock();
   }
+}
+
+/**
+ * [다물건 복구] stu_member='상품' 중복행 정리.
+ *   (in-date정규화|sakun_no|court) 같은 '상품' 행이 2개+ 면 1개만 남기고 나머지 삭제.
+ *   ⚠️ 파괴적 — apply=true 일 때만 실제 삭제, 기본은 dry-run(삭제대상 리포트만).
+ *   안전장치: stu_member==='상품' 행만 대상 (추천/입찰/낙찰 등으로 바뀐 행은 절대 안 건드림).
+ *   남길 행 = 같은 키 중 ① auction_id 있는 행 우선 ② 그다음 가장 위(작은 행번호).
+ *   GAS 에디터에서: dedupeDamulgeonProducts() 로 점검 → dedupeDamulgeonProducts(true) 로 삭제.
+ */
+function dedupeDamulgeonProducts(apply) {
+  var __lock = LockService.getScriptLock();
+  try { __lock.waitLock(30000); } catch (e) { return { success: false, message: '저장이 혼잡합니다. 잠시 후 다시 시도해 주세요.' }; }
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, dup_groups: 0, to_delete: 0, applied: false };
+    var auctionIdCol = ITEM_HEADERS.indexOf('auction_id') + 1;   // 16(P)
+    var n = sheet.getLastRow() - 1;
+    var vals = sheet.getRange(2, 1, n, auctionIdCol).getValues();   // A..P
+    var groups = {};
+    for (var i = 0; i < vals.length; i++) {
+      var r = vals[i];
+      if (String(r[4] || '').trim() !== '상품') continue;   // E(4)=stu_member, '상품'만
+      var key = [_dmDateKey6_(r[1]), String(r[2]).trim(), String(r[3]).trim()].join('|');
+      (groups[key] = groups[key] || []).push({ row: i + 2, id: String(r[0] || ''), aid: String(r[auctionIdCol - 1] || '').trim() });
+    }
+    var toDelete = [], dupGroups = 0, sample = [];
+    Object.keys(groups).forEach(function (k) {
+      var arr = groups[k];
+      if (arr.length < 2) return;
+      dupGroups++;
+      arr.sort(function (a, b) {
+        var aw = a.aid ? 0 : 1, bw = b.aid ? 0 : 1;   // auction_id 있는 행 보존 우선
+        if (aw !== bw) return aw - bw;
+        return a.row - b.row;                          // 그다음 가장 위 보존
+      });
+      if (sample.length < 5) sample.push({ key: k, total: arr.length, keep_row: arr[0].row, keep_id: arr[0].id });
+      for (var j = 1; j < arr.length; j++) toDelete.push(arr[j].row);
+    });
+    toDelete.sort(function (a, b) { return b - a; });   // 아래→위 삭제(행번호 안 밀림)
+    var report = { success: true, dup_groups: dupGroups, to_delete: toDelete.length, applied: false, sample: sample };
+    if (!apply) {
+      Logger.log('[다물건 dedup DRY-RUN] 중복그룹 %s개 · 삭제대상 %s행. 샘플=%s\n실제 삭제하려면 dedupeDamulgeonProducts(true)', dupGroups, toDelete.length, JSON.stringify(sample));
+      return report;
+    }
+    toDelete.forEach(function (rw) { sheet.deleteRow(rw); });
+    SpreadsheetApp.flush();
+    report.applied = true; report.deleted = toDelete.length;
+    Logger.log('[다물건 dedup] %s행 삭제 완료 (중복그룹 %s개)', toDelete.length, dupGroups);
+    return report;
+  } catch (e) {
+    Logger.log('[dedupeDamulgeonProducts] ' + e);
+    return { success: false, message: String(e) };
+  } finally { __lock.releaseLock(); }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
