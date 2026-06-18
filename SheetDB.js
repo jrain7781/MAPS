@@ -598,6 +598,7 @@ function registerDamulgeon(items, mNameId) {
       var key = [inDate, sakun, court].join('|');
       if (existing[key]) { results.push({ sakun_no: sakun, ok: false, msg: '이미 등록됨' }); skipped++; return; }
 
+      var itMid = String(it.m_name_id || '').trim() || mid;   // 물건별 담당자 우선, 없으면 기본('대표님')
       var id = String(new Date().getTime()) + String(Math.floor(Math.random() * 1000));
       var regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
       var row = ITEM_HEADERS.map(function (h) {
@@ -607,9 +608,9 @@ function registerDamulgeon(items, mNameId) {
           case 'sakun_no': return sakun;
           case 'court': return court;
           case 'stu_member': return '상품';
-          case 'm_name_id': return mid;
+          case 'm_name_id': return itMid;
           case 'reg_date': return regDate;
-          case 'reg_member': return String(it.reg_member || '') || mid;
+          case 'reg_member': return String(it.reg_member || '') || itMid;
           case 'lowest_price': return String(it.lowest_price || '');
           case 'deposit': return String(it.deposit || '');
           default: return '';
@@ -626,7 +627,7 @@ function registerDamulgeon(items, mNameId) {
       // 히스토리 (createData 와 동일 패턴, trigger=auction-manager-dm)
       var batchTs = String(new Date().getTime());
       history.push({ action: 'ITEM_CREATE', item_id: id, member_id: '', member_name: '', trigger_type: 'auction-manager-dm', note: court + ' ' + sakun + ' (다물건 상품등록)', req_id: batchTs });
-      [['stu_member', '상품'], ['m_name_id', mid], ['lowest_price', String(it.lowest_price || '')], ['deposit', String(it.deposit || '')]].forEach(function (kv) {
+      [['stu_member', '상품'], ['m_name_id', itMid], ['lowest_price', String(it.lowest_price || '')], ['deposit', String(it.deposit || '')]].forEach(function (kv) {
         if (kv[1] !== '') history.push({ action: 'ITEM_CREATE', item_id: id, field_name: kv[0], from_value: '', to_value: kv[1], trigger_type: 'auction-manager-dm', note: '최초 등록 값', req_id: batchTs });
       });
     });

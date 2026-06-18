@@ -365,16 +365,43 @@
     try { localStorage.setItem('mj_capture_subtab', key); } catch(e) {}
   }
 
-  // ========== 다물건 (옥션 사건의 모든 물건 크롤 → 진행건 items '상품' 등록) ==========
+  // ========== 다물건 (옥션 사건의 모든 물건 크롤 → MAPS 대조 → 진행건 items '상품' 등록) ==========
   let _dmBound = false, _dmRunId = null, _dmOffset = 0, _dmRows = [];
+  let _dmExisting = [], _dmExistingMap = {};
+  const _DM_STATE_KEY = 'mj_dm_state';
   function _dmEl(id) { return document.getElementById(id); }
   function _dmCard() { return document.querySelector('.mjcap-card[data-cap="dm"]'); }
+  function _dmNorm(s) { return String(s || '').replace(/\s+/g, ''); }
+  function _dmComma(v) { v = String(v || ''); if (!v) return ''; var n = parseInt(v.replace(/[^0-9]/g, ''), 10); return isNaN(n) ? escapeHtml(v) : n.toLocaleString(); }
   function _dmLog(msg, cls) { var c = _dmCard(); if (!c) return; var el = c.querySelector('[data-role="log"]'); if (!el) return; var s = document.createElement('span'); if (cls) s.className = cls; s.textContent = msg + '\n'; el.appendChild(s); el.scrollTop = el.scrollHeight; }
   function _dmSetStatus(t, cls) { var c = _dmCard(); if (!c) return; var el = c.querySelector('[data-role="status"]'); if (el) { el.textContent = t; el.className = 'mjcap-status' + (cls ? ' ' + cls : ''); } }
   function _dmSetRunning(running) {
     var ids = ['dmCrawlBtn', 'dmLoadBtn', 'dmRegisterBtn'];
     ids.forEach(function (i) { var e = _dmEl(i); if (e) e.disabled = running; });
     var s = _dmEl('dmStopBtn'); if (s) s.disabled = !running;
+  }
+  function _dmBuildExistingMap() { _dmExistingMap = {}; _dmExisting.forEach(function (it) { _dmExistingMap[_dmNorm(it.sakun_no)] = it; }); }
+  function _dmMatchExisting(r) { return _dmExistingMap[_dmNorm(r.sakun_no)] || null; }
+  function _dmSaveState() {
+    try {
+      localStorage.setItem(_DM_STATE_KEY, JSON.stringify({
+        rows: _dmRows, existing: _dmExisting,
+        sakun: _dmEl('dmSakun') ? _dmEl('dmSakun').value : '',
+        court: _dmEl('dmCourt') ? _dmEl('dmCourt').value : '',
+        bulk: _dmEl('dmBulkManager') ? _dmEl('dmBulkManager').value : '대표님'
+      }));
+    } catch (e) {}
+  }
+  function _dmRestoreState() {
+    try {
+      var s = JSON.parse(localStorage.getItem(_DM_STATE_KEY) || 'null'); if (!s) return;
+      if (_dmEl('dmSakun') && s.sakun != null) _dmEl('dmSakun').value = s.sakun;
+      if (_dmEl('dmCourt') && s.court != null) _dmEl('dmCourt').value = s.court;
+      if (_dmEl('dmBulkManager') && s.bulk) _dmEl('dmBulkManager').value = s.bulk;
+      _dmExisting = Array.isArray(s.existing) ? s.existing : []; _dmBuildExistingMap();
+      if (Array.isArray(s.rows)) { _dmRows = s.rows; }
+      _dmRenderExisting(); dmRenderGrid();
+    } catch (e) {}
   }
   function initDmOnce() {
     if (_dmBound) return; _dmBound = true;
@@ -386,9 +413,12 @@
     _dmEl('dmCrawlBtn')?.addEventListener('click', dmCrawl);
     _dmEl('dmStopBtn')?.addEventListener('click', dmStop);
     _dmEl('dmRegisterBtn')?.addEventListener('click', dmRegister);
+    _dmEl('dmClearBtn')?.addEventListener('click', dmClear);
+    _dmEl('dmBulkApplyBtn')?.addEventListener('click', dmBulkApply);
     _dmEl('dmOnlyJinhaeng')?.addEventListener('change', dmRenderGrid);
+    _dmRestoreState();
   }
-  // ----- 불러오기: MAPS 기등록 조회 (+법원 자동) -----
+  // ----- 불러오기: MAPS 기등록 조회 (+법원 자동, 대조용 저장) -----
   function dmLoad() {
     var sakun = (_dmEl('dmSakun').value || '').trim();
     if (!sakun) { alert('사건번호를 입력하세요.'); return; }
@@ -400,17 +430,24 @@
       body: JSON.stringify({ api_key: apiKey, api_action: 'getItemsBySakun', sakun_no: sakun })
     }).then(r => r.json()).then(j => {
       if (!j || !j.success) { _dmEl('dmExisting').innerHTML = '<div style="padding:6px;color:#ef4444">조회 실패: ' + ((j && (j.message || j.error)) || '?') + '</div>'; return; }
-      var items = j.items || [];
-      // 법원 자동 채움 (비어있을 때)
-      if (items.length && !(_dmEl('dmCourt').value || '').trim()) {
-        var ct = items[0].court || ''; if (ct) _dmEl('dmCourt').value = ct;
-      }
-      if (!items.length) { _dmEl('dmExisting').innerHTML = '<div style="padding:6px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e">MAPS에 기등록 없음 — 법원 입력 후 ▶ 크롤 하세요.</div>'; return; }
-      var rows = items.map(function (it) {
-        return '<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:3px 8px">' + escapeHtml(it.sakun_no) + '</td><td style="padding:3px 8px">' + escapeHtml(it.court) + '</td><td style="padding:3px 8px;font-weight:700;color:#0e7490">' + escapeHtml(it.stu_member) + '</td><td style="padding:3px 8px">' + escapeHtml(it.m_name_id || '') + '</td><td style="padding:3px 8px">' + escapeHtml(String(it.in_date || '')) + '</td></tr>';
-      }).join('');
-      _dmEl('dmExisting').innerHTML = '<div style="font-weight:700;color:#92400e;margin-bottom:3px">MAPS 기등록 ' + items.length + '건</div><table style="width:100%;font-size:12px;border-collapse:collapse;background:#fffbeb;border:1px solid #fde68a;border-radius:6px"><thead><tr style="color:#92400e"><th style="padding:3px 8px;text-align:left">사건번호</th><th style="padding:3px 8px;text-align:left">법원</th><th style="padding:3px 8px;text-align:left">상태</th><th style="padding:3px 8px;text-align:left">담당</th><th style="padding:3px 8px;text-align:left">입찰일</th></tr></thead><tbody>' + rows + '</tbody></table>';
+      _dmExisting = j.items || []; _dmBuildExistingMap();
+      if (_dmExisting.length && !(_dmEl('dmCourt').value || '').trim()) { var ct = _dmExisting[0].court || ''; if (ct) _dmEl('dmCourt').value = ct; }
+      // 기등록의 담당자가 있으면 일괄담당 기본값으로 제안
+      var em = (_dmExisting.find && _dmExisting.find(function (x) { return (x.m_name_id || '').trim(); }));
+      if (em && _dmEl('dmBulkManager')) _dmEl('dmBulkManager').value = (em.m_name_id || '').trim() || '대표님';
+      _dmRenderExisting();
+      // 이미 크롤된 행이 있으면 담당자/ MAPS 대조 갱신 위해 담당자 리셋 후 재렌더
+      _dmRows.forEach(function (r) { r._manager = null; });
+      dmRenderGrid(); _dmSaveState();
     }).catch(e => { _dmEl('dmExisting').innerHTML = '<div style="padding:6px;color:#ef4444">조회 오류: ' + e + '</div>'; });
+  }
+  function _dmRenderExisting() {
+    var box = _dmEl('dmExisting'); if (!box) return;
+    if (!_dmExisting.length) { box.innerHTML = '<div style="padding:5px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:12px">MAPS 기등록 없음 — 법원 입력 후 ▶ 크롤. (등록 시 담당자 기본 대표님)</div>'; return; }
+    var rows = _dmExisting.map(function (it) {
+      return '<tr style="border-bottom:1px solid #fde68a"><td style="padding:2px 8px">' + escapeHtml(it.sakun_no) + '</td><td style="padding:2px 8px">' + escapeHtml(it.court) + '</td><td style="padding:2px 8px;font-weight:700;color:#0e7490">' + escapeHtml(it.stu_member) + '</td><td style="padding:2px 8px">' + escapeHtml(it.m_name_id || '') + '</td><td style="padding:2px 8px">' + escapeHtml(String(it.in_date || '')) + '</td></tr>';
+    }).join('');
+    box.innerHTML = '<div style="font-weight:700;color:#92400e;margin-bottom:2px;font-size:12px">📌 MAPS 기등록 ' + _dmExisting.length + '건 (크롤 결과의 MAPS열과 대조)</div><table style="width:100%;font-size:12px;border-collapse:collapse;background:#fffbeb;border:1px solid #fde68a;border-radius:6px"><thead><tr style="color:#92400e"><th style="padding:2px 8px;text-align:left">사건번호</th><th style="padding:2px 8px;text-align:left">법원</th><th style="padding:2px 8px;text-align:left">상태</th><th style="padding:2px 8px;text-align:left">담당</th><th style="padding:2px 8px;text-align:left">입찰일</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
   // ----- 크롤: 05.dm.py 실행 → RESULT| 가로채 그리드 -----
   function dmCrawl() {
@@ -439,14 +476,16 @@
     if (!_dmRunId) return;
     fetch('/api/imageup/logs?run_id=' + encodeURIComponent(_dmRunId) + '&offset=' + _dmOffset)
       .then(r => r.json()).then(j => {
+        var got = false;
         if (j.lines && j.lines.length) {
           j.lines.forEach(function (line) {
             if (typeof line === 'string' && line.indexOf('RESULT|') === 0) {
-              try { var o = JSON.parse(line.slice(7)); if (!o.error) { _dmRows.push(o); dmRenderGrid(); } else { _dmLog('  ⚠ ' + (o.error || ''), 'log-err'); } }
+              try { var o = JSON.parse(line.slice(7)); if (!o.error) { _dmRows.push(o); got = true; } else { _dmLog('  ⚠ ' + (o.error || ''), 'log-err'); } }
               catch (e) { _dmLog(line); }
             } else { _dmLog(line); }
           });
           _dmOffset += j.lines.length;
+          if (got) { dmRenderGrid(); _dmSaveState(); }
         }
         if (j.status === 'running') { setTimeout(dmPoll, 700); }
         else {
@@ -455,6 +494,7 @@
           _dmRunId = null;
           var jin = _dmRows.filter(r => r.state === '진행').length;
           _dmLog('✅ 크롤 종료 — 물건 ' + _dmRows.length + '건 (진행 ' + jin + ')', 'log-ok');
+          dmRenderGrid(); _dmSaveState();
         }
       }).catch(e => { _dmLog('[polling 오류] ' + e, 'log-err'); setTimeout(dmPoll, 1500); });
   }
@@ -463,64 +503,91 @@
     fetch('/api/imageup/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: _dmRunId }) }).catch(() => {});
     _dmLog('⏹ 중지 요청', 'log-err'); _dmRunId = null; _dmSetRunning(false); _dmSetStatus('중지', 'error');
   }
-  // ----- 결과 그리드 -----
+  // ----- 결과 그리드 (크롤상태 + MAPS 대조 + 물건별 담당자) -----
   function _dmStateBadge(s) {
     var col = s === '진행' ? '#16a34a' : (s === '매각' ? '#6b7280' : (s === '불가' ? '#dc2626' : '#9ca3af'));
     return '<span style="display:inline-block;padding:1px 7px;border-radius:9px;background:' + col + ';color:#fff;font-size:11px;font-weight:700">' + escapeHtml(s || '?') + '</span>';
+  }
+  function _dmMapsBadge(ex) {
+    if (!ex) return '<span style="color:#cbd5e1;font-size:11px">미등록</span>';
+    return '<span style="display:inline-block;padding:1px 6px;border-radius:9px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700" title="MAPS 현재 상태">' + escapeHtml(ex.stu_member || '?') + '</span>';
   }
   function dmRenderGrid() {
     var box = _dmEl('dmGrid'); if (!box) return;
     var onlyJin = _dmEl('dmOnlyJinhaeng') && _dmEl('dmOnlyJinhaeng').checked;
     var rows = _dmRows.map(function (r, i) { return { r: r, i: i }; }).filter(function (x) { return !onlyJin || x.r.state === '진행'; });
-    var sum = _dmEl('dmGridSummary');
     var jin = _dmRows.filter(r => r.state === '진행').length;
-    if (sum) sum.textContent = _dmRows.length ? ('총 ' + _dmRows.length + '건 · 진행 ' + jin + ' · 매각 ' + _dmRows.filter(r => r.state === '매각').length + ' · 불가 ' + _dmRows.filter(r => r.state === '불가').length) : '';
+    var sum = _dmEl('dmGridSummary');
+    if (sum) sum.textContent = _dmRows.length ? ('총 ' + _dmRows.length + '건 · 진행 ' + jin + ' · 매각 ' + _dmRows.filter(r => r.state === '매각').length + ' · 불가 ' + _dmRows.filter(r => r.state === '불가').length + (_dmExisting.length ? ' · MAPS기등록 ' + _dmExisting.length : '')) : '';
     if (!_dmRows.length) { box.innerHTML = '<div style="padding:14px;text-align:center;color:#9ca3af">크롤하면 물건 리스트가 표시됩니다.</div>'; if (_dmEl('dmRegisterBtn')) _dmEl('dmRegisterBtn').disabled = true; return; }
     var body = rows.map(function (x) {
-      var r = x.r;
+      var r = x.r, ex = _dmMatchExisting(r);
       var canReg = (r.state === '진행');
-      var cb = canReg ? '<input type="checkbox" class="dm-cb" data-idx="' + x.i + '" checked>' : '<span style="color:#d1d5db">-</span>';
-      return '<tr style="border-bottom:1px solid #f1f5f9' + (canReg ? '' : ';opacity:.6') + '">'
-        + '<td style="text-align:center;padding:4px">' + cb + '</td>'
+      if (r._manager == null) r._manager = (ex && (ex.m_name_id || '').trim()) ? ex.m_name_id : '대표님';
+      return '<tr style="border-bottom:1px solid #f1f5f9' + (canReg ? '' : ';opacity:.62') + '">'
+        + '<td style="text-align:center;padding:4px"><input type="checkbox" class="dm-cb" data-idx="' + x.i + '"' + (canReg ? ' checked' : '') + '></td>'
         + '<td style="padding:4px 6px">' + _dmStateBadge(r.state) + '</td>'
-        + '<td style="padding:4px 6px;font-weight:600">' + escapeHtml(r.sakun_no || '') + '</td>'
-        + '<td style="padding:4px 6px">' + escapeHtml(r.in_date || '') + '</td>'
-        + '<td style="padding:4px 6px">' + escapeHtml(r.court || '') + '</td>'
-        + '<td style="padding:4px 6px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escapeHtml(r.address || '') + '">' + escapeHtml(r.address || '') + '</td>'
-        + '<td style="padding:4px 6px;text-align:right">' + escapeHtml(r.building_area || '') + '</td>'
-        + '<td style="padding:4px 6px;text-align:right">' + _dmComma(r.lowest_price) + '</td>'
-        + '<td style="padding:4px 6px;text-align:right">' + _dmComma(r.deposit) + '</td>'
+        + '<td style="padding:4px 6px">' + _dmMapsBadge(ex) + '</td>'
+        + '<td style="padding:4px 6px;font-weight:600;white-space:nowrap">' + escapeHtml(r.sakun_no || '') + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap">' + escapeHtml(r.in_date || '') + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap">' + escapeHtml(r.court || '') + '</td>'
+        + '<td style="padding:4px 6px;min-width:220px" title="' + escapeHtml(r.address || '') + '">' + escapeHtml(r.address || '') + '</td>'
+        + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + escapeHtml(r.building_area || '') + '</td>'
+        + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + _dmComma(r.lowest_price) + '</td>'
+        + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + _dmComma(r.deposit) + '</td>'
+        + '<td style="padding:4px 6px"><input type="text" class="dm-mgr" data-idx="' + x.i + '" value="' + escapeAttr(r._manager) + '" style="width:70px;padding:2px 5px;font-size:12px"></td>'
         + '</tr>';
     }).join('');
-    box.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:#f8fafc"><tr style="color:#6b7280;border-bottom:1px solid #e5e7eb">'
-      + '<th style="width:34px;padding:5px">등록</th><th style="padding:5px 6px;text-align:left">상태</th><th style="padding:5px 6px;text-align:left">사건번호</th><th style="padding:5px 6px;text-align:left">입찰일</th><th style="padding:5px 6px;text-align:left">법원</th><th style="padding:5px 6px;text-align:left">주소</th><th style="padding:5px 6px;text-align:right">건물면적</th><th style="padding:5px 6px;text-align:right">최저가</th><th style="padding:5px 6px;text-align:right">보증금</th>'
+    box.innerHTML = '<table style="width:100%;border-collapse:collapse;white-space:nowrap"><thead style="position:sticky;top:0;background:#f8fafc;z-index:1"><tr style="color:#6b7280;border-bottom:1px solid #e5e7eb">'
+      + '<th style="width:30px;padding:5px"><input type="checkbox" id="dmSelAll" title="보이는 행 전체선택"></th>'
+      + '<th style="padding:5px 6px;text-align:left">크롤상태</th><th style="padding:5px 6px;text-align:left">MAPS</th><th style="padding:5px 6px;text-align:left">사건번호</th><th style="padding:5px 6px;text-align:left">입찰일</th><th style="padding:5px 6px;text-align:left">법원</th><th style="padding:5px 6px;text-align:left">주소</th><th style="padding:5px 6px;text-align:right">건물면적</th><th style="padding:5px 6px;text-align:right">최저가</th><th style="padding:5px 6px;text-align:right">보증금</th><th style="padding:5px 6px;text-align:left">담당자</th>'
       + '</tr></thead><tbody>' + body + '</tbody></table>';
+    box.querySelectorAll('.dm-mgr').forEach(function (inp) { inp.addEventListener('change', function () { var r = _dmRows[parseInt(inp.dataset.idx, 10)]; if (r) { r._manager = inp.value; _dmSaveState(); } }); });
+    var selAll = _dmEl('dmSelAll'); if (selAll) selAll.addEventListener('change', function () { box.querySelectorAll('.dm-cb').forEach(function (cb) { cb.checked = selAll.checked; }); });
     if (_dmEl('dmRegisterBtn')) _dmEl('dmRegisterBtn').disabled = (jin === 0);
   }
-  function _dmComma(v) { v = String(v || ''); if (!v) return ''; var n = parseInt(v.replace(/[^0-9]/g, ''), 10); return isNaN(n) ? escapeHtml(v) : n.toLocaleString(); }
-  // ----- 등록: 선택 진행건 → registerDamulgeon -----
+  // ----- 일괄담당 적용 (체크된 행 → 일괄담당 입력값) -----
+  function dmBulkApply() {
+    var v = (_dmEl('dmBulkManager').value || '').trim() || '대표님';
+    var cbs = Array.from(document.querySelectorAll('#dmGrid .dm-cb')).filter(c => c.checked);
+    if (!cbs.length) { alert('담당자를 적용할 행을 체크하세요.'); return; }
+    cbs.forEach(function (cb) { var r = _dmRows[parseInt(cb.dataset.idx, 10)]; if (r) r._manager = v; });
+    dmRenderGrid(); _dmSaveState();
+    _dmLog('담당자 일괄적용: ' + cbs.length + '건 → ' + v, 'log-ok');
+  }
+  // ----- 초기화 -----
+  function dmClear() {
+    if (!confirm('크롤 결과 / MAPS 기등록 / 로그를 초기화할까요? (사건번호·법원 입력은 유지)')) return;
+    _dmRows = []; _dmExisting = []; _dmExistingMap = {};
+    dmRenderGrid(); _dmRenderExisting();
+    var c = _dmCard(); var logEl = c && c.querySelector('[data-role="log"]'); if (logEl) logEl.textContent = '';
+    try { localStorage.removeItem(_DM_STATE_KEY); } catch (e) {}
+    _dmSaveState(); _dmSetStatus('대기', '');
+  }
+  // ----- 등록: 선택건 → registerDamulgeon (물건별 담당자) -----
   function dmRegister() {
     var cbs = Array.from(document.querySelectorAll('#dmGrid .dm-cb')).filter(c => c.checked);
-    if (!cbs.length) { alert('등록할 진행 건을 체크하세요.'); return; }
+    if (!cbs.length) { alert('등록할 건을 체크하세요.'); return; }
     var apiKey = getMapsAdminKeyMj();
     if (!apiKey) { alert('MAPS Admin Key 미설정.'); return; }
-    var mid = (_dmEl('dmManager').value || '').trim() || '대표님';
     var items = cbs.map(function (cb) {
       var r = _dmRows[parseInt(cb.dataset.idx, 10)];
-      return { in_date: r.in_date, sakun_no: r.sakun_no, court: r.court, address: r.address, building_area: r.building_area, lowest_price: r.lowest_price, deposit: r.deposit };
+      return { in_date: r.in_date, sakun_no: r.sakun_no, court: r.court, address: r.address, building_area: r.building_area, lowest_price: r.lowest_price, deposit: r.deposit, m_name_id: (r._manager || '').trim() || '대표님' };
     });
-    if (!confirm(items.length + '건을 MAPS items에 \'상품\'(담당 ' + mid + ')으로 등록합니다.\n계속할까요?')) return;
+    var nonJin = cbs.filter(function (cb) { var r = _dmRows[parseInt(cb.dataset.idx, 10)]; return r && r.state !== '진행'; }).length;
+    var warn = nonJin > 0 ? ('\n⚠ 진행 아닌 건 ' + nonJin + '개 포함.') : '';
+    if (!confirm(items.length + '건을 MAPS items에 \'상품\'으로 등록합니다 (담당자=행별 값).' + warn + '\n계속할까요?')) return;
     var btn = _dmEl('dmRegisterBtn'); if (btn) { btn.disabled = true; btn.textContent = '등록 중…'; }
     fetch('/api/maps-gas', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: apiKey, api_action: 'registerDamulgeon', items: items, m_name_id: mid })
+      body: JSON.stringify({ api_key: apiKey, api_action: 'registerDamulgeon', items: items, m_name_id: (_dmEl('dmBulkManager').value || '').trim() || '대표님' })
     }).then(r => r.json()).then(j => {
       if (btn) { btn.disabled = false; btn.textContent = '✓ 선택 진행건 등록'; }
       if (!j || !j.success) { alert('등록 실패: ' + ((j && (j.message || j.error)) || '?')); return; }
       _dmLog('💾 등록 결과 — 성공 ' + j.saved + ' / 건너뜀 ' + j.skipped, 'log-ok');
       (j.results || []).forEach(function (rr) { if (!rr.ok) _dmLog('  · ' + rr.sakun_no + ': ' + rr.msg, 'log-err'); });
       alert('등록 완료 — 성공 ' + j.saved + '건, 건너뜀(중복 등) ' + j.skipped + '건.');
-      dmLoad();  // 기등록 목록 갱신
+      dmLoad();
     }).catch(e => { if (btn) { btn.disabled = false; btn.textContent = '✓ 선택 진행건 등록'; } alert('등록 오류: ' + e); });
   }
 

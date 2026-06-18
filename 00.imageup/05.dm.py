@@ -279,7 +279,7 @@ def parse_result_rows(driver):
     return out
 
 
-def collect_rows_paged(driver, max_pages=8):
+def collect_rows_paged(driver, max_pages=15):
     rows = parse_result_rows(driver)
     seen_starts = {0}
     for _ in range(max_pages - 1):
