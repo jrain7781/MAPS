@@ -46,7 +46,7 @@ SIDO = [
     (17, "제주특별자치도"),
 ]
 
-SAVE_EVERY_PAGES = 25   # 지역별 모드: N쪽마다 중간저장 + 체크포인트 (≈250건)
+SAVE_EVERY_PAGES = 1    # 매 페이지마다 중간저장 + 체크포인트 (크래시에도 직전 페이지까지 보호)
 _CKPT_PATH = os.path.join(_EXPORT_DIR, "hanbang_checkpoint.json")
 _TOTALS_CACHE = os.path.join(_EXPORT_DIR, "hanbang_region_totals.json")   # 지역별 총페이지 캐시
 
@@ -142,6 +142,10 @@ def detect_block(html_text: str) -> bool:
 def _log(state, msg):
     with state["lock"]:
         state["lines"].append(msg)
+
+
+def _now_stamp():
+    return time.strftime("%Y-%m-%d %H:%M")
 
 
 def _list_page_url(page: int, sido=None) -> str:
@@ -274,6 +278,8 @@ def _do_region(state, session, idx, sido, name, delay, ck, label, force=False):
     total = int(info.get("total") or _detect_total_pages(first))
     rows = _load_xlsx_rows(fpath) if (os.path.exists(fpath) and not force) else []
     done_page = 0 if force else int(info.get("last_page") or 0)
+    started = info.get("started_at") or _now_stamp()   # 최초 시작 시각 보존
+    first_page = done_page + 1
     if done_page > 0:
         _log(state, f"↻ {label} {name} — {done_page}/{total}쪽까지 완료, 이어서 (기존 {len(rows)}건)")
     else:
@@ -287,11 +293,12 @@ def _do_region(state, session, idx, sido, name, delay, ck, label, force=False):
             del rows[before:]   # 중단된 페이지의 부분 데이터 제거(재개 시 중복 방지)
             break
         done_page = page
-        if page % SAVE_EVERY_PAGES == 0:
+        if page % SAVE_EVERY_PAGES == 0:   # =1 → 매 페이지 저장 (크래시에도 직전 페이지까지 보호)
             if _safe_save(state, rows, fpath):
-                ck[key] = {"done": False, "last_page": done_page, "total": total}
+                ck[key] = {"done": False, "last_page": done_page, "total": total, "started_at": started}
                 _save_ckpt(ck)
-                _log(state, f"  💾 중간저장 {name} {done_page}/{total}쪽 ({len(rows)}건)")
+                if page == first_page or page % 10 == 0 or page == total:   # 로그만 솎음(저장은 매 페이지)
+                    _log(state, f"  💾 저장 {done_page}/{total}쪽 ({len(rows)}건)")
             # 저장 실패(파일 잠김 등) — 체크포인트 미갱신, 데이터는 메모리 유지, 다음 저장 때 재시도하며 계속
     saved_ok = True
     if rows:
@@ -302,16 +309,16 @@ def _do_region(state, session, idx, sido, name, delay, ck, label, force=False):
                 state["region_files"].append(os.path.basename(fpath))
     if state.get("cancel"):
         if saved_ok:
-            ck[key] = {"done": False, "last_page": done_page, "total": total}
+            ck[key] = {"done": False, "last_page": done_page, "total": total, "started_at": started}
             _save_ckpt(ck)
         _log(state, f"⏹ {name} 중단 — {done_page}/{total}쪽까지 저장({len(rows)}건). 다음 실행 때 이어서.")
         return "cancelled"
     if not saved_ok:
-        _log(state, f"⚠ {name} 최종 저장 실패(파일 잠김) — 완료 표시 보류. Excel 닫고 🌐 다시 누르면 이어서 재개됩니다.")
+        _log(state, f"⚠ {name} 최종 저장 실패(파일 잠김) — 완료 표시 보류. Excel 닫고 다시 누르면 이어서 재개.")
         return "error"
-    ck[key] = {"done": True, "last_page": total, "total": total}
+    ck[key] = {"done": True, "last_page": total, "total": total, "started_at": started, "done_at": _now_stamp()}
     _save_ckpt(ck)
-    state["region_done"] = max(state.get("region_done", 0), idx)
+    state["region_done"] = state.get("region_done", 0) + 1
     _log(state, f"✅ {label} {name} 완료 — {len(rows)}건: {os.path.basename(fpath)}")
     return "done"
 
@@ -642,6 +649,7 @@ def regions_overview(refresh=False):
             "idx": idx, "sido": sido, "name": name,
             "total_pages": int(total or 0), "est_count": int(total or 0) * 10,
             "done": bool(info.get("done")), "last_page": int(info.get("last_page") or 0),
+            "started_at": info.get("started_at", ""), "done_at": info.get("done_at", ""),
         })
     if fetched:
         try:

@@ -20,10 +20,10 @@
   function _hanLogLine(text) {
     const el = _hanEl('hanLog'); if (!el) return;
     if (el.dataset.init !== '1') { el.textContent = ''; el.dataset.init = '1'; }
-    el.textContent += (el.textContent ? '\n' : '') + text;
+    el.textContent = text + (el.textContent ? '\n' + el.textContent : '');   // 최신이 위로
     const arr = el.textContent.split('\n');
-    if (arr.length > 5000) el.textContent = arr.slice(arr.length - 5000).join('\n');
-    el.scrollTop = el.scrollHeight;
+    if (arr.length > 5000) el.textContent = arr.slice(0, 5000).join('\n');   // 최신(위쪽) 5000줄 유지
+    el.scrollTop = 0;   // 최신이 맨 위
   }
   function _hanSetRunning(running) {
     const r = _hanEl('hanRunBtn'), g = _hanEl('hanRegionBtn'), q = _hanEl('hanQueueBtn'), s = _hanEl('hanStopBtn');
@@ -67,11 +67,16 @@
         const pct = r.total_pages ? Math.floor(r.last_page / r.total_pages * 100) : 0;
         prog = '<div style="display:flex;align-items:center;gap:5px"><div style="flex:1;height:7px;background:#e5e7eb;border-radius:4px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:#0e7490"></div></div><span style="font-size:11px;color:#0e7490;white-space:nowrap">' + r.last_page.toLocaleString() + '/' + r.total_pages.toLocaleString() + '쪽 ' + pct + '%</span></div>';
       } else prog = '<span style="color:#9ca3af">대기</span>';
+      let dateCell = '';
+      if (r.started_at) dateCell += '<div title="시작">▶ ' + escapeHtml(r.started_at) + '</div>';
+      if (r.done_at) dateCell += '<div title="완료" style="color:#16a34a">✅ ' + escapeHtml(r.done_at) + '</div>';
+      if (!dateCell) dateCell = '<span style="color:#d1d5db">-</span>';
       return '<tr style="border-bottom:1px solid #f1f5f9">'
         + '<td style="text-align:center;padding:5px"><input type="checkbox" class="han-rgn-cb" value="' + r.sido + '" data-est="' + r.est_count + '"></td>'
         + '<td style="padding:5px 8px;font-weight:600;color:#374151">' + escapeHtml(r.name) + '</td>'
         + '<td style="padding:5px 8px;text-align:right;color:#0e7490;font-weight:600">' + (r.est_count || 0).toLocaleString() + '건 <span style="font-size:10px;color:#9ca3af;font-weight:400">/' + (r.total_pages || 0).toLocaleString() + '쪽</span></td>'
-        + '<td style="padding:5px 8px">' + prog + '</td></tr>';
+        + '<td style="padding:5px 8px">' + prog + '</td>'
+        + '<td style="padding:5px 8px;font-size:11px;color:#6b7280;line-height:1.5">' + dateCell + '</td></tr>';
     }).join('');
     tb.querySelectorAll('.han-rgn-cb').forEach(function (cb) { cb.addEventListener('change', hanUpdateQueueSummary); });
     hanUpdateQueueSummary();
