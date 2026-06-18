@@ -448,7 +448,6 @@
     _dmEl('dmClearBtn')?.addEventListener('click', dmClear);
     _dmEl('dmBulkApplyBtn')?.addEventListener('click', dmBulkApply);
     _dmEl('dmOnlyJinhaeng')?.addEventListener('change', dmRenderGrid);
-    _dmEl('dmTodayOnly')?.addEventListener('change', function () { dmRenderGrid(); _dmRenderExisting(); });
     _dmEl('dmHideJosa')?.addEventListener('change', dmRenderGrid);
     _dmRestoreState();
     _dmLoadTeachers();
@@ -478,11 +477,8 @@
   }
   function _dmRenderExisting() {
     var box = _dmEl('dmExisting'); if (!box) return;
-    if (!_dmExisting.length) { box.innerHTML = '<div style="padding:5px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:12px">MAPS 기등록 없음 — 법원 입력 후 ▶ 크롤. (등록 시 담당자 기본 대표님)</div>'; return; }
-    var todayOnly = _dmEl('dmTodayOnly') && _dmEl('dmTodayOnly').checked;
-    var today = _dmToday();
-    var list = _dmExisting.filter(function (it) { return !(todayOnly && it.in_date && _dmNormDate(it.in_date) < today); });
-    if (!list.length) { box.innerHTML = '<div style="padding:5px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:12px">📌 MAPS 기등록 ' + _dmExisting.length + '건 (오늘 이후 0건 — 「오늘이후만」 해제 시 전부 표시)</div>'; return; }
+    if (!_dmExisting.length) { box.innerHTML = '<div style="padding:5px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:12px">MAPS 기등록 없음(오늘 이후 기준) — 법원 입력 후 ▶ 크롤. (등록 시 담당자 기본 대표님)</div>'; return; }
+    var list = _dmExisting;   // 서버(getItemsBySakun)가 이미 오늘 이전 제외
     var rows = list.map(function (it) {
       return '<tr style="border-bottom:1px solid #fde68a"><td style="padding:2px 8px;white-space:nowrap">' + escapeHtml(_dmNormDate(it.in_date)) + '</td><td style="padding:2px 8px">' + escapeHtml(it.sakun_no) + '</td><td style="padding:2px 8px">' + escapeHtml(it.court) + '</td><td style="padding:2px 8px;font-weight:700;color:#0e7490">' + escapeHtml(it.stu_member) + '</td><td style="padding:2px 8px">' + escapeHtml(it.m_name_id || '') + '</td></tr>';
     }).join('');
@@ -554,12 +550,9 @@
   function dmRenderGrid() {
     var box = _dmEl('dmGrid'); if (!box) return;
     var onlyJin = _dmEl('dmOnlyJinhaeng') && _dmEl('dmOnlyJinhaeng').checked;
-    var todayOnly = _dmEl('dmTodayOnly') && _dmEl('dmTodayOnly').checked;
     var hideJosa = _dmEl('dmHideJosa') && _dmEl('dmHideJosa').checked;
-    var today = _dmToday();
     var rows = _dmRows.map(function (r, i) { return { r: r, i: i }; }).filter(function (x) {
-      if (onlyJin && x.r.state !== '진행') return false;
-      if (todayOnly && x.r.in_date && _dmNormDate(x.r.in_date) < today) return false;   // 입찰일 오늘 이후만
+      if (onlyJin && x.r.state !== '진행') return false;   // 매각/불가도 보려면 「진행만 보기」 해제
       return true;
     });
     var jin = _dmRows.filter(r => r.state === '진행').length;
