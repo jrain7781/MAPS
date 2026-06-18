@@ -598,10 +598,19 @@ def handle_get(handler) -> bool:
         else:
             _send_json(handler, 200, {"ok": True, **r})
         return True
+    if path == "/api/hanbang/region-info":
+        import hanbang
+        _send_json(handler, 200, hanbang.region_info(qs.get("sido", "1")))
+        return True
+    if path == "/api/hanbang/files":
+        import hanbang
+        _send_json(handler, 200, {"ok": True, "files": hanbang.list_export_files()})
+        return True
     if path == "/api/hanbang/download":
         import hanbang
         run_id = qs.get("run_id", "")
-        fp = hanbang.file_path(run_id)
+        fname = qs.get("file", "")
+        fp = hanbang.file_path_by_name(fname) if fname else hanbang.file_path(run_id)
         if not fp:
             handler.send_response(404)
             handler.end_headers()

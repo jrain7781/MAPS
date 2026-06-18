@@ -287,20 +287,27 @@ def _do_region(state, session, idx, sido, name, delay, ck, label, force=False):
             break
         done_page = page
         if page % SAVE_EVERY_PAGES == 0:
-            _save_rows(rows, fpath)
+            if _safe_save(state, rows, fpath):
+                ck[key] = {"done": False, "last_page": done_page, "total": total}
+                _save_ckpt(ck)
+                _log(state, f"  💾 중간저장 {name} {done_page}/{total}쪽 ({len(rows)}건)")
+            # 저장 실패(파일 잠김 등) — 체크포인트 미갱신, 데이터는 메모리 유지, 다음 저장 때 재시도하며 계속
+    saved_ok = True
+    if rows:
+        saved_ok = _safe_save(state, rows, fpath)
+        if saved_ok:
+            state["file"] = fpath
+            if os.path.basename(fpath) not in state["region_files"]:
+                state["region_files"].append(os.path.basename(fpath))
+    if state.get("cancel"):
+        if saved_ok:
             ck[key] = {"done": False, "last_page": done_page, "total": total}
             _save_ckpt(ck)
-            _log(state, f"  💾 중간저장 {name} {done_page}/{total}쪽 ({len(rows)}건)")
-    if rows:
-        _save_rows(rows, fpath)
-        state["file"] = fpath
-        if os.path.basename(fpath) not in state["region_files"]:
-            state["region_files"].append(os.path.basename(fpath))
-    if state.get("cancel"):
-        ck[key] = {"done": False, "last_page": done_page, "total": total}
-        _save_ckpt(ck)
         _log(state, f"⏹ {name} 중단 — {done_page}/{total}쪽까지 저장({len(rows)}건). 다음 실행 때 이어서.")
         return "cancelled"
+    if not saved_ok:
+        _log(state, f"⚠ {name} 최종 저장 실패(파일 잠김) — 완료 표시 보류. Excel 닫고 🌐 다시 누르면 이어서 재개됩니다.")
+        return "error"
     ck[key] = {"done": True, "last_page": total, "total": total}
     _save_ckpt(ck)
     state["region_done"] = max(state.get("region_done", 0), idx)
@@ -414,8 +421,26 @@ def _save_rows(rows, path) -> str:
     ws.freeze_panes = "A2"
     tmp = path + ".tmp"
     wb.save(tmp)
-    os.replace(tmp, path)   # 원자적 교체 — 저장 중 끊겨도 기존 파일 보존
-    return path
+    # 원자적 교체 — 대상이 잠겨있으면(Excel로 열어둠 등) 재시도, 끝내 실패하면 예외(호출측이 잡아 계속 진행)
+    last_err = None
+    for attempt in range(4):
+        try:
+            os.replace(tmp, path)
+            return path
+        except PermissionError as e:   # WinError 5: 대상 파일 잠김
+            last_err = e
+            time.sleep(0.6)
+    raise RuntimeError("파일 잠김으로 저장 실패(열려있는 Excel을 닫아주세요): " + os.path.basename(path) + " / " + str(last_err))
+
+
+def _safe_save(state, rows, path) -> bool:
+    """저장 시도. 실패(파일 잠김 등)해도 예외 안 내고 False 반환 — 크롤이 죽지 않게."""
+    try:
+        _save_rows(rows, path)
+        return True
+    except Exception as e:
+        _log(state, f"  ⚠ 저장 실패({e}) — 데이터는 메모리 유지, 다음 저장 때 재시도하며 계속 진행")
+        return False
 
 
 def _load_xlsx_rows(path):
@@ -498,4 +523,77 @@ def file_path(run_id: str):
     state = _runs.get(run_id)
     if state and state.get("file") and os.path.isfile(state["file"]):
         return state["file"]
+    return None
+
+
+# ── 지역 총건수 / 저장 폴더 목록 / 파일명 다운로드 ───────────────
+def _fetch_simple(session, url):
+    try:
+        r = session.get(url, headers=_HEADERS, timeout=15)
+        r.encoding = "utf-8"
+        txt = r.text
+        return txt, detect_block(txt)
+    except Exception:
+        return "", False
+
+
+def region_info(sido_code):
+    """지역 선택 시 총 페이지/추정 건수 + 이미 받은 진행도(체크포인트). 사이트 1요청."""
+    try:
+        match = [(i, s, n) for i, (s, n) in enumerate(SIDO, 1) if s == int(sido_code)]
+        if not match:
+            return {"ok": False, "error": "unknown sido"}
+        idx, sido, name = match[0]
+        html, blocked = _fetch_simple(_session(), _list_page_url(1, sido))
+        if blocked:
+            return {"ok": False, "error": "WAF 차단 — 잠시 후"}
+        if not html:
+            return {"ok": False, "error": "응답 없음"}
+        total = _detect_total_pages(html)
+        per = len(parse_list(html)) or 10
+        ck = _load_ckpt()
+        info = ck.get(str(idx), {})
+        return {"ok": True, "name": name, "total_pages": total, "per_page": per,
+                "est_count": total * per, "done": bool(info.get("done")),
+                "last_page": int(info.get("last_page") or 0)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def list_export_files():
+    """저장 폴더(hanbang_exports)의 xlsx 목록 (이름/크기/건수/시각)."""
+    out = []
+    try:
+        if not os.path.isdir(_EXPORT_DIR):
+            return out
+        import openpyxl
+        for fn in sorted(os.listdir(_EXPORT_DIR)):
+            if not fn.lower().endswith(".xlsx") or fn.endswith(".tmp"):
+                continue
+            fp = os.path.join(_EXPORT_DIR, fn)
+            sz = 0; mt = ""; rows = None
+            try:
+                sz = os.path.getsize(fp)
+                mt = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(fp)))
+            except Exception:
+                pass
+            try:
+                wb = openpyxl.load_workbook(fp, read_only=True)
+                rows = wb.active.max_row - 1
+                wb.close()
+            except Exception:
+                rows = None
+            out.append({"name": fn, "size": sz, "mtime": mt, "rows": rows})
+    except Exception:
+        pass
+    return out
+
+
+def file_path_by_name(name):
+    """저장 폴더 내 파일명으로 경로 반환 (경로 탈출 방지)."""
+    if not name or "/" in name or "\\" in name or ".." in name:
+        return None
+    fp = os.path.join(_EXPORT_DIR, name)
+    if os.path.isfile(fp) and fp.lower().endswith(".xlsx"):
+        return fp
     return None

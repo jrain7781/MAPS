@@ -39,6 +39,42 @@
     _hanEl('hanRegionOneBtn')?.addEventListener('click', hanRunOneRegion);
     _hanEl('hanStopBtn')?.addEventListener('click', hanStop);
     _hanEl('hanDownloadBtn')?.addEventListener('click', hanDownload);
+    _hanEl('hanSido')?.addEventListener('change', hanLoadSidoInfo);
+    _hanEl('hanFilesRefresh')?.addEventListener('click', hanLoadFiles);
+    hanLoadSidoInfo();
+    hanLoadFiles();
+  }
+  function hanLoadSidoInfo() {
+    const sel = _hanEl('hanSido'), info = _hanEl('hanSidoInfo');
+    if (!sel || !info) return;
+    info.textContent = '건수 조회 중…';
+    fetch('/api/hanbang/region-info?sido=' + encodeURIComponent(sel.value))
+      .then(r => r.json()).then(j => {
+        if (!j || !j.ok) { info.textContent = '건수 조회 실패(' + ((j && j.error) || '?') + ')'; return; }
+        let s = '약 ' + (j.est_count || 0).toLocaleString() + '건 (' + (j.total_pages || 0).toLocaleString() + '쪽)';
+        if (j.done) s += ' · ✅이미 완료';
+        else if (j.last_page) s += ' · ' + j.last_page.toLocaleString() + '쪽까지 받음';
+        info.textContent = s;
+      }).catch(() => { info.textContent = '건수 조회 오류'; });
+  }
+  function _hanFmtSize(n) { n = n || 0; if (n >= 1048576) return (n / 1048576).toFixed(1) + 'MB'; if (n >= 1024) return Math.round(n / 1024) + 'KB'; return n + 'B'; }
+  function hanLoadFiles() {
+    const box = _hanEl('hanFiles'); if (!box) return;
+    fetch('/api/hanbang/files').then(r => r.json()).then(j => {
+      const files = (j && j.files) || [], sum = _hanEl('hanFilesSummary');
+      if (!files.length) { box.innerHTML = '<div style="padding:10px;color:#9ca3af;text-align:center">저장된 파일 없음</div>'; if (sum) sum.textContent = ''; return; }
+      const totRows = files.reduce((a, f) => a + (f.rows || 0), 0);
+      if (sum) sum.textContent = files.length + '개 · 합계 ' + totRows.toLocaleString() + '건';
+      box.innerHTML = files.map(function (f) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid #f1f5f9">'
+          + '<span style="flex:1;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(f.name) + '</span>'
+          + '<span style="color:#0e7490;font-weight:600;width:72px;text-align:right">' + (f.rows != null ? f.rows.toLocaleString() + '건' : '-') + '</span>'
+          + '<span style="color:#9ca3af;width:55px;text-align:right">' + _hanFmtSize(f.size) + '</span>'
+          + '<span style="color:#9ca3af;width:96px;text-align:right;font-size:11px">' + (f.mtime || '') + '</span>'
+          + '<a href="/api/hanbang/download?file=' + encodeURIComponent(f.name) + '" class="btn_box_sss btn_white" style="font-size:11px;padding:2px 8px;text-decoration:none" title="다운로드">⬇</a>'
+          + '</div>';
+      }).join('');
+    }).catch(e => { box.innerHTML = '<div style="padding:10px;color:#ef4444">목록 오류: ' + e + '</div>'; });
   }
   function _hanLaunch(payload) {
     const el = _hanEl('hanLog'); if (el) { el.textContent = ''; el.dataset.init = '1'; }
@@ -98,6 +134,7 @@
           _hanSetRunning(false);
           if (j.has_file) { _hanEl('hanDownloadBtn').disabled = false; }
           _hanRunId = null;
+          hanLoadFiles();   // 완료 후 저장 폴더 목록 갱신
         }
       }).catch(e => { _hanLogLine('[polling 오류] ' + e); setTimeout(_hanPoll, 2000); });
   }
