@@ -590,24 +590,40 @@ function registerDamulgeon(items, mNameId) {
     var dm = ensureItemDmColumns_();
     var addrCol = dm.addressCol, areaCol = dm.areaCol;
 
-    // 기존 중복키 수집 (B,C,D = in-date, sakun_no, court)
+    // 기존 중복키 수집 (B,C,D = in-date, sakun_no, court) → 행번호. 기등록건 옥션ID 갱신용.
     var existing = {};
     var lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-      sheet.getRange(2, 1, lastRow - 1, 4).getValues().forEach(function (r) {
-        existing[[String(r[1]), String(r[2]).trim(), String(r[3]).trim()].join('|')] = true;
+      sheet.getRange(2, 1, lastRow - 1, 4).getValues().forEach(function (r, i) {
+        existing[[String(r[1]), String(r[2]).trim(), String(r[3]).trim()].join('|')] = i + 2;
       });
     }
+    var auctionIdCol = ITEM_HEADERS.indexOf('auction_id') + 1;   // P열(16) — 고정 위치
 
-    var saved = 0, skipped = 0, results = [], history = [];
+    var saved = 0, skipped = 0, auctionUpdated = 0, results = [], history = [];
     items.forEach(function (it) {
       var inDate = String(it.in_date || it['in-date'] || '').trim();
       var sakun = String(it.sakun_no || '').trim();
       var court = String(it.court || '').trim();
+      var aid = String(it.auction_id || it.pid || '').trim();   // 크롤한 옥션 ID (product_id)
       if (!sakun || !court) { results.push({ sakun_no: sakun, ok: false, msg: '사건번호/법원 누락' }); skipped++; return; }
       if (!isAllowedCourt_(court)) { results.push({ sakun_no: sakun, ok: false, msg: '허용되지 않은 법원' }); skipped++; return; }
       var key = [inDate, sakun, court].join('|');
-      if (existing[key]) { results.push({ sakun_no: sakun, ok: false, msg: '이미 등록됨' }); skipped++; return; }
+      if (existing[key]) {
+        // [옥션ID 갱신] 이미 MAPS 에 있는 건도 크롤한 옥션 ID 를 items.auction_id 에 업데이트(기존 값과 다를 때만)
+        var dupMsg = '이미 등록됨';
+        if (aid && auctionIdCol > 0 && typeof existing[key] === 'number') {
+          var curAid = String(sheet.getRange(existing[key], auctionIdCol).getValue() || '').trim();
+          if (curAid !== aid) {
+            sheet.getRange(existing[key], auctionIdCol).setValue(aid);
+            auctionUpdated++;
+            dupMsg = '이미 등록(옥션ID 갱신)';
+            var exId = String(sheet.getRange(existing[key], 1).getValue() || '');   // 해당 행 items.id
+            history.push({ action: 'ITEM_UPDATE', item_id: exId, field_name: 'auction_id', from_value: curAid, to_value: aid, trigger_type: 'auction-manager-dm', note: court + ' ' + sakun + ' (옥션ID 갱신)', req_id: String(new Date().getTime()) });
+          }
+        }
+        results.push({ sakun_no: sakun, ok: false, msg: dupMsg }); skipped++; return;
+      }
 
       var itMid = String(it.m_name_id || '').trim() || mid;   // 물건별 담당자 우선, 없으면 기본('대표님')
       var id = String(new Date().getTime()) + String(Math.floor(Math.random() * 1000));
@@ -624,6 +640,7 @@ function registerDamulgeon(items, mNameId) {
           case 'reg_member': return String(it.reg_member || '') || itMid;
           case 'lowest_price': return String(it.lowest_price || '');
           case 'deposit': return String(it.deposit || '');
+          case 'auction_id': return aid;   // 크롤한 옥션 ID
           default: return '';
         }
       });
@@ -631,27 +648,342 @@ function registerDamulgeon(items, mNameId) {
       var newRowNum = sheet.getLastRow();
       if (addrCol > 0) sheet.getRange(newRowNum, addrCol).setValue(String(it.address || ''));
       if (areaCol > 0) sheet.getRange(newRowNum, areaCol).setValue(String(it.building_area || ''));
-      existing[key] = true;
+      existing[key] = newRowNum;
       saved++;
       results.push({ sakun_no: sakun, ok: true, id: id });
 
       // 히스토리 (createData 와 동일 패턴, trigger=auction-manager-dm)
       var batchTs = String(new Date().getTime());
       history.push({ action: 'ITEM_CREATE', item_id: id, member_id: '', member_name: '', trigger_type: 'auction-manager-dm', note: court + ' ' + sakun + ' (다물건 상품등록)', req_id: batchTs });
-      [['stu_member', '상품'], ['m_name_id', itMid], ['lowest_price', String(it.lowest_price || '')], ['deposit', String(it.deposit || '')]].forEach(function (kv) {
+      [['stu_member', '상품'], ['m_name_id', itMid], ['lowest_price', String(it.lowest_price || '')], ['deposit', String(it.deposit || '')], ['auction_id', aid]].forEach(function (kv) {
         if (kv[1] !== '') history.push({ action: 'ITEM_CREATE', item_id: id, field_name: kv[0], from_value: '', to_value: kv[1], trigger_type: 'auction-manager-dm', note: '최초 등록 값', req_id: batchTs });
       });
     });
 
     if (history.length && typeof writeItemHistoryBatch_ === 'function') writeItemHistoryBatch_(history);
     SpreadsheetApp.flush();
-    return { success: true, saved: saved, skipped: skipped, results: results };
+    return { success: true, saved: saved, skipped: skipped, auction_updated: auctionUpdated, results: results };
   } catch (e) {
     Logger.log('[registerDamulgeon] ' + e);
     return { success: false, message: String(e) };
   } finally {
     __lock.releaseLock();
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// [다물건 관리] 본앱 메뉴 (입찰물건관리 ▸ 다물건 관리) — Phase A: GAS 백엔드
+//   설계서: ~/.claude/plans/mutable-splashing-lynx.md
+//   · 조회 대상 = items 중 stu_member='상품' && (in-date|사건base|court) 그룹에 물건 2개+
+//   · 별도 '다물건' 시트에 items 에 없는 보조필드만 저장 (items 불변)
+//   · 연동키 = items.id(link_item_id, id 우선) + 3키(in_date|sakun_base|court) 폴백
+// ════════════════════════════════════════════════════════════════════════════
+
+const DB_DAMULGEON_SHEET_NAME = '다물건';
+const DM_FEE_TABLE_KEY = 'DM_FEE_TABLE';
+
+// items 에 없는 다물건 전용 보조필드만 저장. link_item_id 가 PK.
+const DAMULGEON_HEADERS = [
+  'link_item_id',   // PK — items.id (id 우선 머지)
+  'in_date',        // 입찰일자 yyMMdd (3키 폴백)
+  'sakun_no',       // 사건번호(물건번호 포함) (3키 폴백)
+  'court',          // 법원 (3키 폴백)
+  'mulgeon_no',     // 물건번호 (N)
+  'member_id',      // 매칭 회원 id
+  'member_name',    // 회원명
+  'myungui',        // 명의
+  'grade',          // 등급
+  'dong',           // 동
+  'floor',          // 층
+  'ho',             // 호수
+  'hyang',          // 향 (수동)
+  'gamjungga',      // 감정가
+  'bidprice',       // 입찰가 (수동)
+  'jinhaengbi',     // 진행비 (자동/요율표)
+  'daeriin',        // 입찰대리인 (수동)
+  'auth_method',    // 인증방식 (종이/전자)
+  'dm_note',        // 다물건 비고
+  'reg_date',       // 최초 생성
+  'update_date'     // 최종 갱신
+];
+
+// 사용자 편집 대상 보조필드 (link_item_id/3키/시각 제외) — 머지·저장 시 사용
+const DAMULGEON_AUX_FIELDS = ['member_id','member_name','myungui','grade','dong','floor','ho','hyang','gamjungga','bidprice','jinhaengbi','daeriin','auth_method','dm_note'];
+
+/** '다물건' 시트 생성/헤더 보장 (josa_items 패턴). GAS 에디터 1회 실행: initDamulgeonAll */
+function initDamulgeonSheet_() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(DB_DAMULGEON_SHEET_NAME);
+  if (sheet.getMaxColumns() < DAMULGEON_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), DAMULGEON_HEADERS.length - sheet.getMaxColumns());
+  }
+  var hr = sheet.getRange(1, 1, 1, DAMULGEON_HEADERS.length);
+  hr.setValues([DAMULGEON_HEADERS]); hr.setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  // A열(link_item_id) 텍스트 강제 — Sheets number 자동변환(정밀도 손실) 방지
+  sheet.getRange(1, 1, sheet.getMaxRows(), 1).setNumberFormat('@');
+  return sheet;
+}
+
+function initDamulgeonAll() {
+  initDamulgeonSheet_();
+  Logger.log('[다물건] 시트 초기화 완료: ' + DB_DAMULGEON_SHEET_NAME + ' (' + DAMULGEON_HEADERS.length + '컬럼)');
+  return { success: true, sheet: DB_DAMULGEON_SHEET_NAME, headers: DAMULGEON_HEADERS.length };
+}
+
+// 헤더가 DAMULGEON_HEADERS 와 다르면 강제 갱신 (스키마 변경 자동 반영)
+function _ensureDamulgeonHeader_(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) { sheet.getRange(1,1,1,DAMULGEON_HEADERS.length).setValues([DAMULGEON_HEADERS]).setFontWeight('bold'); return; }
+  var cur = sheet.getRange(1, 1, 1, Math.max(lastCol, DAMULGEON_HEADERS.length)).getValues()[0];
+  var ok = true;
+  for (var i = 0; i < DAMULGEON_HEADERS.length; i++) {
+    if (String(cur[i] || '').trim() !== DAMULGEON_HEADERS[i]) { ok = false; break; }
+  }
+  if (!ok) {
+    if (sheet.getMaxColumns() < DAMULGEON_HEADERS.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), DAMULGEON_HEADERS.length - sheet.getMaxColumns());
+    sheet.getRange(1,1,1,DAMULGEON_HEADERS.length).setValues([DAMULGEON_HEADERS]).setFontWeight('bold');
+  }
+}
+
+// 물건번호 추출: '2023타경919(4)' → '4'
+function _dmMulgeonNo_(sakun) {
+  var m = String(sakun || '').match(/\((\d+)\)\s*$/);
+  return m ? m[1] : '';
+}
+
+// 주소 → 동/층/호수 파싱 (초안, Phase F 에서 정교화). 법정동(전포동 등)은 동으로 안 잡음(숫자+동만).
+function _dmParseAddr_(address) {
+  var s = String(address || '');
+  var ho = '', floor = '', dong = '';
+  var mHo = s.match(/(\d+)\s*호/);                       if (mHo) ho = mHo[1];
+  var mFl = s.match(/(지하\s*\d+|[Bb]\d+|\d+)\s*층/);     if (mFl) floor = mFl[1];
+  var mDg = s.match(/(\d+)\s*동/);                       if (mDg) dong = mDg[1];   // 건물 동(숫자+동)만
+  if (!floor && ho && ho.length >= 3) floor = ho.slice(0, ho.length - 2);          // 201호 → 2층 추정
+  return { dong: dong, floor: floor, ho: ho };
+}
+
+// 기본주소(층/호 토큰 제거). 동은 법정동 보호 위해 제거 안 함.
+function _dmBaseAddress_(address) {
+  var s = String(address || '');
+  s = s.replace(/(지하\s*\d+|[Bb]\d+|\d+)\s*층/g, '');
+  s = s.replace(/\d+\s*호/g, '');
+  return s.replace(/[,\s]+$/, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+/** '다물건' 시트 전체 읽기 → 객체배열 */
+function readAllDamulgeon() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME);
+  if (!sheet) { initDamulgeonSheet_(); sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME); }
+  _ensureDamulgeonHeader_(sheet);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  var values = sheet.getRange(2, 1, lastRow - 1, DAMULGEON_HEADERS.length).getValues();
+  return values.map(function(row) {
+    var o = {};
+    DAMULGEON_HEADERS.forEach(function(h, i) {
+      var v = row[i];
+      if (v instanceof Date) v = Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+      o[h] = String(v == null ? '' : v).trim();
+    });
+    return o;
+  }).filter(function(r) { return r.link_item_id; });
+}
+
+/**
+ * [다물건 관리] 좌측 사건리스트 + 우측 물건그리드 데이터.
+ *   items 상품 그룹(2물건+) 조회 + '다물건' 시트 보조필드 머지(id 우선, 3키 폴백).
+ * 반환: { success, groups:[{ group_key, in_date, court, sakun_base, address_base, count, items:[...] }] }
+ */
+function getDamulgeonList() {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, groups: [], count: 0 };
+    var addrCol = _itemColByHeader_(sheet, 'address');
+    var areaCol = _itemColByHeader_(sheet, 'building_area');
+    var maxCols = sheet.getMaxColumns();
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, maxCols).getValues();
+    // ITEM idx: id0 in-date1 sakun_no2 court3 stu_member4 ... deposit21 lowest_price22
+    var groups = {};
+    data.forEach(function(r) {
+      if (String(r[4] || '').trim() !== '상품') return;
+      var sakun = String(r[2] || '').trim();
+      var base = _normSakunBase_(sakun);
+      var court = String(r[3] || '').trim();
+      var inDate = formatParamsDate(r[1]);
+      if (!base || !court) return;
+      var key = inDate + '|' + base + '|' + court;
+      if (!groups[key]) groups[key] = { group_key: key, in_date: inDate, court: court, sakun_base: base, items: [] };
+      var address = addrCol > 0 ? String(r[addrCol - 1] || '') : '';
+      var p = _dmParseAddr_(address);
+      groups[key].items.push({
+        link_item_id: String(r[0] || ''),
+        in_date: inDate, sakun_no: sakun, mulgeon_no: _dmMulgeonNo_(sakun), court: court,
+        stu_member: '상품',
+        address: address,
+        building_area: areaCol > 0 ? String(r[areaCol - 1] || '') : '',
+        lowest_price: String(r[22] || ''), deposit: String(r[21] || ''),
+        // 보조필드 기본값 (다물건 시트 머지로 덮어씀). 동/층/호는 주소 파싱 기본값.
+        member_id: '', member_name: '', myungui: '', grade: '',
+        dong: p.dong, floor: p.floor, ho: p.ho, hyang: '',
+        gamjungga: '', bidprice: '', jinhaengbi: '', daeriin: '', auth_method: '', dm_note: ''
+      });
+    });
+    var kept = Object.keys(groups).map(function(k) { return groups[k]; }).filter(function(g) { return g.items.length >= 2; });
+
+    // '다물건' 시트 보조필드 머지 (id 우선, 3키 폴백)
+    var aux = readAllDamulgeon();
+    var byId = {}, by3 = {};
+    aux.forEach(function(a) {
+      if (a.link_item_id) byId[a.link_item_id] = a;
+      by3[a.in_date + '|' + _normSakunBase_(a.sakun_no) + '|' + a.court] = a;
+    });
+    kept.forEach(function(g) {
+      g.items.forEach(function(it) {
+        var a = byId[it.link_item_id] || by3[it.in_date + '|' + _normSakunBase_(it.sakun_no) + '|' + it.court];
+        if (a) DAMULGEON_AUX_FIELDS.forEach(function(f) { if (a[f] !== undefined && a[f] !== '') it[f] = a[f]; });
+      });
+      g.items.sort(function(x, y) { return (parseInt(x.mulgeon_no, 10) || 0) - (parseInt(y.mulgeon_no, 10) || 0); });
+      g.count = g.items.length;
+      g.address_base = _dmBaseAddress_(g.items[0] && g.items[0].address);
+    });
+    kept.sort(function(a, b) {
+      if (a.in_date !== b.in_date) return a.in_date < b.in_date ? -1 : 1;
+      if (a.court !== b.court) return a.court < b.court ? -1 : 1;
+      return a.sakun_base < b.sakun_base ? -1 : 1;
+    });
+    return { success: true, groups: kept, count: kept.length };
+  } catch (e) {
+    Logger.log('[getDamulgeonList] ' + e);
+    return { success: false, message: String(e), groups: [] };
+  }
+}
+
+/**
+ * '다물건' 시트 보조필드 upsert (link_item_id 키). rows = 행 1개 또는 배열.
+ *   items 는 절대 건드리지 않음. reg_date 보존, update_date 갱신.
+ */
+function bulkSaveDamulgeon(rows) {
+  var __lock = LockService.getScriptLock();
+  try { __lock.waitLock(20000); } catch (e) { return { success: false, message: '저장이 혼잡합니다. 잠시 후 다시 시도해 주세요.' }; }
+  try {
+    rows = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+    if (!rows.length) return { success: true, saved: 0, added: 0, updated: 0 };
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME);
+    if (!sheet) { initDamulgeonSheet_(); sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME); }
+    _ensureDamulgeonHeader_(sheet);
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    var existing = readAllDamulgeon();
+    var idToRow = {};
+    existing.forEach(function(e, i) { if (e.link_item_id) idToRow[e.link_item_id] = i + 2; });
+    var saved = 0, added = 0, updated = 0;
+    rows.forEach(function(row) {
+      var id = String(row.link_item_id || '').trim();
+      if (!id) return;
+      var rowNum = idToRow[id];
+      var prev = rowNum ? existing[rowNum - 2] : null;
+      var obj = {};
+      DAMULGEON_HEADERS.forEach(function(h) {
+        if (h === 'update_date') { obj[h] = now; return; }
+        if (h === 'reg_date') { obj[h] = (prev && prev.reg_date) ? prev.reg_date : now; return; }
+        if (row[h] !== undefined && row[h] !== null) obj[h] = String(row[h]);
+        else if (prev) obj[h] = prev[h] || '';
+        else obj[h] = '';
+      });
+      var arr = DAMULGEON_HEADERS.map(function(h) { return obj[h]; });
+      if (rowNum) { sheet.getRange(rowNum, 1, 1, DAMULGEON_HEADERS.length).setValues([arr]); updated++; }
+      else { sheet.appendRow(arr); idToRow[id] = sheet.getLastRow(); existing.push(obj); added++; }
+      saved++;
+    });
+    SpreadsheetApp.flush();
+    return { success: true, saved: saved, added: added, updated: updated };
+  } catch (e) {
+    Logger.log('[bulkSaveDamulgeon] ' + e);
+    return { success: false, message: String(e) };
+  } finally { __lock.releaseLock(); }
+}
+
+function saveDamulgeonRow(row) { return bulkSaveDamulgeon([row]); }
+
+// ── 진행비 출장비 요율표 (settings 시트 key-value, JSON) ──
+function _dmDefaultFeeTable_() {
+  return {
+    courts: {},                                          // { '부산지방법원': 1인기준액, ... } 사용자 편집
+    person_rate: { '1': 1.0, '2': 0.7, '3': 0.5, '4': 0.4 },  // 인원수별 비율(1인기준 × 비율)
+    car_depreciation: 0,                                 // 차량감가(정액)
+    bid_fee_rule: ''                                     // 입찰진행비 규칙(메모/공식, 추후 확정)
+  };
+}
+function getDmFeeTable() {
+  try {
+    var raw = getSetting_(DM_FEE_TABLE_KEY, '');
+    if (!raw) return { success: true, table: _dmDefaultFeeTable_() };
+    var t; try { t = JSON.parse(raw); } catch (e) { t = _dmDefaultFeeTable_(); }
+    return { success: true, table: t };
+  } catch (e) { return { success: false, message: String(e), table: _dmDefaultFeeTable_() }; }
+}
+function saveDmFeeTable(tableJson) {
+  try {
+    var str = (typeof tableJson === 'string') ? tableJson : JSON.stringify(tableJson || {});
+    JSON.parse(str);  // 유효성 검증
+    ensureSettingsSheet_();
+    saveSetting_(DM_FEE_TABLE_KEY, str);
+    return { success: true };
+  } catch (e) { return { success: false, message: '요율표 JSON 오류: ' + e }; }
+}
+
+/**
+ * [다물건] CSV 출력. groupKeys 미지정 시 전체. BOM 포함(한글 Excel).
+ * 반환: { success, csv, rows }
+ */
+function exportDamulgeonCsv(groupKeys) {
+  try {
+    var res = getDamulgeonList();
+    if (!res.success) return { success: false, message: res.message };
+    var filter = (Array.isArray(groupKeys) && groupKeys.length) ? {} : null;
+    if (filter) groupKeys.forEach(function(k) { filter[k] = true; });
+    var cols = [
+      ['순번', '_seq'], ['입찰일자', 'in_date'], ['법원', 'court'], ['사건번호', 'sakun_no'], ['물건번호', 'mulgeon_no'],
+      ['회원', 'member_name'], ['명의', 'myungui'], ['등급', 'grade'],
+      ['동', 'dong'], ['층', 'floor'], ['호수', 'ho'], ['향', 'hyang'],
+      ['건물면적', 'building_area'], ['감정가', 'gamjungga'], ['최저매각가', 'lowest_price'],
+      ['입찰가', 'bidprice'], ['보증금', 'deposit'], ['진행비', 'jinhaengbi'],
+      ['입찰대리인', 'daeriin'], ['인증방식', 'auth_method'], ['비고', 'dm_note']
+    ];
+    var lines = [cols.map(function(c) { return c[0]; }).join(',')];
+    var seq = 0;
+    res.groups.forEach(function(g) {
+      if (filter && !filter[g.group_key]) return;
+      g.items.forEach(function(it) {
+        seq++;
+        lines.push(cols.map(function(c) {
+          var v = (c[1] === '_seq') ? seq : (it[c[1]] != null ? it[c[1]] : '');
+          v = String(v).replace(/"/g, '""');
+          return /[",\n]/.test(v) ? '"' + v + '"' : v;
+        }).join(','));
+      });
+    });
+    return { success: true, csv: '﻿' + lines.join('\r\n'), rows: seq };
+  } catch (e) {
+    Logger.log('[exportDamulgeonCsv] ' + e);
+    return { success: false, message: String(e) };
+  }
+}
+
+/** GAS 에디터 자가검증용 — 그룹수/샘플 로그 출력 */
+function testDamulgeonList_() {
+  var r = getDamulgeonList();
+  Logger.log('[다물건] success=%s, 그룹수=%s', r.success, r.count);
+  (r.groups || []).slice(0, 3).forEach(function(g, i) {
+    Logger.log('  [%s] %s %s %s — 물건 %s건, 기본주소="%s"', i + 1, g.in_date, g.court, g.sakun_base, g.count, g.address_base);
+    g.items.forEach(function(it) { Logger.log('       └ (%s) id=%s 동%s 층%s 호%s 최저=%s', it.mulgeon_no, it.link_item_id, it.dong, it.floor, it.ho, it.lowest_price); });
+  });
+  var ft = getDmFeeTable();
+  Logger.log('[다물건] 요율표 person_rate=%s', JSON.stringify(ft.table.person_rate));
+  return r;
 }
 
 /**

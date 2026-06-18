@@ -634,7 +634,7 @@
     if (!apiKey) { alert('MAPS Admin Key 미설정.'); return; }
     var items = cbs.map(function (cb) {
       var r = _dmRows[parseInt(cb.dataset.idx, 10)];
-      return { in_date: r.in_date, sakun_no: r.sakun_no, court: r.court, address: r.address, building_area: r.building_area, lowest_price: r.lowest_price, deposit: r.deposit, m_name_id: (r._manager || '').trim() || '대표님' };
+      return { in_date: r.in_date, sakun_no: r.sakun_no, court: r.court, address: r.address, building_area: r.building_area, lowest_price: r.lowest_price, deposit: r.deposit, auction_id: (r.auction_id || r.pid || ''), m_name_id: (r._manager || '').trim() || '대표님' };
     });
     var nonJin = cbs.filter(function (cb) { var r = _dmRows[parseInt(cb.dataset.idx, 10)]; return r && r.state !== '진행'; }).length;
     var warn = nonJin > 0 ? ('\n⚠ 진행 아닌 건 ' + nonJin + '개 포함.') : '';
@@ -646,9 +646,10 @@
     }).then(r => r.json()).then(j => {
       if (btn) { btn.disabled = false; btn.textContent = '✓ 선택 진행건 등록'; }
       if (!j || !j.success) { alert('등록 실패: ' + ((j && (j.message || j.error)) || '?')); return; }
-      _dmLog('💾 등록 결과 — 성공 ' + j.saved + ' / 건너뜀 ' + j.skipped, 'log-ok');
+      var auInfo = j.auction_updated ? (' / 옥션ID갱신 ' + j.auction_updated) : '';
+      _dmLog('💾 등록 결과 — 성공 ' + j.saved + ' / 건너뜀 ' + j.skipped + auInfo, 'log-ok');
       (j.results || []).forEach(function (rr) { if (!rr.ok) _dmLog('  · ' + rr.sakun_no + ': ' + rr.msg, 'log-err'); });
-      alert('등록 완료 — 성공 ' + j.saved + '건, 건너뜀(중복 등) ' + j.skipped + '건.');
+      alert('등록 완료 — 성공 ' + j.saved + '건, 건너뜀(중복 등) ' + j.skipped + '건' + (j.auction_updated ? (', 옥션ID 갱신 ' + j.auction_updated + '건') : '') + '.');
       dmLoad();
     }).catch(e => { if (btn) { btn.disabled = false; btn.textContent = '✓ 선택 진행건 등록'; } alert('등록 오류: ' + e); });
   }
