@@ -370,8 +370,8 @@
   let _dmExisting = [], _dmExistingMap = {};
   const _DM_STATE_KEY = 'mj_dm_state';
   // 결과 그리드 컬럼(순서 고정) + 기본 너비(px) + 사용자 리사이즈 저장
-  const _DM_COLS = ['체크', '입찰일', '크롤상태', 'MAPS', '사건번호', '법원', '주소', '건물면적', '최저가', '보증금', '담당자'];
-  const _DM_DEFW = [34, 92, 66, 60, 122, 70, 380, 84, 110, 110, 84];
+  const _DM_COLS = ['체크', '입찰일', '크롤상태', 'MAPS', '사건번호', '옥션ID', '법원', '주소', '건물면적', '최저가', '보증금', '담당자'];
+  const _DM_DEFW = [34, 92, 66, 60, 122, 96, 70, 380, 84, 110, 110, 84];
   let _dmColW = {};   // idx -> px (사용자 조절분)
   function _dmEl(id) { return document.getElementById(id); }
   function _dmCard() { return document.querySelector('.mjcap-card[data-cap="dm"]'); }
@@ -416,7 +416,7 @@
   function _dmSaveState() {
     try {
       localStorage.setItem(_DM_STATE_KEY, JSON.stringify({
-        rows: _dmRows, existing: _dmExisting, colw: _dmColW,
+        rows: _dmRows, existing: _dmExisting, colw: _dmColW, colcount: _DM_COLS.length,
         sakun: _dmEl('dmSakun') ? _dmEl('dmSakun').value : '',
         court: _dmEl('dmCourt') ? _dmEl('dmCourt').value : '',
         bulk: _dmEl('dmBulkManager') ? _dmEl('dmBulkManager').value : '대표님'
@@ -429,7 +429,8 @@
       if (_dmEl('dmSakun') && s.sakun != null) _dmEl('dmSakun').value = s.sakun;
       if (_dmEl('dmCourt') && s.court != null) _dmEl('dmCourt').value = s.court;
       if (_dmEl('dmBulkManager') && s.bulk) { var bo = _dmEl('dmBulkManager'); if (bo.tagName === 'SELECT') { _dmSetSelectVal(bo, s.bulk); } else { bo.value = s.bulk; } }
-      _dmColW = (s.colw && typeof s.colw === 'object') ? s.colw : {};
+      // 컬럼 레이아웃이 바뀌면(예: 옥션ID 추가) 저장된 폭은 인덱스가 밀리므로 1회 초기화
+      _dmColW = (s.colw && typeof s.colw === 'object' && s.colcount === _DM_COLS.length) ? s.colw : {};
       _dmExisting = Array.isArray(s.existing) ? s.existing : []; _dmBuildExistingMap();
       if (Array.isArray(s.rows)) { _dmRows = s.rows; }
       _dmRenderExisting(); dmRenderGrid();
@@ -570,6 +571,7 @@
         + '<td style="padding:4px 6px">' + _dmStateBadge(r.state) + '</td>'
         + '<td style="padding:4px 6px">' + _dmMapsBadge(ex) + '</td>'
         + '<td style="padding:4px 6px;font-weight:600;white-space:nowrap">' + escapeHtml(r.sakun_no || '') + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap;color:#64748b;font-size:12px" title="옥션원 물건ID">' + escapeHtml(r.auction_id || r.pid || '') + '</td>'
         + '<td style="padding:4px 6px;white-space:nowrap">' + escapeHtml(r.court || '') + '</td>'
         + '<td style="padding:4px 6px;min-width:220px" title="' + escapeHtml(r.address || '') + '">' + escapeHtml(dispAddr) + '</td>'
         + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + escapeHtml(r.building_area || '') + '</td>'
@@ -581,7 +583,7 @@
     var colgroup = '<colgroup>' + _DM_COLS.map(function (_, i) { var w = (_dmColW[i] != null) ? _dmColW[i] : _DM_DEFW[i]; return '<col style="width:' + w + 'px">'; }).join('') + '</colgroup>';
     var headCells = _DM_COLS.map(function (name, i) {
       var label = (i === 0) ? '<input type="checkbox" id="dmSelAll" title="보이는 행 전체선택">' : escapeHtml(name);
-      var align = (i >= 7 && i <= 9) ? 'right' : 'left';
+      var align = (name === '건물면적' || name === '최저가' || name === '보증금') ? 'right' : 'left';
       var grip = (i < _DM_COLS.length - 1) ? '<span class="dm-rsz" data-c="' + i + '" title="드래그로 너비 조절"></span>' : '';
       return '<th style="padding:5px 6px;text-align:' + align + '">' + label + grip + '</th>';
     }).join('');
