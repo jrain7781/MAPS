@@ -369,6 +369,10 @@
   let _dmBound = false, _dmRunId = null, _dmOffset = 0, _dmRows = [];
   let _dmExisting = [], _dmExistingMap = {};
   const _DM_STATE_KEY = 'mj_dm_state';
+  // 결과 그리드 컬럼(순서 고정) + 기본 너비(px) + 사용자 리사이즈 저장
+  const _DM_COLS = ['체크', '입찰일', '크롤상태', 'MAPS', '사건번호', '법원', '주소', '건물면적', '최저가', '보증금', '담당자'];
+  const _DM_DEFW = [34, 92, 66, 60, 122, 70, 380, 84, 110, 110, 84];
+  let _dmColW = {};   // idx -> px (사용자 조절분)
   function _dmEl(id) { return document.getElementById(id); }
   function _dmCard() { return document.querySelector('.mjcap-card[data-cap="dm"]'); }
   function _dmNorm(s) { return String(s || '').replace(/\s+/g, ''); }
@@ -382,6 +386,24 @@
     return String(v || '');
   }
   function _dmStripJosa(addr) { return String(addr || '').replace(/\s*\[[^\]]*\]/g, '').trim(); }   // 주소의 [조사내용/특이사항] 제거
+  function _dmSetSelectVal(sel, val) {
+    if (!sel) return;
+    var has = Array.prototype.some.call(sel.options, function (o) { return o.value === val; });
+    if (!has && val) { var o = document.createElement('option'); o.value = val; o.textContent = val; sel.appendChild(o); }
+    sel.value = val;
+  }
+  function _dmLoadTeachers() {
+    var sel = _dmEl('dmBulkManager'); if (!sel || sel.tagName !== 'SELECT') return;
+    var apiKey = getMapsAdminKeyMj(); if (!apiKey) return;   // 키 없으면 기본(대표님)만
+    fetch('/api/maps-gas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: apiKey, api_action: 'getTeacherNicknames' }) })
+      .then(r => r.json()).then(function (j) {
+        var teachers = (j && j.teachers) || [];
+        var cur = sel.value || '대표님';
+        var opts = ['대표님'].concat(teachers.filter(function (t) { return t && t !== '대표님'; }));
+        sel.innerHTML = opts.map(function (t) { return '<option value="' + escapeAttr(t) + '">' + escapeHtml(t) + '</option>'; }).join('');
+        _dmSetSelectVal(sel, cur);
+      }).catch(function () {});
+  }
   function _dmLog(msg, cls) { var c = _dmCard(); if (!c) return; var el = c.querySelector('[data-role="log"]'); if (!el) return; var s = document.createElement('span'); if (cls) s.className = cls; s.textContent = msg + '\n'; el.appendChild(s); el.scrollTop = el.scrollHeight; }
   function _dmSetStatus(t, cls) { var c = _dmCard(); if (!c) return; var el = c.querySelector('[data-role="status"]'); if (el) { el.textContent = t; el.className = 'mjcap-status' + (cls ? ' ' + cls : ''); } }
   function _dmSetRunning(running) {
@@ -394,7 +416,7 @@
   function _dmSaveState() {
     try {
       localStorage.setItem(_DM_STATE_KEY, JSON.stringify({
-        rows: _dmRows, existing: _dmExisting,
+        rows: _dmRows, existing: _dmExisting, colw: _dmColW,
         sakun: _dmEl('dmSakun') ? _dmEl('dmSakun').value : '',
         court: _dmEl('dmCourt') ? _dmEl('dmCourt').value : '',
         bulk: _dmEl('dmBulkManager') ? _dmEl('dmBulkManager').value : '대표님'
@@ -406,7 +428,8 @@
       var s = JSON.parse(localStorage.getItem(_DM_STATE_KEY) || 'null'); if (!s) return;
       if (_dmEl('dmSakun') && s.sakun != null) _dmEl('dmSakun').value = s.sakun;
       if (_dmEl('dmCourt') && s.court != null) _dmEl('dmCourt').value = s.court;
-      if (_dmEl('dmBulkManager') && s.bulk) _dmEl('dmBulkManager').value = s.bulk;
+      if (_dmEl('dmBulkManager') && s.bulk) { var bo = _dmEl('dmBulkManager'); if (bo.tagName === 'SELECT') { _dmSetSelectVal(bo, s.bulk); } else { bo.value = s.bulk; } }
+      _dmColW = (s.colw && typeof s.colw === 'object') ? s.colw : {};
       _dmExisting = Array.isArray(s.existing) ? s.existing : []; _dmBuildExistingMap();
       if (Array.isArray(s.rows)) { _dmRows = s.rows; }
       _dmRenderExisting(); dmRenderGrid();
@@ -428,6 +451,7 @@
     _dmEl('dmTodayOnly')?.addEventListener('change', function () { dmRenderGrid(); _dmRenderExisting(); });
     _dmEl('dmHideJosa')?.addEventListener('change', dmRenderGrid);
     _dmRestoreState();
+    _dmLoadTeachers();
   }
   // ----- 불러오기: MAPS 기등록 조회 (+법원 자동, 대조용 저장) -----
   function dmLoad() {
@@ -561,13 +585,35 @@
         + '<td style="padding:4px 6px"><input type="text" class="dm-mgr" data-idx="' + x.i + '" value="' + escapeAttr(r._manager) + '" style="width:70px;padding:2px 5px;font-size:12px"></td>'
         + '</tr>';
     }).join('');
-    box.innerHTML = '<table style="width:100%;border-collapse:collapse;white-space:nowrap"><thead style="position:sticky;top:0;background:#f8fafc;z-index:1"><tr style="color:#6b7280;border-bottom:1px solid #e5e7eb">'
-      + '<th style="width:30px;padding:5px"><input type="checkbox" id="dmSelAll" title="보이는 행 전체선택"></th>'
-      + '<th style="padding:5px 6px;text-align:left">입찰일</th><th style="padding:5px 6px;text-align:left">크롤상태</th><th style="padding:5px 6px;text-align:left">MAPS</th><th style="padding:5px 6px;text-align:left">사건번호</th><th style="padding:5px 6px;text-align:left">법원</th><th style="padding:5px 6px;text-align:left">주소</th><th style="padding:5px 6px;text-align:right">건물면적</th><th style="padding:5px 6px;text-align:right">최저가</th><th style="padding:5px 6px;text-align:right">보증금</th><th style="padding:5px 6px;text-align:left">담당자</th>'
-      + '</tr></thead><tbody>' + body + '</tbody></table>';
+    var colgroup = '<colgroup>' + _DM_COLS.map(function (_, i) { var w = (_dmColW[i] != null) ? _dmColW[i] : _DM_DEFW[i]; return '<col style="width:' + w + 'px">'; }).join('') + '</colgroup>';
+    var headCells = _DM_COLS.map(function (name, i) {
+      var label = (i === 0) ? '<input type="checkbox" id="dmSelAll" title="보이는 행 전체선택">' : escapeHtml(name);
+      var align = (i >= 7 && i <= 9) ? 'right' : 'left';
+      var grip = (i < _DM_COLS.length - 1) ? '<span class="dm-rsz" data-c="' + i + '" title="드래그로 너비 조절"></span>' : '';
+      return '<th style="padding:5px 6px;text-align:' + align + '">' + label + grip + '</th>';
+    }).join('');
+    var minW = _DM_DEFW.reduce(function (a, b) { return a + b; }, 0);
+    box.innerHTML = '<table style="width:100%;min-width:' + minW + 'px;table-layout:fixed;border-collapse:collapse;white-space:nowrap">' + colgroup + '<thead style="position:sticky;top:0;background:#f8fafc;z-index:1"><tr style="color:#6b7280;border-bottom:1px solid #e5e7eb">' + headCells + '</tr></thead><tbody>' + body + '</tbody></table>';
     box.querySelectorAll('.dm-mgr').forEach(function (inp) { inp.addEventListener('change', function () { var r = _dmRows[parseInt(inp.dataset.idx, 10)]; if (r) { r._manager = inp.value; _dmSaveState(); } }); });
     var selAll = _dmEl('dmSelAll'); if (selAll) selAll.addEventListener('change', function () { box.querySelectorAll('.dm-cb').forEach(function (cb) { cb.checked = selAll.checked; }); });
+    _dmBindResizers();
     if (_dmEl('dmRegisterBtn')) _dmEl('dmRegisterBtn').disabled = (jin === 0);
+  }
+  function _dmBindResizers() {
+    var box = _dmEl('dmGrid'); if (!box) return;
+    var cols = box.querySelectorAll('colgroup col');
+    var ths = box.querySelectorAll('thead th');
+    box.querySelectorAll('.dm-rsz').forEach(function (g) {
+      g.addEventListener('mousedown', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var ci = parseInt(g.dataset.c, 10), col = cols[ci], th = ths[ci];
+        var startX = e.clientX, startW = th ? th.offsetWidth : (_DM_DEFW[ci] || 80);
+        document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize';
+        function mm(ev) { var w = Math.max(28, startW + (ev.clientX - startX)); if (col) col.style.width = w + 'px'; _dmColW[ci] = w; }
+        function mu() { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); document.body.style.userSelect = ''; document.body.style.cursor = ''; _dmSaveState(); }
+        document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu);
+      });
+    });
   }
   // ----- 일괄담당 적용 (체크된 행 → 일괄담당 입력값) -----
   function dmBulkApply() {

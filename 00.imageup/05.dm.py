@@ -371,7 +371,13 @@ def process_case(driver, wait, case):
         return
     print(f"    → 물건 {len(rows)}건 수집")
     base = str(sakun_in or "").strip()
+    today6 = time.strftime("%y%m%d")
+    skipped_past = 0
     for r in rows:
+        # 오늘 이전(입찰일/매각기일 < 오늘)은 아예 가져오지 않음 (날짜 없으면 보존)
+        if r["date6"] and r["date6"] < today6:
+            skipped_past += 1
+            continue
         state_kind, tok = classify_state(r["state"])
         court = addr_to_court(r["addr"])
         addr = r["addr"].replace("\n", " ")
@@ -400,6 +406,8 @@ def process_case(driver, wait, case):
         print(f"RESULT|{json.dumps(rec, ensure_ascii=False)}")
         print(f"    · {canonical} [{state_kind}] {court} 최저 {r['lowest']} 보증 {deposit} 면적 {area}")
         time.sleep(0.2)
+    if skipped_past:
+        print(f"    (오늘({today6}) 이전 {skipped_past}건 제외)")
 
 
 def main():

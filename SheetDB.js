@@ -8098,6 +8098,34 @@ function buildTeacherDisplayMap_() {
 }
 
 /**
+ * [다물건] 강사 닉네임 목록 (담당자 드롭다운용). members 강사 → teacher_nickname(없으면 본명) distinct.
+ */
+function getTeacherNicknames() {
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_MEMBERS_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, teachers: [] };
+    var colsToRead = Math.min(sheet.getMaxColumns(), ITEM_MEMBER_HEADERS.length);
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, colsToRead).getValues();
+    var gubunCol = ITEM_MEMBER_HEADERS.indexOf('gubun');
+    var nameCol = ITEM_MEMBER_HEADERS.indexOf('member_name');
+    var nickCol = ITEM_MEMBER_HEADERS.indexOf('teacher_nickname');
+    var out = [], seen = {};
+    data.forEach(function (row) {
+      var gubun = String(row[gubunCol] || '');
+      if (gubun.split(',').map(function (s) { return s.trim(); }).indexOf('강사') < 0) return;
+      var name = String(row[nameCol] || '').trim();
+      var nick = (nickCol >= 0 && nickCol < row.length) ? String(row[nickCol] || '').trim() : '';
+      var display = nick || name;
+      if (display && !seen[display]) { seen[display] = true; out.push(display); }
+    });
+    return { success: true, teachers: out };
+  } catch (e) {
+    Logger.log('[getTeacherNicknames] ' + e);
+    return { success: false, message: String(e), teachers: [] };
+  }
+}
+
+/**
  * 이름 하나를 표시명으로 변환 (TelegramService 내부 호출용)
  * 우선순위: (1) members 강사 닉네임 매핑 → (2) settings 옛 매핑 폴백 → (3) 원본
  * @param {string} name
@@ -9203,6 +9231,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'updateJosaField') return updateJosaField(payload.josa_id, payload.field, payload.value);
   if (action === 'getItemsBySakun') return getItemsBySakun(payload.sakun_no);
   if (action === 'registerDamulgeon') return registerDamulgeon(payload.items || [], payload.m_name_id);
+  if (action === 'getTeacherNicknames') return getTeacherNicknames();
   return { success: false, message: '알 수 없는 josa API 액션: ' + action };
 }
 
