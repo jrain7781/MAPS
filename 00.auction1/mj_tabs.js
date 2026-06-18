@@ -373,6 +373,15 @@
   function _dmCard() { return document.querySelector('.mjcap-card[data-cap="dm"]'); }
   function _dmNorm(s) { return String(s || '').replace(/\s+/g, ''); }
   function _dmComma(v) { v = String(v || ''); if (!v) return ''; var n = parseInt(v.replace(/[^0-9]/g, ''), 10); return isNaN(n) ? escapeHtml(v) : n.toLocaleString(); }
+  function _dmToday() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function _dmNormDate(v) {
+    var m = String(v || '').match(/(\d{4})-(\d{2})-(\d{2})/); if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    var s = String(v || '').replace(/[^0-9]/g, '');
+    if (s.length === 8) return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+    if (s.length === 6) return '20' + s.slice(0, 2) + '-' + s.slice(2, 4) + '-' + s.slice(4, 6);
+    return String(v || '');
+  }
+  function _dmStripJosa(addr) { return String(addr || '').replace(/\s*\[[^\]]*\]/g, '').trim(); }   // 주소의 [조사내용/특이사항] 제거
   function _dmLog(msg, cls) { var c = _dmCard(); if (!c) return; var el = c.querySelector('[data-role="log"]'); if (!el) return; var s = document.createElement('span'); if (cls) s.className = cls; s.textContent = msg + '\n'; el.appendChild(s); el.scrollTop = el.scrollHeight; }
   function _dmSetStatus(t, cls) { var c = _dmCard(); if (!c) return; var el = c.querySelector('[data-role="status"]'); if (el) { el.textContent = t; el.className = 'mjcap-status' + (cls ? ' ' + cls : ''); } }
   function _dmSetRunning(running) {
@@ -416,6 +425,8 @@
     _dmEl('dmClearBtn')?.addEventListener('click', dmClear);
     _dmEl('dmBulkApplyBtn')?.addEventListener('click', dmBulkApply);
     _dmEl('dmOnlyJinhaeng')?.addEventListener('change', dmRenderGrid);
+    _dmEl('dmTodayOnly')?.addEventListener('change', function () { dmRenderGrid(); _dmRenderExisting(); });
+    _dmEl('dmHideJosa')?.addEventListener('change', dmRenderGrid);
     _dmRestoreState();
   }
   // ----- 불러오기: MAPS 기등록 조회 (+법원 자동, 대조용 저장) -----
@@ -444,10 +455,14 @@
   function _dmRenderExisting() {
     var box = _dmEl('dmExisting'); if (!box) return;
     if (!_dmExisting.length) { box.innerHTML = '<div style="padding:5px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:12px">MAPS 기등록 없음 — 법원 입력 후 ▶ 크롤. (등록 시 담당자 기본 대표님)</div>'; return; }
-    var rows = _dmExisting.map(function (it) {
-      return '<tr style="border-bottom:1px solid #fde68a"><td style="padding:2px 8px">' + escapeHtml(it.sakun_no) + '</td><td style="padding:2px 8px">' + escapeHtml(it.court) + '</td><td style="padding:2px 8px;font-weight:700;color:#0e7490">' + escapeHtml(it.stu_member) + '</td><td style="padding:2px 8px">' + escapeHtml(it.m_name_id || '') + '</td><td style="padding:2px 8px">' + escapeHtml(String(it.in_date || '')) + '</td></tr>';
+    var todayOnly = _dmEl('dmTodayOnly') && _dmEl('dmTodayOnly').checked;
+    var today = _dmToday();
+    var list = _dmExisting.filter(function (it) { return !(todayOnly && it.in_date && _dmNormDate(it.in_date) < today); });
+    if (!list.length) { box.innerHTML = '<div style="padding:5px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:12px">📌 MAPS 기등록 ' + _dmExisting.length + '건 (오늘 이후 0건 — 「오늘이후만」 해제 시 전부 표시)</div>'; return; }
+    var rows = list.map(function (it) {
+      return '<tr style="border-bottom:1px solid #fde68a"><td style="padding:2px 8px;white-space:nowrap">' + escapeHtml(_dmNormDate(it.in_date)) + '</td><td style="padding:2px 8px">' + escapeHtml(it.sakun_no) + '</td><td style="padding:2px 8px">' + escapeHtml(it.court) + '</td><td style="padding:2px 8px;font-weight:700;color:#0e7490">' + escapeHtml(it.stu_member) + '</td><td style="padding:2px 8px">' + escapeHtml(it.m_name_id || '') + '</td></tr>';
     }).join('');
-    box.innerHTML = '<div style="font-weight:700;color:#92400e;margin-bottom:2px;font-size:12px">📌 MAPS 기등록 ' + _dmExisting.length + '건 (크롤 결과의 MAPS열과 대조)</div><table style="width:100%;font-size:12px;border-collapse:collapse;background:#fffbeb;border:1px solid #fde68a;border-radius:6px"><thead><tr style="color:#92400e"><th style="padding:2px 8px;text-align:left">사건번호</th><th style="padding:2px 8px;text-align:left">법원</th><th style="padding:2px 8px;text-align:left">상태</th><th style="padding:2px 8px;text-align:left">담당</th><th style="padding:2px 8px;text-align:left">입찰일</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    box.innerHTML = '<div style="font-weight:700;color:#92400e;margin-bottom:2px;font-size:12px">📌 MAPS 기등록 ' + list.length + (list.length < _dmExisting.length ? '/' + _dmExisting.length : '') + '건 (크롤 결과의 MAPS열과 대조)</div><table style="width:100%;font-size:12px;border-collapse:collapse;background:#fffbeb;border:1px solid #fde68a;border-radius:6px"><thead><tr style="color:#92400e"><th style="padding:2px 8px;text-align:left">입찰일</th><th style="padding:2px 8px;text-align:left">사건번호</th><th style="padding:2px 8px;text-align:left">법원</th><th style="padding:2px 8px;text-align:left">상태</th><th style="padding:2px 8px;text-align:left">담당</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
   // ----- 크롤: 05.dm.py 실행 → RESULT| 가로채 그리드 -----
   function dmCrawl() {
@@ -515,23 +530,31 @@
   function dmRenderGrid() {
     var box = _dmEl('dmGrid'); if (!box) return;
     var onlyJin = _dmEl('dmOnlyJinhaeng') && _dmEl('dmOnlyJinhaeng').checked;
-    var rows = _dmRows.map(function (r, i) { return { r: r, i: i }; }).filter(function (x) { return !onlyJin || x.r.state === '진행'; });
+    var todayOnly = _dmEl('dmTodayOnly') && _dmEl('dmTodayOnly').checked;
+    var hideJosa = _dmEl('dmHideJosa') && _dmEl('dmHideJosa').checked;
+    var today = _dmToday();
+    var rows = _dmRows.map(function (r, i) { return { r: r, i: i }; }).filter(function (x) {
+      if (onlyJin && x.r.state !== '진행') return false;
+      if (todayOnly && x.r.in_date && _dmNormDate(x.r.in_date) < today) return false;   // 입찰일 오늘 이후만
+      return true;
+    });
     var jin = _dmRows.filter(r => r.state === '진행').length;
     var sum = _dmEl('dmGridSummary');
-    if (sum) sum.textContent = _dmRows.length ? ('총 ' + _dmRows.length + '건 · 진행 ' + jin + ' · 매각 ' + _dmRows.filter(r => r.state === '매각').length + ' · 불가 ' + _dmRows.filter(r => r.state === '불가').length + (_dmExisting.length ? ' · MAPS기등록 ' + _dmExisting.length : '')) : '';
+    if (sum) sum.textContent = _dmRows.length ? ('표시 ' + rows.length + ' / 총 ' + _dmRows.length + '건 · 진행 ' + jin + ' · 매각 ' + _dmRows.filter(r => r.state === '매각').length + ' · 불가 ' + _dmRows.filter(r => r.state === '불가').length + (_dmExisting.length ? ' · MAPS기등록 ' + _dmExisting.length : '')) : '';
     if (!_dmRows.length) { box.innerHTML = '<div style="padding:14px;text-align:center;color:#9ca3af">크롤하면 물건 리스트가 표시됩니다.</div>'; if (_dmEl('dmRegisterBtn')) _dmEl('dmRegisterBtn').disabled = true; return; }
     var body = rows.map(function (x) {
       var r = x.r, ex = _dmMatchExisting(r);
       var canReg = (r.state === '진행');
       if (r._manager == null) r._manager = (ex && (ex.m_name_id || '').trim()) ? ex.m_name_id : '대표님';
+      var dispAddr = hideJosa ? _dmStripJosa(r.address) : (r.address || '');
       return '<tr style="border-bottom:1px solid #f1f5f9' + (canReg ? '' : ';opacity:.62') + '">'
         + '<td style="text-align:center;padding:4px"><input type="checkbox" class="dm-cb" data-idx="' + x.i + '"' + (canReg ? ' checked' : '') + '></td>'
+        + '<td style="padding:4px 6px;white-space:nowrap">' + escapeHtml(_dmNormDate(r.in_date)) + '</td>'
         + '<td style="padding:4px 6px">' + _dmStateBadge(r.state) + '</td>'
         + '<td style="padding:4px 6px">' + _dmMapsBadge(ex) + '</td>'
         + '<td style="padding:4px 6px;font-weight:600;white-space:nowrap">' + escapeHtml(r.sakun_no || '') + '</td>'
-        + '<td style="padding:4px 6px;white-space:nowrap">' + escapeHtml(r.in_date || '') + '</td>'
         + '<td style="padding:4px 6px;white-space:nowrap">' + escapeHtml(r.court || '') + '</td>'
-        + '<td style="padding:4px 6px;min-width:220px" title="' + escapeHtml(r.address || '') + '">' + escapeHtml(r.address || '') + '</td>'
+        + '<td style="padding:4px 6px;min-width:220px" title="' + escapeHtml(r.address || '') + '">' + escapeHtml(dispAddr) + '</td>'
         + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + escapeHtml(r.building_area || '') + '</td>'
         + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + _dmComma(r.lowest_price) + '</td>'
         + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + _dmComma(r.deposit) + '</td>'
@@ -540,7 +563,7 @@
     }).join('');
     box.innerHTML = '<table style="width:100%;border-collapse:collapse;white-space:nowrap"><thead style="position:sticky;top:0;background:#f8fafc;z-index:1"><tr style="color:#6b7280;border-bottom:1px solid #e5e7eb">'
       + '<th style="width:30px;padding:5px"><input type="checkbox" id="dmSelAll" title="보이는 행 전체선택"></th>'
-      + '<th style="padding:5px 6px;text-align:left">크롤상태</th><th style="padding:5px 6px;text-align:left">MAPS</th><th style="padding:5px 6px;text-align:left">사건번호</th><th style="padding:5px 6px;text-align:left">입찰일</th><th style="padding:5px 6px;text-align:left">법원</th><th style="padding:5px 6px;text-align:left">주소</th><th style="padding:5px 6px;text-align:right">건물면적</th><th style="padding:5px 6px;text-align:right">최저가</th><th style="padding:5px 6px;text-align:right">보증금</th><th style="padding:5px 6px;text-align:left">담당자</th>'
+      + '<th style="padding:5px 6px;text-align:left">입찰일</th><th style="padding:5px 6px;text-align:left">크롤상태</th><th style="padding:5px 6px;text-align:left">MAPS</th><th style="padding:5px 6px;text-align:left">사건번호</th><th style="padding:5px 6px;text-align:left">법원</th><th style="padding:5px 6px;text-align:left">주소</th><th style="padding:5px 6px;text-align:right">건물면적</th><th style="padding:5px 6px;text-align:right">최저가</th><th style="padding:5px 6px;text-align:right">보증금</th><th style="padding:5px 6px;text-align:left">담당자</th>'
       + '</tr></thead><tbody>' + body + '</tbody></table>';
     box.querySelectorAll('.dm-mgr').forEach(function (inp) { inp.addEventListener('change', function () { var r = _dmRows[parseInt(inp.dataset.idx, 10)]; if (r) { r._manager = inp.value; _dmSaveState(); } }); });
     var selAll = _dmEl('dmSelAll'); if (selAll) selAll.addEventListener('change', function () { box.querySelectorAll('.dm-cb').forEach(function (cb) { cb.checked = selAll.checked; }); });
