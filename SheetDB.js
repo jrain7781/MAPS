@@ -536,9 +536,20 @@ function getItemsBySakun(sakunNo) {
     var maxCols = sheet.getMaxColumns();
     var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, maxCols).getValues();
     // ITEM_HEADERS index: id0 in-date1 sakun_no2 court3 stu_member4 m_name_id5 ... deposit21 lowest_price22
+    // [오늘 이후만] 입찰일(in-date) 이 오늘 이전인 기등록은 제외 (다물건 불러오기 — 지난 건 노이즈)
+    var todayY6 = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMdd');
+    var _toY6 = function (v) {
+      if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyMMdd');
+      var s = String(v || '').replace(/[^0-9]/g, '');
+      if (s.length >= 8 && s.slice(0, 2) === '20') s = s.slice(2);
+      if (s.length > 6) s = s.slice(-6);
+      return s.length === 6 ? s : '';
+    };
     var out = [];
     data.forEach(function (r) {
       if (_normSakunBase_(r[2]) !== base) return;
+      var d6 = _toY6(r[1]);
+      if (d6 && d6 < todayY6) return;   // 오늘 이전 입찰일 제외
       out.push({
         id: String(r[0] || ''),
         in_date: formatParamsDate(r[1]),
