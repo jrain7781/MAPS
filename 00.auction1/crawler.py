@@ -1583,7 +1583,7 @@ class Handler(SimpleHTTPRequestHandler):
             _READ_ACTIONS = {
                 "getProgressList", "getProgressMatchSummary", "getProgressMatchByDate",
                 "getReportRecipientCandidates", "getInvestigators",
-                "get7DaysBugaList", "getTodayMaegakList",
+                "get7DaysBugaList", "getTodayMaegakList", "getItemsBySakun",
             }
             _retries = 2 if str(payload.get("api_action") or "") in _READ_ACTIONS else 0
             result = _gas_post(payload, timeout=timeout, retries=_retries)

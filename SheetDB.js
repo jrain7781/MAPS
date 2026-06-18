@@ -298,6 +298,49 @@ function ensureItemReasonColumns_() {
 }
 
 /**
+ * items 헤더명 → 1-based 열번호. 없으면 -1. (members_note/stu_reason 처럼 ITEM_HEADERS 밖 끝열 조회용)
+ */
+function _itemColByHeader_(sheet, name) {
+  var maxCols = sheet.getMaxColumns();
+  var hdr = sheet.getRange(1, 1, 1, maxCols).getValues()[0];
+  for (var c = 0; c < hdr.length; c++) { if (String(hdr[c]).trim() === name) return c + 1; }
+  return -1;
+}
+
+/**
+ * [다물건] 신규 items 열 'address'(주소) / 'building_area'(건물면적) 를 시트 맨끝(우측)에 보장.
+ * ⚠️ ITEM_HEADERS 에 append 하면 index23=X열(chuchen_read)과 충돌하므로, members_note 처럼
+ *    헤더명으로 우측 끝에만 추가/조회한다. 기존 열은 절대 건드리지 않음.
+ * 반환: { addressCol, areaCol } (1-based)
+ */
+function ensureItemDmColumns_() {
+  var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+  if (!sheet) return { addressCol: -1, areaCol: -1 };
+  var maxCols = sheet.getMaxColumns();
+  var hdr = sheet.getRange(1, 1, 1, maxCols).getValues()[0];
+  var find = function (nm) { for (var c = 0; c < hdr.length; c++) { if (String(hdr[c]).trim() === nm) return c + 1; } return -1; };
+  var addressCol = find('address'), areaCol = find('building_area');
+  // 우측 끝(마지막 비어있지 않은 헤더) 다음부터 신규 추가
+  var lastUsed = hdr.length;
+  while (lastUsed > 0 && !String(hdr[lastUsed - 1] || '').trim()) lastUsed--;
+  var toAdd = [];
+  if (addressCol < 0) toAdd.push('address');
+  if (areaCol < 0) toAdd.push('building_area');
+  if (toAdd.length) {
+    var need = lastUsed + toAdd.length;
+    if (need > maxCols) sheet.insertColumnsAfter(maxCols, need - maxCols);
+    var col = lastUsed;
+    toAdd.forEach(function (nm) {
+      col++;
+      sheet.getRange(1, col).setValue(nm);
+      if (nm === 'address') addressCol = col; else areaCol = col;
+    });
+    SpreadsheetApp.flush();
+  }
+  return { addressCol: addressCol, areaCol: areaCol };
+}
+
+/**
  * 한 물건의 불가/폐기 사유(stu_reason=Z=26) + 상세(stu_reason_detail=AA=27)만 저장.
  * id 로 행을 찾아 26/27 열만 기록. 기존 열 무손상.
  */
@@ -467,6 +510,136 @@ function _createDataImpl(inDate, sakunNo, court, stuMember, mNameId, mName, bidP
   }
 
   return { success: true, message: '성공적으로 등록되었습니다.', data: createdItem };
+}
+
+/**
+ * [다물건] 사건번호 정규화 — 물건번호(N)·공백 제거한 기본 사건번호. 대조 매칭용.
+ * 예: '2023타경919(4)' → '2023타경919'
+ */
+function _normSakunBase_(s) {
+  s = String(s || '').trim().replace(/\s+/g, '');
+  s = s.replace(/\(\d+\)\s*$/, '');   // 끝의 (물건번호) 제거
+  return s;
+}
+
+/**
+ * [다물건] 입력 사건번호로 items 기등록 행을 조회 (물건번호 변형 포함). 불러오기/대조용.
+ */
+function getItemsBySakun(sakunNo) {
+  try {
+    var base = _normSakunBase_(sakunNo);
+    if (!base) return { success: false, message: '사건번호 필요', items: [] };
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, items: [], count: 0 };
+    var addrCol = _itemColByHeader_(sheet, 'address');
+    var areaCol = _itemColByHeader_(sheet, 'building_area');
+    var maxCols = sheet.getMaxColumns();
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, maxCols).getValues();
+    // ITEM_HEADERS index: id0 in-date1 sakun_no2 court3 stu_member4 m_name_id5 ... deposit21 lowest_price22
+    var out = [];
+    data.forEach(function (r) {
+      if (_normSakunBase_(r[2]) !== base) return;
+      out.push({
+        id: String(r[0] || ''),
+        in_date: formatParamsDate(r[1]),
+        sakun_no: String(r[2] || ''),
+        court: String(r[3] || ''),
+        stu_member: String(r[4] || ''),
+        m_name_id: String(r[5] || ''),
+        m_name: String(r[6] || ''),
+        deposit: String(r[21] || ''),
+        lowest_price: String(r[22] || ''),
+        address: addrCol > 0 ? String(r[addrCol - 1] || '') : '',
+        building_area: areaCol > 0 ? String(r[areaCol - 1] || '') : ''
+      });
+    });
+    return { success: true, items: out, count: out.length };
+  } catch (e) {
+    Logger.log('[getItemsBySakun] ' + e);
+    return { success: false, message: String(e), items: [] };
+  }
+}
+
+/**
+ * [다물건] 크롤한 진행 물건들을 items 에 '상품'으로 일괄 등록 (히스토리 ITEM_CREATE).
+ * @param {Array} items - [{ in_date, sakun_no(물건번호 포함), court, address, building_area, lowest_price, deposit }]
+ * @param {string} mNameId - 담당자(기본 '대표님')
+ * 중복=(in-date, sakun_no, court). stu_member='상품', 회원 공란. 신규열 address/building_area 는 헤더명 열에 기록.
+ */
+function registerDamulgeon(items, mNameId) {
+  var __lock = LockService.getScriptLock();
+  try { __lock.waitLock(20000); } catch (e) { return { success: false, message: '저장이 혼잡합니다. 잠시 후 다시 시도해 주세요.' }; }
+  try {
+    items = items || [];
+    if (!items.length) return { success: true, saved: 0, skipped: 0, results: [] };
+    var mid = String(mNameId || '').trim() || '대표님';
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, message: 'items 시트 없음' };
+    ensureColumnExists(sheet, 16);
+    var dm = ensureItemDmColumns_();
+    var addrCol = dm.addressCol, areaCol = dm.areaCol;
+
+    // 기존 중복키 수집 (B,C,D = in-date, sakun_no, court)
+    var existing = {};
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, 1, lastRow - 1, 4).getValues().forEach(function (r) {
+        existing[[String(r[1]), String(r[2]).trim(), String(r[3]).trim()].join('|')] = true;
+      });
+    }
+
+    var saved = 0, skipped = 0, results = [], history = [];
+    items.forEach(function (it) {
+      var inDate = String(it.in_date || it['in-date'] || '').trim();
+      var sakun = String(it.sakun_no || '').trim();
+      var court = String(it.court || '').trim();
+      if (!sakun || !court) { results.push({ sakun_no: sakun, ok: false, msg: '사건번호/법원 누락' }); skipped++; return; }
+      if (!isAllowedCourt_(court)) { results.push({ sakun_no: sakun, ok: false, msg: '허용되지 않은 법원' }); skipped++; return; }
+      var key = [inDate, sakun, court].join('|');
+      if (existing[key]) { results.push({ sakun_no: sakun, ok: false, msg: '이미 등록됨' }); skipped++; return; }
+
+      var id = String(new Date().getTime()) + String(Math.floor(Math.random() * 1000));
+      var regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      var row = ITEM_HEADERS.map(function (h) {
+        switch (h) {
+          case 'id': return id;
+          case 'in-date': return inDate;
+          case 'sakun_no': return sakun;
+          case 'court': return court;
+          case 'stu_member': return '상품';
+          case 'm_name_id': return mid;
+          case 'reg_date': return regDate;
+          case 'reg_member': return String(it.reg_member || '') || mid;
+          case 'lowest_price': return String(it.lowest_price || '');
+          case 'deposit': return String(it.deposit || '');
+          default: return '';
+        }
+      });
+      sheet.appendRow(row);
+      var newRowNum = sheet.getLastRow();
+      if (addrCol > 0) sheet.getRange(newRowNum, addrCol).setValue(String(it.address || ''));
+      if (areaCol > 0) sheet.getRange(newRowNum, areaCol).setValue(String(it.building_area || ''));
+      existing[key] = true;
+      saved++;
+      results.push({ sakun_no: sakun, ok: true, id: id });
+
+      // 히스토리 (createData 와 동일 패턴, trigger=auction-manager-dm)
+      var batchTs = String(new Date().getTime());
+      history.push({ action: 'ITEM_CREATE', item_id: id, member_id: '', member_name: '', trigger_type: 'auction-manager-dm', note: court + ' ' + sakun + ' (다물건 상품등록)', req_id: batchTs });
+      [['stu_member', '상품'], ['m_name_id', mid], ['lowest_price', String(it.lowest_price || '')], ['deposit', String(it.deposit || '')]].forEach(function (kv) {
+        if (kv[1] !== '') history.push({ action: 'ITEM_CREATE', item_id: id, field_name: kv[0], from_value: '', to_value: kv[1], trigger_type: 'auction-manager-dm', note: '최초 등록 값', req_id: batchTs });
+      });
+    });
+
+    if (history.length && typeof writeItemHistoryBatch_ === 'function') writeItemHistoryBatch_(history);
+    SpreadsheetApp.flush();
+    return { success: true, saved: saved, skipped: skipped, results: results };
+  } catch (e) {
+    Logger.log('[registerDamulgeon] ' + e);
+    return { success: false, message: String(e) };
+  } finally {
+    __lock.releaseLock();
+  }
 }
 
 /**
@@ -9027,6 +9200,8 @@ function handleJosaApiPost_(payload) {
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
   if (action === 'updateJosaField') return updateJosaField(payload.josa_id, payload.field, payload.value);
+  if (action === 'getItemsBySakun') return getItemsBySakun(payload.sakun_no);
+  if (action === 'registerDamulgeon') return registerDamulgeon(payload.items || [], payload.m_name_id);
   return { success: false, message: '알 수 없는 josa API 액션: ' + action };
 }
 
