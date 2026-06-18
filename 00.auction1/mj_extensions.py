@@ -602,6 +602,11 @@ def handle_get(handler) -> bool:
         import hanbang
         _send_json(handler, 200, hanbang.region_info(qs.get("sido", "1")))
         return True
+    if path == "/api/hanbang/regions":
+        import hanbang
+        refresh = qs.get("refresh", "0") in ("1", "true", "yes")
+        _send_json(handler, 200, hanbang.regions_overview(refresh=refresh))
+        return True
     if path == "/api/hanbang/files":
         import hanbang
         _send_json(handler, 200, {"ok": True, "files": hanbang.list_export_files()})
@@ -709,7 +714,8 @@ def handle_post(handler) -> bool:
             delay = float(payload.get("delay", 1.0) or 1.0)
             mode = payload.get("mode", "single")
             sido = payload.get("sido")
-            run_id = hanbang.start(sp, ep, delay, mode=mode, sido=sido)
+            sido_list = payload.get("sido_list")
+            run_id = hanbang.start(sp, ep, delay, mode=mode, sido=sido, sido_list=sido_list)
             _send_json(handler, 200, {"ok": True, "run_id": run_id})
         except Exception as e:
             _send_json(handler, 500, {"ok": False, "error": str(e)})

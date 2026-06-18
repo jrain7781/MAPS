@@ -26,36 +26,75 @@
     el.scrollTop = el.scrollHeight;
   }
   function _hanSetRunning(running) {
-    const r = _hanEl('hanRunBtn'), g = _hanEl('hanRegionBtn'), o = _hanEl('hanRegionOneBtn'), s = _hanEl('hanStopBtn');
+    const r = _hanEl('hanRunBtn'), g = _hanEl('hanRegionBtn'), q = _hanEl('hanQueueBtn'), s = _hanEl('hanStopBtn');
     if (r) r.disabled = running;
     if (g) g.disabled = running;
-    if (o) o.disabled = running;
+    if (q) q.disabled = running;
     if (s) s.disabled = !running;
   }
   function initHanbangOnce() {
     if (_hanBound) return; _hanBound = true;
     _hanEl('hanRunBtn')?.addEventListener('click', hanRun);
     _hanEl('hanRegionBtn')?.addEventListener('click', hanRunRegions);
-    _hanEl('hanRegionOneBtn')?.addEventListener('click', hanRunOneRegion);
     _hanEl('hanStopBtn')?.addEventListener('click', hanStop);
     _hanEl('hanDownloadBtn')?.addEventListener('click', hanDownload);
-    _hanEl('hanSido')?.addEventListener('change', hanLoadSidoInfo);
     _hanEl('hanFilesRefresh')?.addEventListener('click', hanLoadFiles);
-    hanLoadSidoInfo();
+    _hanEl('hanRegionsRefresh')?.addEventListener('click', function () { hanLoadRegions(true); });
+    _hanEl('hanQueueBtn')?.addEventListener('click', hanRunQueue);
+    _hanEl('hanRegionAll')?.addEventListener('change', function () {
+      document.querySelectorAll('#hanRegionRows .han-rgn-cb').forEach(function (cb) { cb.checked = _hanEl('hanRegionAll').checked; });
+      hanUpdateQueueSummary();
+    });
+    hanLoadRegions(false);
     hanLoadFiles();
   }
-  function hanLoadSidoInfo() {
-    const sel = _hanEl('hanSido'), info = _hanEl('hanSidoInfo');
-    if (!sel || !info) return;
-    info.textContent = '건수 조회 중…';
-    fetch('/api/hanbang/region-info?sido=' + encodeURIComponent(sel.value))
-      .then(r => r.json()).then(j => {
-        if (!j || !j.ok) { info.textContent = '건수 조회 실패(' + ((j && j.error) || '?') + ')'; return; }
-        let s = '약 ' + (j.est_count || 0).toLocaleString() + '건 (' + (j.total_pages || 0).toLocaleString() + '쪽)';
-        if (j.done) s += ' · ✅이미 완료';
-        else if (j.last_page) s += ' · ' + j.last_page.toLocaleString() + '쪽까지 받음';
-        info.textContent = s;
-      }).catch(() => { info.textContent = '건수 조회 오류'; });
+  // ----- 지역별 작업 등록 테이블 -----
+  let _hanRegions = [];
+  function hanLoadRegions(refresh) {
+    const tb = _hanEl('hanRegionRows'); if (!tb) return;
+    if (refresh) tb.innerHTML = '<tr><td colspan="4" style="padding:12px;text-align:center;color:#9ca3af">건수 조회 중… (지역당 1요청, 잠시만)</td></tr>';
+    fetch('/api/hanbang/regions?refresh=' + (refresh ? '1' : '0'))
+      .then(r => r.json()).then(j => { _hanRegions = (j && j.regions) || []; _hanRenderRegions(); })
+      .catch(e => { tb.innerHTML = '<tr><td colspan="4" style="padding:12px;text-align:center;color:#ef4444">목록 오류: ' + e + '</td></tr>'; });
+  }
+  function _hanRenderRegions() {
+    const tb = _hanEl('hanRegionRows'); if (!tb) return;
+    if (!_hanRegions.length) { tb.innerHTML = '<tr><td colspan="4" style="padding:12px;text-align:center;color:#9ca3af">데이터 없음</td></tr>'; return; }
+    tb.innerHTML = _hanRegions.map(function (r) {
+      let prog;
+      if (r.done) prog = '<span style="color:#16a34a;font-weight:700">✅ 완료</span>';
+      else if (r.last_page > 0) {
+        const pct = r.total_pages ? Math.floor(r.last_page / r.total_pages * 100) : 0;
+        prog = '<div style="display:flex;align-items:center;gap:5px"><div style="flex:1;height:7px;background:#e5e7eb;border-radius:4px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:#0e7490"></div></div><span style="font-size:11px;color:#0e7490;white-space:nowrap">' + r.last_page.toLocaleString() + '/' + r.total_pages.toLocaleString() + '쪽 ' + pct + '%</span></div>';
+      } else prog = '<span style="color:#9ca3af">대기</span>';
+      return '<tr style="border-bottom:1px solid #f1f5f9">'
+        + '<td style="text-align:center;padding:5px"><input type="checkbox" class="han-rgn-cb" value="' + r.sido + '" data-est="' + r.est_count + '"></td>'
+        + '<td style="padding:5px 8px;font-weight:600;color:#374151">' + escapeHtml(r.name) + '</td>'
+        + '<td style="padding:5px 8px;text-align:right;color:#0e7490;font-weight:600">' + (r.est_count || 0).toLocaleString() + '건 <span style="font-size:10px;color:#9ca3af;font-weight:400">/' + (r.total_pages || 0).toLocaleString() + '쪽</span></td>'
+        + '<td style="padding:5px 8px">' + prog + '</td></tr>';
+    }).join('');
+    tb.querySelectorAll('.han-rgn-cb').forEach(function (cb) { cb.addEventListener('change', hanUpdateQueueSummary); });
+    hanUpdateQueueSummary();
+  }
+  function hanUpdateQueueSummary() {
+    const cbs = Array.from(document.querySelectorAll('#hanRegionRows .han-rgn-cb'));
+    const checked = cbs.filter(function (c) { return c.checked; });
+    const sum = _hanEl('hanQueueSummary');
+    const totEst = checked.reduce(function (a, c) { return a + (parseInt(c.dataset.est, 10) || 0); }, 0);
+    if (sum) sum.textContent = checked.length ? ('선택 ' + checked.length + '개 · 약 ' + totEst.toLocaleString() + '건') : '';
+    const all = _hanEl('hanRegionAll');
+    if (all) all.checked = cbs.length > 0 && checked.length === cbs.length;
+  }
+  function hanRunQueue() {
+    if (_hanRunId) { alert('이미 실행 중입니다. 먼저 중지하세요.'); return; }
+    const checked = Array.from(document.querySelectorAll('#hanRegionRows .han-rgn-cb')).filter(function (c) { return c.checked; });
+    if (!checked.length) { alert('등록할 지역을 1개 이상 체크하세요.'); return; }
+    const sidos = checked.map(function (c) { return c.value; });
+    const totEst = checked.reduce(function (a, c) { return a + (parseInt(c.dataset.est, 10) || 0); }, 0);
+    const delay = parseFloat(_hanEl('hanDelay').value) || 1.0;
+    const names = checked.map(function (c) { return c.closest('tr').children[1].textContent; }).join(', ');
+    if (!confirm('작업 등록 ' + checked.length + '개 지역을 순서대로 크롤합니다.\n\n· 순서: ' + names + '\n· 약 ' + totEst.toLocaleString() + '건 (지역마다 엑셀 1개)\n· 25쪽마다 중간저장 + 끊겨도 이어서 재개(완료 지역 건너뜀)\n· 큰 작업이면 PC 절전/재부팅 안 되게 해주세요.\n\n시작할까요?')) return;
+    _hanLaunch({ mode: 'queue', sido_list: sidos, delay: delay });
   }
   function _hanFmtSize(n) { n = n || 0; if (n >= 1048576) return (n / 1048576).toFixed(1) + 'MB'; if (n >= 1024) return Math.round(n / 1024) + 'KB'; return n + 'B'; }
   function hanLoadFiles() {
@@ -106,15 +145,6 @@
     if (!confirm('전국 17개 시도를 지역별로 자동 크롤합니다.\n\n· 시도마다 엑셀 1개씩 저장 폴더에 자동 저장\n· 25쪽마다 중간저장 + 끊겨도 이어서 재개(완료 지역은 건너뜀)\n· 전체 ~25,000건이라 반나절~하루 소요. PC 절전/재부팅 안 되게 해주세요.\n\n시작할까요?')) return;
     _hanLaunch({ delay: delay, mode: 'regions' });
   }
-  function hanRunOneRegion() {
-    if (_hanRunId) { alert('이미 실행 중입니다. 먼저 중지하세요.'); return; }
-    const sel = _hanEl('hanSido');
-    const sido = sel ? sel.value : '1';
-    const name = sel ? sel.options[sel.selectedIndex].text : '';
-    const delay = parseFloat(_hanEl('hanDelay').value) || 1.0;
-    if (!confirm(`[${name}] 지역만 전체 크롤합니다.\n그 지역 엑셀 1개로 저장 폴더에 저장됩니다.\n(이미 완료된 지역이면 건너뜁니다 — 다시 받으려면 해당 파일 삭제 후 실행)\n\n시작할까요?`)) return;
-    _hanLaunch({ delay: delay, mode: 'region_one', sido: sido });
-  }
   function _hanPoll() {
     if (!_hanRunId) return;
     fetch('/api/hanbang/logs?run_id=' + encodeURIComponent(_hanRunId) + '&offset=' + _hanOffset)
@@ -122,9 +152,10 @@
         if (!j.ok) { _hanLogLine('[로그 오류] ' + (j.error || '?')); _hanSetRunning(false); _hanRunId = null; return; }
         if (j.lines && j.lines.length) { j.lines.forEach(_hanLogLine); _hanOffset += j.lines.length; }
         const tail = (j.status === 'running' ? ' …' : (j.status === 'done' ? ' · 완료' : ' · 오류'));
-        if (j.mode === 'regions') {
+        if (j.mode === 'regions' || j.mode === 'queue') {
+          const lbl = (j.mode === 'queue') ? '작업 큐' : '지역별';
           _hanEl('hanProgress').textContent =
-            `지역별 진행: ${j.region_done}/${j.region_total} 지역 완료 · 현재 [${j.cur_region || '-'}] ${j.cur_page}쪽 · 누적 ${j.count}건` + tail;
+            `${lbl} 진행: ${j.region_done}/${j.region_total} 지역 완료 · 현재 [${j.cur_region || '-'}] ${j.cur_page}쪽 · 누적 ${j.count}건` + tail;
         } else {
           _hanEl('hanProgress').textContent =
             `진행: ${j.start_page}~${j.end_page}쪽 중 현재 ${j.cur_page}쪽 · 수집 ${j.count}건` + tail;
@@ -134,7 +165,8 @@
           _hanSetRunning(false);
           if (j.has_file) { _hanEl('hanDownloadBtn').disabled = false; }
           _hanRunId = null;
-          hanLoadFiles();   // 완료 후 저장 폴더 목록 갱신
+          hanLoadFiles();      // 완료 후 저장 폴더 목록 갱신
+          hanLoadRegions(false); // 지역 진행도 갱신
         }
       }).catch(e => { _hanLogLine('[polling 오류] ' + e); setTimeout(_hanPoll, 2000); });
   }

@@ -48,6 +48,7 @@ SIDO = [
 
 SAVE_EVERY_PAGES = 25   # 지역별 모드: N쪽마다 중간저장 + 체크포인트 (≈250건)
 _CKPT_PATH = os.path.join(_EXPORT_DIR, "hanbang_checkpoint.json")
+_TOTALS_CACHE = os.path.join(_EXPORT_DIR, "hanbang_region_totals.json")   # 지역별 총페이지 캐시
 
 # ── 작업 레지스트리 (run_id -> state) ───────────────────────────
 _runs = {}            # run_id -> dict
@@ -263,7 +264,7 @@ def _do_region(state, session, idx, sido, name, delay, ck, label, force=False):
     state["cur_region"] = name
     fpath = _region_file(idx, name)
     if info.get("done"):
-        state["region_done"] = max(state.get("region_done", 0), idx)
+        state["region_done"] = state.get("region_done", 0) + 1
         _log(state, f"⏭ {label} {name} — 이미 완료, 건너뜀 (다시 받으려면 파일 삭제 후 실행)")
         return "skipped"
     first, blocked = _fetch(session, _list_page_url(1, sido), BASE + "/", delay, state)
@@ -375,6 +376,57 @@ def _run_one_region(state, sido_code, delay):
             state["status"] = "done"
 
 
+def _run_queue(state, sido_list, delay):
+    """작업 등록 큐 — 사용자가 선택한 시도들을 등록 순서대로 순차 크롤. 시도마다 엑셀 1개.
+    각 지역은 체크포인트/재개(완료 지역은 건너뜀). 중간에 멈춰도 다음 실행 때 이어서."""
+    try:
+        os.makedirs(_EXPORT_DIR, exist_ok=True)
+        # 선택 코드 → (idx, sido, name) 해석 (SIDO 정의 순 유지)
+        items = []
+        seen = set()
+        for code in (sido_list or []):
+            try:
+                cv = int(code)
+            except Exception:
+                continue
+            if cv in seen:
+                continue
+            seen.add(cv)
+            m = [(i, s, n) for i, (s, n) in enumerate(SIDO, 1) if s == cv]
+            if m:
+                items.append(m[0])
+        if not items:
+            _log(state, "❌ 등록된 지역이 없습니다.")
+            state["status"] = "error"
+            return
+        session = _session()
+        if not _warm(state, session, delay, None):
+            state["status"] = "error"
+            return
+        state["region_total"] = len(items)
+        names = ", ".join(n for _, _, n in items)
+        _log(state, f"🧾 작업 등록 {len(items)}개 지역 순차 크롤 (지연 {delay}s · {SAVE_EVERY_PAGES}쪽마다 중간저장)")
+        _log(state, f"   순서: {names}")
+        ck = _load_ckpt()
+        for k, (idx, sido, name) in enumerate(items, 1):
+            if state.get("cancel"):
+                _log(state, "⏹ 사용자 중지")
+                break
+            res = _do_region(state, session, idx, sido, name, delay, ck, f"[{k}/{len(items)}]")
+            if res == "cancelled":
+                break
+        state["status"] = "done"
+        _log(state, f"🏁 작업 종료 — 완료 {state.get('region_done', 0)}/{len(items)} 지역")
+    except Exception as e:
+        import traceback
+        _log(state, "❌ 예외: " + str(e))
+        _log(state, traceback.format_exc())
+        state["status"] = "error"
+    finally:
+        if state["status"] not in ("done", "error"):
+            state["status"] = "done"
+
+
 # ── 체크포인트 / 엑셀 저장·로드 ─────────────────────────────
 def _load_ckpt() -> dict:
     try:
@@ -459,8 +511,8 @@ def _load_xlsx_rows(path):
 # ============================================================
 # 공개 API (mj_extensions 라우터에서 호출)
 # ============================================================
-def start(start_page: int = 1, end_page: int = 1, delay: float = 1.0, mode: str = "single", sido=None):
-    # 동시 실행 방지 — 진행 중 작업(전국/지역/단일) 있으면 거부 (체크포인트 파일 경쟁 방지)
+def start(start_page: int = 1, end_page: int = 1, delay: float = 1.0, mode: str = "single", sido=None, sido_list=None):
+    # 동시 실행 방지 — 진행 중 작업(전국/지역/단일/큐) 있으면 거부 (체크포인트 파일 경쟁 방지)
     with _runs_lock:
         if any(s.get("status") == "running" for s in _runs.values()):
             raise RuntimeError("이미 다른 한방 크롤이 실행 중입니다. 먼저 중지하세요.")
@@ -479,6 +531,8 @@ def start(start_page: int = 1, end_page: int = 1, delay: float = 1.0, mode: str 
         _runs[run_id] = state
     if mode == "regions":
         t = threading.Thread(target=_run_regions, args=(state, delay), daemon=True)
+    elif mode == "queue":
+        t = threading.Thread(target=_run_queue, args=(state, list(sido_list or []), delay), daemon=True)
     elif mode == "region_one":
         t = threading.Thread(target=_run_one_region, args=(state, int(sido or 1), delay), daemon=True)
     else:
@@ -558,6 +612,44 @@ def region_info(sido_code):
                 "last_page": int(info.get("last_page") or 0)}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+def regions_overview(refresh=False):
+    """17개 시도 전체 목록 + 총페이지/추정건수(캐시) + 현재 진행도(체크포인트, 라이브).
+    refresh=True면 사이트에서 총페이지 다시 조회(지역당 1요청, ~0.4s 페이싱)."""
+    cache = {}
+    if not refresh:
+        try:
+            cache = json.load(open(_TOTALS_CACHE, encoding="utf-8"))
+        except Exception:
+            cache = {}
+    ck = _load_ckpt()
+    session = None
+    out = []
+    fetched = False
+    for idx, (sido, name) in enumerate(SIDO, 1):
+        total = cache.get(str(sido))
+        if not total:
+            if session is None:
+                session = _session()
+            html, blocked = _fetch_simple(session, _list_page_url(1, sido))
+            total = _detect_total_pages(html) if (html and not blocked) else 0
+            cache[str(sido)] = total
+            fetched = True
+            time.sleep(0.4)   # WAF 회피 페이싱
+        info = ck.get(str(idx), {})
+        out.append({
+            "idx": idx, "sido": sido, "name": name,
+            "total_pages": int(total or 0), "est_count": int(total or 0) * 10,
+            "done": bool(info.get("done")), "last_page": int(info.get("last_page") or 0),
+        })
+    if fetched:
+        try:
+            os.makedirs(_EXPORT_DIR, exist_ok=True)
+            json.dump(cache, open(_TOTALS_CACHE, "w", encoding="utf-8"), ensure_ascii=False)
+        except Exception:
+            pass
+    return {"ok": True, "regions": out}
 
 
 def list_export_files():
