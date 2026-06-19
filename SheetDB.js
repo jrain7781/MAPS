@@ -933,6 +933,7 @@ function getDamulgeonList() {
         link_item_id: String(r[0] || ''),                                  // 사건번호 클릭 → 수정모달용
         in_date: inDate, sakun_no: sakun, mulgeon_no: _dmMulgeonNo_(sakun), court: court,
         stu_member: stu,                  // 상태 = items (단일관리)
+        bid_state: String(r[11] || ''),  // 입찰상태(전달 전/완료) — 입찰가 색상용 (L열=11)
         m_name_id: String(r[5] || ''),   // 담당자 — 좌측 카드 표시용
         prop_kind: pkCol > 0 ? String(r[pkCol - 1] || '') : '',   // 물건종류 (items 연계)
         address: address,
