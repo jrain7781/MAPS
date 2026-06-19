@@ -713,6 +713,165 @@ function registerDamulgeon(items, mNameId) {
  *   남길 행 = 같은 키 중 ① auction_id 있는 행 우선 ② 그다음 가장 위(작은 행번호).
  *   GAS 에디터에서: dedupeDamulgeonProducts() 로 점검 → dedupeDamulgeonProducts(true) 로 삭제.
  */
+/* =======================================================================
+ * 대리입찰 명의관리 — member_accounts (정규화 시트)  [Phase 1]
+ *   회원의 본인(idx0) + 명의(idx1~10) 별 인적사항(구분/이름/직업/주민·법인번호/
+ *   사업자번호/전화/주소/계좌) 관리. 등급은 저장 안 하고 class 연계.
+ * ===================================================================== */
+const DB_MEMBER_ACCOUNTS_SHEET = 'member_accounts';
+const MEMBER_ACCOUNTS_HEADERS = ['member_id','idx','gubun','name','job','jumin_corp','biz_no','phone','address','account_bank','account_no','account_name','update_date'];
+
+function _getMemberAccountsSheet_() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(DB_MEMBER_ACCOUNTS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(DB_MEMBER_ACCOUNTS_SHEET);
+    sh.getRange(1, 1, 1, MEMBER_ACCOUNTS_HEADERS.length).setValues([MEMBER_ACCOUNTS_HEADERS]);
+    sh.setFrozenRows(1);
+  } else if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, MEMBER_ACCOUNTS_HEADERS.length).setValues([MEMBER_ACCOUNTS_HEADERS]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// member_accounts 전체 → { 'memberId|idx': {헤더:값} }
+function _readMemberAccountsMap_() {
+  var sh = _getMemberAccountsSheet_();
+  var lr = sh.getLastRow();
+  var map = {};
+  if (lr < 2) return map;
+  var vals = sh.getRange(2, 1, lr - 1, MEMBER_ACCOUNTS_HEADERS.length).getValues();
+  vals.forEach(function (r) {
+    var o = {};
+    MEMBER_ACCOUNTS_HEADERS.forEach(function (h, i) { o[h] = (r[i] == null) ? '' : r[i]; });
+    map[String(o.member_id).trim() + '|' + String(parseInt(o.idx, 10))] = o;
+  });
+  return map;
+}
+
+// member.class_id → "class_type - class_name - class_grade - class_loc"
+function _memberGradeStr_(classId) {
+  classId = String(classId || '').trim();
+  if (!classId) return '';
+  try {
+    var classes = readAllClasses();
+    for (var i = 0; i < classes.length; i++) {
+      if (String(classes[i].class_id).trim() === classId) {
+        var c = classes[i];
+        return [c.class_type, c.class_name, c.class_grade, c.class_loc]
+          .filter(function (x) { return String(x || '').trim() !== ''; }).join(' - ');
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+
+/**
+ * 회원의 본인(0) + 명의(1~10) 목록 반환.
+ * members의 명의(nameN/nameN_gubun) + member_accounts 상세를 머지, 본인은 members값 시드.
+ * @return {Object} { success, member_id, member_name, grade, accounts:[{idx,gubun,name,job,jumin_corp,biz_no,phone,address,account_bank,account_no,account_name,grade,saved}] }
+ */
+function getMemberAccounts(memberId) {
+  memberId = String(memberId || '').trim();
+  if (!memberId) return { success: false, msg: 'memberId 없음' };
+  var m = getMemberById_(memberId);
+  if (!m) return { success: false, msg: '회원 없음: ' + memberId };
+  var det = _readMemberAccountsMap_();
+  var grade = _memberGradeStr_(m.class_id);
+
+  function pick(saved, key, seed) {
+    if (saved && String(saved[key] || '') !== '') return String(saved[key]);
+    return seed != null ? String(seed) : '';
+  }
+  function mk(idx, gubunDefault, name, seed) {
+    var s = det[memberId + '|' + idx] || null;
+    return {
+      idx: idx,
+      gubun: pick(s, 'gubun', gubunDefault || (idx === 0 ? '개인' : '')),
+      name: pick(s, 'name', name),
+      job: (s && String(s.job || '') !== '') ? String(s.job) : '회사원',
+      jumin_corp: s ? String(s.jumin_corp || '') : '',
+      biz_no: s ? String(s.biz_no || '') : '',
+      phone: pick(s, 'phone', seed ? seed.phone : ''),
+      address: pick(s, 'address', seed ? seed.address : ''),
+      account_bank: pick(s, 'account_bank', seed ? seed.account_bank : ''),
+      account_no: pick(s, 'account_no', seed ? seed.account_no : ''),
+      account_name: pick(s, 'account_name', seed ? (seed.account_name || name) : name),
+      grade: grade,
+      saved: !!s
+    };
+  }
+
+  var accounts = [];
+  accounts.push(mk(0, '개인', m.member_name, {
+    phone: m.phone, address: m.address,
+    account_bank: m.account_bank, account_no: m.account_no, account_name: m.account_name
+  }));
+  for (var i = 1; i <= 10; i++) {
+    var nn = String(m['name' + i] || '').trim();
+    if (!nn) continue;
+    accounts.push(mk(i, String(m['name' + i + '_gubun'] || ''), nn, null));
+  }
+  return { success: true, member_id: memberId, member_name: String(m.member_name || ''), grade: grade, accounts: accounts };
+}
+
+/**
+ * (member_id, idx) upsert 저장. data = {gubun,name,job,jumin_corp,biz_no,phone,address,account_bank,account_no,account_name}
+ */
+function saveMemberAccount(memberId, idx, data) {
+  memberId = String(memberId || '').trim();
+  idx = parseInt(idx, 10);
+  if (!memberId || isNaN(idx)) return { success: false, msg: '키 오류' };
+  data = data || {};
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { success: false, msg: 'lock 실패' }; }
+  try {
+    var sh = _getMemberAccountsSheet_();
+    var lr = sh.getLastRow();
+    var rows = lr >= 2 ? sh.getRange(2, 1, lr - 1, MEMBER_ACCOUNTS_HEADERS.length).getValues() : [];
+    var foundRow = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === memberId && parseInt(rows[i][1], 10) === idx) { foundRow = i + 2; break; }
+    }
+    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    var rec = {
+      member_id: memberId, idx: idx,
+      gubun: String(data.gubun || ''), name: String(data.name || ''),
+      job: String(data.job || '회사원'),
+      jumin_corp: String(data.jumin_corp || ''), biz_no: String(data.biz_no || ''),
+      phone: String(data.phone || ''), address: String(data.address || ''),
+      account_bank: String(data.account_bank || ''), account_no: String(data.account_no || ''),
+      account_name: String(data.account_name || ''), update_date: now
+    };
+    var arr = MEMBER_ACCOUNTS_HEADERS.map(function (h) { return rec[h]; });
+    if (foundRow > 0) sh.getRange(foundRow, 1, 1, arr.length).setValues([arr]);
+    else sh.appendRow(arr);
+    return { success: true, idx: idx, update_date: now };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/** [자체검증용] GAS 에디터에서 실행 — 시트생성/저장/조회 동작 확인 */
+function _test_memberAccounts_() {
+  var sh = _getMemberAccountsSheet_();
+  Logger.log('시트: ' + sh.getName() + ' / 헤더수: ' + MEMBER_ACCOUNTS_HEADERS.length);
+  // 첫 회원 1명으로 조회 테스트
+  var members = readAllMembersNew();
+  if (!members.length) { Logger.log('회원 없음'); return; }
+  var mid = String(members[0].member_id);
+  var before = getMemberAccounts(mid);
+  Logger.log('조회(' + mid + '): ' + JSON.stringify(before).substring(0, 800));
+  // 본인(idx0) 주민번호 테스트 저장 → 재조회
+  var sv = saveMemberAccount(mid, 0, { gubun: '개인', name: before.member_name, jumin_corp: '900101-1234567', phone: '010-0000-0000' });
+  Logger.log('저장결과: ' + JSON.stringify(sv));
+  var after = getMemberAccounts(mid);
+  var self0 = after.accounts.filter(function (a) { return a.idx === 0; })[0];
+  Logger.log('재조회 본인: ' + JSON.stringify(self0));
+  Logger.log('=> jumin_corp 저장확인: ' + (self0 && self0.jumin_corp === '900101-1234567' ? 'OK' : 'FAIL'));
+}
+
 function dedupeDamulgeonProducts(apply) {
   var __lock = LockService.getScriptLock();
   try { __lock.waitLock(30000); } catch (e) { return { success: false, message: '저장이 혼잡합니다. 잠시 후 다시 시도해 주세요.' }; }
