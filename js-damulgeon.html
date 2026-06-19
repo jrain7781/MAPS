@@ -911,7 +911,15 @@
       return String(v==null?'':v);
     }
     function cq(s){ s=String(s==null?'':s); return /[",\n\r]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; }
-    var rows=[ cols.map(function(c){return cq(c.label);}).join(',') ];
+    var rows=[], g=_groups.filter(function(x){return x.group_key===_selKey;})[0];
+    if(g){   // 상단: 그리드 상단(사건번호/법원/입찰일/물건수/담당/주소)
+      var mgr=_firstMgr(g)?_mgrDisplay(_firstMgr(g)).disp:'';
+      var addrFull=_addrBase((g.items[0]&&g.items[0].address)||g.address_base||'');
+      rows.push(['사건번호',g.sakun_base||'','법원',g.court||'','입찰일',g.in_date||'','물건수',String(g.count||''),'담당',mgr].map(cq).join(','));
+      rows.push(['주소',addrFull].map(cq).join(','));
+      rows.push('');
+    }
+    rows.push(cols.map(function(c){return cq(c.label);}).join(','));
     items.forEach(function(it,idx){ rows.push(cols.map(function(c){return cq(fmt(c,it,idx));}).join(',')); });
     var csvStr='﻿'+rows.join('\r\n');   // BOM(한글 엑셀)
     var fn='다물건_'+(_selKey?String(_selKey).replace(/[^0-9A-Za-z가-힣]/g,'_'):'전체')+'.csv';
