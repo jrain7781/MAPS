@@ -546,7 +546,17 @@
   }
   function _dmMapsBadge(ex) {
     if (!ex) return '<span style="color:#cbd5e1;font-size:11px">미등록</span>';
-    return '<span style="display:inline-block;padding:1px 6px;border-radius:9px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700" title="MAPS 현재 상태">' + escapeHtml(ex.stu_member || '?') + '</span>';
+    var aidTxt = ex.auction_id ? ('옥션ID ' + ex.auction_id) : '옥션ID 없음';
+    return '<span style="display:inline-block;padding:1px 6px;border-radius:9px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700" title="MAPS 현재 상태 · ' + escapeAttr(aidTxt) + '">' + escapeHtml(ex.stu_member || '?') + '</span>';
+  }
+  function _dmPid(r) { return (r && (r.auction_id || r.pid)) || ''; }
+  // 옥션ID 셀 마커: 기등록인데 MAPS에 옥션ID 없으면 빨강●, 크롤값과 다르면 주황≠ (등록 시 기록/갱신됨)
+  function _dmAidMark(r, ex) {
+    if (!ex) return '';
+    var pid = _dmPid(r);
+    if (!ex.auction_id) return ' <span style="color:#dc2626;font-weight:700" title="MAPS에 옥션ID 없음 — 등록 시 기록됨">●</span>';
+    if (pid && String(ex.auction_id) !== String(pid)) return ' <span style="color:#d97706;font-weight:700" title="MAPS 옥션ID=' + escapeAttr(ex.auction_id) + ' / 크롤=' + escapeAttr(pid) + ' (등록 시 갱신)">≠</span>';
+    return '';
   }
   function dmRenderGrid() {
     var box = _dmEl('dmGrid'); if (!box) return;
@@ -571,7 +581,7 @@
         + '<td style="padding:4px 6px">' + _dmStateBadge(r.state) + '</td>'
         + '<td style="padding:4px 6px">' + _dmMapsBadge(ex) + '</td>'
         + '<td style="padding:4px 6px;font-weight:600;white-space:nowrap">' + escapeHtml(r.sakun_no || '') + '</td>'
-        + '<td style="padding:4px 6px;white-space:nowrap;color:#64748b;font-size:12px" title="옥션원 물건ID">' + escapeHtml(r.auction_id || r.pid || '') + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap;color:#64748b;font-size:12px" title="옥션원 물건ID">' + escapeHtml(_dmPid(r)) + _dmAidMark(r, ex) + '</td>'
         + '<td style="padding:4px 6px;white-space:nowrap">' + escapeHtml(r.court || '') + '</td>'
         + '<td style="padding:4px 6px;min-width:220px" title="' + escapeHtml(r.address || '') + '">' + escapeHtml(dispAddr) + '</td>'
         + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + escapeHtml(r.building_area || '') + '</td>'
@@ -650,6 +660,10 @@
       if (!j || !j.success) { alert('등록 실패: ' + ((j && (j.message || j.error)) || '?')); return; }
       var auInfo = j.auction_updated ? (' / 옥션ID갱신 ' + j.auction_updated) : '';
       _dmLog('💾 등록 결과 — 성공 ' + j.saved + ' / 건너뜀 ' + j.skipped + auInfo, 'log-ok');
+      // 행별 옥션ID 처리 요약 (다중 전송 시 각 행이 어떻게 됐는지 진단)
+      var auN = { 'new': 0, updated: 0, same: 0, none: 0 };
+      (j.results || []).forEach(function (rr) { if (rr.au && auN[rr.au] != null) auN[rr.au]++; });
+      _dmLog('  옥션ID — 신규기록 ' + auN['new'] + ' · 갱신 ' + auN.updated + ' · 동일 ' + auN.same + ' · pid없음 ' + auN.none, (auN.none ? 'log-err' : 'log-ok'));
       (j.results || []).forEach(function (rr) { if (!rr.ok) _dmLog('  · ' + rr.sakun_no + ': ' + rr.msg, 'log-err'); });
       alert('등록 완료 — 성공 ' + j.saved + '건, 건너뜀(중복 등) ' + j.skipped + '건' + (j.auction_updated ? (', 옥션ID 갱신 ' + j.auction_updated + '건') : '') + '.');
       dmLoad();

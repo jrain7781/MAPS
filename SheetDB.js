@@ -572,6 +572,7 @@ function getItemsBySakun(sakunNo) {
         stu_member: String(r[4] || ''),
         m_name_id: String(r[5] || ''),
         m_name: String(r[6] || ''),
+        auction_id: String(r[15] || ''),   // P열=옥션ID — 기등록 행의 MAPS 저장값(갱신 확인용)
         deposit: String(r[21] || ''),
         lowest_price: String(r[22] || ''),
         address: addrCol > 0 ? String(r[addrCol - 1] || '') : '',
@@ -626,17 +627,18 @@ function registerDamulgeon(items, mNameId) {
       if (existing[key]) {
         // [옥션ID 갱신] 이미 MAPS 에 있는 건도 크롤한 옥션 ID 를 items.auction_id 에 업데이트(기존 값과 다를 때만)
         var dupMsg = '이미 등록됨';
+        var au = aid ? 'same' : 'none';   // 행별 옥션ID 처리상태 (진단용)
         if (aid && auctionIdCol > 0 && typeof existing[key] === 'number') {
           var curAid = String(sheet.getRange(existing[key], auctionIdCol).getValue() || '').trim();
           if (curAid !== aid) {
             sheet.getRange(existing[key], auctionIdCol).setValue(aid);
-            auctionUpdated++;
+            auctionUpdated++; au = 'updated';
             dupMsg = '이미 등록(옥션ID 갱신)';
             var exId = String(sheet.getRange(existing[key], 1).getValue() || '');   // 해당 행 items.id
             history.push({ action: 'ITEM_UPDATE', item_id: exId, field_name: 'auction_id', from_value: curAid, to_value: aid, trigger_type: 'auction-manager-dm', note: court + ' ' + sakun + ' (옥션ID 갱신)', req_id: String(new Date().getTime()) });
           }
         }
-        results.push({ sakun_no: sakun, ok: false, msg: dupMsg }); skipped++; return;
+        results.push({ sakun_no: sakun, ok: false, msg: dupMsg, au: au }); skipped++; return;
       }
 
       var itMid = String(it.m_name_id || '').trim() || mid;   // 물건별 담당자 우선, 없으면 기본('대표님')
@@ -664,7 +666,7 @@ function registerDamulgeon(items, mNameId) {
       if (areaCol > 0) sheet.getRange(newRowNum, areaCol).setValue(String(it.building_area || ''));
       existing[key] = newRowNum;
       saved++;
-      results.push({ sakun_no: sakun, ok: true, id: id });
+      results.push({ sakun_no: sakun, ok: true, id: id, au: aid ? 'new' : 'none' });
 
       // 히스토리 (createData 와 동일 패턴, trigger=auction-manager-dm)
       var batchTs = String(new Date().getTime());
