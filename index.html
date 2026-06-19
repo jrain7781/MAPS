@@ -2195,7 +2195,7 @@
                             oninput="DM.applyFilter()" onfocus="this.select()" onclick="this.select()">
                         <datalist id="dmMemberList"></datalist>
                         <span style="border-left:1px solid #e5e7eb;height:20px;margin:0 2px"></span>
-                        <select id="dmBulkAction" onchange="DM.bulkActionChange()" class="border rounded px-2 py-1" style="font-size:12px">
+                        <select id="dmBulkAction" class="border rounded px-2 py-1" style="font-size:12px">
                             <option value="">일괄작업 선택</option>
                             <option value="member">회원</option>
                             <option value="myungui">명의</option>
@@ -2204,10 +2204,8 @@
                             <option value="hyang">향</option>
                             <option value="auth_method">인증</option>
                         </select>
-                        <span id="dmBulkValWrap"></span>
-                        <button onclick="DM.bulkApply2()"
+                        <button onclick="DM.bulkOpenModal()"
                             class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded font-bold" style="font-size:12px">일괄적용</button>
-                        <datalist id="dmMemberNamesList"></datalist>
                         <button onclick="DM.exportCsv()"
                             class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded font-bold" style="font-size:12px">📥 엑셀(CSV) 출력</button>
                         <span id="dmGridInfo" class="text-gray-400" style="font-size:12px"></span>
@@ -2224,6 +2222,31 @@
                         </table>
                     </div>
                 </main>
+
+                <!-- 일괄작업 모달 (상단 값입력/회원검색 + 하단 선택 물건 리스트) -->
+                <div id="dmBulkModal" class="content-hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)DM.bulkClose()">
+                    <div style="background:#fff;border-radius:10px;width:580px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+                        <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:8px">
+                            <h3 style="font-size:16px;font-weight:800;color:#111827">일괄작업 — <span id="dmBulkActLabel"></span></h3>
+                            <span id="dmBulkCnt" style="font-size:12px;color:#6b7280"></span>
+                            <button onclick="DM.bulkClose()" style="margin-left:auto;font-size:18px;color:#9ca3af;line-height:1">✕</button>
+                        </div>
+                        <div id="dmBulkInputArea" style="padding:14px 16px;border-bottom:1px solid #f1f5f9"></div>
+                        <div style="padding:6px 16px;font-size:12px;color:#6b7280">적용 대상 (체크된 물건 <span id="dmBulkListCnt"></span>)</div>
+                        <div style="flex:1;overflow:auto;padding:0 16px 8px">
+                            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                                <thead style="position:sticky;top:0;background:#f8fafc;z-index:1"><tr style="color:#6b7280;border-bottom:1px solid #e5e7eb">
+                                    <th style="text-align:left;padding:5px 6px">사건/물건</th><th style="text-align:left;padding:5px 6px">법원</th><th style="text-align:right;padding:5px 6px">최저가</th><th style="text-align:left;padding:5px 6px">적용값</th>
+                                </tr></thead>
+                                <tbody id="dmBulkList"></tbody>
+                            </table>
+                        </div>
+                        <div style="padding:12px 16px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end">
+                            <button onclick="DM.bulkClose()" style="padding:6px 14px;border-radius:6px;background:#f3f4f6;color:#374151;font-size:13px">취소</button>
+                            <button id="dmBulkConfirmBtn" onclick="DM.bulkConfirm()" style="padding:6px 16px;border-radius:6px;background:#4f46e5;color:#fff;font-weight:700;font-size:13px">적용</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- ================================ 조사물건 관리 (SearchManagement) — 구버전 (비활성, 코드 안전 보존용) ================================ -->
