@@ -897,20 +897,28 @@
     });
   }
 
+  // 엑셀(CSV) 출력 — 현재 화면(보이는 컬럼+표시값) 그대로
   DM.exportCsv = function(){
-    if (typeof google==='undefined'||!google.script||!google.script.run) return;
-    var keys=_selKey?[_selKey]:[];
-    google.script.run
-      .withSuccessHandler(function(res){
-        if(!res||!res.success){ alert('CSV 실패: '+(res&&res.message||'?')); return; }
-        var fn='다물건_'+(_selKey?String(_selKey).replace(/[^0-9A-Za-z가-힣]/g,'_'):'전체')+'.csv';
-        var blob=new Blob([res.csv],{type:'text/csv;charset=utf-8;'});
-        var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fn;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        setTimeout(function(){ URL.revokeObjectURL(a.href); },1500);
-      })
-      .withFailureHandler(function(e){ alert('CSV 오류: '+(e&&e.message||e)); })
-      .exportDamulgeonCsv(keys);
+    if(!_selKey){ alert('사건을 선택하세요.'); return; }
+    var cols=visCols().filter(function(c){ return c.t!=='check' && c.t!=='auction'; });   // 체크박스·옥션버튼 제외
+    var items=filteredItems();
+    if(!items.length){ alert('출력할 행이 없습니다.'); return; }
+    function fmt(c,it,idx){
+      if(c.t==='tg') return it.tg==='Y'?'T':'';
+      if(c.t==='status') return String(it.stu_member||'');
+      var v=computed(c.f,it,idx);
+      if(c.num) v=_num(v)?_comma(v):'';
+      return String(v==null?'':v);
+    }
+    function cq(s){ s=String(s==null?'':s); return /[",\n\r]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; }
+    var rows=[ cols.map(function(c){return cq(c.label);}).join(',') ];
+    items.forEach(function(it,idx){ rows.push(cols.map(function(c){return cq(fmt(c,it,idx));}).join(',')); });
+    var csvStr='﻿'+rows.join('\r\n');   // BOM(한글 엑셀)
+    var fn='다물건_'+(_selKey?String(_selKey).replace(/[^0-9A-Za-z가-힣]/g,'_'):'전체')+'.csv';
+    var blob=new Blob([csvStr],{type:'text/csv;charset=utf-8;'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fn;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },1500);
   };
 
   // ── 일괄등록 모달 (회원/명의/입찰가 %) ──
