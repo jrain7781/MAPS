@@ -30,6 +30,8 @@
   .dm-mcard-tabs { display:flex; flex-wrap:wrap; gap:4px; padding:8px 12px; border-bottom:1px solid #eef2f7; }
   .dm-mc-tab { font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; color:#475569; }
   .dm-mc-tab.on { background:#2563eb; color:#fff; border-color:#2563eb; font-weight:700; }
+  .dm-mc-tab.dm-mc-add { border-color:#16a34a; color:#16a34a; }
+  .dm-mc-tab.dm-mc-add.on { background:#16a34a; color:#fff; border-color:#16a34a; }
   .dm-mcard-body { flex:1; overflow:auto; padding:12px 16px; }
   .dm-mc-row { display:flex; align-items:center; padding:5px 2px; border-bottom:1px solid #f1f5f9; font-size:13px; }
   .dm-mc-row .k { width:92px; flex-shrink:0; color:#64748b; }
@@ -99,8 +101,9 @@
     { label:'물건',     f:'mulgeon_no',   t:'ro',     a:'center', w:42,  src:'items',frozen:true },
     { label:'상태',     f:'stu_member',   t:'status', a:'center', w:56,  src:'items',frozen:true },
     { label:'T',        f:'tg',           t:'tg',     a:'center', w:28,  src:'link', frozen:true },
-    { label:'회원',     f:'member_name',  t:'ro',     a:'left',   w:96,  src:'items',frozen:true },
-    { label:'명의',     f:'myungui',      t:'text',   a:'left',   w:68,  src:'dm',   frozen:true },
+    { label:'회원',     f:'_pMember',     t:'ro',     a:'left',   w:80,  src:'items',frozen:true },
+    { label:'구분',     f:'_pGubun',      t:'ro',     a:'center', w:46,  src:'items',frozen:true },
+    { label:'명의',     f:'_pMyungui',    t:'ro',     a:'left',   w:76,  src:'items',frozen:true },
     { label:'등급',     f:'grade',        t:'ro',     a:'center', w:54,  src:'link' },
     { label:'주소',     f:'_addrBase',    t:'ro',     a:'left',   w:190, src:'items', hideable:true },
     { label:'동',       f:'_dong',        t:'ro',     a:'center', w:42,  src:'items' },
@@ -254,8 +257,25 @@
     renderDetail(g);
   }
 
+  // ITEMS.m_name("회원 (구분) 명의") → {member, gubun(본인/개인/법인), myungui}
+  function _memberNameById(id){ id=String(id||'').trim(); if(!id) return ''; var ms=_members||[]; for(var i=0;i<ms.length;i++){ if(String(ms[i].member_id)===id) return String(ms[i].name||ms[i].member_name||''); } return ''; }
+  function _parseMName(mn, memberId){
+    var s=String(mn||'').trim(), real=_memberNameById(memberId);
+    var m=s.match(/^(.*?)\s*\(([^)]*)\)\s*(.*)$/);
+    if(m){
+      var mem=(m[1]||'').trim(), gb=(m[2]||'').trim(), my=(m[3]||'').trim();
+      if(!mem) mem=real||'';
+      if(!my) return { member:mem||real, gubun:'본인', myungui:'' };
+      return { member:mem||real, gubun:(gb||'개인'), myungui:my };
+    }
+    if(real && s && s!==real && s.indexOf(real)===0){ var rest=s.substring(real.length).trim(); if(rest) return { member:real, gubun:'개인', myungui:rest }; }
+    return { member:(real||s), gubun:'본인', myungui:'' };
+  }
   function computed(f, it, idx){
     if (f==='_seq') return String(idx+1);
+    if (f==='_pMember')  return _parseMName(it.member_name, it.member_id).member;
+    if (f==='_pGubun')   return it.member_name ? _parseMName(it.member_name, it.member_id).gubun : '';
+    if (f==='_pMyungui') return _parseMName(it.member_name, it.member_id).myungui;
     if (f==='_addrBase') return _addrBase(it.address);
     if (f==='_dong') return _parseAddr(it.address).dong;
     if (f==='_floor') return _parseAddr(it.address).floor;
@@ -280,7 +300,7 @@
       var v=computed(c.f,it,idx); if(c.num) v=_num(v)?_comma(v):'';
       if(c.f==='mulgeon_no' && it.link_item_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(v)+'</span></td>';   // 사건번호 숨김 시 물건번호로 모달
       if(c.f==='_total'){ var done3=(_num(it.bidprice)>0 && _num(it.deposit)>0 && _num(it._fee)>0); return '<td class="'+cls+'" style="'+style+(done3?';color:#2563eb;font-weight:800':'')+'">'+esc(v)+'</td>'; }   // 입찰가·보증금·진행비 모두 입력 → 굵은 파랑
-      if(c.f==='member_name' && it.member_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-member-link" onclick="DM._hl(this);DM.openMyungui(\''+esc(it.member_id)+'\',\''+esc(it.myungui||'')+'\',\''+esc(v)+'\',\''+esc(it.link_item_id)+'\')" title="클릭 → 명의/계좌 정보">'+esc(v)+'</span></td>';   // 회원 클릭 → 명의 카드
+      if(c.f==='_pMember' && it.member_id){ var _pm=_parseMName(it.member_name,it.member_id); return '<td class="'+cls+'" style="'+style+'"><span class="dm-member-link" onclick="DM._hl(this);DM.openMyungui(\''+esc(it.member_id)+'\',\''+esc(_pm.myungui)+'\',\''+esc(_pm.member)+'\',\''+esc(it.link_item_id)+'\')" title="클릭 → 명의/계좌 정보">'+esc(v)+'</span></td>'; }   // 회원 클릭 → 명의 카드(선택 명의 표시)
       return '<td class="'+cls+'" style="'+style+'">'+esc(v)+'</td>';
     }
     if(c.t==='num' || c.t==='text' || c.t==='bid'){
@@ -351,14 +371,20 @@
     DM.mcSelect(sel, true);
   }
   function _renderMcSelector(){
-    var others=_mcAccounts.filter(function(a){return a.idx!==0;});
+    var others=_mcAccounts.filter(function(a){return a.idx>0;});
     var html='<span class="dm-mc-tab'+(_mcSel===0?' on':'')+'" onclick="DM.mcSelect(0)">본인</span>';
     if(others.length){
       var opts='<option value="">명의 선택…</option>'+others.map(function(a){ return '<option value="'+a.idx+'"'+(a.idx===_mcSel?' selected':'')+'>'+esc(a.name||('명의'+a.idx))+' ('+esc(a.gubun||'개인')+')</option>'; }).join('');
       html+='<select class="dm-mc-sel" onchange="DM.mcSelect(parseInt(this.value,10))">'+opts+'</select>';
     }
+    html+='<span class="dm-mc-tab dm-mc-add'+(_mcSel===-1?' on':'')+'" onclick="DM.mcNewMyungui()">➕ 명의 등록</span>';
     _mcEl('dmMcTabs').innerHTML=html;
   }
+  DM.mcNewMyungui=function(){
+    _mcAccounts=_mcAccounts.filter(function(a){return a.idx!==-1;});
+    _mcAccounts.push({ idx:-1, gubun:'개인', name:'', job:'회사원', jumin_corp:'', biz_no:'', phone:'', address:'', account_bank:'', account_no:'', account_name:'', grade:(_mcAccounts[0]?_mcAccounts[0].grade:'') });
+    DM.mcSelect(-1, true);
+  };
   DM.mcSelect = function(idx, skipCapture){
     if(isNaN(idx)) return;
     if(!skipCapture) _mcCapture();
@@ -383,7 +409,10 @@
     h+=inRow('계좌번호','account_no',a.account_no,'acc');
     h+=inRow('계좌명의','account_name',a.account_name);
     h+=inRow('직업','job',a.job);
-    h+='<div class="dm-mc-actions"><button onclick="DM.mcSave()" class="dm-mc-btn-save">저장</button><button onclick="DM.mcPrint()" class="dm-mc-btn-print" title="위임장+기일입찰표 인쇄">📄 출력</button><span id="dmMcSaveMsg" style="font-size:12px"></span></div>';
+    h+='<div class="dm-mc-actions">'+(idx===-1
+      ? '<button onclick="DM.mcAddSave()" class="dm-mc-btn-save" style="background:#16a34a">명의 등록</button>'
+      : '<button onclick="DM.mcSave()" class="dm-mc-btn-save">저장</button><button onclick="DM.mcPrint()" class="dm-mc-btn-print" title="위임장+기일입찰표 인쇄">📄 출력</button>')
+      +'<span id="dmMcSaveMsg" style="font-size:12px"></span></div>';
     _mcEl('dmMcBody').innerHTML=h;
   };
   DM.mcReveal=function(el){ el.value=(el.getAttribute('data-raw')||''); };
@@ -409,6 +438,19 @@
         if(_mcCache[_mcMemberId]){ var ca=(_mcCache[_mcMemberId].accounts||[]).filter(function(x){return x.idx===_mcSel;})[0]; if(ca) Object.assign(ca, data, {saved:true}); }
       } else { if(msg){ msg.textContent='실패: '+esc((r&&r.msg)||''); msg.style.color='#dc2626'; } }
     }).withFailureHandler(function(e){ if(msg){ msg.textContent='실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).saveMemberAccount(_mcMemberId, _mcSel, data);
+  };
+  DM.mcAddSave=function(){
+    if(!_mcMemberId) return;
+    _mcCapture();
+    var a=_mcAccounts.filter(function(x){return x.idx===-1;})[0]; if(!a) return;
+    if(!String(a.name||'').trim()){ alert('명의자 이름을 입력하세요.'); return; }
+    var data={ gubun:a.gubun, name:a.name, job:a.job, jumin_corp:a.jumin_corp, biz_no:a.biz_no, phone:a.phone, address:a.address, account_bank:a.account_bank, account_no:a.account_no, account_name:a.account_name };
+    var msg=_mcEl('dmMcSaveMsg'); if(msg){ msg.textContent='등록 중…'; msg.style.color='#64748b'; }
+    var mid=_mcMemberId, mname=(_mcEl('dmMcMember')||{}).textContent||'';
+    google.script.run.withSuccessHandler(function(r){
+      if(r&&r.success){ delete _mcCache[mid]; DM.openMyungui(mid, data.name, mname); }
+      else { if(msg){ msg.textContent='등록 실패: '+esc((r&&r.msg)||''); msg.style.color='#dc2626'; } }
+    }).withFailureHandler(function(e){ if(msg){ msg.textContent='등록 실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).addMemberMyungui(mid, data);
   };
   DM.closeMyungui = function(){ var card=_mcEl('dmMyunguiCard'); if(card){ card.classList.remove('open'); card.setAttribute('aria-hidden','true'); } };
   DM.mcResizeStart=function(ev){

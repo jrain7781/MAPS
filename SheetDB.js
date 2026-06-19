@@ -854,6 +854,46 @@ function saveMemberAccount(memberId, idx, data) {
 }
 
 /**
+ * 회원에게 신규 명의 추가: members의 빈 nameN 슬롯(1~10)에 nameN_gubun/nameN 기록 + member_accounts 상세 저장.
+ * data = {gubun(개인/법인), name, job, jumin_corp, biz_no, phone, address, account_bank, account_no, account_name}
+ */
+function addMemberMyungui(memberId, data) {
+  memberId = String(memberId || '').trim();
+  if (!memberId) return { success: false, msg: 'memberId 없음' };
+  data = data || {};
+  var name = String(data.name || '').trim();
+  if (!name) return { success: false, msg: '명의자 이름 없음' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { success: false, msg: 'lock 실패' }; }
+  var idx = 0, errMsg = '';
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_MEMBERS_SHEET_NAME);
+    if (!sheet) { errMsg = 'members 시트 없음'; }
+    else {
+      var lr = sheet.getLastRow();
+      var match = sheet.getRange(2, 1, lr - 1, 1).createTextFinder(memberId).matchEntireCell(true).findNext();
+      if (!match) { errMsg = '회원 없음'; }
+      else {
+        var rowNum = match.getRow();
+        for (var i = 1; i <= 10; i++) {
+          var nc = ITEM_MEMBER_HEADERS.indexOf('name' + i) + 1;
+          if (String(sheet.getRange(rowNum, nc).getValue() || '').trim() === '') { idx = i; break; }
+        }
+        if (idx === 0) { errMsg = '명의 슬롯(1~10) 가득참'; }
+        else {
+          var gc = ITEM_MEMBER_HEADERS.indexOf('name' + idx + '_gubun') + 1, nc2 = ITEM_MEMBER_HEADERS.indexOf('name' + idx) + 1;
+          sheet.getRange(rowNum, gc).setValue(String(data.gubun || '개인').trim());
+          sheet.getRange(rowNum, nc2).setValue(name);
+        }
+      }
+    }
+  } finally { try { lock.releaseLock(); } catch (e) {} }
+  if (idx === 0) return { success: false, msg: errMsg || '등록 실패' };
+  saveMemberAccount(memberId, idx, data);
+  return { success: true, idx: idx, name: name };
+}
+
+/**
  * 대리입찰 출력(위임장·기일입찰표)용 데이터 조립.
  * @param memberId 회원, idx 명의(0=본인), daeriinName 입찰대리인(직원) 이름
  * @return { success, principal:{명의 인적사항}, agent:{대리인 인적사항} }
