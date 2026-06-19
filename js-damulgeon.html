@@ -422,30 +422,48 @@
   function _bidDateStr(v){ var s=String(v||'').replace(/[^0-9]/g,''); if(s.length>=8) return s.substring(0,4)+'년'+s.substring(4,6)+'월'+s.substring(6,8)+'일'; if(s.length===6) return '20'+s.substring(0,2)+'년'+s.substring(2,4)+'월'+s.substring(4,6)+'일'; return String(v||''); }
   function _digitsRight(num, n){ var v=Math.round(_num(num))||0, s=(v?String(v):''); var arr=[]; for(var i=0;i<n;i++) arr.push(''); for(var j=0;j<s.length && j<n;j++){ arr[n-1-j]=s[s.length-1-j]; } return arr; }
   function _amtCells(arr){ return arr.map(function(d){ return '<td>'+(d||'')+'</td>'; }).join(''); }
+  var _DM_PRINT_CSS = '@page{size:A4;margin:12mm;}'
+    +'*{box-sizing:border-box;}body{font-family:"Malgun Gothic","맑은 고딕",sans-serif;color:#000;margin:0;}'
+    +'.dm-doc{page-break-after:always;}.dm-doc:last-child{page-break-after:auto;}'
+    +'.dm-doc-title{text-align:center;font-size:22px;letter-spacing:8px;font-weight:800;margin:0 0 14px;}'
+    +'.dm-form,.dm-ip,.dm-amt{width:100%;border-collapse:collapse;margin:7px 0;}'
+    +'.dm-form td,.dm-ip td,.dm-amt td{border:1px solid #000;padding:5px 7px;font-size:12px;vertical-align:middle;}'
+    +'.dm-form .lh,.dm-ip .lh{width:48px;text-align:center;font-weight:700;background:#f1f5f9;}'
+    +'.dm-form .lb,.dm-ip .lb{width:92px;text-align:center;background:#fafafa;white-space:nowrap;line-height:1.2;}'
+    +'.dm-ip .hd{font-weight:700;text-align:center;}'
+    +'.dm-amt td{text-align:center;}.dm-amt .u{background:#fafafa;font-size:10px;}.dm-amt .lb{width:46px;font-weight:700;background:#fafafa;}'
+    +'.dm-doc-p{font-size:12px;margin:7px 0;}.dm-doc-p2{font-size:13px;margin:8px 0;font-weight:600;}'
+    +'.dm-doc-center{text-align:center;font-size:14px;letter-spacing:6px;margin:10px 0;}'
+    +'.dm-doc-right{text-align:right;font-size:12px;margin:7px 0;}'
+    +'.dm-doc-sign{text-align:right;font-size:13px;margin:12px 0;font-weight:600;}';
   DM.mcPrint=function(){
     if(!_mcMemberId){ alert('회원을 먼저 선택하세요'); return; }
     _mcCapture();
     var it=_mcRowItem;
     if(!it){ alert('출력할 사건(물건)을 알 수 없습니다. 그리드에서 회원명을 클릭해 카드를 여세요.'); return; }
+    var w=window.open('', '_blank', 'width=900,height=1000');   // 클릭 시 즉시 열기(팝업차단 회피)
+    if(!w){ alert('팝업이 차단되었습니다. 이 사이트의 팝업을 허용한 뒤 다시 눌러주세요.'); return; }
+    try{ w.document.write('<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>대리입찰</title></head><body style="font-family:sans-serif;padding:24px;color:#555">출력 준비 중…</body></html>'); w.document.close(); }catch(e){}
     var daeriin=String(it.daeriin||'').trim();
-    var msg=_mcEl('dmMcSaveMsg'); if(msg){ msg.textContent='출력 준비 중…'; msg.style.color='#64748b'; }
     google.script.run.withSuccessHandler(function(res){
-      if(!res||!res.success){ if(msg){ msg.textContent='출력 실패: '+esc((res&&res.msg)||''); msg.style.color='#dc2626'; } return; }
-      if(msg) msg.textContent='';
-      _renderAndPrint(res.principal, res.agent, it);
-    }).withFailureHandler(function(e){ if(msg){ msg.textContent='출력 실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).getDaeriipchalPrintData(_mcMemberId, _mcSel, daeriin);
+      if(!res||!res.success){ try{ w.document.body.innerHTML='출력 실패: '+esc((res&&res.msg)||''); }catch(e){} return; }
+      _writePrintWindow(w, res.principal, res.agent, it);
+    }).withFailureHandler(function(e){ try{ w.document.body.innerHTML='출력 실패: '+esc(e&&e.message); }catch(_e){} }).getDaeriipchalPrintData(_mcMemberId, _mcSel, daeriin);
   };
-  function _renderAndPrint(p, agent, it){
+  function _writePrintWindow(w, p, agent, it){
+    if(!w){ return; }
     agent=agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
     var court=_courtParse(it.court);
     var ctx={ bon:court.bon, support:court.support, sakun:String(it.sakun_no||''), mulgeon:String(it.mulgeon_no||''), bidDate:_bidDateStr(it.in_date), bidprice:it.bidprice, deposit:it.deposit };
     var isCorp=String(p.gubun||'').indexOf('법인')>=0;
-    var area=document.getElementById('dmPrintArea'); if(!area){ alert('인쇄영역 없음'); return; }
-    area.innerHTML=_wijangHtml(p, agent, ctx, isCorp)+_ipchalHtml(p, agent, ctx, isCorp);
-    document.body.classList.add('dm-printing');
-    var restore=function(){ document.body.classList.remove('dm-printing'); area.innerHTML=''; window.removeEventListener('afterprint', restore); };
-    window.addEventListener('afterprint', restore);
-    setTimeout(function(){ window.print(); }, 150);
+    var body=_wijangHtml(p, agent, ctx, isCorp)+_ipchalHtml(p, agent, ctx, isCorp);
+    try{
+      w.document.open();
+      w.document.write('<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>대리입찰 '+esc(ctx.sakun)+'</title><style>'+_DM_PRINT_CSS+'</style></head><body>'+body+'</body></html>');
+      w.document.close();
+      w.focus();
+      setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
+    }catch(e){ alert('인쇄창 생성 실패: '+(e&&e.message)); }
   }
   function _courtFull(ctx){ return esc(ctx.bon)+'법원 '+(ctx.support?esc(ctx.support)+'지원 ':''); }
   function _wijangHtml(p, agent, ctx, isCorp){
