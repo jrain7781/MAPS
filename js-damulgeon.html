@@ -29,10 +29,16 @@
   .dm-mc-tab { font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; color:#475569; }
   .dm-mc-tab.on { background:#2563eb; color:#fff; border-color:#2563eb; font-weight:700; }
   .dm-mcard-body { flex:1; overflow:auto; padding:12px 16px; }
-  .dm-mc-row { display:flex; padding:7px 2px; border-bottom:1px solid #f1f5f9; font-size:13px; }
+  .dm-mc-row { display:flex; align-items:center; padding:5px 2px; border-bottom:1px solid #f1f5f9; font-size:13px; }
   .dm-mc-row .k { width:92px; flex-shrink:0; color:#64748b; }
   .dm-mc-row .v { flex:1; color:#111827; word-break:break-all; }
   .dm-mc-empty { color:#cbd5e1; }
+  .dm-mc-in { width:100%; box-sizing:border-box; border:1px solid #d1d5db; border-radius:5px; padding:4px 7px; font-size:13px; background:#fff; }
+  .dm-mc-in:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,.15); }
+  .dm-mc-sel { margin-left:6px; font-size:12px; padding:3px 8px; border:1px solid #cbd5e1; border-radius:14px; background:#fff; cursor:pointer; max-width:170px; }
+  .dm-mcard-resize { position:absolute; left:0; top:0; width:7px; height:100%; cursor:col-resize; z-index:3; background:transparent; }
+  .dm-mcard-resize:hover { background:rgba(37,99,235,.25); }
+  .dm-mcard-foot { padding:10px 16px; border-top:1px solid #e5e7eb; background:#f8fafc; display:flex; align-items:center; gap:12px; flex-shrink:0; }
 </style>
 <script>
 (function () {
@@ -242,7 +248,7 @@
       var v=computed(c.f,it,idx); if(c.num) v=_num(v)?_comma(v):'';
       if(c.f==='mulgeon_no' && it.link_item_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(v)+'</span></td>';   // 사건번호 숨김 시 물건번호로 모달
       if(c.f==='_total'){ var done3=(_num(it.bidprice)>0 && _num(it.deposit)>0 && _num(it._fee)>0); return '<td class="'+cls+'" style="'+style+(done3?';color:#2563eb;font-weight:800':'')+'">'+esc(v)+'</td>'; }   // 입찰가·보증금·진행비 모두 입력 → 굵은 파랑
-      if(c.f==='member_name' && it.member_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-member-link" onclick="DM.openMyungui(\''+esc(it.member_id)+'\',\''+esc(it.myungui||'')+'\')" title="클릭 → 명의/계좌 정보">'+esc(v)+'</span></td>';   // 회원 클릭 → 명의 카드
+      if(c.f==='member_name' && it.member_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-member-link" onclick="DM.openMyungui(\''+esc(it.member_id)+'\',\''+esc(it.myungui||'')+'\',\''+esc(v)+'\')" title="클릭 → 명의/계좌 정보">'+esc(v)+'</span></td>';   // 회원 클릭 → 명의 카드
       return '<td class="'+cls+'" style="'+style+'">'+esc(v)+'</td>';
     }
     if(c.t==='num' || c.t==='text' || c.t==='bid'){
@@ -280,51 +286,102 @@
   function reRenderGrid(){ var thead=document.getElementById('dmGridHead'); if(thead) thead.innerHTML=headHtml(); applyTableWidth(); renderBody(); bindResizers(); }
   DM.sortBy = function(f){ if(_sortField===f){ _sortDir=-_sortDir; } else { _sortField=f; _sortDir=1; } reRenderGrid(); };
   DM.toggleHideBasic = function(el){ _hideBasic=!!(el&&el.checked); try{ localStorage.setItem('dmHideBasic', _hideBasic?'1':'0'); }catch(_){}; reRenderGrid(); };
-  // ===== 명의 상세 슬라이드 카드 (Phase 2: 조회/표시) =====
+  // ===== 명의 상세 슬라이드 카드 (조회/수정/저장) =====
+  var _mcCache={};   // memberId → 조회결과 (속도: 재오픈 즉시)
   function _mcEl(id){ return document.getElementById(id); }
-  function _maskJumin(v){ v=String(v||''); if(!v) return ''; var i=v.indexOf('-'); if(i>=0) return esc(v.substring(0,i+1))+'●●●●●●●'; if(v.length>6) return esc(v.substring(0,6))+'●●●●●●●'; return esc(v); }
-  function _maskAcc(v){ v=String(v||''); if(!v) return ''; if(v.length<=4) return '●●●'+esc(v); return '●●●●'+esc(v.slice(-4)); }
-  DM.openMyungui = function(memberId, rowMyungui){
+  function _maskJumin(v){ v=String(v||''); if(!v) return ''; var i=v.indexOf('-'); if(i>=0) return v.substring(0,i+1)+'●●●●●●●'; if(v.length>6) return v.substring(0,6)+'●●●●●●●'; return v; }
+  function _maskAcc(v){ v=String(v||''); if(!v) return ''; if(v.length<=4) return '●●●'+v; return '●●●●'+v.slice(-4); }
+  DM.openMyungui = function(memberId, rowMyungui, memberName){
     memberId=String(memberId||'').trim(); if(!memberId) return;
-    var card=_mcEl('dmMyunguiCard'); if(card){ card.classList.add('open'); card.setAttribute('aria-hidden','false'); }
-    _mcEl('dmMcMember').textContent='불러오는 중…'; _mcEl('dmMcGrade').textContent=''; _mcEl('dmMcTabs').innerHTML=''; _mcEl('dmMcBody').innerHTML='';
-    if(typeof google==='undefined'||!google.script||!google.script.run){ _mcEl('dmMcMember').textContent='google.script.run 없음'; return; }
+    var card=_mcEl('dmMyunguiCard');
+    if(card){ var w=0; try{ w=parseInt(localStorage.getItem('dmMcardW')||'',10); }catch(_){}; if(w>=280&&w<=900) card.style.width=w+'px'; card.classList.add('open'); card.setAttribute('aria-hidden','false'); }
+    _mcEl('dmMcSaveMsg').textContent='';
+    var rm=String(rowMyungui||'').trim();
+    _mcEl('dmMcMember').textContent=String(memberName||'').trim()||'불러오는 중…';   // 헤더 즉시 표시
+    if(_mcCache[memberId]){ _applyMcData(memberId, _mcCache[memberId], rm); return; }   // 캐시 즉시
+    _mcEl('dmMcGrade').textContent=''; _mcEl('dmMcTabs').innerHTML=''; _mcEl('dmMcBody').innerHTML='<div style="color:#94a3b8;padding:10px 2px">불러오는 중…</div>';
+    if(typeof google==='undefined'||!google.script||!google.script.run){ _mcEl('dmMcBody').innerHTML='google.script.run 없음'; return; }
     google.script.run.withSuccessHandler(function(res){
-      if(!res||!res.success){ _mcEl('dmMcMember').textContent=(res&&res.msg)||'조회 실패'; return; }
-      _mcMemberId=memberId; _mcAccounts=res.accounts||[];
-      _mcEl('dmMcMember').textContent=res.member_name||'';
-      _mcEl('dmMcGrade').textContent=res.grade||'';
-      var sel=0, cur=String(rowMyungui||'').trim();
-      if(cur){ for(var i=0;i<_mcAccounts.length;i++){ if(_mcAccounts[i].idx!==0 && String(_mcAccounts[i].name).trim()===cur){ sel=_mcAccounts[i].idx; break; } } }
-      _renderMcTabs(); DM.mcSelect(sel);
-    }).withFailureHandler(function(e){ _mcEl('dmMcMember').textContent='실패: '+(e&&e.message); }).getMemberAccounts(memberId);
+      if(!res||!res.success){ _mcEl('dmMcBody').innerHTML=esc((res&&res.msg)||'조회 실패'); return; }
+      _mcCache[memberId]=res; _applyMcData(memberId, res, rm);
+    }).withFailureHandler(function(e){ _mcEl('dmMcBody').innerHTML='실패: '+esc(e&&e.message); }).getMemberAccounts(memberId);
   };
-  function _renderMcTabs(){
-    _mcEl('dmMcTabs').innerHTML=_mcAccounts.map(function(a){
-      var label=a.idx===0?'본인':(a.name||('명의'+a.idx));
-      var sub=(a.idx!==0 && a.gubun)?(' <small style="opacity:.7">'+esc(a.gubun)+'</small>'):'';
-      return '<span class="dm-mc-tab'+(a.idx===_mcSel?' on':'')+'" onclick="DM.mcSelect('+a.idx+')">'+esc(label)+sub+'</span>';
-    }).join('');
+  function _applyMcData(memberId, res, rm){
+    _mcMemberId=memberId;
+    _mcAccounts=(res.accounts||[]).map(function(a){ return Object.assign({}, a); });   // 편집용 복사
+    _mcEl('dmMcMember').textContent=res.member_name||'';
+    _mcEl('dmMcGrade').textContent=res.grade||'';
+    var sel=0;
+    if(rm){ for(var i=0;i<_mcAccounts.length;i++){ if(_mcAccounts[i].idx!==0 && String(_mcAccounts[i].name).trim()===rm){ sel=_mcAccounts[i].idx; break; } } }
+    DM.mcSelect(sel, true);
   }
-  DM.mcSelect = function(idx){
-    _mcSel=idx; _renderMcTabs();
+  function _renderMcSelector(){
+    var others=_mcAccounts.filter(function(a){return a.idx!==0;});
+    var html='<span class="dm-mc-tab'+(_mcSel===0?' on':'')+'" onclick="DM.mcSelect(0)">본인</span>';
+    if(others.length){
+      var opts='<option value="">명의 선택…</option>'+others.map(function(a){ return '<option value="'+a.idx+'"'+(a.idx===_mcSel?' selected':'')+'>'+esc(a.name||('명의'+a.idx))+' ('+esc(a.gubun||'개인')+')</option>'; }).join('');
+      html+='<select class="dm-mc-sel" onchange="DM.mcSelect(parseInt(this.value,10))">'+opts+'</select>';
+    }
+    _mcEl('dmMcTabs').innerHTML=html;
+  }
+  DM.mcSelect = function(idx, skipCapture){
+    if(isNaN(idx)) return;
+    if(!skipCapture) _mcCapture();
+    _mcSel=idx; _renderMcSelector();
     var a=_mcAccounts.filter(function(x){return x.idx===idx;})[0]; if(!a){ _mcEl('dmMcBody').innerHTML=''; return; }
     var isCorp=String(a.gubun||'').indexOf('법인')>=0;
-    function row(k,v,mask){ var val=String(v==null?'':v); var disp=val?(mask?mask(val):esc(val)):'<span class="dm-mc-empty">(미입력)</span>'; return '<div class="dm-mc-row"><div class="k">'+esc(k)+'</div><div class="v">'+disp+'</div></div>'; }
+    function inRow(k,f,val,maskType){
+      var raw=String(val==null?'':val);
+      var shown=maskType?(maskType==='jumin'?_maskJumin(raw):_maskAcc(raw)):raw;
+      var ma=maskType?(' data-mask="'+maskType+'" data-raw="'+esc(raw)+'" onfocus="DM.mcReveal(this)" onblur="DM.mcMaskBlur(this)" oninput="DM.mcRawIn(this)"'):'';
+      return '<div class="dm-mc-row"><div class="k">'+esc(k)+'</div><div class="v"><input class="dm-mc-in" data-f="'+f+'"'+ma+' value="'+esc(shown)+'"></div></div>';
+    }
     var h='';
-    h+=row('구분', a.gubun||(idx===0?'개인':''));
-    h+=row('이름', a.name);
-    h+=row('등급', a.grade);
-    h+=row('전화번호', a.phone);
-    h+=row(isCorp?'법인등록번호':'주민등록번호', a.jumin_corp, _maskJumin);
-    if(isCorp) h+=row('사업자번호', a.biz_no);
-    h+=row('주소', a.address);
-    h+=row('은행', a.account_bank);
-    h+=row('계좌번호', a.account_no, _maskAcc);
-    h+=row('계좌명의', a.account_name);
+    h+='<div class="dm-mc-row"><div class="k">구분</div><div class="v"><select class="dm-mc-in" data-f="gubun" onchange="DM.mcGubun(this)"><option'+(!isCorp?' selected':'')+'>개인</option><option'+(isCorp?' selected':'')+'>법인</option></select></div></div>';
+    h+=inRow('이름','name',a.name);
+    h+='<div class="dm-mc-row"><div class="k">등급</div><div class="v" style="color:#475569">'+(a.grade?esc(a.grade):'<span class="dm-mc-empty">(없음)</span>')+'</div></div>';
+    h+=inRow('전화번호','phone',a.phone);
+    h+=inRow(isCorp?'법인등록번호':'주민등록번호','jumin_corp',a.jumin_corp,'jumin');
+    if(isCorp) h+=inRow('사업자번호','biz_no',a.biz_no);
+    h+=inRow('주소','address',a.address);
+    h+=inRow('은행','account_bank',a.account_bank);
+    h+=inRow('계좌번호','account_no',a.account_no,'acc');
+    h+=inRow('계좌명의','account_name',a.account_name);
+    h+=inRow('직업','job',a.job);
     _mcEl('dmMcBody').innerHTML=h;
   };
+  DM.mcReveal=function(el){ el.value=(el.getAttribute('data-raw')||''); };
+  DM.mcRawIn=function(el){ el.setAttribute('data-raw', el.value); };
+  DM.mcMaskBlur=function(el){ var t=el.getAttribute('data-mask'), r=el.getAttribute('data-raw')||''; el.value=(t==='jumin'?_maskJumin(r):_maskAcc(r)); };
+  DM.mcGubun=function(sel){ _mcCapture(); DM.mcSelect(_mcSel, true); };   // 구분 변경 → 사업자번호 표시 토글
+  function _mcCapture(){   // 현재 폼 → _mcAccounts[_mcSel]
+    var a=_mcAccounts.filter(function(x){return x.idx===_mcSel;})[0]; if(!a) return;
+    var body=_mcEl('dmMcBody'); if(!body) return;
+    var ins=body.querySelectorAll('[data-f]');
+    for(var i=0;i<ins.length;i++){ var el=ins[i], f=el.getAttribute('data-f'); a[f]=el.getAttribute('data-mask')?(el.getAttribute('data-raw')||''):el.value; }
+  }
+  DM.mcSave=function(){
+    if(!_mcMemberId){ return; }
+    _mcCapture();
+    var a=_mcAccounts.filter(function(x){return x.idx===_mcSel;})[0]; if(!a) return;
+    var data={ gubun:a.gubun, name:a.name, job:a.job, jumin_corp:a.jumin_corp, biz_no:a.biz_no, phone:a.phone, address:a.address, account_bank:a.account_bank, account_no:a.account_no, account_name:a.account_name };
+    var msg=_mcEl('dmMcSaveMsg'); if(msg){ msg.textContent='저장 중…'; msg.style.color='#64748b'; }
+    google.script.run.withSuccessHandler(function(r){
+      if(r&&r.success){
+        if(msg){ msg.textContent='저장됨 ✓'; msg.style.color='#16a34a'; }
+        a.saved=true;
+        if(_mcCache[_mcMemberId]){ var ca=(_mcCache[_mcMemberId].accounts||[]).filter(function(x){return x.idx===_mcSel;})[0]; if(ca) Object.assign(ca, data, {saved:true}); }
+      } else { if(msg){ msg.textContent='실패: '+esc((r&&r.msg)||''); msg.style.color='#dc2626'; } }
+    }).withFailureHandler(function(e){ if(msg){ msg.textContent='실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).saveMemberAccount(_mcMemberId, _mcSel, data);
+  };
   DM.closeMyungui = function(){ var card=_mcEl('dmMyunguiCard'); if(card){ card.classList.remove('open'); card.setAttribute('aria-hidden','true'); } };
+  DM.mcResizeStart=function(ev){
+    ev.preventDefault();
+    var card=_mcEl('dmMyunguiCard'); if(!card) return;
+    function mv(e){ var x=(e.touches?e.touches[0].clientX:e.clientX); var w=card.getBoundingClientRect().right-x; if(w<280)w=280; if(w>900)w=900; card.style.width=w+'px'; }
+    function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); try{ localStorage.setItem('dmMcardW', String(parseInt(card.style.width,10)||360)); }catch(_){} }
+    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+  };
   // [임시] 명의DB 백엔드 자가테스트 — 브라우저 버튼 한 번
   DM.selfTest = function(){
     if(typeof google==='undefined'||!google.script||!google.script.run){ alert('google.script.run 없음'); return; }
