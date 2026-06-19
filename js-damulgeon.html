@@ -40,7 +40,31 @@
   .dm-mc-sel { margin-left:6px; font-size:12px; padding:3px 8px; border:1px solid #cbd5e1; border-radius:14px; background:#fff; cursor:pointer; max-width:170px; }
   .dm-mcard-resize { position:absolute; left:0; top:0; width:7px; height:100%; cursor:col-resize; z-index:3; background:transparent; }
   .dm-mcard-resize:hover { background:rgba(37,99,235,.25); }
-  .dm-mcard-foot { padding:10px 16px; border-top:1px solid #e5e7eb; background:#f8fafc; display:flex; align-items:center; gap:12px; flex-shrink:0; }
+  .dm-mcard-foot { padding:10px 16px; border-top:1px solid #e5e7eb; background:#f8fafc; display:flex; align-items:center; gap:10px; flex-shrink:0; flex-wrap:wrap; }
+  /* 대리입찰 출력(인쇄) */
+  #dmPrintArea { display:none; }
+  .dm-doc-title { text-align:center; font-size:22px; letter-spacing:8px; font-weight:800; margin:0 0 14px; }
+  .dm-form, .dm-ip, .dm-amt { width:100%; border-collapse:collapse; margin:7px 0; }
+  .dm-form td, .dm-ip td, .dm-amt td { border:1px solid #000; padding:5px 7px; font-size:12px; vertical-align:middle; }
+  .dm-form .lh, .dm-ip .lh { width:48px; text-align:center; font-weight:700; background:#f1f5f9; }
+  .dm-form .lb, .dm-ip .lb { width:92px; text-align:center; background:#fafafa; white-space:nowrap; line-height:1.2; }
+  .dm-ip .hd { font-weight:700; text-align:center; }
+  .dm-amt td { text-align:center; }
+  .dm-amt .u { background:#fafafa; font-size:10px; }
+  .dm-amt .lb { width:46px; font-weight:700; background:#fafafa; }
+  .dm-doc-p { font-size:12px; margin:7px 0; }
+  .dm-doc-p2 { font-size:13px; margin:8px 0; font-weight:600; }
+  .dm-doc-center { text-align:center; font-size:14px; letter-spacing:6px; margin:10px 0; }
+  .dm-doc-right { text-align:right; font-size:12px; margin:7px 0; }
+  .dm-doc-sign { text-align:right; font-size:13px; margin:12px 0; font-weight:600; }
+  @media print {
+    body.dm-printing * { visibility:hidden !important; }
+    body.dm-printing #dmPrintArea, body.dm-printing #dmPrintArea * { visibility:visible !important; }
+    body.dm-printing #dmPrintArea { display:block !important; position:absolute; left:0; top:0; width:100%; }
+    .dm-doc { page-break-after:always; padding:13mm 12mm; box-sizing:border-box; font-family:'Malgun Gothic','맑은 고딕',sans-serif; color:#000; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .dm-doc:last-child { page-break-after:auto; }
+    @page { size:A4; margin:0; }
+  }
 </style>
 <script>
 (function () {
@@ -90,7 +114,7 @@
     { label:'비고',     f:'dm_note',      t:'text',   a:'left',   w:130, src:'dm' }
   ];
   var _hideBasic=false, _sortField='', _sortDir=1, _statusSel={}, _bidMissing=false;
-  var _mcMemberId='', _mcAccounts=[], _mcSel=0;   // 명의 카드 상태
+  var _mcMemberId='', _mcAccounts=[], _mcSel=0, _mcRowItem=null;   // 명의 카드 상태
   function visCols(){ return COLS.filter(function(c){ return !(_hideBasic && c.hideable); }); }
   function _numCols(f){ return f==='lowest_price'||f==='deposit'||f==='bidprice'||f==='jinhaengbi'; }
   // 헤더 배경색 (출처: items파랑 / dm노랑 / 수식(계산·연계)연녹색)
@@ -250,7 +274,7 @@
       var v=computed(c.f,it,idx); if(c.num) v=_num(v)?_comma(v):'';
       if(c.f==='mulgeon_no' && it.link_item_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(v)+'</span></td>';   // 사건번호 숨김 시 물건번호로 모달
       if(c.f==='_total'){ var done3=(_num(it.bidprice)>0 && _num(it.deposit)>0 && _num(it._fee)>0); return '<td class="'+cls+'" style="'+style+(done3?';color:#2563eb;font-weight:800':'')+'">'+esc(v)+'</td>'; }   // 입찰가·보증금·진행비 모두 입력 → 굵은 파랑
-      if(c.f==='member_name' && it.member_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-member-link" onclick="DM._hl(this);DM.openMyungui(\''+esc(it.member_id)+'\',\''+esc(it.myungui||'')+'\',\''+esc(v)+'\')" title="클릭 → 명의/계좌 정보">'+esc(v)+'</span></td>';   // 회원 클릭 → 명의 카드
+      if(c.f==='member_name' && it.member_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-member-link" onclick="DM._hl(this);DM.openMyungui(\''+esc(it.member_id)+'\',\''+esc(it.myungui||'')+'\',\''+esc(v)+'\',\''+esc(it.link_item_id)+'\')" title="클릭 → 명의/계좌 정보">'+esc(v)+'</span></td>';   // 회원 클릭 → 명의 카드
       return '<td class="'+cls+'" style="'+style+'">'+esc(v)+'</td>';
     }
     if(c.t==='num' || c.t==='text' || c.t==='bid'){
@@ -295,8 +319,9 @@
   function _mcEl(id){ return document.getElementById(id); }
   function _maskJumin(v){ v=String(v||''); if(!v) return ''; var i=v.indexOf('-'); if(i>=0) return v.substring(0,i+1)+'●●●●●●●'; if(v.length>6) return v.substring(0,6)+'●●●●●●●'; return v; }
   function _maskAcc(v){ v=String(v||''); if(!v) return ''; if(v.length<=4) return '●●●'+v; return '●●●●'+v.slice(-4); }
-  DM.openMyungui = function(memberId, rowMyungui, memberName){
+  DM.openMyungui = function(memberId, rowMyungui, memberName, rowId){
     memberId=String(memberId||'').trim(); if(!memberId) return;
+    _mcRowItem=null; try{ if(rowId){ _mcRowItem=curItems().filter(function(x){return String(x.link_item_id)===String(rowId);})[0]||null; } }catch(e){}
     var card=_mcEl('dmMyunguiCard');
     if(card){ var w=0; try{ w=parseInt(localStorage.getItem('dmMcardW')||'',10); }catch(_){}; if(w>=280&&w<=900) card.style.width=w+'px'; card.classList.add('open'); card.setAttribute('aria-hidden','false'); }
     _mcEl('dmMcSaveMsg').textContent='';
@@ -386,6 +411,84 @@
     function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); try{ localStorage.setItem('dmMcardW', String(parseInt(card.style.width,10)||360)); }catch(_){} }
     document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
   };
+  // ===== 대리입찰 출력 (조사탭처럼 window.print) =====
+  function _courtParse(court){
+    var c=String(court||'').trim(), m=c.match(/^(.*?)지방법원\s*(.*?)지원/);
+    if(m) return { bon:(m[1]||'')+'지방', support:(m[2]||'') };
+    m=c.match(/^(.*?)지방법원/); if(m) return { bon:(m[1]||'')+'지방', support:'' };
+    return { bon:c, support:'' };
+  }
+  function _bidDateStr(v){ var s=String(v||'').replace(/[^0-9]/g,''); if(s.length>=8) return s.substring(0,4)+'년'+s.substring(4,6)+'월'+s.substring(6,8)+'일'; if(s.length===6) return '20'+s.substring(0,2)+'년'+s.substring(2,4)+'월'+s.substring(4,6)+'일'; return String(v||''); }
+  function _digitsRight(num, n){ var v=Math.round(_num(num))||0, s=(v?String(v):''); var arr=[]; for(var i=0;i<n;i++) arr.push(''); for(var j=0;j<s.length && j<n;j++){ arr[n-1-j]=s[s.length-1-j]; } return arr; }
+  function _amtCells(arr){ return arr.map(function(d){ return '<td>'+(d||'')+'</td>'; }).join(''); }
+  DM.mcPrint=function(){
+    if(!_mcMemberId){ alert('회원을 먼저 선택하세요'); return; }
+    _mcCapture();
+    var it=_mcRowItem;
+    if(!it){ alert('출력할 사건(물건)을 알 수 없습니다. 그리드에서 회원명을 클릭해 카드를 여세요.'); return; }
+    var daeriin=String(it.daeriin||'').trim();
+    var msg=_mcEl('dmMcSaveMsg'); if(msg){ msg.textContent='출력 준비 중…'; msg.style.color='#64748b'; }
+    google.script.run.withSuccessHandler(function(res){
+      if(!res||!res.success){ if(msg){ msg.textContent='출력 실패: '+esc((res&&res.msg)||''); msg.style.color='#dc2626'; } return; }
+      if(msg) msg.textContent='';
+      _renderAndPrint(res.principal, res.agent, it);
+    }).withFailureHandler(function(e){ if(msg){ msg.textContent='출력 실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).getDaeriipchalPrintData(_mcMemberId, _mcSel, daeriin);
+  };
+  function _renderAndPrint(p, agent, it){
+    agent=agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
+    var court=_courtParse(it.court);
+    var ctx={ bon:court.bon, support:court.support, sakun:String(it.sakun_no||''), mulgeon:String(it.mulgeon_no||''), bidDate:_bidDateStr(it.in_date), bidprice:it.bidprice, deposit:it.deposit };
+    var isCorp=String(p.gubun||'').indexOf('법인')>=0;
+    var area=document.getElementById('dmPrintArea'); if(!area){ alert('인쇄영역 없음'); return; }
+    area.innerHTML=_wijangHtml(p, agent, ctx, isCorp)+_ipchalHtml(p, agent, ctx, isCorp);
+    document.body.classList.add('dm-printing');
+    var restore=function(){ document.body.classList.remove('dm-printing'); area.innerHTML=''; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    setTimeout(function(){ window.print(); }, 150);
+  }
+  function _courtFull(ctx){ return esc(ctx.bon)+'법원 '+(ctx.support?esc(ctx.support)+'지원 ':''); }
+  function _wijangHtml(p, agent, ctx, isCorp){
+    var pReg=isCorp?(p.biz_no||''):(p.jumin_corp||'');
+    return '<div class="dm-doc"><h2 class="dm-doc-title">위 임 장</h2>'
+    +'<table class="dm-form">'
+    +'<tr><td class="lh" rowspan="3">대리인</td><td class="lb">성 명</td><td>'+esc(agent.name||'')+'</td><td class="lb">직 업</td><td>'+esc(agent.job||'회사원')+'</td></tr>'
+    +'<tr><td class="lb">주민등록번호</td><td>'+esc(agent.jumin_corp||'')+'</td><td class="lb">전화번호</td><td>'+esc(agent.phone||'')+'</td></tr>'
+    +'<tr><td class="lb">주 소</td><td colspan="3">'+esc(agent.address||'')+'</td></tr></table>'
+    +'<p class="dm-doc-p">위 사람을 대리인으로 정하고 다음 사항을 위임함.</p>'
+    +'<p class="dm-doc-center">다 음</p>'
+    +'<p class="dm-doc-p2">'+_courtFull(ctx)+esc(ctx.sakun)+' 호'+(ctx.mulgeon?(' (물건번호 '+esc(ctx.mulgeon)+')'):'')+'</p>'
+    +'<p class="dm-doc-p">위 경매사건에 관한 입찰행위 일체</p>'
+    +'<p class="dm-doc-right">'+esc(ctx.bidDate)+'</p>'
+    +'<table class="dm-form">'
+    +'<tr><td class="lh" rowspan="3">본인</td><td class="lb">성 명</td><td>'+esc(p.name||'')+'</td><td class="lb">직 업</td><td>'+esc(p.job||'회사원')+'</td></tr>'
+    +'<tr><td class="lb">'+(isCorp?'법인사업자번호':'주민등록번호')+'</td><td>'+esc(pReg)+'</td><td class="lb">전화번호</td><td>'+esc(p.phone||'')+'</td></tr>'
+    +'<tr><td class="lb">주 소</td><td colspan="3">'+esc(p.address||'')+'</td></tr></table>'
+    +'<p class="dm-doc-sign">서명 '+esc(p.name||'')+' (인)</p>'
+    +'<p class="dm-doc-center" style="margin-top:18px">'+_courtFull(ctx)+'귀중</p></div>';
+  }
+  function _ipchalHtml(p, agent, ctx, isCorp){
+    var regSaeop=isCorp?(p.biz_no||''):(p.jumin_corp||''), corpReg=isCorp?(p.jumin_corp||''):'';
+    var bidU=['천억','백억','십억','억','천만','백만','십만','만','천','백','십','일'], depU=['백억','십억','억','천만','백만','십만','만','천','백','십','일'];
+    var bid=_digitsRight(ctx.bidprice, bidU.length), dep=_digitsRight(ctx.deposit, depU.length);
+    return '<div class="dm-doc"><h2 class="dm-doc-title">기 일 입 찰 표</h2>'
+    +'<table class="dm-ip">'
+    +'<tr><td class="hd" colspan="2">'+_courtFull(ctx)+'집행관 귀하</td><td class="hd" colspan="2">입찰기일 : '+esc(ctx.bidDate)+'</td></tr>'
+    +'<tr><td class="lb">사건번호</td><td>'+esc(ctx.sakun)+' 호</td><td class="lb">물건번호</td><td>'+esc(ctx.mulgeon||'')+'</td></tr></table>'
+    +'<table class="dm-ip">'
+    +'<tr><td class="lh" rowspan="3">입찰자<br>본인</td><td class="lb">성명</td><td>'+esc(p.name||'')+'</td><td class="lb">전화번호</td><td>'+esc(p.phone||'')+'</td></tr>'
+    +'<tr><td class="lb">주민(사업자)<br>등록번호</td><td>'+esc(regSaeop)+'</td><td class="lb">법인등록<br>번호</td><td>'+esc(corpReg)+'</td></tr>'
+    +'<tr><td class="lb">주소</td><td colspan="3">'+esc(p.address||'')+'</td></tr></table>'
+    +'<table class="dm-ip">'
+    +'<tr><td class="lh" rowspan="3">대리인</td><td class="lb">성명</td><td>'+esc(agent.name||'')+' (인)</td><td class="lb">본인과의<br>관계</td><td>지인</td></tr>'
+    +'<tr><td class="lb">주민등록<br>번호</td><td>'+esc(agent.jumin_corp||'')+'</td><td class="lb">전화번호</td><td>'+esc(agent.phone||'')+'</td></tr>'
+    +'<tr><td class="lb">주소</td><td colspan="3">'+esc(agent.address||'')+'</td></tr></table>'
+    +'<table class="dm-amt"><tr><td class="lb">입찰<br>가격</td>'+bidU.map(function(u){return '<td class="u">'+u+'</td>';}).join('')+'<td class="u">원</td></tr>'
+    +'<tr><td class="lb"></td>'+_amtCells(bid)+'<td></td></tr></table>'
+    +'<table class="dm-amt"><tr><td class="lb">보증<br>금액</td>'+depU.map(function(u){return '<td class="u">'+u+'</td>';}).join('')+'<td class="u">원</td></tr>'
+    +'<tr><td class="lb"></td>'+_amtCells(dep)+'<td></td></tr></table>'
+    +'<p class="dm-doc-p">보증의 제공방법 : ☑ 현금·자기앞수표　 □ 보증서</p>'
+    +'<p class="dm-doc-sign">입찰자 대리인 '+esc(agent.name||'')+' (인)</p></div>';
+  }
   // [임시] 명의DB 백엔드 자가테스트 — 브라우저 버튼 한 번
   DM.selfTest = function(){
     if(typeof google==='undefined'||!google.script||!google.script.run){ alert('google.script.run 없음'); return; }

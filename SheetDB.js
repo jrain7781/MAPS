@@ -853,6 +853,29 @@ function saveMemberAccount(memberId, idx, data) {
   }
 }
 
+/**
+ * 대리입찰 출력(위임장·기일입찰표)용 데이터 조립.
+ * @param memberId 회원, idx 명의(0=본인), daeriinName 입찰대리인(직원) 이름
+ * @return { success, principal:{명의 인적사항}, agent:{대리인 인적사항} }
+ */
+function getDaeriipchalPrintData(memberId, idx, daeriinName) {
+  idx = parseInt(idx, 10);
+  var res = getMemberAccounts(memberId);
+  if (!res || !res.success) return { success: false, msg: (res && res.msg) || '명의 조회 실패' };
+  var pr = (res.accounts || []).filter(function (a) { return a.idx === idx; })[0];
+  if (!pr) return { success: false, msg: '명의 없음 idx=' + idx };
+  pr.member_name = res.member_name; pr.grade = res.grade;
+  var agent = null;
+  daeriinName = String(daeriinName || '').trim();
+  if (daeriinName) {
+    var members = readAllMembersNew(), sm = null;
+    for (var i = 0; i < members.length; i++) { if (String(members[i].member_name || '').trim() === daeriinName) { sm = members[i]; break; } }
+    if (sm) { var ar = getMemberAccounts(String(sm.member_id)); if (ar && ar.success) agent = (ar.accounts || []).filter(function (a) { return a.idx === 0; })[0] || null; }
+    if (!agent) agent = { name: daeriinName, job: '회사원', jumin_corp: '', phone: '', address: '', account_bank: '', account_no: '', account_name: '' };
+  }
+  return { success: true, principal: pr, agent: agent };
+}
+
 /** [브라우저 버튼용] 결과를 문자열로 반환 — google.script.run 으로 호출해 alert */
 function selfTestMemberAccounts() {
   var log = [];
