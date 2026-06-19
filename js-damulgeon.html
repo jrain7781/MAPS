@@ -361,7 +361,7 @@
     google.script.run.withSuccessHandler(function(res){ _members=(res&&res.members)||[]; cb&&cb(); })
       .withFailureHandler(function(){ _members=[]; cb&&cb(); }).getDamulgeonMembers();
   }
-  // 회원명(수기) → member_id 해석 (이름 또는 명의 매칭). allMembersNewData 우선.
+  // 회원명(수기) → 회원객체 해석 (이름 또는 명의 매칭). allMembersNewData(명의 name1~10 포함) 우선.
   function _memberByName(name){
     name=String(name||'').trim(); if(!name) return null;
     var src=(typeof allMembersNewData!=='undefined' && allMembersNewData && allMembersNewData.length)?allMembersNewData:(_members||[]);
@@ -369,10 +369,16 @@
     for(var i=0;i<src.length;i++){
       var m=src[i], nm=String(m.member_name||m.name||'').trim();
       var cn=nm.replace(/^\([^)]+\)\s*/,'').split(/[\s(]/)[0].trim();
-      if(nm===name || (clean && cn===clean)) return { member_id:String(m.member_id||''), name:nm };
-      for(var k=1;k<=10;k++){ if(String(m['name'+k]||'').trim()===name) return { member_id:String(m.member_id||''), name:nm }; }   // 명의 매칭
+      if(nm===name || (clean && cn===clean)) return { member_id:String(m.member_id||''), name:nm, m:m };
+      for(var k=1;k<=10;k++){ if(String(m['name'+k]||'').trim()===name) return { member_id:String(m.member_id||''), name:nm, m:m }; }   // 명의 매칭
     }
     return null;
+  }
+  // 회원의 명의 리스트 (입찰물건관리 updateMemberTokenInfo 와 동일: gubun-값)
+  function _myunguiOf(m){
+    if(!m) return [];
+    var out=[]; for(var i=1;i<=10;i++){ var v=m['name'+i], gb=m['name'+i+'_gubun']; if(v && String(v).trim()) out.push((gb||'')+'-'+String(v).trim()); }
+    return out;
   }
 
   // ── 일괄작업 모달 (일괄적용 클릭 → 모달: 상단 값입력/회원검색 + 하단 선택 물건) ──
@@ -408,7 +414,15 @@
   };
   DM.bulkMemberInfo = function(){
     var v=(document.getElementById('dmBulkVal')||{}).value||''; var info=document.getElementById('dmBulkMemInfo');
-    if(info){ var m=_memberByName(v); info.textContent=v?(m&&m.member_id?'✓ 등록회원':'⚠ 미등록 이름'):''; info.style.color=(m&&m.member_id)?'#16a34a':'#dc2626'; }
+    if(info){
+      var r=_memberByName(v);
+      if(!String(v).trim()){ info.innerHTML=''; }
+      else if(r){
+        var my=_myunguiOf(r.m);
+        info.innerHTML='<span style="color:#16a34a;font-weight:700">✓ '+esc(r.name)+'</span>'
+          + (my.length ? '<span style="color:#374151;font-weight:600;margin-left:8px">명의: '+esc(my.join(', '))+'</span>' : '<span style="color:#9ca3af;margin-left:8px">(명의 없음)</span>');
+      } else { info.innerHTML='<span style="color:#dc2626;font-weight:700">⚠ 미등록 이름</span>'; }
+    }
     renderBulkList();
   };
   DM.bulkPrev = function(){ renderBulkList(); };
@@ -416,15 +430,21 @@
     var tb=document.getElementById('dmBulkList'); if(!tb) return;
     var act=_bulkAct, valEl=document.getElementById('dmBulkVal'), val=valEl?String(valEl.value).trim():'';
     var memName=(act==='member' && val)?((_memberByName(val)||{}).name||val):'';
-    tb.innerHTML=_bulkTgts.map(function(it){
-      var after;
-      if(act==='member') after=memName||'(미입력)';
-      else if(act==='bidprice'){ var p=parseFloat(val); after=isNaN(p)?'(미입력)':_comma(String(Math.round(_num(it.lowest_price)*p/100))); }
-      else after=val||'(미입력)';
-      return '<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:3px 6px">'+esc(it.sakun_no)+'</td>'
-        +'<td style="padding:3px 6px;color:#6b7280">'+esc(it.court)+'</td>'
-        +'<td style="padding:3px 6px;text-align:right">'+_comma(it.lowest_price)+'</td>'
-        +'<td style="padding:3px 6px;font-weight:700;color:#4f46e5">'+esc(after)+'</td></tr>';
+    tb.innerHTML=_bulkTgts.map(function(it,idx){
+      var cur, next;
+      if(act==='member'){ cur=it.member_name||''; next=memName; }
+      else if(act==='bidprice'){ cur=it.bidprice?_comma(it.bidprice):''; var p=parseFloat(val); next=isNaN(p)?'':_comma(String(Math.round(_num(it.lowest_price)*p/100))); }
+      else { cur=it[act]||''; next=val; }
+      var changed = next && String(cur)!==String(next);
+      var bg = (idx%2) ? '#fafafa' : '#fff';
+      return '<tr style="background:'+bg+';border-bottom:1px solid #f1f5f9">'
+        +'<td style="padding:5px 8px;white-space:nowrap;font-weight:600;color:#1f2937">'+esc(it.sakun_no)+'</td>'
+        +'<td style="padding:5px 8px;white-space:nowrap;color:#6b7280">'+esc(it.court)+'</td>'
+        +'<td style="padding:5px 8px;text-align:right;white-space:nowrap;color:#475569">'+_comma(it.lowest_price)+'</td>'
+        +'<td style="padding:5px 8px;white-space:nowrap;color:#94a3b8">'+esc(cur||'-')+'</td>'
+        +'<td style="text-align:center;color:#cbd5e1">→</td>'
+        +'<td style="padding:5px 8px;white-space:nowrap;font-weight:700;color:'+(changed?'#4f46e5':(next?'#94a3b8':'#cbd5e1'))+'">'+esc(next||'(미입력)')+'</td>'
+        +'</tr>';
     }).join('');
   }
   DM.bulkClose = function(){ var m=document.getElementById('dmBulkModal'); if(m) m.classList.add('content-hidden'); };
