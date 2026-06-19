@@ -52,7 +52,7 @@
     { label:'입찰가',   f:'bidprice',     t:'bid',    a:'right',  w:96,  src:'items' },
     { label:'비율',     f:'_ratio',       t:'calc',   a:'right',  w:54,  src:'calc' },
     { label:'보증금',   f:'deposit',      t:'ro',     a:'right',  w:90,  src:'items' },
-    { label:'진행비',   f:'jinhaengbi',   t:'ro',     a:'right',  w:84,  src:'calc' },
+    { label:'진행비',   f:'jinhaengbi',   t:'text',   a:'right',  w:84,  src:'dm' },
     { label:'총입금요청',f:'_total',      t:'calc',   a:'right',  w:104, src:'calc' },
     { label:'향',       f:'hyang',        t:'text',   a:'center', w:50,  src:'dm' },
     { label:'입찰대리인',f:'daeriin',     t:'daeriin',a:'left',   w:88,  src:'dm' },
@@ -118,12 +118,14 @@
       var mgr = _firstMgr(g);
       return '<li onclick="DM.select(\''+esc(g.group_key)+'\')" '
         + 'style="padding:7px 9px;margin-bottom:5px;border-radius:6px;cursor:pointer;border:1px solid '+(sel?'#60a5fa':'#e5e7eb')+';background:'+(sel?'#eff6ff':'#fff')+'">'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+        + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">'
         +   '<span style="font-weight:700;color:#1f2937">'+esc(g.sakun_base)+'</span>'
-        +   '<span style="font-size:11px;padding:1px 6px;border-radius:9px;background:#fef3c7;color:#92400e;font-weight:700;flex-shrink:0">'+g.count+'물건</span>'
+        +   '<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">'
+        +     '<span style="font-size:11px;padding:1px 6px;border-radius:9px;background:#fef3c7;color:#92400e;font-weight:700">'+g.count+'물건</span>'
+        +     (mgr? '<span style="font-size:11px;color:#0e7490;font-weight:700">'+esc(mgr)+'</span>' : '')   // 담당자 = 물건카운트 아래
+        +   '</span>'
         + '</div>'
-        + '<div style="font-size:11px;color:#6b7280;margin-top:2px">'+esc(g.in_date)+' · '+esc(g.court)
-        +   (mgr? ' · <span style="color:#0e7490;font-weight:700">'+esc(mgr)+'</span>' : '')+'</div>'
+        + '<div style="font-size:11px;color:#6b7280;margin-top:2px">'+esc(g.in_date)+' · '+esc(g.court)+'</div>'
         + '<div style="font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(g.address_base||'')+'">'+esc(g.address_base||'')+'</div>'
         + '</li>';
     }).join('');
@@ -289,7 +291,7 @@
     var id=tr.getAttribute('data-id'), f=el.getAttribute('data-f');
     var it=curItems().filter(function(x){return x.link_item_id===id;})[0]; if(!it) return;
     it[f]=el.value;
-    if (f==='bidprice') refreshCalc(tr,it);
+    if (f==='bidprice'||f==='jinhaengbi') refreshCalc(tr,it);
     var tk=id+'|'+f;
     if (_saveTimers[tk]) clearTimeout(_saveTimers[tk]);
     _saveTimers[tk]=setTimeout(function(){ (f==='bidprice') ? saveItemBid(it) : saveDmAux(it); },600);
@@ -302,7 +304,7 @@
   // 다물건 전용(명의/향/인증/비고) → damulgeon 시트 (3키)
   function saveDmAux(it){
     if (typeof google==='undefined'||!google.script||!google.script.run) return;
-    var row={ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, myungui:it.myungui, hyang:it.hyang, daeriin:it.daeriin, auth_method:it.auth_method, dm_note:it.dm_note };
+    var row={ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, myungui:it.myungui, hyang:it.hyang, daeriin:it.daeriin, jinhaengbi:it.jinhaengbi, auth_method:it.auth_method, dm_note:it.dm_note };
     _dot('● 저장 중');
     google.script.run.withSuccessHandler(function(){ _dot('✓ 저장됨', true); })
       .withFailureHandler(function(e){ _dot('⚠ 저장실패'); console.error('[DM aux save]',e); })
@@ -359,63 +361,67 @@
     google.script.run.withSuccessHandler(function(res){ _members=(res&&res.members)||[]; cb&&cb(); })
       .withFailureHandler(function(){ _members=[]; cb&&cb(); }).getDamulgeonMembers();
   }
-  function _bulkPct(){ var v=parseFloat((document.getElementById('dmBulkPct')||{}).value); return isNaN(v)?null:v; }
-  function _bulkBid(it){ var p=_bulkPct(); return (p==null)?'':String(Math.round(_num(it.lowest_price)*p/100)); }
-  DM.bulkOpen = function(){
+  // 회원명(수기) → member_id 해석 (입찰물건관리 validateMember 방식). allMembersNewData 우선.
+  function _memberByName(name){
+    name=String(name||'').trim(); if(!name) return null;
+    var src=(typeof allMembersNewData!=='undefined' && allMembersNewData && allMembersNewData.length)?allMembersNewData:(_members||[]);
+    var clean=name.replace(/^\([^)]+\)\s*/,'').split(/[\s(]/)[0].trim();
+    for(var i=0;i<src.length;i++){
+      var nm=String(src[i].member_name||src[i].name||'').trim();
+      var cn=nm.replace(/^\([^)]+\)\s*/,'').split(/[\s(]/)[0].trim();
+      if(nm===name || (clean && cn===clean)) return { member_id:String(src[i].member_id||''), name:nm };
+    }
+    return null;
+  }
+  function _fillMemberDatalist(){
+    var dl=document.getElementById('dmMemberNamesList'); if(!dl) return;
+    var src=(typeof allMembersNewData!=='undefined' && allMembersNewData && allMembersNewData.length)?allMembersNewData:(_members||[]);
+    var seen={}, opts=[];
+    src.forEach(function(m){ var nm=String(m.member_name||m.name||'').trim(); if(nm && !seen[nm]){ seen[nm]=1; opts.push('<option value="'+esc(nm)+'">'); } });
+    dl.innerHTML=opts.join('');
+  }
+
+  // 일괄작업 선택 → 값 입력칸 동적 생성 (회원=수기+자동완성, 인증=종이/전자, 나머지=텍스트)
+  DM.bulkActionChange = function(){
+    var act=(document.getElementById('dmBulkAction')||{}).value||'';
+    var wrap=document.getElementById('dmBulkValWrap'); if(!wrap) return;
+    var st='border:1px solid #d1d5db;border-radius:6px;padding:3px 6px;font-size:12px';
+    if(act==='member'){ loadMembers(_fillMemberDatalist); _fillMemberDatalist(); wrap.innerHTML='<input id="dmBulkVal" list="dmMemberNamesList" placeholder="회원명(수기 입력)" autocomplete="off" onfocus="this.select()" style="'+st+';width:150px">'; }
+    else if(act==='myungui'){ wrap.innerHTML='<input id="dmBulkVal" placeholder="명의" onfocus="this.select()" style="'+st+';width:120px">'; }
+    else if(act==='bidprice'){ wrap.innerHTML='최저가의 <input id="dmBulkVal" type="number" step="0.1" placeholder="%" onfocus="this.select()" style="'+st+';width:72px;text-align:right"> %'; }
+    else if(act==='jinhaengbi'){ wrap.innerHTML='<input id="dmBulkVal" placeholder="진행비(원)" onfocus="this.select()" style="'+st+';width:110px;text-align:right">'; }
+    else if(act==='hyang'){ wrap.innerHTML='<input id="dmBulkVal" placeholder="향" onfocus="this.select()" style="'+st+';width:90px">'; }
+    else if(act==='auth_method'){ wrap.innerHTML='<select id="dmBulkVal" style="'+st+'"><option value="">선택</option><option>종이</option><option>전자</option></select>'; }
+    else { wrap.innerHTML=''; }
+  };
+
+  // 일괄적용 — 체크된 행에만. 회원/입찰가 → ITEMS, 명의/진행비/향/인증 → 다물건 시트.
+  DM.bulkApply2 = function(){
+    var act=(document.getElementById('dmBulkAction')||{}).value||'';
+    if(!act){ alert('일괄작업을 선택하세요.'); return; }
+    var valEl=document.getElementById('dmBulkVal'); var val=valEl?String(valEl.value).trim():'';
     var ids=DM.selectedIds();
-    var items=curItems().filter(function(it){ return ids.indexOf(it.link_item_id)>=0; });
-    if(!items.length) items=filteredItems();   // 체크 없으면 현재 표시 전체
-    if(!items.length){ alert('대상 물건이 없습니다. (사건 선택 후)'); return; }
-    _bulkTargets=items;
-    var cnt=document.getElementById('dmBulkCount'); if(cnt) cnt.textContent='대상 '+items.length+'건'+(ids.length?'(체크)':'(표시 전체)');
-    var my=document.getElementById('dmBulkMyungui'); if(my) my.value='';
-    var pc=document.getElementById('dmBulkPct'); if(pc) pc.value='';
-    var au=document.getElementById('dmBulkAuth'); if(au) au.value='';
-    loadMembers(function(){
-      var sel=document.getElementById('dmBulkMember');
-      if(sel) sel.innerHTML='<option value="">(변경안함)</option>'+(_members||[]).map(function(m){ return '<option value="'+esc(m.member_id)+'" data-name="'+esc(m.name)+'">'+esc(m.name)+(m.gubun?(' ['+esc(m.gubun)+']'):'')+'</option>'; }).join('');
-      var dr=document.getElementById('dmBulkDaeriin');
-      if(dr) dr.innerHTML='<option value="">(변경안함)</option>'+_staff().map(function(s){ return '<option>'+esc(s.name)+'</option>'; }).join('');
-      DM.bulkPreview();
-    });
-    var modal=document.getElementById('dmBulkModal'); if(modal) modal.classList.remove('content-hidden');
-  };
-  DM.bulkClose = function(){ var m=document.getElementById('dmBulkModal'); if(m) m.classList.add('content-hidden'); };
-  function _bulkMember(){ var s=document.getElementById('dmBulkMember'); if(!s||!s.value) return {id:'',name:''}; return {id:s.value, name:(s.options[s.selectedIndex].getAttribute('data-name')||'')}; }
-  DM.bulkPreview = function(){
-    var mem=_bulkMember(); var myung=(document.getElementById('dmBulkMyungui')||{}).value||'';
-    var tb=document.getElementById('dmBulkPreview'); if(!tb) return;
-    tb.innerHTML=_bulkTargets.map(function(it){
-      var bid=_bulkBid(it);
-      return '<tr style="border-bottom:1px solid #f3f4f6">'
-        +'<td style="padding:3px 6px">'+esc(it.sakun_no)+'</td>'
-        +'<td style="padding:3px 6px">'+esc(mem.name||it.member_name||'')+'</td>'
-        +'<td style="padding:3px 6px">'+esc(myung||it.myungui||'')+'</td>'
-        +'<td style="padding:3px 6px;text-align:right">'+_comma(it.lowest_price)+'</td>'
-        +'<td style="padding:3px 6px;text-align:right;font-weight:700;color:#4f46e5">'+(bid?_comma(bid):(it.bidprice?_comma(it.bidprice):'-'))+'</td>'
-        +'</tr>';
-    }).join('');
-  };
-  DM.bulkApply = function(){
-    var mem=_bulkMember(); var myung=((document.getElementById('dmBulkMyungui')||{}).value||'').trim(); var pct=_bulkPct();
-    var daeriin=((document.getElementById('dmBulkDaeriin')||{}).value||'').trim();
-    var auth=((document.getElementById('dmBulkAuth')||{}).value||'').trim();
-    if(!mem.id && !myung && pct==null && !daeriin && !auth){ alert('회원 / 명의 / 입찰가% / 입찰대리인 / 인증 중 하나는 입력하세요.'); return; }
+    if(!ids.length){ alert('그리드에서 체크박스로 물건을 선택하세요.'); return; }
+    var targets=curItems().filter(function(it){ return ids.indexOf(it.link_item_id)>=0; });
+    if(!targets.length){ alert('선택된 물건이 없습니다.'); return; }
     var itemsRows=[], dmRows=[];
-    _bulkTargets.forEach(function(it){
-      var key={ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court };
-      if(mem.id || pct!=null){ var r={in_date:key.in_date,sakun_no:key.sakun_no,court:key.court}; if(mem.id){r.member_id=mem.id;r.member_name=mem.name;} if(pct!=null){r.bidprice=_bulkBid(it);} itemsRows.push(r); }
-      var dmr=null;
-      if(myung){ dmr=dmr||{in_date:key.in_date,sakun_no:key.sakun_no,court:key.court}; dmr.myungui=myung; }
-      if(daeriin){ dmr=dmr||{in_date:key.in_date,sakun_no:key.sakun_no,court:key.court}; dmr.daeriin=daeriin; }
-      if(auth){ dmr=dmr||{in_date:key.in_date,sakun_no:key.sakun_no,court:key.court}; dmr.auth_method=auth; }
-      if(dmr) dmRows.push(dmr);
-    });
-    var btn=document.getElementById('dmBulkApplyBtn'); if(btn){ btn.disabled=true; btn.textContent='적용 중…'; }
-    var need=(itemsRows.length?1:0)+(dmRows.length?1:0), done=0;
-    function fin(){ done++; if(done>=need){ if(btn){btn.disabled=false;btn.textContent='확정 적용';} DM.bulkClose(); DM.load(); } }
-    if(itemsRows.length) google.script.run.withSuccessHandler(fin).withFailureHandler(function(e){ alert('회원/입찰가 적용 오류: '+(e&&e.message||e)); fin(); }).bulkAssignDamulgeon(itemsRows);
-    if(dmRows.length) google.script.run.withSuccessHandler(fin).withFailureHandler(function(e){ alert('명의 저장 오류: '+(e&&e.message||e)); fin(); }).bulkSaveDamulgeon(dmRows);
+    if(act==='member'){
+      if(!val){ alert('회원명을 입력하세요.'); return; }
+      var mem=_memberByName(val);
+      if(!mem){ if(!confirm('회원목록에 없는 이름입니다. 회원명만 기록할까요?')) return; mem={member_id:'',name:val}; }
+      targets.forEach(function(it){ itemsRows.push({in_date:it.in_date,sakun_no:it.sakun_no,court:it.court,member_name:mem.name,member_id:mem.member_id}); });
+    } else if(act==='bidprice'){
+      var pct=parseFloat(val); if(isNaN(pct)){ alert('퍼센트(%)를 입력하세요.'); return; }
+      targets.forEach(function(it){ itemsRows.push({in_date:it.in_date,sakun_no:it.sakun_no,court:it.court,bidprice:String(Math.round(_num(it.lowest_price)*pct/100))}); });
+    } else {   // myungui/jinhaengbi/hyang/auth_method → 다물건 시트
+      if(act!=='auth_method' && !val){ alert('값을 입력하세요.'); return; }
+      targets.forEach(function(it){ var r={in_date:it.in_date,sakun_no:it.sakun_no,court:it.court}; r[act]=val; dmRows.push(r); });
+    }
+    var need=(itemsRows.length?1:0)+(dmRows.length?1:0), done=0; if(!need) return;
+    _dot('● 일괄적용 중');
+    function fin(){ done++; if(done>=need){ _dot('✓ 일괄적용 '+targets.length+'건', true); DM.load(); } }
+    if(itemsRows.length) google.script.run.withSuccessHandler(fin).withFailureHandler(function(e){ alert('적용 오류: '+(e&&e.message||e)); fin(); }).bulkAssignDamulgeon(itemsRows);
+    if(dmRows.length) google.script.run.withSuccessHandler(fin).withFailureHandler(function(e){ alert('적용 오류: '+(e&&e.message||e)); fin(); }).bulkSaveDamulgeon(dmRows);
   };
 
   function setupSplitter(){

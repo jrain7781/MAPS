@@ -775,7 +775,7 @@ const DM_FEE_TABLE_KEY = 'DM_FEE_TABLE';
 //   회원/입찰가/상태/물건종류/주소/감정가/최저가/보증금/등급은 ITEMS·연계에서 라이브 조회(이중관리 X).
 //   다물건 시트엔 items 에 '없는 값'만 저장: 명의(다물건 전용)·향·인증방식·비고.
 const DAMULGEON_KEY_FIELDS = ['in_date', 'sakun_no', 'court'];   // sakun_no 는 물건번호(N) 포함
-const DAMULGEON_AUX_FIELDS = ['myungui', 'hyang', 'daeriin', 'auth_method', 'dm_note'];
+const DAMULGEON_AUX_FIELDS = ['myungui', 'hyang', 'daeriin', 'jinhaengbi', 'auth_method', 'dm_note'];
 const DAMULGEON_HEADERS = [
   'in_date',      // KEY — 입찰일자
   'sakun_no',     // KEY — 사건번호(물건번호 포함)
@@ -783,6 +783,7 @@ const DAMULGEON_HEADERS = [
   'myungui',      // 명의 (다물건 전용 — 회원 명의 아님)
   'hyang',        // 향
   'daeriin',      // 입찰대리인 (직원 연계 — 다물건 전용)
+  'jinhaengbi',   // 진행비 (다물건 전용)
   'auth_method',  // 인증방식 (종이/전자)
   'dm_note',      // 비고
   'reg_date',     // 최초 생성
