@@ -485,7 +485,7 @@
       a.saved=true;
       if(_mcCache[mid]){ var ca=(_mcCache[mid].accounts||[]).filter(function(x){return x.idx===sel;})[0]; if(ca) Object.assign(ca, data, {saved:true}); }
       if(itemId && it){   // 그리드 즉시 반영(회원/구분/명의 재파싱) + 캐시 동기화
-        it.member_name=newMName; it.member_id=mid;
+        it.member_name=newMName; it.member_id=mid; it.tg=_tgForMember(mid);
         try{ var bd=(typeof allBiddingData!=='undefined'&&allBiddingData)?allBiddingData.filter(function(b){return String(b.id)===String(itemId);})[0]:null; if(bd){ bd.m_name=newMName; bd.member_id=mid; } }catch(e){}
         renderBody();
         if(msg){ msg.textContent='저장됨 ✓ (ITEMS 명의 반영)'; msg.style.color='#16a34a'; }
@@ -505,7 +505,7 @@
       if(r&&r.success){
         // 그 물건에도 명의 배정됨 → 그리드/캐시 즉시 반영
         if(itemId && it && r.mName){
-          it.member_name=r.mName; it.member_id=mid;
+          it.member_name=r.mName; it.member_id=mid; it.tg=_tgForMember(mid);
           try{ var bd=(typeof allBiddingData!=='undefined'&&allBiddingData)?allBiddingData.filter(function(b){return String(b.id)===String(itemId);})[0]:null; if(bd){ bd.m_name=r.mName; bd.member_id=mid; } }catch(e){}
           renderBody();
         }
@@ -828,6 +828,13 @@
     } catch(e){}
   };
   // allBiddingData(모달이 갱신) → 다물건 그리드 항목 로컬 반영 (입찰가/회원/상태/전달상태)
+  // 회원 member_id → 텔레그램 뱃지(Y/'') — allMembersNewData(telegram_enabled) 기준
+  function _tgForMember(memberId){
+    memberId=String(memberId||'').trim(); if(!memberId) return '';
+    var src=(typeof allMembersNewData!=='undefined'&&allMembersNewData)?allMembersNewData:[];
+    for(var i=0;i<src.length;i++){ if(String(src[i].member_id)===memberId) return (String(src[i].telegram_enabled||'')==='Y')?'Y':''; }
+    return '';
+  }
   function _syncItemFromCache(id){
     try {
       var it=curItems().filter(function(x){return x.link_item_id===id;})[0];
@@ -838,6 +845,7 @@
       it.member_id=String(bd.member_id||'');
       if(bd.stu_member) it.stu_member=String(bd.stu_member);
       it.bid_state=String(bd.bid_state||'');
+      it.tg=_tgForMember(it.member_id);   // 회원 변경/삭제 → T 뱃지 갱신(삭제 시 사라짐)
       _computeFees(curItems()); renderBody();
     } catch(e){}
   }
