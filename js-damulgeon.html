@@ -410,15 +410,15 @@
     DM.mcSelect(sel, true);
   }
   function _renderMcSelector(){
-    var others=_mcAccounts.filter(function(a){return a.idx>0;});
     var cur=_mcAccounts.filter(function(a){return a.idx===_mcSel;})[0];
-    var html='<span class="dm-mc-tab'+(_mcSel===0?' on':'')+'" onclick="DM.mcSelect(0)">본인</span>';
-    if(others.length){
-      var opts='<option value="">명의 선택…</option>'+others.map(function(a){ return '<option value="'+a.idx+'"'+(a.idx===_mcSel?' selected':'')+'>'+esc(a.name||('명의'+a.idx))+' ('+esc(a.gubun||'개인')+')</option>'; }).join('');
-      html+='<select class="dm-mc-sel" onchange="DM.mcSelect(parseInt(this.value,10))">'+opts+'</select>';
-    }
-    var cg=_mcSel===-1?'신규':(_mcSel===0?'본인':(cur?(cur.gubun||'개인'):''));   // 현재 구분 색상 badge
-    if(cg){ var gcol=({'본인':'#2563eb','개인':'#16a34a','법인':'#9333ea','신규':'#16a34a'})[cg]||'#64748b'; html+='<span class="dm-mc-gbadge" style="color:'+gcol+';background:'+gcol+'1a;border:1px solid '+gcol+'66">'+esc(cg)+'</span>'; }
+    // 구분 badge → 헤더 이름 옆
+    var cg=_mcSel===-1?'신규':(_mcSel===0?'본인':(cur?(cur.gubun||'개인'):''));
+    var badge=_mcEl('dmMcGubunBadge');
+    if(badge){ if(cg){ var gcol=({'본인':'#2563eb','개인':'#16a34a','법인':'#9333ea','신규':'#16a34a'})[cg]||'#64748b'; badge.innerHTML='<span class="dm-mc-gbadge" style="color:'+gcol+';background:'+gcol+'1a;border:1px solid '+gcol+'66">'+esc(cg)+'</span>'; } else badge.innerHTML=''; }
+    // 드랍다운(맨 위 본인 + 명의들) + 명의 등록  — 2개만
+    var others=_mcAccounts.filter(function(a){return a.idx>0;});
+    var opts='<option value="0"'+(_mcSel===0?' selected':'')+'>본인</option>'+others.map(function(a){ return '<option value="'+a.idx+'"'+(a.idx===_mcSel?' selected':'')+'>'+esc(a.name||('명의'+a.idx))+' ('+esc(a.gubun||'개인')+')</option>'; }).join('');
+    var html='<select class="dm-mc-sel" style="max-width:220px" onchange="DM.mcSelect(parseInt(this.value,10))">'+opts+'</select>';
     html+='<span class="dm-mc-tab dm-mc-add'+(_mcSel===-1?' on':'')+'" onclick="DM.mcNewMyungui()">➕ 명의 등록</span>';
     _mcEl('dmMcTabs').innerHTML=html;
   }

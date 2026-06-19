@@ -1260,6 +1260,7 @@ function getDamulgeonList() {
         lowest_price: String(r[22] || ''), deposit: String(r[21] || ''),
         bidprice: String(r[7] || ''),     // 입찰가 = items.bidprice (연계)
         member_id: String(r[8] || ''), member_name: String(r[6] || ''),   // 회원 = items
+        auction_id: String(r[15] || ''),  // 옥션ID(P열) — 옥션원 버튼용
         grade: '',                        // 등급 = 회원 종목(class_grade) 연계 (아래)
         myungui: '', hyang: '', auth_method: '', dm_note: ''               // 다물건 전용 (시트 머지)
       });
