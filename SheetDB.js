@@ -911,6 +911,7 @@ function getDamulgeonList() {
         link_item_id: String(r[0] || ''),
         in_date: inDate, sakun_no: sakun, mulgeon_no: _dmMulgeonNo_(sakun), court: court,
         stu_member: '상품',
+        m_name_id: String(r[5] || ''),   // 담당자(대표님/전부쌤 등) — 좌측 카드 표시용
         address: address,
         building_area: areaCol > 0 ? String(r[areaCol - 1] || '') : '',
         lowest_price: String(r[22] || ''), deposit: String(r[21] || ''),
@@ -921,6 +922,10 @@ function getDamulgeonList() {
       });
     });
     var kept = Object.keys(groups).map(function(k) { return groups[k]; }).filter(function(g) { return g.items.length >= 2; });
+
+    // 좌측 리스트: 입찰일(in_date)이 오늘 이전인 사건은 제외 (오늘·이후만)
+    var today6 = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMdd');
+    kept = kept.filter(function (g) { var d6 = _dmDateKey6_(g.in_date); return !(d6 && d6 < today6); });
 
     // '다물건' 시트 보조필드 머지 (id 우선, 3키 폴백)
     var aux = readAllDamulgeon();
