@@ -301,7 +301,7 @@
     var cls='dmgrid-td'+(edge?' dm-frozen-edge':'');
     if(c.t==='check') return '<td class="'+cls+'" style="'+style+';text-align:center"><input type="checkbox" class="dm-row-cb" data-id="'+esc(it.link_item_id)+'"></td>';
     if(c.t==='tg') return '<td class="'+cls+'" style="'+style+';text-align:center">'+((it.tg==='Y')?'<span class="telegram-badge">T</span>':'')+'</td>';
-    if(c.t==='auction'){ var aid=String(it.auction_id||'').trim(); return '<td class="'+cls+'" style="'+style+';text-align:center;padding:0">'+(aid?'<button onclick="DM.openAuction(\''+esc(aid)+'\',\''+esc(it.court||'')+'\',\''+esc(it.sakun_no||'')+'\')" title="옥션원 상세 보기" style="border:1px solid #f59e0b;background:#fff7ed;color:#b45309;border-radius:4px;font-size:10px;padding:1px 5px;cursor:pointer;font-weight:700">옥션</button>':'')+'</td>'; }
+    if(c.t==='auction'){ var aid=String(it.auction_id||'').trim(); return '<td class="'+cls+'" style="'+style+';text-align:center;padding:0">'+(aid?'<button onclick="DM.openAuction(\''+esc(aid)+'\',\''+esc(it.court||'')+'\',\''+esc(it.sakun_no||'')+'\')" title="옥션원 상세 보기" style="border:1px solid #2563eb;background:#eff6ff;color:#1d4ed8;border-radius:4px;font-size:10px;padding:1px 5px;cursor:pointer;font-weight:700">옥션</button>':'')+'</td>'; }
     if(c.t==='sakun') return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(it.sakun_no)+'</span></td>';
     if(c.t==='status'){ var st=String(it.stu_member||''); var k=(typeof getStatusTagClass==='function')?getStatusTagClass(st):''; return '<td class="'+cls+'" style="'+style+'"><span class="'+k+'">'+esc(st)+'</span></td>'; }
     if(c.t==='ro' || c.t==='calc'){
@@ -452,7 +452,7 @@
     h+=inRow('직업','job',a.job);
     h+='<div class="dm-mc-actions">'+(idx===-1
       ? '<button onclick="DM.mcAddSave()" class="dm-mc-btn-save" style="background:#16a34a">명의 등록</button>'
-      : '<button onclick="DM.mcSave()" class="dm-mc-btn-save">저장</button><button onclick="DM.mcPrint()" class="dm-mc-btn-print" title="위임장+기일입찰표 인쇄">📄 출력</button>')
+      : '<button id="dmMcSaveBtn" onclick="DM.mcSave()" class="dm-mc-btn-save">저장</button><button onclick="DM.mcPrint()" class="dm-mc-btn-print" title="위임장+기일입찰표 인쇄">📄 출력</button>')
       +'<span id="dmMcSaveMsg" style="font-size:12px"></span></div>';
     _mcEl('dmMcBody').innerHTML=h;
   };
@@ -472,12 +472,15 @@
     var a=_mcAccounts.filter(function(x){return x.idx===_mcSel;})[0]; if(!a) return;
     var data={ gubun:a.gubun, name:a.name, job:a.job, jumin_corp:a.jumin_corp, biz_no:a.biz_no, phone:a.phone, address:a.address, account_bank:a.account_bank, account_no:a.account_no, account_name:a.account_name };
     var msg=_mcEl('dmMcSaveMsg'); if(msg){ msg.textContent='저장 중…'; msg.style.color='#64748b'; }
+    var sbtn=_mcEl('dmMcSaveBtn'); if(sbtn){ sbtn.disabled=true; sbtn.textContent='저장중…'; sbtn.style.opacity='0.7'; }
+    function _restoreBtn(){ var b=_mcEl('dmMcSaveBtn'); if(b){ b.disabled=false; b.textContent='저장'; b.style.opacity='1'; } }
     var mid=_mcMemberId, sel=_mcSel, it=_mcRowItem;
     var mname=(_mcEl('dmMcMember')||{}).textContent||'';
     // 선택 명의 → items.m_name 형식: 본인="회원", 명의="회원 (구분) 명의자"
     var newMName=(sel===0)? mname : (mname+' ('+(a.gubun||'개인')+') '+(a.name||''));
     var itemId=(it&&it.link_item_id)?it.link_item_id:'';
     google.script.run.withSuccessHandler(function(r){
+      _restoreBtn();
       if(!(r&&r.success)){ if(msg){ msg.textContent='실패: '+esc((r&&r.msg)||''); msg.style.color='#dc2626'; } return; }
       a.saved=true;
       if(_mcCache[mid]){ var ca=(_mcCache[mid].accounts||[]).filter(function(x){return x.idx===sel;})[0]; if(ca) Object.assign(ca, data, {saved:true}); }
@@ -487,7 +490,7 @@
         renderBody();
         if(msg){ msg.textContent='저장됨 ✓ (ITEMS 명의 반영)'; msg.style.color='#16a34a'; }
       } else { if(msg){ msg.textContent='저장됨 ✓'; msg.style.color='#16a34a'; } }
-    }).withFailureHandler(function(e){ if(msg){ msg.textContent='실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).saveDamulgeonMyungui(mid, sel, data, itemId, newMName);
+    }).withFailureHandler(function(e){ _restoreBtn(); if(msg){ msg.textContent='실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).saveDamulgeonMyungui(mid, sel, data, itemId, newMName);
   };
   DM.mcAddSave=function(){
     if(!_mcMemberId) return;
