@@ -301,6 +301,7 @@
       if(c.f==='mulgeon_no' && it.link_item_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(v)+'</span></td>';   // 사건번호 숨김 시 물건번호로 모달
       if(c.f==='_total'){ var done3=(_num(it.bidprice)>0 && _num(it.deposit)>0 && _num(it._fee)>0); return '<td class="'+cls+'" style="'+style+(done3?';color:#2563eb;font-weight:800':'')+'">'+esc(v)+'</td>'; }   // 입찰가·보증금·진행비 모두 입력 → 굵은 파랑
       if(c.f==='_pMember' && it.member_id){ var _pm=_parseMName(it.member_name,it.member_id); return '<td class="'+cls+'" style="'+style+'"><span class="dm-member-link" onclick="DM._hl(this);DM.openMyungui(\''+esc(it.member_id)+'\',\''+esc(_pm.myungui)+'\',\''+esc(_pm.member)+'\',\''+esc(it.link_item_id)+'\')" title="클릭 → 명의/계좌 정보">'+esc(v)+'</span></td>'; }   // 회원 클릭 → 명의 카드(선택 명의 표시)
+      if(c.f==='_pGubun' && v){ var _gc=({'본인':'#2563eb','개인':'#16a34a','법인':'#9333ea'})[v]||'#64748b'; return '<td class="'+cls+'" style="'+style+';text-align:center"><span style="background:'+_gc+'1a;color:'+_gc+';padding:1px 8px;border-radius:9px;font-size:11px;font-weight:700">'+esc(v)+'</span></td>'; }   // 구분 색상 badge
       return '<td class="'+cls+'" style="'+style+'">'+esc(v)+'</td>';
     }
     if(c.t==='num' || c.t==='text' || c.t==='bid'){
@@ -369,22 +370,21 @@
     _mcEl('dmMcMember').textContent=memberName;
     _mcEl('dmMcGrade').textContent=res.grade||'';
     var rowMName=(_mcRowItem&&_mcRowItem.member_name)?String(_mcRowItem.member_name):'';
-    var sel=0, matched=false, i, a;
-    // 1) 그 행의 전체 m_name("회원 (구분) 명의")과 각 명의 구성을 비교(공백 무시)
-    if(rowMName){
-      var target=_norm(rowMName);
-      for(i=0;i<_mcAccounts.length;i++){ a=_mcAccounts[i];
-        var gb=String(a.gubun||'').trim();   // buildMemberAcItems_ 와 동일: 구분 비면 괄호 없음
-        var cand=(a.idx===0)?memberName:(gb?(memberName+' ('+gb+') '+(a.name||'')):(memberName+' '+(a.name||'')));
-        if(_norm(cand)===target){ sel=a.idx; matched=true; break; }
-      }
+    var pm=_parseMName(rowMName||'', memberId);            // 그리드 회원/구분/명의와 동일 파싱
+    var wantName=_norm(pm.myungui||rm||''), tgt=_norm(rowMName||''), sel=0, hit=null, i, gb, cd, n;
+    if(pm.gubun!=='본인' && (wantName||tgt)){
+      var cands=_mcAccounts.filter(function(x){return x.idx>0;});
+      // 1) 전체 m_name 일치
+      for(i=0;i<cands.length&&!hit;i++){ gb=String(cands[i].gubun||'').trim(); cd=gb?(memberName+' ('+gb+') '+(cands[i].name||'')):(memberName+' '+(cands[i].name||'')); if(tgt&&_norm(cd)===tgt) hit=cands[i]; }
+      // 2) 명의명 정확일치
+      if(!hit&&wantName){ for(i=0;i<cands.length&&!hit;i++){ if(_norm(cands[i].name)===wantName) hit=cands[i]; } }
+      // 3) 명의명 부분일치(괄호/태그 차이 허용)
+      if(!hit&&wantName){ for(i=0;i<cands.length&&!hit;i++){ n=_norm(cands[i].name); if(n&&(n.indexOf(wantName)>=0||wantName.indexOf(n)>=0)) hit=cands[i]; } }
+      // 4) 명의가 1개뿐이면 그걸로
+      if(!hit&&cands.length===1) hit=cands[0];
+      if(hit) sel=hit.idx;
     }
-    // 2) 그리드와 동일 파싱(_parseMName)의 명의명으로 매칭(폴백)
-    if(!matched){
-      var pm=_parseMName(rowMName, memberId);   // 그리드 회원/구분/명의와 동일
-      var key=_norm(pm.myungui||rm||'');
-      if(key && pm.gubun!=='본인'){ for(i=0;i<_mcAccounts.length;i++){ if(_mcAccounts[i].idx>0 && _norm(_mcAccounts[i].name)===key){ sel=_mcAccounts[i].idx; matched=true; break; } } }
-    }
+    try{ console.log('[dmCard] rowMName=',rowMName,'| pm=',pm,'| accounts=',_mcAccounts.map(function(x){return x.idx+':'+x.name+'('+x.gubun+')';}),'| sel=',sel); }catch(e){}
     DM.mcSelect(sel, true);
   }
   function _renderMcSelector(){
