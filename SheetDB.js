@@ -308,36 +308,31 @@ function _itemColByHeader_(sheet, name) {
 }
 
 /**
- * [다물건] 신규 items 열 'address'(주소) / 'building_area'(건물면적) 를 시트 맨끝(우측)에 보장.
- * ⚠️ ITEM_HEADERS 에 append 하면 index23=X열(chuchen_read)과 충돌하므로, members_note 처럼
- *    헤더명으로 우측 끝에만 추가/조회한다. 기존 열은 절대 건드리지 않음.
- * 반환: { addressCol, areaCol } (1-based)
+ * [다물건] 신규 items 열 'address'/'building_area'/'prop_kind'(물건종류)/'gamjungga'(감정가) 를 시트 맨끝에 보장.
+ * ⚠️ ITEM_HEADERS 에 append 하면 기존 index 열과 충돌하므로, 헤더명으로 우측 끝에만 추가/조회. 기존 열 무손상.
+ * 반환: { addressCol, areaCol, propKindCol, gamjunggaCol } (1-based)
  */
 function ensureItemDmColumns_() {
   var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
-  if (!sheet) return { addressCol: -1, areaCol: -1 };
+  if (!sheet) return { addressCol: -1, areaCol: -1, propKindCol: -1, gamjunggaCol: -1 };
   var maxCols = sheet.getMaxColumns();
   var hdr = sheet.getRange(1, 1, 1, maxCols).getValues()[0];
   var find = function (nm) { for (var c = 0; c < hdr.length; c++) { if (String(hdr[c]).trim() === nm) return c + 1; } return -1; };
-  var addressCol = find('address'), areaCol = find('building_area');
+  var want = ['address', 'building_area', 'prop_kind', 'gamjungga'];
+  var cols = {};
+  want.forEach(function (nm) { cols[nm] = find(nm); });
   // 우측 끝(마지막 비어있지 않은 헤더) 다음부터 신규 추가
   var lastUsed = hdr.length;
   while (lastUsed > 0 && !String(hdr[lastUsed - 1] || '').trim()) lastUsed--;
-  var toAdd = [];
-  if (addressCol < 0) toAdd.push('address');
-  if (areaCol < 0) toAdd.push('building_area');
+  var toAdd = want.filter(function (nm) { return cols[nm] < 0; });
   if (toAdd.length) {
     var need = lastUsed + toAdd.length;
     if (need > maxCols) sheet.insertColumnsAfter(maxCols, need - maxCols);
     var col = lastUsed;
-    toAdd.forEach(function (nm) {
-      col++;
-      sheet.getRange(1, col).setValue(nm);
-      if (nm === 'address') addressCol = col; else areaCol = col;
-    });
+    toAdd.forEach(function (nm) { col++; sheet.getRange(1, col).setValue(nm); cols[nm] = col; });
     SpreadsheetApp.flush();
   }
-  return { addressCol: addressCol, areaCol: areaCol };
+  return { addressCol: cols['address'], areaCol: cols['building_area'], propKindCol: cols['prop_kind'], gamjunggaCol: cols['gamjungga'] };
 }
 
 /**
@@ -603,7 +598,7 @@ function registerDamulgeon(items, mNameId) {
     if (!sheet) return { success: false, message: 'items 시트 없음' };
     ensureColumnExists(sheet, 16);
     var dm = ensureItemDmColumns_();
-    var addrCol = dm.addressCol, areaCol = dm.areaCol;
+    var addrCol = dm.addressCol, areaCol = dm.areaCol, propKindCol = dm.propKindCol, gamjunggaCol = dm.gamjunggaCol;
 
     // 기존 중복키 수집 (B,C,D = in-date, sakun_no, court) → 행번호. 기등록건 지정필드 갱신용.
     var existing = {};
@@ -654,6 +649,8 @@ function registerDamulgeon(items, mNameId) {
           _upd(22, 'deposit',            String(it.deposit || ''));        // 보증금
           _upd(addrCol, 'address',       String(it.address || ''));        // 주소
           _upd(areaCol, 'building_area', String(it.building_area || ''));   // 면적
+          _upd(propKindCol, 'prop_kind', String(it.prop_kind || ''));      // 물건종류
+          _upd(gamjunggaCol, 'gamjungga', String(it.gamjungga || ''));     // 감정가
           _upd(auctionIdCol, 'auction_id', aid);                           // 옥션ID
         }
         if (changed.length) { updated++; results.push({ sakun_no: sakun, ok: false, updated: true, msg: '이미 등록 → 갱신(' + changed.join(',') + ')', au: au }); }
@@ -683,6 +680,8 @@ function registerDamulgeon(items, mNameId) {
       var newRowNum = sheet.getLastRow();
       if (addrCol > 0) sheet.getRange(newRowNum, addrCol).setValue(String(it.address || ''));
       if (areaCol > 0) sheet.getRange(newRowNum, areaCol).setValue(String(it.building_area || ''));
+      if (propKindCol > 0) sheet.getRange(newRowNum, propKindCol).setValue(String(it.prop_kind || ''));
+      if (gamjunggaCol > 0) sheet.getRange(newRowNum, gamjunggaCol).setValue(String(it.gamjungga || ''));
       existing[key] = newRowNum;
       saved++;
       results.push({ sakun_no: sakun, ok: true, id: id, au: aid ? 'new' : 'none' });
@@ -911,6 +910,8 @@ function getDamulgeonList() {
     if (!sheet || sheet.getLastRow() < 2) return { success: true, groups: [], count: 0 };
     var addrCol = _itemColByHeader_(sheet, 'address');
     var areaCol = _itemColByHeader_(sheet, 'building_area');
+    var pkCol = _itemColByHeader_(sheet, 'prop_kind');
+    var gjCol = _itemColByHeader_(sheet, 'gamjungga');
     var maxCols = sheet.getMaxColumns();
     var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, maxCols).getValues();
     // ITEM idx: id0 in-date1 sakun_no2 court3 stu_member4 ... deposit21 lowest_price22
@@ -931,10 +932,10 @@ function getDamulgeonList() {
         in_date: inDate, sakun_no: sakun, mulgeon_no: _dmMulgeonNo_(sakun), court: court,
         stu_member: stu,                  // 상태 = items (단일관리)
         m_name_id: String(r[5] || ''),   // 담당자 — 좌측 카드 표시용
-        prop_kind: '',                    // 물건종류 (items 새 컬럼 — 크롤 추가 후 채움)
+        prop_kind: pkCol > 0 ? String(r[pkCol - 1] || '') : '',   // 물건종류 (items 연계)
         address: address,
         building_area: areaCol > 0 ? String(r[areaCol - 1] || '') : '',
-        gamjungga: '',                    // 감정가 (items 새 컬럼 — 크롤 추가 후)
+        gamjungga: gjCol > 0 ? String(r[gjCol - 1] || '') : '',   // 감정가 (items 연계)
         lowest_price: String(r[22] || ''), deposit: String(r[21] || ''),
         bidprice: String(r[7] || ''),     // 입찰가 = items.bidprice (연계)
         member_id: String(r[8] || ''), member_name: String(r[6] || ''),   // 회원 = items

@@ -165,6 +165,28 @@ def parse_price_cell(txt):
     return nums[0] if nums else ""
 
 
+def parse_appraisal_cell(txt):
+    """결과표 td[4] → 감정가 숫자(콤마 제거). 보통 첫 금액 = 감정가."""
+    t = txt or ""
+    m = re.search(r"감\s*정\s*가?\s*[^\d]{0,8}([1-9][\d,]{3,})", t)
+    if m:
+        return m.group(1).replace(",", "")
+    nums = [n.replace(",", "") for n in re.findall(r"([1-9][\d,]{3,})", t)]
+    return nums[0] if nums else ""
+
+
+def prop_kind_of(sakun_txt):
+    """td[2](사건번호 셀) 에서 물건종류 추출. 사건번호/물건번호 줄 제외, 한글 물건종류 줄."""
+    lines = [l.strip() for l in str(sakun_txt or "").split("\n") if l.strip()]
+    for l in lines[1:]:
+        if "타경" in l:
+            continue
+        if re.fullmatch(r"\(?\d+\)?", l):   # 물건번호 (4) 등
+            continue
+        return l
+    return ""
+
+
 # ── 옥션 ───────────────────────────────────────────────────────────────
 def login(driver, account):
     driver.get(f"{A1_BASE}/common/login_box.php")
@@ -268,9 +290,11 @@ def parse_result_rows(driver):
                 "line_num": line_num,
                 "sakun": sakun_txt,
                 "mulgeon": mulgeon_no(sakun_txt),
+                "prop_kind": prop_kind_of(sakun_txt),     # 물건종류 (사건번호 아래 줄)
                 "addr": (tds[3].text or "").strip(),
                 "state": (tds[5].text or "").strip(),
                 "lowest": parse_price_cell(tds[4].text or ""),
+                "gamjungga": parse_appraisal_cell(tds[4].text or ""),   # 감정가
                 "date6": extract_date6(date_txt),
                 "date_txt": date_txt.replace("\n", " "),
             })
@@ -386,12 +410,14 @@ def process_case(driver, wait, case):
             "sakun_no": canonical,             # 등록/대조용 정규화 사건번호(+물건번호)
             "sakun_raw": r["sakun"].split("\n")[0].strip(),  # 옥션 원문(참고)
             "mulgeon": r["mulgeon"],
+            "prop_kind": r.get("prop_kind", ""),   # 물건종류 (아파트/오피스텔 등)
             "in_date": yymmdd_to_full(r["date6"]),
             "date_txt": r["date_txt"],
             "court": court,
             "address": addr,
             "building_area": area,
             "lowest_price": r["lowest"],
+            "gamjungga": r.get("gamjungga", ""),   # 감정가
             "deposit": deposit,
             "state": state_kind,               # 매각/진행/불가/기타
             "state_raw": r["state"].replace("\n", " "),

@@ -370,8 +370,8 @@
   let _dmExisting = [], _dmExistingMap = {};
   const _DM_STATE_KEY = 'mj_dm_state';
   // 결과 그리드 컬럼(순서 고정) + 기본 너비(px) + 사용자 리사이즈 저장
-  const _DM_COLS = ['체크', '입찰일', '크롤상태', 'MAPS', '사건번호', '옥션ID', '법원', '주소', '건물면적', '최저가', '보증금', '담당자'];
-  const _DM_DEFW = [34, 92, 66, 60, 122, 96, 70, 380, 84, 110, 110, 84];
+  const _DM_COLS = ['체크', '입찰일', '크롤상태', 'MAPS', '사건번호', '물건종류', '옥션ID', '법원', '주소', '건물면적', '감정가', '최저가', '보증금', '담당자'];
+  const _DM_DEFW = [34, 92, 66, 60, 122, 78, 96, 70, 360, 84, 100, 110, 110, 84];
   let _dmColW = {};   // idx -> px (사용자 조절분)
   function _dmEl(id) { return document.getElementById(id); }
   function _dmCard() { return document.querySelector('.mjcap-card[data-cap="dm"]'); }
@@ -581,10 +581,12 @@
         + '<td style="padding:4px 6px">' + _dmStateBadge(r.state) + '</td>'
         + '<td style="padding:4px 6px">' + _dmMapsBadge(ex) + '</td>'
         + '<td style="padding:4px 6px;font-weight:600;white-space:nowrap">' + escapeHtml(r.sakun_no || '') + '</td>'
+        + '<td style="padding:4px 6px;white-space:nowrap;color:#475569" title="물건종류">' + escapeHtml(r.prop_kind || '') + '</td>'
         + '<td style="padding:4px 6px;white-space:nowrap;color:#64748b;font-size:12px" title="옥션원 물건ID">' + escapeHtml(_dmPid(r)) + _dmAidMark(r, ex) + '</td>'
         + '<td style="padding:4px 6px;white-space:nowrap">' + escapeHtml(r.court || '') + '</td>'
         + '<td style="padding:4px 6px;min-width:220px" title="' + escapeHtml(r.address || '') + '">' + escapeHtml(dispAddr) + '</td>'
         + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + escapeHtml(r.building_area || '') + '</td>'
+        + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + _dmComma(r.gamjungga) + '</td>'
         + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + _dmComma(r.lowest_price) + '</td>'
         + '<td style="padding:4px 6px;text-align:right;white-space:nowrap">' + _dmComma(r.deposit) + '</td>'
         + '<td style="padding:4px 6px"><input type="text" class="dm-mgr" data-idx="' + x.i + '" value="' + escapeAttr(r._manager) + '" style="width:70px;padding:2px 5px;font-size:12px"></td>'
@@ -593,7 +595,7 @@
     var colgroup = '<colgroup>' + _DM_COLS.map(function (_, i) { var w = (_dmColW[i] != null) ? _dmColW[i] : _DM_DEFW[i]; return '<col style="width:' + w + 'px">'; }).join('') + '</colgroup>';
     var headCells = _DM_COLS.map(function (name, i) {
       var label = (i === 0) ? '<input type="checkbox" id="dmSelAll" title="보이는 행 전체선택">' : escapeHtml(name);
-      var align = (name === '건물면적' || name === '최저가' || name === '보증금') ? 'right' : 'left';
+      var align = (name === '건물면적' || name === '감정가' || name === '최저가' || name === '보증금') ? 'right' : 'left';
       var grip = (i < _DM_COLS.length - 1) ? '<span class="dm-rsz" data-c="' + i + '" title="드래그로 너비 조절"></span>' : '';
       return '<th style="padding:5px 6px;text-align:' + align + '">' + label + grip + '</th>';
     }).join('');
@@ -646,7 +648,7 @@
     if (!apiKey) { alert('MAPS Admin Key 미설정.'); return; }
     var items = cbs.map(function (cb) {
       var r = _dmRows[parseInt(cb.dataset.idx, 10)];
-      return { in_date: r.in_date, sakun_no: r.sakun_no, court: r.court, address: r.address, building_area: r.building_area, lowest_price: r.lowest_price, deposit: r.deposit, auction_id: (r.auction_id || r.pid || ''), m_name_id: (r._manager || '').trim() || '대표님' };
+      return { in_date: r.in_date, sakun_no: r.sakun_no, court: r.court, address: r.address, building_area: r.building_area, prop_kind: (r.prop_kind || ''), gamjungga: (r.gamjungga || ''), lowest_price: r.lowest_price, deposit: r.deposit, auction_id: (r.auction_id || r.pid || ''), m_name_id: (r._manager || '').trim() || '대표님' };
     });
     var nonJin = cbs.filter(function (cb) { var r = _dmRows[parseInt(cb.dataset.idx, 10)]; return r && r.state !== '진행'; }).length;
     var warn = nonJin > 0 ? ('\n⚠ 진행 아닌 건 ' + nonJin + '개 포함.') : '';
