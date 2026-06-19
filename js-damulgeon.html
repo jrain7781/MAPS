@@ -431,13 +431,22 @@
     var a=_mcAccounts.filter(function(x){return x.idx===_mcSel;})[0]; if(!a) return;
     var data={ gubun:a.gubun, name:a.name, job:a.job, jumin_corp:a.jumin_corp, biz_no:a.biz_no, phone:a.phone, address:a.address, account_bank:a.account_bank, account_no:a.account_no, account_name:a.account_name };
     var msg=_mcEl('dmMcSaveMsg'); if(msg){ msg.textContent='저장 중…'; msg.style.color='#64748b'; }
+    var mid=_mcMemberId, sel=_mcSel, it=_mcRowItem;
+    var mname=(_mcEl('dmMcMember')||{}).textContent||'';
+    // 선택 명의 → items.m_name 형식: 본인="회원", 명의="회원 (구분) 명의자"
+    var newMName=(sel===0)? mname : (mname+' ('+(a.gubun||'개인')+') '+(a.name||''));
+    var itemId=(it&&it.link_item_id)?it.link_item_id:'';
     google.script.run.withSuccessHandler(function(r){
-      if(r&&r.success){
-        if(msg){ msg.textContent='저장됨 ✓'; msg.style.color='#16a34a'; }
-        a.saved=true;
-        if(_mcCache[_mcMemberId]){ var ca=(_mcCache[_mcMemberId].accounts||[]).filter(function(x){return x.idx===_mcSel;})[0]; if(ca) Object.assign(ca, data, {saved:true}); }
-      } else { if(msg){ msg.textContent='실패: '+esc((r&&r.msg)||''); msg.style.color='#dc2626'; } }
-    }).withFailureHandler(function(e){ if(msg){ msg.textContent='실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).saveMemberAccount(_mcMemberId, _mcSel, data);
+      if(!(r&&r.success)){ if(msg){ msg.textContent='실패: '+esc((r&&r.msg)||''); msg.style.color='#dc2626'; } return; }
+      a.saved=true;
+      if(_mcCache[mid]){ var ca=(_mcCache[mid].accounts||[]).filter(function(x){return x.idx===sel;})[0]; if(ca) Object.assign(ca, data, {saved:true}); }
+      if(itemId && it){   // 그리드 즉시 반영(회원/구분/명의 재파싱) + 캐시 동기화
+        it.member_name=newMName; it.member_id=mid;
+        try{ var bd=(typeof allBiddingData!=='undefined'&&allBiddingData)?allBiddingData.filter(function(b){return String(b.id)===String(itemId);})[0]:null; if(bd){ bd.m_name=newMName; bd.member_id=mid; } }catch(e){}
+        renderBody();
+        if(msg){ msg.textContent='저장됨 ✓ (ITEMS 명의 반영)'; msg.style.color='#16a34a'; }
+      } else { if(msg){ msg.textContent='저장됨 ✓'; msg.style.color='#16a34a'; } }
+    }).withFailureHandler(function(e){ if(msg){ msg.textContent='실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).saveDamulgeonMyungui(mid, sel, data, itemId, newMName);
   };
   DM.mcAddSave=function(){
     if(!_mcMemberId) return;

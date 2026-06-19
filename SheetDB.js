@@ -893,6 +893,42 @@ function addMemberMyungui(memberId, data) {
   return { success: true, idx: idx, name: name };
 }
 
+/** items.m_name(+member_id) 변경 + 히스토리 기록 (다물건 카드에서 명의 변경) */
+function updateItemMyungui(itemId, mName, memberId) {
+  itemId = String(itemId || '').trim();
+  if (!itemId) return { success: false, msg: 'itemId 없음' };
+  mName = String(mName == null ? '' : mName);
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { success: false, msg: 'lock 실패' }; }
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet) return { success: false, msg: 'items 시트 없음' };
+    var lr = sheet.getLastRow();
+    if (lr < 2) return { success: false, msg: '데이터 없음' };
+    var match = sheet.getRange(2, 1, lr - 1, 1).createTextFinder(itemId).matchEntireCell(true).findNext();
+    if (!match) return { success: false, msg: 'item 없음: ' + itemId };
+    var rowNum = match.getRow();
+    var mIdx = ITEM_HEADERS.indexOf('m_name'), memIdx = ITEM_HEADERS.indexOf('member_id');
+    var oldM = String(sheet.getRange(rowNum, mIdx + 1).getValue() || '');
+    sheet.getRange(rowNum, mIdx + 1).setValue(mName);
+    if (memIdx >= 0 && memberId != null && String(memberId) !== '') sheet.getRange(rowNum, memIdx + 1).setValue(String(memberId));
+    SpreadsheetApp.flush();
+    try { writeItemHistory_({ action: 'ITEM_UPDATE', item_id: itemId, field_name: 'm_name', from_value: oldM, to_value: mName, member_id: String(memberId || ''), member_name: mName, trigger_type: 'damulgeon-card', note: '명의 변경(다물건 카드)' }); } catch (e) {}
+    return { success: true, mName: mName };
+  } finally { try { lock.releaseLock(); } catch (e) {} }
+}
+
+/** 다물건 카드 저장: 명의 상세(member_accounts) + (행 있으면) items.m_name 변경+히스토리 한 번에 */
+function saveDamulgeonMyungui(memberId, idx, data, itemId, mName) {
+  var r1 = saveMemberAccount(memberId, idx, data);
+  if (!r1 || !r1.success) return r1 || { success: false, msg: '상세 저장 실패' };
+  if (itemId) {
+    var r2 = updateItemMyungui(itemId, mName, memberId);
+    if (!r2 || !r2.success) return { success: false, msg: '상세는 저장됨, ITEMS 반영 실패: ' + ((r2 && r2.msg) || '') };
+  }
+  return { success: true, mName: mName };
+}
+
 /**
  * 대리입찰 출력(위임장·기일입찰표)용 데이터 조립.
  * @param memberId 회원, idx 명의(0=본인), daeriinName 입찰대리인(직원) 이름
