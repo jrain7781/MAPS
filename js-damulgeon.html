@@ -422,20 +422,26 @@
   function _bidDateStr(v){ var s=String(v||'').replace(/[^0-9]/g,''); if(s.length>=8) return s.substring(0,4)+'년'+s.substring(4,6)+'월'+s.substring(6,8)+'일'; if(s.length===6) return '20'+s.substring(0,2)+'년'+s.substring(2,4)+'월'+s.substring(4,6)+'일'; return String(v||''); }
   function _digitsRight(num, n){ var v=Math.round(_num(num))||0, s=(v?String(v):''); var arr=[]; for(var i=0;i<n;i++) arr.push(''); for(var j=0;j<s.length && j<n;j++){ arr[n-1-j]=s[s.length-1-j]; } return arr; }
   function _amtCells(arr){ return arr.map(function(d){ return '<td>'+(d||'')+'</td>'; }).join(''); }
-  var _DM_PRINT_CSS = '@page{size:A4;margin:12mm;}'
+  var _DM_PRINT_CSS = '@page{size:A4;margin:7mm 9mm;}'
     +'*{box-sizing:border-box;}body{font-family:"Malgun Gothic","맑은 고딕",sans-serif;color:#000;margin:0;}'
     +'.dm-doc{page-break-after:always;}.dm-doc:last-child{page-break-after:auto;}'
-    +'.dm-doc-title{text-align:center;font-size:22px;letter-spacing:8px;font-weight:800;margin:0 0 14px;}'
-    +'.dm-form,.dm-ip,.dm-amt{width:100%;border-collapse:collapse;margin:7px 0;}'
-    +'.dm-form td,.dm-ip td,.dm-amt td{border:1px solid #000;padding:5px 7px;font-size:12px;vertical-align:middle;}'
-    +'.dm-form .lh,.dm-ip .lh{width:48px;text-align:center;font-weight:700;background:#f1f5f9;}'
-    +'.dm-form .lb,.dm-ip .lb{width:92px;text-align:center;background:#fafafa;white-space:nowrap;line-height:1.2;}'
-    +'.dm-ip .hd{font-weight:700;text-align:center;}'
-    +'.dm-amt td{text-align:center;}.dm-amt .u{background:#fafafa;font-size:10px;}.dm-amt .lb{width:46px;font-weight:700;background:#fafafa;}'
-    +'.dm-doc-p{font-size:12px;margin:7px 0;}.dm-doc-p2{font-size:13px;margin:8px 0;font-weight:600;}'
-    +'.dm-doc-center{text-align:center;font-size:14px;letter-spacing:6px;margin:10px 0;}'
-    +'.dm-doc-right{text-align:right;font-size:12px;margin:7px 0;}'
-    +'.dm-doc-sign{text-align:right;font-size:13px;margin:12px 0;font-weight:600;}';
+    +'.fm{border-collapse:collapse;table-layout:fixed;}'
+    +'.fm td{border:1px solid #000;font-size:12px;padding:3px 5px;text-align:center;vertical-align:middle;word-break:break-all;line-height:1.22;}'
+    +'.fm .lf{text-align:left;}.fm .vl{font-weight:600;line-height:1.6;letter-spacing:1px;}'
+    +'.wj-title{text-align:center;font-size:27px;letter-spacing:18px;font-weight:700;margin:4px 0 22px;}'
+    +'.wj-tbl{width:84%;margin:0 auto;}.wj-tbl2{margin-top:34px;}'
+    +'.wj-mid{text-align:center;font-size:13px;margin:22px 0 0;}'
+    +'.wj-da{text-align:center;font-size:15px;letter-spacing:10px;margin:16px 0;}'
+    +'.wj-case{text-align:center;font-size:13px;margin:14px 0 4px;}'
+    +'.wj-mid2{text-align:center;font-size:13px;margin:4px 0;}'
+    +'.wj-date{text-align:center;font-size:13px;margin:8px 0 0;}'
+    +'.wj-sign{text-align:center;font-size:14px;letter-spacing:3px;margin:92px 0 0;}'
+    +'.wj-foot{text-align:center;font-size:20px;font-weight:700;letter-spacing:5px;margin:30px 0 0;}'
+    +'.ip-formno{display:flex;justify-content:space-between;font-size:9px;color:#222;margin-bottom:2px;}'
+    +'.ip-title{text-align:center;font-size:23px;letter-spacing:9px;font-weight:800;margin:2px 0 7px;}'
+    +'.ip-head{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin:0 2px 3px;}'
+    +'.amt .u{font-size:8px;padding:1px 0;line-height:1;}.amt .d{height:21px;font-size:14px;font-weight:600;}'
+    +'.ip-notice{font-size:8px;color:#111;margin-top:6px;line-height:1.36;white-space:pre-line;}';
   DM.mcPrint=function(){
     if(!_mcMemberId){ alert('회원을 먼저 선택하세요'); return; }
     _mcCapture();
@@ -465,48 +471,70 @@
       setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
     }catch(e){ alert('인쇄창 생성 실패: '+(e&&e.message)); }
   }
-  function _courtFull(ctx){ return esc(ctx.bon)+'법원 '+(ctx.support?esc(ctx.support)+'지원 ':''); }
+  function _vstack(s){ return String(s||'').split('').join('<br>'); }
+  function _courtLine(ctx){ return esc(ctx.bon)+' 지방법원'+(ctx.support?('　　'+esc(ctx.support)+' 지원'):''); }
+  function _wijTbl(label, name, job, reg, phone, addr, cls){
+    return '<table class="fm wj-tbl '+(cls||'')+'"><colgroup><col style="width:7%"><col style="width:16%"><col style="width:30%"><col style="width:12%"><col style="width:35%"></colgroup>'
+      +'<tr><td class="vl" rowspan="3">'+_vstack(label)+'</td><td>성　명</td><td>'+esc(name||'')+'</td><td>직　업</td><td>'+esc(job||'회사원')+'</td></tr>'
+      +'<tr><td>주민등록번호</td><td>'+esc(reg||'')+'</td><td>전화번호</td><td>'+esc(phone||'')+'</td></tr>'
+      +'<tr><td>주　소</td><td colspan="3" class="lf">'+esc(addr||'')+'</td></tr></table>';
+  }
   function _wijangHtml(p, agent, ctx, isCorp){
     var pReg=isCorp?(p.biz_no||''):(p.jumin_corp||'');
-    return '<div class="dm-doc"><h2 class="dm-doc-title">위 임 장</h2>'
-    +'<table class="dm-form">'
-    +'<tr><td class="lh" rowspan="3">대리인</td><td class="lb">성 명</td><td>'+esc(agent.name||'')+'</td><td class="lb">직 업</td><td>'+esc(agent.job||'회사원')+'</td></tr>'
-    +'<tr><td class="lb">주민등록번호</td><td>'+esc(agent.jumin_corp||'')+'</td><td class="lb">전화번호</td><td>'+esc(agent.phone||'')+'</td></tr>'
-    +'<tr><td class="lb">주 소</td><td colspan="3">'+esc(agent.address||'')+'</td></tr></table>'
-    +'<p class="dm-doc-p">위 사람을 대리인으로 정하고 다음 사항을 위임함.</p>'
-    +'<p class="dm-doc-center">다 음</p>'
-    +'<p class="dm-doc-p2">'+_courtFull(ctx)+esc(ctx.sakun)+' 호'+(ctx.mulgeon?(' (물건번호 '+esc(ctx.mulgeon)+')'):'')+'</p>'
-    +'<p class="dm-doc-p">위 경매사건에 관한 입찰행위 일체</p>'
-    +'<p class="dm-doc-right">'+esc(ctx.bidDate)+'</p>'
-    +'<table class="dm-form">'
-    +'<tr><td class="lh" rowspan="3">본인</td><td class="lb">성 명</td><td>'+esc(p.name||'')+'</td><td class="lb">직 업</td><td>'+esc(p.job||'회사원')+'</td></tr>'
-    +'<tr><td class="lb">'+(isCorp?'법인사업자번호':'주민등록번호')+'</td><td>'+esc(pReg)+'</td><td class="lb">전화번호</td><td>'+esc(p.phone||'')+'</td></tr>'
-    +'<tr><td class="lb">주 소</td><td colspan="3">'+esc(p.address||'')+'</td></tr></table>'
-    +'<p class="dm-doc-sign">서명 '+esc(p.name||'')+' (인)</p>'
-    +'<p class="dm-doc-center" style="margin-top:18px">'+_courtFull(ctx)+'귀중</p></div>';
+    return '<div class="dm-doc"><div class="wj-title">위　임　장</div>'
+    +_wijTbl('대리인', agent.name, agent.job, agent.jumin_corp, agent.phone, agent.address, '')
+    +'<div class="wj-mid">위 사람을 대리인으로 정하고 다음 사항을 위임함.</div>'
+    +'<div class="wj-da">다　음</div>'
+    +'<div class="wj-case">'+_courtLine(ctx)+'　　　'+esc(ctx.sakun)+'　　호</div>'
+    +'<div class="wj-mid2">위 경매사건에 관한 입찰행위 일체</div>'
+    +'<div class="wj-date">'+esc(ctx.bidDate)+'</div>'
+    +_wijTbl('본인', p.name, p.job, pReg, p.phone, p.address, 'wj-tbl2')
+    +'<div class="wj-sign">서명　　　'+esc(p.name||'')+'　　　(인)</div>'
+    +'<div class="wj-foot">지방법원 귀중</div></div>';
+  }
+  function _ipNotice(){
+    return ['주의사항',
+      '1. 입찰표는 물건마다 별도의 용지를 사용하십시오. 다만, 일괄입찰시에는 1매의 용지를 사용하십시오.',
+      '2. 한 사건에서 입찰물건이 여러개 있고 그 물건들이 개별적으로 입찰에 부쳐진 경우에는 사건번호외에 물건번호를 기재하십시오.',
+      '3. 입찰자가 법인인 경우에는 본인의 성명란에 법인의 명칭과 대표자의 지위 및 성명을, 주민등록란에는 개인은 주민등록번호, 법인은 사업자등록번호를 기재하고, 대표자의 자격증명서면(법인등기부 등·초본)을 제출하여야 합니다.',
+      '4. 주소는 주민등록상의 주소를, 법인은 등기부상의 본점소재지를 기재하시고, 신분확인상 주민등록증을 꼭 지참하십시오.',
+      '5. 입찰가격은 수정할 수 없으므로, 수정을 요하는 때에는 새 용지를 사용하십시오.',
+      '6. 대리인이 입찰하는 때에는 입찰자란에 본인과 대리인의 인적사항 및 관계를 모두 기재하는 외에 본인의 인감이 날인된 위임장과 인감증명을 제출하십시오.',
+      '7. 위임장·인감증명 및 자격증명서는 이 입찰표에 첨부하십시오.',
+      '8. 일단 제출된 입찰표는 취소·변경이나 교환이 불가능합니다.',
+      '9. 공동입찰시에는 공동입찰신고서를 입찰표와 함께 제출하되, 본인란에 "별첨 공동입찰자목록 기재와 같음"이라 기재하십시오.',
+      '10. 입찰자 본인 또는 대리인 누구나 보증을 반환 받을 수 있습니다.',
+      '11. 보증의 제공방법(현금·자기앞수표 또는 보증서) 중 하나를 선택하여 V표를 기재하십시오.'
+    ].join(String.fromCharCode(10));
   }
   function _ipchalHtml(p, agent, ctx, isCorp){
     var regSaeop=isCorp?(p.biz_no||''):(p.jumin_corp||''), corpReg=isCorp?(p.jumin_corp||''):'';
     var bidU=['천억','백억','십억','억','천만','백만','십만','만','천','백','십','일'], depU=['백억','십억','억','천만','백만','십만','만','천','백','십','일'];
-    var bid=_digitsRight(ctx.bidprice, bidU.length), dep=_digitsRight(ctx.deposit, depU.length);
-    return '<div class="dm-doc"><h2 class="dm-doc-title">기 일 입 찰 표</h2>'
-    +'<table class="dm-ip">'
-    +'<tr><td class="hd" colspan="2">'+_courtFull(ctx)+'집행관 귀하</td><td class="hd" colspan="2">입찰기일 : '+esc(ctx.bidDate)+'</td></tr>'
-    +'<tr><td class="lb">사건번호</td><td>'+esc(ctx.sakun)+' 호</td><td class="lb">물건번호</td><td>'+esc(ctx.mulgeon||'')+'</td></tr></table>'
-    +'<table class="dm-ip">'
-    +'<tr><td class="lh" rowspan="3">입찰자<br>본인</td><td class="lb">성명</td><td>'+esc(p.name||'')+'</td><td class="lb">전화번호</td><td>'+esc(p.phone||'')+'</td></tr>'
-    +'<tr><td class="lb">주민(사업자)<br>등록번호</td><td>'+esc(regSaeop)+'</td><td class="lb">법인등록<br>번호</td><td>'+esc(corpReg)+'</td></tr>'
-    +'<tr><td class="lb">주소</td><td colspan="3">'+esc(p.address||'')+'</td></tr></table>'
-    +'<table class="dm-ip">'
-    +'<tr><td class="lh" rowspan="3">대리인</td><td class="lb">성명</td><td>'+esc(agent.name||'')+' (인)</td><td class="lb">본인과의<br>관계</td><td>지인</td></tr>'
-    +'<tr><td class="lb">주민등록<br>번호</td><td>'+esc(agent.jumin_corp||'')+'</td><td class="lb">전화번호</td><td>'+esc(agent.phone||'')+'</td></tr>'
-    +'<tr><td class="lb">주소</td><td colspan="3">'+esc(agent.address||'')+'</td></tr></table>'
-    +'<table class="dm-amt"><tr><td class="lb">입찰<br>가격</td>'+bidU.map(function(u){return '<td class="u">'+u+'</td>';}).join('')+'<td class="u">원</td></tr>'
-    +'<tr><td class="lb"></td>'+_amtCells(bid)+'<td></td></tr></table>'
-    +'<table class="dm-amt"><tr><td class="lb">보증<br>금액</td>'+depU.map(function(u){return '<td class="u">'+u+'</td>';}).join('')+'<td class="u">원</td></tr>'
-    +'<tr><td class="lb"></td>'+_amtCells(dep)+'<td></td></tr></table>'
-    +'<p class="dm-doc-p">보증의 제공방법 : ☑ 현금·자기앞수표　 □ 보증서</p>'
-    +'<p class="dm-doc-sign">입찰자 대리인 '+esc(agent.name||'')+' (인)</p></div>';
+    var bid=_digitsRight(ctx.bidprice, 12), dep=_digitsRight(ctx.deposit, 11);
+    var units=function(arr){ return arr.map(function(u){return '<td class="u">'+u+'</td>';}).join(''); };
+    var digs=function(arr){ return arr.map(function(d){return '<td class="d">'+(d||'')+'</td>';}).join(''); };
+    return '<div class="dm-doc">'
+    +'<div class="ip-formno"><span>[전산양식 A3360] 기일입찰표(흰색)</span><span>용지규격 210mm×297mm(A4용지)</span></div>'
+    +'<div class="ip-title">기　일　입　찰　표</div>'
+    +'<div class="ip-head"><span>'+_courtLine(ctx)+' 집행관 귀하</span><span>입찰기일 : '+esc(ctx.bidDate)+'</span></div>'
+    +'<table class="fm" style="width:100%;margin-bottom:-1px"><colgroup><col style="width:9%"><col style="width:41%"><col style="width:9%"><col style="width:41%"></colgroup>'
+    +'<tr><td>사건<br>번호</td><td><div style="display:flex;justify-content:space-between"><span>'+esc(ctx.sakun)+'</span><span>호</span></div></td><td>물건<br>번호</td><td>'+esc(ctx.mulgeon||'')+'</td></tr></table>'
+    +'<table class="fm" style="width:100%;margin-bottom:-1px"><colgroup><col style="width:5%"><col style="width:7%"><col style="width:15%"><col style="width:30%"><col style="width:13%"><col style="width:30%"></colgroup>'
+    +'<tr><td class="vl" rowspan="6">'+_vstack('입찰자')+'</td><td class="vl" rowspan="3">'+_vstack('본인')+'</td>'
+    +'<td>성　명</td><td>'+esc(p.name||'')+'</td><td>전화번호</td><td>'+esc(p.phone||'')+'</td></tr>'
+    +'<tr><td>주민(사업자)<br>등록번호</td><td>'+esc(regSaeop)+'</td><td>법인등록<br>번　호</td><td>'+esc(corpReg)+'</td></tr>'
+    +'<tr><td>주　소</td><td colspan="3" class="lf">'+esc(p.address||'')+'</td></tr>'
+    +'<tr><td class="vl" rowspan="3">'+_vstack('대리인')+'</td><td>성　명</td><td>'+esc(agent.name||'')+'　(인)</td><td>본인과의<br>관　계</td><td>지인</td></tr>'
+    +'<tr><td>주민등록<br>번　호</td><td>'+esc(agent.jumin_corp||'')+'</td><td>전화번호</td><td>'+esc(agent.phone||'')+'</td></tr>'
+    +'<tr><td>주　소</td><td colspan="3" class="lf">'+esc(agent.address||'')+'</td></tr></table>'
+    +'<table class="fm amt" style="width:100%;margin-bottom:-1px;table-layout:fixed">'
+    +'<tr><td class="vl" rowspan="2" style="width:5.5%">입찰<br>가격</td>'+units(bidU)+'<td class="u" style="width:2.6%">원</td>'
+    +'<td class="vl" rowspan="2" style="width:5.5%">보증<br>금액</td>'+units(depU)+'<td class="u" style="width:2.6%">원</td></tr>'
+    +'<tr>'+digs(bid)+'<td class="d"></td>'+digs(dep)+'<td class="d"></td></tr></table>'
+    +'<table class="fm" style="width:100%"><colgroup><col style="width:13%"><col style="width:40%"><col style="width:47%"></colgroup>'
+    +'<tr><td class="vl" rowspan="2">보증의<br>제공방법</td><td class="lf">☑ 현금·자기앞수표</td><td rowspan="2">보증을 반환 받았습니다.<br><br>입찰자 대리인　'+esc(agent.name||'')+'　(인)</td></tr>'
+    +'<tr><td class="lf">□ 보증서</td></tr></table>'
+    +'<div class="ip-notice">'+_ipNotice()+'</div></div>';
   }
   // [임시] 명의DB 백엔드 자가테스트 — 브라우저 버튼 한 번
   DM.selfTest = function(){
