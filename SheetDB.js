@@ -918,6 +918,20 @@ function updateItemMyungui(itemId, mName, memberId) {
   } finally { try { lock.releaseLock(); } catch (e) {} }
 }
 
+/** 다물건 카드 신규 명의 등록 + (행 있으면) 그 물건에 배정(items.m_name 변경+히스토리) 한 번에 */
+function addMyunguiAndAssign(memberId, data, itemId, memberName) {
+  var r = addMemberMyungui(memberId, data);
+  if (!r || !r.success) return r || { success: false, msg: '명의 등록 실패' };
+  var gubun = String((data && data.gubun) || '개인').trim();
+  var nm = String((data && data.name) || '').trim();
+  var mName = String(memberName || '').trim() + ' (' + gubun + ') ' + nm;
+  if (itemId) {
+    var r2 = updateItemMyungui(itemId, mName, memberId);
+    if (!r2 || !r2.success) return { success: true, idx: r.idx, mName: mName, itemWarn: (r2 && r2.msg) || 'ITEMS 반영 실패' };
+  }
+  return { success: true, idx: r.idx, mName: mName };
+}
+
 /** 다물건 카드 저장: 명의 상세(member_accounts) + (행 있으면) items.m_name 변경+히스토리 한 번에 */
 function saveDamulgeonMyungui(memberId, idx, data, itemId, mName) {
   var r1 = saveMemberAccount(memberId, idx, data);

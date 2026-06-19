@@ -500,10 +500,20 @@
     var data={ gubun:a.gubun, name:a.name, job:a.job, jumin_corp:a.jumin_corp, biz_no:a.biz_no, phone:a.phone, address:a.address, account_bank:a.account_bank, account_no:a.account_no, account_name:a.account_name };
     var msg=_mcEl('dmMcSaveMsg'); if(msg){ msg.textContent='등록 중…'; msg.style.color='#64748b'; }
     var mid=_mcMemberId, mname=(_mcEl('dmMcMember')||{}).textContent||'';
+    var it=_mcRowItem, itemId=(it&&it.link_item_id)?it.link_item_id:'';
     google.script.run.withSuccessHandler(function(r){
-      if(r&&r.success){ delete _mcCache[mid]; DM.openMyungui(mid, data.name, mname); }
+      if(r&&r.success){
+        // 그 물건에도 명의 배정됨 → 그리드/캐시 즉시 반영
+        if(itemId && it && r.mName){
+          it.member_name=r.mName; it.member_id=mid;
+          try{ var bd=(typeof allBiddingData!=='undefined'&&allBiddingData)?allBiddingData.filter(function(b){return String(b.id)===String(itemId);})[0]:null; if(bd){ bd.m_name=r.mName; bd.member_id=mid; } }catch(e){}
+          renderBody();
+        }
+        if(msg){ msg.textContent=(r.itemWarn?('명의 등록됨(ITEMS: '+esc(r.itemWarn)+')'):'명의 등록+물건 배정 완료 ✓'); msg.style.color=(r.itemWarn?'#b45309':'#16a34a'); }
+        delete _mcCache[mid]; DM.openMyungui(mid, data.name, mname);   // 새 명의로 카드 갱신
+      }
       else { if(msg){ msg.textContent='등록 실패: '+esc((r&&r.msg)||''); msg.style.color='#dc2626'; } }
-    }).withFailureHandler(function(e){ if(msg){ msg.textContent='등록 실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).addMemberMyungui(mid, data);
+    }).withFailureHandler(function(e){ if(msg){ msg.textContent='등록 실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).addMyunguiAndAssign(mid, data, itemId, mname);
   };
   DM.closeMyungui = function(){ var card=_mcEl('dmMyunguiCard'); if(card){ card.classList.remove('open'); card.setAttribute('aria-hidden','true'); } };
   DM.mcResizeStart=function(ev){
