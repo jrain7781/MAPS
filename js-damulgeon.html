@@ -27,11 +27,12 @@
   var _loading = false;
   var SPLIT_KEY = 'dmListW';
   var COLW_KEY = 'dmGridColW';
-  var FROZEN = 8;        // 순번~명의(0~7) 열고정
+  var FROZEN = 9;        // 체크~명의(0~8) 열고정
   var _colW = {};        // 컬럼 인덱스 → px (사용자 조절)
 
-  // 25열: label / f(필드) / t(타입: ro읽기,num숫자수동,text텍스트수동,auth인증,calc자동,status상태,sakun링크) / a(정렬) / w(폭px)
+  // 컬럼: label / f(필드) / t(타입: check체크,ro읽기,num숫자수동,text텍스트수동,auth인증,calc자동,status상태,sakun링크) / a(정렬) / w(폭px)
   var COLS = [
+    { label:'',         f:'_check',           t:'check',  a:'center', w:32 },
     { label:'순번',     f:'_seq',             t:'ro',     a:'center', w:42 },
     { label:'입찰일',   f:'in_date',          t:'ro',     a:'center', w:68 },
     { label:'법원',     f:'court',            t:'ro',     a:'left',   w:62 },
@@ -63,7 +64,8 @@
   function _comma(v){ var n=_num(v); return n? n.toLocaleString('ko-KR') : String(v==null?'':v); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   // 동/층/호수 토큰 제거 (숫자+동만 → 건물동, 법정동은 보존). 우측 상세 + 그리드 주소.
-  function _addrBase(a){ var s=String(a||''); s=s.replace(/\d+\s*동/g,'').replace(/(지하\s*\d+|[Bb]\d+|\d+)\s*층/g,'').replace(/\d+\s*호/g,''); return s.replace(/[,\s]+$/,'').replace(/^[,\s]+/,'').replace(/\s{2,}/g,' ').trim(); }
+  // 동/층/호수 + 대괄호 조사내용([특수권리 등]) 제거. 법정동(전포동)은 숫자 없어 보존.
+  function _addrBase(a){ var s=String(a||''); s=s.replace(/\[[^\]]*\]/g,''); s=s.replace(/\d+\s*동/g,'').replace(/(지하\s*\d+|[Bb]\d+|\d+)\s*층/g,'').replace(/\d+\s*호/g,''); return s.replace(/[,\s]+$/,'').replace(/^[,\s]+/,'').replace(/\s{2,}/g,' ').trim(); }
   function widthOf(i){ return (_colW[i]!=null)?_colW[i]:COLS[i].w; }
   function frozenLeft(i){ var x=0; for(var k=0;k<i;k++) x+=widthOf(k); return x; }
   function totalW(){ var x=0; for(var i=0;i<COLS.length;i++) x+=widthOf(i); return x; }
@@ -147,6 +149,9 @@
   function cell(c, ci, it, idx){
     var cls = 'dmgrid-td' + (ci===FROZEN-1?' dm-frozen-edge':'');
     var style = tdStyle(c, ci);
+    if (c.t==='check'){
+      return '<td class="'+cls+'" style="'+style+';text-align:center"><input type="checkbox" class="dm-row-cb" data-id="'+esc(it.link_item_id)+'"></td>';
+    }
     if (c.t==='sakun'){
       return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(it.sakun_no)+'</span></td>';
     }
@@ -176,13 +181,18 @@
 
   function headHtml(){
     return '<tr>' + COLS.map(function(c, ci){
-      var st = 'min-width:'+widthOf(ci)+'px;width:'+widthOf(ci)+'px;max-width:'+widthOf(ci)+'px;text-align:'+c.a+';position:relative';
+      var st = 'min-width:'+widthOf(ci)+'px;width:'+widthOf(ci)+'px;max-width:'+widthOf(ci)+'px;text-align:center;position:relative';  // 제목 가운데정렬
       var cls = 'dmgrid-th'+(ci===FROZEN-1?' dm-frozen-edge':'');
       if (ci < FROZEN) st += ';position:sticky;left:'+frozenLeft(ci)+'px;z-index:6';
+      if (c.t==='check'){
+        return '<th class="'+cls+'" style="'+st+'"><input type="checkbox" id="dmCheckAll" onclick="DM.checkAll(this)" title="전체선택"></th>';
+      }
       var grip = '<span class="dm-th-grip" data-c="'+ci+'" title="드래그로 폭 조절"></span>';
       return '<th class="'+cls+'" style="'+st+'">'+esc(c.label)+grip+'</th>';
     }).join('') + '</tr>';
   }
+  DM.checkAll = function(el){ document.querySelectorAll('#dmGridBody .dm-row-cb').forEach(function(cb){ cb.checked = el.checked; }); };
+  DM.selectedIds = function(){ var ids=[]; document.querySelectorAll('#dmGridBody .dm-row-cb:checked').forEach(function(cb){ ids.push(cb.getAttribute('data-id')); }); return ids; };
 
   function curItems(){ var g=_groups.filter(function(x){return x.group_key===_selKey;})[0]; return g?g.items:[]; }
   function filteredItems(){
@@ -203,6 +213,7 @@
       var idx = curItems().indexOf(it);
       return '<tr data-id="'+esc(it.link_item_id)+'">'+COLS.map(function(c,ci){ return cell(c,ci,it,idx); }).join('')+'</tr>';
     }).join('');
+    var ca=document.getElementById('dmCheckAll'); if(ca) ca.checked=false;
     var info=document.getElementById('dmGridInfo');
     if(info){ var tot=curItems().length, sh=items.length; info.textContent = (sh===tot? ('물건 '+tot+'건') : ('표시 '+sh+'/'+tot+'건')) + ' · 수동필드 입력 시 자동저장'; }
   }
@@ -218,16 +229,16 @@
       fillDatalists([]);
       return;
     }
-    var addrFull = _addrBase((g.items[0]&&g.items[0].address) || g.address_base || '');  // 동/층/호 제거, 전체 표시
+    var addrFull = _addrBase((g.items[0]&&g.items[0].address) || g.address_base || '');  // 동/층/호 + 조사내용 제거, 전체 표시
     if (head) head.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">'
-      + '<span style="font-size:20px;font-weight:800;color:#111827">'+esc(g.sakun_base)+'</span>'
-      + '<span style="font-size:14px;font-weight:700;color:#1d4ed8">'+esc(g.court)+'</span>'
-      + '<span style="font-size:13px;color:#4b5563">입찰일 '+esc(g.in_date)+'</span>'
-      + '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#fef3c7;color:#92400e;font-weight:700">물건 '+g.count+'</span>'
-      + (_firstMgr(g)? '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#cffafe;color:#0e7490;font-weight:700">담당 '+esc(_firstMgr(g))+'</span>':'')
-      + '</div>'
-      + '<div style="font-size:14px;color:#374151;margin-top:5px;white-space:normal;word-break:break-all">'+esc(addrFull)+'</div>';
+      '<div style="font-size:17px;font-weight:700;color:#111827;white-space:normal;word-break:break-all;line-height:1.35">'+esc(addrFull)+'</div>'
+      + '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:5px">'
+      +   '<span style="font-size:18px;font-weight:800;color:#111827">'+esc(g.sakun_base)+'</span>'
+      +   '<span style="font-size:14px;font-weight:700;color:#1d4ed8">'+esc(g.court)+'</span>'
+      +   '<span style="font-size:13px;color:#4b5563">입찰일 '+esc(g.in_date)+'</span>'
+      +   '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#fef3c7;color:#92400e;font-weight:700">물건 '+g.count+'</span>'
+      +   (_firstMgr(g)? '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#cffafe;color:#0e7490;font-weight:700">담당 '+esc(_firstMgr(g))+'</span>':'')
+      + '</div>';
     if (thead) thead.innerHTML = headHtml();
     applyTableWidth();
     fillDatalists(g.items);

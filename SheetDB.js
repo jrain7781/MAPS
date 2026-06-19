@@ -768,18 +768,16 @@ function dedupeDamulgeonProducts(apply) {
 //   · 연동키 = items.id(link_item_id, id 우선) + 3키(in_date|sakun_base|court) 폴백
 // ════════════════════════════════════════════════════════════════════════════
 
-const DB_DAMULGEON_SHEET_NAME = '다물건';
+const DB_DAMULGEON_SHEET_NAME = 'damulgeon';   // 영문 시트명 (구 '다물건' 자동 이관)
+const DB_DAMULGEON_SHEET_OLD  = '다물건';      // 구버전 한글 시트명
 const DM_FEE_TABLE_KEY = 'DM_FEE_TABLE';
 
-// items 에 없는 다물건 전용 보조필드만 저장. link_item_id 가 PK.
+// ★link_item_id(=items.id) 만 키로 저장. items 파생값(in_date/sakun_no/court/mulgeon_no)은
+//   저장하지 않고 getDamulgeonList 가 items 에서 라이브 조회 — 중복저장 제거. 나머지는 items 에 없는 보조필드.
 const DAMULGEON_HEADERS = [
-  'link_item_id',   // PK — items.id (id 우선 머지)
-  'in_date',        // 입찰일자 yyMMdd (3키 폴백)
-  'sakun_no',       // 사건번호(물건번호 포함) (3키 폴백)
-  'court',          // 법원 (3키 폴백)
-  'mulgeon_no',     // 물건번호 (N)
-  'member_id',      // 매칭 회원 id
-  'member_name',    // 회원명
+  'link_item_id',   // PK — items.id (유일 연동키)
+  'member_id',      // 매칭 회원 id (드래그)
+  'member_name',    // 회원명 (드래그 오버라이드, 기본은 items)
   'myungui',        // 명의
   'grade',          // 등급
   'dong',           // 동
@@ -796,44 +794,55 @@ const DAMULGEON_HEADERS = [
   'update_date'     // 최종 갱신
 ];
 
-// 사용자 편집 대상 보조필드 (link_item_id/3키/시각 제외) — 머지·저장 시 사용
+// 사용자 편집 대상 보조필드 (link_item_id/시각 제외) — 머지·저장 시 사용
 const DAMULGEON_AUX_FIELDS = ['member_id','member_name','myungui','grade','dong','floor','ho','hyang','gamjungga','bidprice','jinhaengbi','daeriin','auth_method','dm_note'];
 
-/** '다물건' 시트 생성/헤더 보장 (josa_items 패턴). GAS 에디터 1회 실행: initDamulgeonAll */
-function initDamulgeonSheet_() {
+/**
+ * damulgeon 시트 획득 (없으면 구 한글시트 '다물건' 자동 이관, 그래도 없으면 신규) + 스키마 보장.
+ */
+function _getDamulgeonSheet_() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME);
-  if (!sheet) sheet = ss.insertSheet(DB_DAMULGEON_SHEET_NAME);
-  if (sheet.getMaxColumns() < DAMULGEON_HEADERS.length) {
-    sheet.insertColumnsAfter(sheet.getMaxColumns(), DAMULGEON_HEADERS.length - sheet.getMaxColumns());
+  if (!sheet) {
+    var old = ss.getSheetByName(DB_DAMULGEON_SHEET_OLD);
+    if (old) { old.setName(DB_DAMULGEON_SHEET_NAME); sheet = old; }   // 한글→영문 이관(데이터 보존)
   }
-  var hr = sheet.getRange(1, 1, 1, DAMULGEON_HEADERS.length);
-  hr.setValues([DAMULGEON_HEADERS]); hr.setFontWeight('bold');
-  sheet.setFrozenRows(1);
-  // A열(link_item_id) 텍스트 강제 — Sheets number 자동변환(정밀도 손실) 방지
-  sheet.getRange(1, 1, sheet.getMaxRows(), 1).setNumberFormat('@');
+  if (!sheet) sheet = ss.insertSheet(DB_DAMULGEON_SHEET_NAME);
+  _ensureDamulgeonHeader_(sheet);
   return sheet;
 }
 
+function initDamulgeonSheet_() { return _getDamulgeonSheet_(); }
+
 function initDamulgeonAll() {
-  initDamulgeonSheet_();
-  Logger.log('[다물건] 시트 초기화 완료: ' + DB_DAMULGEON_SHEET_NAME + ' (' + DAMULGEON_HEADERS.length + '컬럼)');
+  _getDamulgeonSheet_();
+  Logger.log('[damulgeon] 시트 보장 완료: ' + DB_DAMULGEON_SHEET_NAME + ' (' + DAMULGEON_HEADERS.length + '컬럼)');
   return { success: true, sheet: DB_DAMULGEON_SHEET_NAME, headers: DAMULGEON_HEADERS.length };
 }
 
-// 헤더가 DAMULGEON_HEADERS 와 다르면 강제 갱신 (스키마 변경 자동 반영)
+/**
+ * 헤더가 DAMULGEON_HEADERS 와 다르면 '헤더명 기준'으로 기존 데이터를 새 스키마에 재배열.
+ *   (컬럼 추가/삭제/순서변경/시트명 변경 모두 데이터 보존 — link_item_id+보조필드 유지, 제거 컬럼은 버림)
+ */
 function _ensureDamulgeonHeader_(sheet) {
-  var lastCol = sheet.getLastColumn();
-  if (lastCol < 1) { sheet.getRange(1,1,1,DAMULGEON_HEADERS.length).setValues([DAMULGEON_HEADERS]).setFontWeight('bold'); return; }
-  var cur = sheet.getRange(1, 1, 1, Math.max(lastCol, DAMULGEON_HEADERS.length)).getValues()[0];
-  var ok = true;
-  for (var i = 0; i < DAMULGEON_HEADERS.length; i++) {
-    if (String(cur[i] || '').trim() !== DAMULGEON_HEADERS[i]) { ok = false; break; }
+  var lastCol = sheet.getLastColumn(), lastRow = sheet.getLastRow();
+  var cur = (lastCol > 0) ? sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(x){ return String(x || '').trim(); }) : [];
+  var match = (cur.length === DAMULGEON_HEADERS.length) && DAMULGEON_HEADERS.every(function(h, i){ return cur[i] === h; });
+  if (match) return;
+  var oldObjs = [];
+  if (lastRow >= 2 && lastCol > 0) {
+    var vals = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    oldObjs = vals.map(function(r){ var o = {}; cur.forEach(function(h, i){ if (h) o[h] = r[i]; }); return o; })
+                  .filter(function(o){ return String(o.link_item_id || '').trim(); });
   }
-  if (!ok) {
-    if (sheet.getMaxColumns() < DAMULGEON_HEADERS.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), DAMULGEON_HEADERS.length - sheet.getMaxColumns());
-    sheet.getRange(1,1,1,DAMULGEON_HEADERS.length).setValues([DAMULGEON_HEADERS]).setFontWeight('bold');
+  sheet.clear();
+  sheet.getRange(1, 1, 1, DAMULGEON_HEADERS.length).setValues([DAMULGEON_HEADERS]).setFontWeight('bold');
+  if (oldObjs.length) {
+    var out = oldObjs.map(function(o){ return DAMULGEON_HEADERS.map(function(h){ return (o[h] != null) ? o[h] : ''; }); });
+    sheet.getRange(2, 1, out.length, DAMULGEON_HEADERS.length).setValues(out);
   }
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, sheet.getMaxRows(), 1).setNumberFormat('@');   // A열(link_item_id) 텍스트 강제
 }
 
 // 물건번호 추출: '2023타경919(4)' → '4'
@@ -861,12 +870,9 @@ function _dmBaseAddress_(address) {
   return s.replace(/[,\s]+$/, '').replace(/\s{2,}/g, ' ').trim();
 }
 
-/** '다물건' 시트 전체 읽기 → 객체배열 */
+/** damulgeon 시트 전체 읽기 → 객체배열 */
 function readAllDamulgeon() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME);
-  if (!sheet) { initDamulgeonSheet_(); sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME); }
-  _ensureDamulgeonHeader_(sheet);
+  var sheet = _getDamulgeonSheet_();
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   var values = sheet.getRange(2, 1, lastRow - 1, DAMULGEON_HEADERS.length).getValues();
@@ -916,8 +922,8 @@ function getDamulgeonList() {
         address: address,
         building_area: areaCol > 0 ? String(r[areaCol - 1] || '') : '',
         lowest_price: String(r[22] || ''), deposit: String(r[21] || ''),
-        // 보조필드 기본값 (다물건 시트 머지로 덮어씀). 동/층/호는 주소 파싱 기본값.
-        member_id: '', member_name: '', myungui: '', grade: '',
+        // 보조필드 기본값. 회원은 items(m_name/member_id) 기본 → damulgeon 시트(드래그)가 있으면 덮어씀.
+        member_id: String(r[8] || ''), member_name: String(r[6] || ''), myungui: '', grade: '',
         dong: p.dong, floor: p.floor, ho: p.ho, hyang: '',
         gamjungga: '', bidprice: '', jinhaengbi: '', daeriin: '', auth_method: '', dm_note: ''
       });
@@ -933,16 +939,13 @@ function getDamulgeonList() {
     var today6 = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMdd');
     kept = kept.filter(function (g) { var d6 = _dmDateKey6_(g.in_date); return !(d6 && d6 < today6); });
 
-    // '다물건' 시트 보조필드 머지 (id 우선, 3키 폴백)
+    // damulgeon 시트 보조필드 머지 (link_item_id 단일키 — items 파생 3키는 시트에서 제거됨)
     var aux = readAllDamulgeon();
-    var byId = {}, by3 = {};
-    aux.forEach(function(a) {
-      if (a.link_item_id) byId[a.link_item_id] = a;
-      by3[a.in_date + '|' + _normSakunBase_(a.sakun_no) + '|' + a.court] = a;
-    });
+    var byId = {};
+    aux.forEach(function(a) { if (a.link_item_id) byId[a.link_item_id] = a; });
     kept.forEach(function(g) {
       g.items.forEach(function(it) {
-        var a = byId[it.link_item_id] || by3[it.in_date + '|' + _normSakunBase_(it.sakun_no) + '|' + it.court];
+        var a = byId[it.link_item_id];
         if (a) DAMULGEON_AUX_FIELDS.forEach(function(f) { if (a[f] !== undefined && a[f] !== '') it[f] = a[f]; });
       });
       g.items.sort(function(x, y) { return (parseInt(x.mulgeon_no, 10) || 0) - (parseInt(y.mulgeon_no, 10) || 0); });
@@ -971,10 +974,7 @@ function bulkSaveDamulgeon(rows) {
   try {
     rows = Array.isArray(rows) ? rows : (rows ? [rows] : []);
     if (!rows.length) return { success: true, saved: 0, added: 0, updated: 0 };
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME);
-    if (!sheet) { initDamulgeonSheet_(); sheet = ss.getSheetByName(DB_DAMULGEON_SHEET_NAME); }
-    _ensureDamulgeonHeader_(sheet);
+    var sheet = _getDamulgeonSheet_();
     var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     var existing = readAllDamulgeon();
     var idToRow = {};
