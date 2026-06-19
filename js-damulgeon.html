@@ -91,6 +91,7 @@
     if (_loading) return;
     _loading = true;
     try { _colW = JSON.parse(localStorage.getItem(COLW_KEY)||'{}')||{}; } catch(_){ _colW={}; }
+    try { _hideBasic = localStorage.getItem('dmHideBasic')==='1'; var hb=document.getElementById('dmHideBasic'); if(hb) hb.checked=_hideBasic; } catch(_){}   // 기본정보 숨기기 복원(PC별)
     loadMembers(function(){ if(_selKey) renderBody(); });   // 직원 드롭다운/텔레그램용 회원 선로드 후 그리드 갱신
     var list = document.getElementById('dmList');
     if (list) list.innerHTML = '<li style="color:#9ca3af;font-size:12px;padding:12px">불러오는 중…</li>';
@@ -220,7 +221,7 @@
   }
   function reRenderGrid(){ var thead=document.getElementById('dmGridHead'); if(thead) thead.innerHTML=headHtml(); applyTableWidth(); renderBody(); bindResizers(); }
   DM.sortBy = function(f){ if(_sortField===f){ _sortDir=-_sortDir; } else { _sortField=f; _sortDir=1; } reRenderGrid(); };
-  DM.toggleHideBasic = function(el){ _hideBasic=!!(el&&el.checked); reRenderGrid(); };
+  DM.toggleHideBasic = function(el){ _hideBasic=!!(el&&el.checked); try{ localStorage.setItem('dmHideBasic', _hideBasic?'1':'0'); }catch(_){}; reRenderGrid(); };
   DM.checkAll = function(el){ document.querySelectorAll('#dmGridBody .dm-row-cb').forEach(function(cb){ cb.checked = el.checked; }); };
   DM.selectedIds = function(){ var ids=[]; document.querySelectorAll('#dmGridBody .dm-row-cb:checked').forEach(function(cb){ ids.push(cb.getAttribute('data-id')); }); return ids; };
 
