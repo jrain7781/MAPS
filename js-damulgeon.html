@@ -429,6 +429,7 @@
 
   // ── 일괄작업 모달 (일괄적용 클릭 → 모달: 상단 값입력/회원검색 + 하단 선택 물건) ──
   var _bulkAct='', _bulkTgts=[], _acItems=[];
+  var _bidMethod='pct', _bidWon=0;   // 입찰가 방식(pct/direct/plus) + 위젯 환산 원값
   function _bulkLabel(a){ return {member:'회원',myungui:'명의',bidprice:'입찰가(최저%)',jinhaengbi:'진행비',hyang:'향',daeriin:'입찰대리인',auth_method:'인증'}[a]||a; }
   DM.bulkOpenModal = function(){
     var act=(document.getElementById('dmBulkAction')||{}).value||'';
@@ -453,7 +454,15 @@
         +'<div id="dmBulkMemInfo" style="font-size:12px;font-weight:700;margin-top:5px"></div>';
     }
     else if(act==='myungui'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">명의</label><br><input id="dmBulkVal" placeholder="명의" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:200px;margin-top:5px">'; }
-    else if(act==='bidprice'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">입찰가 = 최저가의</label><br><input id="dmBulkVal" type="number" step="0.1" placeholder="%" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:90px;text-align:right;margin-top:5px"> %'; }
+    else if(act==='bidprice'){
+      area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">입찰가 방식</label>'
+        +'<div style="margin-top:5px;display:flex;gap:14px;font-size:12px">'
+        +'<label style="cursor:pointer"><input type="radio" name="dmBidMethod" onclick="DM.bidMethod(\'direct\')"> 직접입력</label>'
+        +'<label style="cursor:pointer"><input type="radio" name="dmBidMethod" checked onclick="DM.bidMethod(\'pct\')"> 퍼센트</label>'
+        +'<label style="cursor:pointer"><input type="radio" name="dmBidMethod" onclick="DM.bidMethod(\'plus\')"> 최저가+금액</label>'
+        +'</div><div id="dmBidValArea" style="margin-top:7px"></div>';
+      DM.bidMethod('pct');
+    }
     else if(act==='jinhaengbi'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">진행비(원)</label><br><input id="dmBulkVal" placeholder="진행비" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:150px;text-align:right;margin-top:5px">'; }
     else if(act==='hyang'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">향</label><br><input id="dmBulkVal" placeholder="향" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:120px;margin-top:5px">'; }
     else if(act==='daeriin'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">입찰대리인 (구분에 직원 포함)</label><br><select id="dmBulkVal" onchange="DM.bulkPrev()" style="'+st+';min-width:170px;margin-top:5px"><option value="">불러오는 중…</option></select>'; loadMembers(function(){ var s=document.getElementById('dmBulkVal'); if(s) s.innerHTML='<option value="">선택</option>'+_staff().map(function(m){ var n=m.name||m.member_name||''; return n?'<option>'+esc(n)+'</option>':''; }).join(''); DM.bulkPrev(); }); }
@@ -494,6 +503,39 @@
   }
   DM.bulkMemberInfo = bulkMemInfo;
   DM.bulkPrev = function(){ renderBulkList(); };
+  // 입찰가 3옵션 위젯 (직접입력/퍼센트/최저가+금액) — 입찰물건관리 입찰가 입력 재사용(parseBidWon_·bidStyleGet_, 자유/분리 PC저장)
+  function _bidWidgetHtml(){
+    var style=(typeof bidStyleGet_==='function')?bidStyleGet_():'free';
+    return '<div style="font-size:11px;margin-bottom:5px">'
+      +'<label style="margin-right:10px;cursor:pointer"><input type="radio" name="dmBidStyle" '+(style==='free'?'checked':'')+' onclick="DM.setBidStyle(\'free\')"> 자유</label>'
+      +'<label style="cursor:pointer"><input type="radio" name="dmBidStyle" '+(style==='split'?'checked':'')+' onclick="DM.setBidStyle(\'split\')"> 분리</label></div>'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<span id="dmBidFreeWrap"'+(style==='split'?' style="display:none"':'')+'><input id="dmBidFree" placeholder="예: 14억5900만 / 145900000" oninput="DM.bidInput()" onfocus="this.select()" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px;width:210px;text-align:right"></span>'
+      +'<span id="dmBidSplitWrap"'+(style==='free'?' style="display:none"':'')+'><input id="dmBidEok" inputmode="numeric" placeholder="억" oninput="DM.bidInput()" onfocus="this.select()" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 6px;font-size:13px;width:56px;text-align:right"> 억 <input id="dmBidMan" inputmode="numeric" placeholder="만" oninput="DM.bidInput()" onfocus="this.select()" style="border:1px solid #d1d5db;border-radius:6px;padding:5px 6px;font-size:13px;width:68px;text-align:right"> 만</span>'
+      +'<span style="font-size:13px;font-weight:700;color:#2563eb">= <span id="dmBidWonDisp">0</span> 원</span></div>';
+  }
+  DM.setBidStyle = function(s){ try{ localStorage.setItem('bidInputStyle', s==='split'?'split':'free'); }catch(_){}; var f=document.getElementById('dmBidFreeWrap'), sp=document.getElementById('dmBidSplitWrap'); if(f) f.style.display=(s==='split')?'none':''; if(sp) sp.style.display=(s==='free')?'none':''; DM.bidInput(); };
+  DM.bidInput = function(){
+    var style=(typeof bidStyleGet_==='function')?bidStyleGet_():'free', won=0;
+    if(style==='split'){ var ev=parseInt(((document.getElementById('dmBidEok')||{}).value||'').replace(/[^0-9]/g,'')||'0',10)||0; var mv=parseInt(((document.getElementById('dmBidMan')||{}).value||'').replace(/[^0-9]/g,'')||'0',10)||0; won=ev*100000000+mv*10000; }
+    else { var v=(document.getElementById('dmBidFree')||{}).value||''; won=(typeof parseBidWon_==='function')?(parseBidWon_(v)||0):_num(v); }
+    _bidWon=won; var d=document.getElementById('dmBidWonDisp'); if(d) d.textContent=_comma(won);
+    renderBulkList();
+  };
+  DM.bidMethod = function(m){
+    _bidMethod=m; _bidWon=0;
+    var a=document.getElementById('dmBidValArea'); if(!a) return;
+    if(m==='pct'){ a.innerHTML='최저가의 <input id="dmBulkVal" type="number" step="0.1" placeholder="%" oninput="DM.bulkPrev()" onfocus="this.select()" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 6px;font-size:13px;width:84px;text-align:right"> %'; }
+    else { a.innerHTML=(m==='plus'?'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">최저가 + 아래 금액을 각 물건에 적용</div>':'')+_bidWidgetHtml(); DM.bidInput(); }
+    renderBulkList();
+  };
+  // 항목별 적용 입찰가 (방식별)
+  function _bidFor(it){
+    if(_bidMethod==='pct'){ var p=parseFloat((document.getElementById('dmBulkVal')||{}).value); return isNaN(p)?null:Math.round(_num(it.lowest_price)*p/100); }
+    if(_bidMethod==='direct'){ return _bidWon||null; }
+    if(_bidMethod==='plus'){ return _bidWon? (_num(it.lowest_price)+_bidWon) : null; }
+    return null;
+  }
   function renderBulkList(){
     var tb=document.getElementById('dmBulkList'); if(!tb) return;
     var act=_bulkAct, valEl=document.getElementById('dmBulkVal'), val=valEl?String(valEl.value).trim():'';
@@ -501,7 +543,7 @@
     tb.innerHTML=_bulkTgts.map(function(it,idx){
       var cur, next;
       if(act==='member'){ cur=it.member_name||''; next=memName; }
-      else if(act==='bidprice'){ cur=it.bidprice?_comma(it.bidprice):''; var p=parseFloat(val); next=isNaN(p)?'':_comma(String(Math.round(_num(it.lowest_price)*p/100))); }
+      else if(act==='bidprice'){ cur=it.bidprice?_comma(it.bidprice):''; var nb=_bidFor(it); next=(nb==null)?'':_comma(String(nb)); }
       else { cur=it[act]||''; next=val; }
       var changed = next && String(cur)!==String(next);
       var bg = (idx%2) ? '#fafafa' : '#fff';
@@ -526,8 +568,9 @@
       if(!mid){ var rr=_memberByName(val); if(rr) mid=rr.member_id; }   // 수기 입력 폴백
       targets.forEach(function(it){ itemsRows.push({in_date:it.in_date,sakun_no:it.sakun_no,court:it.court,member_name:val,member_id:mid}); });   // member_name = 명의 포함값
     } else if(act==='bidprice'){
-      var pct=parseFloat(val); if(isNaN(pct)){ alert('퍼센트(%)를 입력하세요.'); return; }
-      targets.forEach(function(it){ itemsRows.push({in_date:it.in_date,sakun_no:it.sakun_no,court:it.court,bidprice:String(Math.round(_num(it.lowest_price)*pct/100))}); });
+      if(_bidMethod==='pct'){ if(isNaN(parseFloat((document.getElementById('dmBulkVal')||{}).value))){ alert('퍼센트(%)를 입력하세요.'); return; } }
+      else if(!_bidWon){ alert('입찰가/금액을 입력하세요.'); return; }
+      targets.forEach(function(it){ var nb=_bidFor(it); if(nb!=null) itemsRows.push({in_date:it.in_date,sakun_no:it.sakun_no,court:it.court,bidprice:String(nb)}); });
     } else {
       if(act!=='auth_method' && !val){ alert('값을 입력하세요.'); return; }
       targets.forEach(function(it){ var r={in_date:it.in_date,sakun_no:it.sakun_no,court:it.court}; r[act]=val; dmRows.push(r); });
