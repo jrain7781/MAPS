@@ -25,6 +25,8 @@
   var _filtered = [];    // 좌측 리스트 검색 필터분
   var _selKey = null;    // 선택 group_key
   var _loading = false;
+  var _members = null;   // 일괄등록 회원 목록 캐시
+  var _bulkTargets = []; // 일괄등록 대상 행
   var SPLIT_KEY = 'dmListW';
   var COLW_KEY = 'dmGridColW';
   var FROZEN = 10;       // 체크~명의(0~9) 열고정
@@ -328,6 +330,63 @@
       })
       .withFailureHandler(function(e){ alert('CSV 오류: '+(e&&e.message||e)); })
       .exportDamulgeonCsv(keys);
+  };
+
+  // ── 일괄등록 모달 (회원/명의/입찰가 %) ──
+  function loadMembers(cb){
+    if (_members) { cb && cb(); return; }
+    if (typeof google==='undefined'||!google.script||!google.script.run){ _members=[]; cb&&cb(); return; }
+    google.script.run.withSuccessHandler(function(res){ _members=(res&&res.members)||[]; cb&&cb(); })
+      .withFailureHandler(function(){ _members=[]; cb&&cb(); }).getDamulgeonMembers();
+  }
+  function _bulkPct(){ var v=parseFloat((document.getElementById('dmBulkPct')||{}).value); return isNaN(v)?null:v; }
+  function _bulkBid(it){ var p=_bulkPct(); return (p==null)?'':String(Math.round(_num(it.lowest_price)*p/100)); }
+  DM.bulkOpen = function(){
+    var ids=DM.selectedIds();
+    var items=curItems().filter(function(it){ return ids.indexOf(it.link_item_id)>=0; });
+    if(!items.length) items=filteredItems();   // 체크 없으면 현재 표시 전체
+    if(!items.length){ alert('대상 물건이 없습니다. (사건 선택 후)'); return; }
+    _bulkTargets=items;
+    var cnt=document.getElementById('dmBulkCount'); if(cnt) cnt.textContent='대상 '+items.length+'건'+(ids.length?'(체크)':'(표시 전체)');
+    var my=document.getElementById('dmBulkMyungui'); if(my) my.value='';
+    var pc=document.getElementById('dmBulkPct'); if(pc) pc.value='';
+    loadMembers(function(){
+      var sel=document.getElementById('dmBulkMember');
+      if(sel) sel.innerHTML='<option value="">(변경안함)</option>'+(_members||[]).map(function(m){ return '<option value="'+esc(m.member_id)+'" data-name="'+esc(m.name)+'">'+esc(m.name)+(m.gubun?(' ['+esc(m.gubun)+']'):'')+'</option>'; }).join('');
+      DM.bulkPreview();
+    });
+    var modal=document.getElementById('dmBulkModal'); if(modal) modal.classList.remove('content-hidden');
+  };
+  DM.bulkClose = function(){ var m=document.getElementById('dmBulkModal'); if(m) m.classList.add('content-hidden'); };
+  function _bulkMember(){ var s=document.getElementById('dmBulkMember'); if(!s||!s.value) return {id:'',name:''}; return {id:s.value, name:(s.options[s.selectedIndex].getAttribute('data-name')||'')}; }
+  DM.bulkPreview = function(){
+    var mem=_bulkMember(); var myung=(document.getElementById('dmBulkMyungui')||{}).value||'';
+    var tb=document.getElementById('dmBulkPreview'); if(!tb) return;
+    tb.innerHTML=_bulkTargets.map(function(it){
+      var bid=_bulkBid(it);
+      return '<tr style="border-bottom:1px solid #f3f4f6">'
+        +'<td style="padding:3px 6px">'+esc(it.sakun_no)+'</td>'
+        +'<td style="padding:3px 6px">'+esc(mem.name||it.member_name||'')+'</td>'
+        +'<td style="padding:3px 6px">'+esc(myung||it.myungui||'')+'</td>'
+        +'<td style="padding:3px 6px;text-align:right">'+_comma(it.lowest_price)+'</td>'
+        +'<td style="padding:3px 6px;text-align:right;font-weight:700;color:#4f46e5">'+(bid?_comma(bid):(it.bidprice?_comma(it.bidprice):'-'))+'</td>'
+        +'</tr>';
+    }).join('');
+  };
+  DM.bulkApply = function(){
+    var mem=_bulkMember(); var myung=((document.getElementById('dmBulkMyungui')||{}).value||'').trim(); var pct=_bulkPct();
+    if(!mem.id && !myung && pct==null){ alert('회원 / 명의 / 입찰가% 중 하나는 입력하세요.'); return; }
+    var itemsRows=[], dmRows=[];
+    _bulkTargets.forEach(function(it){
+      var key={ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court };
+      if(mem.id || pct!=null){ var r={in_date:key.in_date,sakun_no:key.sakun_no,court:key.court}; if(mem.id){r.member_id=mem.id;r.member_name=mem.name;} if(pct!=null){r.bidprice=_bulkBid(it);} itemsRows.push(r); }
+      if(myung) dmRows.push({in_date:key.in_date,sakun_no:key.sakun_no,court:key.court,myungui:myung});
+    });
+    var btn=document.getElementById('dmBulkApplyBtn'); if(btn){ btn.disabled=true; btn.textContent='적용 중…'; }
+    var need=(itemsRows.length?1:0)+(dmRows.length?1:0), done=0;
+    function fin(){ done++; if(done>=need){ if(btn){btn.disabled=false;btn.textContent='확정 적용';} DM.bulkClose(); DM.load(); } }
+    if(itemsRows.length) google.script.run.withSuccessHandler(fin).withFailureHandler(function(e){ alert('회원/입찰가 적용 오류: '+(e&&e.message||e)); fin(); }).bulkAssignDamulgeon(itemsRows);
+    if(dmRows.length) google.script.run.withSuccessHandler(fin).withFailureHandler(function(e){ alert('명의 저장 오류: '+(e&&e.message||e)); fin(); }).bulkSaveDamulgeon(dmRows);
   };
 
   function setupSplitter(){

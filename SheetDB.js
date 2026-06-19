@@ -1060,6 +1060,47 @@ function saveDamulgeonItemBid(inDate, sakun, court, bidprice) {
   finally { __lock.releaseLock(); }
 }
 
+/** [다물건 일괄등록] 회원 선택 목록 (id, name, gubun). gubun='직원' 은 입찰대리인 후보. */
+function getDamulgeonMembers() {
+  try {
+    var ms = (typeof readAllMembersNew === 'function') ? readAllMembersNew() : [];
+    var out = ms.map(function(m) { return { member_id: String(m.member_id || ''), name: String(m.member_name || ''), gubun: String(m.gubun || '') }; })
+                .filter(function(x) { return x.member_id && x.name; });
+    return { success: true, members: out };
+  } catch (e) { return { success: false, message: String(e), members: [] }; }
+}
+
+/**
+ * [다물건 일괄등록] 선택 행(3키)에 회원/입찰가를 ITEMS 에 일괄 기록. (명의는 프론트가 별도 bulkSaveDamulgeon)
+ * rows = [{ in_date, sakun_no, court, member_id?, member_name?, bidprice? }] — 지정된 값만 기록(상태 불변).
+ */
+function bulkAssignDamulgeon(rows) {
+  var __lock = LockService.getScriptLock();
+  try { __lock.waitLock(30000); } catch (e) { return { success: false, message: '저장이 혼잡합니다.' }; }
+  try {
+    rows = Array.isArray(rows) ? rows : [];
+    if (!rows.length) return { success: true, items_updated: 0 };
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'items 없음' };
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();   // A~D (id,in-date,sakun,court)
+    var keyToRow = {};
+    data.forEach(function(r, i) { keyToRow[_dmKey3_(formatParamsDate(r[1]), r[2], r[3])] = i + 2; });
+    var updated = 0;
+    rows.forEach(function(row) {
+      var rn = keyToRow[_dmKey3_(row.in_date, row.sakun_no, row.court)];
+      if (!rn) return;
+      var did = false;
+      if (row.member_name !== undefined && row.member_name !== '') { sheet.getRange(rn, 7).setValue(String(row.member_name)); did = true; }   // G=m_name
+      if (row.member_id !== undefined && row.member_id !== '') { sheet.getRange(rn, 9).setValue(String(row.member_id)); did = true; }          // I=member_id
+      if (row.bidprice !== undefined && row.bidprice !== '') { sheet.getRange(rn, 8).setValue(String(row.bidprice)); did = true; }              // H=bidprice
+      if (did) updated++;
+    });
+    SpreadsheetApp.flush();
+    return { success: true, items_updated: updated };
+  } catch (e) { Logger.log('[bulkAssignDamulgeon] ' + e); return { success: false, message: String(e) }; }
+  finally { __lock.releaseLock(); }
+}
+
 // ── 진행비 출장비 요율표 (settings 시트 key-value, JSON) ──
 function _dmDefaultFeeTable_() {
   return {
