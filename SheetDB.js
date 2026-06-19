@@ -605,7 +605,7 @@ function registerDamulgeon(items, mNameId) {
     var dm = ensureItemDmColumns_();
     var addrCol = dm.addressCol, areaCol = dm.areaCol;
 
-    // 기존 중복키 수집 (B,C,D = in-date, sakun_no, court) → 행번호. 기등록건 옥션ID 갱신용.
+    // 기존 중복키 수집 (B,C,D = in-date, sakun_no, court) → 행번호. 기등록건 지정필드 갱신용.
     var existing = {};
     var lastRow = sheet.getLastRow();
     if (lastRow > 1) {
@@ -614,8 +614,9 @@ function registerDamulgeon(items, mNameId) {
       });
     }
     var auctionIdCol = ITEM_HEADERS.indexOf('auction_id') + 1;   // P열(16) — 고정 위치
+    var lastColCount = sheet.getLastColumn();
 
-    var saved = 0, skipped = 0, auctionUpdated = 0, results = [], history = [];
+    var saved = 0, skipped = 0, updated = 0, auctionUpdated = 0, results = [], history = [];
     items.forEach(function (it) {
       var inDate = String(it.in_date || it['in-date'] || '').trim();
       var sakun = String(it.sakun_no || '').trim();
@@ -623,25 +624,43 @@ function registerDamulgeon(items, mNameId) {
       var aid = String(it.auction_id || it.pid || '').trim();   // 크롤한 옥션 ID (product_id)
       if (!sakun || !court) { results.push({ sakun_no: sakun, ok: false, msg: '사건번호/법원 누락' }); skipped++; return; }
       if (!isAllowedCourt_(court)) { results.push({ sakun_no: sakun, ok: false, msg: '허용되지 않은 법원' }); skipped++; return; }
+      var itMid = String(it.m_name_id || '').trim() || mid;   // 물건별 담당자 우선, 없으면 기본('대표님')
       var key = [_dmDateKey6_(inDate), sakun, court].join('|');
+
+      // ── 이미 MAPS 에 등록된 건: 지정 필드만 업데이트 (없으면 아래에서 신규 추가) ──
+      //   갱신 대상: 담당자(m_name_id)·최저매각가(lowest_price)·보증금(deposit)·주소(address)·면적(building_area)·옥션ID(auction_id).
+      //   ★상태(stu_member)·회원(member_id/m_name/m_name2/bidprice 등)은 절대 안 건드림.
+      //   빈 값으로는 덮어쓰지 않음(crawl 누락 보호), 기존과 다를 때만 기록.
       if (existing[key]) {
-        // [옥션ID 갱신] 이미 MAPS 에 있는 건도 크롤한 옥션 ID 를 items.auction_id 에 업데이트(기존 값과 다를 때만)
-        var dupMsg = '이미 등록됨';
-        var au = aid ? 'same' : 'none';   // 행별 옥션ID 처리상태 (진단용)
-        if (aid && auctionIdCol > 0 && typeof existing[key] === 'number') {
-          var curAid = String(sheet.getRange(existing[key], auctionIdCol).getValue() || '').trim();
-          if (curAid !== aid) {
-            sheet.getRange(existing[key], auctionIdCol).setValue(aid);
-            auctionUpdated++; au = 'updated';
-            dupMsg = '이미 등록(옥션ID 갱신)';
-            var exId = String(sheet.getRange(existing[key], 1).getValue() || '');   // 해당 행 items.id
-            history.push({ action: 'ITEM_UPDATE', item_id: exId, field_name: 'auction_id', from_value: curAid, to_value: aid, trigger_type: 'auction-manager-dm', note: court + ' ' + sakun + ' (옥션ID 갱신)', req_id: String(new Date().getTime()) });
-          }
+        var exRow = existing[key];
+        var au = aid ? 'same' : 'none';   // 옥션ID 처리상태(진단)
+        var changed = [];
+        if (typeof exRow === 'number') {
+          var exVals = sheet.getRange(exRow, 1, 1, lastColCount).getValues()[0];
+          var exId = String(exVals[0] || '');
+          var _upd = function (col, fname, newVal) {
+            if (!col || col <= 0) return;
+            var nv = String(newVal == null ? '' : newVal);
+            if (nv === '') return;                                  // 빈 값이면 갱신 안 함(기존 보존)
+            var cur = String(exVals[col - 1] == null ? '' : exVals[col - 1]).trim();
+            if (cur === nv.trim()) return;                          // 동일하면 skip
+            sheet.getRange(exRow, col).setValue(nv);
+            changed.push(fname);
+            history.push({ action: 'ITEM_UPDATE', item_id: exId, field_name: fname, from_value: cur, to_value: nv, trigger_type: 'auction-manager-dm', note: court + ' ' + sakun + ' (다물건 재등록 갱신)', req_id: String(new Date().getTime()) });
+            if (fname === 'auction_id') { au = 'updated'; auctionUpdated++; }
+          };
+          _upd(6,  'm_name_id',          itMid);                           // 담당자
+          _upd(23, 'lowest_price',       String(it.lowest_price || ''));   // 최저매각가
+          _upd(22, 'deposit',            String(it.deposit || ''));        // 보증금
+          _upd(addrCol, 'address',       String(it.address || ''));        // 주소
+          _upd(areaCol, 'building_area', String(it.building_area || ''));   // 면적
+          _upd(auctionIdCol, 'auction_id', aid);                           // 옥션ID
         }
-        results.push({ sakun_no: sakun, ok: false, msg: dupMsg, au: au }); skipped++; return;
+        if (changed.length) { updated++; results.push({ sakun_no: sakun, ok: false, updated: true, msg: '이미 등록 → 갱신(' + changed.join(',') + ')', au: au }); }
+        else { skipped++; results.push({ sakun_no: sakun, ok: false, msg: '이미 등록(변경없음)', au: au }); }
+        return;
       }
 
-      var itMid = String(it.m_name_id || '').trim() || mid;   // 물건별 담당자 우선, 없으면 기본('대표님')
       var id = String(new Date().getTime()) + String(Math.floor(Math.random() * 1000));
       var regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
       var row = ITEM_HEADERS.map(function (h) {
@@ -678,7 +697,7 @@ function registerDamulgeon(items, mNameId) {
 
     if (history.length && typeof writeItemHistoryBatch_ === 'function') writeItemHistoryBatch_(history);
     SpreadsheetApp.flush();
-    return { success: true, saved: saved, skipped: skipped, auction_updated: auctionUpdated, results: results };
+    return { success: true, saved: saved, updated: updated, skipped: skipped, auction_updated: auctionUpdated, results: results };
   } catch (e) {
     Logger.log('[registerDamulgeon] ' + e);
     return { success: false, message: String(e) };

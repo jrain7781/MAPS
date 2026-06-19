@@ -658,14 +658,17 @@
     }).then(r => r.json()).then(j => {
       if (btn) { btn.disabled = false; btn.textContent = '✓ 선택 진행건 등록'; }
       if (!j || !j.success) { alert('등록 실패: ' + ((j && (j.message || j.error)) || '?')); return; }
-      var auInfo = j.auction_updated ? (' / 옥션ID갱신 ' + j.auction_updated) : '';
-      _dmLog('💾 등록 결과 — 성공 ' + j.saved + ' / 건너뜀 ' + j.skipped + auInfo, 'log-ok');
+      var u = (j.updated || 0);
+      _dmLog('💾 등록 결과 — 신규 ' + j.saved + ' · 갱신 ' + u + ' · 변경없음 ' + j.skipped, 'log-ok');
       // 행별 옥션ID 처리 요약 (다중 전송 시 각 행이 어떻게 됐는지 진단)
       var auN = { 'new': 0, updated: 0, same: 0, none: 0 };
       (j.results || []).forEach(function (rr) { if (rr.au && auN[rr.au] != null) auN[rr.au]++; });
       _dmLog('  옥션ID — 신규기록 ' + auN['new'] + ' · 갱신 ' + auN.updated + ' · 동일 ' + auN.same + ' · pid없음 ' + auN.none, (auN.none ? 'log-err' : 'log-ok'));
-      (j.results || []).forEach(function (rr) { if (!rr.ok) _dmLog('  · ' + rr.sakun_no + ': ' + rr.msg, 'log-err'); });
-      alert('등록 완료 — 성공 ' + j.saved + '건, 건너뜀(중복 등) ' + j.skipped + '건' + (j.auction_updated ? (', 옥션ID 갱신 ' + j.auction_updated + '건') : '') + '.');
+      (j.results || []).forEach(function (rr) {
+        if (rr.updated) _dmLog('  ↻ ' + rr.sakun_no + ': ' + rr.msg, 'log-ok');
+        else if (!rr.ok && rr.msg && rr.msg.indexOf('변경없음') < 0) _dmLog('  · ' + rr.sakun_no + ': ' + rr.msg, 'log-err');
+      });
+      alert('등록 완료 — 신규 ' + j.saved + '건, 갱신 ' + u + '건, 변경없음 ' + j.skipped + '건.');
       dmLoad();
     }).catch(e => { if (btn) { btn.disabled = false; btn.textContent = '✓ 선택 진행건 등록'; } alert('등록 오류: ' + e); });
   }
