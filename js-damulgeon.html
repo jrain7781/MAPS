@@ -361,13 +361,30 @@
       _mcCache[memberId]=res; _applyMcData(memberId, res, rm);
     }).withFailureHandler(function(e){ _mcEl('dmMcBody').innerHTML='실패: '+esc(e&&e.message); }).getMemberAccounts(memberId);
   };
+  function _norm(s){ return String(s==null?'':s).replace(/\s+/g,''); }
   function _applyMcData(memberId, res, rm){
     _mcMemberId=memberId;
     _mcAccounts=(res.accounts||[]).map(function(a){ return Object.assign({}, a); });   // 편집용 복사
-    _mcEl('dmMcMember').textContent=res.member_name||'';
+    var memberName=res.member_name||'';
+    _mcEl('dmMcMember').textContent=memberName;
     _mcEl('dmMcGrade').textContent=res.grade||'';
-    var sel=0;
-    if(rm){ for(var i=0;i<_mcAccounts.length;i++){ if(_mcAccounts[i].idx!==0 && String(_mcAccounts[i].name).trim()===rm){ sel=_mcAccounts[i].idx; break; } } }
+    var rowMName=(_mcRowItem&&_mcRowItem.member_name)?String(_mcRowItem.member_name):'';
+    var sel=0, matched=false, i, a;
+    // 1) 그 행의 전체 m_name("회원 (구분) 명의")과 각 명의 구성을 비교(공백 무시)
+    if(rowMName){
+      var target=_norm(rowMName);
+      for(i=0;i<_mcAccounts.length;i++){ a=_mcAccounts[i];
+        var gb=String(a.gubun||'').trim();   // buildMemberAcItems_ 와 동일: 구분 비면 괄호 없음
+        var cand=(a.idx===0)?memberName:(gb?(memberName+' ('+gb+') '+(a.name||'')):(memberName+' '+(a.name||'')));
+        if(_norm(cand)===target){ sel=a.idx; matched=true; break; }
+      }
+    }
+    // 2) 그리드와 동일 파싱(_parseMName)의 명의명으로 매칭(폴백)
+    if(!matched){
+      var pm=_parseMName(rowMName, memberId);   // 그리드 회원/구분/명의와 동일
+      var key=_norm(pm.myungui||rm||'');
+      if(key && pm.gubun!=='본인'){ for(i=0;i<_mcAccounts.length;i++){ if(_mcAccounts[i].idx>0 && _norm(_mcAccounts[i].name)===key){ sel=_mcAccounts[i].idx; matched=true; break; } } }
+    }
     DM.mcSelect(sel, true);
   }
   function _renderMcSelector(){
