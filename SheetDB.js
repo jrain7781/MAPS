@@ -1286,8 +1286,11 @@ function getDamulgeonList() {
       ((typeof readAllMembersNew === 'function') ? readAllMembersNew() : []).forEach(function(m) { if (m.member_id) { memberClass[String(m.member_id)] = String(m.class_id || ''); memberTg[String(m.member_id)] = String(m.telegram_enabled || ''); } });
       var csh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_SHEET_NAME_DB);
       if (csh && csh.getLastRow() > 1) {
-        var cidI = CLASS_HEADERS.indexOf('class_id'), cgI = CLASS_HEADERS.indexOf('class_grade');
-        csh.getRange(2, 1, csh.getLastRow() - 1, CLASS_HEADERS.length).getValues().forEach(function(cr) { classGrade[String(cr[cidI])] = String(cr[cgI] || ''); });
+        var cidI = CLASS_HEADERS.indexOf('class_id'), cgI = CLASS_HEADERS.indexOf('class_grade'), ctI = CLASS_HEADERS.indexOf('class_type');
+        csh.getRange(2, 1, csh.getLastRow() - 1, CLASS_HEADERS.length).getValues().forEach(function(cr) {
+          var ct = String(cr[ctI] || '').trim(), cg = String(cr[cgI] || '').trim();
+          classGrade[String(cr[cidI])] = [ct, cg].filter(function(x){ return x; }).join('-');   // class_type-class_grade
+        });
       }
     } catch (e) { Logger.log('[dm grade] ' + e); }
     kept.forEach(function(g) {
