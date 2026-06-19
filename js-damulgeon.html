@@ -382,7 +382,7 @@
   }
 
   // ── 일괄작업 모달 (일괄적용 클릭 → 모달: 상단 값입력/회원검색 + 하단 선택 물건) ──
-  var _bulkAct='', _bulkTgts=[];
+  var _bulkAct='', _bulkTgts=[], _acItems=[];
   function _bulkLabel(a){ return {member:'회원',myungui:'명의',bidprice:'입찰가(최저%)',jinhaengbi:'진행비',hyang:'향',auth_method:'인증'}[a]||a; }
   DM.bulkOpenModal = function(){
     var act=(document.getElementById('dmBulkAction')||{}).value||'';
@@ -397,11 +397,14 @@
     var area=document.getElementById('dmBulkInputArea');
     var st='border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px';
     if(act==='member'){
-      if(typeof updateMemberNameDatalist==='function'){ try{ updateMemberNameDatalist(); }catch(e){} }   // 입찰물건관리와 동일 datalist 채움
-      area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">회원명 입력/검색 (입찰물건관리와 동일)</label>'
-        +'<div style="display:flex;align-items:center;gap:8px;margin-top:5px">'
-        +'<input id="dmBulkVal" list="member-name-with-myungui-datalist" placeholder="예: 홍길동" autocomplete="off" spellcheck="false" oninput="DM.bulkMemberInfo()" onfocus="this.select()" style="'+st+';width:230px">'
-        +'<span id="dmBulkMemInfo" style="font-size:12px;font-weight:700"></span></div>';
+      // 입찰물건관리와 동일: 이름 입력 → 그 회원의 명의 목록 드롭다운 → 선택 시 m_name="이름 (구분) 명의"
+      area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">회원명 입력 → 명의 선택 (입찰물건관리와 동일)</label>'
+        +'<div style="position:relative;margin-top:5px">'
+        +'<input id="dmBulkVal" autocomplete="off" spellcheck="false" placeholder="이름 입력 (예: 이정우)" oninput="DM.memberAcInput()" onfocus="DM.memberAcInput()" onblur="DM.memberAcBlur()" style="'+st+';width:260px">'
+        +'<input type="hidden" id="dmBulkMemberId">'
+        +'<ul id="dmMemberAc" style="display:none;position:absolute;left:0;top:100%;z-index:60;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:240px;overflow:auto;min-width:260px;margin:3px 0 0;padding:4px;list-style:none"></ul>'
+        +'</div>'
+        +'<div id="dmBulkMemInfo" style="font-size:12px;font-weight:700;margin-top:5px"></div>';
     }
     else if(act==='myungui'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">명의</label><br><input id="dmBulkVal" placeholder="명의" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:200px;margin-top:5px">'; }
     else if(act==='bidprice'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">입찰가 = 최저가의</label><br><input id="dmBulkVal" type="number" step="0.1" placeholder="%" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:90px;text-align:right;margin-top:5px"> %'; }
@@ -412,24 +415,42 @@
     document.getElementById('dmBulkModal').classList.remove('content-hidden');
     setTimeout(function(){ var v=document.getElementById('dmBulkVal'); if(v) v.focus(); },60);
   };
-  DM.bulkMemberInfo = function(){
-    var v=(document.getElementById('dmBulkVal')||{}).value||''; var info=document.getElementById('dmBulkMemInfo');
-    if(info){
-      var r=_memberByName(v);
-      if(!String(v).trim()){ info.innerHTML=''; }
-      else if(r){
-        var my=_myunguiOf(r.m);
-        info.innerHTML='<span style="color:#16a34a;font-weight:700">✓ '+esc(r.name)+'</span>'
-          + (my.length ? '<span style="color:#374151;font-weight:600;margin-left:8px">명의: '+esc(my.join(', '))+'</span>' : '<span style="color:#9ca3af;margin-left:8px">(명의 없음)</span>');
-      } else { info.innerHTML='<span style="color:#dc2626;font-weight:700">⚠ 미등록 이름</span>'; }
+  // 회원 자동완성 — 입찰물건관리 buildMemberAcItems_(전역) 그대로 호출 → 명의 포함 항목 드롭다운
+  DM.memberAcInput = function(){
+    var inp=document.getElementById('dmBulkVal'), ul=document.getElementById('dmMemberAc'); if(!inp||!ul) return;
+    var hid=document.getElementById('dmBulkMemberId'); if(hid) hid.value='';   // 타이핑하면 선택 해제
+    _acItems = (typeof buildMemberAcItems_==='function') ? (buildMemberAcItems_(inp.value)||[]) : [];
+    if(!_acItems.length){ ul.style.display='none'; ul.innerHTML=''; }
+    else {
+      ul.innerHTML=_acItems.map(function(it,i){
+        var sty=(it.kind==='myungui')?'padding-left:22px;color:#374151':'font-weight:700;color:#111827';
+        return '<li onmousedown="DM.memberAcPick('+i+')" onmouseenter="this.style.background=\'#eef2ff\'" onmouseleave="this.style.background=\'transparent\'" style="padding:6px 10px;cursor:pointer;border-radius:5px;white-space:nowrap;'+sty+'">'+esc(it.displayText)+(it.rightText?(' <span style="color:#94a3b8;font-size:11px">'+esc(it.rightText)+'</span>'):'')+'</li>';
+      }).join('');
+      ul.style.display='block';
     }
-    renderBulkList();
+    bulkMemInfo(); renderBulkList();
   };
+  DM.memberAcPick = function(i){
+    var it=_acItems[i]; if(!it) return;
+    var inp=document.getElementById('dmBulkVal'); if(inp) inp.value=it.inputValue;   // "이정우 (MJ) 한한한" (명의 포함)
+    var hid=document.getElementById('dmBulkMemberId'); if(hid) hid.value=it.member_id||'';
+    var ul=document.getElementById('dmMemberAc'); if(ul) ul.style.display='none';
+    bulkMemInfo(); renderBulkList();
+  };
+  DM.memberAcBlur = function(){ setTimeout(function(){ var ul=document.getElementById('dmMemberAc'); if(ul) ul.style.display='none'; },200); };
+  function bulkMemInfo(){
+    var v=String((document.getElementById('dmBulkVal')||{}).value||'').trim();
+    var hid=(document.getElementById('dmBulkMemberId')||{}).value||'';
+    var info=document.getElementById('dmBulkMemInfo'); if(!info) return;
+    if(!v){ info.innerHTML=''; return; }
+    info.innerHTML = hid ? '<span style="color:#16a34a">✓ 선택됨 (명의 포함): '+esc(v)+'</span>' : '<span style="color:#d97706">목록에서 명의를 선택하세요 (또는 이름 그대로 적용)</span>';
+  }
+  DM.bulkMemberInfo = bulkMemInfo;
   DM.bulkPrev = function(){ renderBulkList(); };
   function renderBulkList(){
     var tb=document.getElementById('dmBulkList'); if(!tb) return;
     var act=_bulkAct, valEl=document.getElementById('dmBulkVal'), val=valEl?String(valEl.value).trim():'';
-    var memName=(act==='member' && val)?((_memberByName(val)||{}).name||val):'';
+    var memName=(act==='member')?val:'';   // 입력값 그대로(명의 포함: "이정우 (MJ) 한한한")
     tb.innerHTML=_bulkTgts.map(function(it,idx){
       var cur, next;
       if(act==='member'){ cur=it.member_name||''; next=memName; }
@@ -454,8 +475,9 @@
     var itemsRows=[], dmRows=[];
     if(act==='member'){
       if(!val){ alert('회원명을 입력하세요.'); return; }
-      var mem=_memberByName(val); if(!mem){ if(!confirm('회원목록에 없는 이름입니다. 회원명만 기록할까요?')) return; mem={member_id:'',name:val}; }
-      targets.forEach(function(it){ itemsRows.push({in_date:it.in_date,sakun_no:it.sakun_no,court:it.court,member_name:mem.name,member_id:mem.member_id}); });
+      var mid=String((document.getElementById('dmBulkMemberId')||{}).value||'');
+      if(!mid){ var rr=_memberByName(val); if(rr) mid=rr.member_id; }   // 수기 입력 폴백
+      targets.forEach(function(it){ itemsRows.push({in_date:it.in_date,sakun_no:it.sakun_no,court:it.court,member_name:val,member_id:mid}); });   // member_name = 명의 포함값
     } else if(act==='bidprice'){
       var pct=parseFloat(val); if(isNaN(pct)){ alert('퍼센트(%)를 입력하세요.'); return; }
       targets.forEach(function(it){ itemsRows.push({in_date:it.in_date,sakun_no:it.sakun_no,court:it.court,bidprice:String(Math.round(_num(it.lowest_price)*pct/100))}); });
