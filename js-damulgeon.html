@@ -448,29 +448,33 @@
     _mcCapture();
     var it=_mcRowItem;
     if(!it){ alert('출력할 사건(물건)을 알 수 없습니다. 그리드에서 회원명을 클릭해 카드를 여세요.'); return; }
-    var w=window.open('', '_blank', 'width=900,height=1000');   // 클릭 시 즉시 열기(팝업차단 회피)
-    if(!w){ alert('팝업이 차단되었습니다. 이 사이트의 팝업을 허용한 뒤 다시 눌러주세요.'); return; }
-    try{ w.document.write('<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>대리입찰</title></head><body style="font-family:sans-serif;padding:24px;color:#555">출력 준비 중…</body></html>'); w.document.close(); }catch(e){}
+    var msg=_mcEl('dmMcSaveMsg'); if(msg){ msg.textContent='출력 준비 중…'; msg.style.color='#64748b'; }
     var daeriin=String(it.daeriin||'').trim();
     google.script.run.withSuccessHandler(function(res){
-      if(!res||!res.success){ try{ w.document.body.innerHTML='출력 실패: '+esc((res&&res.msg)||''); }catch(e){} return; }
-      _writePrintWindow(w, res.principal, res.agent, it);
-    }).withFailureHandler(function(e){ try{ w.document.body.innerHTML='출력 실패: '+esc(e&&e.message); }catch(_e){} }).getDaeriipchalPrintData(_mcMemberId, _mcSel, daeriin);
+      if(!res||!res.success){ if(msg){ msg.textContent='출력 실패: '+esc((res&&res.msg)||''); msg.style.color='#dc2626'; } return; }
+      if(msg) msg.textContent='';
+      _printDaeriipchal(res.principal, res.agent, it);
+    }).withFailureHandler(function(e){ if(msg){ msg.textContent='출력 실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).getDaeriipchalPrintData(_mcMemberId, _mcSel, daeriin);
   };
-  function _writePrintWindow(w, p, agent, it){
-    if(!w){ return; }
+  function _printDaeriipchal(p, agent, it){
     agent=agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
     var court=_courtParse(it.court);
     var ctx={ bon:court.bon, support:court.support, sakun:String(it.sakun_no||''), mulgeon:String(it.mulgeon_no||''), bidDate:_bidDateStr(it.in_date), bidprice:it.bidprice, deposit:it.deposit };
     var isCorp=String(p.gubun||'').indexOf('법인')>=0;
     var body=_wijangHtml(p, agent, ctx, isCorp)+_ipchalHtml(p, agent, ctx, isCorp);
-    try{
-      w.document.open();
-      w.document.write('<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>대리입찰 '+esc(ctx.sakun)+'</title><style>'+_DM_PRINT_CSS+'</style></head><body>'+body+'</body></html>');
-      w.document.close();
-      w.focus();
-      setTimeout(function(){ try{ w.print(); }catch(e){} }, 400);
-    }catch(e){ alert('인쇄창 생성 실패: '+(e&&e.message)); }
+    var html='<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>대리입찰 '+esc(ctx.sakun)+'</title><style>'+_DM_PRINT_CSS+'</style></head><body>'+body+'</body></html>';
+    // 미리보기 창 없이 숨은 iframe 으로 바로 인쇄 대화상자
+    var old=document.getElementById('dmPrintIframe'); if(old&&old.parentNode) old.parentNode.removeChild(old);
+    var ifr=document.createElement('iframe');
+    ifr.id='dmPrintIframe';
+    ifr.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(ifr);
+    var d=ifr.contentWindow.document;
+    d.open(); d.write(html); d.close();
+    setTimeout(function(){
+      try{ ifr.contentWindow.focus(); ifr.contentWindow.print(); }
+      catch(e){ alert('인쇄 실패: '+(e&&e.message)); }
+    }, 350);
   }
   function _vstack(s){ return String(s||'').split('').join('<br>'); }
   function _rep(s,n){ var o=''; while(n-->0) o+=s; return o; }
