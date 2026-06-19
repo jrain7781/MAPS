@@ -16,6 +16,8 @@
   #DaMultiItemManagement .dm-frozen-edge { border-right:2px solid #cbd5e1 !important; }
   #DaMultiItemManagement .dm-sakun-link { color:#1d4ed8; cursor:pointer; text-decoration:underline; text-underline-offset:2px; font-weight:600; }
   #DaMultiItemManagement .dm-sakun-link:hover { color:#1e40af; }
+  @keyframes dmSpin { to { transform:rotate(360deg); } }
+  .dm-spin { animation:dmSpin .7s linear infinite; }
 </style>
 <script>
 (function () {
@@ -138,13 +140,17 @@
   // 수정 후 그 사건(그리드)만 빠르게 갱신 — 전체 재조회 버퍼링 없이
   DM.refreshGroup = function(key){
     key = key || _selKey; if(!key || typeof google==='undefined' || !google.script || !google.script.run) return;
+    var btn=document.getElementById('dmRefreshBtn'), orig=btn?btn.innerHTML:'';
+    if(btn){ btn.disabled=true; btn.innerHTML='<span class="dm-spin" style="display:inline-block">↻</span> 새로고침중…'; }
+    function _restore(){ if(btn){ btn.disabled=false; btn.innerHTML=orig||'↻ 새로고침'; } }
     google.script.run.withSuccessHandler(function(res){
+      _restore();
       if(!res || !res.success || !res.group){ return; }
       var i=-1; for(var k=0;k<_groups.length;k++){ if(_groups[k].group_key===key){ i=k; break; } }
       if(i>=0) _groups[i]=res.group;
       DM.filterList((document.getElementById('dmSearch')||{}).value||'');   // 좌측 갱신
       if(_selKey===key) renderDetail(res.group);                            // 우측 그리드 갱신
-    }).withFailureHandler(function(){}).getDamulgeonGroup(key);
+    }).withFailureHandler(function(){ _restore(); }).getDamulgeonGroup(key);
   };
 
   DM.filterList = function (q) {
@@ -352,9 +358,18 @@
         }
       }
     } catch(e){}
+    var key=_selKey;
     try { if (typeof openDetailModalById==='function') openDetailModalById(id);
       else if (typeof openDetailModalWithTab==='function') openDetailModalWithTab(id); }
     catch(e){ console.error('[DM openItem]', e); }
+    // 모달에서 수정/삭제 후 닫히면 그 사건만 자동 새로고침
+    try {
+      var modal=document.getElementById('itemDetailModal');
+      if(modal && typeof MutationObserver!=='undefined' && !modal.classList.contains('content-hidden')){
+        var obs=new MutationObserver(function(){ if(modal.classList.contains('content-hidden')){ obs.disconnect(); DM.refreshGroup(key); } });
+        obs.observe(modal,{attributes:true,attributeFilter:['class']});
+      }
+    } catch(e){}
   };
 
   var _saveTimers = {};
