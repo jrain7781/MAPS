@@ -30,6 +30,7 @@
   .dm-mcard-tabs { display:flex; flex-wrap:wrap; gap:4px; padding:8px 12px; border-bottom:1px solid #eef2f7; }
   .dm-mc-tab { font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; color:#475569; }
   .dm-mc-tab.on { background:#2563eb; color:#fff; border-color:#2563eb; font-weight:700; }
+  .dm-mc-gbadge { padding:3px 13px; border-radius:13px; font-size:13px; font-weight:800; }
   .dm-mc-tab.dm-mc-add { border-color:#16a34a; color:#16a34a; }
   .dm-mc-tab.dm-mc-add.on { background:#16a34a; color:#fff; border-color:#16a34a; }
   .dm-mcard-body { flex:1; overflow:auto; padding:12px 16px; }
@@ -94,6 +95,7 @@
   var COLS = [
     { label:'',         f:'_check',       t:'check',  a:'center', w:32,  src:'',     frozen:true },
     { label:'순번',     f:'_seq',         t:'ro',     a:'center', w:40,  src:'calc', frozen:true },
+    { label:'옥션',     f:'_auction',     t:'auction',a:'center', w:42,  src:'items',frozen:true },
     { label:'입찰일',   f:'in_date',      t:'ro',     a:'center', w:66,  src:'items',frozen:true, hideable:true },
     { label:'법원',     f:'court',        t:'ro',     a:'left',   w:60,  src:'items',frozen:true, hideable:true },
     { label:'사건번호', f:'sakun_no',     t:'sakun',  a:'left',   w:116, src:'items',frozen:true, hideable:true },
@@ -294,6 +296,7 @@
     var cls='dmgrid-td'+(edge?' dm-frozen-edge':'');
     if(c.t==='check') return '<td class="'+cls+'" style="'+style+';text-align:center"><input type="checkbox" class="dm-row-cb" data-id="'+esc(it.link_item_id)+'"></td>';
     if(c.t==='tg') return '<td class="'+cls+'" style="'+style+';text-align:center">'+((it.tg==='Y')?'<span class="telegram-badge">T</span>':'')+'</td>';
+    if(c.t==='auction'){ var aid=String(it.auction_id||'').trim(); return '<td class="'+cls+'" style="'+style+';text-align:center;padding:0">'+(aid?'<button onclick="DM.openAuction(\''+esc(aid)+'\',\''+esc(it.court||'')+'\',\''+esc(it.sakun_no||'')+'\')" title="옥션원 상세 보기" style="border:1px solid #f59e0b;background:#fff7ed;color:#b45309;border-radius:4px;font-size:10px;padding:1px 5px;cursor:pointer;font-weight:700">옥션</button>':'')+'</td>'; }
     if(c.t==='sakun') return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(it.sakun_no)+'</span></td>';
     if(c.t==='status'){ var st=String(it.stu_member||''); var k=(typeof getStatusTagClass==='function')?getStatusTagClass(st):''; return '<td class="'+cls+'" style="'+style+'"><span class="'+k+'">'+esc(st)+'</span></td>'; }
     if(c.t==='ro' || c.t==='calc'){
@@ -339,6 +342,20 @@
   function reRenderGrid(){ var thead=document.getElementById('dmGridHead'); if(thead) thead.innerHTML=headHtml(); applyTableWidth(); renderBody(); bindResizers(); }
   DM.sortBy = function(f){ if(_sortField===f){ _sortDir=-_sortDir; } else { _sortField=f; _sortDir=1; } reRenderGrid(); };
   DM.toggleHideBasic = function(el){ _hideBasic=!!(el&&el.checked); try{ localStorage.setItem('dmHideBasic', _hideBasic?'1':'0'); }catch(_){}; reRenderGrid(); };
+  // 옥션원 상세 가기 (입찰물건관리 옥션원 가기와 동일 — auction_id로 ca_view, 첫클릭 로그인유도)
+  DM.openAuction = function(auctionId, court, sakun){
+    auctionId=String(auctionId||'').trim();
+    var awin='width=896,height=900,left=100,top=50,resizable=yes,scrollbars=yes', LOGIN='https://www.auction1.co.kr/common/login_box.php';
+    if(!auctionId){ window.open(LOGIN,'_auction',awin); return; }
+    try{ if(typeof _auctionLoginShown!=='undefined' && !_auctionLoginShown){ _auctionLoginShown=true; window.open(LOGIN,'_auction',awin); if(typeof showStatus==='function') showStatus('로그인 페이지를 열었습니다. 로그인 후 다시 옥션 버튼을 클릭하세요.','info'); return; } }catch(e){}
+    var isGongmae=(court==='공매' || (sakun && String(sakun).indexOf('-')>=0));
+    var st=(typeof auctionSettingsCache!=='undefined' && auctionSettingsCache)?auctionSettingsCache:{};
+    var pattern=isGongmae?(st.gongmae_pattern||''):(st.auction_pattern||''), url;
+    if(pattern && pattern.indexOf('[ID]')>=0) url=pattern.replace('[ID]',auctionId);
+    else if(pattern) url=pattern+auctionId;
+    else url=(isGongmae?'https://www.auction1.co.kr/pubauct/view.php?product_id=':'https://www.auction1.co.kr/auction/ca_view.php?product_id=')+auctionId;
+    window.open(url||LOGIN,'_auction',awin);
+  };
   // 그리드 행 하이라이트 (이름/물건번호/사건번호 클릭 시)
   DM._hl = function(el){ try{ var tr=el&&el.closest?el.closest('tr'):null; if(!tr) return; var tb=document.getElementById('dmGridBody'); if(tb) tb.querySelectorAll('tr.dm-row-hl').forEach(function(r){ r.classList.remove('dm-row-hl'); }); tr.classList.add('dm-row-hl'); }catch(e){} };
   // ===== 명의 상세 슬라이드 카드 (조회/수정/저장) =====
@@ -389,11 +406,14 @@
   }
   function _renderMcSelector(){
     var others=_mcAccounts.filter(function(a){return a.idx>0;});
+    var cur=_mcAccounts.filter(function(a){return a.idx===_mcSel;})[0];
     var html='<span class="dm-mc-tab'+(_mcSel===0?' on':'')+'" onclick="DM.mcSelect(0)">본인</span>';
     if(others.length){
       var opts='<option value="">명의 선택…</option>'+others.map(function(a){ return '<option value="'+a.idx+'"'+(a.idx===_mcSel?' selected':'')+'>'+esc(a.name||('명의'+a.idx))+' ('+esc(a.gubun||'개인')+')</option>'; }).join('');
       html+='<select class="dm-mc-sel" onchange="DM.mcSelect(parseInt(this.value,10))">'+opts+'</select>';
     }
+    var cg=_mcSel===-1?'신규':(_mcSel===0?'본인':(cur?(cur.gubun||'개인'):''));   // 현재 구분 색상 badge
+    if(cg){ var gcol=({'본인':'#2563eb','개인':'#16a34a','법인':'#9333ea','신규':'#16a34a'})[cg]||'#64748b'; html+='<span class="dm-mc-gbadge" style="color:'+gcol+';background:'+gcol+'1a;border:1px solid '+gcol+'66">'+esc(cg)+'</span>'; }
     html+='<span class="dm-mc-tab dm-mc-add'+(_mcSel===-1?' on':'')+'" onclick="DM.mcNewMyungui()">➕ 명의 등록</span>';
     _mcEl('dmMcTabs').innerHTML=html;
   }
