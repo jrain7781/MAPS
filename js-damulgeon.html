@@ -443,7 +443,8 @@
     +'.wj-case{text-align:center;font-size:15.5px;margin:18px 0 6px;}'
     +'.wj-mid2{text-align:center;font-size:15.5px;margin:6px 0;}'
     +'.wj-date{text-align:center;font-size:15.5px;margin:12px 0 0;}'
-    +'.wj-sign{text-align:center;font-size:14px;letter-spacing:3px;margin:92px 0 0;}'
+    +'.wj-tbl .cap{white-space:nowrap;}'
+    +'.wj-sign{text-align:center;font-size:15.5px;letter-spacing:3px;margin:92px 0 0;}'
     +'.wj-foot{text-align:center;font-size:20px;font-weight:700;letter-spacing:5px;margin:30px 0 0;}'
     +'.ip-formno{display:flex;justify-content:space-between;font-size:9px;color:#222;margin-bottom:2px;}'
     +'.ip-title{text-align:center;font-size:23px;letter-spacing:9px;font-weight:800;margin:2px 0 7px;}'
@@ -507,12 +508,13 @@
   };
   function _vstack(s){ return String(s||'').split('').join('<br>'); }
   function _rep(s,n){ var o=''; while(n-->0) o+=s; return o; }
+  function _sakunBase(s){ return String(s||'').replace(/\s*\([^)]*\)\s*$/,'').trim(); }   // 사건번호 끝 괄호(물건번호) 제거
   function _courtLine(ctx){ return esc(ctx.bon)+' 지방법원'+(ctx.support?('　　'+esc(ctx.support)+' 지원'):''); }
   function _wijTbl(label, name, job, reg, phone, addr, cls){
-    return '<table class="fm iprow wj-tbl '+(cls||'')+'"><colgroup><col style="width:7%"><col style="width:16%"><col style="width:30%"><col style="width:12%"><col style="width:35%"></colgroup>'
-      +'<tr><td class="vl" rowspan="3">'+_vstack(label)+'</td><td>성　명</td><td>'+esc(name||'')+'</td><td>직　업</td><td>'+esc(job||'회사원')+'</td></tr>'
-      +'<tr><td>주민등록번호</td><td>'+esc(reg||'')+'</td><td>전화번호</td><td>'+esc(phone||'')+'</td></tr>'
-      +'<tr><td>주　소</td><td colspan="3" class="lf">'+esc(addr||'')+'</td></tr></table>';
+    return '<table class="fm iprow wj-tbl '+(cls||'')+'"><colgroup><col style="width:6%"><col style="width:18%"><col style="width:28%"><col style="width:14%"><col style="width:34%"></colgroup>'
+      +'<tr><td class="vl" rowspan="3">'+_vstack(label)+'</td><td class="cap">성　명</td><td>'+esc(name||'')+'</td><td class="cap">직　업</td><td>'+esc(job||'회사원')+'</td></tr>'
+      +'<tr><td class="cap">주민등록번호</td><td>'+esc(reg||'')+'</td><td class="cap">전화번호</td><td>'+esc(phone||'')+'</td></tr>'
+      +'<tr><td class="cap">주　소</td><td colspan="3" class="lf">'+esc(addr||'')+'</td></tr></table>';
   }
   function _wijangHtml(p, agent, ctx, isCorp){
     var pReg=isCorp?(p.biz_no||''):(p.jumin_corp||'');
@@ -520,7 +522,7 @@
     +_wijTbl('대리인', agent.name, agent.job, agent.jumin_corp, agent.phone, agent.address, '')
     +'<div class="wj-mid">위 사람을 대리인으로 정하고 다음 사항을 위임함.</div>'
     +'<div class="wj-da">다　음</div>'
-    +'<div class="wj-case">'+_courtLine(ctx)+'　　　'+esc(ctx.sakun)+'　　호</div>'
+    +'<div class="wj-case">'+_courtLine(ctx)+'　　　'+esc(_sakunBase(ctx.sakun))+'　　호'+(ctx.mulgeon?'　('+esc(ctx.mulgeon)+')':'')+'</div>'
     +'<div class="wj-mid2">위 경매사건에 관한 입찰행위 일체</div>'
     +'<div class="wj-date">'+esc(ctx.bidDate)+'</div>'
     +_wijTbl('본인', p.name, p.job, pReg, p.phone, p.address, 'wj-tbl2')
@@ -553,7 +555,7 @@
     +'<div class="ip-title">기　일　입　찰　표</div>'
     +'<div class="ip-head"><span>'+_courtLine(ctx)+' 집행관 귀하</span><span>입찰기일 : '+esc(ctx.bidDate)+'</span></div>'
     +'<table class="fm iprow" style="width:100%;margin-bottom:-1px"><colgroup><col style="width:9%"><col style="width:41%"><col style="width:9%"><col style="width:41%"></colgroup>'
-    +'<tr><td>사건<br>번호</td><td><div style="display:flex;justify-content:space-between"><span>'+esc(ctx.sakun)+'</span><span>호</span></div></td><td>물건<br>번호</td><td>'+esc(ctx.mulgeon||'')+'</td></tr></table>'
+    +'<tr><td>사건<br>번호</td><td><div style="display:flex;justify-content:space-between"><span>'+esc(_sakunBase(ctx.sakun))+'</span><span>호</span></div></td><td>물건<br>번호</td><td>'+esc(ctx.mulgeon||'')+'</td></tr></table>'
     +'<table class="fm ipblk" style="width:100%;margin-bottom:-1px"><colgroup><col style="width:5%"><col style="width:7%"><col style="width:15%"><col style="width:30%"><col style="width:13%"><col style="width:30%"></colgroup>'
     +'<tr><td class="vl" rowspan="6">'+_vstack('입찰자')+'</td><td class="vl" rowspan="3">'+_vstack('본인')+'</td>'
     +'<td>성　명</td><td>'+esc(p.name||'')+'</td><td>전화번호</td><td>'+esc(p.phone||'')+'</td></tr>'
