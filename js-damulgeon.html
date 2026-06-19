@@ -27,38 +27,38 @@
   var _loading = false;
   var SPLIT_KEY = 'dmListW';
   var COLW_KEY = 'dmGridColW';
-  var FROZEN = 9;        // 체크~명의(0~8) 열고정
+  var FROZEN = 10;       // 체크~명의(0~9) 열고정
   var _colW = {};        // 컬럼 인덱스 → px (사용자 조절)
 
-  // 컬럼: label / f(필드) / t(타입: check체크,ro읽기,num숫자수동,text텍스트수동,auth인증,calc자동,status상태,sakun링크) / a(정렬) / w(폭px)
+  // 컬럼: label / f / t(타입) / a(정렬) / w(폭) / src(데이터 출처: items파랑·dm노랑·link/calc회색)
+  //   t: check체크 / ro읽기 / text텍스트편집(dm) / auth인증(dm) / bid입찰가편집(items저장) / calc자동 / status상태 / sakun링크
   var COLS = [
-    { label:'',         f:'_check',           t:'check',  a:'center', w:32 },
-    { label:'순번',     f:'_seq',             t:'ro',     a:'center', w:42 },
-    { label:'입찰일',   f:'in_date',          t:'ro',     a:'center', w:68 },
-    { label:'법원',     f:'court',            t:'ro',     a:'left',   w:62 },
-    { label:'사건번호', f:'sakun_no',         t:'sakun',  a:'left',   w:120 },
-    { label:'물건',     f:'mulgeon_no',       t:'ro',     a:'center', w:42 },
-    { label:'상태',     f:'stu_member',       t:'status', a:'center', w:56 },
-    { label:'회원',     f:'member_name',      t:'ro',     a:'left',   w:70 },
-    { label:'명의',     f:'myungui',          t:'ro',     a:'left',   w:62 },
-    { label:'등급',     f:'grade',            t:'ro',     a:'center', w:54 },
-    { label:'주소',     f:'_addrBase',        t:'ro',     a:'left',   w:190 },
-    { label:'동',       f:'dong',             t:'text',   a:'center', w:44 },
-    { label:'층',       f:'floor',            t:'text',   a:'center', w:40 },
-    { label:'호수',     f:'ho',               t:'text',   a:'center', w:50 },
-    { label:'향',       f:'hyang',            t:'text',   a:'center', w:46 },
-    { label:'건물면적', f:'building_area',    t:'ro',     a:'right',  w:70 },
-    { label:'감정가',   f:'gamjungga',        t:'num',    a:'right',  w:92 },
-    { label:'최저매각가',f:'lowest_price',    t:'ro',     a:'right',  w:96 },
-    { label:'입찰가',   f:'bidprice',         t:'num',    a:'right',  w:96 },
-    { label:'비율',     f:'_ratio',           t:'calc',   a:'right',  w:54 },
-    { label:'보증금',   f:'deposit',          t:'ro',     a:'right',  w:90 },
-    { label:'진행비',   f:'jinhaengbi',       t:'num',    a:'right',  w:84 },
-    { label:'총입금요청',f:'_total',          t:'calc',   a:'right',  w:104 },
-    { label:'입찰대리인',f:'daeriin',         t:'text',   a:'left',   w:80 },
-    { label:'인증',     f:'auth_method',      t:'auth',   a:'center', w:60 },
-    { label:'비고',     f:'dm_note',          t:'text',   a:'left',   w:130 }
+    { label:'',         f:'_check',       t:'check',  a:'center', w:32,  src:'' },
+    { label:'순번',     f:'_seq',         t:'ro',     a:'center', w:42,  src:'calc' },
+    { label:'입찰일',   f:'in_date',      t:'ro',     a:'center', w:68,  src:'items' },
+    { label:'법원',     f:'court',        t:'ro',     a:'left',   w:60,  src:'items' },
+    { label:'사건번호', f:'sakun_no',     t:'sakun',  a:'left',   w:116, src:'items' },
+    { label:'물건종류', f:'prop_kind',    t:'ro',     a:'left',   w:78,  src:'items' },
+    { label:'물건',     f:'mulgeon_no',   t:'ro',     a:'center', w:42,  src:'items' },
+    { label:'상태',     f:'stu_member',   t:'status', a:'center', w:56,  src:'items' },
+    { label:'회원',     f:'member_name',  t:'ro',     a:'left',   w:68,  src:'items' },
+    { label:'명의',     f:'myungui',      t:'text',   a:'left',   w:68,  src:'dm' },
+    { label:'등급',     f:'grade',        t:'ro',     a:'center', w:54,  src:'link' },
+    { label:'주소',     f:'_addrBase',    t:'ro',     a:'left',   w:190, src:'items' },
+    { label:'건물면적', f:'building_area',t:'ro',     a:'right',  w:70,  src:'items' },
+    { label:'감정가',   f:'gamjungga',    t:'ro',     a:'right',  w:90,  src:'items' },
+    { label:'최저매각가',f:'lowest_price',t:'ro',     a:'right',  w:96,  src:'items' },
+    { label:'입찰가',   f:'bidprice',     t:'bid',    a:'right',  w:96,  src:'items' },
+    { label:'비율',     f:'_ratio',       t:'calc',   a:'right',  w:54,  src:'calc' },
+    { label:'보증금',   f:'deposit',      t:'ro',     a:'right',  w:90,  src:'items' },
+    { label:'진행비',   f:'jinhaengbi',   t:'ro',     a:'right',  w:84,  src:'calc' },
+    { label:'총입금요청',f:'_total',      t:'calc',   a:'right',  w:104, src:'calc' },
+    { label:'향',       f:'hyang',        t:'text',   a:'center', w:50,  src:'dm' },
+    { label:'인증',     f:'auth_method',  t:'auth',   a:'center', w:60,  src:'dm' },
+    { label:'비고',     f:'dm_note',      t:'text',   a:'left',   w:130, src:'dm' }
   ];
+  // 헤더 배경색 (출처 구분)
+  function srcBg(src){ return src==='items' ? '#dbeafe' : (src==='dm' ? '#fef9c3' : (src==='link' ? '#e0e7ff' : '#f1f5f9')); }
 
   function _num(v){ var n=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; }
   function _comma(v){ var n=_num(v); return n? n.toLocaleString('ko-KR') : String(v==null?'':v); }
@@ -165,9 +165,10 @@
       if (c.a==='right' && (c.f==='lowest_price'||c.f==='deposit'||c.f==='building_area')) v=_comma(v);
       return '<td class="'+cls+'" style="'+style+'">'+esc(v)+'</td>';
     }
-    if (c.t==='num' || c.t==='text'){
+    if (c.t==='num' || c.t==='text' || c.t==='bid'){
       var val = it[c.f]==null?'':it[c.f];
-      return '<td class="'+cls+'" style="'+style+';padding:0"><input type="text" value="'+esc(val)+'" data-f="'+c.f+'" oninput="DM.edit(this)" onfocus="this.select()" onclick="this.select()" class="dmgrid-input" style="width:100%;border:0;background:transparent;text-align:'+c.a+';padding:3px 6px;font-size:12px;box-sizing:border-box"></td>';
+      var bg = (c.src==='dm') ? 'background:#fffdf3' : 'background:transparent';   // dm 편집칸 옅은 노랑
+      return '<td class="'+cls+'" style="'+style+';padding:0"><input type="text" value="'+esc(val)+'" data-f="'+c.f+'" oninput="DM.edit(this)" onfocus="this.select()" onclick="this.select()" class="dmgrid-input" style="width:100%;border:0;'+bg+';text-align:'+c.a+';padding:3px 6px;font-size:12px;box-sizing:border-box"></td>';
     }
     if (c.t==='auth'){
       var cur=it[c.f]||'';
@@ -181,7 +182,7 @@
 
   function headHtml(){
     return '<tr>' + COLS.map(function(c, ci){
-      var st = 'min-width:'+widthOf(ci)+'px;width:'+widthOf(ci)+'px;max-width:'+widthOf(ci)+'px;text-align:center;position:relative';  // 제목 가운데정렬
+      var st = 'min-width:'+widthOf(ci)+'px;width:'+widthOf(ci)+'px;max-width:'+widthOf(ci)+'px;text-align:center;position:relative;background:'+srcBg(c.src);  // 제목 가운데정렬 + 출처색
       var cls = 'dmgrid-th'+(ci===FROZEN-1?' dm-frozen-edge':'');
       if (ci < FROZEN) st += ';position:sticky;left:'+frozenLeft(ci)+'px;z-index:6';
       if (c.t==='check'){
@@ -231,13 +232,13 @@
     }
     var addrFull = _addrBase((g.items[0]&&g.items[0].address) || g.address_base || '');  // 동/층/호 + 조사내용 제거, 전체 표시
     if (head) head.innerHTML =
-      '<div style="font-size:17px;font-weight:700;color:#111827;white-space:normal;word-break:break-all;line-height:1.35">'+esc(addrFull)+'</div>'
-      + '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:5px">'
-      +   '<span style="font-size:18px;font-weight:800;color:#111827">'+esc(g.sakun_base)+'</span>'
-      +   '<span style="font-size:14px;font-weight:700;color:#1d4ed8">'+esc(g.court)+'</span>'
-      +   '<span style="font-size:13px;color:#4b5563">입찰일 '+esc(g.in_date)+'</span>'
-      +   '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#fef3c7;color:#92400e;font-weight:700">물건 '+g.count+'</span>'
-      +   (_firstMgr(g)? '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#cffafe;color:#0e7490;font-weight:700">담당 '+esc(_firstMgr(g))+'</span>':'')
+      '<div style="display:flex;align-items:baseline;gap:10px;white-space:nowrap;overflow-x:auto">'
+      +   '<span style="font-size:16px;font-weight:700;color:#111827;flex-shrink:0">'+esc(addrFull)+'</span>'
+      +   '<span style="font-size:16px;font-weight:800;color:#111827;flex-shrink:0">'+esc(g.sakun_base)+'</span>'
+      +   '<span style="font-size:13px;font-weight:700;color:#1d4ed8;flex-shrink:0">'+esc(g.court)+'</span>'
+      +   '<span style="font-size:12px;color:#4b5563;flex-shrink:0">입찰일 '+esc(g.in_date)+'</span>'
+      +   '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#fef3c7;color:#92400e;font-weight:700;flex-shrink:0">물건 '+g.count+'</span>'
+      +   (_firstMgr(g)? '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#cffafe;color:#0e7490;font-weight:700;flex-shrink:0">담당 '+esc(_firstMgr(g))+'</span>':'')
       + '</div>';
     if (thead) thead.innerHTML = headHtml();
     applyTableWidth();
@@ -266,25 +267,32 @@
     var id=tr.getAttribute('data-id'), f=el.getAttribute('data-f');
     var it=curItems().filter(function(x){return x.link_item_id===id;})[0]; if(!it) return;
     it[f]=el.value;
-    if (f==='bidprice'||f==='jinhaengbi') refreshCalc(tr,it);
-    if (_saveTimers[id]) clearTimeout(_saveTimers[id]);
-    _saveTimers[id]=setTimeout(function(){ saveRow(it); },600);
+    if (f==='bidprice') refreshCalc(tr,it);
+    var tk=id+'|'+f;
+    if (_saveTimers[tk]) clearTimeout(_saveTimers[tk]);
+    _saveTimers[tk]=setTimeout(function(){ (f==='bidprice') ? saveItemBid(it) : saveDmAux(it); },600);
   };
   function refreshCalc(tr,it){
     var tds=tr.children;
     COLS.forEach(function(c,i){ if(c.t==='calc' && tds[i]) tds[i].textContent=computed(c.f,it,0); });
   }
-  function saveRow(it){
+  function _dot(txt, hide){ var dot=document.getElementById('dmSaveDot'); if(!dot) return; dot.style.opacity='1'; dot.textContent=txt; if(hide) setTimeout(function(){dot.style.opacity='0';},1200); }
+  // 다물건 전용(명의/향/인증/비고) → damulgeon 시트 (3키)
+  function saveDmAux(it){
     if (typeof google==='undefined'||!google.script||!google.script.run) return;
-    var row={ link_item_id:it.link_item_id, in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, mulgeon_no:it.mulgeon_no,
-      member_id:it.member_id, member_name:it.member_name, myungui:it.myungui, grade:it.grade,
-      dong:it.dong, floor:it.floor, ho:it.ho, hyang:it.hyang, gamjungga:it.gamjungga,
-      bidprice:it.bidprice, jinhaengbi:it.jinhaengbi, daeriin:it.daeriin, auth_method:it.auth_method, dm_note:it.dm_note };
-    var dot=document.getElementById('dmSaveDot'); if(dot){ dot.style.opacity='1'; dot.textContent='● 저장 중'; }
-    google.script.run
-      .withSuccessHandler(function(){ if(dot){ dot.textContent='✓ 저장됨'; setTimeout(function(){dot.style.opacity='0';},1200);} })
-      .withFailureHandler(function(e){ if(dot){ dot.textContent='⚠ 저장실패'; } console.error('[DM save]',e); })
+    var row={ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, myungui:it.myungui, hyang:it.hyang, auth_method:it.auth_method, dm_note:it.dm_note };
+    _dot('● 저장 중');
+    google.script.run.withSuccessHandler(function(){ _dot('✓ 저장됨', true); })
+      .withFailureHandler(function(e){ _dot('⚠ 저장실패'); console.error('[DM aux save]',e); })
       .saveDamulgeonRow(row);
+  }
+  // 입찰가 → ITEMS.bidprice (연계, 단일 소스)
+  function saveItemBid(it){
+    if (typeof google==='undefined'||!google.script||!google.script.run) return;
+    _dot('● 입찰가 저장 중');
+    google.script.run.withSuccessHandler(function(r){ _dot(r&&r.success?'✓ 입찰가 저장(ITEMS)':'⚠ '+((r&&r.message)||'실패'), true); })
+      .withFailureHandler(function(e){ _dot('⚠ 입찰가 저장실패'); console.error('[DM bid save]',e); })
+      .saveDamulgeonItemBid(it.in_date, it.sakun_no, it.court, it.bidprice);
   }
 
   // ── 컬럼 리사이즈 ──
