@@ -263,6 +263,13 @@
   function reRenderGrid(){ var thead=document.getElementById('dmGridHead'); if(thead) thead.innerHTML=headHtml(); applyTableWidth(); renderBody(); bindResizers(); }
   DM.sortBy = function(f){ if(_sortField===f){ _sortDir=-_sortDir; } else { _sortField=f; _sortDir=1; } reRenderGrid(); };
   DM.toggleHideBasic = function(el){ _hideBasic=!!(el&&el.checked); try{ localStorage.setItem('dmHideBasic', _hideBasic?'1':'0'); }catch(_){}; reRenderGrid(); };
+  // [임시] 명의DB 백엔드 자가테스트 — 브라우저 버튼 한 번
+  DM.selfTest = function(){
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('google.script.run 없음'); return; }
+    google.script.run.withSuccessHandler(function(r){ alert((r&&r.log)||'결과 없음'); })
+      .withFailureHandler(function(e){ alert('실패: '+(e&&e.message)); })
+      .selfTestMemberAccounts();
+  };
   // 상태 다중선택 조회 (입찰물건관리 방식)
   var DM_STATUSES=['상품','검증','미정','추천','입찰','낙찰','폐기','불가'];
   DM.toggleStatusMenu = function(){

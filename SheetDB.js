@@ -853,6 +853,34 @@ function saveMemberAccount(memberId, idx, data) {
   }
 }
 
+/** [브라우저 버튼용] 결과를 문자열로 반환 — google.script.run 으로 호출해 alert */
+function selfTestMemberAccounts() {
+  var log = [];
+  try {
+    var sh = _getMemberAccountsSheet_();
+    log.push('✔ 시트: ' + sh.getName() + ' (헤더 ' + MEMBER_ACCOUNTS_HEADERS.length + '열)');
+    var members = readAllMembersNew();
+    if (!members.length) { log.push('회원 없음'); return { success: false, log: log.join('\n') }; }
+    var mid = String(members[0].member_id);
+    var before = getMemberAccounts(mid);
+    log.push('✔ 조회 회원: ' + before.member_name + ' (' + mid + ')');
+    log.push('  등급: ' + (before.grade || '(없음)'));
+    log.push('  계정수(본인+명의): ' + before.accounts.length + '개');
+    var sv = saveMemberAccount(mid, 0, { gubun: '개인', name: before.member_name, jumin_corp: '900101-1234567', phone: '010-0000-0000' });
+    log.push('✔ 저장: ' + JSON.stringify(sv));
+    var after = getMemberAccounts(mid);
+    var self0 = after.accounts.filter(function (a) { return a.idx === 0; })[0];
+    var ok = self0 && self0.jumin_corp === '900101-1234567';
+    log.push('✔ 재조회 본인 주민번호: ' + (self0 ? self0.jumin_corp : '?'));
+    log.push('');
+    log.push('=> 저장확인: ' + (ok ? 'OK ✅' : 'FAIL ❌'));
+    return { success: !!ok, log: log.join('\n') };
+  } catch (e) {
+    log.push('에러: ' + (e && e.message));
+    return { success: false, log: log.join('\n') };
+  }
+}
+
 /** [자체검증용] GAS 에디터에서 실행 — 시트생성/저장/조회 동작 확인 */
 function _test_memberAccounts_() {
   var sh = _getMemberAccountsSheet_();
