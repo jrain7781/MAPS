@@ -9,6 +9,8 @@
   #DaMultiItemManagement .dmgrid-th { padding:5px 6px; font-weight:700; color:#475569; border-bottom:2px solid #cbd5e1; border-right:1px solid #e2e8f0; white-space:nowrap; background:#f1f5f9; font-size:12px; position:sticky; top:0; z-index:4; box-sizing:border-box; }
   #DaMultiItemManagement td.dmgrid-td { border-bottom:1px solid #f1f5f9; border-right:1px solid #f1f5f9; white-space:nowrap; padding:3px 6px; font-size:12px; color:#334155; background:#fff; box-sizing:border-box; }
   #DaMultiItemManagement tr:hover td.dmgrid-td { background:#f8fafc; }
+  #DaMultiItemManagement tr.dm-row-hl td.dmgrid-td { background:#fff3c4; }
+  #DaMultiItemManagement tr.dm-row-hl:hover td.dmgrid-td { background:#ffe9a3; }
   #DaMultiItemManagement .dmgrid-input:focus { background:#fffbeb !important; outline:1px solid #fbbf24; }
   #DaMultiItemManagement #dmSplitter:hover, #DaMultiItemManagement #dmSplitter.dragging { background:#93c5fd; }
   #DaMultiItemManagement .dm-th-grip { position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:7; }
@@ -242,13 +244,13 @@
     var cls='dmgrid-td'+(edge?' dm-frozen-edge':'');
     if(c.t==='check') return '<td class="'+cls+'" style="'+style+';text-align:center"><input type="checkbox" class="dm-row-cb" data-id="'+esc(it.link_item_id)+'"></td>';
     if(c.t==='tg') return '<td class="'+cls+'" style="'+style+';text-align:center">'+((it.tg==='Y')?'<span class="telegram-badge">T</span>':'')+'</td>';
-    if(c.t==='sakun') return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(it.sakun_no)+'</span></td>';
+    if(c.t==='sakun') return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(it.sakun_no)+'</span></td>';
     if(c.t==='status'){ var st=String(it.stu_member||''); var k=(typeof getStatusTagClass==='function')?getStatusTagClass(st):''; return '<td class="'+cls+'" style="'+style+'"><span class="'+k+'">'+esc(st)+'</span></td>'; }
     if(c.t==='ro' || c.t==='calc'){
       var v=computed(c.f,it,idx); if(c.num) v=_num(v)?_comma(v):'';
-      if(c.f==='mulgeon_no' && it.link_item_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(v)+'</span></td>';   // 사건번호 숨김 시 물건번호로 모달
+      if(c.f==='mulgeon_no' && it.link_item_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(v)+'</span></td>';   // 사건번호 숨김 시 물건번호로 모달
       if(c.f==='_total'){ var done3=(_num(it.bidprice)>0 && _num(it.deposit)>0 && _num(it._fee)>0); return '<td class="'+cls+'" style="'+style+(done3?';color:#2563eb;font-weight:800':'')+'">'+esc(v)+'</td>'; }   // 입찰가·보증금·진행비 모두 입력 → 굵은 파랑
-      if(c.f==='member_name' && it.member_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-member-link" onclick="DM.openMyungui(\''+esc(it.member_id)+'\',\''+esc(it.myungui||'')+'\',\''+esc(v)+'\')" title="클릭 → 명의/계좌 정보">'+esc(v)+'</span></td>';   // 회원 클릭 → 명의 카드
+      if(c.f==='member_name' && it.member_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-member-link" onclick="DM._hl(this);DM.openMyungui(\''+esc(it.member_id)+'\',\''+esc(it.myungui||'')+'\',\''+esc(v)+'\')" title="클릭 → 명의/계좌 정보">'+esc(v)+'</span></td>';   // 회원 클릭 → 명의 카드
       return '<td class="'+cls+'" style="'+style+'">'+esc(v)+'</td>';
     }
     if(c.t==='num' || c.t==='text' || c.t==='bid'){
@@ -286,6 +288,8 @@
   function reRenderGrid(){ var thead=document.getElementById('dmGridHead'); if(thead) thead.innerHTML=headHtml(); applyTableWidth(); renderBody(); bindResizers(); }
   DM.sortBy = function(f){ if(_sortField===f){ _sortDir=-_sortDir; } else { _sortField=f; _sortDir=1; } reRenderGrid(); };
   DM.toggleHideBasic = function(el){ _hideBasic=!!(el&&el.checked); try{ localStorage.setItem('dmHideBasic', _hideBasic?'1':'0'); }catch(_){}; reRenderGrid(); };
+  // 그리드 행 하이라이트 (이름/물건번호/사건번호 클릭 시)
+  DM._hl = function(el){ try{ var tr=el&&el.closest?el.closest('tr'):null; if(!tr) return; var tb=document.getElementById('dmGridBody'); if(tb) tb.querySelectorAll('tr.dm-row-hl').forEach(function(r){ r.classList.remove('dm-row-hl'); }); tr.classList.add('dm-row-hl'); }catch(e){} };
   // ===== 명의 상세 슬라이드 카드 (조회/수정/저장) =====
   var _mcCache={};   // memberId → 조회결과 (속도: 재오픈 즉시)
   function _mcEl(id){ return document.getElementById(id); }
