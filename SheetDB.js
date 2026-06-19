@@ -876,6 +876,38 @@ function getDaeriipchalPrintData(memberId, idx, daeriinName) {
   return { success: true, principal: pr, agent: agent };
 }
 
+/**
+ * 일괄 출력용: reqs = [{member_id, myungui, daeriin}] → [{success, principal, agent}] (순서 유지).
+ * 회원/명의/대리인을 회당 1번씩만 읽도록 캐싱.
+ */
+function getBulkDaeriipchalData(reqs) {
+  reqs = reqs || [];
+  var members = readAllMembersNew();
+  var byName = {};
+  members.forEach(function (m) { byName[String(m.member_name || '').trim()] = m; });
+  var accCache = {};
+  function accOf(mid) { mid = String(mid || '').trim(); if (!mid) return null; if (!(mid in accCache)) accCache[mid] = getMemberAccounts(mid); return accCache[mid]; }
+  var out = [];
+  for (var i = 0; i < reqs.length; i++) {
+    var r = reqs[i] || {};
+    var acc = accOf(r.member_id);
+    if (!acc || !acc.success) { out.push({ success: false }); continue; }
+    var myung = String(r.myungui || '').trim(), idx = 0;
+    if (myung) { for (var j = 0; j < acc.accounts.length; j++) { if (acc.accounts[j].idx !== 0 && String(acc.accounts[j].name).trim() === myung) { idx = acc.accounts[j].idx; break; } } }
+    var pr = acc.accounts.filter(function (a) { return a.idx === idx; })[0];
+    if (!pr) { out.push({ success: false }); continue; }
+    pr = Object.assign({}, pr, { member_name: acc.member_name, grade: acc.grade });
+    var agent = null, daeriin = String(r.daeriin || '').trim();
+    if (daeriin) {
+      var sm = byName[daeriin];
+      if (sm) { var sa = accOf(String(sm.member_id)); if (sa && sa.success) agent = (sa.accounts || []).filter(function (a) { return a.idx === 0; })[0] || null; }
+      if (!agent) agent = { name: daeriin, job: '회사원', jumin_corp: '', phone: '', address: '' };
+    }
+    out.push({ success: true, principal: pr, agent: agent });
+  }
+  return out;
+}
+
 /** [브라우저 버튼용] 결과를 문자열로 반환 — google.script.run 으로 호출해 alert */
 function selfTestMemberAccounts() {
   var log = [];

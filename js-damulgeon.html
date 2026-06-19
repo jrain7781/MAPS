@@ -41,6 +41,11 @@
   .dm-mcard-resize { position:absolute; left:0; top:0; width:7px; height:100%; cursor:col-resize; z-index:3; background:transparent; }
   .dm-mcard-resize:hover { background:rgba(37,99,235,.25); }
   .dm-mcard-foot { padding:10px 16px; border-top:1px solid #e5e7eb; background:#f8fafc; display:flex; align-items:center; gap:10px; flex-shrink:0; flex-wrap:wrap; }
+  .dm-mc-actions { display:flex; align-items:center; gap:10px; padding:14px 2px 6px; }
+  .dm-mc-btn-save { background:#2563eb; color:#fff; border:0; border-radius:6px; padding:7px 18px; font-size:13px; font-weight:700; cursor:pointer; }
+  .dm-mc-btn-save:hover { background:#1d4ed8; }
+  .dm-mc-btn-print { background:#334155; color:#fff; border:0; border-radius:6px; padding:7px 16px; font-size:13px; font-weight:700; cursor:pointer; }
+  .dm-mc-btn-print:hover { background:#1e293b; }
   /* 대리입찰 출력(인쇄) */
   #dmPrintArea { display:none; }
   .dm-doc-title { text-align:center; font-size:22px; letter-spacing:8px; font-weight:800; margin:0 0 14px; }
@@ -378,6 +383,7 @@
     h+=inRow('계좌번호','account_no',a.account_no,'acc');
     h+=inRow('계좌명의','account_name',a.account_name);
     h+=inRow('직업','job',a.job);
+    h+='<div class="dm-mc-actions"><button onclick="DM.mcSave()" class="dm-mc-btn-save">저장</button><button onclick="DM.mcPrint()" class="dm-mc-btn-print" title="위임장+기일입찰표 인쇄">📄 출력</button><span id="dmMcSaveMsg" style="font-size:12px"></span></div>';
     _mcEl('dmMcBody').innerHTML=h;
   };
   DM.mcReveal=function(el){ el.value=(el.getAttribute('data-raw')||''); };
@@ -443,7 +449,8 @@
     +'.ip-title{text-align:center;font-size:23px;letter-spacing:9px;font-weight:800;margin:2px 0 7px;}'
     +'.ip-head{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin:0 2px 3px;}'
     +'.amt .u{font-size:10px;padding:2px 0;line-height:1;}.amt .d{height:61px;font-size:20px;font-weight:600;}'
-    +'.ip-notice{font-size:11px;color:#111;margin-top:22px;line-height:1.6;white-space:pre-line;}';
+    +'.wj-doc{padding-top:30px;}.ip-doc{padding-top:16px;}'
+    +'.ip-notice{font-size:16px;color:#111;margin-top:26px;line-height:1.45;white-space:pre-line;}';
   DM.mcPrint=function(){
     if(!_mcMemberId){ alert('회원을 먼저 선택하세요'); return; }
     _mcCapture();
@@ -457,14 +464,15 @@
       _printDaeriipchal(res.principal, res.agent, it);
     }).withFailureHandler(function(e){ if(msg){ msg.textContent='출력 실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).getDaeriipchalPrintData(_mcMemberId, _mcSel, daeriin);
   };
-  function _printDaeriipchal(p, agent, it){
+  function _ctxOf(it){ var c=_courtParse(it.court); return { bon:c.bon, support:c.support, sakun:String(it.sakun_no||''), mulgeon:String(it.mulgeon_no||''), bidDate:_bidDateStr(it.in_date), bidprice:it.bidprice, deposit:it.deposit }; }
+  function _docsFor(p, agent, it){
     agent=agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
-    var court=_courtParse(it.court);
-    var ctx={ bon:court.bon, support:court.support, sakun:String(it.sakun_no||''), mulgeon:String(it.mulgeon_no||''), bidDate:_bidDateStr(it.in_date), bidprice:it.bidprice, deposit:it.deposit };
-    var isCorp=String(p.gubun||'').indexOf('법인')>=0;
-    var body=_wijangHtml(p, agent, ctx, isCorp)+_ipchalHtml(p, agent, ctx, isCorp);
-    var html='<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>대리입찰 '+esc(ctx.sakun)+'</title><style>'+_DM_PRINT_CSS+'</style></head><body>'+body+'</body></html>';
-    // 미리보기 창 없이 숨은 iframe 으로 바로 인쇄 대화상자
+    var ctx=_ctxOf(it), isCorp=String(p.gubun||'').indexOf('법인')>=0;
+    return _wijangHtml(p, agent, ctx, isCorp)+_ipchalHtml(p, agent, ctx, isCorp);
+  }
+  // 미리보기 창 없이 숨은 iframe 으로 바로 인쇄 대화상자
+  function _printHtmlBody(body){
+    var html='<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>대리입찰</title><style>'+_DM_PRINT_CSS+'</style></head><body>'+body+'</body></html>';
     var old=document.getElementById('dmPrintIframe'); if(old&&old.parentNode) old.parentNode.removeChild(old);
     var ifr=document.createElement('iframe');
     ifr.id='dmPrintIframe';
@@ -477,6 +485,26 @@
       catch(e){ alert('인쇄 실패: '+(e&&e.message)); }
     }, 350);
   }
+  function _printDaeriipchal(p, agent, it){ _printHtmlBody(_docsFor(p, agent, it)); }
+  // 일괄 프린트 — 그리드 체크된 물건 전체
+  DM.bulkPrint=function(){
+    var ids=DM.selectedIds();
+    if(!ids||!ids.length){ alert('프린트할 물건을 체크하세요.'); return; }
+    var its=ids.map(function(id){ return curItems().filter(function(x){return String(x.link_item_id)===String(id);})[0]; }).filter(Boolean);
+    its=its.filter(function(it){ return String(it.member_id||'').trim(); });
+    if(!its.length){ alert('회원이 배정된 물건이 없습니다.'); return; }
+    var reqs=its.map(function(it){ return { member_id:it.member_id, myungui:it.myungui||'', daeriin:it.daeriin||'' }; });
+    var btn=document.getElementById('dmBulkPrintBtn'), orig=btn?btn.innerHTML:'';
+    if(btn){ btn.disabled=true; btn.innerHTML='준비중…'; }
+    function done(){ if(btn){ btn.disabled=false; btn.innerHTML=orig||'🖨 일괄프린트'; } }
+    google.script.run.withSuccessHandler(function(res){
+      done();
+      var body='';
+      for(var i=0;i<its.length;i++){ var r=res&&res[i]; if(!r||!r.success) continue; body+=_docsFor(r.principal, r.agent, its[i]); }
+      if(!body){ alert('출력할 데이터가 없습니다(명의 정보 확인).'); return; }
+      _printHtmlBody(body);
+    }).withFailureHandler(function(e){ done(); alert('일괄출력 실패: '+(e&&e.message)); }).getBulkDaeriipchalData(reqs);
+  };
   function _vstack(s){ return String(s||'').split('').join('<br>'); }
   function _rep(s,n){ var o=''; while(n-->0) o+=s; return o; }
   function _courtLine(ctx){ return esc(ctx.bon)+' 지방법원'+(ctx.support?('　　'+esc(ctx.support)+' 지원'):''); }
@@ -488,7 +516,7 @@
   }
   function _wijangHtml(p, agent, ctx, isCorp){
     var pReg=isCorp?(p.biz_no||''):(p.jumin_corp||'');
-    return '<div class="dm-doc"><div class="wj-title">위　임　장</div>'
+    return '<div class="dm-doc wj-doc"><div class="wj-title">위　임　장</div>'
     +_wijTbl('대리인', agent.name, agent.job, agent.jumin_corp, agent.phone, agent.address, '')
     +'<div class="wj-mid">위 사람을 대리인으로 정하고 다음 사항을 위임함.</div>'
     +'<div class="wj-da">다　음</div>'
@@ -520,7 +548,7 @@
     var bid=_digitsRight(ctx.bidprice, 12), dep=_digitsRight(ctx.deposit, 11);
     var units=function(arr){ return arr.map(function(u){return '<td class="u">'+u+'</td>';}).join(''); };
     var digs=function(arr){ return arr.map(function(d){return '<td class="d">'+(d||'')+'</td>';}).join(''); };
-    return '<div class="dm-doc">'
+    return '<div class="dm-doc ip-doc">'
     +'<div class="ip-formno"><span>[전산양식 A3360] 기일입찰표(흰색)</span><span>용지규격 210mm×297mm(A4용지)</span></div>'
     +'<div class="ip-title">기　일　입　찰　표</div>'
     +'<div class="ip-head"><span>'+_courtLine(ctx)+' 집행관 귀하</span><span>입찰기일 : '+esc(ctx.bidDate)+'</span></div>'
