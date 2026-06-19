@@ -994,6 +994,16 @@ function getDamulgeonList() {
   }
 }
 
+/** [다물건] 단일 사건(group_key) 만 반환 — 수정 후 그 그리드만 빠르게 갱신용. */
+function getDamulgeonGroup(groupKey) {
+  try {
+    var res = getDamulgeonList();
+    if (!res.success) return { success: false, message: res.message };
+    var g = (res.groups || []).filter(function (x) { return x.group_key === groupKey; })[0];
+    return { success: true, group: g || null };
+  } catch (e) { return { success: false, message: String(e) }; }
+}
+
 /**
  * damulgeon 시트 보조필드 upsert (3키 = in_date|sakun_no|court). rows = 행 1개 또는 배열.
  *   다물건 전용 값(명의/향/인증/비고)만 저장. items 는 절대 안 건드림. reg_date 보존, update_date 갱신.
