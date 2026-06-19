@@ -897,12 +897,13 @@ function getDamulgeonList() {
     // ITEM idx: id0 in-date1 sakun_no2 court3 stu_member4 ... deposit21 lowest_price22
     var groups = {};
     data.forEach(function(r) {
-      if (String(r[4] || '').trim() !== '상품') return;
+      // [전체 상태 포함] '상품'만이 아니라 (입찰일|사건base|법원) 같은 사건의 모든 물건을 실제 상태로 수집.
+      var stu = String(r[4] || '').trim();
       var sakun = String(r[2] || '').trim();
       var base = _normSakunBase_(sakun);
       var court = String(r[3] || '').trim();
       var inDate = formatParamsDate(r[1]);
-      if (!base || !court) return;
+      if (!base || !court || !stu) return;   // 빈 행 제외
       var key = inDate + '|' + base + '|' + court;
       if (!groups[key]) groups[key] = { group_key: key, in_date: inDate, court: court, sakun_base: base, items: [] };
       var address = addrCol > 0 ? String(r[addrCol - 1] || '') : '';
@@ -910,7 +911,7 @@ function getDamulgeonList() {
       groups[key].items.push({
         link_item_id: String(r[0] || ''),
         in_date: inDate, sakun_no: sakun, mulgeon_no: _dmMulgeonNo_(sakun), court: court,
-        stu_member: '상품',
+        stu_member: stu,                  // 실제 상태(상품/추천/입찰/낙찰/폐기/불가 …)
         m_name_id: String(r[5] || ''),   // 담당자(대표님/전부쌤 등) — 좌측 카드 표시용
         address: address,
         building_area: areaCol > 0 ? String(r[areaCol - 1] || '') : '',
@@ -921,7 +922,12 @@ function getDamulgeonList() {
         gamjungga: '', bidprice: '', jinhaengbi: '', daeriin: '', auth_method: '', dm_note: ''
       });
     });
-    var kept = Object.keys(groups).map(function(k) { return groups[k]; }).filter(function(g) { return g.items.length >= 2; });
+    // 다물건 = 서로 다른 물건번호(N) 2개 이상인 사건 (빈 물건번호=단일물건 제외)
+    var kept = Object.keys(groups).map(function(k) { return groups[k]; }).filter(function(g) {
+      var mset = {};
+      g.items.forEach(function(it) { var m = String(it.mulgeon_no || '').trim(); if (m) mset[m] = 1; });
+      return Object.keys(mset).length >= 2;
+    });
 
     // 좌측 리스트: 입찰일(in_date)이 오늘 이전인 사건은 제외 (오늘·이후만)
     var today6 = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMMdd');
