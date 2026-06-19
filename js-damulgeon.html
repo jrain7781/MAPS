@@ -58,7 +58,7 @@
     { label:'입찰가',   f:'bidprice',     t:'bid',    a:'right',  w:96,  src:'items', num:true },
     { label:'비율',     f:'_ratio',       t:'calc',   a:'right',  w:54,  src:'calc' },
     { label:'보증금',   f:'deposit',      t:'ro',     a:'right',  w:90,  src:'items', num:true },
-    { label:'진행비',   f:'jinhaengbi',   t:'text',   a:'right',  w:84,  src:'dm',   num:true },
+    { label:'진행비',   f:'jinhaengbi',   t:'ro',     a:'right',  w:84,  src:'calc', num:true },
     { label:'총입금요청',f:'_total',      t:'calc',   a:'right',  w:104, src:'calc' },
     { label:'입찰대리인',f:'daeriin',     t:'daeriin',a:'left',   w:88,  src:'dm' },
     { label:'인증',     f:'auth_method',  t:'auth',   a:'center', w:60,  src:'dm' },
@@ -85,6 +85,19 @@
     var mDg=s.match(/(\d+)\s*동/); if(mDg) dong=mDg[1];
     if(!fl && ho && ho.length>=3) fl=ho.slice(0,ho.length-2);
     return {dong:dong,floor:fl,ho:ho};
+  }
+  // 진행비 자동: 법원 지역 + 회원별 입찰건수 (입찰진행비표 근거). 부산/경상=8만+건당6만, 그외=8만→7만→이후6만
+  function _feeRegion(court){ var c=String(court||''); if(c.indexOf('부산')>=0) return 'bg'; if(c.indexOf('대구')>=0||c.indexOf('울산')>=0||c.indexOf('창원')>=0) return 'gs'; return 'etc'; }
+  function _computeFees(items){
+    var by={};
+    (items||[]).forEach(function(it){ it._fee=''; var m=String(it.member_name||'').trim(); if(m) (by[m]=by[m]||[]).push(it); });
+    Object.keys(by).forEach(function(m){
+      var arr=by[m].slice().sort(function(a,b){ return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0); });
+      arr.forEach(function(it,i){
+        var bgGs=(_feeRegion(it.court)!=='etc');
+        it._fee = String(bgGs ? (i===0?80000:60000) : (i===0?80000:(i===1?70000:60000)));
+      });
+    });
   }
   function widthOf(c){ return (_colW[c.f]!=null)?_colW[c.f]:c.w; }
   function totalW(){ var x=0; visCols().forEach(function(c){ x+=widthOf(c); }); return x; }
@@ -182,8 +195,9 @@
     if (f==='_floor') return _parseAddr(it.address).floor;
     if (f==='_ho') return _parseAddr(it.address).ho;
     if (f==='_pyeong'){ var sq=_num(it.building_area); return sq? (Math.round(sq*0.3025*100)/100)+'평':''; }   // ㎡ → 평
+    if (f==='jinhaengbi') return it._fee||'';   // 자동계산(수식)
     if (f==='_ratio'){ var lp=_num(it.lowest_price), bp=_num(it.bidprice); return (lp&&bp)?(Math.round(bp/lp*1000)/10)+'%':''; }
-    if (f==='_total'){ var t=_num(it.bidprice)+_num(it.jinhaengbi); return t?_comma(t):''; }
+    if (f==='_total'){ var t=_num(it.bidprice)+_num(it._fee); return t?_comma(t):''; }
     return it[f];
   }
 
@@ -226,7 +240,7 @@
       var cls='dmgrid-th'+(o.edge?' dm-frozen-edge':'');
       if(o.left!=null) st+=';position:sticky;left:'+o.left+'px;z-index:6';
       if(c.t==='check') return '<th class="'+cls+'" style="'+st+'"><input type="checkbox" id="dmCheckAll" onclick="DM.checkAll(this)" title="전체선택"></th>';
-      var sortable=(c.f.charAt(0)!=='_' && c.t!=='tg');
+      var sortable=(c.t!=='check' && c.t!=='tg');
       var arrow=(_sortField===c.f)?('<span style="color:#4f46e5">'+(_sortDir>0?' ▲':' ▼')+'</span>'):'';
       var grip='<span class="dm-th-grip" data-c="'+esc(c.f)+'" title="드래그로 폭 조절"></span>';
       var lab = sortable ? '<span style="cursor:pointer" onclick="DM.sortBy(\''+esc(c.f)+'\')">'+esc(c.label)+arrow+'</span>' : esc(c.label);
@@ -283,6 +297,7 @@
       fillDatalists([]);
       return;
     }
+    _computeFees(g.items);   // 진행비 자동계산(회원 등록분)
     var addrFull = _addrBase((g.items[0]&&g.items[0].address) || g.address_base || '');  // 동/층/호 + 조사내용 제거, 전체 표시
     if (head) head.innerHTML =
       '<div style="display:flex;align-items:baseline;gap:10px;white-space:nowrap;overflow-x:auto">'
@@ -333,7 +348,7 @@
   // 다물건 전용(명의/향/인증/비고) → damulgeon 시트 (3키)
   function saveDmAux(it){
     if (typeof google==='undefined'||!google.script||!google.script.run) return;
-    var row={ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, myungui:it.myungui, hyang:it.hyang, daeriin:it.daeriin, jinhaengbi:it.jinhaengbi, auth_method:it.auth_method, dm_note:it.dm_note };
+    var row={ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, myungui:it.myungui, hyang:it.hyang, daeriin:it.daeriin, auth_method:it.auth_method, dm_note:it.dm_note };
     _dot('● 저장 중');
     google.script.run.withSuccessHandler(function(){ _dot('✓ 저장됨', true); })
       .withFailureHandler(function(e){ _dot('⚠ 저장실패'); console.error('[DM aux save]',e); })
