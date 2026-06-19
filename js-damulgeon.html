@@ -263,15 +263,20 @@
   function _memberNameById(id){ id=String(id||'').trim(); if(!id) return ''; var ms=_members||[]; for(var i=0;i<ms.length;i++){ if(String(ms[i].member_id)===id) return String(ms[i].name||ms[i].member_name||''); } return ''; }
   function _parseMName(mn, memberId){
     var s=String(mn||'').trim(), real=_memberNameById(memberId);
-    var m=s.match(/^(.*?)\s*\(([^)]*)\)\s*(.*)$/);
-    if(m){
-      var mem=(m[1]||'').trim(), gb=(m[2]||'').trim(), my=(m[3]||'').trim();
-      if(!mem) mem=real||'';
-      if(!my) return { member:mem||real, gubun:'본인', myungui:'' };
-      return { member:mem||real, gubun:(gb||'개인'), myungui:my };
+    if(!s) return { member:'', gubun:'', myungui:'' };
+    // 구분은 (개인)/(법인) 만 인정. 그 외 괄호는 명의 이름의 일부.
+    if(real && s.indexOf(real)===0){
+      var rest=s.substring(real.length).trim();
+      var rm=rest.match(/^\((개인|법인)\)\s*([\s\S]*)$/);
+      if(rm) return { member:real, gubun:rm[1], myungui:rm[2].trim() };
+      if(!rest) return { member:real, gubun:'본인', myungui:'' };
+      return { member:real, gubun:'개인', myungui:rest };
     }
-    if(real && s && s!==real && s.indexOf(real)===0){ var rest=s.substring(real.length).trim(); if(rest) return { member:real, gubun:'개인', myungui:rest }; }
-    return { member:(real||s), gubun:'본인', myungui:'' };
+    var gm=s.match(/^([\s\S]*?)\s*\((개인|법인)\)\s*([\s\S]*)$/);
+    if(gm) return { member:((gm[1]||'').trim()||real), gubun:gm[2], myungui:(gm[3]||'').trim() };
+    var sp=s.indexOf(' ');
+    if(sp>0){ var my2=s.substring(sp).trim(); return { member:s.substring(0,sp), gubun:(my2?'개인':'본인'), myungui:my2 }; }
+    return { member:s, gubun:'본인', myungui:'' };
   }
   function computed(f, it, idx){
     if (f==='_seq') return String(idx+1);
@@ -399,7 +404,7 @@
       if(!hit&&wantName){ for(i=0;i<cands.length&&!hit;i++){ n=_norm(cands[i].name); if(n&&(n.indexOf(wantName)>=0||wantName.indexOf(n)>=0)) hit=cands[i]; } }
       // 4) 명의가 1개뿐이면 그걸로
       if(!hit&&cands.length===1) hit=cands[0];
-      if(hit) sel=hit.idx;
+      if(hit){ sel=hit.idx; if(pm.myungui) hit.name=pm.myungui; }   // 카드 이름 = m_name의 명의 전체(괄호 포함)로 표시
     }
     try{ console.log('[dmCard] rowMName=',rowMName,'| pm=',pm,'| accounts=',_mcAccounts.map(function(x){return x.idx+':'+x.name+'('+x.gubun+')';}),'| sel=',sel); }catch(e){}
     DM.mcSelect(sel, true);
