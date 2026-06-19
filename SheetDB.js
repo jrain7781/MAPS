@@ -775,13 +775,14 @@ const DM_FEE_TABLE_KEY = 'DM_FEE_TABLE';
 //   회원/입찰가/상태/물건종류/주소/감정가/최저가/보증금/등급은 ITEMS·연계에서 라이브 조회(이중관리 X).
 //   다물건 시트엔 items 에 '없는 값'만 저장: 명의(다물건 전용)·향·인증방식·비고.
 const DAMULGEON_KEY_FIELDS = ['in_date', 'sakun_no', 'court'];   // sakun_no 는 물건번호(N) 포함
-const DAMULGEON_AUX_FIELDS = ['myungui', 'hyang', 'auth_method', 'dm_note'];
+const DAMULGEON_AUX_FIELDS = ['myungui', 'hyang', 'daeriin', 'auth_method', 'dm_note'];
 const DAMULGEON_HEADERS = [
   'in_date',      // KEY — 입찰일자
   'sakun_no',     // KEY — 사건번호(물건번호 포함)
   'court',        // KEY — 법원
   'myungui',      // 명의 (다물건 전용 — 회원 명의 아님)
   'hyang',        // 향
+  'daeriin',      // 입찰대리인 (직원 연계 — 다물건 전용)
   'auth_method',  // 인증방식 (종이/전자)
   'dm_note',      // 비고
   'reg_date',     // 최초 생성
@@ -959,9 +960,9 @@ function getDamulgeonList() {
     var byKey = {};
     aux.forEach(function(a) { byKey[_dmKey3_(a.in_date, a.sakun_no, a.court)] = a; });
     // 등급 연계: member_id → class_id → class_grade (회원당 종목 1개)
-    var memberClass = {}, classGrade = {};
+    var memberClass = {}, classGrade = {}, memberTg = {};
     try {
-      ((typeof readAllMembersNew === 'function') ? readAllMembersNew() : []).forEach(function(m) { if (m.member_id) memberClass[String(m.member_id)] = String(m.class_id || ''); });
+      ((typeof readAllMembersNew === 'function') ? readAllMembersNew() : []).forEach(function(m) { if (m.member_id) { memberClass[String(m.member_id)] = String(m.class_id || ''); memberTg[String(m.member_id)] = String(m.telegram_enabled || ''); } });
       var csh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_SHEET_NAME_DB);
       if (csh && csh.getLastRow() > 1) {
         var cidI = CLASS_HEADERS.indexOf('class_id'), cgI = CLASS_HEADERS.indexOf('class_grade');
@@ -974,6 +975,7 @@ function getDamulgeonList() {
         if (a) DAMULGEON_AUX_FIELDS.forEach(function(f) { if (a[f] !== undefined && a[f] !== '') it[f] = a[f]; });
         var cid = memberClass[String(it.member_id || '')];
         it.grade = cid ? (classGrade[cid] || '') : '';
+        it.tg = (memberTg[String(it.member_id || '')] === 'Y') ? 'Y' : '';   // 텔레그램 뱃지용
       });
       g.items.sort(function(x, y) { return (parseInt(x.mulgeon_no, 10) || 0) - (parseInt(y.mulgeon_no, 10) || 0); });
       g.count = g.items.length;
