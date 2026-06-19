@@ -48,6 +48,9 @@
     { label:'명의',     f:'myungui',      t:'text',   a:'left',   w:68,  src:'dm',   frozen:true },
     { label:'등급',     f:'grade',        t:'ro',     a:'center', w:54,  src:'link' },
     { label:'주소',     f:'_addrBase',    t:'ro',     a:'left',   w:190, src:'items', hideable:true },
+    { label:'동',       f:'_dong',        t:'ro',     a:'center', w:42,  src:'items' },
+    { label:'층',       f:'_floor',       t:'ro',     a:'center', w:40,  src:'items' },
+    { label:'호수',     f:'_ho',          t:'ro',     a:'center', w:48,  src:'items' },
     { label:'건물면적', f:'building_area',t:'ro',     a:'right',  w:74,  src:'items' },
     { label:'평',       f:'_pyeong',      t:'ro',     a:'right',  w:52,  src:'calc' },
     { label:'향',       f:'hyang',        t:'text',   a:'center', w:50,  src:'dm' },
@@ -75,6 +78,14 @@
   // 동/층/호수 토큰 제거 (숫자+동만 → 건물동, 법정동은 보존). 우측 상세 + 그리드 주소.
   // 동/층/호수 + 대괄호 조사내용([특수권리 등]) 제거. 법정동(전포동)은 숫자 없어 보존.
   function _addrBase(a){ var s=String(a||''); s=s.replace(/\[[^\]]*\]/g,''); s=s.replace(/\d+\s*동/g,'').replace(/(지하\s*\d+|[Bb]\d+|\d+)\s*층/g,'').replace(/\d+\s*호/g,''); return s.replace(/[,\s]+$/,'').replace(/^[,\s]+/,'').replace(/\s{2,}/g,' ').trim(); }
+  // items 주소 → 동/층/호수 분리 (건물 동=숫자+동, 호수 앞2자리로 층 추정)
+  function _parseAddr(a){ var s=String(a||''); var ho='',fl='',dong='';
+    var mHo=s.match(/(\d+)\s*호/); if(mHo) ho=mHo[1];
+    var mFl=s.match(/(지하\s*\d+|[Bb]\d+|\d+)\s*층/); if(mFl) fl=mFl[1];
+    var mDg=s.match(/(\d+)\s*동/); if(mDg) dong=mDg[1];
+    if(!fl && ho && ho.length>=3) fl=ho.slice(0,ho.length-2);
+    return {dong:dong,floor:fl,ho:ho};
+  }
   function widthOf(c){ return (_colW[c.f]!=null)?_colW[c.f]:c.w; }
   function totalW(){ var x=0; visCols().forEach(function(c){ x+=widthOf(c); }); return x; }
   function applyTableWidth(){ var t=document.getElementById('dmGrid'); if(t) t.style.width=totalW()+'px'; }
@@ -167,6 +178,9 @@
   function computed(f, it, idx){
     if (f==='_seq') return String(idx+1);
     if (f==='_addrBase') return _addrBase(it.address);
+    if (f==='_dong') return _parseAddr(it.address).dong;
+    if (f==='_floor') return _parseAddr(it.address).floor;
+    if (f==='_ho') return _parseAddr(it.address).ho;
     if (f==='_pyeong'){ var sq=_num(it.building_area); return sq? (Math.round(sq*0.3025*100)/100)+'평':''; }   // ㎡ → 평
     if (f==='_ratio'){ var lp=_num(it.lowest_price), bp=_num(it.bidprice); return (lp&&bp)?(Math.round(bp/lp*1000)/10)+'%':''; }
     if (f==='_total'){ var t=_num(it.bidprice)+_num(it.jinhaengbi); return t?_comma(t):''; }
@@ -226,7 +240,7 @@
   DM.selectedIds = function(){ var ids=[]; document.querySelectorAll('#dmGridBody .dm-row-cb:checked').forEach(function(cb){ ids.push(cb.getAttribute('data-id')); }); return ids; };
 
   function curItems(){ var g=_groups.filter(function(x){return x.group_key===_selKey;})[0]; return g?g.items:[]; }
-  var NUMF={lowest_price:1,deposit:1,bidprice:1,jinhaengbi:1,building_area:1,gamjungga:1,mulgeon_no:1,_pyeong:1,_total:1,_ratio:1};
+  var NUMF={lowest_price:1,deposit:1,bidprice:1,jinhaengbi:1,building_area:1,gamjungga:1,mulgeon_no:1,_pyeong:1,_total:1,_ratio:1,_dong:1,_floor:1,_ho:1};
   function filteredItems(){
     var fm=(document.getElementById('dmFilterMulgeon')||{}).value||'';
     var fn=(document.getElementById('dmFilterMember')||{}).value||'';
