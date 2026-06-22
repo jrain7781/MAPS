@@ -126,6 +126,14 @@
   ];
   var _hideBasic=false, _sortField='', _sortDir=1, _statusSel={}, _bidMissing=false;
   var _mcMemberId='', _mcAccounts=[], _mcSel=0, _mcRowItem=null;   // 명의 카드 상태
+  var _fav={}, _favOnly=false;   // 즐겨찾기(사건) — PC별 저장
+  try{ _fav=JSON.parse(localStorage.getItem('dmFav')||'{}')||{}; }catch(_){ _fav={}; }
+  try{ _favOnly=(localStorage.getItem('dmFavOnly')==='1'); }catch(_){}
+  function _favKey(g){ return String(g.sakun_base||'')+'|'+String(g.court||''); }
+  function _isFav(g){ return !!_fav[_favKey(g)]; }
+  DM.toggleFav=function(key, ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); if(_fav[key]) delete _fav[key]; else _fav[key]=1; try{ localStorage.setItem('dmFav', JSON.stringify(_fav)); }catch(_){}; DM.filterList((document.getElementById('dmSearch')||{}).value||''); };
+  DM.toggleFavFilter=function(){ _favOnly=!_favOnly; try{ localStorage.setItem('dmFavOnly', _favOnly?'1':'0'); }catch(_){}; _updateFavFilterBtn(); DM.filterList((document.getElementById('dmSearch')||{}).value||''); };
+  function _updateFavFilterBtn(){ var b=document.getElementById('dmFavFilterBtn'); if(b){ b.textContent=_favOnly?'❤️':'🤍'; b.title=_favOnly?'전체 보기':'즐겨찾기만 보기'; } }
   function visCols(){ return COLS.filter(function(c){ return !(_hideBasic && c.hideable); }); }
   function _numCols(f){ return f==='lowest_price'||f==='deposit'||f==='bidprice'||f==='jinhaengbi'; }
   // 헤더 배경색 (출처: items파랑 / dm노랑 / 수식(계산·연계)연녹색)
@@ -220,7 +228,9 @@
 
   DM.filterList = function (q) {
     q = String(q||'').trim().toLowerCase();
-    _filtered = !q ? _groups.slice() : _groups.filter(function(g){
+    _filtered = _groups.filter(function(g){
+      if(_favOnly && !_isFav(g)) return false;   // 즐겨찾기만 보기
+      if(!q) return true;
       return ((g.sakun_base||'')+' '+(g.court||'')+' '+(g.address_base||'')+' '+(g.in_date||'')+' '+_firstMgr(g)).toLowerCase().indexOf(q) >= 0;
     });
     renderList();
@@ -229,6 +239,7 @@
   function renderList(){
     var list = document.getElementById('dmList');
     var cnt = document.getElementById('dmListCount');
+    _updateFavFilterBtn();
     if (cnt) cnt.textContent = '('+_filtered.length+(_filtered.length!==_groups.length?('/'+_groups.length):'')+')';
     if (!list) return;
     if (!_filtered.length){ list.innerHTML='<li style="color:#9ca3af;font-size:12px;padding:12px">다물건(상품·2물건+)이 없습니다.</li>'; return; }
@@ -238,7 +249,7 @@
       return '<li onclick="DM.select(\''+esc(g.group_key)+'\')" '
         + 'style="padding:7px 9px;margin-bottom:5px;border-radius:6px;cursor:pointer;border:1px solid '+(sel?'#2563eb':'#e5e7eb')+';background:'+(sel?'#bfdbfe':'#fff')+(sel?';box-shadow:inset 0 0 0 1px #2563eb,0 1px 4px rgba(37,99,235,.25)':'')+'">'
         + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">'
-        +   '<span style="font-weight:700;color:#1f2937">'+esc(g.sakun_base)+'</span>'
+        +   '<span style="font-weight:700;color:#1f2937">'+esc(g.sakun_base)+'<span onclick="DM.toggleFav(\''+esc(_favKey(g))+'\',event)" title="즐겨찾기" style="cursor:pointer;margin-left:5px;font-size:13px;color:'+(_isFav(g)?'#ef4444':'#cbd5e1')+'">'+(_isFav(g)?'♥':'♡')+'</span></span>'
         +   '<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">'
         +     '<span style="font-size:11px;padding:1px 6px;border-radius:9px;background:#fef3c7;color:#92400e;font-weight:700">'+g.count+'물건</span>'
         +     (mgr? (function(){ var md=_mgrDisplay(mgr); return '<span style="font-size:11px;color:'+md.color+';font-weight:700">'+esc(md.disp)+'</span>'; })() : '')   // 담당자(본인 색상) = 물건카운트 아래
