@@ -678,6 +678,7 @@ function registerDamulgeon(items, mNameId) {
       });
       sheet.appendRow(row);
       var newRowNum = sheet.getLastRow();
+      sheet.getRange(newRowNum, ITEM_HEADERS.indexOf('id') + 1).setNumberFormat('@').setValue(id);   // id 텍스트 고정(지수표기/매칭실패 방지)
       if (addrCol > 0) sheet.getRange(newRowNum, addrCol).setValue(String(it.address || ''));
       if (areaCol > 0) sheet.getRange(newRowNum, areaCol).setValue(String(it.building_area || ''));
       if (propKindCol > 0) sheet.getRange(newRowNum, propKindCol).setValue(String(it.prop_kind || ''));
@@ -893,6 +894,36 @@ function addMemberMyungui(memberId, data) {
   return { success: true, idx: idx, name: name };
 }
 
+/** 셀 값 → 지수표기 없는 id 문자열 (숫자 저장된 id 안전 비교용) */
+function _idStr_(v) {
+  if (v == null) return '';
+  if (typeof v === 'number') return Number.isInteger(v) ? v.toFixed(0) : String(v);
+  return String(v).trim();
+}
+
+/**
+ * [복구] ITEMS id 컬럼을 텍스트로 변환 — 다물건 등록분 16자리 id가 숫자로 저장돼 지수표기(1.78E+15)된 것 정리.
+ * 값은 그대로 보존(< 2^53 이라 정밀손실 없음), 표시만 정상화 + TextFinder 매칭 복원. 반환: {success, total, changed}
+ */
+function repairItemIds() {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { success: false, msg: 'lock 실패' }; }
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
+    if (!sheet || sheet.getLastRow() < 2) return { success: true, total: 0, changed: 0 };
+    var idCol = ITEM_HEADERS.indexOf('id') + 1;
+    var rng = sheet.getRange(2, idCol, sheet.getLastRow() - 1, 1);
+    var vals = rng.getValues(), changed = 0;
+    var out = vals.map(function (r) { var was = r[0]; var s = _idStr_(was); if (typeof was === 'number') changed++; return [s]; });
+    rng.setNumberFormat('@');   // 텍스트 포맷(이후 숫자변환 방지)
+    rng.setValues(out);         // 문자열로 재기록(값 보존)
+    SpreadsheetApp.flush();
+    Logger.log('[repairItemIds] total=%s, 숫자→텍스트 %s행', out.length, changed);
+    return { success: true, total: out.length, changed: changed };
+  } catch (e) { Logger.log('[repairItemIds] ' + e); return { success: false, msg: String(e) }; }
+  finally { try { lock.releaseLock(); } catch (e) {} }
+}
+
 /** items.m_name(+member_id) 변경 + 히스토리 기록 (다물건 카드에서 명의 변경) */
 function updateItemMyungui(itemId, mName, memberId) {
   itemId = String(itemId || '').trim();
@@ -905,9 +936,12 @@ function updateItemMyungui(itemId, mName, memberId) {
     if (!sheet) return { success: false, msg: 'items 시트 없음' };
     var lr = sheet.getLastRow();
     if (lr < 2) return { success: false, msg: '데이터 없음' };
-    var match = sheet.getRange(2, 1, lr - 1, 1).createTextFinder(itemId).matchEntireCell(true).findNext();
-    if (!match) return { success: false, msg: 'item 없음: ' + itemId };
-    var rowNum = match.getRow();
+    // id 매칭: TextFinder는 숫자(지수표기) 셀을 못 찾음 → 값 스캔 + 문자열 비교(텍스트/숫자 모두 안전)
+    var idCol = ITEM_HEADERS.indexOf('id') + 1;
+    var idVals = sheet.getRange(2, idCol, lr - 1, 1).getValues();
+    var rowNum = -1;
+    for (var _r = 0; _r < idVals.length; _r++) { if (_idStr_(idVals[_r][0]) === itemId) { rowNum = _r + 2; break; } }
+    if (rowNum < 0) return { success: false, msg: 'item 없음: ' + itemId };
     var mIdx = ITEM_HEADERS.indexOf('m_name'), memIdx = ITEM_HEADERS.indexOf('member_id');
     var oldM = String(sheet.getRange(rowNum, mIdx + 1).getValue() || '');
     sheet.getRange(rowNum, mIdx + 1).setValue(mName);

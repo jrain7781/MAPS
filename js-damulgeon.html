@@ -1067,6 +1067,7 @@
     var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=true;
     _renderMsgLeft();
     _renderMsgRight();   // 진입 즉시 대표(첫) 회원 보고서 표시 — 상세는 도착 시 갱신
+    setupMsgSplitter(); _applyMsgListW();   // 카드↔보고서 스플리터(PC별 저장폭 적용)
     var mo=document.getElementById('dmMsgModal'); if(mo) mo.classList.remove('content-hidden');
     _msgUpdateSelCnt();
     // 명의별 상세 조회 (회원 × 구분된 명의)
@@ -1097,14 +1098,19 @@
   function _renderMsgLeft(){
     var box=document.getElementById('dmMsgList'); if(!box) return;
     box.innerHTML=_msgGroups.map(function(m,gi){
-      var s=_msgSums(m), foc=(gi===_msgFocusGi), gcol=({'본인':'#2563eb','개인':'#16a34a','법인':'#9333ea'})[m.gubun]||'#64748b';
+      var s=_msgSums(m), foc=(gi===_msgFocusGi);
+      var mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).filter(Boolean).join(',');
+      var c={본인:0,개인:0,법인:0}; m.items.forEach(function(it){ var g=_parseMName(it.member_name,it.member_id).gubun; if(c[g]!==undefined) c[g]++; });
+      var cnt=[]; if(c.본인) cnt.push('<span style="color:#2563eb">본인 '+c.본인+'</span>'); if(c.개인) cnt.push('<span style="color:#16a34a">개인 '+c.개인+'</span>'); if(c.법인) cnt.push('<span style="color:#9333ea">법인 '+c.법인+'</span>');
+      var grade=(m.items[0]&&m.items[0].grade)||'';
       return '<div onclick="DM.msgFocus('+gi+')" style="background:'+(foc?'#eef2ff':'#fff')+';border:1px solid '+(foc?'#4f46e5':'#e5e7eb')+';border-radius:9px;margin-bottom:9px;padding:9px 11px;cursor:pointer">'
-        +'<div style="display:flex;align-items:center;gap:7px">'
+        +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
         +  '<input type="checkbox" class="dm-msg-cb" data-gi="'+gi+'"'+(_msgSel[gi]?' checked':'')+' onclick="event.stopPropagation()" onchange="DM.msgUpdateSel()">'
         +  '<span style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</span>'
-        +  '<span style="font-size:11px;color:'+gcol+';background:'+gcol+'1a;border:1px solid '+gcol+'55;padding:0 7px;border-radius:9px;font-weight:700">'+esc(m.gubun)+'</span>'
-        +  '<span style="font-size:11px;color:#6b7280">'+m.items.length+'물건</span>'
+        +  '<span style="font-size:11px;color:#475569;font-weight:600">물건 '+esc(mulNos)+'</span>'
         +'</div>'
+        + (grade?('<div style="font-size:11px;color:#0e7490;font-weight:700;margin:2px 0 0 22px">'+esc(grade)+'</div>'):'')
+        +'<div style="display:flex;gap:10px;font-size:11px;font-weight:700;margin:3px 0 0 22px">'+(cnt.join('')||'<span style="color:#9ca3af">-</span>')+'</div>'
         +'<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:12px"><span style="color:#6b7280">총비용</span><span style="font-weight:800;color:#dc2626">'+_won(s.total)+'원</span></div>'
         +'</div>';
     }).join('') || '<div style="color:#9ca3af;padding:18px;text-align:center;font-size:12px">회원 없음</div>';
@@ -1451,7 +1457,27 @@
     document.addEventListener('mousemove',function(e){ if(!drag)return; var w=Math.max(240,Math.min(900,sw+(e.clientX-sx))); pane.style.width=w+'px';});
     document.addEventListener('mouseup',function(){ if(!drag)return; drag=false;sp.classList.remove('dragging');document.body.style.userSelect=''; try{localStorage.setItem(SPLIT_KEY,String(Math.round(pane.getBoundingClientRect().width)));}catch(_){}});
   }
-  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', setupSplitter);
-  else setupSplitter();
+  // 메시지 모달 스플리터 (좌 카드 ↔ 우 보고서) — PC별 저장
+  var MSG_SPLIT_KEY='dmMsgListW';
+  function setupMsgSplitter(){
+    var sp=document.getElementById('dmMsgSplitter'), pane=document.getElementById('dmMsgList');
+    if(!sp||!pane||sp.dataset.bound) return;
+    sp.dataset.bound='1';
+    var drag=false,sx=0,sw=0;
+    sp.addEventListener('mousedown',function(e){ drag=true;sx=e.clientX;sw=pane.getBoundingClientRect().width;sp.style.background='#93c5fd';document.body.style.userSelect='none';e.preventDefault();});
+    document.addEventListener('mousemove',function(e){ if(!drag)return; var w=Math.max(220,Math.min(640,sw+(e.clientX-sx))); pane.style.width=w+'px';});
+    document.addEventListener('mouseup',function(){ if(!drag)return; drag=false;sp.style.background='#e5e7eb';document.body.style.userSelect=''; try{localStorage.setItem(MSG_SPLIT_KEY,String(Math.round(pane.getBoundingClientRect().width)));}catch(_){}});
+  }
+  function _applyMsgListW(){ try{ var w=parseInt(localStorage.getItem(MSG_SPLIT_KEY)||'',10); var pane=document.getElementById('dmMsgList'); if(pane&&!isNaN(w)&&w>=220&&w<=640) pane.style.width=w+'px'; }catch(_){} }
+  // ITEMS id 지수표기 복구 (1회용 버튼)
+  DM.repairIds=function(){
+    if(!confirm('ITEMS id 지수표기(1.78E+15) 복구를 실행합니다.\n다물건 등록분 id를 텍스트로 정리(값은 그대로 보존)합니다. 진행할까요?')) return;
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 불가'); return; }
+    google.script.run.withSuccessHandler(function(r){ if(r&&r.success) alert('복구 완료: 총 '+r.total+'행 중 '+r.changed+'행 텍스트 정리.\n새로고침합니다.'); else alert('실패: '+((r&&r.msg)||'?')); DM.load(); })
+      .withFailureHandler(function(e){ alert('실패: '+(e&&e.message||e)); }).repairItemIds();
+  };
+  function _dmInit(){ setupSplitter(); setupMsgSplitter(); }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', _dmInit);
+  else _dmInit();
 })();
 </script>
