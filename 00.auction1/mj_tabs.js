@@ -419,7 +419,10 @@
         rows: _dmRows, existing: _dmExisting, colw: _dmColW, colcount: _DM_COLS.length,
         sakun: _dmEl('dmSakun') ? _dmEl('dmSakun').value : '',
         court: _dmEl('dmCourt') ? _dmEl('dmCourt').value : '',
-        bulk: _dmEl('dmBulkManager') ? _dmEl('dmBulkManager').value : '대표님'
+        bulk: _dmEl('dmBulkManager') ? _dmEl('dmBulkManager').value : '대표님',
+        headless: _dmEl('dmHeadless') ? !!_dmEl('dmHeadless').checked : false,    // 창숨김 저장
+        hidejosa: _dmEl('dmHideJosa') ? !!_dmEl('dmHideJosa').checked : false,
+        onlyjin: _dmEl('dmOnlyJinhaeng') ? !!_dmEl('dmOnlyJinhaeng').checked : false
       }));
     } catch (e) {}
   }
@@ -429,6 +432,9 @@
       if (_dmEl('dmSakun') && s.sakun != null) _dmEl('dmSakun').value = s.sakun;
       if (_dmEl('dmCourt') && s.court != null) _dmEl('dmCourt').value = s.court;
       if (_dmEl('dmBulkManager') && s.bulk) { var bo = _dmEl('dmBulkManager'); if (bo.tagName === 'SELECT') { _dmSetSelectVal(bo, s.bulk); } else { bo.value = s.bulk; } }
+      if (_dmEl('dmHeadless') && s.headless != null) _dmEl('dmHeadless').checked = !!s.headless;   // 창숨김 복원
+      if (_dmEl('dmHideJosa') && s.hidejosa != null) _dmEl('dmHideJosa').checked = !!s.hidejosa;
+      if (_dmEl('dmOnlyJinhaeng') && s.onlyjin != null) _dmEl('dmOnlyJinhaeng').checked = !!s.onlyjin;
       // 컬럼 레이아웃이 바뀌면(예: 옥션ID 추가) 저장된 폭은 인덱스가 밀리므로 1회 초기화
       _dmColW = (s.colw && typeof s.colw === 'object' && s.colcount === _DM_COLS.length) ? s.colw : {};
       _dmExisting = Array.isArray(s.existing) ? s.existing : []; _dmBuildExistingMap();
@@ -448,8 +454,9 @@
     _dmEl('dmRegisterBtn')?.addEventListener('click', dmRegister);
     _dmEl('dmClearBtn')?.addEventListener('click', dmClear);
     _dmEl('dmBulkApplyBtn')?.addEventListener('click', dmBulkApply);
-    _dmEl('dmOnlyJinhaeng')?.addEventListener('change', dmRenderGrid);
-    _dmEl('dmHideJosa')?.addEventListener('change', dmRenderGrid);
+    _dmEl('dmOnlyJinhaeng')?.addEventListener('change', function () { dmRenderGrid(); _dmSaveState(); });
+    _dmEl('dmHideJosa')?.addEventListener('change', function () { dmRenderGrid(); _dmSaveState(); });
+    _dmEl('dmHeadless')?.addEventListener('change', _dmSaveState);   // 창숨김 변경 즉시 저장
     _dmRestoreState();
     _dmLoadTeachers();
   }
