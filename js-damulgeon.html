@@ -147,6 +147,16 @@
   // 동/층/호수 토큰 제거 (숫자+동만 → 건물동, 법정동은 보존). 우측 상세 + 그리드 주소.
   // 동/층/호수 + 대괄호 조사내용([특수권리 등]) 제거. 법정동(전포동)은 숫자 없어 보존.
   function _addrBase(a){ var s=String(a||''); s=s.replace(/\[[^\]]*\]/g,''); s=s.replace(/\d+\s*동/g,'').replace(/(지하\s*\d+|[Bb]\d+|\d+)\s*층/g,'').replace(/\d+\s*호/g,''); return s.replace(/[,\s]+$/,'').replace(/^[,\s]+/,'').replace(/\s{2,}/g,' ').trim(); }
+  // 카드용 짧은 주소: 시/도+시(구) + 맨 뒤 건물명 (예: "경기도 부천시 베스아이퀸")
+  function _shortAddr(full){
+    full=String(full||'').trim(); if(!full) return '';
+    var bldg='', ci=full.lastIndexOf(','), head=full;
+    if(ci>=0){ bldg=full.substring(ci+1).trim(); head=full.substring(0,ci).trim(); }
+    var toks=head.split(/\s+/).filter(Boolean);
+    var region=toks.slice(0,2).join(' ');
+    if(!bldg && toks.length>2){ var last=toks[toks.length-1]; if(!/^\d/.test(last)) bldg=last; }   // 콤마 없으면 숫자 아닌 마지막 토큰
+    return bldg ? (region+' '+bldg) : (region||full);
+  }
   // items 주소 → 동/층/호수 분리 (건물 동=숫자+동, 호수 앞2자리로 층 추정)
   function _parseAddr(a){ var s=String(a||''); var ho='',fl='',dong='';
     var mHo=s.match(/(\d+)\s*호/); if(mHo) ho=mHo[1];
@@ -260,7 +270,7 @@
         +   '</span>'
         + '</div>'
         + '<div style="font-size:11px;color:#6b7280;margin-top:2px">'+esc(g.in_date)+' · '+esc(g.court)+'</div>'
-        + '<div style="font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(g.address_base||'')+'">'+esc(g.address_base||'')+'</div>'
+        + '<div style="font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(g.address_base||'')+'">'+esc(_shortAddr(g.address_base))+'</div>'
         + '</li>';
     }).join('');
   }
