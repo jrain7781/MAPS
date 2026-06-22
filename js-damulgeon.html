@@ -20,6 +20,26 @@
   #DaMultiItemManagement .dm-sakun-link:hover { color:#1e40af; }
   @keyframes dmSpin { to { transform:rotate(360deg); } }
   .dm-spin { animation:dmSpin .7s linear infinite; }
+  /* 입찰안내 보고서 */
+  #dmMsgPreviewBody .rrep { background:#fff; border:1px solid #e5e7eb; border-radius:10px; margin:0 0 16px; overflow:hidden; }
+  #dmMsgPreviewBody .rrep-h { display:flex; align-items:center; gap:8px; padding:9px 12px; background:#1e3a5f; color:#fff; font-size:14px; }
+  #dmMsgPreviewBody .rrep-h .rgb { font-size:11px; padding:1px 9px; border-radius:9px; font-weight:700; }
+  #dmMsgPreviewBody .rrep-h .gb-y { background:#fde68a; color:#92400e; } #dmMsgPreviewBody .rrep-h .gb-o { background:#fdba74; color:#7c2d12; }
+  #dmMsgPreviewBody .rrep-h .rcopy { margin-left:auto; background:#fff; color:#1e3a5f; border:0; border-radius:5px; padding:3px 11px; font-size:12px; font-weight:700; cursor:pointer; }
+  #dmMsgPreviewBody .rtbl { width:100%; border-collapse:collapse; font-size:12.5px; }
+  #dmMsgPreviewBody .rtbl td { border:1px solid #e5e7eb; padding:5px 9px; vertical-align:middle; }
+  #dmMsgPreviewBody .rtbl .rcat { width:84px; text-align:center; font-weight:800; background:#f1f5f9; color:#334155; line-height:1.2; }
+  #dmMsgPreviewBody .cat-b { background:#dbeafe!important; color:#1e40af!important; } #dmMsgPreviewBody .cat-g { background:#dcfce7!important; color:#166534!important; }
+  #dmMsgPreviewBody .cat-r { background:#fee2e2!important; color:#991b1b!important; } #dmMsgPreviewBody .cat-y { background:#fef9c3!important; color:#854d0e!important; } #dmMsgPreviewBody .cat-o { background:#ffedd5!important; color:#9a3412!important; }
+  #dmMsgPreviewBody .rtbl .rk { width:118px; background:#fafafa; color:#475569; font-weight:600; }
+  #dmMsgPreviewBody .rtbl .rv.hl-y { background:#fef9c3; font-weight:700; } #dmMsgPreviewBody .rtbl .rv.hl-b { background:#dbeafe; font-weight:700; }
+  #dmMsgPreviewBody .rtbl .rv.hl-r { color:#dc2626; font-weight:700; } #dmMsgPreviewBody .rtbl .rv.hl-o { background:#ffedd5; font-weight:700; }
+  #dmMsgPreviewBody .rtbl .rv-sub { padding:0; }
+  #dmMsgPreviewBody .rsub { width:100%; border-collapse:collapse; font-size:12px; }
+  #dmMsgPreviewBody .rsub th { background:#f8fafc; color:#6b7280; padding:3px 9px; border:1px solid #eef2f7; font-weight:600; }
+  #dmMsgPreviewBody .rsub td { border:1px solid #eef2f7; padding:3px 9px; }
+  #dmMsgPreviewBody .rsub .rnum { text-align:right; } #dmMsgPreviewBody .rsub .hl-y { background:#fffbe6; } #dmMsgPreviewBody .rsub .hl-b { background:#eaf2ff; }
+  #dmMsgPreviewBody .rsub tfoot td { font-weight:800; background:#f8fafc; } #dmMsgPreviewBody .rsub .rtot td { color:#dc2626; background:#fff5f5; }
   /* 명의 상세 슬라이드 카드 */
   #DaMultiItemManagement .dm-member-link { color:#0e7490; cursor:pointer; text-decoration:underline dotted; }
   #DaMultiItemManagement .dm-member-link:hover { color:#1e40af; }
@@ -1025,16 +1045,19 @@
     var mo=document.getElementById('dmMsgModal'); if(mo) mo.classList.remove('content-hidden');
     _msgUpdateSelCnt();
   };
-  function _msgSums(m){ var b=0,d=0,f=0; m.items.forEach(function(it){ b+=_num(it.bidprice); d+=_num(it.deposit); f+=_num(it._fee); }); return { bid:b, dep:d, fee:f, total:d+f }; }
+  function _msgConsol(){ return !!(document.getElementById('dmMsgFeeConsol')||{}).checked; }
+  function _msgFees(m){ var fees=m.items.map(function(it){return _num(it._fee);}); if(_msgConsol()){ var t=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?t:0;}); } return fees; }   // 진행비 대표통합 옵션
+  function _msgSums(m){ var fees=_msgFees(m), b=0,d=0,f=0; m.items.forEach(function(it,i){ b+=_num(it.bidprice); d+=_num(it.deposit); f+=fees[i]; }); return { bid:b, dep:d, fee:f, total:d+f }; }
+  DM.msgRerender=function(){ _renderMsgModal(); };
   function _renderMsgModal(){
     var box=document.getElementById('dmMsgList'); if(!box) return;
     box.innerHTML=_msgGroups.map(function(m,gi){
-      var s=_msgSums(m);
-      var rows=m.items.map(function(it){
+      var s=_msgSums(m), fees=_msgFees(m);
+      var rows=m.items.map(function(it,ri){
         return '<tr><td style="padding:3px 9px;border-bottom:1px solid #f1f5f9">'+esc(it.mulgeon_no||'')+'</td>'
           +'<td style="padding:3px 9px;border-bottom:1px solid #f1f5f9;text-align:right">'+_won(it.bidprice)+'</td>'
           +'<td style="padding:3px 9px;border-bottom:1px solid #f1f5f9;text-align:right">'+_won(it.deposit)+'</td>'
-          +'<td style="padding:3px 9px;border-bottom:1px solid #f1f5f9;text-align:right">'+_won(it._fee)+'</td></tr>';
+          +'<td style="padding:3px 9px;border-bottom:1px solid #f1f5f9;text-align:right">'+_won(fees[ri])+'</td></tr>';
       }).join('');
       var gcol=({'본인':'#2563eb','개인':'#16a34a','법인':'#9333ea'})[m.gubun]||'#64748b';
       return '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;overflow:hidden">'
@@ -1058,30 +1081,105 @@
   DM.msgSelectAll=function(el){ var on=!!(el&&el.checked); var cbs=document.querySelectorAll('#dmMsgList .dm-msg-cb'); for(var i=0;i<cbs.length;i++) cbs[i].checked=on; _msgUpdateSelCnt(); };
   DM.msgClose=function(){ var mo=document.getElementById('dmMsgModal'); if(mo) mo.classList.add('content-hidden'); };
   function _msgSelected(){ var out=[]; var cbs=document.querySelectorAll('#dmMsgList .dm-msg-cb:checked'); for(var i=0;i<cbs.length;i++){ var gi=parseInt(cbs[i].getAttribute('data-gi'),10); if(_msgGroups[gi]) out.push(_msgGroups[gi]); } return out; }
-  function _composeMsg(m){
+  var _msgReports=[];
+  function _msgAcct(a){ a=a||{}; return [String(a.account_bank||'').trim(),String(a.account_no||'').trim(),String(a.account_name||'').trim()].filter(Boolean).join(' '); }
+  function _sec(cat, pairs, catCls){
+    return pairs.map(function(pr,i){
+      var c=i===0?('<td class="rcat'+(catCls?' '+catCls:'')+'" rowspan="'+pairs.length+'">'+cat+'</td>'):'';
+      var hl=pr[2]?(' '+pr[2]):'', raw=(pr[3]==='raw');
+      return '<tr>'+c+'<td class="rk">'+esc(pr[0])+'</td><td class="rv'+hl+'">'+(raw?pr[1]:esc(pr[1]||''))+'</td></tr>';
+    }).join('');
+  }
+  function _buildMsgReport(m, p, agent, opts, idx){
+    p=p||{}; agent=agent||{};
+    var isCorp=String(p.gubun||m.gubun||'').indexOf('법인')>=0;
+    var court=_courtParse((m.items[0]&&m.items[0].court)||'');
+    var courtFull=esc(court.bon)+'법원'+(court.support?(' '+esc(court.support)+'지원'):'');
+    var sakunB=_sakunBase((m.items[0]&&m.items[0].sakun_no)||'');
+    var fees=m.items.map(function(it){return _num(it._fee);}); if(opts.consol){ var tf=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?tf:0;}); }
+    var sumBid=0,sumDep=0,sumFee=0; m.items.forEach(function(it,i){ sumBid+=_num(it.bidprice); sumDep+=_num(it.deposit); sumFee+=fees[i]; });
+    var mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).join(', ');
+    var bidRows=m.items.map(function(it,i){ return '<tr><td>'+esc(it.mulgeon_no||'')+'</td><td class="rnum hl-y">'+_won(it.bidprice)+'</td><td class="rnum hl-b">'+_won(it.deposit)+'</td><td class="rnum">'+_won(fees[i])+'</td></tr>'; }).join('');
+    var bidTable='<table class="rsub"><thead><tr><th>물건</th><th>입찰가</th><th>보증금</th><th>진행비</th></tr></thead><tbody>'+bidRows+'</tbody>'
+      +'<tfoot><tr><td>합계</td><td class="rnum">'+_won(sumBid)+'</td><td class="rnum">'+_won(sumDep)+'</td><td class="rnum">'+_won(sumFee)+'</td></tr>'
+      +'<tr class="rtot"><td colspan="3">총 비용(보증금+진행비)</td><td class="rnum">'+_won(sumDep+sumFee)+'원</td></tr></tfoot></table>';
+    var pName=p.name||m.member||'';
+    var info = isCorp
+      ? _sec('법인', [['법인성명',pName,'hl-o'],['법인사업자번호',p.biz_no],['법인등록번호',p.jumin_corp],['법인전화번호',p.phone],['법인주소',p.address],['법인계좌/보증금반환',_msgAcct(p)||'법인계좌']], 'cat-o')
+      : _sec('개인', [['입찰명의성명',pName,'hl-y'],['본인직업',p.job||'회사원'],['본인주민등록번호',p.jumin_corp,'hl-y'],['본인전화번호',p.phone],['본인주소',p.address],['본인계좌/보증금반환',_msgAcct(p)||'본인계좌','hl-y']], 'cat-y');
+    var ej=_sec('전자본인서명<br>확인서발급', [
+      ['발급 방법','<a href="https://www.youtube.com/watch?v=S2xVZjJeQd0&t=14s" target="_blank">발급 영상 보기</a>','','raw'],
+      ['용도', courtFull+' '+sakunB+' 대리입찰'],
+      ['수임자 성명', agent.name||''],
+      ['수임자 주소', agent.address||''],
+      ['수요법원', courtFull],
+      ['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요'],
+      ['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']
+    ]);
+    return '<div class="rrep" id="rrep'+idx+'">'
+      +'<div class="rrep-h"><b>'+esc(m.member)+'</b>님 입찰안내 <span class="rgb '+(isCorp?'gb-o':'gb-y')+'">'+(isCorp?'법인':(m.gubun==='본인'?'개인(본인)':'개인'))+'</span>'
+      +'<button class="rcopy" onclick="DM.msgCopyText('+idx+')">📋 텍스트 복사</button></div>'
+      +'<table class="rtbl">'
+      + _sec('개요', [['법원',court.bon+'법원'],['지원',court.support||'-'],['경매번호',sakunB],['물건번호',mulNos],['입찰일자',_msgCtx.bidDate]], 'cat-b')
+      +'<tr><td class="rcat cat-g">입찰</td><td colspan="2" class="rv rv-sub">'+bidTable+'</td></tr>'
+      + _sec('서류 기한안내', [['서류제출 기한',opts.due1||'(미입력)','hl-r'],['보증금송금 기한',opts.due2||'(미입력)','hl-r'],['보증금 입금계좌',_msgAcct(agent)||'(대리인 계좌)']], 'cat-r')
+      + info + ej
+      +'</table></div>';
+  }
+  function _composeMsgText(m, p, agent, opts){
+    p=p||{}; agent=agent||{};
+    var isCorp=String(p.gubun||m.gubun||'').indexOf('법인')>=0;
+    var court=_courtParse((m.items[0]&&m.items[0].court)||''), courtFull=court.bon+'법원'+(court.support?(' '+court.support+'지원'):'');
+    var sakunB=_sakunBase((m.items[0]&&m.items[0].sakun_no)||'');
+    var fees=m.items.map(function(it){return _num(it._fee);}); if(opts.consol){ var tf=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?tf:0;}); }
+    var sumDep=0,sumFee=0; m.items.forEach(function(it,i){ sumDep+=_num(it.deposit); sumFee+=fees[i]; });
     var L=[];
-    L.push('['+_msgCtx.court+' 입찰 안내] '+m.member+'님'+(m.myungui?(' ('+m.myungui+')'):'')+' / 명의 '+m.gubun);
-    L.push(_msgCtx.courtFull+' '+_msgCtx.sakun);
-    L.push('입찰일 '+_msgCtx.bidDate);
+    L.push('['+courtFull+' 입찰 안내] '+m.member+'님 ('+(isCorp?'법인':'개인')+')');
+    L.push('경매번호 '+sakunB+' / 입찰일 '+_msgCtx.bidDate+' / 물건 '+m.items.map(function(it){return it.mulgeon_no;}).join(', '));
     L.push('');
-    m.items.forEach(function(it){ L.push('▪ 물건 '+(it.mulgeon_no||'')+' : 입찰가 '+_won(it.bidprice)+' / 보증금 '+_won(it.deposit)+' / 진행비 '+_won(it._fee)); });
-    var s=_msgSums(m);
+    m.items.forEach(function(it,i){ L.push('· 물건 '+(it.mulgeon_no||'')+'  입찰가 '+_won(it.bidprice)+' / 보증금 '+_won(it.deposit)+' / 진행비 '+_won(fees[i])); });
+    L.push('▶ 총 비용(보증금+진행비) '+_won(sumDep+sumFee)+'원');
     L.push('');
-    L.push('합계  입찰가 '+_won(s.bid)+' / 보증금 '+_won(s.dep)+' / 진행비 '+_won(s.fee));
-    L.push('▶ 총 비용(보증금+진행비) '+_won(s.total)+'원');
+    L.push('[서류 기한안내]');
+    L.push('· 서류제출 기한 : '+(opts.due1||'-'));
+    L.push('· 보증금송금 기한 : '+(opts.due2||'-'));
+    L.push('· 보증금 입금계좌 : '+(_msgAcct(agent)||'(대리인 계좌)'));
+    L.push('');
+    L.push(isCorp?'[법인 정보 확인]':'[본인 정보 확인]');
+    if(isCorp){ L.push('· 법인성명 '+(p.name||m.member)); L.push('· 사업자번호 '+(p.biz_no||'')); L.push('· 법인등록번호 '+(p.jumin_corp||'')); L.push('· 전화 '+(p.phone||'')); L.push('· 주소 '+(p.address||'')); L.push('· 계좌 '+(_msgAcct(p)||'법인계좌')); }
+    else { L.push('· 성명 '+(p.name||m.member)); L.push('· 직업 '+(p.job||'회사원')); L.push('· 주민등록번호 '+(p.jumin_corp||'')); L.push('· 전화 '+(p.phone||'')); L.push('· 주소 '+(p.address||'')); L.push('· 계좌 '+(_msgAcct(p)||'본인계좌')); }
+    L.push('');
+    L.push('[전자본인서명 확인서 발급]');
+    L.push('· 용도 : '+courtFull+' '+sakunB+' 대리입찰');
+    L.push('· 수임자 : '+(agent.name||'')+(agent.address?(' / '+agent.address):''));
+    L.push('· 수요법원 : '+courtFull);
+    L.push('· 발급영상 https://www.youtube.com/watch?v=S2xVZjJeQd0&t=14s');
+    L.push('※ 물건이 1개 이상이면 물건번호별로 따로 신청해야 합니다.');
     return L.join('\n');
   }
   DM.msgPreview=function(){
-    var sel=_msgSelected(); if(!sel.length){ alert('전송할 회원을 선택하세요.'); return; }
-    var method=(document.getElementById('dmMsgMethod')||{}).value||'text';
-    var body=document.getElementById('dmMsgPreviewBody');
-    body.innerHTML=sel.map(function(m){ return '<pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:0 0 12px">'+esc(_composeMsg(m))+'</pre>'; }).join('')
-      + '<div style="font-size:12px;color:#6b7280">전송방식: '+(method==='image'?'이미지 카드':'텍스트')+' · '+sel.length+'명</div>';
+    var sel=_msgSelected(); if(!sel.length){ alert('회원을 선택하세요.'); return; }
+    var opts={ due1:(document.getElementById('dmMsgDue1')||{}).value||'', due2:(document.getElementById('dmMsgDue2')||{}).value||'', consol:_msgConsol() };
+    var body=document.getElementById('dmMsgPreviewBody'); body.innerHTML='<div style="padding:30px;color:#6b7280">회원 정보 불러오는 중…</div>';
     document.getElementById('dmMsgPreview').classList.remove('content-hidden');
+    var reqs=sel.map(function(m){ var it0=m.items[0]||{}; return { member_id:m.member_id, myungui:m.myungui||'', daeriin:String(it0.daeriin||'').trim() }; });
+    if(typeof google==='undefined'||!google.script||!google.script.run){ body.innerHTML='google.script.run 없음'; return; }
+    google.script.run.withSuccessHandler(function(res){
+      res=res||[];
+      _msgReports=sel.map(function(m,i){ var d=res[i]||{}; return { m:m, p:d.principal, agent:d.agent, opts:opts }; });
+      body.innerHTML=_msgReports.map(function(r,i){ return _buildMsgReport(r.m, r.p, r.agent, r.opts, i); }).join('');
+    }).withFailureHandler(function(e){ body.innerHTML='<div style="padding:20px;color:#dc2626">불러오기 실패: '+esc(e&&e.message)+'</div>'; }).getBulkDaeriipchalData(reqs);
+  };
+  function _msgCopyFallback(txt){ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); alert('복사됨'); }catch(e){ alert('복사 실패'); } document.body.removeChild(ta); }
+  DM.msgCopyText=function(idx){
+    var r=_msgReports[idx]; if(!r) return;
+    var txt=_composeMsgText(r.m, r.p, r.agent, r.opts);
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ alert('복사됨 — '+r.m.member+'님'); }).catch(function(){ _msgCopyFallback(txt); }); }
+    else _msgCopyFallback(txt);
   };
   DM.msgSend=function(){
-    var sel=_msgSelected(); if(!sel.length){ alert('전송할 회원을 선택하세요.'); return; }
-    alert('카카오 전송은 다음 단계에서 연결합니다(채널/템플릿 또는 이미지카드). 지금은 [미리보기]로 내용 확인 가능합니다.\n선택: '+sel.length+'명');
+    var sel=_msgSelected(); if(!sel.length){ alert('회원을 선택하세요.'); return; }
+    alert('실제 카카오 전송 연결은 다음 단계입니다.\n지금은 [📄 보고서 보기]에서 회원별 보고서를 확인하고, 각 보고서의 [📋 텍스트 복사]로 카카오에 붙여넣어 보낼 수 있습니다.\n선택: '+sel.length+'명');
   };
   DM.bulkOpenModal = function(){
     var act=(document.getElementById('dmBulkAction')||{}).value||'';
