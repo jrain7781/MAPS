@@ -42,12 +42,12 @@
   #dmMsgReport .rkv .rv.hl-r { color:#dc2626; font-weight:700; }
   /* 입찰 표 — 가로 압축 + 컬럼 리사이즈 */
   #dmMsgReport .rsub { border-collapse:collapse; font-size:.84em; table-layout:fixed; }   /* width는 컬럼합(인라인) — 만진 열만 변경 */
-  #dmMsgReport .rsub th { position:relative; background:#eef2f7; color:#475569; padding:3px 4px; border:1px solid #dce3ec; font-weight:700; }
+  #dmMsgReport .rsub th { position:relative; text-align:center; background:#eef2f7; color:#475569; padding:3px 4px; border:1px solid #dce3ec; font-weight:700; }
   #dmMsgReport .rsub td { border:1px solid #eef2f7; padding:3px 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #dmMsgReport .rsub .bgrip { position:absolute; top:0; right:-3px; width:8px; height:100%; cursor:col-resize; z-index:3; }
   #dmMsgReport .rsub .bgrip:hover { background:#93c5fd; }
   #dmMsgReport .rsub .rnum { text-align:right; } #dmMsgReport .rsub .hl-y { font-weight:700; }
-  #dmMsgReport .rsub tfoot td { font-weight:800; background:#f6f8fb; } #dmMsgReport .rsub .rtot td { color:#1f3a5f; background:#e6eef8; }
+  #dmMsgReport .rsub tfoot td { font-weight:800; background:#f6f8fb; } #dmMsgReport .rsub .rtot td { color:#dc2626; background:#fff5f5; }   /* 총비용 빨강 */
   /* 명의 상세 슬라이드 카드 */
   #DaMultiItemManagement .dm-member-link { color:#0e7490; cursor:pointer; text-decoration:underline dotted; }
   #DaMultiItemManagement .dm-member-link:hover { color:#1e40af; }
@@ -1140,7 +1140,7 @@
   function _kvTable(pairs){ return '<table class="rkv">'+pairs.map(function(pr){ var hl=pr[2]?(' '+pr[2]):'', raw=(pr[3]==='raw'); return '<tr><td class="rk">'+esc(pr[0])+'</td><td class="rv'+hl+'">'+(raw?pr[1]:esc(pr[1]||''))+'</td></tr>'; }).join('')+'</table>'; }
   // 입찰표 컬럼폭(PC별 저장) + 드래그 리사이즈
   var _bidColW=null;
-  function _loadBidColW(){ if(!_bidColW){ try{ _bidColW=JSON.parse(localStorage.getItem('dmMsgBidW')||'null'); }catch(_){}; if(!_bidColW||_bidColW.length!==5) _bidColW=[44,28,118,108,58]; } return _bidColW; }
+  function _loadBidColW(){ if(!_bidColW){ try{ _bidColW=JSON.parse(localStorage.getItem('dmMsgBidW')||'null'); }catch(_){}; if(!_bidColW||_bidColW.length!==5) _bidColW=[58,34,104,98,58]; } return _bidColW; }
   function _bindBidResizers(){
     var rp=document.getElementById('dmMsgReport'); if(!rp) return;
     rp.querySelectorAll('.rsub .bgrip').forEach(function(g){
@@ -1168,7 +1168,7 @@
     // 섹션 블록 (굵은 테두리 + 교대 2색)
     var _bi=0; function blk(name, body){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
     // 입찰 표
-    var bidRows=m.items.map(function(it,i){ return '<tr><td style="color:'+_msgMyungColor(it)+';font-weight:700">'+esc(_msgMyungLabel(it))+'</td><td>'+esc(it.mulgeon_no||'')+'</td><td class="rnum hl-y">'+_won(it.bidprice)+'</td><td class="rnum">'+_won(it.deposit)+'</td><td class="rnum">'+_won(fees[i])+'</td></tr>'; }).join('');
+    var bidRows=m.items.map(function(it,i){ return '<tr><td style="color:'+_msgMyungColor(it)+';font-weight:700;text-align:center">'+esc(_msgMyungLabel(it))+'</td><td style="text-align:center">'+esc(it.mulgeon_no||'')+'</td><td class="rnum hl-y">'+_won(it.bidprice)+'</td><td class="rnum">'+_won(it.deposit)+'</td><td class="rnum">'+_won(fees[i])+'</td></tr>'; }).join('');
     var bcw=_loadBidColW(), bsum=bcw.reduce(function(a,b){return a+b;},0);
     var bidTable='<table class="rsub" style="width:'+bsum+'px"><colgroup>'+bcw.map(function(w){return '<col style="width:'+w+'px">';}).join('')+'</colgroup>'
       +'<thead><tr>'+['명의','물건','입찰가','보증금','진행비'].map(function(h,ci){ return '<th>'+h+(ci<4?'<span class="bgrip" data-ci="'+ci+'"></span>':'')+'</th>'; }).join('')+'</tr></thead><tbody>'+bidRows+'</tbody>'
