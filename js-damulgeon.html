@@ -21,14 +21,12 @@
   @keyframes dmSpin { to { transform:rotate(360deg); } }
   .dm-spin { animation:dmSpin .7s linear infinite; }
   /* 입찰안내 보고서 — 모바일 친화 좁은 폭, 섹션별 굵은 테두리 + 교대 2색 */
-  #dmMsgReport .rrep { width:430px; max-width:100%; background:#fff; border:1px solid #cdd5df; border-radius:10px; margin:0 0 16px; overflow:hidden; }
-  #dmMsgReport .rrep-h { display:flex; align-items:center; flex-wrap:wrap; gap:5px 8px; padding:9px 12px; background:#1f3a5f; color:#fff; font-size:13.5px; }
-  #dmMsgReport .rrep-h b { font-size:15px; }
-  #dmMsgReport .rh-cnt { font-size:11px; font-weight:700; background:#fde68a; color:#92400e; padding:1px 7px; border-radius:9px; }
-  #dmMsgReport .rrep-loc { flex-basis:100%; font-size:12px; font-weight:600; color:#cfe0f5; }   /* 걸리면 줄바꿈 */
-  #dmMsgReport .rcopy-wrap { margin-left:auto; display:flex; gap:6px; }
-  #dmMsgReport .rcopy { background:#fff; color:#1f3a5f; border:0; border-radius:5px; padding:4px 10px; font-size:12px; font-weight:700; cursor:pointer; }
-  #dmMsgReport .rcopy:hover { background:#e8eef6; }
+  #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 auto 16px; background:#fff; border:1px solid #cdd5df; border-radius:10px; overflow:hidden; }   /* 가운데 정렬 */
+  #dmMsgReport .rrep-h { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; padding:11px 12px; background:#1f3a5f; color:#fff; }
+  #dmMsgReport .rrep-title { font-size:15px; }
+  #dmMsgReport .rrep-h b { font-size:1.55em; }   /* 이름 크게, 눈에 띄게 */
+  #dmMsgReport .rh-cnt { font-size:11px; font-weight:700; background:#fde68a; color:#92400e; padding:1px 7px; border-radius:9px; vertical-align:middle; }
+  #dmMsgReport .rrep-loc { font-size:12px; font-weight:600; color:#cfe0f5; }
   #dmMsgReport .rbody { padding:10px; font-size:var(--dmrf,14px); }   /* 폰트 조절(상단 글자 버튼) */
   /* 섹션 블록 */
   #dmMsgReport .rsec { border:2px solid; border-radius:8px; margin:0 0 9px; overflow:hidden; }
@@ -43,7 +41,7 @@
   #dmMsgReport .rkv .rv.hl-y { font-weight:800; }
   #dmMsgReport .rkv .rv.hl-r { color:#dc2626; font-weight:700; }
   /* 입찰 표 — 가로 압축 + 컬럼 리사이즈 */
-  #dmMsgReport .rsub { width:100%; border-collapse:collapse; font-size:.84em; table-layout:fixed; }
+  #dmMsgReport .rsub { border-collapse:collapse; font-size:.84em; table-layout:fixed; }   /* width는 컬럼합(인라인) — 만진 열만 변경 */
   #dmMsgReport .rsub th { position:relative; background:#eef2f7; color:#475569; padding:3px 4px; border:1px solid #dce3ec; font-weight:700; }
   #dmMsgReport .rsub td { border:1px solid #eef2f7; padding:3px 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #dmMsgReport .rsub .bgrip { position:absolute; top:0; right:-3px; width:8px; height:100%; cursor:col-resize; z-index:3; }
@@ -1110,9 +1108,9 @@
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
         +  '<input type="checkbox" class="dm-msg-cb" data-gi="'+gi+'"'+(_msgSel[gi]?' checked':'')+' onclick="event.stopPropagation()" onchange="DM.msgUpdateSel()">'
         +  '<span style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</span>'
+        +  (grade?('<span style="font-size:11px;color:#0e7490;font-weight:700">'+esc(grade)+'</span>'):'')
         +  '<span style="font-size:11px;color:#475569;font-weight:600">물건 '+esc(mulNos)+'</span>'
         +'</div>'
-        + (grade?('<div style="font-size:11px;color:#0e7490;font-weight:700;margin:2px 0 0 22px">'+esc(grade)+'</div>'):'')
         +'<div style="display:flex;gap:10px;font-size:11px;font-weight:700;margin:3px 0 0 22px">'+(cnt.join('')||'<span style="color:#9ca3af">-</span>')+'</div>'
         +'<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:12px"><span style="color:#6b7280">총비용</span><span style="font-weight:800;color:#dc2626">'+_won(s.total)+'원</span></div>'
         +'</div>';
@@ -1148,8 +1146,8 @@
     rp.querySelectorAll('.rsub .bgrip').forEach(function(g){
       g.onmousedown=function(e){
         e.preventDefault(); e.stopPropagation();
-        var ci=parseInt(g.getAttribute('data-ci'),10), sx=e.clientX, sw=_loadBidColW()[ci];
-        function mm(ev){ var w=Math.max(24, sw+(ev.clientX-sx)); _bidColW[ci]=w; rp.querySelectorAll('table.rsub colgroup col').forEach(function(c,idx){ if(idx===ci) c.style.width=w+'px'; }); }
+        var ci=parseInt(g.getAttribute('data-ci'),10), sx=e.clientX, sw=_loadBidColW()[ci], table=g.closest('table.rsub');
+        function mm(ev){ var w=Math.max(24, sw+(ev.clientX-sx)); _bidColW[ci]=w; var cols=table.querySelectorAll('colgroup col'); if(cols[ci]) cols[ci].style.width=w+'px'; table.style.width=_bidColW.reduce(function(a,b){return a+b;},0)+'px'; }   // 만진 열 + 테이블 폭만 변경, 나머지 고정
         function mu(){ document.removeEventListener('mousemove',mm); document.removeEventListener('mouseup',mu); document.body.style.userSelect=''; try{ localStorage.setItem('dmMsgBidW', JSON.stringify(_bidColW)); }catch(_){}; }
         document.body.style.userSelect='none'; document.addEventListener('mousemove',mm); document.addEventListener('mouseup',mu);
       };
@@ -1171,8 +1169,8 @@
     var _bi=0; function blk(name, body){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
     // 입찰 표
     var bidRows=m.items.map(function(it,i){ return '<tr><td style="color:'+_msgMyungColor(it)+';font-weight:700">'+esc(_msgMyungLabel(it))+'</td><td>'+esc(it.mulgeon_no||'')+'</td><td class="rnum hl-y">'+_won(it.bidprice)+'</td><td class="rnum">'+_won(it.deposit)+'</td><td class="rnum">'+_won(fees[i])+'</td></tr>'; }).join('');
-    var bcw=_loadBidColW();
-    var bidTable='<table class="rsub"><colgroup>'+bcw.map(function(w){return '<col style="width:'+w+'px">';}).join('')+'</colgroup>'
+    var bcw=_loadBidColW(), bsum=bcw.reduce(function(a,b){return a+b;},0);
+    var bidTable='<table class="rsub" style="width:'+bsum+'px"><colgroup>'+bcw.map(function(w){return '<col style="width:'+w+'px">';}).join('')+'</colgroup>'
       +'<thead><tr>'+['명의','물건','입찰가','보증금','진행비'].map(function(h,ci){ return '<th>'+h+(ci<4?'<span class="bgrip" data-ci="'+ci+'"></span>':'')+'</th>'; }).join('')+'</tr></thead><tbody>'+bidRows+'</tbody>'
       +'<tfoot><tr><td colspan="2">합계</td><td class="rnum">'+_won(sumBid)+'</td><td class="rnum">'+_won(sumDep)+'</td><td class="rnum">'+_won(sumFee)+'</td></tr>'
       +'<tr class="rtot"><td colspan="4">총 비용(보증금+진행비)</td><td class="rnum">'+_won(sumDep+sumFee)+'원</td></tr></tfoot></table>';
@@ -1210,9 +1208,10 @@
     var rawA=''; for(var ai=0;ai<m.items.length;ai++){ var aa=String(m.items[ai].address||'').trim(); if(aa){ rawA=aa; break; } }
     var shortAddr=rawA?_shortAddr(rawA):(_msgCtx.addr?_shortAddr(_msgCtx.addr):'');
     return '<div class="rrep" id="rrep'+idx+'">'
-      +'<div class="rrep-h"><b>'+esc(m.member)+'</b>님 <span class="rh-cnt">'+m.items.length+'물건</span> 입찰안내'
-      +(shortAddr?(' <span class="rrep-loc">📍 '+esc(shortAddr)+'</span>'):'')
-      +'<span class="rcopy-wrap"><button class="rcopy" onclick="DM.msgCopyText('+idx+')">📋텍스트</button><button class="rcopy" onclick="DM.msgCopyImage('+idx+')">📷이미지</button><button class="rcopy" onclick="DM.msgSaveImages('+idx+')" title="화면 크기로 나눠 저장 → 카톡에 모두 첨부하면 좌우로 넘겨 봄">💾분할</button></span></div>'
+      +'<div class="rrep-h">'
+      +  '<div class="rrep-title"><b>'+esc(m.member)+'</b>님 <span class="rh-cnt">'+m.items.length+'물건</span> 입찰안내</div>'
+      +  (shortAddr?('<div class="rrep-loc">📍 '+esc(shortAddr)+'</div>'):'')
+      +'</div>'
       +'<div class="rbody">'+body+'</div></div>';
   }
   function _composeMsgText(m, opts){
@@ -1258,6 +1257,7 @@
   }
   function _msgCopyFallback(txt){ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); alert('복사됨'); }catch(e){ alert('복사 실패'); } document.body.removeChild(ta); }
   DM.msgCopyText=function(gi){
+    if(gi==null) gi=_msgFocusGi;
     var m=_msgGroups[gi]; if(!m) return;
     var txt=_composeMsgText(m, _msgOpts());
     if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ alert('텍스트 복사됨 — '+m.member+'님\n카카오에 붙여넣으세요.'); }).catch(function(){ _msgCopyFallback(txt); }); }
@@ -1273,6 +1273,7 @@
     document.head.appendChild(s);
   }
   DM.msgCopyImage=function(gi){
+    if(gi==null) gi=_msgFocusGi;
     var el=document.getElementById('rrep'+gi); if(!el) return;
     var m=_msgGroups[gi];
     _withHtml2Canvas(function(){
@@ -1292,6 +1293,7 @@
   function _downloadBlobSilent(blob, name){ var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); document.body.removeChild(a); },120); }
   // 보고서를 화면 크기로 분할 → 여러 장 PNG 저장 (카톡 앨범 좌우 스와이프용 — 세로로 긴 1장 in-chat 뷰 문제 해결)
   DM.msgSaveImages=function(gi){
+    if(gi==null) gi=_msgFocusGi;
     var rep=document.getElementById('rrep'+gi); if(!rep) return; var m=_msgGroups[gi];
     var secs=Array.prototype.slice.call(rep.querySelectorAll('.rbody > .rsec'));
     if(!secs.length){ DM.msgCopyImage(gi); return; }
