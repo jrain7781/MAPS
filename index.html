@@ -2188,8 +2188,8 @@
                     <div id="dmDetailHead" class="border-b bg-white px-4 py-3">
                         <div class="text-gray-400 text-sm">좌측에서 사건을 선택하세요.</div>
                     </div>
-                    <div class="px-4 py-2 border-b bg-gray-50 flex items-center gap-2">
-                        <label style="font-size:12px;color:#475569;display:flex;align-items:center;gap:3px;cursor:pointer" title="입찰일/법원/사건번호/주소 열 숨김"><input type="checkbox" id="dmHideBasic" onchange="DM.toggleHideBasic(this)"> 기본정보 숨기기</label>
+                    <div class="px-4 py-2 border-b bg-gray-50 flex items-center gap-2" style="flex-wrap:nowrap;overflow-x:auto">
+                        <label style="flex-shrink:0;white-space:nowrap;font-size:12px;color:#475569;display:flex;align-items:center;gap:3px;cursor:pointer" title="입찰일/법원/사건번호/주소 열 숨김"><input type="checkbox" id="dmHideBasic" onchange="DM.toggleHideBasic(this)"> 기본정보 숨기기</label>
                         <span style="border-left:1px solid #e5e7eb;height:20px;margin:0 2px"></span>
                         <input id="dmFilterMulgeon" list="dmMulgeonList" placeholder="물건번호" autocomplete="off"
                             class="border rounded px-2 py-1" style="font-size:12px;width:88px"
@@ -2222,13 +2222,13 @@
                         <button id="dmRefreshBtn" onclick="DM.refreshGroup()" title="이 사건만 새로고침"
                             class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded font-bold border border-slate-300" style="font-size:12px">↻ 새로고침</button>
                         <span id="dmGridInfo" class="text-gray-400" style="font-size:12px"></span>
-                        <span style="font-size:11px;color:#94a3b8;margin-left:4px">제목색:
+                        <span style="flex-shrink:0;white-space:nowrap;font-size:11px;color:#94a3b8;margin-left:4px">제목색:
                             <span style="background:#dbeafe;padding:0 4px;border-radius:3px">ITEMS</span>
                             <span style="background:#fef9c3;padding:0 4px;border-radius:3px">다물건입력</span>
                             <span style="background:#dcfce7;padding:0 4px;border-radius:3px">수식</span></span>
-                        <span id="dmSaveDot" class="text-green-600 font-bold" style="font-size:12px;opacity:0;transition:opacity .3s;margin-left:8px"></span>
+                        <span id="dmSaveDot" class="text-green-600 font-bold" style="flex-shrink:0;font-size:12px;opacity:0;transition:opacity .3s;margin-left:8px"></span>
                         <button onclick="DM.exportCsv()"
-                            class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded font-bold" style="font-size:12px;margin-left:auto">📥 엑셀(CSV) 출력</button>
+                            class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded font-bold" style="font-size:12px;margin-left:auto;flex-shrink:0;white-space:nowrap">📥 엑셀(CSV) 출력</button>
                     </div>
                     <!-- 상태별 썸머리 (클릭 → 해당 상태만 조회, 입찰물건관리 스타일) -->
                     <div id="dmSummary" class="px-4 py-1.5 border-b bg-white flex flex-wrap items-center" style="font-size:12px;gap:3px 8px"></div>
@@ -2289,22 +2289,21 @@
                 <!-- 입찰안내 메세지 모달 (큰 모달 — 회원별 입찰 요약 + 선택 전송) -->
                 <div id="dmMsgModal" class="content-hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:55;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)DM.msgClose()">
                     <div style="background:#fff;border-radius:12px;width:1180px;max-width:97vw;height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 50px rgba(0,0,0,.35)">
-                        <div style="padding:13px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:10px;flex-shrink:0">
-                            <h3 style="font-size:17px;font-weight:800;color:#111827">📨 입찰안내 메세지</h3>
-                            <span id="dmMsgSakun" style="font-size:13px;color:#1d4ed8;font-weight:700"></span>
-                            <span id="dmMsgCnt" style="font-size:12px;color:#6b7280"></span>
-                            <label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:600;margin-left:14px"><input type="checkbox" id="dmMsgSelectAll" onchange="DM.msgSelectAll(this)"> 전체선택</label>
-                            <span id="dmMsgSelCnt" style="font-size:12px;color:#6b7280"></span>
-                            <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
-                                <span style="font-size:11px;color:#94a3b8">선택회원 보고서:</span>
-                                <button onclick="DM.msgCopyText()" class="border rounded" style="font-size:12px;font-weight:700;background:#fff;padding:5px 10px;cursor:pointer">📋텍스트</button>
-                                <button onclick="DM.msgCopyImage()" class="border rounded" style="font-size:12px;font-weight:700;background:#fff;padding:5px 10px;cursor:pointer">📷이미지</button>
-                                <button onclick="DM.msgSaveImages()" class="border rounded" title="화면 크기로 나눠 저장 → 카톡에 모두 첨부하면 좌우로 넘겨 봄" style="font-size:12px;font-weight:700;background:#fff;padding:5px 10px;cursor:pointer">💾분할</button>
-                                <span style="width:1px;height:20px;background:#d1d5db;margin:0 2px"></span>
-                                <button onclick="DM.msgSendTelegram()" class="px-3 py-1 rounded font-bold text-white" style="font-size:13px;background:#229ED9">✈ 텔레그램</button>
-                                <button onclick="DM.msgSendKakao()" class="px-3 py-1 rounded font-bold" style="font-size:13px;background:#FEE500;color:#3A1D1D">💬 카카오</button>
+                        <div style="padding:11px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:9px;flex-shrink:0;flex-wrap:nowrap;overflow-x:auto">
+                            <h3 style="flex-shrink:0;white-space:nowrap;font-size:16px;font-weight:800;color:#111827">📨 입찰안내</h3>
+                            <span id="dmMsgSakun" style="flex-shrink:0;white-space:nowrap;font-size:12px;color:#1d4ed8;font-weight:700"></span>
+                            <span id="dmMsgCnt" style="flex-shrink:0;white-space:nowrap;font-size:12px;color:#6b7280"></span>
+                            <label style="flex-shrink:0;white-space:nowrap;font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:600;margin-left:10px"><input type="checkbox" id="dmMsgSelectAll" onchange="DM.msgSelectAll(this)"> 전체선택</label>
+                            <span id="dmMsgSelCnt" style="flex-shrink:0;white-space:nowrap;font-size:12px;color:#6b7280"></span>
+                            <span style="margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:5px">
+                                <button onclick="DM.msgCopyText()" title="선택 회원 보고서 텍스트 복사" class="border rounded" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:700;background:#fff;padding:5px 9px;cursor:pointer">📋텍스트</button>
+                                <button onclick="DM.msgCopyImage()" title="이미지 복사" class="border rounded" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:700;background:#fff;padding:5px 9px;cursor:pointer">📷이미지</button>
+                                <button onclick="DM.msgSaveImages()" class="border rounded" title="화면 크기로 나눠 저장 → 카톡에 모두 첨부하면 좌우로 넘겨 봄" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:700;background:#fff;padding:5px 9px;cursor:pointer">💾분할</button>
+                                <span style="width:1px;height:20px;background:#d1d5db;margin:0 2px;flex-shrink:0"></span>
+                                <button onclick="DM.msgSendTelegram()" class="px-3 py-1 rounded font-bold text-white" style="flex-shrink:0;white-space:nowrap;font-size:13px;background:#229ED9">✈ 텔레그램</button>
+                                <button onclick="DM.msgSendKakao()" class="px-3 py-1 rounded font-bold" style="flex-shrink:0;white-space:nowrap;font-size:13px;background:#FEE500;color:#3A1D1D">💬 카카오</button>
                             </span>
-                            <button onclick="DM.msgClose()" style="border:0;background:transparent;font-size:20px;color:#64748b;cursor:pointer">✕</button>
+                            <button onclick="DM.msgClose()" style="flex-shrink:0;border:0;background:transparent;font-size:20px;color:#64748b;cursor:pointer">✕</button>
                         </div>
                         <div style="padding:7px 18px;border-bottom:1px solid #eef2f7;display:flex;align-items:center;gap:14px;flex-shrink:0;flex-wrap:nowrap;overflow-x:auto;background:#f8fafc">
                             <span style="flex-shrink:0;white-space:nowrap;font-size:12px;display:flex;align-items:center;gap:4px">🔤 글자
