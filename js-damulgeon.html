@@ -26,6 +26,7 @@
   #dmMsgReport .rrep-h .rgb { font-size:11px; padding:1px 9px; border-radius:9px; font-weight:700; }
   #dmMsgReport .rrep-h .gb-y { background:#fde68a; color:#92400e; } #dmMsgReport .rrep-h .gb-o { background:#fdba74; color:#7c2d12; }
   #dmMsgReport .rrep-h .rcopy { margin-left:auto; background:#fff; color:#1e3a5f; border:0; border-radius:5px; padding:3px 11px; font-size:12px; font-weight:700; cursor:pointer; }
+  #dmMsgReport .rrep-addr { padding:6px 12px; background:#eff6ff; border-bottom:1px solid #dbeafe; font-size:12.5px; font-weight:700; color:#1d4ed8; }
   #dmMsgReport .rtbl { width:100%; border-collapse:collapse; font-size:12.5px; }
   #dmMsgReport .rtbl td { border:1px solid #e5e7eb; padding:5px 9px; vertical-align:middle; }
   #dmMsgReport .rtbl .rcat { width:112px; text-align:center; font-weight:800; background:#f1f5f9; color:#334155; line-height:1.25; }
@@ -1040,7 +1041,8 @@
   var _msgDetail=[], _msgFocusGi=0;
   DM.openMsgModal = function(targets){
     var g0=targets[0]||{}, court=_courtParse(g0.court||'');
-    _msgCtx={ court:String(g0.court||''), courtFull:(esc(court.bon)+'법원'+(court.support?(' '+esc(court.support)+'지원'):'')), sakun:_sakunBase(g0.sakun_no||''), bidDate:_bidDateStr(g0.in_date) };
+    var _repA=''; for(var _ti=0;_ti<targets.length;_ti++){ var _a=String(targets[_ti].address||'').trim(); if(_a){ _repA=_a; break; } }   // 대표 주소(빈 더미 제외)
+    _msgCtx={ court:String(g0.court||''), courtFull:(esc(court.bon)+'법원'+(court.support?(' '+esc(court.support)+'지원'):'')), sakun:_sakunBase(g0.sakun_no||''), bidDate:_bidDateStr(g0.in_date), addr:_addrBase(_repA) };
     var sb=document.getElementById('dmMsgSakun'); if(sb) sb.textContent=_msgCtx.sakun+' · '+_msgCtx.court+' · 입찰일 '+(g0.in_date||'');
     var map={};
     targets.forEach(function(it){
@@ -1141,9 +1143,11 @@
       ['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요'],
       ['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']
     ]);
+    var repAddr=''; for(var ai=0;ai<m.items.length;ai++){ var aa=String(m.items[ai].address||'').trim(); if(aa){ repAddr=_addrBase(aa); break; } } if(!repAddr) repAddr=_msgCtx.addr||'';
     return '<div class="rrep" id="rrep'+idx+'">'
       +'<div class="rrep-h"><b>'+esc(m.member)+'</b>님 입찰안내 <span class="rgb '+(isCorp?'gb-o':'gb-y')+'">'+(isCorp?'법인':(m.gubun==='본인'?'개인(본인)':'개인'))+'</span>'
       +'<button class="rcopy" onclick="DM.msgCopyText('+idx+')">📋 텍스트 복사</button></div>'
+      +(repAddr?('<div class="rrep-addr">📍 '+esc(repAddr)+'</div>'):'')
       +'<table class="rtbl">'
       + _sec('개요', [['법원',court.bon+'법원'],['지원',court.support||'-'],['경매번호',sakunB],['물건번호',mulNos],['입찰일자',_msgCtx.bidDate]], 'cat-b')
       +'<tr><td class="rcat cat-g">입찰</td><td colspan="2" class="rv rv-sub">'+bidTable+'</td></tr>'
@@ -1159,7 +1163,9 @@
     var fees=m.items.map(function(it){return _num(it._fee);}); if(opts.consol){ var tf=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?tf:0;}); }
     var sumDep=0,sumFee=0; m.items.forEach(function(it,i){ sumDep+=_num(it.deposit); sumFee+=fees[i]; });
     var L=[];
+    var rAddr=''; for(var ai=0;ai<m.items.length;ai++){ var aa=String(m.items[ai].address||'').trim(); if(aa){ rAddr=_addrBase(aa); break; } } if(!rAddr) rAddr=_msgCtx.addr||'';
     L.push('['+courtFull+' 입찰 안내] '+m.member+'님 ('+(isCorp?'법인':'개인')+')');
+    if(rAddr) L.push('📍 '+rAddr);
     L.push('경매번호 '+sakunB+' / 입찰일 '+_msgCtx.bidDate+' / 물건 '+m.items.map(function(it){return it.mulgeon_no;}).join(', '));
     L.push('');
     m.items.forEach(function(it,i){ L.push('· ['+_msgMyungLabel(it)+'] 물건 '+(it.mulgeon_no||'')+'  입찰가 '+_won(it.bidprice)+' / 보증금 '+_won(it.deposit)+' / 진행비 '+_won(fees[i])); });
@@ -1178,6 +1184,7 @@
     L.push('· 용도 : '+courtFull+' '+sakunB+' 대리입찰');
     L.push('· 수임자 : '+(agent.name||'')+(agent.address?(' / '+agent.address):''));
     L.push('· 수요법원 : '+courtFull);
+    L.push('· 제출 방법 : PDF 파일 다운로드 후 담당자에게 보내주세요');
     L.push('· 발급영상 https://www.youtube.com/watch?v=S2xVZjJeQd0&t=14s');
     L.push('※ 물건이 1개 이상이면 물건번호별로 따로 신청해야 합니다.');
     return L.join('\n');
