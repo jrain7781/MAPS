@@ -21,7 +21,7 @@
   @keyframes dmSpin { to { transform:rotate(360deg); } }
   .dm-spin { animation:dmSpin .7s linear infinite; }
   /* 입찰안내 보고서 — 모바일 친화 좁은 폭, 섹션별 굵은 테두리 + 교대 2색 */
-  #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 auto 16px; background:#fff; border:1px solid #cdd5df; border-radius:10px; overflow:hidden; }   /* 가운데 정렬 */
+  #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 0 16px 6px; background:#fff; border:1px solid #cdd5df; border-radius:10px; overflow:hidden; }   /* 왼쪽 정렬 + 왼쪽 여백 */
   #dmMsgReport .rrep-h { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; padding:11px 12px; background:#1f3a5f; color:#fff; }
   #dmMsgReport .rrep-title { font-size:15px; }
   #dmMsgReport .rrep-h b { font-size:1.55em; }   /* 이름 크게, 눈에 띄게 */
@@ -150,6 +150,7 @@
     { label:'총입금요청',f:'_total',      t:'calc',   a:'right',  w:104, src:'calc' },
     { label:'입찰대리인',f:'daeriin',     t:'daeriin',a:'left',   w:88,  src:'dm' },
     { label:'인증',     f:'auth_method',  t:'auth',   a:'center', w:60,  src:'dm' },
+    { label:'담당자',   f:'m_name_id',    t:'ro',     a:'center', w:64,  src:'items' },
     { label:'비고',     f:'dm_note',      t:'text',   a:'left',   w:130, src:'dm' }
   ];
   var _hideBasic=false, _sortField='', _sortDir=1, _statusSel={}, _bidMissing=false;
@@ -788,6 +789,14 @@
       html+=chip(st, st+' '+c+'건', DM_SCOLOR[st]||'#4b5563', (only.length===1 && only[0]===st && !_bidMissing));
       if(st==='입찰' && miss>0) html+=chip('bid_missing','(미입력 '+miss+'건)','#dc2626',_bidMissing);
     });
+    // 둘째 줄: 전체 물건(? 포함) · 회원 수 · 담당자별 m_name_id 카운트
+    var mgrCnt={}, memberSet={};
+    items.forEach(function(it){ var mn=String(it.m_name_id||'').trim()||'(미지정)'; mgrCnt[mn]=(mgrCnt[mn]||0)+1; var mem=_parseMName(it.member_name,it.member_id).member; if(mem) memberSet[mem]=1; });
+    var mgrParts=Object.keys(mgrCnt).sort().map(function(k){ var md=(typeof _mgrDisplay==='function')?_mgrDisplay(k):{disp:k,color:'#0e7490'}; return '<span style="color:'+md.color+';font-weight:700">'+esc(md.disp)+'</span> '+mgrCnt[k]; });
+    html+='<span style="flex-basis:100%;height:0"></span>'
+      +'<span style="font-weight:800;color:#111827">물건 '+items.length+'건</span>'
+      +'<span style="color:#cbd5e1">·</span><span style="color:#374151">회원 '+Object.keys(memberSet).length+'명</span>'
+      +'<span style="color:#cbd5e1">|</span><span style="color:#64748b;font-weight:600">담당자</span> '+mgrParts.join('<span style="color:#e5e7eb">·</span>');
     bar.innerHTML=html;
   }
   DM.summaryFilter=function(key){
@@ -1104,9 +1113,12 @@
       var c={본인:0,개인:0,법인:0}; m.items.forEach(function(it){ var g=_parseMName(it.member_name,it.member_id).gubun; if(c[g]!==undefined) c[g]++; });
       var cnt=[]; if(c.본인) cnt.push('<span style="color:#2563eb">본인 '+c.본인+'</span>'); if(c.개인) cnt.push('<span style="color:#16a34a">개인 '+c.개인+'</span>'); if(c.법인) cnt.push('<span style="color:#9333ea">법인 '+c.법인+'</span>');
       var grade=(m.items[0]&&m.items[0].grade)||'';
-      return '<div onclick="DM.msgFocus('+gi+')" style="background:'+(foc?'#eef2ff':'#fff')+';border:1px solid '+(foc?'#4f46e5':'#e5e7eb')+';border-radius:9px;margin-bottom:9px;padding:9px 11px;cursor:pointer">'
+      var tg=m.items.some(function(it){ return String(it.tg)==='Y'; });
+      var cardStyle=foc ? 'background:#bfdbfe;border:1px solid #2563eb;box-shadow:inset 0 0 0 1px #2563eb,0 1px 4px rgba(37,99,235,.25)' : 'background:#fff;border:1px solid #e5e7eb';
+      return '<div onclick="DM.msgFocus('+gi+')" style="'+cardStyle+';border-radius:9px;margin-bottom:9px;padding:9px 11px;cursor:pointer">'
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
         +  '<input type="checkbox" class="dm-msg-cb" data-gi="'+gi+'"'+(_msgSel[gi]?' checked':'')+' onclick="event.stopPropagation()" onchange="DM.msgUpdateSel()">'
+        +  (tg?'<span title="텔레그램 사용" style="font-size:10px;font-weight:800;color:#fff;background:#229ED9;border-radius:4px;padding:1px 5px">T</span>':'')
         +  '<span style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</span>'
         +  (grade?('<span style="font-size:11px;color:#0e7490;font-weight:700">'+esc(grade)+'</span>'):'')
         +  '<span style="font-size:11px;color:#475569;font-weight:600">물건 '+esc(mulNos)+'</span>'
@@ -1171,7 +1183,7 @@
     var bidRows=m.items.map(function(it,i){ return '<tr><td style="color:'+_msgMyungColor(it)+';font-weight:700;text-align:center">'+esc(_msgMyungLabel(it))+'</td><td style="text-align:center">'+esc(it.mulgeon_no||'')+'</td><td class="rnum hl-y">'+_won(it.bidprice)+'</td><td class="rnum">'+_won(it.deposit)+'</td><td class="rnum">'+_won(fees[i])+'</td></tr>'; }).join('');
     var bcw=_loadBidColW(), bsum=bcw.reduce(function(a,b){return a+b;},0);
     var bidTable='<table class="rsub" style="width:'+bsum+'px"><colgroup>'+bcw.map(function(w){return '<col style="width:'+w+'px">';}).join('')+'</colgroup>'
-      +'<thead><tr>'+['명의','물건','입찰가','보증금','진행비'].map(function(h,ci){ return '<th>'+h+(ci<4?'<span class="bgrip" data-ci="'+ci+'"></span>':'')+'</th>'; }).join('')+'</tr></thead><tbody>'+bidRows+'</tbody>'
+      +'<thead><tr>'+['명의','물건','입찰가','보증금','진행비'].map(function(h,ci){ return '<th>'+h+'<span class="bgrip" data-ci="'+ci+'"></span></th>'; }).join('')+'</tr></thead><tbody>'+bidRows+'</tbody>'
       +'<tfoot><tr><td colspan="2">합계</td><td class="rnum">'+_won(sumBid)+'</td><td class="rnum">'+_won(sumDep)+'</td><td class="rnum">'+_won(sumFee)+'</td></tr>'
       +'<tr class="rtot"><td colspan="4">총 비용(보증금+진행비)</td><td class="rnum">'+_won(sumDep+sumFee)+'원</td></tr></tfoot></table>';
     var body='';
@@ -1318,9 +1330,14 @@
       })();
     });
   };
-  DM.msgSend=function(){
+  DM.msgSendTelegram=function(){
     var sel=_msgSelected(); if(!sel.length){ alert('회원을 선택하세요.'); return; }
-    alert('실제 카카오 전송 연결은 다음 단계입니다.\n지금은 [📄 보고서 보기]에서 회원별 보고서를 확인하고, 각 보고서의 [📋 텍스트 복사]로 카카오에 붙여넣어 보낼 수 있습니다.\n선택: '+sel.length+'명');
+    var tgN=sel.filter(function(m){ return m.items.some(function(it){return String(it.tg)==='Y';}); }).length;
+    alert('[텔레그램 전송] 연결은 다음 단계입니다.\n선택 '+sel.length+'명 중 텔레그램 사용(T) '+tgN+'명.\n지금은 [📷 이미지]/[💾 분할]/[📋 텍스트]로 보고서를 받아 전송할 수 있습니다.');
+  };
+  DM.msgSendKakao=function(){
+    var sel=_msgSelected(); if(!sel.length){ alert('회원을 선택하세요.'); return; }
+    alert('[카카오 전송] 연결은 다음 단계입니다.\n선택 '+sel.length+'명.\n지금은 [📷 이미지](클립보드)/[💾 분할](앨범)/[📋 텍스트]로 카톡에 붙여넣어 보낼 수 있습니다.');
   };
   DM.bulkOpenModal = function(){
     var act=(document.getElementById('dmBulkAction')||{}).value||'';
