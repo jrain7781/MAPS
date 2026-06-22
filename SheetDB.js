@@ -1317,7 +1317,10 @@ function getDamulgeonList() {
       });
       g.items.sort(function(x, y) { return (parseInt(x.mulgeon_no, 10) || 0) - (parseInt(y.mulgeon_no, 10) || 0); });
       g.count = g.items.length;
-      g.address_base = _dmBaseAddress_(g.items[0] && g.items[0].address);
+      // 대표 물건 = '주소 있는' 첫 물건 (더미 (?) 물건은 크롤 주소가 없어 대표에서 제외)
+      var _repAddr = '';
+      for (var _ri = 0; _ri < g.items.length; _ri++) { var _a = String(g.items[_ri].address || '').trim(); if (_a) { _repAddr = g.items[_ri].address; break; } }
+      g.address_base = _dmBaseAddress_(_repAddr);
     });
     kept.sort(function(a, b) {
       if (a.in_date !== b.in_date) return a.in_date < b.in_date ? -1 : 1;

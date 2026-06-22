@@ -260,7 +260,7 @@
         +   '</span>'
         + '</div>'
         + '<div style="font-size:11px;color:#6b7280;margin-top:2px">'+esc(g.in_date)+' · '+esc(g.court)+'</div>'
-        + '<div style="font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(g.address_base||'')+'">'+esc(g.address_base||'')+'</div>'
+        + '<div style="font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(g.address_base||'')+'">'+esc(g.address_base||'')+'</div>'
         + '</li>';
     }).join('');
   }
@@ -790,7 +790,8 @@
       return;
     }
     _computeFees(g.items);   // 진행비 자동계산(회원 등록분)
-    var addrFull = _addrBase((g.items[0]&&g.items[0].address) || g.address_base || '');  // 동/층/호 + 조사내용 제거, 전체 표시
+    var _repA=''; for(var _ri=0;_ri<g.items.length;_ri++){ if(String(g.items[_ri].address||'').trim()){ _repA=g.items[_ri].address; break; } }   // 대표=주소 있는 첫 물건(더미 제외)
+    var addrFull = _addrBase(_repA || g.address_base || '');  // 동/층/호 + 조사내용 제거, 전체 표시
     if (head) head.innerHTML =
       '<div style="display:flex;align-items:baseline;gap:10px;white-space:nowrap;overflow-x:auto">'
       +   '<span style="font-size:17px;font-weight:800;color:#111827;flex-shrink:0">'+esc(g.sakun_base)+'</span>'
