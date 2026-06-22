@@ -1002,6 +1002,87 @@
   var _bulkAct='', _bulkTgts=[], _acItems=[];
   var _bidMethod='pct', _bidWon=0;   // 입찰가 방식(pct/direct/plus) + 위젯 환산 원값
   function _bulkLabel(a){ return {member:'회원',myungui:'명의',bidprice:'입찰가(최저%)',jinhaengbi:'진행비',hyang:'향',daeriin:'입찰대리인',auth_method:'인증'}[a]||a; }
+  // ===== 입찰안내 메세지 모달 (회원별 입찰 요약 + 선택 전송) =====
+  var _msgGroups=[], _msgCtx={};
+  function _won(n){ n=_num(n); return n?n.toLocaleString('ko-KR'):'0'; }
+  DM.openMsgModal = function(targets){
+    var g0=targets[0]||{}, court=_courtParse(g0.court||'');
+    _msgCtx={ court:String(g0.court||''), courtFull:(esc(court.bon)+'법원'+(court.support?(' '+esc(court.support)+'지원'):'')), sakun:_sakunBase(g0.sakun_no||''), bidDate:_bidDateStr(g0.in_date) };
+    var sb=document.getElementById('dmMsgSakun'); if(sb) sb.textContent=_msgCtx.sakun+' · '+_msgCtx.court+' · 입찰일 '+(g0.in_date||'');
+    // 회원별 그룹
+    var map={};
+    targets.forEach(function(it){
+      var pm=_parseMName(it.member_name, it.member_id);
+      var key=String(it.member_id||'').trim()||('nm:'+(pm.member||'(미지정)'));
+      if(!map[key]) map[key]={ key:key, member:pm.member||'(미지정)', member_id:String(it.member_id||''), gubun:pm.gubun||'본인', myungui:pm.myungui||'', items:[] };
+      map[key].items.push(it);
+      if(pm.gubun==='법인') map[key].gubun='법인';   // 법인 섞이면 법인 우선
+    });
+    _msgGroups=Object.keys(map).map(function(k){ var m=map[k]; m.items.sort(function(a,b){return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0);}); return m; });
+    var cnt=document.getElementById('dmMsgCnt'); if(cnt) cnt.textContent='· 회원 '+_msgGroups.length+'명 / 물건 '+targets.length+'건';
+    var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=false;
+    _renderMsgModal();
+    var mo=document.getElementById('dmMsgModal'); if(mo) mo.classList.remove('content-hidden');
+    _msgUpdateSelCnt();
+  };
+  function _msgSums(m){ var b=0,d=0,f=0; m.items.forEach(function(it){ b+=_num(it.bidprice); d+=_num(it.deposit); f+=_num(it._fee); }); return { bid:b, dep:d, fee:f, total:d+f }; }
+  function _renderMsgModal(){
+    var box=document.getElementById('dmMsgList'); if(!box) return;
+    box.innerHTML=_msgGroups.map(function(m,gi){
+      var s=_msgSums(m);
+      var rows=m.items.map(function(it){
+        return '<tr><td style="padding:3px 9px;border-bottom:1px solid #f1f5f9">'+esc(it.mulgeon_no||'')+'</td>'
+          +'<td style="padding:3px 9px;border-bottom:1px solid #f1f5f9;text-align:right">'+_won(it.bidprice)+'</td>'
+          +'<td style="padding:3px 9px;border-bottom:1px solid #f1f5f9;text-align:right">'+_won(it.deposit)+'</td>'
+          +'<td style="padding:3px 9px;border-bottom:1px solid #f1f5f9;text-align:right">'+_won(it._fee)+'</td></tr>';
+      }).join('');
+      var gcol=({'본인':'#2563eb','개인':'#16a34a','법인':'#9333ea'})[m.gubun]||'#64748b';
+      return '<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;overflow:hidden">'
+        +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #eef2f7">'
+        +  '<input type="checkbox" class="dm-msg-cb" data-gi="'+gi+'" onchange="DM.msgUpdateSel()">'
+        +  '<span style="font-size:15px;font-weight:800;color:#111827">'+esc(m.member)+'</span>'
+        +  (m.myungui?('<span style="font-size:12px;color:#475569">'+esc(m.myungui)+'</span>'):'')
+        +  '<span style="font-size:12px;color:'+gcol+';background:'+gcol+'1a;border:1px solid '+gcol+'66;padding:1px 9px;border-radius:11px;font-weight:700">'+esc(m.gubun)+'</span>'
+        +  '<span style="font-size:12px;color:#6b7280">'+m.items.length+'물건</span>'
+        +  '<span style="margin-left:auto;font-size:14px;font-weight:800;color:#dc2626">총비용 '+_won(s.total)+'원</span>'
+        +'</div>'
+        +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +  '<thead><tr style="background:#fafafa;color:#6b7280"><th style="padding:4px 9px;text-align:left;width:70px">물건</th><th style="padding:4px 9px;text-align:right">입찰가</th><th style="padding:4px 9px;text-align:right">보증금</th><th style="padding:4px 9px;text-align:right">진행비</th></tr></thead>'
+        +  '<tbody>'+rows+'</tbody>'
+        +  '<tfoot><tr style="font-weight:800;background:#f8fafc"><td style="padding:4px 9px">합계</td><td style="padding:4px 9px;text-align:right">'+_won(s.bid)+'</td><td style="padding:4px 9px;text-align:right">'+_won(s.dep)+'</td><td style="padding:4px 9px;text-align:right">'+_won(s.fee)+'</td></tr></tfoot>'
+        +'</table></div>';
+    }).join('') || '<div style="color:#9ca3af;padding:20px;text-align:center">선택된 물건의 회원이 없습니다.</div>';
+  }
+  DM.msgUpdateSel=function(){ _msgUpdateSelCnt(); };
+  function _msgUpdateSelCnt(){ var n=document.querySelectorAll('#dmMsgList .dm-msg-cb:checked').length; var e=document.getElementById('dmMsgSelCnt'); if(e) e.textContent='선택 '+n+'명'; }
+  DM.msgSelectAll=function(el){ var on=!!(el&&el.checked); var cbs=document.querySelectorAll('#dmMsgList .dm-msg-cb'); for(var i=0;i<cbs.length;i++) cbs[i].checked=on; _msgUpdateSelCnt(); };
+  DM.msgClose=function(){ var mo=document.getElementById('dmMsgModal'); if(mo) mo.classList.add('content-hidden'); };
+  function _msgSelected(){ var out=[]; var cbs=document.querySelectorAll('#dmMsgList .dm-msg-cb:checked'); for(var i=0;i<cbs.length;i++){ var gi=parseInt(cbs[i].getAttribute('data-gi'),10); if(_msgGroups[gi]) out.push(_msgGroups[gi]); } return out; }
+  function _composeMsg(m){
+    var L=[];
+    L.push('['+_msgCtx.court+' 입찰 안내] '+m.member+'님'+(m.myungui?(' ('+m.myungui+')'):'')+' / 명의 '+m.gubun);
+    L.push(_msgCtx.courtFull+' '+_msgCtx.sakun);
+    L.push('입찰일 '+_msgCtx.bidDate);
+    L.push('');
+    m.items.forEach(function(it){ L.push('▪ 물건 '+(it.mulgeon_no||'')+' : 입찰가 '+_won(it.bidprice)+' / 보증금 '+_won(it.deposit)+' / 진행비 '+_won(it._fee)); });
+    var s=_msgSums(m);
+    L.push('');
+    L.push('합계  입찰가 '+_won(s.bid)+' / 보증금 '+_won(s.dep)+' / 진행비 '+_won(s.fee));
+    L.push('▶ 총 비용(보증금+진행비) '+_won(s.total)+'원');
+    return L.join('\n');
+  }
+  DM.msgPreview=function(){
+    var sel=_msgSelected(); if(!sel.length){ alert('전송할 회원을 선택하세요.'); return; }
+    var method=(document.getElementById('dmMsgMethod')||{}).value||'text';
+    var body=document.getElementById('dmMsgPreviewBody');
+    body.innerHTML=sel.map(function(m){ return '<pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin:0 0 12px">'+esc(_composeMsg(m))+'</pre>'; }).join('')
+      + '<div style="font-size:12px;color:#6b7280">전송방식: '+(method==='image'?'이미지 카드':'텍스트')+' · '+sel.length+'명</div>';
+    document.getElementById('dmMsgPreview').classList.remove('content-hidden');
+  };
+  DM.msgSend=function(){
+    var sel=_msgSelected(); if(!sel.length){ alert('전송할 회원을 선택하세요.'); return; }
+    alert('카카오 전송은 다음 단계에서 연결합니다(채널/템플릿 또는 이미지카드). 지금은 [미리보기]로 내용 확인 가능합니다.\n선택: '+sel.length+'명');
+  };
   DM.bulkOpenModal = function(){
     var act=(document.getElementById('dmBulkAction')||{}).value||'';
     if(!act){ alert('일괄작업을 선택하세요.'); return; }
@@ -1009,6 +1090,7 @@
     if(!ids.length){ alert('그리드에서 체크박스로 물건을 선택하세요.'); return; }
     var targets=curItems().filter(function(it){ return ids.indexOf(it.link_item_id)>=0; });
     if(!targets.length){ alert('선택된 물건이 없습니다.'); return; }
+    if(act==='message'){ DM.openMsgModal(targets); return; }   // 입찰안내 메세지 = 별도 큰 모달
     _bulkAct=act; _bulkTgts=targets;
     var lab=document.getElementById('dmBulkActLabel'); if(lab) lab.textContent=_bulkLabel(act);
     var lc=document.getElementById('dmBulkListCnt'); if(lc) lc.textContent=targets.length+'건';
