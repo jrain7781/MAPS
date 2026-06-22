@@ -200,8 +200,7 @@
         _loading = false;
         if (!res || !res.success) { if(list) list.innerHTML='<li style="color:#ef4444;font-size:12px;padding:12px">로드 실패: '+esc(res&&res.message||'?')+'</li>'; return; }
         _groups = res.groups || [];
-        _filtered = _groups.slice();
-        renderList();
+        DM.filterList((document.getElementById('dmSearch')||{}).value||'');   // 즐겨찾기(_favOnly)+검색 필터 반영 — 새로고침/재진입 시 즐겨찾기만 유지
         if (_selKey && _groups.some(function(g){return g.group_key===_selKey;})) selectGroup(_selKey);
         else if (_filtered.length) selectGroup(_filtered[0].group_key);
         else renderDetail(null);
@@ -249,7 +248,7 @@
       return '<li onclick="DM.select(\''+esc(g.group_key)+'\')" '
         + 'style="padding:7px 9px;margin-bottom:5px;border-radius:6px;cursor:pointer;border:1px solid '+(sel?'#2563eb':'#e5e7eb')+';background:'+(sel?'#bfdbfe':'#fff')+(sel?';box-shadow:inset 0 0 0 1px #2563eb,0 1px 4px rgba(37,99,235,.25)':'')+'">'
         + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">'
-        +   '<span style="font-weight:700;color:#1f2937">'+esc(g.sakun_base)+'<span onclick="DM.toggleFav(\''+esc(_favKey(g))+'\',event)" title="즐겨찾기" style="cursor:pointer;margin-left:5px;font-size:13px;color:'+(_isFav(g)?'#ef4444':'#cbd5e1')+'">'+(_isFav(g)?'♥':'♡')+'</span></span>'
+        +   '<span style="font-weight:700;color:#1f2937">'+esc(g.sakun_base)+'<span onclick="DM.toggleFav(\''+esc(_favKey(g))+'\',event)" title="즐겨찾기" style="cursor:pointer;margin-left:6px;font-size:17px;line-height:1;color:'+(_isFav(g)?'#ef4444':'#cbd5e1')+'">'+(_isFav(g)?'♥':'♡')+'</span></span>'
         +   '<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0">'
         +     '<span style="font-size:11px;padding:1px 6px;border-radius:9px;background:#fef3c7;color:#92400e;font-weight:700">'+g.count+'물건</span>'
         +     (mgr? (function(){ var md=_mgrDisplay(mgr); return '<span style="font-size:11px;color:'+md.color+';font-weight:700">'+esc(md.disp)+'</span>'; })() : '')   // 담당자(본인 색상) = 물건카운트 아래
