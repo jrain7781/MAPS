@@ -2288,35 +2288,34 @@
 
                 <!-- 입찰안내 메세지 모달 (큰 모달 — 회원별 입찰 요약 + 선택 전송) -->
                 <div id="dmMsgModal" class="content-hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:55;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)DM.msgClose()">
-                    <div style="background:#fff;border-radius:12px;width:960px;max-width:96vw;height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 50px rgba(0,0,0,.35)">
+                    <div style="background:#fff;border-radius:12px;width:1180px;max-width:97vw;height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 50px rgba(0,0,0,.35)">
                         <div style="padding:13px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:10px;flex-shrink:0">
                             <h3 style="font-size:17px;font-weight:800;color:#111827">📨 입찰안내 메세지</h3>
                             <span id="dmMsgSakun" style="font-size:13px;color:#1d4ed8;font-weight:700"></span>
                             <span id="dmMsgCnt" style="font-size:12px;color:#6b7280"></span>
-                            <button onclick="DM.msgClose()" style="margin-left:auto;border:0;background:transparent;font-size:20px;color:#64748b;cursor:pointer">✕</button>
-                        </div>
-                        <div style="padding:8px 18px;border-bottom:1px solid #eef2f7;display:flex;align-items:center;gap:12px;flex-shrink:0;background:#f8fafc">
-                            <label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:600"><input type="checkbox" id="dmMsgSelectAll" onchange="DM.msgSelectAll(this)"> 전체 회원 선택</label>
+                            <label style="font-size:13px;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:600;margin-left:14px"><input type="checkbox" id="dmMsgSelectAll" onchange="DM.msgSelectAll(this)"> 전체선택</label>
                             <span id="dmMsgSelCnt" style="font-size:12px;color:#6b7280"></span>
-                            <button onclick="DM.msgPreview()" class="px-4 py-1 rounded font-bold text-white" style="font-size:13px;font-weight:700;background:#4f46e5;margin-left:auto">📄 보고서 보기</button>
-                            <button id="dmMsgSendBtn" onclick="DM.msgSend()" class="px-4 py-1 rounded font-bold text-white" style="font-size:13px;background:#16a34a">전송</button>
+                            <button id="dmMsgSendBtn" onclick="DM.msgSend()" class="px-4 py-1 rounded font-bold text-white" style="font-size:13px;background:#16a34a;margin-left:auto">전송</button>
+                            <button onclick="DM.msgClose()" style="border:0;background:transparent;font-size:20px;color:#64748b;cursor:pointer">✕</button>
                         </div>
-                        <div style="padding:6px 18px;border-bottom:1px solid #eef2f7;display:flex;align-items:center;gap:14px;flex-shrink:0;flex-wrap:wrap;background:#fff">
+                        <div style="padding:7px 18px;border-bottom:1px solid #eef2f7;display:flex;align-items:center;gap:16px;flex-shrink:0;flex-wrap:wrap;background:#f8fafc">
                             <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:600"><input type="checkbox" id="dmMsgFeeConsol" onchange="DM.msgRerender()"> 진행비 대표물건 통합</label>
-                            <label style="font-size:12px;display:flex;align-items:center;gap:4px">서류제출 기한 <input id="dmMsgDue1" type="text" placeholder="예: 20251017 오후 3시" class="border rounded px-2 py-1" style="width:160px;font-size:12px" onfocus="this.select()"></label>
-                            <label style="font-size:12px;display:flex;align-items:center;gap:4px">보증금송금 기한 <input id="dmMsgDue2" type="text" placeholder="예: 20251017 오후 1시" class="border rounded px-2 py-1" style="width:160px;font-size:12px" onfocus="this.select()"></label>
+                            <span style="font-size:12px;display:flex;align-items:center;gap:5px">📄 서류제출
+                                <input id="dmMsgDue1Date" type="date" class="border rounded px-1 py-1" style="font-size:12px" onchange="DM.msgDueChg()">
+                                <select id="dmMsgDue1Time" class="border rounded px-1 py-1" style="font-size:12px" onchange="DM.msgDueChg()"><option value="">시간</option><option value="08:00">오전 8시</option><option value="09:00">오전 9시</option><option value="10:00">오전 10시</option><option value="11:00">오전 11시</option><option value="12:00">오후 12시</option><option value="13:00">오후 1시</option><option value="14:00">오후 2시</option><option value="15:00">오후 3시</option><option value="16:00">오후 4시</option><option value="17:00">오후 5시</option><option value="18:00">오후 6시</option><option value="19:00">오후 7시</option><option value="20:00">오후 8시</option></select>
+                            </span>
+                            <span style="font-size:12px;display:flex;align-items:center;gap:5px">💰 보증금송금
+                                <label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" id="dmMsgDue2Same" onchange="DM.msgDueSame(this)"> 서류제출과 동일</label>
+                                <input id="dmMsgDue2Date" type="date" class="border rounded px-1 py-1" style="font-size:12px" onchange="DM.msgDueChg()">
+                                <select id="dmMsgDue2Time" class="border rounded px-1 py-1" style="font-size:12px" onchange="DM.msgDueChg()"><option value="">시간</option><option value="08:00">오전 8시</option><option value="09:00">오전 9시</option><option value="10:00">오전 10시</option><option value="11:00">오전 11시</option><option value="12:00">오후 12시</option><option value="13:00">오후 1시</option><option value="14:00">오후 2시</option><option value="15:00">오후 3시</option><option value="16:00">오후 4시</option><option value="17:00">오후 5시</option><option value="18:00">오후 6시</option><option value="19:00">오후 7시</option><option value="20:00">오후 8시</option></select>
+                            </span>
                         </div>
-                        <div id="dmMsgList" style="flex:1;overflow:auto;padding:14px 18px;background:#f9fafb"></div>
+                        <div style="flex:1;display:flex;overflow:hidden">
+                            <div id="dmMsgList" style="width:340px;flex-shrink:0;overflow:auto;padding:12px;background:#f9fafb;border-right:1px solid #e5e7eb"></div>
+                            <div id="dmMsgReport" style="flex:1;overflow:auto;padding:16px;background:#fff"></div>
+                        </div>
                     </div>
                 </div>
-                <!-- 미리보기 패널 -->
-                <div id="dmMsgPreview" class="content-hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.classList.add('content-hidden')">
-                    <div style="background:#fff;border-radius:10px;width:760px;max-width:96vw;height:90vh;display:flex;flex-direction:column">
-                        <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center"><b style="font-size:15px">📄 입찰안내 보고서</b><span style="font-size:12px;color:#6b7280;margin-left:8px">각 보고서 [텍스트 복사]로 카카오 붙여넣기</span><button onclick="document.getElementById('dmMsgPreview').classList.add('content-hidden')" style="margin-left:auto;border:0;background:transparent;font-size:18px;cursor:pointer">✕</button></div>
-                        <div id="dmMsgPreviewBody" style="flex:1;overflow:auto;padding:16px;background:#f9fafb"></div>
-                    </div>
-                </div>
-            </div>
 
             <!-- ================================ 조사물건 관리 (SearchManagement) — 구버전 (비활성, 코드 안전 보존용) ================================ -->
             <div id="SearchManagement" class="tab-content h-full flex flex-col content-hidden bg-white overflow-hidden">
