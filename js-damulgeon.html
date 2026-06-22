@@ -217,6 +217,11 @@
     return out;
   }
   function _firstMgr(g){ return (g.items && g.items.length) ? (g.items[0].m_name_id||'') : ''; }  // 가장 빠른 물건번호(정렬됨)의 담당자
+  function _repDaeriin(g){   // 대표 입찰대리인 = 사건 물건들 중 최빈 daeriin(동률이면 먼저 나온 것)
+    var cnt={}, best='', bestN=0;
+    (g.items||[]).forEach(function(it){ var d=String(it.daeriin||'').trim(); if(!d) return; cnt[d]=(cnt[d]||0)+1; if(cnt[d]>bestN){ bestN=cnt[d]; best=d; } });
+    return best;
+  }
   // 담당자 표시/색상 — 회원관리 강사 teacher_color (전부쌤/대표님 등 본인 색상)
   function _mgrDisplay(mgr){
     var d=mgr, c='#0e7490';
@@ -300,7 +305,12 @@
         +   '</span>'
         + '</div>'
         + '<div style="font-size:11px;color:#6b7280;margin-top:2px">'+esc(g.in_date)+' · '+esc(g.court)+'</div>'
-        + '<div style="font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(g.address_base||'')+'">'+esc(_shortAddr(g.address_base))+'</div>'
+        + (function(){ var rd=_repDaeriin(g);
+            return '<div style="display:flex;align-items:center;gap:6px;margin-top:2px">'
+              + '<span style="font-size:11px;color:#2563eb;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="'+esc(g.address_base||'')+'">'+esc(_shortAddr(g.address_base))+'</span>'
+              + (rd? '<span title="대표 입찰대리인" style="flex-shrink:0;font-size:11px;font-weight:800;color:#7c2d12;background:#fde68a;border:1px solid #f59e0b;padding:1px 7px;border-radius:8px;white-space:nowrap">🧑‍⚖️ '+esc(rd)+'</span>' : '')
+              + '</div>';
+          })()
         + '</li>';
     }).join('');
   }
