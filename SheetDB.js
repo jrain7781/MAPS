@@ -513,7 +513,7 @@ function _createDataImpl(inDate, sakunNo, court, stuMember, mNameId, mName, bidP
  */
 function _normSakunBase_(s) {
   s = String(s || '').trim().replace(/\s+/g, '');
-  s = s.replace(/\(\d+\)\s*$/, '');   // 끝의 (물건번호) 제거
+  s = s.replace(/\([^)]*\)\s*$/, '');   // 끝의 (물건번호) 제거 — (6)·(?1) 등 임의등록(물음표) 포함
   return s;
 }
 
@@ -1193,8 +1193,8 @@ function _ensureDamulgeonHeader_(sheet) {
 
 // 물건번호 추출: '2023타경919(4)' → '4'
 function _dmMulgeonNo_(sakun) {
-  var m = String(sakun || '').match(/\((\d+)\)\s*$/);
-  return m ? m[1] : '';
+  var m = String(sakun || '').match(/\(([^)]+)\)\s*$/);   // (6)·(?1) 등 — 임의등록(물음표) 포함
+  return m ? m[1].trim() : '';
 }
 
 // 주소 → 동/층/호수 파싱 (초안, Phase F 에서 정교화). 법정동(전포동 등)은 동으로 안 잡음(숫자+동만).
