@@ -1230,7 +1230,7 @@ function readAllDamulgeon() {
       o[h] = String(v == null ? '' : v).trim();
     });
     return o;
-  }).filter(function(r) { return r.link_item_id; });
+  }).filter(function(r) { return r.link_item_id || (r.in_date && r.sakun_no && r.court); });   // 3키만 있어도 유효(일괄저장 신규행은 link_item_id 비어있음)
 }
 
 /**
@@ -1353,37 +1353,43 @@ function bulkSaveDamulgeon(rows) {
   try { __lock.waitLock(20000); } catch (e) { return { success: false, message: '저장이 혼잡합니다. 잠시 후 다시 시도해 주세요.' }; }
   try {
     rows = Array.isArray(rows) ? rows : (rows ? [rows] : []);
-    if (!rows.length) return { success: true, saved: 0, added: 0, updated: 0 };
     var sheet = _getDamulgeonSheet_();
     var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    // 1) 기존 전체를 3키로 병합(중복행 자동 합치기 — 행 순서상 뒤=최신, 비어있지 않은 값 우선 → 값 손실 없이 dedup)
     var existing = readAllDamulgeon();
-    var keyToRow = {};
-    existing.forEach(function(e, i) { keyToRow[_dmKey3_(e.in_date, e.sakun_no, e.court)] = i + 2; });
+    var byKey = {}, order = [], dupCollapsed = 0;
+    existing.forEach(function(e) {
+      var key = _dmKey3_(e.in_date, e.sakun_no, e.court);
+      if (!byKey[key]) { byKey[key] = e; order.push(key); }
+      else { DAMULGEON_HEADERS.forEach(function(h) { if (e[h] !== undefined && e[h] !== '') byKey[key][h] = e[h]; }); dupCollapsed++; }
+    });
+    // 2) 들어온 수정 적용 (3키 매칭 → 기존행 갱신, 없으면 신규)
     var saved = 0, added = 0, updated = 0;
     rows.forEach(function(row) {
       var inDate = String(row.in_date || '').trim(), sakun = String(row.sakun_no || '').trim(), court = String(row.court || '').trim();
       if (!inDate || !sakun || !court) return;   // 3키 필수
       var key = _dmKey3_(inDate, sakun, court);
-      var rowNum = keyToRow[key];
-      var prev = rowNum ? existing[rowNum - 2] : null;
-      var obj = {};
+      var obj = byKey[key];
+      if (!obj) { obj = {}; DAMULGEON_HEADERS.forEach(function(h) { obj[h] = ''; }); obj.in_date = inDate; obj.sakun_no = sakun; obj.court = court; obj.reg_date = now; byKey[key] = obj; order.push(key); added++; }
+      else updated++;
       DAMULGEON_HEADERS.forEach(function(h) {
         if (h === 'in_date') { obj[h] = inDate; return; }
         if (h === 'sakun_no') { obj[h] = sakun; return; }
         if (h === 'court') { obj[h] = court; return; }
         if (h === 'update_date') { obj[h] = now; return; }
-        if (h === 'reg_date') { obj[h] = (prev && prev.reg_date) ? prev.reg_date : now; return; }
-        if (row[h] !== undefined && row[h] !== null) obj[h] = String(row[h]);
-        else if (prev) obj[h] = prev[h] || '';
-        else obj[h] = '';
+        if (h === 'reg_date') { if (!obj[h]) obj[h] = now; return; }
+        if (row[h] !== undefined && row[h] !== null) obj[h] = String(row[h]);   // 지정 필드만 갱신, 나머지는 기존 보존
       });
-      var arr = DAMULGEON_HEADERS.map(function(h) { return obj[h]; });
-      if (rowNum) { sheet.getRange(rowNum, 1, 1, DAMULGEON_HEADERS.length).setValues([arr]); updated++; }
-      else { sheet.appendRow(arr); keyToRow[key] = sheet.getLastRow(); existing.push(obj); added++; }
       saved++;
     });
+    // 3) 시트 데이터영역 재기록 (3키당 1행 — 헤더/서식 보존)
+    var lastRow = sheet.getLastRow();
+    if (lastRow >= 2) sheet.getRange(2, 1, lastRow - 1, DAMULGEON_HEADERS.length).clearContent();
+    var out = order.map(function(k) { var o = byKey[k]; return DAMULGEON_HEADERS.map(function(h) { return (o[h] != null) ? o[h] : ''; }); });
+    if (out.length) sheet.getRange(2, 1, out.length, DAMULGEON_HEADERS.length).setValues(out);
     SpreadsheetApp.flush();
-    return { success: true, saved: saved, added: added, updated: updated };
+    if (dupCollapsed) Logger.log('[bulkSaveDamulgeon] 중복 %s행 병합 정리', dupCollapsed);
+    return { success: true, saved: saved, added: added, updated: updated, dupCollapsed: dupCollapsed };
   } catch (e) {
     Logger.log('[bulkSaveDamulgeon] ' + e);
     return { success: false, message: String(e) };
@@ -1391,6 +1397,9 @@ function bulkSaveDamulgeon(rows) {
 }
 
 function saveDamulgeonRow(row) { return bulkSaveDamulgeon([row]); }
+
+/** [다물건] damulgeon 시트 중복(3키) 1행으로 일괄 병합 정리 — 값 손실 없이. (빈 rows 저장 = 전체 dedup 재기록) */
+function dedupeDamulgeonSheet() { var r = bulkSaveDamulgeon([]); Logger.log('[dedupeDamulgeonSheet] %s', JSON.stringify(r)); return r; }
 
 /** [다물건] 입찰가 인라인 저장 → items.bidprice (3키로 행 찾음). 상태/회원 등 다른 필드는 안 건드림. */
 function saveDamulgeonItemBid(inDate, sakun, court, bidprice) {

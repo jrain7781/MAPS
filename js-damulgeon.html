@@ -242,7 +242,7 @@
         _loading = false;
         if (!res || !res.success) { if(!hadCache && list) list.innerHTML='<li style="color:#ef4444;font-size:12px;padding:12px">로드 실패: '+esc(res&&res.message||'?')+'</li>'; return; }
         _groups = res.groups || [];
-        try{ localStorage.setItem('dmGroupsCache', JSON.stringify({ groups:_groups, ts:(new Date()).getTime() })); }catch(_){}   // 다음 진입 즉시표시용 캐시
+        _saveGroupsCache();   // 다음 진입 즉시표시용 캐시
         DM.filterList((document.getElementById('dmSearch')||{}).value||'');   // 즐겨찾기(_favOnly)+검색 필터 반영
         if (_selKey && _groups.some(function(g){return g.group_key===_selKey;})) selectGroup(_selKey);
         else if (_filtered.length) selectGroup(_filtered[0].group_key);
@@ -252,6 +252,7 @@
       .getDamulgeonList();
   };
 
+  function _saveGroupsCache(){ try{ localStorage.setItem('dmGroupsCache', JSON.stringify({ groups:_groups, ts:(new Date()).getTime() })); }catch(_){} }   // 그리드 캐시 즉시 갱신용
   // 수정 후 그 사건(그리드)만 빠르게 갱신 — 전체 재조회 버퍼링 없이
   DM.refreshGroup = function(key){
     key = key || _selKey; if(!key || typeof google==='undefined' || !google.script || !google.script.run) return;
@@ -263,6 +264,7 @@
       if(!res || !res.success || !res.group){ return; }
       var i=-1; for(var k=0;k<_groups.length;k++){ if(_groups[k].group_key===key){ i=k; break; } }
       if(i>=0) _groups[i]=res.group;
+      _saveGroupsCache();                                                   // 캐시도 최신화(다음 진입 즉시 정확)
       DM.filterList((document.getElementById('dmSearch')||{}).value||'');   // 좌측 갱신
       if(_selKey===key) renderDetail(res.group);                            // 우측 그리드 갱신
     }).withFailureHandler(function(){ _restore(); }).getDamulgeonGroup(key);
@@ -925,7 +927,7 @@
     if (typeof google==='undefined'||!google.script||!google.script.run) return;
     var row={ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, myungui:it.myungui, hyang:it.hyang, daeriin:it.daeriin, auth_method:it.auth_method, dm_note:it.dm_note };
     _dot('● 저장 중');
-    google.script.run.withSuccessHandler(function(){ _dot('✓ 저장됨', true); })
+    google.script.run.withSuccessHandler(function(){ _dot('✓ 저장됨', true); _saveGroupsCache(); })   // it 는 이미 in-memory 반영 → 캐시만 최신화
       .withFailureHandler(function(e){ _dot('⚠ 저장실패'); console.error('[DM aux save]',e); })
       .saveDamulgeonRow(row);
   }
