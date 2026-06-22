@@ -1478,6 +1478,8 @@
 
         const countEl = document.getElementById('extend-deadline-count');
         if (countEl) countEl.textContent = _extendDeadlineCtx_.itemIds.length;
+        const listEl0 = document.getElementById('extend-deadline-list');   // 단건 흐름은 리스트 숨김(일괄에서만 표시)
+        if (listEl0) { listEl0.classList.add('content-hidden'); listEl0.innerHTML = ''; }
 
         // 비추천 상태 → reactivate 안내 박스 표시
         const noticeBox = document.getElementById('extend-deadline-reactivate-notice');
@@ -1514,6 +1516,28 @@
     function closeExtendDeadlineModal_() {
         const modal = document.getElementById('extendDeadlineModal');
         if (modal) modal.classList.add('content-hidden');
+    }
+    // [입찰물건관리 일괄적용] 만기연장 — 체크된 물건들 → 모달(선택 리스트 만기일자 표시 + 일괄 수정)
+    function openBulkExtendDeadline_(cbs) {
+        const ids = idsFromCbs(cbs);
+        const items = ids.map(id => (typeof allBiddingData !== 'undefined' ? allBiddingData.find(x => String(x.id) === String(id)) : null)).filter(Boolean);
+        if (!items.length) { showStatus('선택 물건을 찾지 못했습니다.', 'warning'); return; }
+        const stus = items.map(x => String(x.stu_member || '').trim());
+        const anyNon = stus.some(s => s && s !== '추천');
+        const curStu = anyNon ? (stus.filter(s => s && s !== '추천')[0] || '') : '추천';   // 비추천 섞이면 재활성화 안내
+        openExtendDeadlineModal_(ids, '', curStu);   // 일괄: 단일 기준마감 없음 → +시간은 현재시각 기준
+        _renderExtendDeadlineList_(items);
+    }
+    function _renderExtendDeadlineList_(items) {
+        const box = document.getElementById('extend-deadline-list'); if (!box) return;
+        const rows = items.map(it => {
+            const bd2 = String(it.bid_datetime_2 || '').trim();
+            let cur = '(미설정)';
+            if (/^\d{10}$/.test(bd2)) { const ts = parseYymmddHHmm_(bd2); if (!isNaN(ts)) cur = fmtDReadable_(new Date(ts)); }
+            return '<div class="flex justify-between gap-2 px-2 py-1 border-b border-gray-100"><span class="text-gray-700 truncate">' + escapeHtml(it.sakun_no || '') + '</span><span class="font-mono text-gray-500 whitespace-nowrap">' + escapeHtml(cur) + '</span></div>';
+        }).join('');
+        box.innerHTML = '<div class="px-2 py-1 bg-gray-50 font-bold text-gray-600 sticky top-0">선택 물건 현재 만기일자</div>' + rows;
+        box.classList.remove('content-hidden');
     }
     function extendDeadlineApplyPreset_(hoursStr) {
         const hours = parseInt(hoursStr, 10);
@@ -22252,6 +22276,8 @@ MJ 이정우 팀장
 
         if (type === 'status') {
             openBulkStatusModal(cbs);
+        } else if (type === 'extend_deadline') {
+            openBulkExtendDeadline_(cbs);
         } else if (type === 'multi_recommend') {
             openBulkMessageModal(cbs);
         } else if (type === 'delete') {
