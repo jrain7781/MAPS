@@ -193,19 +193,24 @@
     try { _hideBasic = localStorage.getItem('dmHideBasic')==='1'; var hb=document.getElementById('dmHideBasic'); if(hb) hb.checked=_hideBasic; } catch(_){}   // 기본정보 숨기기 복원(PC별)
     loadMembers(function(){ if(_selKey) renderBody(); });   // 직원 드롭다운/텔레그램용 회원 선로드 후 그리드 갱신
     var list = document.getElementById('dmList');
-    if (list) list.innerHTML = '<li style="color:#9ca3af;font-size:12px;padding:12px">불러오는 중…</li>';
+    // 1) 캐시 즉시 표시(체감속도) — 서버 응답 오면 교체
+    var hadCache=false;
+    try{ var cc=JSON.parse(localStorage.getItem('dmGroupsCache')||'null'); if(cc&&cc.groups&&cc.groups.length){ _groups=cc.groups; hadCache=true; DM.filterList((document.getElementById('dmSearch')||{}).value||''); if(_selKey&&_groups.some(function(g){return g.group_key===_selKey;})) selectGroup(_selKey); else if(_filtered.length) selectGroup(_filtered[0].group_key); } }catch(_){}
+    if (!hadCache && list) list.innerHTML = '<li style="color:#9ca3af;font-size:12px;padding:12px">불러오는 중…</li>';
+    var lc=document.getElementById('dmListCount'); if(lc&&hadCache) lc.textContent=lc.textContent+' ⟳';
     if (typeof google === 'undefined' || !google.script || !google.script.run) { _loading=false; return; }
     google.script.run
       .withSuccessHandler(function (res) {
         _loading = false;
-        if (!res || !res.success) { if(list) list.innerHTML='<li style="color:#ef4444;font-size:12px;padding:12px">로드 실패: '+esc(res&&res.message||'?')+'</li>'; return; }
+        if (!res || !res.success) { if(!hadCache && list) list.innerHTML='<li style="color:#ef4444;font-size:12px;padding:12px">로드 실패: '+esc(res&&res.message||'?')+'</li>'; return; }
         _groups = res.groups || [];
-        DM.filterList((document.getElementById('dmSearch')||{}).value||'');   // 즐겨찾기(_favOnly)+검색 필터 반영 — 새로고침/재진입 시 즐겨찾기만 유지
+        try{ localStorage.setItem('dmGroupsCache', JSON.stringify({ groups:_groups, ts:(new Date()).getTime() })); }catch(_){}   // 다음 진입 즉시표시용 캐시
+        DM.filterList((document.getElementById('dmSearch')||{}).value||'');   // 즐겨찾기(_favOnly)+검색 필터 반영
         if (_selKey && _groups.some(function(g){return g.group_key===_selKey;})) selectGroup(_selKey);
         else if (_filtered.length) selectGroup(_filtered[0].group_key);
         else renderDetail(null);
       })
-      .withFailureHandler(function (e) { _loading=false; if(list) list.innerHTML='<li style="color:#ef4444;font-size:12px;padding:12px">오류: '+esc(e&&e.message||e)+'</li>'; })
+      .withFailureHandler(function (e) { _loading=false; if(!hadCache && list) list.innerHTML='<li style="color:#ef4444;font-size:12px;padding:12px">오류: '+esc(e&&e.message||e)+'</li>'; })
       .getDamulgeonList();
   };
 
