@@ -1339,7 +1339,8 @@
     var _mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).filter(Boolean).join(',');
     var _sp=[]; if(_shortA)_sp.push(_shortA); var _cs=((_msgCtx.court||'')+' '+(_msgCtx.sakun||'')).trim(); if(_cs)_sp.push(_cs); if(_mulNos)_sp.push('물건 '+_mulNos); if(_msgCtx.bidDate)_sp.push('입찰 '+_msgCtx.bidDate);
     var _ph=((_msgDetailFor(m, m.items[0]).principal)||{}).phone||''; var phone4=String(_ph).replace(/[^0-9]/g,'').slice(-4);
-    return { m:m, seed:seed, html:cardEl.outerHTML, title:title, summary:_sp.join(' / '), phone4:phone4, member_id:String(m.member_id||'') };
+    var _bd=String((m.items[0]&&m.items[0].in_date)||''); var _bm=_bd.match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/); var biddate=_bm?(_bm[1]+'-'+('0'+_bm[2]).slice(-2)+'-'+('0'+_bm[3]).slice(-2)):'';
+    return { m:m, seed:seed, html:cardEl.outerHTML, title:title, summary:_sp.join(' / '), phone4:phone4, member_id:String(m.member_id||''), biddate:biddate };
   }
   function _dmLinkDone(res, a, renewed){
     if(!(res&&res.url)){ alert('링크 처리 실패'); return; }
@@ -1356,7 +1357,7 @@
     if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
     google.script.run.withSuccessHandler(function(res){ _dmLinkDone(res, a, false); })
       .withFailureHandler(function(e){ alert('링크 생성 오류: '+(e&&e.message||e)); })
-      .dmGetOrCreateLink(a.seed, a.html, a.title, a.summary, a.phone4, a.member_id);
+      .dmGetOrCreateLink(a.seed, a.html, a.title, a.summary, a.phone4, a.member_id, a.biddate);
   };
   DM.revokeLink=function(gi){
     if(gi==null) gi=_msgFocusGi;
@@ -1365,7 +1366,7 @@
     if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
     google.script.run.withSuccessHandler(function(res){ _dmLinkDone(res, a, true); })
       .withFailureHandler(function(e){ alert('재발급 오류: '+(e&&e.message||e)); })
-      .dmRevokeAndRenew(a.seed, a.html, a.title, a.summary, a.phone4, a.member_id);
+      .dmRevokeAndRenew(a.seed, a.html, a.title, a.summary, a.phone4, a.member_id, a.biddate);
   };
   DM.msgCopyImage=function(gi){
     if(gi==null) gi=_msgFocusGi;

@@ -15,7 +15,7 @@ function dmLinkSheet_() {
   var sh = ss.getSheetByName(DM_LINK_SHEET);
   if (!sh) {
     sh = ss.insertSheet(DM_LINK_SHEET);
-    sh.getRange(1, 1, 1, 10).setValues([['token', 'seed', 'member_id', 'phone4', 'html', 'title', 'summary', 'status', 'fail', 'created']]);
+    sh.getRange(1, 1, 1, 11).setValues([['token', 'seed', 'member_id', 'phone4', 'html', 'title', 'summary', 'status', 'fail', 'created', 'biddate']]);
     sh.hideSheet();
   }
   return sh;
@@ -38,30 +38,39 @@ function dmFindByToken_(data, token) {
   return -1;
 }
 
+/** 입찰일자(yyyy-MM-dd) 다음날부터 만료. */
+function dmExpired_(biddate) {
+  biddate = String(biddate || '').trim();
+  if (!biddate) return false;
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return today > biddate; // 오늘이 입찰일보다 뒤 = 다음날 이후
+}
+
 /** 🔗 링크복사: 활성 링크 있으면 재사용(내용만 최신 갱신), 없으면 새로 생성. → {token,url,gated} */
-function dmGetOrCreateLink(seed, html, title, summary, phone4, member_id) {
+function dmGetOrCreateLink(seed, html, title, summary, phone4, member_id, biddate) {
   if (!seed || !html) throw new Error('데이터 부족');
   phone4 = String(phone4 || '').replace(/[^0-9]/g, '').slice(-4);
+  biddate = String(biddate || '').trim();
   var sh = dmLinkSheet_(), data = sh.getDataRange().getValues();
   var ri = dmFindActiveBySeed_(data, seed), token;
   if (ri >= 0) {
     token = String(data[ri][0]);
-    // 4 phone4, 5 html, 6 title, 7 summary, 8 status, 9 fail
-    sh.getRange(ri + 1, 4, 1, 6).setValues([[phone4, html, title || '', summary || '', 'active', 0]]);
+    sh.getRange(ri + 1, 4, 1, 6).setValues([[phone4, html, title || '', summary || '', 'active', 0]]); // 4..9
+    sh.getRange(ri + 1, 11).setValue(biddate);
   } else {
     token = dmRandToken_();
-    sh.appendRow([token, seed, member_id || '', phone4, html, title || '', summary || '', 'active', 0, new Date()]);
+    sh.appendRow([token, seed, member_id || '', phone4, html, title || '', summary || '', 'active', 0, new Date(), biddate]);
   }
-  return { token: token, url: dmLinkUrl_(token), gated: phone4.length >= 4 };
+  return { token: token, url: dmLinkUrl_(token), gated: phone4.length >= 4, expire: biddate };
 }
 
 /** 🚫 폐기·재발급: 현재 활성 링크 폐기 후 새 토큰 발급. → {token,url,gated} */
-function dmRevokeAndRenew(seed, html, title, summary, phone4, member_id) {
+function dmRevokeAndRenew(seed, html, title, summary, phone4, member_id, biddate) {
   if (!seed) throw new Error('seed 없음');
   var sh = dmLinkSheet_(), data = sh.getDataRange().getValues();
   var ri = dmFindActiveBySeed_(data, seed);
   if (ri >= 0) sh.getRange(ri + 1, 8).setValue('revoked');
-  if (html) return dmGetOrCreateLink(seed, html, title, summary, phone4, member_id);
+  if (html) return dmGetOrCreateLink(seed, html, title, summary, phone4, member_id, biddate);
   return { revoked: true };
 }
 
@@ -72,6 +81,7 @@ function dmVerifyReport(token, last4) {
   if (ri < 0) return { status: 'revoked' };
   var row = data[ri];
   if (String(row[7]) !== 'active') return { status: 'revoked' };
+  if (dmExpired_(row[10])) return { status: 'expired' };   // 입찰일 다음날 이후 자동 만료
   var phone4 = String(row[3] || '').replace(/[^0-9]/g, '');
   if (!phone4) return { status: 'ok', html: String(row[4] || ''), title: String(row[5] || '') }; // 전화 없으면 게이트 통과
   var inp = String(last4 || '').replace(/[^0-9]/g, '').slice(-4);
