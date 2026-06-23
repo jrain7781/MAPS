@@ -75,6 +75,7 @@ function doGet(e) {
         var _dmT = HtmlService.createTemplateFromFile('dm-report');
         _dmT.reportHtml = _dmRep.html;
         _dmT.reportTitle = _dmRep.title || '입찰 안내';
+        _dmT.reportDesc = _dmRep.summary || '입찰 안내 보고서';
         return _dmT.evaluate()
           .setTitle(_dmRep.title || '입찰 안내')
           .addMetaTag('viewport', 'width=device-width, initial-scale=1')

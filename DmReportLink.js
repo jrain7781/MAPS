@@ -20,7 +20,7 @@ function dmReportSheet_() {
   var sh = ss.getSheetByName(DM_REPORT_SHEET);
   if (!sh) {
     sh = ss.insertSheet(DM_REPORT_SHEET);
-    sh.getRange(1, 1, 1, 4).setValues([['token', 'title', 'html', 'updated']]);
+    sh.getRange(1, 1, 1, 5).setValues([['token', 'title', 'html', 'updated', 'summary']]);
     sh.hideSheet();
   }
   return sh;
@@ -33,7 +33,7 @@ function dmReportSheet_() {
  * @param {string} title 페이지 제목
  * @return {{token:string, url:string}}
  */
-function dmSaveReportLink(seed, html, title) {
+function dmSaveReportLink(seed, html, title, summary) {
   if (!seed) throw new Error('seed 없음');
   if (!html) throw new Error('보고서 내용 없음');
   var token = dmReportToken_(seed);
@@ -45,9 +45,9 @@ function dmSaveReportLink(seed, html, title) {
   }
   var now = new Date();
   if (rowIdx > 0) {
-    sh.getRange(rowIdx, 2, 1, 3).setValues([[title || '', html, now]]);
+    sh.getRange(rowIdx, 2, 1, 4).setValues([[title || '', html, now, summary || '']]);
   } else {
-    sh.appendRow([token, title || '', html, now]);
+    sh.appendRow([token, title || '', html, now, summary || '']);
   }
   var base = '';
   try { base = ScriptApp.getService().getUrl() || ''; } catch (e) { base = ''; }
@@ -65,7 +65,7 @@ function dmGetReportLink(token) {
     var data = sh.getDataRange().getValues();
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(token)) {
-        return { title: String(data[i][1] || ''), html: String(data[i][2] || '') };
+        return { title: String(data[i][1] || ''), html: String(data[i][2] || ''), summary: String(data[i][4] || '') };
       }
     }
   } catch (e) { Logger.log('dmGetReportLink err: ' + e); }

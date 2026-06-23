@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
 <title><?= reportTitle ?></title>
+<meta property="og:title" content="<?= reportTitle ?>">
+<meta property="og:description" content="<?= reportDesc ?>">
+<meta name="description" content="<?= reportDesc ?>">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
   body{ margin:0; background:#eef1f5; font-family:'Inter','Malgun Gothic','맑은 고딕',sans-serif; -webkit-text-size-adjust:100%; }
@@ -39,6 +42,15 @@
   #dmMsgReport .rsub .bgrip { display:none; }
   #dmMsgReport .rsub .rnum { text-align:right; } #dmMsgReport .rsub .hl-y { font-weight:700; }
   #dmMsgReport .rsub tfoot td { background:#f6f8fb; } #dmMsgReport .rsub .rtot td { color:#dc2626; font-weight:800; background:#fff5f5; }
+  /* 모바일: 카드는 화면폭에 맞추고, 넓은 입찰표는 그 표(.rsec-bd)만 가로 스크롤 — 진행비까지 밀어서 봄 */
+  html, body { overflow-x:hidden; }
+  #dmMsgReport .rrep-card, #dmMsgReport .rbody, #dmMsgReport .rsec, #dmMsgReport .rsec-bd, #dmMsgReport .rkv { max-width:100%; box-sizing:border-box; }
+  #dmMsgReport .rsec > .rsec-bd { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  #dmMsgReport .rsub { font-size:11px; }
+  #dmMsgReport .rsub td, #dmMsgReport .rsub th { padding:6px 4px; }
+  /* 복사 버튼 */
+  #dmMsgReport .dmcp{ background:#0e7490; color:#fff; border:0; border-radius:5px; padding:3px 9px; font-size:.8em; font-weight:700; cursor:pointer; margin-left:5px; vertical-align:middle; white-space:nowrap; }
+  #dmMsgReport .dmcp:active{ background:#0b5563; }
 </style>
 </head>
 <body>
@@ -56,6 +68,14 @@
       + '<button onclick="var o=this.closest(\'div\').parentNode; if(o&&o.parentNode)o.parentNode.removeChild(o);" style="position:absolute;top:-40px;right:0;background:#fff;border:0;border-radius:6px;padding:6px 14px;font-weight:800;cursor:pointer">✕ 닫기</button>'
       + '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:8px;overflow:hidden;background:#000"><iframe src="https://www.youtube.com/embed/'+id+'?autoplay=1&rel=0" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe></div></div>';
     document.body.appendChild(ov);
+  };
+  // 복사 버튼 — data-c 값을 클립보드로
+  DM.copyVal = function(btn){
+    var v = btn.getAttribute('data-c') || '';
+    function ok(){ var o = btn.getAttribute('data-o')||btn.textContent; btn.setAttribute('data-o', o); btn.textContent='✓ 복사됨'; btn.style.background='#16a34a'; setTimeout(function(){ btn.textContent=o; btn.style.background=''; }, 1200); }
+    function fb(){ var ta=document.createElement('textarea'); ta.value=v; ta.style.position='fixed'; ta.style.top='-1000px'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); try{ document.execCommand('copy'); ok(); }catch(e){ alert('복사 실패 — 값을 길게 눌러 복사해 주세요'); } document.body.removeChild(ta); }
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(v).then(ok).catch(fb); }
+    else fb();
   };
 </script>
 </body>
