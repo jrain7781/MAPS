@@ -1064,7 +1064,7 @@
   // ===== 입찰안내 메세지 모달 (회원별 입찰 요약 + 선택 전송) =====
   var _msgGroups=[], _msgCtx={};
   function _won(n){ n=_num(n); return n?n.toLocaleString('ko-KR'):'0'; }
-  var _msgDetailMap={}, _msgFocusGi=0, _msgSel={};   // 상세=회원||명의 키, 선택=gi
+  var _msgDetailMap={}, _msgFocusGi=0, _msgSel={}, _msgTab='link';   // 상세=회원||명의 키, 선택=gi, 탭=link(웹링크 미리보기)/image(캡처)
   DM.openMsgModal = function(targets){
     var g0=targets[0]||{}, court=_courtParse(g0.court||'');
     var _repA=''; for(var _ti=0;_ti<targets.length;_ti++){ var _a=String(targets[_ti].address||'').trim(); if(_a){ _repA=_a; break; } }   // 대표 주소(빈 더미 제외)
@@ -1079,7 +1079,7 @@
       if(pm.gubun==='법인') map[key].gubun='법인';
     });
     _msgGroups=Object.keys(map).map(function(k){ var m=map[k]; m.items.sort(function(a,b){return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0);}); return m; });
-    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 기본 전체선택
+    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgTab='link'; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 기본 전체선택 + 링크 탭 기본
     var cnt=document.getElementById('dmMsgCnt'); if(cnt) cnt.textContent='· 회원 '+_msgGroups.length+'명 / 물건 '+targets.length+'건';
     var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=true;
     _loadMsgFont();
@@ -1087,6 +1087,7 @@
     _renderMsgRight();   // 진입 즉시 대표(첫) 회원 보고서 표시 — 상세는 도착 시 갱신
     setupMsgSplitter(); _applyMsgListW();   // 카드↔보고서 스플리터(PC별 저장폭 적용)
     var mo=document.getElementById('dmMsgModal'); if(mo) mo.classList.remove('content-hidden');
+    try{ DM.msgTab('link'); }catch(_){}   // 열 때마다 링크 탭 기본 + 버튼/보고서 초기화
     _msgUpdateSelCnt();
     // 명의별 상세 조회 (회원 × 구분된 명의)
     var reqKeys=[], reqs=[];
@@ -1113,6 +1114,16 @@
   };
   DM.msgRerender=function(){ _renderMsgLeft(); DM.msgDueChg(); };
   DM.msgFocus=function(gi){ _msgFocusGi=gi; _renderMsgLeft(); _renderMsgRight(); };
+  DM.msgTab=function(which){
+    _msgTab=(which==='image')?'image':'link';
+    var lb=document.getElementById('dmLinkBtns'), ib=document.getElementById('dmImgBtns'),
+        tl=document.getElementById('dmTabLink'), ti=document.getElementById('dmTabImg');
+    if(lb) lb.style.display=(_msgTab==='link')?'flex':'none';
+    if(ib) ib.style.display=(_msgTab==='image')?'flex':'none';
+    if(tl){ tl.style.background=(_msgTab==='link')?'#0e7490':'#fff'; tl.style.color=(_msgTab==='link')?'#fff':'#475569'; }
+    if(ti){ ti.style.background=(_msgTab==='image')?'#1f3a5f':'#fff'; ti.style.color=(_msgTab==='image')?'#fff':'#475569'; }
+    _renderMsgRight();
+  };
   function _renderMsgLeft(){
     var box=document.getElementById('dmMsgList'); if(!box) return;
     box.innerHTML=_msgGroups.map(function(m,gi){
@@ -1139,8 +1150,8 @@
   function _renderMsgRight(){
     var rp=document.getElementById('dmMsgReport'); if(!rp) return;
     var m=_msgGroups[_msgFocusGi]; if(!m){ rp.innerHTML='<div style="padding:30px;color:#94a3b8">좌측에서 회원을 선택하세요.</div>'; return; }
-    rp.innerHTML=_buildMsgReport(m, _msgOpts(), _msgFocusGi);
-    _applyMsgFont(); _bindBidResizers();
+    rp.innerHTML=_buildMsgReport(m, _msgOpts(), _msgFocusGi, _msgTab==='link');   // 링크 탭=웹변형(복사버튼·주민가림), 이미지 탭=캡처변형
+    _applyMsgFont(); if(_msgTab==='image') _bindBidResizers();
   }
   DM.msgUpdateSel=function(){ _msgSel={}; var cbs=document.querySelectorAll('#dmMsgList .dm-msg-cb:checked'); for(var i=0;i<cbs.length;i++){ _msgSel[parseInt(cbs[i].getAttribute('data-gi'),10)]=1; } _msgUpdateSelCnt(); };
   function _msgUpdateSelCnt(){ var n=Object.keys(_msgSel).length, e=document.getElementById('dmMsgSelCnt'); if(e) e.textContent='선택 '+n+'명'; var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=(n===_msgGroups.length && n>0); }
