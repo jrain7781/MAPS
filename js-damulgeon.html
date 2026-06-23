@@ -21,7 +21,7 @@
   @keyframes dmSpin { to { transform:rotate(360deg); } }
   .dm-spin { animation:dmSpin .7s linear infinite; }
   /* 입찰안내 보고서 — 모바일 친화 좁은 폭, 섹션별 굵은 테두리 + 교대 2색 */
-  #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 0 16px 6px; background:#fff; border:1px solid #cdd5df; border-radius:10px; overflow:hidden; }   /* 왼쪽 정렬 + 왼쪽 여백 */
+  #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 auto 16px; padding:34px 0; background:#fff; border:1px solid #cdd5df; border-radius:10px; overflow:hidden; }   /* 가운데 정렬(좌우 여백) + 상·하 흰 여백 1cm(모바일 편집아이콘이 내용 가리는 것 방지) */
   #dmMsgReport .rrep-h { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; padding:11px 12px; background:#1f3a5f; color:#fff; }
   #dmMsgReport .rrep-title { font-size:15px; }
   #dmMsgReport .rrep-h b { font-size:1.55em; }   /* 이름 크게, 눈에 띄게 */
@@ -40,6 +40,14 @@
   #dmMsgReport .rsec-b .rkv .rk { background:#fbfcf8; }
   #dmMsgReport .rkv .rv.hl-y { font-weight:800; }
   #dmMsgReport .rkv .rv.hl-r { color:#dc2626; font-weight:700; }
+  #dmMsgReport .rkv .rv.hl-need { background:#fde047; color:#92400e; font-weight:800; }   /* 누락 항목 — 노란 강조(회신 요청) */
+  /* 필독 사항 블록 — 개요 위, 눈에 띄게 강조 */
+  #dmMsgReport .rsec-must { border-color:#ef4444; }
+  #dmMsgReport .rsec-must .rsec-h { background:#fee2e2; color:#b91c1c; }
+  #dmMsgReport .rsec-must .rmust-bd { padding:8px 11px 9px; background:#fffdf5; }
+  #dmMsgReport .rsec-must ol { margin:0; padding-left:21px; }
+  #dmMsgReport .rsec-must li { margin:4px 0; font-weight:700; line-height:1.45; color:#1f2937; }
+  #dmMsgReport .rsec-must li .mneed { background:#fde047; color:#92400e; padding:1px 5px; border-radius:4px; font-weight:800; }
   /* 입찰 표 — 가로 압축 + 컬럼 리사이즈 */
   #dmMsgReport .rsub { border-collapse:collapse; font-size:.84em; table-layout:fixed; }   /* width는 컬럼합(인라인) — 만진 열만 변경 */
   #dmMsgReport .rsub th { position:relative; text-align:center; background:#eef2f7; color:#475569; padding:3px 4px; border:1px solid #dce3ec; font-weight:700; }
@@ -1179,6 +1187,9 @@
     var firstAgent=(_msgDetailFor(m, m.items[0]).agent)||{};
     // 섹션 블록 (굵은 테두리 + 교대 2색)
     var _bi=0; function blk(name, body){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
+    // 회원정보 누락 항목 → 노란 강조 + "회신 부탁드립니다." (필독 1번 표시 여부도 결정)
+    var _missing=false;
+    function _nrow(label, v){ v=(v==null?'':String(v)).trim(); if(v) return [label, v]; _missing=true; return [label, '회신 부탁드립니다.', 'hl-need']; }
     // 입찰 표
     var bidRows=m.items.map(function(it,i){ return '<tr><td style="color:'+_msgMyungColor(it)+';font-weight:700;text-align:center">'+esc(_msgMyungLabel(it))+'</td><td style="text-align:center">'+esc(it.mulgeon_no||'')+'</td><td class="rnum hl-y">'+_won(it.bidprice)+'</td><td class="rnum">'+_won(it.deposit)+'</td><td class="rnum">'+_won(fees[i])+'</td></tr>'; }).join('');
     var bcw=_loadBidColW(), bsum=bcw.reduce(function(a,b){return a+b;},0);
@@ -1201,8 +1212,8 @@
       var caseLines=grp.map(function(it){ return esc(_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+')'); }).join('<br>');
       var pName=p.name||pm.member||m.member||'';
       var rows=[['사건·물건', caseLines,'hl-y','raw']].concat(isCorp
-        ? [['법인성명',pName,'hl-y'],['사업자번호',p.biz_no],['법인등록번호',p.jumin_corp],['전화번호',p.phone],['주소',p.address],['계좌/보증금반환',_msgAcct(p)||'법인계좌']]
-        : [['입찰명의성명',pName,'hl-y'],['직업',p.job||'회사원'],['주민등록번호',p.jumin_corp],['전화번호',p.phone],['주소',p.address],['계좌/보증금반환',_msgAcct(p)||'본인계좌']]);
+        ? [['법인성명',pName,'hl-y'],_nrow('사업자번호',p.biz_no),_nrow('법인등록번호',p.jumin_corp),_nrow('전화번호',p.phone),_nrow('주소',p.address),_nrow('계좌/보증금반환',_msgAcct(p))]
+        : [['입찰명의성명',pName,'hl-y'],['직업',p.job||'회사원'],_nrow('주민등록번호',p.jumin_corp),_nrow('전화번호',p.phone),_nrow('주소',p.address),_nrow('계좌/보증금반환',_msgAcct(p))]);
       body += blk(hd, _kvTable(rows));
     });
     // 전자본인서명 용도 = 물건번호별 줄 (3건이면 3줄)
@@ -1216,6 +1227,12 @@
       ['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요'],
       ['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']
     ]));
+    // 필독 사항 — 개요 위(맨 위). 1번(누락정보 회신)은 누락 항목이 있을 때만 노출
+    var mustItems=[];
+    if(_missing) mustItems.push('누락된 회원님 정보(<span class="mneed">노란색 칸</span>)를 회신해 주세요~');
+    mustItems.push('총비용을 기한 내에 꼭 입금해 주세요, 입금 후 알려주세요~');
+    mustItems.push('전자본인서명 확인서를 꼭 기한 내에 전달해 주세요~');
+    body = '<div class="rsec rsec-must"><div class="rsec-h">⚠ 필독 사항</div><div class="rmust-bd"><ol><li>'+mustItems.join('</li><li>')+'</li></ol></div></div>' + body;
     // 짧은 주소(좌측 다물건 리스트와 동일) — 이름 옆에
     var rawA=''; for(var ai=0;ai<m.items.length;ai++){ var aa=String(m.items[ai].address||'').trim(); if(aa){ rawA=aa; break; } }
     var shortAddr=rawA?_shortAddr(rawA):(_msgCtx.addr?_shortAddr(_msgCtx.addr):'');
