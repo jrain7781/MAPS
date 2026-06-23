@@ -21,7 +21,7 @@
   @keyframes dmSpin { to { transform:rotate(360deg); } }
   .dm-spin { animation:dmSpin .7s linear infinite; }
   /* 입찰안내 보고서 — 모바일 친화 좁은 폭, 섹션별 굵은 테두리 + 교대 2색 */
-  #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 auto 16px; padding:106px 0; background:#fff; line-height:1.1; }   /* 캡처 루트: 상·하 흰 여백 + line-height 1.1(html2canvas 캡처 시 글자 하단쏠림 보정 — 보고서 전체 표에 적용) */
+  #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 auto 16px; padding:106px 0; background:#fff; line-height:1.4; }   /* 캡처 루트: 상·하 흰 여백. (캡처는 html-to-image=화면 네이티브 렌더라 줄간격은 가독성용) */
   #dmMsgReport .rrep-card { border:1px solid #cdd5df; border-radius:10px; overflow:hidden; background:#fff; }   /* 실제 카드 테두리(여백 영역엔 테두리 없음) */
   #dmMsgReport .rrep-h { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; padding:11px 12px; background:#1f3a5f; color:#fff; }
   #dmMsgReport .rrep-title { font-size:15px; }
@@ -50,8 +50,8 @@
   #dmMsgReport .rsec-must .rmust-li .mneed { background:#fde047; color:#92400e; padding:1px 5px; border-radius:4px; font-weight:800; }
   /* 입찰 표 — 가로 압축 + 컬럼 리사이즈 */
   #dmMsgReport .rsub { border-collapse:collapse; font-size:.84em; table-layout:fixed; }   /* width는 컬럼합(인라인) — 만진 열만 변경 */
-  #dmMsgReport .rsub th { position:relative; text-align:center; background:#eef2f7; color:#475569; padding:6px 4px; border:1px solid #dce3ec; font-weight:700; vertical-align:middle; line-height:1.1; }
-  #dmMsgReport .rsub td { border:1px solid #eef2f7; padding:7px 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; line-height:1.1; }   /* 행높이=padding으로 확보, line-height는 1.1로 타이트(html2canvas가 큰 line-box 하단에 글자를 그려 캡처 시 아래로 쏠리는 것 방지) */
+  #dmMsgReport .rsub th { position:relative; text-align:center; background:#eef2f7; color:#475569; padding:6px 4px; border:1px solid #dce3ec; font-weight:700; vertical-align:middle; line-height:1.4; }
+  #dmMsgReport .rsub td { border:1px solid #eef2f7; padding:7px 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; line-height:1.4; }
   #dmMsgReport .rsub .bgrip { position:absolute; top:0; right:-3px; width:8px; height:100%; cursor:col-resize; z-index:3; }
   #dmMsgReport .rsub .bgrip:hover { background:#93c5fd; }
   #dmMsgReport .rsub .rnum { text-align:right; } #dmMsgReport .rsub .hl-y { font-weight:700; }
@@ -1228,7 +1228,7 @@
       ['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']
     ]));
     // [임시] 버전 표식 — 캡처 이미지로 새 코드 적용 여부 확인용(확인 후 제거)
-    body += '<div style="text-align:center;font-size:11px;font-weight:800;color:#16a34a;padding:4px 0 0">build 1526 · 표 전체 세로가운데</div>';
+    body += '<div style="text-align:center;font-size:11px;font-weight:800;color:#16a34a;padding:4px 0 0">build 1527 · 엔진교체(html-to-image)</div>';
     // 필독 사항 — 개요 위(맨 위). 1번(정보 회신)은 누락 항목이 있을 때만 노출. 숫자는 직접 부여(캡처 시 ol 마커 누락 방지)
     var mustItems=[];
     if(_missing) mustItems.push('회원님 정보(<span class="mneed">노란색 칸</span>)를 회신해 주세요~');
@@ -1297,12 +1297,12 @@
     if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ alert('텍스트 복사됨 — '+m.member+'님\n카카오에 붙여넣으세요.'); }).catch(function(){ _msgCopyFallback(txt); }); }
     else _msgCopyFallback(txt);
   };
-  // 보고서를 이미지로 클립보드 복사 (카카오 붙여넣기용). html2canvas 지연로드.
-  function _withHtml2Canvas(cb){
-    if(window.html2canvas) return cb();
-    var s=document.getElementById('dmH2cScript');
+  // 보고서를 이미지로 — html-to-image(브라우저 네이티브 렌더 → 화면과 동일, 세로정렬 정확). 지연로드.
+  function _withCapLib(cb){
+    if(window.htmlToImage) return cb();
+    var s=document.getElementById('dmH2iScript');
     if(s){ s.addEventListener('load',function(){cb();}); return; }
-    s=document.createElement('script'); s.id='dmH2cScript'; s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s=document.createElement('script'); s.id='dmH2iScript'; s.src='https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js';
     s.onload=function(){ cb(); }; s.onerror=function(){ alert('이미지 변환 라이브러리 로드 실패(네트워크). 화면 캡처를 이용하세요.'); };
     document.head.appendChild(s);
   }
@@ -1310,16 +1310,14 @@
     if(gi==null) gi=_msgFocusGi;
     var el=document.getElementById('rrep'+gi); if(!el) return;
     var m=_msgGroups[gi];
-    _withHtml2Canvas(function(){
-      window.html2canvas(el, { scale:2, backgroundColor:'#ffffff', useCORS:true }).then(function(canvas){
-        canvas.toBlob(function(blob){
-          if(!blob){ alert('이미지 생성 실패'); return; }
-          if(navigator.clipboard && window.ClipboardItem){
-            navigator.clipboard.write([new ClipboardItem({'image/png':blob})])
-              .then(function(){ alert('이미지 복사됨 — '+(m?m.member:'')+'님\n카카오에 Ctrl+V 로 붙여넣으세요.'); })
-              .catch(function(){ _downloadBlob(blob, (m?m.member:'보고서')+'_입찰안내.png'); });
-          } else _downloadBlob(blob, (m?m.member:'보고서')+'_입찰안내.png');
-        },'image/png');
+    _withCapLib(function(){
+      window.htmlToImage.toBlob(el, { pixelRatio:2, backgroundColor:'#ffffff', cacheBust:true }).then(function(blob){
+        if(!blob){ alert('이미지 생성 실패'); return; }
+        if(navigator.clipboard && window.ClipboardItem){
+          navigator.clipboard.write([new ClipboardItem({'image/png':blob})])
+            .then(function(){ alert('이미지 복사됨 — '+(m?m.member:'')+'님\n카카오에 Ctrl+V 로 붙여넣으세요.'); })
+            .catch(function(){ _downloadBlob(blob, (m?m.member:'보고서')+'_입찰안내.png'); });
+        } else _downloadBlob(blob, (m?m.member:'보고서')+'_입찰안내.png');
       }).catch(function(e){ alert('이미지 변환 실패: '+(e&&e.message||e)); });
     });
   };
@@ -1334,7 +1332,7 @@
     var pages=[], cur=[], h=0, TH=820;   // 페이지당 목표 높이(px) ≈ 한 화면
     secs.forEach(function(s){ var sh=s.offsetHeight+9; if(cur.length && (h+sh)>TH){ pages.push(cur); cur=[]; h=0; } cur.push(s); h+=sh; });
     if(cur.length) pages.push(cur);
-    _withHtml2Canvas(function(){
+    _withCapLib(function(){
       var i=0;
       (function next(){
         if(i>=pages.length){ alert(pages.length+'장 저장 완료.\n카톡에 '+pages.length+'장 모두 첨부하면, 받는 사람이 좌우로 넘겨 편하게 봅니다.'); return; }
@@ -1347,9 +1345,9 @@
         var bd=document.createElement('div'); bd.className='rbody'; pages[i].forEach(function(s){ bd.appendChild(s.cloneNode(true)); }); inner.appendChild(bd);
         card.appendChild(inner);
         wrap.appendChild(card); document.body.appendChild(wrap);
-        window.html2canvas(card, { scale:2.5, backgroundColor:'#ffffff', useCORS:true }).then(function(cv){
+        window.htmlToImage.toBlob(card, { pixelRatio:2.5, backgroundColor:'#ffffff', cacheBust:true }).then(function(b){
           if(wrap.parentNode) document.body.removeChild(wrap);
-          cv.toBlob(function(b){ if(b) _downloadBlobSilent(b, (m?m.member:'보고서')+'_입찰안내_'+(i+1)+'.png'); i++; setTimeout(next, 220); }, 'image/png');
+          if(b) _downloadBlobSilent(b, (m?m.member:'보고서')+'_입찰안내_'+(i+1)+'.png'); i++; setTimeout(next, 220);
         }).catch(function(e){ if(wrap.parentNode) document.body.removeChild(wrap); alert('이미지 저장 실패: '+(e&&e.message||e)); });
       })();
     });
