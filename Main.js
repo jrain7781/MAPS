@@ -67,20 +67,19 @@ function doGet(e) {
     }
   }
 
-  // 2.7 다물건 입찰안내 웹 링크(회원이 여는 보고서) — 추측불가 토큰 ?r=
+  // 2.7 다물건 입찰안내 웹 링크(회원이 여는 보고서) — 추측불가 토큰 ?r= (게이트 페이지; 본문은 전화 확인 후 dmVerifyReport로 로드)
   if (params.r) {
     try {
-      var _dmRep = (typeof dmGetReportLink === 'function') ? dmGetReportLink(params.r) : null;
-      if (_dmRep && _dmRep.html) {
-        var _dmT = HtmlService.createTemplateFromFile('dm-report');
-        _dmT.reportHtml = _dmRep.html;
-        _dmT.reportTitle = _dmRep.title || '입찰 안내';
-        _dmT.reportDesc = _dmRep.summary || '입찰 안내 보고서';
-        return _dmT.evaluate()
-          .setTitle(_dmRep.title || '입찰 안내')
-          .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-          .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-      }
+      var _meta = (typeof dmGetReportMeta === 'function') ? dmGetReportMeta(params.r) : null;
+      var _dmT = HtmlService.createTemplateFromFile('dm-report');
+      _dmT.token = String(params.r);
+      _dmT.gated = !!(_meta && _meta.gated);
+      _dmT.reportTitle = (_meta && _meta.title) || '입찰 안내';
+      _dmT.reportDesc = (_meta && _meta.summary) || '입찰 안내';
+      return _dmT.evaluate()
+        .setTitle((_meta && _meta.title) || '입찰 안내')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     } catch (_dmErr) { Logger.log('dm-report doGet err: ' + _dmErr); }
   }
 

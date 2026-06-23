@@ -1329,32 +1329,43 @@
     document.body.appendChild(ov);
   };
   // 웹 링크 생성 — 보고서 카드 HTML 스냅샷을 서버에 저장하고 추측불가 링크 반환(회원이 열어서 복사·클릭 가능)
-  DM.makeLink=function(gi){
-    if(gi==null) gi=_msgFocusGi;
-    var m=_msgGroups[gi]; if(!m){ alert('회원을 선택하세요.'); return; }
-    var tmp=document.createElement('div'); tmp.innerHTML=_buildMsgReport(m, _msgOpts(), gi, true);   // web=true: 복사버튼·유튜브버튼만
-    var cardEl=tmp.querySelector('.rrep-card'); if(!cardEl){ alert('보고서 생성 실패.'); return; }
-    var html=cardEl.outerHTML;
+  function _dmLinkArgs(gi){
+    var m=_msgGroups[gi]; if(!m) return null;
+    var tmp=document.createElement('div'); tmp.innerHTML=_buildMsgReport(m, _msgOpts(), gi, true);   // web=true: 복사버튼·유튜브버튼만·주민 가림
+    var cardEl=tmp.querySelector('.rrep-card'); if(!cardEl) return null;
     var seed=(m.member_id||m.member||'')+'|'+(_msgCtx.sakun||'');
     var title=(m.member||'')+'님 입찰안내';
-    // 카톡 링크 미리보기 설명: 짧은주소 / 법원 사건번호 / 물건번호 / 입찰일자
     var _shortA=''; for(var _ai=0;_ai<m.items.length;_ai++){ var _aa=String(m.items[_ai].address||'').trim(); if(_aa){ _shortA=_shortAddr(_aa); break; } } if(!_shortA&&_msgCtx.addr) _shortA=_shortAddr(_msgCtx.addr);
     var _mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).filter(Boolean).join(',');
     var _sp=[]; if(_shortA)_sp.push(_shortA); var _cs=((_msgCtx.court||'')+' '+(_msgCtx.sakun||'')).trim(); if(_cs)_sp.push(_cs); if(_mulNos)_sp.push('물건 '+_mulNos); if(_msgCtx.bidDate)_sp.push('입찰 '+_msgCtx.bidDate);
-    var summary=_sp.join(' / ');
+    var _ph=((_msgDetailFor(m, m.items[0]).principal)||{}).phone||''; var phone4=String(_ph).replace(/[^0-9]/g,'').slice(-4);
+    return { m:m, seed:seed, html:cardEl.outerHTML, title:title, summary:_sp.join(' / '), phone4:phone4, member_id:String(m.member_id||'') };
+  }
+  function _dmLinkDone(res, a, renewed){
+    if(!(res&&res.url)){ alert('링크 처리 실패'); return; }
+    var url=res.url;
+    var gateMsg = res.gated ? '\n\n🔒 회원이 열 때 전화 뒷4자리 확인 필요(3회 틀리면 자동 폐기).' : '\n\n⚠ 이 회원은 전화번호가 없어 확인 없이 열립니다.';
+    var head = renewed ? '🔄 새 링크 발급(옛 링크 폐기됨) — ' : '🔗 웹 링크 복사됨 — ';
+    function done(){ alert(head+a.m.member+'님\n\n'+url+gateMsg+'\n\n카톡에 붙여 보내세요. (회원마다 각자 링크)'); }
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(done).catch(function(){ prompt('웹 링크 (복사하세요):', url); }); }
+    else prompt('웹 링크 (복사하세요):', url);
+  }
+  DM.makeLink=function(gi){
+    if(gi==null) gi=_msgFocusGi;
+    var a=_dmLinkArgs(gi); if(!a){ alert('회원을 선택하세요.'); return; }
     if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
-    google.script.run
-      .withSuccessHandler(function(res){
-        if(res&&res.url){
-          var url=res.url;
-          if(navigator.clipboard&&navigator.clipboard.writeText){
-            navigator.clipboard.writeText(url).then(function(){ alert('🔗 웹 링크 복사됨 — '+m.member+'님\n\n'+url+'\n\n카톡에 붙여 보내면, 회원이 열어서 글자·계좌번호 복사·유튜브 클릭 다 됩니다.\n(회원마다 각자 링크를 보내세요)'); })
-              .catch(function(){ prompt('웹 링크 (복사하세요):', url); });
-          } else prompt('웹 링크 (복사하세요):', url);
-        } else alert('링크 생성 실패');
-      })
+    google.script.run.withSuccessHandler(function(res){ _dmLinkDone(res, a, false); })
       .withFailureHandler(function(e){ alert('링크 생성 오류: '+(e&&e.message||e)); })
-      .dmSaveReportLink(seed, html, title, summary);
+      .dmGetOrCreateLink(a.seed, a.html, a.title, a.summary, a.phone4, a.member_id);
+  };
+  DM.revokeLink=function(gi){
+    if(gi==null) gi=_msgFocusGi;
+    var a=_dmLinkArgs(gi); if(!a){ alert('회원을 선택하세요.'); return; }
+    if(!confirm(a.m.member+'님의 기존 링크를 폐기하고 새 링크를 발급합니다.\n(잘못 보낸 링크 대비 — 옛 링크는 더 이상 안 열림)\n진행할까요?')) return;
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+    google.script.run.withSuccessHandler(function(res){ _dmLinkDone(res, a, true); })
+      .withFailureHandler(function(e){ alert('재발급 오류: '+(e&&e.message||e)); })
+      .dmRevokeAndRenew(a.seed, a.html, a.title, a.summary, a.phone4, a.member_id);
   };
   DM.msgCopyImage=function(gi){
     if(gi==null) gi=_msgFocusGi;

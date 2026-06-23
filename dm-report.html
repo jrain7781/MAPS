@@ -9,10 +9,22 @@
 <meta name="description" content="<?= reportDesc ?>">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
+  html, body { overflow-x:hidden; }
   body{ margin:0; background:#eef1f5; font-family:'Inter','Malgun Gothic','맑은 고딕',sans-serif; -webkit-text-size-adjust:100%; }
   .dmw-top{ text-align:center; padding:14px 12px 4px; color:#64748b; font-size:12px; }
-  .dmw-wrap{ max-width:460px; margin:0 auto; padding:8px 12px 40px; overflow-x:auto; }
-  /* ===== 보고서 디자인 (모달과 동일) ===== */
+  .dmw-wrap{ max-width:460px; margin:0 auto; padding:8px 12px 40px; }
+  /* 게이트(본인확인) */
+  #gate{ max-width:340px; margin:48px auto; background:#fff; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,.12); padding:26px 22px; text-align:center; }
+  #gate .lock{ font-size:34px; }
+  #gate h2{ font-size:17px; margin:10px 0 4px; color:#111827; }
+  #gate p{ font-size:13px; color:#6b7280; margin:0 0 16px; }
+  #gate input{ width:140px; font-size:22px; letter-spacing:6px; text-align:center; padding:10px; border:2px solid #cbd5e1; border-radius:10px; }
+  #gate input:focus{ outline:none; border-color:#1f3a5f; }
+  #gate button{ display:block; width:100%; margin-top:14px; background:#1f3a5f; color:#fff; border:0; border-radius:10px; padding:12px; font-size:15px; font-weight:800; cursor:pointer; }
+  #gateMsg{ margin-top:12px; font-size:13px; font-weight:700; min-height:18px; }
+  #gateMsg.err{ color:#dc2626; } #gateMsg.ok{ color:#16a34a; }
+  /* ===== 보고서 디자인 ===== */
+  #dmMsgReport .rrep-card, #dmMsgReport .rbody, #dmMsgReport .rsec, #dmMsgReport .rsec-bd, #dmMsgReport .rkv { max-width:100%; box-sizing:border-box; }
   #dmMsgReport .rrep-card { border:1px solid #cdd5df; border-radius:10px; overflow:hidden; background:#fff; line-height:1.4; box-shadow:0 4px 18px rgba(0,0,0,.08); }
   #dmMsgReport .rrep-h { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; padding:13px 12px; background:#1f3a5f; color:#fff; }
   #dmMsgReport .rrep-title { font-size:15px; } #dmMsgReport .rrep-h b { font-size:1.55em; }
@@ -36,32 +48,41 @@
   #dmMsgReport .rsec-must .rmust-bd { padding:8px 12px 9px; background:#fffdf5; }
   #dmMsgReport .rsec-must .rmust-li { margin:4px 0; font-weight:700; line-height:1.45; color:#1f2937; }
   #dmMsgReport .rsec-must .rmust-li .mneed { background:#fde047; color:#92400e; padding:1px 5px; border-radius:4px; font-weight:800; }
-  #dmMsgReport .rsub { border-collapse:collapse; font-size:.84em; table-layout:fixed; max-width:100%; }
+  #dmMsgReport .rsub { border-collapse:collapse; font-size:11px; table-layout:fixed; max-width:100%; }
   #dmMsgReport .rsub th { text-align:center; background:#eef2f7; color:#475569; padding:6px 4px; border:1px solid #dce3ec; font-weight:700; vertical-align:middle; line-height:1.4; }
-  #dmMsgReport .rsub td { border:1px solid #eef2f7; padding:7px 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; line-height:1.4; }
+  #dmMsgReport .rsub td { border:1px solid #eef2f7; padding:6px 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; line-height:1.4; }
   #dmMsgReport .rsub .bgrip { display:none; }
   #dmMsgReport .rsub .rnum { text-align:right; } #dmMsgReport .rsub .hl-y { font-weight:700; }
   #dmMsgReport .rsub tfoot td { background:#f6f8fb; } #dmMsgReport .rsub .rtot td { color:#dc2626; font-weight:800; background:#fff5f5; }
-  /* 모바일: 카드는 화면폭에 맞추고, 넓은 입찰표는 그 표(.rsec-bd)만 가로 스크롤 — 진행비까지 밀어서 봄 */
-  html, body { overflow-x:hidden; }
-  #dmMsgReport .rrep-card, #dmMsgReport .rbody, #dmMsgReport .rsec, #dmMsgReport .rsec-bd, #dmMsgReport .rkv { max-width:100%; box-sizing:border-box; }
-  #dmMsgReport .rsec > .rsec-bd { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  #dmMsgReport .rsub { font-size:11px; }
-  #dmMsgReport .rsub td, #dmMsgReport .rsub th { padding:6px 4px; }
-  /* 복사 버튼 */
-  #dmMsgReport .dmcp{ background:#0e7490; color:#fff; border:0; border-radius:5px; padding:4px 11px; font-size:.82em; font-weight:700; cursor:pointer; flex:0 0 auto; vertical-align:middle; white-space:nowrap; }
+  #dmMsgReport .dmcp{ background:#0e7490; color:#fff; border:0; border-radius:5px; padding:4px 11px; font-size:.82em; font-weight:700; cursor:pointer; flex:0 0 auto; white-space:nowrap; }
   #dmMsgReport .dmcp:active{ background:#0b5563; }
-  /* 값 + 복사버튼 한 줄: 버튼은 항상 오른쪽 끝, 줄마다 정렬(겹침 방지) */
   #dmMsgReport .cpline{ display:flex; align-items:center; gap:8px; margin:2px 0; }
   #dmMsgReport .cpline .cpv{ flex:1 1 auto; min-width:0; word-break:break-all; }
 </style>
 </head>
 <body>
-  <div class="dmw-top">📨 입찰 안내 — 아래 내용은 길게 눌러 복사할 수 있습니다</div>
-  <div class="dmw-wrap"><div id="dmMsgReport"><?!= reportHtml ?></div></div>
+  <!-- 본인확인 게이트 -->
+  <div id="gate" style="display:none">
+    <div class="lock">🔒</div>
+    <h2>본인 확인</h2>
+    <p>등록된 <b>전화번호 뒷 4자리</b>를 입력하세요.</p>
+    <input id="g4" type="tel" inputmode="numeric" maxlength="4" placeholder="0000">
+    <button id="gBtn" onclick="DMV.submit()">확인</button>
+    <div id="gateMsg"></div>
+  </div>
+  <!-- 보고서(확인 후 표시) -->
+  <div id="repWrap" style="display:none">
+    <div class="dmw-top">📨 입찰 안내 — 아래 내용은 길게 눌러 복사할 수 있습니다</div>
+    <div class="dmw-wrap"><div id="dmMsgReport"></div></div>
+  </div>
+  <div id="loading" style="text-align:center;padding:60px 12px;color:#94a3b8;font-size:14px">불러오는 중…</div>
+
 <script>
-  // 유튜브 보기 버튼 → 임베드 라이트박스
+  var TOKEN = '<?= token ?>';
+  var GATED = ('<?= gated ?>' === 'true');
+  var KEY = 'dmv4_' + TOKEN;
   window.DM = window.DM || {};
+  // 유튜브 임베드
   DM.playYt = function(id){
     id = id || 'S2xVZjJeQd0';
     var ov = document.createElement('div');
@@ -72,7 +93,6 @@
       + '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:8px;overflow:hidden;background:#000"><iframe src="https://www.youtube.com/embed/'+id+'?autoplay=1&rel=0" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe></div></div>';
     document.body.appendChild(ov);
   };
-  // 복사 버튼 — data-c 값을 클립보드로
   DM.copyVal = function(btn){
     var v = btn.getAttribute('data-c') || '';
     function ok(){ var o = btn.getAttribute('data-o')||btn.textContent; btn.setAttribute('data-o', o); btn.textContent='✓ 복사됨'; btn.style.background='#16a34a'; setTimeout(function(){ btn.textContent=o; btn.style.background=''; }, 1200); }
@@ -80,6 +100,53 @@
     if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(v).then(ok).catch(fb); }
     else fb();
   };
+
+  var DMV = {
+    el: function(id){ return document.getElementById(id); },
+    show: function(which){ DMV.el('gate').style.display = which==='gate'?'block':'none'; DMV.el('repWrap').style.display = which==='rep'?'block':'none'; DMV.el('loading').style.display = which==='loading'?'block':'none'; },
+    msg: function(t, cls){ var m=DMV.el('gateMsg'); m.textContent=t||''; m.className = cls||''; },
+    handle: function(res, typed){
+      res = res || {};
+      if(res.status === 'ok'){
+        if(GATED && typed) { try{ localStorage.setItem(KEY, typed); }catch(e){} }
+        DMV.el('dmMsgReport').innerHTML = res.html || '';
+        if(res.title) document.title = res.title;
+        DMV.show('rep');
+      } else if(res.status === 'fail'){
+        try{ localStorage.removeItem(KEY); }catch(e){}
+        DMV.show('gate'); DMV.msg('번호가 일치하지 않습니다. (남은 ' + (res.left!=null?res.left:'') + '회)', 'err');
+        var i=DMV.el('g4'); i.value=''; i.focus();
+      } else if(res.status === 'locked'){
+        DMV.show('gate'); DMV.el('g4').style.display='none'; DMV.el('gBtn').style.display='none';
+        try{ localStorage.removeItem(KEY); }catch(e){}
+        DMV.msg('3회 틀려 링크가 폐기되었습니다. 담당자에게 새 링크를 요청해 주세요.', 'err');
+      } else { // revoked / 기타
+        DMV.show('gate'); DMV.el('g4').style.display='none'; DMV.el('gBtn').style.display='none';
+        try{ localStorage.removeItem(KEY); }catch(e){}
+        DMV.msg('유효하지 않은 링크입니다. 담당자에게 새 링크를 요청해 주세요.', 'err');
+      }
+    },
+    verify: function(typed){
+      if(typeof google==='undefined'||!google.script||!google.script.run){ DMV.show('gate'); DMV.msg('실행 환경 오류',''); return; }
+      DMV.show('loading');
+      google.script.run.withSuccessHandler(function(res){ DMV.handle(res, typed); })
+        .withFailureHandler(function(e){ DMV.show('gate'); DMV.msg('오류: '+(e&&e.message||e),'err'); })
+        .dmVerifyReport(TOKEN, typed||'');
+    },
+    submit: function(){
+      var v = (DMV.el('g4').value||'').replace(/[^0-9]/g,'');
+      if(v.length<4){ DMV.msg('4자리를 입력하세요.','err'); return; }
+      DMV.verify(v);
+    },
+    init: function(){
+      if(!GATED){ DMV.verify(''); return; }                 // 게이트 없음(전화 미등록) → 바로 로드
+      var saved=''; try{ saved=localStorage.getItem(KEY)||''; }catch(e){}
+      if(saved){ DMV.verify(saved); }                        // 이 기기에서 이미 확인함 → 자동
+      else { DMV.show('gate'); setTimeout(function(){ var i=DMV.el('g4'); if(i) i.focus(); }, 100); }
+    }
+  };
+  document.getElementById('g4') && document.getElementById('g4').addEventListener('keydown', function(e){ if(e.key==='Enter') DMV.submit(); });
+  DMV.init();
 </script>
 </body>
 </html>
