@@ -67,6 +67,22 @@ function doGet(e) {
     }
   }
 
+  // 2.7 다물건 입찰안내 웹 링크(회원이 여는 보고서) — 추측불가 토큰 ?r=
+  if (params.r) {
+    try {
+      var _dmRep = (typeof dmGetReportLink === 'function') ? dmGetReportLink(params.r) : null;
+      if (_dmRep && _dmRep.html) {
+        var _dmT = HtmlService.createTemplateFromFile('dm-report');
+        _dmT.reportHtml = _dmRep.html;
+        _dmT.reportTitle = _dmRep.title || '입찰 안내';
+        return _dmT.evaluate()
+          .setTitle(_dmRep.title || '입찰 안내')
+          .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+          .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+      }
+    } catch (_dmErr) { Logger.log('dm-report doGet err: ' + _dmErr); }
+  }
+
   // 3. 인증 실패 → 접근 거부
   return HtmlService.createHtmlOutputFromFile('access-denied')
     .setTitle('접근 거부')

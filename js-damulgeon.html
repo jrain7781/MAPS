@@ -1314,6 +1314,28 @@
       +'<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:8px;overflow:hidden;background:#000"><iframe src="https://www.youtube.com/embed/'+id+'?autoplay=1&rel=0" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe></div></div>';
     document.body.appendChild(ov);
   };
+  // 웹 링크 생성 — 보고서 카드 HTML 스냅샷을 서버에 저장하고 추측불가 링크 반환(회원이 열어서 복사·클릭 가능)
+  DM.makeLink=function(gi){
+    if(gi==null) gi=_msgFocusGi;
+    var m=_msgGroups[gi]; if(!m){ alert('회원을 선택하세요.'); return; }
+    var cardEl=document.querySelector('#rrep'+gi+' .rrep-card'); if(!cardEl){ alert('보고서를 먼저 여세요.'); return; }
+    var html=cardEl.outerHTML;
+    var seed=(m.member_id||m.member||'')+'|'+(_msgCtx.sakun||'');
+    var title=(m.member||'')+'님 입찰안내';
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+    google.script.run
+      .withSuccessHandler(function(res){
+        if(res&&res.url){
+          var url=res.url;
+          if(navigator.clipboard&&navigator.clipboard.writeText){
+            navigator.clipboard.writeText(url).then(function(){ alert('🔗 웹 링크 복사됨 — '+m.member+'님\n\n'+url+'\n\n카톡에 붙여 보내면, 회원이 열어서 글자·계좌번호 복사·유튜브 클릭 다 됩니다.\n(회원마다 각자 링크를 보내세요)'); })
+              .catch(function(){ prompt('웹 링크 (복사하세요):', url); });
+          } else prompt('웹 링크 (복사하세요):', url);
+        } else alert('링크 생성 실패');
+      })
+      .withFailureHandler(function(e){ alert('링크 생성 오류: '+(e&&e.message||e)); })
+      .dmSaveReportLink(seed, html, title);
+  };
   DM.msgCopyImage=function(gi){
     if(gi==null) gi=_msgFocusGi;
     var el=document.getElementById('rrep'+gi); if(!el) return;

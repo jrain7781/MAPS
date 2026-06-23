@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<title><?= reportTitle ?></title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body{ margin:0; background:#eef1f5; font-family:'Inter','Malgun Gothic','맑은 고딕',sans-serif; -webkit-text-size-adjust:100%; }
+  .dmw-top{ text-align:center; padding:14px 12px 4px; color:#64748b; font-size:12px; }
+  .dmw-wrap{ max-width:460px; margin:0 auto; padding:8px 12px 40px; overflow-x:auto; }
+  /* ===== 보고서 디자인 (모달과 동일) ===== */
+  #dmMsgReport .rrep-card { border:1px solid #cdd5df; border-radius:10px; overflow:hidden; background:#fff; line-height:1.4; box-shadow:0 4px 18px rgba(0,0,0,.08); }
+  #dmMsgReport .rrep-h { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; padding:13px 12px; background:#1f3a5f; color:#fff; }
+  #dmMsgReport .rrep-title { font-size:15px; } #dmMsgReport .rrep-h b { font-size:1.55em; }
+  #dmMsgReport .rh-cnt { font-size:11px; font-weight:700; background:#fde68a; color:#92400e; padding:1px 7px; border-radius:9px; vertical-align:middle; }
+  #dmMsgReport .rrep-loc { font-size:12px; font-weight:600; color:#cfe0f5; }
+  #dmMsgReport .rbody { padding:11px; font-size:15px; }
+  #dmMsgReport .rsec { border:2px solid; border-radius:8px; margin:0 0 9px; overflow:hidden; }
+  #dmMsgReport .rsec-h { padding:5px 10px; font-weight:800; font-size:1.02em; }
+  #dmMsgReport .rsec-h .rh-sub { font-weight:700; font-size:.82em; padding:0 6px; border-radius:8px; background:rgba(255,255,255,.6); }
+  #dmMsgReport .rsec-a { border-color:#9db4d4; } #dmMsgReport .rsec-a .rsec-h { background:#e6eef8; color:#1e3a5f; }
+  #dmMsgReport .rsec-b { border-color:#b7c4ad; } #dmMsgReport .rsec-b .rsec-h { background:#eaf0e4; color:#3a4a2a; }
+  #dmMsgReport .rkv { width:100%; border-collapse:collapse; font-size:.93em; }
+  #dmMsgReport .rkv td { border:1px solid #e8edf3; padding:6px 8px; vertical-align:middle; color:#1f2937; word-break:break-all; }
+  #dmMsgReport .rkv .rk { width:84px; background:#fafbfc; color:#64748b; font-weight:600; white-space:nowrap; }
+  #dmMsgReport .rsec-b .rkv .rk { background:#fbfcf8; }
+  #dmMsgReport .rkv .rv.hl-y { font-weight:800; }
+  #dmMsgReport .rkv .rv.hl-r { color:#dc2626; font-weight:700; }
+  #dmMsgReport .rkv .rv.hl-need { background:#fde047; color:#92400e; font-weight:800; }
+  #dmMsgReport .rsec-must { border-color:#ef4444; }
+  #dmMsgReport .rsec-must .rsec-h { background:#fee2e2; color:#b91c1c; }
+  #dmMsgReport .rsec-must .rmust-bd { padding:8px 12px 9px; background:#fffdf5; }
+  #dmMsgReport .rsec-must .rmust-li { margin:4px 0; font-weight:700; line-height:1.45; color:#1f2937; }
+  #dmMsgReport .rsec-must .rmust-li .mneed { background:#fde047; color:#92400e; padding:1px 5px; border-radius:4px; font-weight:800; }
+  #dmMsgReport .rsub { border-collapse:collapse; font-size:.84em; table-layout:fixed; max-width:100%; }
+  #dmMsgReport .rsub th { text-align:center; background:#eef2f7; color:#475569; padding:6px 4px; border:1px solid #dce3ec; font-weight:700; vertical-align:middle; line-height:1.4; }
+  #dmMsgReport .rsub td { border:1px solid #eef2f7; padding:7px 5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; line-height:1.4; }
+  #dmMsgReport .rsub .bgrip { display:none; }
+  #dmMsgReport .rsub .rnum { text-align:right; } #dmMsgReport .rsub .hl-y { font-weight:700; }
+  #dmMsgReport .rsub tfoot td { background:#f6f8fb; } #dmMsgReport .rsub .rtot td { color:#dc2626; font-weight:800; background:#fff5f5; }
+</style>
+</head>
+<body>
+  <div class="dmw-top">📨 입찰 안내 — 아래 내용은 길게 눌러 복사할 수 있습니다</div>
+  <div class="dmw-wrap"><div id="dmMsgReport"><?!= reportHtml ?></div></div>
+<script>
+  // 유튜브 보기 버튼 → 임베드 라이트박스
+  window.DM = window.DM || {};
+  DM.playYt = function(id){
+    id = id || 'S2xVZjJeQd0';
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:80;display:flex;align-items:center;justify-content:center;padding:18px';
+    ov.onclick = function(e){ if(e.target===ov && ov.parentNode) ov.parentNode.removeChild(ov); };
+    ov.innerHTML = '<div style="position:relative;width:96%;max-width:900px">'
+      + '<button onclick="var o=this.closest(\'div\').parentNode; if(o&&o.parentNode)o.parentNode.removeChild(o);" style="position:absolute;top:-40px;right:0;background:#fff;border:0;border-radius:6px;padding:6px 14px;font-weight:800;cursor:pointer">✕ 닫기</button>'
+      + '<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:8px;overflow:hidden;background:#000"><iframe src="https://www.youtube.com/embed/'+id+'?autoplay=1&rel=0" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe></div></div>';
+    document.body.appendChild(ov);
+  };
+</script>
+</body>
+</html>
