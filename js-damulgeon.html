@@ -55,7 +55,7 @@
   #dmMsgReport .rsub .bgrip { position:absolute; top:0; right:-3px; width:8px; height:100%; cursor:col-resize; z-index:3; }
   #dmMsgReport .rsub .bgrip:hover { background:#93c5fd; }
   #dmMsgReport .rsub .rnum { text-align:right; } #dmMsgReport .rsub .hl-y { font-weight:700; }
-  #dmMsgReport .rsub tfoot td { font-weight:800; background:#f6f8fb; } #dmMsgReport .rsub .rtot td { color:#dc2626; background:#fff5f5; }   /* 총비용 빨강 */
+  #dmMsgReport .rsub tfoot td { background:#f6f8fb; } #dmMsgReport .rsub .rtot td { color:#dc2626; font-weight:800; background:#fff5f5; }   /* 합계=기본(굵게X), 총비용만 굵게 빨강 */
   /* 명의 상세 슬라이드 카드 */
   #DaMultiItemManagement .dm-member-link { color:#0e7490; cursor:pointer; text-decoration:underline dotted; }
   #DaMultiItemManagement .dm-member-link:hover { color:#1e40af; }
@@ -1191,14 +1191,14 @@
     var _missing=false;
     function _nrow(label, v){ v=(v==null?'':String(v)).trim(); if(v) return [label, v]; _missing=true; return [label, '회신 부탁드립니다.', 'hl-need']; }
     // 입찰 표
-    var bidRows=m.items.map(function(it,i){ return '<tr><td style="color:'+_msgMyungColor(it)+';font-weight:700;text-align:center">'+esc(_msgMyungLabel(it))+'</td><td style="text-align:center">'+esc(it.mulgeon_no||'')+'</td><td class="rnum hl-y">'+_won(it.bidprice)+'</td><td class="rnum">'+_won(it.deposit)+'</td><td class="rnum">'+_won(fees[i])+'</td></tr>'; }).join('');
+    var bidRows=m.items.map(function(it,i){ return '<tr><td style="color:'+_msgMyungColor(it)+';font-weight:700;text-align:center">'+esc(_msgMyungLabel(it))+'</td><td style="text-align:center">'+esc(it.mulgeon_no||'')+'</td><td class="rnum" style="color:#2563eb">'+_won(it.bidprice)+'</td><td class="rnum">'+_won(it.deposit)+'</td><td class="rnum">'+_won(fees[i])+'</td></tr>'; }).join('');
     var bcw=_loadBidColW(), bsum=bcw.reduce(function(a,b){return a+b;},0);
     var bidTable='<table class="rsub" style="width:'+bsum+'px"><colgroup>'+bcw.map(function(w){return '<col style="width:'+w+'px">';}).join('')+'</colgroup>'
       +'<thead><tr>'+['명의','물건','입찰가','보증금','진행비'].map(function(h,ci){ return '<th>'+h+'<span class="bgrip" data-ci="'+ci+'"></span></th>'; }).join('')+'</tr></thead><tbody>'+bidRows+'</tbody>'
-      +'<tfoot><tr><td colspan="2">합계</td><td class="rnum">'+_won(sumBid)+'</td><td class="rnum">'+_won(sumDep)+'</td><td class="rnum">'+_won(sumFee)+'</td></tr>'
-      +'<tr class="rtot"><td colspan="5" style="overflow:visible;white-space:nowrap;padding:5px 9px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;white-space:nowrap"><span>총 비용</span><span style="font-size:1.15em;font-weight:800;letter-spacing:-.2px">'+_won(sumDep+sumFee)+'원</span></div></td></tr></tfoot></table>';
+      +'<tfoot><tr><td colspan="2" style="text-align:center">합계</td><td class="rnum">'+_won(sumBid)+'</td><td class="rnum">'+_won(sumDep)+'</td><td class="rnum">'+_won(sumFee)+'</td></tr>'
+      +'<tr class="rtot"><td colspan="2" style="text-align:center">총 비용</td><td colspan="3" style="text-align:center;font-size:1.12em;white-space:nowrap;letter-spacing:-.2px">'+_won(sumDep+sumFee)+'원</td></tr></tfoot></table>';
     var body='';
-    body += blk('개요', _kvTable([['법원',court.bon+'법원'],['지원',court.support||'-'],['경매번호',_msgCtx.sakun],['물건번호',mulNos],['입찰일자',_msgCtx.bidDate]]));
+    body += blk('개요', _kvTable([['법원',court.bon+'법원','hl-y'],['지원',court.support||'-','hl-y'],['경매번호',_msgCtx.sakun,'hl-y'],['물건번호',mulNos,'hl-y'],['입찰일자',_msgCtx.bidDate,'hl-y']]));
     body += blk('입찰', bidTable);
     body += blk('서류 기한안내', _kvTable([['서류제출 기한',opts.due1||'(미입력)','hl-r'],['보증금송금 기한',opts.due2||'(미입력)','hl-r'],['보증금 입금계좌',_msgAcct(firstAgent)||'(대리인 계좌)']]));
     // 명의별 개인/법인 블록 — 헤더(명의N·구분) 다음 줄바꿈하여 정보(상단 사건·물건번호 줄들 → 이름 등)
@@ -1219,7 +1219,7 @@
     // 전자본인서명 용도 = 물건번호별 줄 (3건이면 3줄)
     var purposeLines=m.items.map(function(it){ return esc(courtFull+' '+_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+') 대리입찰'); }).join('<br>');
     body += blk('전자본인서명 확인서발급', _kvTable([
-      ['발급 영상','<a href="https://www.youtube.com/watch?v=S2xVZjJeQd0&t=14s" target="_blank" style="color:#1d4ed8;font-weight:700">https://youtu.be/S2xVZjJeQd0</a>','','raw'],
+      ['발급 영상','<button type="button" onclick="DM.playYt(\'S2xVZjJeQd0\')" style="background:#FF0000;color:#fff;border:0;border-radius:6px;padding:4px 11px;font-weight:800;cursor:pointer;font-size:.95em;vertical-align:middle">▶ 유튜브 보기</button> <span style="color:#1d4ed8;font-weight:600;font-size:.9em">youtu.be/S2xVZjJeQd0</span>','','raw'],
       ['용도', purposeLines,'','raw'],
       ['수임자 성명', firstAgent.name||''],
       ['수임자 주소', firstAgent.address||''],
@@ -1227,8 +1227,6 @@
       ['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요'],
       ['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']
     ]));
-    // [임시] 버전 표식 — 캡처 이미지로 새 코드 적용 여부 확인용(확인 후 제거)
-    body += '<div style="text-align:center;font-size:11px;font-weight:800;color:#16a34a;padding:4px 0 0">build 1527 · 엔진교체(html-to-image)</div>';
     // 필독 사항 — 개요 위(맨 위). 1번(정보 회신)은 누락 항목이 있을 때만 노출. 숫자는 직접 부여(캡처 시 ol 마커 누락 방지)
     var mustItems=[];
     if(_missing) mustItems.push('회원님 정보(<span class="mneed">노란색 칸</span>)를 회신해 주세요~');
@@ -1306,6 +1304,16 @@
     s.onload=function(){ cb(); }; s.onerror=function(){ alert('이미지 변환 라이브러리 로드 실패(네트워크). 화면 캡처를 이용하세요.'); };
     document.head.appendChild(s);
   }
+  // 전자본인서명 발급영상 — 클릭 시 유튜브 임베드 라이트박스(모달에서 바로 재생). 캡처 이미지엔 버튼+URL만 남음
+  DM.playYt=function(id){
+    id=id||'S2xVZjJeQd0';
+    var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:80;display:flex;align-items:center;justify-content:center;padding:24px';
+    ov.onclick=function(e){ if(e.target===ov && ov.parentNode) ov.parentNode.removeChild(ov); };
+    ov.innerHTML='<div style="position:relative;width:92%;max-width:900px">'
+      +'<button onclick="var o=this.closest(\'div\').parentNode; if(o&&o.parentNode)o.parentNode.removeChild(o);" style="position:absolute;top:-38px;right:0;background:#fff;border:0;border-radius:6px;padding:5px 13px;font-weight:800;cursor:pointer">✕ 닫기</button>'
+      +'<div style="position:relative;padding-bottom:56.25%;height:0;border-radius:8px;overflow:hidden;background:#000"><iframe src="https://www.youtube.com/embed/'+id+'?autoplay=1&rel=0" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe></div></div>';
+    document.body.appendChild(ov);
+  };
   DM.msgCopyImage=function(gi){
     if(gi==null) gi=_msgFocusGi;
     var el=document.getElementById('rrep'+gi); if(!el) return;
