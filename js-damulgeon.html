@@ -21,7 +21,8 @@
   @keyframes dmSpin { to { transform:rotate(360deg); } }
   .dm-spin { animation:dmSpin .7s linear infinite; }
   /* 입찰안내 보고서 — 모바일 친화 좁은 폭, 섹션별 굵은 테두리 + 교대 2색 */
-  #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 auto 16px; padding:34px 0; background:#fff; border:1px solid #cdd5df; border-radius:10px; overflow:hidden; }   /* 가운데 정렬(좌우 여백) + 상·하 흰 여백 1cm(모바일 편집아이콘이 내용 가리는 것 방지) */
+  #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 auto 16px; padding:68px 0; background:#fff; line-height:1.2; }   /* 캡처 루트: 테두리 없는 상·하 흰 여백(약2cm) + line-height 축소(캡처 시 글자 하단정렬 보정→세로 가운데) */
+  #dmMsgReport .rrep-card { border:1px solid #cdd5df; border-radius:10px; overflow:hidden; background:#fff; }   /* 실제 카드 테두리(여백 영역엔 테두리 없음) */
   #dmMsgReport .rrep-h { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; padding:11px 12px; background:#1f3a5f; color:#fff; }
   #dmMsgReport .rrep-title { font-size:15px; }
   #dmMsgReport .rrep-h b { font-size:1.55em; }   /* 이름 크게, 눈에 띄게 */
@@ -35,7 +36,7 @@
   #dmMsgReport .rsec-a { border-color:#9db4d4; } #dmMsgReport .rsec-a .rsec-h { background:#e6eef8; color:#1e3a5f; }
   #dmMsgReport .rsec-b { border-color:#b7c4ad; } #dmMsgReport .rsec-b .rsec-h { background:#eaf0e4; color:#3a4a2a; }
   #dmMsgReport .rkv { width:100%; border-collapse:collapse; font-size:.93em; }
-  #dmMsgReport .rkv td { border:1px solid #e8edf3; padding:4px 8px; vertical-align:top; color:#1f2937; word-break:break-all; }
+  #dmMsgReport .rkv td { border:1px solid #e8edf3; padding:4px 8px; vertical-align:middle; color:#1f2937; word-break:break-all; }
   #dmMsgReport .rkv .rk { width:84px; background:#fafbfc; color:#64748b; font-weight:600; white-space:nowrap; }
   #dmMsgReport .rsec-b .rkv .rk { background:#fbfcf8; }
   #dmMsgReport .rkv .rv.hl-y { font-weight:800; }
@@ -44,10 +45,9 @@
   /* 필독 사항 블록 — 개요 위, 눈에 띄게 강조 */
   #dmMsgReport .rsec-must { border-color:#ef4444; }
   #dmMsgReport .rsec-must .rsec-h { background:#fee2e2; color:#b91c1c; }
-  #dmMsgReport .rsec-must .rmust-bd { padding:8px 11px 9px; background:#fffdf5; }
-  #dmMsgReport .rsec-must ol { margin:0; padding-left:21px; }
-  #dmMsgReport .rsec-must li { margin:4px 0; font-weight:700; line-height:1.45; color:#1f2937; }
-  #dmMsgReport .rsec-must li .mneed { background:#fde047; color:#92400e; padding:1px 5px; border-radius:4px; font-weight:800; }
+  #dmMsgReport .rsec-must .rmust-bd { padding:8px 12px 9px; background:#fffdf5; }
+  #dmMsgReport .rsec-must .rmust-li { margin:4px 0; font-weight:700; line-height:1.35; color:#1f2937; }
+  #dmMsgReport .rsec-must .rmust-li .mneed { background:#fde047; color:#92400e; padding:1px 5px; border-radius:4px; font-weight:800; }
   /* 입찰 표 — 가로 압축 + 컬럼 리사이즈 */
   #dmMsgReport .rsub { border-collapse:collapse; font-size:.84em; table-layout:fixed; }   /* width는 컬럼합(인라인) — 만진 열만 변경 */
   #dmMsgReport .rsub th { position:relative; text-align:center; background:#eef2f7; color:#475569; padding:3px 4px; border:1px solid #dce3ec; font-weight:700; }
@@ -1196,7 +1196,7 @@
     var bidTable='<table class="rsub" style="width:'+bsum+'px"><colgroup>'+bcw.map(function(w){return '<col style="width:'+w+'px">';}).join('')+'</colgroup>'
       +'<thead><tr>'+['명의','물건','입찰가','보증금','진행비'].map(function(h,ci){ return '<th>'+h+'<span class="bgrip" data-ci="'+ci+'"></span></th>'; }).join('')+'</tr></thead><tbody>'+bidRows+'</tbody>'
       +'<tfoot><tr><td colspan="2">합계</td><td class="rnum">'+_won(sumBid)+'</td><td class="rnum">'+_won(sumDep)+'</td><td class="rnum">'+_won(sumFee)+'</td></tr>'
-      +'<tr class="rtot"><td colspan="2">총 비용</td><td colspan="3" class="rnum" style="overflow:visible;white-space:nowrap">'+_won(sumDep+sumFee)+'원</td></tr></tfoot></table>';
+      +'<tr class="rtot"><td colspan="5" style="overflow:visible;white-space:nowrap;padding:5px 9px"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;white-space:nowrap"><span>총 비용</span><span style="font-size:1.15em;font-weight:800;letter-spacing:-.2px">'+_won(sumDep+sumFee)+'원</span></div></td></tr></tfoot></table>';
     var body='';
     body += blk('개요', _kvTable([['법원',court.bon+'법원'],['지원',court.support||'-'],['경매번호',_msgCtx.sakun],['물건번호',mulNos],['입찰일자',_msgCtx.bidDate]]));
     body += blk('입찰', bidTable);
@@ -1227,21 +1227,24 @@
       ['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요'],
       ['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']
     ]));
-    // 필독 사항 — 개요 위(맨 위). 1번(누락정보 회신)은 누락 항목이 있을 때만 노출
+    // 필독 사항 — 개요 위(맨 위). 1번(정보 회신)은 누락 항목이 있을 때만 노출. 숫자는 직접 부여(캡처 시 ol 마커 누락 방지)
     var mustItems=[];
-    if(_missing) mustItems.push('누락된 회원님 정보(<span class="mneed">노란색 칸</span>)를 회신해 주세요~');
-    mustItems.push('총비용을 기한 내에 꼭 입금해 주세요, 입금 후 알려주세요~');
-    mustItems.push('전자본인서명 확인서를 꼭 기한 내에 전달해 주세요~');
-    body = '<div class="rsec rsec-must"><div class="rsec-h">⚠ 필독 사항</div><div class="rmust-bd"><ol><li>'+mustItems.join('</li><li>')+'</li></ol></div></div>' + body;
+    if(_missing) mustItems.push('회원님 정보(<span class="mneed">노란색 칸</span>)를 회신해 주세요~');
+    mustItems.push('총비용을 기한내에 꼭 입금해 주세요~');
+    mustItems.push('전자본인서명을 꼭 기한 내에 전달해 주세요~');
+    var mustList=mustItems.map(function(t,i){ return '<div class="rmust-li">'+(i+1)+'. '+t+'</div>'; }).join('');
+    body = '<div class="rsec rsec-must"><div class="rsec-h">⚠ 필독 사항</div><div class="rmust-bd">'+mustList+'</div></div>' + body;
     // 짧은 주소(좌측 다물건 리스트와 동일) — 이름 옆에
     var rawA=''; for(var ai=0;ai<m.items.length;ai++){ var aa=String(m.items[ai].address||'').trim(); if(aa){ rawA=aa; break; } }
     var shortAddr=rawA?_shortAddr(rawA):(_msgCtx.addr?_shortAddr(_msgCtx.addr):'');
     return '<div class="rrep" id="rrep'+idx+'">'
+      +'<div class="rrep-card">'
       +'<div class="rrep-h">'
       +  '<div class="rrep-title"><b>'+esc(m.member)+'</b>님 <span class="rh-cnt">'+m.items.length+'물건</span> 입찰안내</div>'
       +  (shortAddr?('<div class="rrep-loc">📍 '+esc(shortAddr)+'</div>'):'')
       +'</div>'
-      +'<div class="rbody">'+body+'</div></div>';
+      +'<div class="rbody">'+body+'</div>'
+      +'</div></div>';
   }
   function _composeMsgText(m, opts){
     var court=_courtParse((m.items[0]&&m.items[0].court)||''), courtFull=court.bon+'법원'+(court.support?(' '+court.support+'지원'):'');
@@ -1335,10 +1338,12 @@
         if(i>=pages.length){ alert(pages.length+'장 저장 완료.\n카톡에 '+pages.length+'장 모두 첨부하면, 받는 사람이 좌우로 넘겨 편하게 봅니다.'); return; }
         var wrap=document.createElement('div'); wrap.id='dmMsgReport'; wrap.style.cssText='position:fixed;left:-9999px;top:0;width:430px;background:#fff'; wrap.style.setProperty('--dmrf', _msgFont+'px');
         var card=document.createElement('div'); card.className='rrep';
+        var inner=document.createElement('div'); inner.className='rrep-card';
         var hc=rep.querySelector('.rrep-h').cloneNode(true); var cw=hc.querySelector('.rcopy-wrap'); if(cw) cw.parentNode.removeChild(cw);
         if(pages.length>1){ var pg=document.createElement('span'); pg.className='rh-cnt'; pg.style.marginLeft='auto'; pg.textContent=(i+1)+' / '+pages.length; hc.appendChild(pg); }
-        card.appendChild(hc);
-        var bd=document.createElement('div'); bd.className='rbody'; pages[i].forEach(function(s){ bd.appendChild(s.cloneNode(true)); }); card.appendChild(bd);
+        inner.appendChild(hc);
+        var bd=document.createElement('div'); bd.className='rbody'; pages[i].forEach(function(s){ bd.appendChild(s.cloneNode(true)); }); inner.appendChild(bd);
+        card.appendChild(inner);
         wrap.appendChild(card); document.body.appendChild(wrap);
         window.html2canvas(card, { scale:2.5, backgroundColor:'#ffffff', useCORS:true }).then(function(cv){
           if(wrap.parentNode) document.body.removeChild(wrap);
