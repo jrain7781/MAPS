@@ -76,13 +76,15 @@
       <button onclick="location.reload()" style="background:#1f3a5f;color:#fff;border:0;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:800;cursor:pointer">🔄 새로고침 (최신 정보)</button>
     </div>
     <div class="dmw-top">📨 입찰 안내 — 아래 내용은 길게 눌러 복사할 수 있습니다</div>
-    <div class="dmw-wrap"><div id="dmMsgReport"></div></div>
+    <div class="dmw-wrap"><div id="dmMsgReport"><?!= embedHtml ?></div></div>
   </div>
   <div id="loading" style="text-align:center;padding:60px 12px;color:#94a3b8;font-size:14px">불러오는 중…</div>
 
 <script>
   var TOKEN = '<?= token ?>';
   var GATED = ('<?= gated ?>' === 'true');
+  var STATUS = '<?= reportStatus ?>';
+  var HAS_EMBED = ('<?= hasEmbed ?>' === 'true');
   var KEY = 'dmv4_' + TOKEN;
   window.DM = window.DM || {};
   // 유튜브 임베드
@@ -145,10 +147,20 @@
       if(v.length<4){ DMV.msg('4자리를 입력하세요.','err'); return; }
       DMV.verify(v);
     },
+    showInvalid: function(msg){
+      DMV.show('gate');
+      var i=DMV.el('g4'), b=DMV.el('gBtn'); if(i) i.style.display='none'; if(b) b.style.display='none';
+      var lk=document.querySelector('#gate .lock'); if(lk) lk.textContent='⚠';
+      var h=document.querySelector('#gate h2'); if(h) h.textContent='안내';
+      var p=document.querySelector('#gate p'); if(p) p.style.display='none';
+      DMV.msg(msg, 'err');
+    },
     init: function(){
-      if(!GATED){ DMV.verify(''); return; }                 // 게이트 없음(전화 미등록) → 바로 로드
+      if(STATUS==='revoked'){ DMV.showInvalid('유효하지 않은 링크입니다. 담당자에게 새 링크를 요청해 주세요.'); return; }
+      if(STATUS==='expired'){ DMV.showInvalid('입찰일이 지나 만료된 링크입니다.'); return; }
+      if(HAS_EMBED){ DMV.show('rep'); return; }               // 게이트 없음 → 임베드된 보고서 즉시(서버호출 0)
       var saved=''; try{ saved=localStorage.getItem(KEY)||''; }catch(e){}
-      if(saved){ DMV.verify(saved); }                        // 이 기기에서 이미 확인함 → 자동
+      if(saved){ DMV.verify(saved); }                          // 게이트: 이 기기 기억 → 자동확인
       else { DMV.show('gate'); setTimeout(function(){ var i=DMV.el('g4'); if(i) i.focus(); }, 100); }
     }
   };

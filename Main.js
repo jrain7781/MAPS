@@ -74,6 +74,9 @@ function doGet(e) {
       var _dmT = HtmlService.createTemplateFromFile('dm-report');
       _dmT.token = String(params.r);
       _dmT.gated = !!(_meta && _meta.gated);
+      _dmT.reportStatus = (_meta && _meta.status) || 'revoked';
+      _dmT.embedHtml = (_meta && _meta.html) || '';      // 게이트 없으면 바로 임베드(빠름)
+      _dmT.hasEmbed = !!(_meta && _meta.html);
       _dmT.reportTitle = (_meta && _meta.title) || '입찰 안내';
       _dmT.reportDesc = (_meta && _meta.summary) || '입찰 안내';
       return _dmT.evaluate()
