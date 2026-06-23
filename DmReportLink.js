@@ -95,10 +95,15 @@ function dmVerifyReport(token, last4) {
   return { status: 'fail', left: 3 - fail };
 }
 
-/** doGet 게이트 페이지용 메타(제목/요약/게이트여부) — 검증 전 미리보기. */
+/** doGet용 메타. 게이트 없으면(전화 미등록) html까지 실어 doGet에서 바로 임베드(서버 재호출 없이 빠르게). */
 function dmGetReportMeta(token) {
   var data = dmLinkSheet_().getDataRange().getValues();
   var ri = dmFindByToken_(data, token);
   if (ri < 0) return null;
-  return { title: String(data[ri][5] || ''), summary: String(data[ri][6] || ''), gated: !!String(data[ri][3] || ''), active: String(data[ri][7]) === 'active' };
+  var row = data[ri];
+  var active = String(row[7]) === 'active', expired = dmExpired_(row[10]), gated = !!String(row[3] || '');
+  var status = !active ? 'revoked' : (expired ? 'expired' : 'active');
+  var meta = { title: String(row[5] || ''), summary: String(row[6] || ''), gated: gated, status: status };
+  if (status === 'active' && !gated) meta.html = String(row[4] || '');   // 게이트 없음 → 바로 임베드
+  return meta;
 }

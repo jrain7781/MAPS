@@ -1331,6 +1331,7 @@
   // 웹 링크 생성 — 보고서 카드 HTML 스냅샷을 서버에 저장하고 추측불가 링크 반환(회원이 열어서 복사·클릭 가능)
   function _dmLinkArgs(gi){
     var m=_msgGroups[gi]; if(!m) return null;
+    if(Object.keys(_msgDetailMap).length===0) return { notReady:true };   // 상세정보(전화·대리인) 아직 로딩 전 → 불완전 링크 방지
     var tmp=document.createElement('div'); tmp.innerHTML=_buildMsgReport(m, _msgOpts(), gi, true);   // web=true: 복사버튼·유튜브버튼만·주민 가림
     var cardEl=tmp.querySelector('.rrep-card'); if(!cardEl) return null;
     var seed=(m.member_id||m.member||'')+'|'+(_msgCtx.sakun||'');
@@ -1354,6 +1355,7 @@
   DM.makeLink=function(gi){
     if(gi==null) gi=_msgFocusGi;
     var a=_dmLinkArgs(gi); if(!a){ alert('회원을 선택하세요.'); return; }
+    if(a.notReady){ alert('회원 상세정보를 불러오는 중입니다.\n보고서가 다 뜬 뒤(전화·대리인 표시) 다시 눌러주세요.'); return; }
     if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
     google.script.run.withSuccessHandler(function(res){ _dmLinkDone(res, a, false); })
       .withFailureHandler(function(e){ alert('링크 생성 오류: '+(e&&e.message||e)); })
@@ -1362,6 +1364,7 @@
   DM.revokeLink=function(gi){
     if(gi==null) gi=_msgFocusGi;
     var a=_dmLinkArgs(gi); if(!a){ alert('회원을 선택하세요.'); return; }
+    if(a.notReady){ alert('회원 상세정보를 불러오는 중입니다. 잠시 후 다시 눌러주세요.'); return; }
     if(!confirm(a.m.member+'님의 기존 링크를 폐기하고 새 링크를 발급합니다.\n(잘못 보낸 링크 대비 — 옛 링크는 더 이상 안 열림)\n진행할까요?')) return;
     if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
     google.script.run.withSuccessHandler(function(res){ _dmLinkDone(res, a, true); })
