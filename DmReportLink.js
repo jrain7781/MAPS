@@ -226,7 +226,7 @@ function _dmSavePdf_(memberId, token, filename, base64) {
     var file = _dmPdfFolder_().createFile(blob);
     file.setDescription('다물건 전자서명 업로드 member=' + memberId + ' token=' + token);
     var url = file.getUrl();
-    _dmRecordUpload_(token, memberId, safe, url);
+    _dmRecordUpload_(token, memberId, safe, url, _dmBiddateFor_(token, memberId));   // 입찰일 기록 → 다음날 자동 삭제
     return { success: true, url: url, name: safe };
   } catch (e) {
     return { success: false, msg: (e && e.message) || String(e) };
@@ -277,13 +277,61 @@ function dmGetUploadsBulk(memberIds) {
   return map;
 }
 
-function _dmRecordUpload_(token, memberId, name, url) {
+function _dmRecordUpload_(token, memberId, name, url, biddate) {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sh = ss.getSheetByName('dm_uploads');
-    if (!sh) { sh = ss.insertSheet('dm_uploads'); sh.getRange(1, 1, 1, 5).setValues([['date', 'token', 'member_id', 'filename', 'url']]); sh.hideSheet(); }
-    sh.appendRow([new Date(), token, memberId, name, url]);
+    if (!sh) { sh = ss.insertSheet('dm_uploads'); sh.getRange(1, 1, 1, 6).setValues([['date', 'token', 'member_id', 'filename', 'url', 'biddate']]); sh.hideSheet(); }
+    sh.appendRow([new Date(), token, memberId, name, url, String(biddate || '')]);
   } catch (e) {}
+}
+
+/** 업로드 PDF의 입찰일 추정: token이면 그 링크, 없으면 member_id의 활성/최근 링크 biddate. */
+function _dmBiddateFor_(token, memberId) {
+  try {
+    var data = dmLinkSheet_().getDataRange().getValues();
+    if (token) { var ri = dmFindByToken_(data, token); if (ri >= 0) return String(data[ri][10] || ''); }
+    memberId = String(memberId || '').trim();
+    if (memberId) {
+      for (var i = 1; i < data.length; i++) { if (String(data[i][2]).trim() === memberId && String(data[i][7]) === 'active') return String(data[i][10] || ''); }
+      for (var j = data.length - 1; j >= 1; j--) { if (String(data[j][2]).trim() === memberId) return String(data[j][10] || ''); }
+    }
+  } catch (e) {}
+  return '';
+}
+
+/**
+ * 입찰 다음날 자동 폐기: 만료된 링크의 첨부 PDF를 휴지통으로(복구가능) + dm_uploads 행 제거.
+ * 링크 자체는 dmExpired_로 이미 접근 차단(만료). 일일 트리거(installDmCleanupTrigger)로 실행.
+ */
+function dmCleanupExpired() {
+  var trashed = 0, kept = 0;
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID), sh = ss.getSheetByName('dm_uploads');
+    if (sh && sh.getLastRow() >= 2) {
+      var n = sh.getLastRow() - 1, v = sh.getRange(2, 1, n, 6).getValues(), keep = [];
+      for (var i = 0; i < v.length; i++) {
+        var bd = String(v[i][5] || '');
+        if (bd && dmExpired_(bd)) {
+          var url = String(v[i][4] || ''), idm = url.match(/[-\w]{25,}/);
+          if (idm) { try { DriveApp.getFileById(idm[0]).setTrashed(true); } catch (e) {} }
+          trashed++;
+        } else { keep.push(v[i]); kept++; }
+      }
+      sh.getRange(2, 1, n, 6).clearContent();
+      if (keep.length) sh.getRange(2, 1, keep.length, 6).setValues(keep);
+    }
+  } catch (e2) { Logger.log('dmCleanupExpired err: ' + e2); }
+  Logger.log('dmCleanupExpired: trashedPdf=' + trashed + ' keptPdf=' + kept);
+  return { trashedPdf: trashed, keptPdf: kept };
+}
+
+/** 일일 트리거 설치(1회 실행) — 매일 새벽 4시 dmCleanupExpired. */
+function installDmCleanupTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'dmCleanupExpired') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('dmCleanupExpired').timeBased().everyDays(1).atHour(4).create();
+  Logger.log('dmCleanupExpired 일일 트리거 설치 완료(매일 04시)');
+  return { installed: true };
 }
 
 /** 모달 표시용: seed의 현재 활성 링크 상태(활성/만료/없음) + 생성시각·게이트여부. 읽기 전용. */
