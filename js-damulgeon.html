@@ -26,8 +26,8 @@
   /* 회원 입력칸(노란칸) + 일괄 저장 버튼(카드 우상단) — 회원 웹페이지와 동일 */
   #dmMsgReport .dmedit { width:100%; box-sizing:border-box; border:1px solid #f59e0b; border-radius:5px; padding:5px 7px; font-size:.95em; background:#fffbeb; color:#92400e; }
   #dmMsgReport .dmedit-acct { display:flex; gap:4px; } #dmMsgReport .dmedit-acct .dmedit { width:33%; }
-  #dmMsgReport .dmsave { position:absolute; top:9px; right:10px; z-index:2; background:#f59e0b; color:#fff; border:0; border-radius:7px; padding:6px 13px; font-size:13px; font-weight:800; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.25); }
-  #dmMsgReport .dmsave:active { background:#d97706; }
+  #dmMsgReport .dmsave { position:absolute; top:3px; right:5px; z-index:2; background:#f59e0b; color:#fff; border:0; border-radius:6px; padding:3px 11px; font-size:12px; font-weight:800; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.2); }
+  #dmMsgReport .dmsave:active { background:#d97706; } #dmMsgReport .dmsave:disabled { cursor:default; opacity:.95; }
   #dmMsgReport .rrep-h { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; padding:11px 12px; background:#1f3a5f; color:#fff; }
   #dmMsgReport .rrep-title { font-size:15px; }
   #dmMsgReport .rrep-h b { font-size:1.55em; }   /* 이름 크게, 눈에 띄게 */
@@ -35,7 +35,7 @@
   #dmMsgReport .rrep-loc { font-size:12px; font-weight:600; color:#cfe0f5; }
   #dmMsgReport .rbody { padding:10px; font-size:var(--dmrf,14px); }   /* 폰트 조절(상단 글자 버튼) */
   /* 섹션 블록 */
-  #dmMsgReport .rsec { border:2px solid; border-radius:8px; margin:0 0 9px; overflow:hidden; }
+  #dmMsgReport .rsec { position:relative; border:2px solid; border-radius:8px; margin:0 0 9px; overflow:hidden; }
   #dmMsgReport .rsec-h { padding:5px 10px; font-weight:800; font-size:1.02em; }
   #dmMsgReport .rsec-h .rh-sub { font-weight:700; font-size:.82em; padding:0 6px; border-radius:8px; background:rgba(255,255,255,.6); }
   #dmMsgReport .rsec-a { border-color:#9db4d4; } #dmMsgReport .rsec-a .rsec-h { background:#e6eef8; color:#1e3a5f; }
@@ -1197,6 +1197,20 @@
         .withFailureHandler(function(){}).dmGetLinkStatus(seed);
     }
   }
+  // 모달(관리자) 저장: 노란칸을 관리자가 채워 저장. member_id로 직접(토큰 불필요). 같은 .rsec 입력칸만.
+  DM.saveFields=function(btn){
+    var scope=(btn.closest&&btn.closest('.rsec'))||document.getElementById('dmMsgReport')||document;
+    var inputs=scope.querySelectorAll('.dmedit'), edits=[], filled=0;
+    for(var i=0;i<inputs.length;i++){ var el=inputs[i], v=(el.value||'').trim(); if(!v) continue; filled++; edits.push({ idx:parseInt(el.getAttribute('data-idx'),10), field:el.getAttribute('data-field'), value:v }); }
+    if(!filled){ alert('입력한 내용이 없습니다. 노란 칸을 채워주세요.'); return; }
+    var m=_msgGroups[_msgFocusGi]; if(!m||!m.member_id){ alert('회원 식별 불가(미지정 회원은 저장 불가)'); return; }
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+    var o=btn.getAttribute('data-o')||btn.textContent; btn.setAttribute('data-o',o);
+    btn.disabled=true; btn.textContent='저장 중…'; btn.style.background='#9ca3af';
+    google.script.run.withSuccessHandler(function(r){ if(r&&r.success){ btn.textContent='✓ 저장됨'; btn.style.background='#16a34a'; alert('저장되었습니다.'); } else { btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 실패: '+((r&&r.msg)||'?')); } })
+      .withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 오류: '+(e&&e.message||e)); })
+      .dmSaveMemberFieldsByMember(m.member_id, edits);
+  };
   // 미리보기 복사버튼 동작(웹페이지 DM.copyVal과 동일) — 모달에서도 눌러 복사 가능
   DM.copyVal=function(btn){
     var v=btn.getAttribute('data-c')||'';
@@ -1250,6 +1264,8 @@
     var firstAgent=(_msgDetailFor(m, m.items[0]).agent)||{};
     // 섹션 블록 (굵은 테두리 + 교대 2색)
     var _bi=0; function blk(name, body){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
+    // 명의 카드용: 제목 옆(우측)에 💾 저장 버튼. 웹=DMV.saveFields / 모달=DM.saveFields. 같은 .rsec 안 입력칸만 저장.
+    function blkSave(name, body, withSave){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'">'+(withSave?'<button type="button" class="dmsave" onclick="if(window.DMV&&DMV.saveFields){DMV.saveFields(this)}else if(window.DM&&DM.saveFields){DM.saveFields(this)}">💾 저장</button>':'')+'<div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
     // 회원정보 누락 항목 → 노란 강조. 웹(링크)에선 입력칸으로(회원이 채워 저장), 그 외엔 "회신 부탁드립니다."
     var _missing=false;
     function _editCell(idx, field, ph){ return '<input class="dmedit" type="text" data-idx="'+idx+'" data-field="'+field+'" placeholder="'+ph+'">'; }
@@ -1258,7 +1274,7 @@
     // 복사 버튼(웹 링크 전용). data-c 평문을 클릭 시 복사(DM.copyVal은 웹 보고서 페이지에 정의). 이미지/모달(web=false)에선 버튼 없음
     function _cpBtn(v){ v=String(v==null?'':v).trim(); if(!web||!v||v==='-'||v==='(미입력)'||v==='(대리인 계좌)') return ''; return '<button type="button" class="dmcp" data-c="'+esc(v)+'" onclick="DM.copyVal&&DM.copyVal(this)">복사</button>'; }
     // 값+복사버튼을 한 줄 flex로(버튼은 오른쪽 끝, 겹침 방지). 복사대상 없으면 값만
-    function _cpLine(v){ var s=(v==null?'':String(v)); var b=_cpBtn(s); return b ? ('<div class="cpline"><span class="cpv">'+esc(s)+'</span>'+b+'</div>') : esc(s); }
+    function _cpLine(v, copyOverride){ var s=(v==null?'':String(v)); var cv=(copyOverride!=null?String(copyOverride):s); var b=_cpBtn(cv); return b ? ('<div class="cpline"><span class="cpv">'+esc(s)+'</span>'+b+'</div>') : esc(s); }
     function _cpRow(label, v, hl){ return [label, _cpLine(v), hl||'', 'raw']; }
     // 주민/법인등록번호 뒷자리 가림(웹 링크에서만): 901010-1******
     function _maskNo(v){ if(!web) return v; v=String(v==null?'':v).trim(); var d=v.replace(/[^0-9]/g,''); if(d.length>=7) return d.slice(0,6)+'-'+d.charAt(6)+'******'; return v; }
@@ -1273,9 +1289,10 @@
       +'<tfoot><tr><td colspan="2" style="text-align:center">합계</td><td class="rnum">'+_won(sumBid)+'</td><td class="rnum">'+_won(sumDep)+'</td><td class="rnum">'+_won(sumFee)+'</td></tr>'
       +'<tr class="rtot"><td colspan="3" style="text-align:center">총 비용</td><td colspan="2" style="text-align:center;font-size:1.12em;white-space:nowrap;letter-spacing:-.2px">'+(web?('<div class="cpline"><span class="cpv" style="text-align:center">'+_won(sumDep+sumFee)+'원</span><button type="button" class="dmcp" data-c="'+(sumDep+sumFee)+'" onclick="DM.copyVal&&DM.copyVal(this)">복사</button></div>'):(_won(sumDep+sumFee)+'원'))+'</td></tr></tfoot></table>';   /* 경계=입찰가|보증금. 값은 보증금+진행비 칸 위에 */
     var body='';
-    body += blk('개요', _kvTable([_cpRow('법원',court.bon+'법원','hl-y'),_cpRow('지원',court.support||'-','hl-y'),['경매번호',_msgCtx.sakun,'hl-y'],['물건번호',mulNos,'hl-y'],['입찰일자',_msgCtx.bidDate,'hl-y']]));
+    body += blk('개요', _kvTable([_cpRow('법원',court.bon+'법원','hl-y'),_cpRow('지원',court.support||'-','hl-y'),_cpRow('경매번호',_msgCtx.sakun,'hl-y'),['물건번호',mulNos,'hl-y'],['입찰일자',_msgCtx.bidDate,'hl-y']]));
     body += blk('입찰', bidTable);
-    body += blk('서류 기한안내', _kvTable([['서류제출 기한',opts.due1||'(미입력)','hl-r'],['보증금송금 기한',opts.due2||'(미입력)','hl-r'],_cpRow('보증금 입금계좌',_msgAcct(firstAgent)||'(대리인 계좌)')]));
+    // 보증금 입금계좌: 화면엔 은행·번호·예금주 다 보이고, 복사는 계좌번호만
+    body += blk('서류 기한안내', _kvTable([['서류제출 기한',opts.due1||'(미입력)','hl-r'],['보증금송금 기한',opts.due2||'(미입력)','hl-r'],['보증금 입금계좌', _cpLine(_msgAcct(firstAgent)||'(대리인 계좌)', String(firstAgent.account_no||'').trim()), '', 'raw']]));
     // 명의별 개인/법인 블록 — 헤더(명의N·구분) 다음 줄바꿈하여 정보(상단 사건·물건번호 줄들 → 이름 등)
     var mg={}, mgOrder=[]; m.items.forEach(function(it){ var k=_myunguiKey(it); if(!mg[k]){ mg[k]=[]; mgOrder.push(k); } mg[k].push(it); });
     mgOrder.forEach(function(k, gIdx){
@@ -1289,7 +1306,8 @@
       var rows=[['사건·물건', caseLines,'hl-y','raw']].concat(isCorp
         ? [['법인성명',pName,'hl-y'],_nrow('사업자번호',p.biz_no,'biz_no',p.idx),_nrow('법인등록번호',_maskNo(p.jumin_corp),'jumin_corp',p.idx),_nrow('전화번호',p.phone,'phone',p.idx),_nrow('주소',p.address,'address',p.idx),_acctRow(p)]
         : [['입찰명의성명',pName,'hl-y'],['직업',p.job||'회사원'],_nrow('주민등록번호',_maskNo(p.jumin_corp),'jumin_corp',p.idx),_nrow('전화번호',p.phone,'phone',p.idx),_nrow('주소',p.address,'address',p.idx),_acctRow(p)]);
-      body += blk(hd, _kvTable(rows));
+      var tbl=_kvTable(rows);
+      body += blkSave(hd, tbl, web && tbl.indexOf('dmedit')>=0);   // 노란 입력칸 있는 명의 카드에만 제목 옆 저장버튼
     });
     // 전자본인서명 용도 = 물건번호별 줄 (3건이면 3줄). 웹이면 줄마다 복사버튼(물건별)
     var purposeLines=m.items.map(function(it){ var line=courtPlain+' '+_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+') 대리입찰'; return web ? _cpLine(line) : esc(line); }).join(web?'':'<br>');
@@ -1317,7 +1335,6 @@
     var shortAddr=rawA?_shortAddr(rawA):(_msgCtx.addr?_shortAddr(_msgCtx.addr):'');
     return '<div class="rrep" id="rrep'+idx+'">'
       +'<div class="rrep-card">'
-      +((web&&_missing)?'<button type="button" class="dmsave" onclick="window.DMV&&DMV.saveFields&&DMV.saveFields(this)">💾 저장</button>':'')
       +'<div class="rrep-h">'
       +  '<div class="rrep-title"><b>'+esc(m.member)+'</b>님 <span class="rh-cnt">'+m.items.length+'물건</span> 입찰안내</div>'
       +  (shortAddr?('<div class="rrep-loc">📍 '+esc(shortAddr)+'</div>'):'')

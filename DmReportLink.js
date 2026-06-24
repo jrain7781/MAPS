@@ -109,7 +109,6 @@ function dmRevokeOnly(seed) {
  * edits = [{idx, field, value}]. (field: jumin_corp/biz_no/phone/address/account_bank/account_no/account_name/job/name)
  */
 function dmSaveMemberFields(token, edits) {
-  edits = edits || [];
   var data = dmLinkSheet_().getDataRange().getValues();
   var ri = dmFindByToken_(data, token);
   if (ri < 0) return { success: false, msg: '유효하지 않은 링크' };
@@ -118,6 +117,18 @@ function dmSaveMemberFields(token, edits) {
   if (dmExpired_(row[10])) return { success: false, msg: '만료된 링크' };
   var memberId = String(row[2] || '').trim();
   if (!memberId) return { success: false, msg: '회원 식별 불가' };
+  return _dmSaveFieldsCore_(memberId, edits);
+}
+
+/** 관리자(모달)용 직접 저장 — 토큰 없이 member_id로. 노란칸 부분 병합. */
+function dmSaveMemberFieldsByMember(memberId, edits) {
+  memberId = String(memberId || '').trim();
+  if (!memberId) return { success: false, msg: '회원 식별 불가' };
+  return _dmSaveFieldsCore_(memberId, edits);
+}
+
+function _dmSaveFieldsCore_(memberId, edits) {
+  edits = edits || [];
   var allow = { gubun: 1, name: 1, job: 1, jumin_corp: 1, biz_no: 1, phone: 1, address: 1, account_bank: 1, account_no: 1, account_name: 1 };
   var byIdx = {};
   edits.forEach(function (e) {

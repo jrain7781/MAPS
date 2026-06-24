@@ -58,13 +58,13 @@
   #dmMsgReport .dmcp:active{ background:#0b5563; }
   #dmMsgReport .cpline{ display:flex; align-items:center; gap:8px; margin:2px 0; }
   #dmMsgReport .cpline .cpv{ flex:1 1 auto; min-width:0; word-break:break-all; }
-  /* 회원 입력칸(노란칸) + 카드 우상단 일괄 저장 버튼 */
-  #dmMsgReport .rrep-card{ position:relative; }
+  /* 회원 입력칸(노란칸) + 명의 카드 제목 옆 일괄 저장 버튼 */
+  #dmMsgReport .rsec{ position:relative; }
   #dmMsgReport .dmedit{ width:100%; box-sizing:border-box; border:1px solid #f59e0b; border-radius:6px; padding:8px 9px; font-size:1em; background:#fffbeb; color:#92400e; }
   #dmMsgReport .dmedit:focus{ outline:none; border-color:#d97706; background:#fff; }
   #dmMsgReport .dmedit-acct{ display:flex; gap:5px; } #dmMsgReport .dmedit-acct .dmedit{ width:33%; }
-  #dmMsgReport .dmsave{ position:absolute; top:9px; right:10px; z-index:2; background:#f59e0b; color:#fff; border:0; border-radius:8px; padding:7px 14px; font-size:14px; font-weight:800; cursor:pointer; box-shadow:0 1px 5px rgba(0,0,0,.3); }
-  #dmMsgReport .dmsave:active{ background:#d97706; }
+  #dmMsgReport .dmsave{ position:absolute; top:4px; right:6px; z-index:2; background:#f59e0b; color:#fff; border:0; border-radius:7px; padding:4px 12px; font-size:13px; font-weight:800; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+  #dmMsgReport .dmsave:active{ background:#d97706; } #dmMsgReport .dmsave:disabled{ cursor:default; opacity:.95; }
 </style>
 </head>
 <body>
@@ -111,27 +111,6 @@
     function fb(){ var ta=document.createElement('textarea'); ta.value=v; ta.style.position='fixed'; ta.style.top='-1000px'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); try{ document.execCommand('copy'); ok(); }catch(e){ alert('복사 실패 — 값을 길게 눌러 복사해 주세요'); } document.body.removeChild(ta); }
     if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(v).then(ok).catch(fb); }
     else fb();
-  };
-  // 노란칸(누락 항목) 일괄 저장 — 카드 우상단 💾 저장
-  window.DMV = window.DMV || {};
-  DMV.saveFields = function(btn){
-    var inputs = document.querySelectorAll('#dmMsgReport .dmedit');
-    var edits = [], filled = 0;
-    for(var i=0;i<inputs.length;i++){
-      var el=inputs[i], v=(el.value||'').trim();
-      if(!v) continue;
-      filled++;
-      edits.push({ idx: parseInt(el.getAttribute('data-idx'),10), field: el.getAttribute('data-field'), value: v });
-    }
-    if(!filled){ alert('입력한 내용이 없습니다. 노란 칸을 채운 뒤 저장해 주세요.'); return; }
-    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('저장 환경 오류'); return; }
-    var o=btn.textContent; btn.disabled=true; btn.textContent='저장 중…';
-    google.script.run.withSuccessHandler(function(r){
-      btn.disabled=false;
-      if(r&&r.success){ btn.textContent='✓ 저장됨'; btn.style.background='#16a34a'; alert('저장되었습니다. 담당자에게 전달됩니다. 감사합니다!'); }
-      else { btn.textContent=o; alert('저장 실패: '+((r&&r.msg)||'알 수 없음')); }
-    }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; alert('저장 오류: '+(e&&e.message||e)); })
-      .dmSaveMemberFields(TOKEN, edits);
   };
 
   var DMV = {
@@ -191,6 +170,26 @@
       if(saved){ DMV.verify(saved); }                          // 게이트: 이 기기 기억 → 자동확인
       else { DMV.show('gate'); setTimeout(function(){ var i=DMV.el('g4'); if(i) i.focus(); }, 100); }
     }
+  };
+  // 노란칸(누락 항목) 일괄 저장 — 명의 카드 제목 옆 💾 저장. 같은 카드(.rsec) 안의 입력칸만 저장.
+  DMV.saveFields = function(btn){
+    var scope = (btn.closest && btn.closest('.rsec')) || document.getElementById('dmMsgReport') || document;
+    var inputs = scope.querySelectorAll('.dmedit'), edits = [], filled = 0;
+    for(var i=0;i<inputs.length;i++){
+      var el=inputs[i], v=(el.value||'').trim();
+      if(!v) continue;
+      filled++;
+      edits.push({ idx: parseInt(el.getAttribute('data-idx'),10), field: el.getAttribute('data-field'), value: v });
+    }
+    if(!filled){ alert('입력한 내용이 없습니다. 노란 칸을 채운 뒤 저장해 주세요.'); return; }
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('저장 환경 오류'); return; }
+    var o = btn.getAttribute('data-o') || btn.textContent; btn.setAttribute('data-o', o);
+    btn.disabled=true; btn.textContent='저장 중…'; btn.style.background='#9ca3af';
+    google.script.run.withSuccessHandler(function(r){
+      if(r&&r.success){ btn.disabled=true; btn.textContent='✓ 저장됨'; btn.style.background='#16a34a'; alert('저장되었습니다. 담당자에게 전달됩니다. 감사합니다!'); }
+      else { btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 실패: '+((r&&r.msg)||'알 수 없음')); }
+    }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 오류: '+(e&&e.message||e)); })
+      .dmSaveMemberFields(TOKEN, edits);
   };
   document.getElementById('g4') && document.getElementById('g4').addEventListener('keydown', function(e){ if(e.key==='Enter') DMV.submit(); });
   DMV.init();
