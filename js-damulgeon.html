@@ -1025,7 +1025,7 @@
     try {
       var modal=document.getElementById('itemDetailModal');
       if(modal && typeof MutationObserver!=='undefined' && !modal.classList.contains('content-hidden')){
-        var obs=new MutationObserver(function(){ if(modal.classList.contains('content-hidden')){ obs.disconnect(); setTimeout(function(){ _syncItemFromCache(id); if(DM.refreshGroup) DM.refreshGroup(); },300); } });   // 즉시 로컬반영 + 서버 재조회로 그리드·카운팅 확정
+        var obs=new MutationObserver(function(){ if(modal.classList.contains('content-hidden')){ obs.disconnect(); setTimeout(function(){ _syncItemFromCache(id); },300); } });   // 모달이 갱신한 캐시로 그리드+카운팅 즉시 반영(서버 재조회는 레이스로 옛값 복귀 → 안 함)
         obs.observe(modal,{attributes:true,attributeFilter:['class']});
       }
     } catch(e){}
