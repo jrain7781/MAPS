@@ -45,6 +45,9 @@
   #dmMsgReport .rsec.editmode .dmf > .dmdisp { display:none; }
   #dmMsgReport .rsec.editmode .dmf > .dmedit { display:block; }
   #dmMsgReport .rsec.editmode .dmf > .dmedit-acct { display:flex; }
+  #dmMsgReport .dmf > .dmdue-edit { display:none; }
+  #dmMsgReport .rsec.editmode .dmf > .dmdue-edit { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+  #dmMsgReport .dmdue { font-size:.9em; padding:3px 5px; border:1px solid #cbd5e1; border-radius:5px; }
   #dmMsgReport .dmcard-btns { position:absolute; top:3px; right:5px; z-index:2; display:flex; gap:5px; }
   #dmMsgReport .dmedt { background:#fff; color:#1d4ed8; border:1px solid #93c5fd; border-radius:6px; padding:3px 10px; font-size:12px; font-weight:800; cursor:pointer; }
   #dmMsgReport .dmsave { background:#f59e0b; color:#fff; border:0; border-radius:6px; padding:3px 11px; font-size:12px; font-weight:800; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.2); }
@@ -1191,6 +1194,32 @@
     _saveMsgDue(); _renderMsgRight();
   };
   DM.msgRerender=function(){ _renderMsgLeft(); DM.msgDueChg(); };
+  // 📌 일괄등록: 헤더 입력 기한을 좌측 체크된 회원의 모든 물건(다물건 시트)에 저장
+  function _dueRowsFor(groups, due1, due2){ var rows=[]; groups.forEach(function(m){ m.items.forEach(function(it){ if(it.in_date&&it.sakun_no&&it.court) rows.push({ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, due1:due1, due2:due2 }); }); }); return rows; }
+  DM.msgDueRegister=function(){
+    var sel=_msgSelected(); if(!sel.length){ alert('등록할 회원을 좌측 체크박스로 선택하세요.'); return; }
+    var o=_msgOpts(); if(!o.due1 && !o.due2){ alert('서류제출/보증금 기한을 입력하세요.'); return; }
+    var rows=_dueRowsFor(sel, o.due1, o.due2); if(!rows.length){ alert('대상 물건이 없습니다.'); return; }
+    if(!confirm('체크한 '+sel.length+'명에게 기한을 일괄 등록합니다.\n· 서류제출: '+(o.due1||'-')+'\n· 보증금: '+(o.due2||'-')+'\n진행할까요?')) return;
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+    var btn=document.getElementById('dmDueRegBtn'), ot=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='등록 중…'; }
+    google.script.run.withSuccessHandler(function(r){ if(btn){ btn.disabled=false; btn.textContent=ot; }
+      if(r&&r.success){ sel.forEach(function(m){ m.items.forEach(function(it){ it.due1=o.due1; it.due2=o.due2; }); }); _renderMsgRight(); alert('✓ '+sel.length+'명 기한 일괄 등록 완료.'); }
+      else alert('등록 실패: '+((r&&r.message)||'알 수 없음')); })
+      .withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.textContent=ot; } alert('등록 오류: '+(e&&e.message||e)); })
+      .bulkSaveDamulgeon(rows);
+  };
+  // 💾 개별저장: 보고서 서류기한 카드에서 그 회원만 저장
+  DM.saveDue=function(btn){
+    var sec=(btn.closest&&btn.closest('.rsec'))||document; var m=_msgGroups[_msgFocusGi]; if(!m){ alert('회원을 선택하세요.'); return; }
+    function comp(k){ var d=sec.querySelector('[data-key="'+k+'_d"]'), t=sec.querySelector('[data-key="'+k+'_t"]'); var dv=d?d.value:'', tv=t?t.value:''; if(!dv) return ''; var tl=_DUE_TL[tv]||''; return dv+(tl?(' '+tl):''); }
+    var due1=comp('due1'), due2=comp('due2');
+    var rows=_dueRowsFor([m], due1, due2); if(!rows.length){ alert('대상 물건이 없습니다.'); return; }
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+    var o=btn.getAttribute('data-o')||btn.textContent; btn.setAttribute('data-o',o); btn.disabled=true; btn.textContent='저장 중…'; btn.style.background='#9ca3af';
+    google.script.run.withSuccessHandler(function(r){ if(r&&r.success){ m.items.forEach(function(it){ it.due1=due1; it.due2=due2; }); _renderMsgRight(); alert('✓ '+m.member+'님 기한 저장됨.'); } else { btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 실패: '+((r&&r.message)||'?')); } })
+      .withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('오류: '+(e&&e.message||e)); }).bulkSaveDamulgeon(rows);
+  };
   DM.msgFocus=function(gi){ _msgFocusGi=gi; _renderMsgLeft(); _renderMsgRight(); };
   DM.msgTab=function(which){
     _msgTab=(which==='image')?'image':'link';
@@ -1214,6 +1243,7 @@
       var cardStyle=foc ? 'background:#bfdbfe;border:1px solid #2563eb;box-shadow:inset 0 0 0 1px #2563eb,0 1px 4px rgba(37,99,235,.25)' : 'background:#fff;border:1px solid #e5e7eb';
       return '<div onclick="DM.msgFocus('+gi+')" style="'+cardStyle+';border-radius:9px;margin-bottom:9px;padding:9px 11px;cursor:pointer">'
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+        +  '<input type="checkbox" class="dm-msg-cb" data-gi="'+gi+'"'+(_msgSel[gi]?' checked':'')+' onclick="event.stopPropagation()" onchange="DM.msgUpdateSel()">'
         +  (tg?'<span title="텔레그램 사용" style="font-size:10px;font-weight:800;color:#fff;background:#229ED9;border-radius:4px;padding:1px 5px">T</span>':'')
         +  '<span style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</span>'
         +  '<span style="font-size:11px;color:#475569;font-weight:600">물건 '+esc(mulNos)+'</span>'
@@ -1328,7 +1358,7 @@
   function _msgUpdateSelCnt(){ var n=Object.keys(_msgSel).length, e=document.getElementById('dmMsgSelCnt'); if(e) e.textContent='선택 '+n+'명'; var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=(n===_msgGroups.length && n>0); }
   DM.msgSelectAll=function(el){ var on=!!(el&&el.checked); _msgSel={}; if(on) _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; }); _renderMsgLeft(); _msgUpdateSelCnt(); };
   DM.msgClose=function(){ var mo=document.getElementById('dmMsgModal'); if(mo) mo.classList.add('content-hidden'); };
-  function _msgSelected(){ return _msgGroups.slice(); }   // 체크박스 제거 → 리스트 전체 대상(텔레그램/카카오 전송용)
+  function _msgSelected(){ var out=[]; Object.keys(_msgSel).forEach(function(gi){ if(_msgGroups[gi]) out.push(_msgGroups[gi]); }); return out; }   // 체크된 회원(일괄등록·전송 대상)
   function _msgAcct(a){ a=a||{}; return [String(a.account_bank||'').trim(),String(a.account_no||'').trim(),String(a.account_name||'').trim()].filter(Boolean).join(' '); }
   function _sec(cat, pairs, catCls){
     return pairs.map(function(pr,i){
@@ -1374,6 +1404,18 @@
     var _EDT='<button type="button" class="dmedt" onclick="var s=this.closest(\'.rsec\');if(s){var on=s.classList.toggle(\'editmode\');this.textContent=on?\'✕ 수정취소\':\'✏ 수정\';}">✏ 수정</button>';
     var _SAV='<button type="button" class="dmsave" onclick="if(window.DMV&&DMV.saveFields){DMV.saveFields(this)}else if(window.DM&&DM.saveFields){DM.saveFields(this)}">💾 저장</button>';
     function blkSave(name, body, withBtns){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'">'+(withBtns?('<div class="dmcard-btns">'+_EDT+_SAV+'</div>'):'')+'<div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
+    // 서류기한 카드: 회원별 수정/저장(DM.saveDue). 수정 모드면 날짜+시간 선택 노출.
+    function blkSaveDue(name, body, withBtns){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'">'+(withBtns?('<div class="dmcard-btns">'+_EDT+'<button type="button" class="dmsave" onclick="DM.saveDue&&DM.saveDue(this)">💾 저장</button></div>'):'')+'<div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
+    function _dueTimeSelect(key, sel){ var o='<option value="">시간</option>'; for(var tk in _DUE_TL){ o+='<option value="'+tk+'"'+(tk===sel?' selected':'')+'>'+_DUE_TL[tk]+'</option>'; } return '<select class="dmdue" data-key="'+key+'">'+o+'</select>'; }
+    function _dueRow(label, val, key){
+      val=String(val||'').trim();
+      if(!web) return [label, val||'(미입력)', 'hl-r'];
+      var dm=val.match(/(\d{4}-\d{2}-\d{2})/), dval=dm?dm[1]:'';
+      var tval=''; for(var tk in _DUE_TL){ if(_DUE_TL[tk] && val.indexOf(_DUE_TL[tk])>=0){ tval=tk; break; } }
+      var inner='<span class="dmdisp" style="color:#dc2626;font-weight:700">'+(val?esc(val):'(미입력)')+'</span>'
+        +'<span class="dmdue-edit"><input type="date" class="dmdue" data-key="'+key+'_d" value="'+dval+'">'+_dueTimeSelect(key+'_t', tval)+'</span>';
+      return [label, '<div class="dmf" data-filled="1">'+inner+'</div>', 'hl-r', 'raw'];
+    }
     // 회원정보 — web(링크)에선 값+입력 동시(채워진칸=값/빈칸=입력, 수정모드=전부 입력), 이미지(web=false)는 값만/빈칸은 회신문구.
     var _missing=false;
     function _einput(idx, field, ph, val){ return '<input class="dmedit" type="text" data-idx="'+idx+'" data-field="'+field+'" value="'+esc(val||'')+'" placeholder="'+ph+'">'; }
@@ -1412,7 +1454,8 @@
     body += blk('개요', _kvTable([_cpRow('법원',court.bon+'법원','hl-y'),_cpRow('지원',court.support||'-','hl-y'),_cpRow('경매번호',_msgCtx.sakun,'hl-y'),['물건번호',mulNos,'hl-y'],['입찰일자',_msgCtx.bidDate,'hl-y']]));
     body += blk('입찰', bidTable);
     // 보증금 입금계좌: 화면엔 은행·번호·예금주 다 보이고, 복사는 계좌번호만
-    body += blk('서류 기한안내', _kvTable([['서류제출 기한',opts.due1||'(미입력)','hl-r'],['보증금송금 기한',opts.due2||'(미입력)','hl-r'],['보증금 입금계좌', _cpLine(_msgAcct(firstAgent)||'(대리인 계좌)', String(firstAgent.account_no||'').trim()), '', 'raw']]));
+    var mDue1=String((m.items[0]&&m.items[0].due1)||'').trim(), mDue2=String((m.items[0]&&m.items[0].due2)||'').trim();   // 회원별 저장된 기한
+    body += blkSaveDue('서류 기한안내', _kvTable([_dueRow('서류제출 기한', mDue1, 'due1'), _dueRow('보증금송금 기한', mDue2, 'due2'), ['보증금 입금계좌', _cpLine(_msgAcct(firstAgent)||'(대리인 계좌)', String(firstAgent.account_no||'').trim()), '', 'raw']]), web);
     // 명의별 개인/법인 블록 — 헤더(명의N·구분) 다음 줄바꿈하여 정보(상단 사건·물건번호 줄들 → 이름 등)
     var mg={}, mgOrder=[]; m.items.forEach(function(it){ var k=_myunguiKey(it); if(!mg[k]){ mg[k]=[]; mgOrder.push(k); } mg[k].push(it); });
     mgOrder.forEach(function(k, gIdx){
@@ -1557,7 +1600,8 @@
     var _reqs=[], _reqKeys=[], _seen={};
     m.items.forEach(function(it){ var pm=_parseMName(it.member_name, m.member_id); var mk=pm.myungui||''; if(_seen[mk]!==undefined) return; _seen[mk]=1; _reqKeys.push(m.member_id+'||'+mk); _reqs.push({ member_id:m.member_id, myungui:mk, daeriin:String(it.daeriin||'').trim() }); });
     var _slim=m.items.map(function(it){ return { member_name:it.member_name, member_id:it.member_id, court:it.court, sakun_no:it.sakun_no, mulgeon_no:it.mulgeon_no, bidprice:it.bidprice, deposit:it.deposit, _fee:it._fee, address:it.address, in_date:it.in_date, daeriin:it.daeriin }; });
-    var _payload=JSON.stringify({ m:{ member:m.member, member_id:String(m.member_id||''), items:_slim }, ctx:{ sakun:_msgCtx.sakun, bidDate:_msgCtx.bidDate, addr:_msgCtx.addr, court:_msgCtx.court, memberName:m.member }, opts:_msgOpts(), reqs:_reqs, reqKeys:_reqKeys });
+    var _mDueOpts={ due1:String((m.items[0]&&m.items[0].due1)||'').trim(), due2:String((m.items[0]&&m.items[0].due2)||'').trim(), consol:_msgConsol() };   // 웹 링크엔 회원별 저장 기한 사용
+    var _payload=JSON.stringify({ m:{ member:m.member, member_id:String(m.member_id||''), items:_slim }, ctx:{ sakun:_msgCtx.sakun, bidDate:_msgCtx.bidDate, addr:_msgCtx.addr, court:_msgCtx.court, memberName:m.member }, opts:_mDueOpts, reqs:_reqs, reqKeys:_reqKeys });
     return { m:m, seed:seed, html:cardEl.outerHTML, title:title, summary:_sp.join(' / '), phone4:phone4, member_id:String(m.member_id||''), biddate:biddate, payload:_payload };
   }
   function _dmLinkDone(res, a, renewed){

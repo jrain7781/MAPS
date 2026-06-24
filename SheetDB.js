@@ -1141,7 +1141,7 @@ const DM_FEE_TABLE_KEY = 'DM_FEE_TABLE';
 //   회원/입찰가/상태/물건종류/주소/감정가/최저가/보증금/등급은 ITEMS·연계에서 라이브 조회(이중관리 X).
 //   다물건 시트엔 items 에 '없는 값'만 저장: 명의(다물건 전용)·향·인증방식·비고.
 const DAMULGEON_KEY_FIELDS = ['in_date', 'sakun_no', 'court'];   // sakun_no 는 물건번호(N) 포함
-const DAMULGEON_AUX_FIELDS = ['myungui', 'hyang', 'daeriin', 'jinhaengbi', 'auth_method', 'dm_note'];
+const DAMULGEON_AUX_FIELDS = ['myungui', 'hyang', 'daeriin', 'jinhaengbi', 'auth_method', 'dm_note', 'due1', 'due2'];
 const DAMULGEON_HEADERS = [
   'in_date',      // KEY — 입찰일자
   'sakun_no',     // KEY — 사건번호(물건번호 포함)
@@ -1152,6 +1152,8 @@ const DAMULGEON_HEADERS = [
   'jinhaengbi',   // 진행비 (다물건 전용)
   'auth_method',  // 인증방식 (종이/전자)
   'dm_note',      // 비고
+  'due1',         // 서류제출 기한(텍스트, 회원별) — 메시지 모달 일괄/개별 등록
+  'due2',         // 보증금송금 기한(텍스트, 회원별)
   'reg_date',     // 최초 생성
   'update_date'   // 최종 갱신
 ];
@@ -1310,7 +1312,7 @@ function getDamulgeonList() {
         member_id: String(r[8] || ''), member_name: String(r[6] || ''),   // 회원 = items
         auction_id: String(r[15] || ''),  // 옥션ID(P열) — 옥션원 버튼용
         grade: '',                        // 등급 = 회원 종목(class_grade) 연계 (아래)
-        myungui: '', hyang: '', auth_method: '', dm_note: ''               // 다물건 전용 (시트 머지)
+        myungui: '', hyang: '', auth_method: '', dm_note: '', due1: '', due2: ''   // 다물건 전용 (시트 머지)
       });
     });
     // 다물건 = 서로 다른 물건번호(N) 2개 이상인 사건 (빈 물건번호=단일물건 제외)
