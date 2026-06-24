@@ -201,6 +201,53 @@ function _dmSaveFieldsCore_(memberId, edits) {
   return { success: saved > 0, saved: saved };
 }
 
+/** 전자서명 PDF 업로드(회원 — 토큰 검증) → Drive 저장 + dm_uploads 기록. */
+function dmUploadPdf(token, filename, base64) {
+  var data = dmLinkSheet_().getDataRange().getValues();
+  var ri = dmFindByToken_(data, token);
+  if (ri < 0) return { success: false, msg: '유효하지 않은 링크' };
+  var row = data[ri];
+  if (String(row[7]) !== 'active') return { success: false, msg: '폐기된 링크' };
+  return _dmSavePdf_(String(row[2] || ''), token, filename, base64);
+}
+
+/** 전자서명 PDF 업로드(관리자 모달 — member_id 직접). */
+function dmUploadPdfByMember(memberId, filename, base64) {
+  return _dmSavePdf_(String(memberId || ''), '', filename, base64);
+}
+
+function _dmSavePdf_(memberId, token, filename, base64) {
+  if (!base64) return { success: false, msg: '파일 없음' };
+  try {
+    var safe = String(filename || '전자서명.pdf').replace(/[\\/:*?"<>|]/g, '_').trim();
+    if (!/\.pdf$/i.test(safe)) safe += '.pdf';
+    var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
+    var blob = Utilities.newBlob(Utilities.base64Decode(base64), 'application/pdf', (memberId || 'm') + '_' + stamp + '_' + safe);
+    var file = _dmPdfFolder_().createFile(blob);
+    file.setDescription('다물건 전자서명 업로드 member=' + memberId + ' token=' + token);
+    var url = file.getUrl();
+    _dmRecordUpload_(token, memberId, safe, url);
+    return { success: true, url: url, name: safe };
+  } catch (e) {
+    return { success: false, msg: (e && e.message) || String(e) };
+  }
+}
+
+function _dmPdfFolder_() {
+  var name = '다물건_전자서명_PDF';
+  var it = DriveApp.getFoldersByName(name);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(name);
+}
+
+function _dmRecordUpload_(token, memberId, name, url) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sh = ss.getSheetByName('dm_uploads');
+    if (!sh) { sh = ss.insertSheet('dm_uploads'); sh.getRange(1, 1, 1, 5).setValues([['date', 'token', 'member_id', 'filename', 'url']]); sh.hideSheet(); }
+    sh.appendRow([new Date(), token, memberId, name, url]);
+  } catch (e) {}
+}
+
 /** 모달 표시용: seed의 현재 활성 링크 상태(활성/만료/없음) + 생성시각·게이트여부. 읽기 전용. */
 function dmGetLinkStatus(seed) {
   seed = String(seed || '').trim();

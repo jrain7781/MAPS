@@ -62,7 +62,11 @@
   #dmMsgReport .rsec{ position:relative; }
   #dmMsgReport .dmedit{ width:100%; box-sizing:border-box; border:1px solid #f59e0b; border-radius:6px; padding:8px 9px; font-size:1em; background:#fffbeb; color:#92400e; }
   #dmMsgReport .dmedit:focus{ outline:none; border-color:#d97706; background:#fff; }
-  #dmMsgReport .dmedit-acct{ gap:5px; } #dmMsgReport .dmedit-acct .dmedit{ width:33%; }
+  #dmMsgReport .dmedit-acct{ flex-direction:column; gap:5px; } #dmMsgReport .dmedit-acct .dmedit{ width:100%; }
+  #dmMsgReport .dmpdf{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  #dmMsgReport .dmpdf-btn{ display:inline-block; background:#1f3a5f; color:#fff; border-radius:7px; padding:7px 14px; font-weight:800; cursor:pointer; font-size:.92em; white-space:nowrap; }
+  #dmMsgReport .dmpdf-btn:active{ background:#16294a; }
+  #dmMsgReport .dmpdf-msg{ font-size:.85em; color:#6b7280; word-break:break-all; }
   #dmMsgReport .dmneed{ color:#92400e; font-weight:700; }
   /* 기본: 채워진칸=값 / 빈칸=입력. 수정모드(.editmode): 전부 입력 */
   #dmMsgReport .dmf > .dmedit, #dmMsgReport .dmf > .dmedit-acct{ display:none; }
@@ -227,6 +231,27 @@
       else { btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 실패: '+((r&&r.msg)||'알 수 없음')); }
     }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 오류: '+(e&&e.message||e)); })
       .dmSaveMemberFields(TOKEN, edits);
+  };
+  // 전자서명 PDF 업로드 — 파일 선택 시 자동 업로드(서버 Drive 저장)
+  DMV.uploadPdf = function(inp){
+    var f = inp.files && inp.files[0]; if(!f) return;
+    var msg = inp.parentNode.parentNode.querySelector('.dmpdf-msg');
+    function setMsg(t,c){ if(msg){ msg.textContent=t; msg.style.color=c||'#6b7280'; } }
+    if(f.type!=='application/pdf' && !/\.pdf$/i.test(f.name)){ setMsg('PDF 파일만 업로드 가능합니다.','#dc2626'); inp.value=''; return; }
+    if(f.size > 12*1024*1024){ setMsg('12MB 이하 PDF만 가능합니다.','#dc2626'); inp.value=''; return; }
+    if(typeof google==='undefined'||!google.script||!google.script.run){ setMsg('업로드 환경 오류','#dc2626'); return; }
+    setMsg('업로드 중… '+f.name);
+    var rd=new FileReader();
+    rd.onload=function(){
+      var b64=String(rd.result||'').split(',')[1]||'';
+      google.script.run.withSuccessHandler(function(r){
+        if(r&&r.success){ setMsg('✓ 업로드됨: '+(r.name||f.name),'#16a34a'); }
+        else { setMsg('업로드 실패: '+((r&&r.msg)||'알 수 없음'),'#dc2626'); }
+      }).withFailureHandler(function(e){ setMsg('업로드 오류: '+(e&&e.message||e),'#dc2626'); })
+        .dmUploadPdf(TOKEN, f.name, b64);
+    };
+    rd.onerror=function(){ setMsg('파일 읽기 실패','#dc2626'); };
+    rd.readAsDataURL(f);
   };
   document.getElementById('g4') && document.getElementById('g4').addEventListener('keydown', function(e){ if(e.key==='Enter') DMV.submit(); });
   DMV.init();

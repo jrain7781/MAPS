@@ -25,7 +25,11 @@
   #dmMsgReport .rrep-card { position:relative; border:1px solid #cdd5df; border-radius:10px; overflow:hidden; background:#fff; }   /* 실제 카드 테두리(여백 영역엔 테두리 없음) */
   /* 회원 입력칸 + 명의 카드 [✏수정][💾저장] (회원 웹페이지와 동일) */
   #dmMsgReport .dmedit { width:100%; box-sizing:border-box; border:1px solid #f59e0b; border-radius:5px; padding:5px 7px; font-size:.95em; background:#fffbeb; color:#92400e; }
-  #dmMsgReport .dmedit-acct { gap:4px; } #dmMsgReport .dmedit-acct .dmedit { width:33%; }
+  #dmMsgReport .dmedit-acct { flex-direction:column; gap:4px; } #dmMsgReport .dmedit-acct .dmedit { width:100%; }
+  #dmMsgReport .dmpdf { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  #dmMsgReport .dmpdf-btn { display:inline-block; background:#1f3a5f; color:#fff; border-radius:6px; padding:5px 12px; font-weight:700; cursor:pointer; font-size:.9em; white-space:nowrap; }
+  #dmMsgReport .dmpdf-btn:active { background:#16294a; }
+  #dmMsgReport .dmpdf-msg { font-size:.82em; color:#6b7280; word-break:break-all; }
   #dmMsgReport .dmneed { color:#92400e; font-weight:700; }
   /* 기본: 채워진칸=값 / 빈칸=입력. 수정모드(.editmode): 전부 입력 */
   #dmMsgReport .dmf > .dmedit, #dmMsgReport .dmf > .dmedit-acct { display:none; }
@@ -1119,7 +1123,7 @@
     var reqKeys=[], reqs=[];
     _msgGroups.forEach(function(m){ var seen={}; m.items.forEach(function(it){ var pm=_parseMName(it.member_name, it.member_id); var mk=pm.myungui||''; if(seen[mk]!==undefined) return; seen[mk]=1; reqKeys.push(m.member_id+'||'+mk); reqs.push({ member_id:m.member_id, myungui:mk, daeriin:String(it.daeriin||'').trim() }); }); });
     if(typeof google==='undefined'||!google.script||!google.script.run){ if(onDone) onDone(); return; }
-    google.script.run.withSuccessHandler(function(res){ res=res||[]; _msgDetailMap={}; reqKeys.forEach(function(k,i){ _msgDetailMap[k]=res[i]||{}; }); _renderMsgRight(); if(onDone) onDone(); })
+    google.script.run.withSuccessHandler(function(res){ res=res||[]; _msgDetailMap={}; reqKeys.forEach(function(k,i){ _msgDetailMap[k]=res[i]||{}; }); _renderMsgLeft(); _renderMsgRight(); if(onDone) onDone(); })
       .withFailureHandler(function(e){ console.error('[msg detail]',e); if(onDone) onDone(); }).getBulkDaeriipchalData(reqs);
   }
   // 🔄 새로고침: 상세 재조회 + 링크상태 재조회 → 회원 등록분 반영(링크/이미지 탭 공통)
@@ -1132,6 +1136,7 @@
   function _msgConsol(){ return !!(document.getElementById('dmMsgFeeConsol')||{}).checked; }
   function _msgFees(m){ var fees=m.items.map(function(it){return _num(it._fee);}); if(_msgConsol()){ var t=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?t:0;}); } return fees; }   // 진행비 대표통합 옵션
   function _msgSums(m){ var fees=_msgFees(m), b=0,d=0,f=0; m.items.forEach(function(it,i){ b+=_num(it.bidprice); d+=_num(it.deposit); f+=fees[i]; }); return { bid:b, dep:d, fee:f, total:d+f }; }
+  function _msgGrade(m){ var g=(m.items[0]&&m.items[0].grade)||''; if(g) return g; var d=_msgDetailFor(m, m.items[0]); return (d&&d.principal&&d.principal.grade)||''; }   // 그리드 등급 우선, 없으면 상세(class) 등급
   function _msgMyungLabel(it){ var pm=_parseMName(it.member_name, it.member_id); return pm.gubun==='본인'?'본인':(pm.myungui||'개인'); }   // 물건 앞 명의
   function _msgMyungColor(it){ var pm=_parseMName(it.member_name, it.member_id); return ({'본인':'#2563eb','개인':'#16a34a','법인':'#9333ea'})[pm.gubun]||'#16a34a'; }
   var _DUE_TL={'08:00':'오전 8시','09:00':'오전 9시','10:00':'오전 10시','11:00':'오전 11시','12:00':'오후 12시','13:00':'오후 1시','14:00':'오후 2시','15:00':'오후 3시','16:00':'오후 4시','17:00':'오후 5시','18:00':'오후 6시','19:00':'오후 7시','20:00':'오후 8시'};
@@ -1163,18 +1168,17 @@
       var mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).filter(Boolean).join(',');
       var c={본인:0,개인:0,법인:0}; m.items.forEach(function(it){ var g=_parseMName(it.member_name,it.member_id).gubun; if(c[g]!==undefined) c[g]++; });
       var cnt=[]; if(c.본인) cnt.push('<span style="color:#2563eb">본인 '+c.본인+'</span>'); if(c.개인) cnt.push('<span style="color:#16a34a">개인 '+c.개인+'</span>'); if(c.법인) cnt.push('<span style="color:#9333ea">법인 '+c.법인+'</span>');
-      var grade=(m.items[0]&&m.items[0].grade)||'';
+      var grade=_msgGrade(m);
       var tg=m.items.some(function(it){ return String(it.tg)==='Y'; });
       var cardStyle=foc ? 'background:#bfdbfe;border:1px solid #2563eb;box-shadow:inset 0 0 0 1px #2563eb,0 1px 4px rgba(37,99,235,.25)' : 'background:#fff;border:1px solid #e5e7eb';
       return '<div onclick="DM.msgFocus('+gi+')" style="'+cardStyle+';border-radius:9px;margin-bottom:9px;padding:9px 11px;cursor:pointer">'
         +'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
-        +  '<input type="checkbox" class="dm-msg-cb" data-gi="'+gi+'"'+(_msgSel[gi]?' checked':'')+' onclick="event.stopPropagation()" onchange="DM.msgUpdateSel()">'
         +  (tg?'<span title="텔레그램 사용" style="font-size:10px;font-weight:800;color:#fff;background:#229ED9;border-radius:4px;padding:1px 5px">T</span>':'')
         +  '<span style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</span>'
-        +  (grade?('<span style="font-size:11px;color:#0e7490;font-weight:700">'+esc(grade)+'</span>'):'')
         +  '<span style="font-size:11px;color:#475569;font-weight:600">물건 '+esc(mulNos)+'</span>'
         +'</div>'
-        +'<div style="display:flex;gap:10px;font-size:11px;font-weight:700;margin:3px 0 0 22px">'+(cnt.join('')||'<span style="color:#9ca3af">-</span>')+'</div>'
+        +'<div style="font-size:11px;margin:3px 0 0;font-weight:700"><span style="color:#6b7280">등급 </span><span style="color:#0e7490">'+(grade?esc(grade):'<span style="color:#9ca3af">-</span>')+'</span></div>'
+        +'<div style="display:flex;gap:10px;font-size:11px;font-weight:700;margin:3px 0 0">'+(cnt.join('')||'<span style="color:#9ca3af">-</span>')+'</div>'
         +'<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:12px"><span style="color:#6b7280">총비용</span><span style="font-weight:800;color:#dc2626">'+_won(s.total)+'원</span></div>'
         +'</div>';
     }).join('') || '<div style="color:#9ca3af;padding:18px;text-align:center;font-size:12px">회원 없음</div>';
@@ -1231,6 +1235,25 @@
       .withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 오류: '+(e&&e.message||e)); })
       .dmSaveMemberFieldsByMember(m.member_id, edits);
   };
+  // 전자서명 PDF 업로드(모달=관리자) — member_id로 직접 Drive 저장
+  DM.uploadPdf=function(inp){
+    var f=inp.files&&inp.files[0]; if(!f) return;
+    var msg=inp.parentNode.parentNode.querySelector('.dmpdf-msg');
+    function setMsg(t,c){ if(msg){ msg.textContent=t; msg.style.color=c||'#6b7280'; } }
+    if(f.type!=='application/pdf'&&!/\.pdf$/i.test(f.name)){ setMsg('PDF만 가능','#dc2626'); inp.value=''; return; }
+    if(f.size>12*1024*1024){ setMsg('12MB 이하만','#dc2626'); inp.value=''; return; }
+    var m=_msgGroups[_msgFocusGi]; if(!m||!m.member_id){ setMsg('회원 식별 불가','#dc2626'); return; }
+    if(typeof google==='undefined'||!google.script||!google.script.run){ setMsg('실행 환경 아님','#dc2626'); return; }
+    setMsg('업로드 중… '+f.name);
+    var rd=new FileReader();
+    rd.onload=function(){ var b64=String(rd.result||'').split(',')[1]||'';
+      google.script.run.withSuccessHandler(function(r){ if(r&&r.success) setMsg('✓ 업로드됨: '+(r.name||f.name),'#16a34a'); else setMsg('실패: '+((r&&r.msg)||'?'),'#dc2626'); })
+        .withFailureHandler(function(e){ setMsg('오류: '+(e&&e.message||e),'#dc2626'); })
+        .dmUploadPdfByMember(String(m.member_id), f.name, b64);
+    };
+    rd.onerror=function(){ setMsg('파일 읽기 실패','#dc2626'); };
+    rd.readAsDataURL(f);
+  };
   // 미리보기 복사버튼 동작(웹페이지 DM.copyVal과 동일) — 모달에서도 눌러 복사 가능
   DM.copyVal=function(btn){
     var v=btn.getAttribute('data-c')||'';
@@ -1242,7 +1265,7 @@
   function _msgUpdateSelCnt(){ var n=Object.keys(_msgSel).length, e=document.getElementById('dmMsgSelCnt'); if(e) e.textContent='선택 '+n+'명'; var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=(n===_msgGroups.length && n>0); }
   DM.msgSelectAll=function(el){ var on=!!(el&&el.checked); _msgSel={}; if(on) _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; }); _renderMsgLeft(); _msgUpdateSelCnt(); };
   DM.msgClose=function(){ var mo=document.getElementById('dmMsgModal'); if(mo) mo.classList.add('content-hidden'); };
-  function _msgSelected(){ var out=[]; Object.keys(_msgSel).forEach(function(gi){ if(_msgGroups[gi]) out.push(_msgGroups[gi]); }); return out; }
+  function _msgSelected(){ return _msgGroups.slice(); }   // 체크박스 제거 → 리스트 전체 대상(텔레그램/카카오 전송용)
   function _msgAcct(a){ a=a||{}; return [String(a.account_bank||'').trim(),String(a.account_no||'').trim(),String(a.account_name||'').trim()].filter(Boolean).join(' '); }
   function _sec(cat, pairs, catCls){
     return pairs.map(function(pr,i){
@@ -1304,7 +1327,7 @@
       if(!filled) _missing=true;
       if(!web){ return filled ? ['계좌/보증금반환', disp] : ['계좌/보증금반환','회신 부탁드립니다.','hl-need']; }
       var inner='<span class="dmdisp">'+(filled?esc(disp):'<span class="dmneed">회신 부탁</span>')+'</span>'
-        +'<div class="dmedit-acct">'+_einput(p.idx,'account_bank','은행',bank)+_einput(p.idx,'account_no','계좌번호',no)+_einput(p.idx,'account_name','예금주',nm)+'</div>';
+        +'<div class="dmedit-acct">'+_einput(p.idx,'account_bank','은행',bank)+_einput(p.idx,'account_no','계좌번호',no)+_einput(p.idx,'account_name','소유자',nm)+'</div>';
       return ['계좌/보증금반환', '<div class="dmf" data-filled="'+(filled?1:0)+'">'+inner+'</div>', (filled?'':'hl-need'), 'raw'];
     }
     // 복사 버튼(웹 링크 전용). data-c 평문을 클릭 시 복사(DM.copyVal은 웹 보고서 페이지에 정의). 이미지/모달(web=false)에선 버튼 없음
@@ -1348,15 +1371,17 @@
     // 발급영상: 이미지=버튼+URL+안내, 웹=버튼만(URL/안내 제거)
     var _ytBtn='<button type="button" onclick="DM.playYt(\'S2xVZjJeQd0\')" style="background:#FF0000;color:#fff;border:0;border-radius:6px;padding:4px 11px;font-weight:800;cursor:pointer;font-size:.95em;vertical-align:middle">▶ YouTube</button>';
     var _ytCell=web ? _ytBtn : (_ytBtn+' <span style="color:#1d4ed8;font-weight:600;font-size:.9em">youtu.be/S2xVZjJeQd0</span><div style="font-size:.82em;color:#6b7280;margin-top:4px">(링크를 꾹 누른 후 링크연결 하세요)</div>');
-    body += blk('전자본인서명 확인서발급', _kvTable([
+    var _esRows=[
       ['발급 영상', _ytCell,'','raw'],
       ['용도', purposeLines,'','raw'],
       _cpRow('수임자 성명', firstAgent.name||''),
       _cpRow('수임자 주소', firstAgent.address||''),
       _cpRow('수요법원', courtPlain),
-      ['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요'],
-      ['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']
-    ]));
+      ['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요']
+    ];
+    if(web) _esRows.push(['PDF 업로드','<div class="dmpdf"><label class="dmpdf-btn">📎 PDF 선택<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="if(window.DMV&&DMV.uploadPdf){DMV.uploadPdf(this)}else if(window.DM&&DM.uploadPdf){DM.uploadPdf(this)}"></label><span class="dmpdf-msg">작성한 전자서명 PDF를 여기에 올려주세요</span></div>','','raw']);
+    _esRows.push(['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']);
+    body += blk('전자본인서명 확인서발급', _kvTable(_esRows));
     // 필독 사항 — 개요 위(맨 위). 1번(정보 회신)은 누락 항목이 있을 때만 노출. 숫자는 직접 부여(캡처 시 ol 마커 누락 방지)
     var mustItems=[];
     if(_missing) mustItems.push('회원님 정보(<span class="mneed">노란색 칸</span>)를 회신해 주세요~');
