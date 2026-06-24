@@ -827,6 +827,9 @@
     if(menu.style.display==='block'){ menu.style.display='none'; return; }
     menu.innerHTML='<label style="display:block;font-size:12px;padding:3px 6px;cursor:pointer;font-weight:700"><input type="checkbox" '+(Object.keys(_statusSel).length===0?'checked':'')+' onchange="DM.statusAll(this)"> 전체</label><div style="border-top:1px solid #eee;margin:3px 0"></div>'
       + DM_STATUSES.map(function(s){ return '<label style="display:block;font-size:12px;padding:3px 6px;cursor:pointer"><input type="checkbox" value="'+s+'" '+(_statusSel[s]?'checked':'')+' onchange="DM.statusCheck(this)"> '+s+'</label>'; }).join('');
+    // 툴바 overflow-x:auto 가 absolute 메뉴를 잘라 안 보임 → fixed(버튼 좌표)로 띄워 클리핑 탈출 + 최상단
+    var btn=document.getElementById('dmStatusBtn');
+    if(btn){ var r=btn.getBoundingClientRect(); menu.style.position='fixed'; menu.style.top=(r.bottom+2)+'px'; menu.style.left=r.left+'px'; menu.style.zIndex='9999'; }
     menu.style.display='block';
   };
   DM.statusAll = function(el){ if(el.checked){ _statusSel={}; _bidMissing=false; DM.toggleStatusMenu(); DM.toggleStatusMenu(); } else { el.checked=true; } _statusBtn(); renderSummary(); renderBody(); };
