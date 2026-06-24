@@ -1939,8 +1939,18 @@
   };
   DM.matchConfirm=function(){
     var ids=Object.keys(_matchAssign); if(!ids.length){ alert('매칭된 물건이 없습니다.'); return; }
-    var lines=ids.map(function(id){ var it=_matchItems.filter(function(x){return String(x.link_item_id)===id;})[0]; var m=_matchMembers[_matchAssign[id]]; return '· 물건 '+(it?it.mulgeon_no:'?')+' → '+(m?m.member:''); });
-    alert('[매칭 미리보기] '+ids.length+'건\n'+lines.join('\n')+'\n\n적용 내용(다음 단계 연결 예정):\n① ? 물건 → 폐기\n② ? 추천기록 → 매칭 물건으로 이동(추천요청일자 유지)\n③ 매칭 물건 → 회원 등록 + 입찰');
+    var byMi={}; ids.forEach(function(id){ var mi=_matchAssign[id]; (byMi[mi]=byMi[mi]||[]).push(id); });
+    var pairs=[];
+    Object.keys(byMi).forEach(function(miStr){ var mi=parseInt(miStr,10), m=_matchMembers[mi]; (byMi[miStr]||[]).forEach(function(rid,i){ var q=m.items[i]; if(!q) return; pairs.push({ member_id:m.member_id, member_name:m.member_name_full, qItemId:String(q.link_item_id), realItemId:String(rid) }); }); });
+    if(!pairs.length){ alert('매칭 데이터 없음'); return; }
+    if(!confirm('매칭 '+pairs.length+'건을 적용합니다.\n① ?물건 → 폐기\n② 추천기록 이동(요청일자 유지)\n③ 매칭물건 회원등록 + 입찰\n\n되돌리기 어렵습니다. 진행할까요?')) return;
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+    var btn=document.querySelector('#dmMatchHead button'); if(btn){ btn.disabled=true; btn.textContent='적용 중…'; }
+    google.script.run.withSuccessHandler(function(r){
+      if(btn){ btn.disabled=false; btn.textContent='✔ 매칭하기'; }
+      if(r&&r.success){ alert('✓ 매칭 완료 '+r.matched+'건\n· 폐기 '+r.discarded+' · 입찰배정 '+r.assigned+' · 추천이동 '+r.recMoved); DM.matchClose(); if(DM.refreshGroup) DM.refreshGroup(); }
+      else alert('매칭 실패: '+((r&&r.msg)||'알 수 없음'));
+    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.textContent='✔ 매칭하기'; } alert('매칭 오류: '+(e&&e.message||e)); }).dmMatchMembers(pairs);
   };
   (function(){   // 헤더 드래그로 모달 이동
     var h=document.getElementById('dmMatchHead'), mo=document.getElementById('dmMatchModal'); if(!h||!mo) return;

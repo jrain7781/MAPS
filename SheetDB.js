@@ -1500,6 +1500,66 @@ function bulkAssignDamulgeon(rows) {
   finally { __lock.releaseLock(); }
 }
 
+/**
+ * [다물건 회원매칭] ?임의등록(입찰) 물건을 실제 물건에 매칭.
+ * pairs = [{ member_id, member_name, qItemId, realItemId }]  (?[i] → real[i] 1:1)
+ *  ① ? 물건 stu_member → '폐기'
+ *  ② members_item_status: ?물건의 '추천' 기록 삭제 + 실물건에 '추천' 신규(요청일자 event_date 유지)
+ *  ③ 실물건: m_name(회원, 명의포함)+member_id 등록, stu_member → '입찰'
+ */
+function dmMatchMembers(pairs) {
+  pairs = Array.isArray(pairs) ? pairs : [];
+  if (!pairs.length) return { success: false, msg: '매칭 데이터 없음' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (e) { return { success: false, msg: '저장이 혼잡합니다. 잠시 후 다시.' }; }
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var itemSheet = ss.getSheetByName(DB_SHEET_NAME);
+    if (!itemSheet || itemSheet.getLastRow() < 2) return { success: false, msg: 'items 없음' };
+    var n = itemSheet.getLastRow() - 1;
+    var all = itemSheet.getRange(2, 1, n, ITEM_HEADERS.length).getValues();
+    var idRow = {};
+    for (var i = 0; i < all.length; i++) idRow[String(all[i][0])] = i + 2;   // id → 시트 행번호
+    function rowOf(id) { var rn = idRow[String(id)]; return rn ? all[rn - 2] : null; }
+
+    var mis = ensureMembersItemStatusSheet_();
+    var misLast = mis.getLastRow();
+    var misData = misLast >= 2 ? mis.getRange(2, 1, misLast - 1, MIS_HEADERS.length).getValues() : [];
+    var now = new Date(), nowIso = now.toISOString();
+    var delRows = [], newMis = [], discarded = 0, assigned = 0, seq = 0;
+
+    pairs.forEach(function (p) {
+      var qRn = idRow[String(p.qItemId)], rRn = idRow[String(p.realItemId)];
+      if (!qRn || !rRn) return;
+      itemSheet.getRange(qRn, 5).setValue('폐기'); discarded++;                  // ① E: stu_member
+      if (p.member_name) itemSheet.getRange(rRn, 7).setValue(String(p.member_name)); // ③ G: m_name(명의포함)
+      if (p.member_id) itemSheet.getRange(rRn, 9).setValue(String(p.member_id));      //    I: member_id
+      itemSheet.getRange(rRn, 5).setValue('입찰'); assigned++;                        //    E: stu_member
+      // ② ?물건의 '추천' MIS 찾기 → 요청일자 캡처 + 삭제
+      var evDate = '';
+      for (var k = 0; k < misData.length; k++) {
+        var rr = misData[k];
+        if (String(rr[5]) === String(p.qItemId) && String(rr[9]) === '추천') { evDate = String(rr[16] || ''); delRows.push(k + 2); break; }
+      }
+      var rr2 = rowOf(p.realItemId);
+      if (rr2) {
+        if (!evDate) evDate = String(rr2[17] || '') || nowIso;   // 폴백: 실물건 chuchen_date/now
+        var misId = 'MIS' + now.getTime() + (seq++) + Math.floor(Math.random() * 1000);
+        newMis.push([misId, String(p.member_id || ''), String(p.member_name || ''), String(rr2[5] || ''), String(rr2[14] || ''),
+          String(p.realItemId), String(rr2[1] || ''), String(rr2[2] || ''), String(rr2[3] || ''), '추천', nowIso,
+          String(rr2[22] || ''), String(rr2[7] || ''), '', '', '', evDate, String(rr2[20] || '')]);
+      }
+    });
+    delRows.sort(function (a, b) { return b - a; }).forEach(function (rn) { mis.deleteRow(rn); });   // 아래부터 삭제
+    if (newMis.length) mis.getRange(mis.getLastRow() + 1, 1, newMis.length, MIS_HEADERS.length).setValues(newMis);
+    SpreadsheetApp.flush();
+    return { success: true, matched: pairs.length, discarded: discarded, assigned: assigned, recMoved: newMis.length, recDeleted: delRows.length };
+  } catch (e) {
+    Logger.log('[dmMatchMembers] ' + e);
+    return { success: false, msg: String(e) };
+  } finally { try { lock.releaseLock(); } catch (e) {} }
+}
+
 // ── 진행비 출장비 요율표 (settings 시트 key-value, JSON) ──
 function _dmDefaultFeeTable_() {
   return {
