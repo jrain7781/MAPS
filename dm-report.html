@@ -30,7 +30,7 @@
   #dmMsgReport .rrep-title { font-size:15px; } #dmMsgReport .rrep-h b { font-size:1.55em; }
   #dmMsgReport .rh-cnt { font-size:11px; font-weight:700; background:#fde68a; color:#92400e; padding:1px 7px; border-radius:9px; vertical-align:middle; }
   #dmMsgReport .rrep-loc { font-size:12px; font-weight:600; color:#cfe0f5; }
-  #dmMsgReport .rbody { padding:11px; font-size:15px; }
+  #dmMsgReport .rbody { padding:11px; font-size:var(--dmrf,15px); }   /* 관리자가 모달에서 정한 글자크기(payload.opts.font) 적용 */
   #dmMsgReport .rsec { border:2px solid; border-radius:8px; margin:0 0 9px; overflow:hidden; }
   #dmMsgReport .rsec-h { padding:5px 10px; font-weight:800; font-size:1.02em; }
   #dmMsgReport .rsec-h .rh-sub { font-weight:700; font-size:.82em; padding:0 6px; border-radius:8px; background:rgba(255,255,255,.6); }
@@ -138,6 +138,8 @@
       if(res && res.payload && window.DMBuild){
         var pl = (typeof res.payload === 'string') ? JSON.parse(res.payload) : res.payload;
         pl.detailMap = res.detailMap || {};
+        var f = pl.opts && parseInt(pl.opts.font, 10);
+        if(f && f>=10 && f<=24) host.style.setProperty('--dmrf', f+'px');   // 관리자가 정한 글자크기 적용
         host.innerHTML = window.DMBuild.report(pl);
       } else if(res && res.html != null){ host.innerHTML = res.html; }
     },

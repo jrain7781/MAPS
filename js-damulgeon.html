@@ -1501,7 +1501,7 @@
     body += blk('전자본인서명 확인서발급', _kvTable(_esRows));
     // 필독 사항 — 개요 위(맨 위). 1번(정보 회신)은 누락 항목이 있을 때만 노출. 숫자는 직접 부여(캡처 시 ol 마커 누락 방지)
     var mustItems=[];
-    if(_missing) mustItems.push('회원님 정보(<span class="mneed">노란색 칸</span>)를 회신해 주세요~');
+    if(_missing) mustItems.push('회원님 정보(<span class="mneed">노란색 칸</span>)를 저장해 주세요~');
     mustItems.push('총비용을 기한내에 꼭 입금해 주세요~');
     mustItems.push('전자본인서명을 꼭 기한 내에 전달해 주세요~');
     var mustList=mustItems.map(function(t,i){ return '<div class="rmust-li">'+(i+1)+'. '+t+'</div>'; }).join('');
@@ -1603,7 +1603,7 @@
     var _reqs=[], _reqKeys=[], _seen={};
     m.items.forEach(function(it){ var pm=_parseMName(it.member_name, m.member_id); var mk=pm.myungui||''; if(_seen[mk]!==undefined) return; _seen[mk]=1; _reqKeys.push(m.member_id+'||'+mk); _reqs.push({ member_id:m.member_id, myungui:mk, daeriin:String(it.daeriin||'').trim() }); });
     var _slim=m.items.map(function(it){ return { member_name:it.member_name, member_id:it.member_id, court:it.court, sakun_no:it.sakun_no, mulgeon_no:it.mulgeon_no, bidprice:it.bidprice, deposit:it.deposit, _fee:it._fee, address:it.address, in_date:it.in_date, daeriin:it.daeriin }; });
-    var _mDueOpts={ due1:String((m.items[0]&&m.items[0].due1)||'').trim(), due2:String((m.items[0]&&m.items[0].due2)||'').trim(), consol:_msgConsol() };   // 웹 링크엔 회원별 저장 기한 사용
+    var _mDueOpts={ due1:String((m.items[0]&&m.items[0].due1)||'').trim(), due2:String((m.items[0]&&m.items[0].due2)||'').trim(), consol:_msgConsol(), font:_msgFont };   // 웹 링크엔 회원별 저장 기한 + 글자크기
     var _payload=JSON.stringify({ m:{ member:m.member, member_id:String(m.member_id||''), items:_slim }, ctx:{ sakun:_msgCtx.sakun, bidDate:_msgCtx.bidDate, addr:_msgCtx.addr, court:_msgCtx.court, memberName:m.member }, opts:_mDueOpts, reqs:_reqs, reqKeys:_reqKeys });
     return { m:m, seed:seed, html:cardEl.outerHTML, title:title, summary:_sp.join(' / '), phone4:phone4, member_id:String(m.member_id||''), biddate:biddate, payload:_payload };
   }
