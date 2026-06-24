@@ -1040,16 +1040,25 @@
   }
   function _syncItemFromCache(id){
     try {
-      var it=curItems().filter(function(x){return x.link_item_id===id;})[0];
-      var bd=(typeof allBiddingData!=='undefined'&&allBiddingData&&allBiddingData.length)?allBiddingData.find(function(b){return String(b.id)===String(id);}):null;
-      if(!it||!bd) return;
+      var g=_groups.filter(function(x){return x.group_key===_selKey;})[0]; if(!g) return;
+      var idx=-1; for(var i=0;i<g.items.length;i++){ if(String(g.items[i].link_item_id)===String(id)){ idx=i; break; } }
+      if(idx<0) return;
+      var hasCache=(typeof allBiddingData!=='undefined'&&allBiddingData&&allBiddingData.length);
+      var bd=hasCache?allBiddingData.find(function(b){return String(b.id)===String(id);}):null;
+      if(hasCache && !bd){   // 캐시에서 사라짐 = 모달에서 삭제됨 → 그리드에서 제거
+        g.items.splice(idx,1); g.count=g.items.length; try{ _saveGroupsCache(); }catch(_){}
+        _computeFees(g.items); renderBody(); renderSummary();
+        return;
+      }
+      if(!bd) return;
+      var it=g.items[idx];
       it.bidprice=String(bd.bidprice==null?'':bd.bidprice);
       it.member_name=String(bd.m_name||'');
       it.member_id=String(bd.member_id||'');
       if(bd.stu_member) it.stu_member=String(bd.stu_member);
       it.bid_state=String(bd.bid_state||'');
-      it.tg=_tgForMember(it.member_id);   // 회원 변경/삭제 → T 뱃지 갱신(삭제 시 사라짐)
-      _computeFees(curItems()); renderBody(); renderSummary();   // 카운팅(상태/회원/?)도 즉시 갱신
+      it.tg=_tgForMember(it.member_id);   // 회원 변경/삭제 → T 뱃지 갱신
+      _computeFees(g.items); renderBody(); renderSummary();   // 카운팅(상태/회원/?)도 즉시 갱신
     } catch(e){}
   }
 
