@@ -1657,9 +1657,9 @@
     var tmp=document.createElement('div'); tmp.innerHTML=_buildMsgReport(m, _msgOpts(), gi, true);   // web=true: 복사버튼·유튜브버튼만·주민 가림
     var cardEl=tmp.querySelector('.rrep-card'); if(!cardEl) return null;
     var seed=(m.member_id||m.member||'')+'|'+(_msgCtx.sakun||'');
-    var title=(m.member||'')+'님 입찰안내';
     var _shortA=''; for(var _ai=0;_ai<m.items.length;_ai++){ var _aa=String(m.items[_ai].address||'').trim(); if(_aa){ _shortA=_shortAddr(_aa); break; } } if(!_shortA&&_msgCtx.addr) _shortA=_shortAddr(_msgCtx.addr);
     var _mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).filter(Boolean).join(',');
+    var title=(m.member||'')+'님 입찰안내'+(_msgCtx.sakun?(' '+_msgCtx.sakun):'')+(_mulNos?(' 물건 '+_mulNos):'');   // 카톡 미리보기 제목에 사건·물건번호
     var _sp=[]; if(_shortA)_sp.push(_shortA); var _cs=((_msgCtx.court||'')+' '+(_msgCtx.sakun||'')).trim(); if(_cs)_sp.push(_cs); if(_mulNos)_sp.push('물건 '+_mulNos); if(_msgCtx.bidDate)_sp.push('입찰 '+_msgCtx.bidDate);
     var _ph=((_msgDetailFor(m, m.items[0]).principal)||{}).phone||''; var phone4=String(_ph).replace(/[^0-9]/g,'').slice(-4);
     var _bd=String((m.items[0]&&m.items[0].in_date)||''); var _bm=_bd.match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/); var biddate=_bm?(_bm[1]+'-'+('0'+_bm[2]).slice(-2)+'-'+('0'+_bm[3]).slice(-2)):'';
