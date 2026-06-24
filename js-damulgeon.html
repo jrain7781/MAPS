@@ -1025,7 +1025,7 @@
     try {
       var modal=document.getElementById('itemDetailModal');
       if(modal && typeof MutationObserver!=='undefined' && !modal.classList.contains('content-hidden')){
-        var obs=new MutationObserver(function(){ if(modal.classList.contains('content-hidden')){ obs.disconnect(); setTimeout(function(){ _syncItemFromCache(id); },300); } });
+        var obs=new MutationObserver(function(){ if(modal.classList.contains('content-hidden')){ obs.disconnect(); setTimeout(function(){ _syncItemFromCache(id); if(DM.refreshGroup) DM.refreshGroup(); },300); } });   // 즉시 로컬반영 + 서버 재조회로 그리드·카운팅 확정
         obs.observe(modal,{attributes:true,attributeFilter:['class']});
       }
     } catch(e){}
@@ -1049,7 +1049,7 @@
       if(bd.stu_member) it.stu_member=String(bd.stu_member);
       it.bid_state=String(bd.bid_state||'');
       it.tg=_tgForMember(it.member_id);   // 회원 변경/삭제 → T 뱃지 갱신(삭제 시 사라짐)
-      _computeFees(curItems()); renderBody();
+      _computeFees(curItems()); renderBody(); renderSummary();   // 카운팅(상태/회원/?)도 즉시 갱신
     } catch(e){}
   }
 
