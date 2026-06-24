@@ -233,10 +233,13 @@ function _dmSavePdf_(memberId, token, filename, base64) {
   }
 }
 
+/** 전자서명 PDF 저장 폴더: 내 드라이브 / MAPS / damulgun_pdf (없으면 생성). */
 function _dmPdfFolder_() {
-  var name = '다물건_전자서명_PDF';
-  var it = DriveApp.getFoldersByName(name);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(name);
+  var root = DriveApp.getRootFolder();
+  var mit = root.getFoldersByName('MAPS');                 // 내 드라이브 루트의 MAPS
+  var maps = mit.hasNext() ? mit.next() : root.createFolder('MAPS');
+  var sit = maps.getFoldersByName('damulgun_pdf');
+  return sit.hasNext() ? sit.next() : maps.createFolder('damulgun_pdf');
 }
 
 /** 회원이 등록한 전자서명 PDF 목록(최신순). [{date,filename,url}] */
