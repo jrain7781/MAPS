@@ -197,7 +197,8 @@
     { label:'담당자',   f:'m_name_id',    t:'ro',     a:'center', w:64,  src:'items' },
     { label:'비고',     f:'dm_note',      t:'text',   a:'left',   w:130, src:'dm' }
   ];
-  var _hideBasic=false, _sortField='', _sortDir=1, _statusSel={}, _bidMissing=false, _memberSel='', _summaryMembers=[];
+  var _hideBasic=false, _sortField='', _sortDir=1, _statusSel={}, _bidMissing=false, _memberSel='', _summaryMembers=[], _qOnly=false, _qSummaryMembers=[];
+  function _isQ(it){ return String(it.sakun_no||'').indexOf('?')>=0 || String(it.mulgeon_no||'').indexOf('?')>=0; }   // ?표(임의등록) 물건
   var _mcMemberId='', _mcAccounts=[], _mcSel=0, _mcRowItem=null;   // 명의 카드 상태
   var _fav={}, _favOnly=false;   // 즐겨찾기(사건) — PC별 저장
   try{ _fav=JSON.parse(localStorage.getItem('dmFav')||'{}')||{}; }catch(_){ _fav={}; }
@@ -373,7 +374,7 @@
     _selKey = key; renderList();
     var g = _groups.filter(function(x){return x.group_key===key;})[0];
     var fm=document.getElementById('dmFilterMulgeon'), fn=document.getElementById('dmFilterMember');
-    if(fm) fm.value=''; if(fn) fn.value=''; _memberSel='';
+    if(fm) fm.value=''; if(fn) fn.value=''; _memberSel=''; _qOnly=false;
     renderDetail(g);
   }
 
@@ -847,10 +848,10 @@
     items.forEach(function(it){ var st=String(it.stu_member||'미정').trim(); cnt[st]=(cnt[st]||0)+1; if(st==='입찰' && !(_num(it.bidprice)>0)) miss++; });
     var only=Object.keys(_statusSel);
     function schip(key,label,color,active){ return '<span onclick="DM.summaryFilter(\''+key+'\')" style="cursor:pointer;color:'+color+';'+(active?'font-weight:800;text-decoration:underline':'')+'">'+esc(label)+'</span>'; }
-    var statusHtml=schip('__all__','전체 '+items.length,'#4b5563',(only.length===0 && !_bidMissing));
+    var statusHtml=schip('__all__','전체 '+items.length,'#4b5563',(only.length===0 && !_bidMissing && !_qOnly));
     DM_STATUSES.forEach(function(st){ var c=cnt[st]||0; if(!c) return;
       statusHtml+='<span style="color:#cbd5e1">|</span>';
-      statusHtml+=schip(st, st+' '+c, DM_SCOLOR[st]||'#4b5563', (only.length===1 && only[0]===st && !_bidMissing));
+      statusHtml+=schip(st, st+' '+c, DM_SCOLOR[st]||'#4b5563', (only.length===1 && only[0]===st && !_bidMissing && !_qOnly));
       if(st==='입찰' && miss>0) statusHtml+=schip('bid_missing','(미입력 '+miss+')','#dc2626',_bidMissing);
     });
     // 회원별 카운트 (담당자별은 맨 위 헤더로 이동 — 그리드 위에선 제거)
@@ -861,18 +862,23 @@
     // 미지정은 맨 끝(오른쪽)으로
     memOrder.sort(); var _mi=memOrder.indexOf('(미지정)'), _hasMi=_mi>=0; if(_hasMi) memOrder.splice(_mi,1);
     _summaryMembers = memOrder.concat(_hasMi?['(미지정)']:[]);
-    function mchip(name, extra){ var i=_summaryMembers.indexOf(name), active=(_memberSel===name), mi=(name==='(미지정)');
+    function mchip(name, extra){ var i=_summaryMembers.indexOf(name), active=(_memberSel===name && !_qOnly), mi=(name==='(미지정)');
       var sty = active ? (mi?'background:#64748b;color:#fff;font-weight:800':'background:#4f46e5;color:#fff;font-weight:800')
                        : (mi?'background:#e2e8f0;color:#475569;font-weight:700':'background:#eef2ff;color:#3730a3;font-weight:600');   // 미지정=회색 구분
       return '<span onclick="DM.memberSummaryFilter('+i+')" title="이 회원만 보기(다시 누르면 해제)" style="'+(extra||'')+'cursor:pointer;padding:1px 8px;border-radius:11px;'+sty+'">'+esc(name)+' '+memCnt[name]+'</span>'; }
-    // ?표(임의등록) 물건만 별도 카운팅 — 상태 카운팅 뒤에 띄우고 | 로 구분
-    var qItems=items.filter(function(it){ return String(it.sakun_no||'').indexOf('?')>=0 || String(it.mulgeon_no||'').indexOf('?')>=0; });
-    var qMem={}; qItems.forEach(function(it){ qMem[_parseMName(it.member_name,it.member_id).member||'(미지정)']=1; });
-    var qHtml = qItems.length
-      ? '<span style="margin-left:16px;color:#d1d5db">|</span>'
-        +'<span style="color:#b45309;font-weight:800">? 전체 '+qItems.length+'</span>'
-        +'<span style="color:#e5e7eb">·</span><span style="color:#b45309;font-weight:700">? 회원 '+Object.keys(qMem).length+'명</span>'
-      : '';
+    // ?표(임의등록) 물건만 별도 카운팅 — 상태별(? 추천 2 …), 클릭 필터. 상태 카운팅 뒤 | 구분
+    var qItems=items.filter(_isQ), qCnt={};
+    qItems.forEach(function(it){ var st=String(it.stu_member||'미정').trim(); qCnt[st]=(qCnt[st]||0)+1; });
+    var qMemCnt={}, qMemOrder=[];
+    qItems.forEach(function(it){ var mm=_parseMName(it.member_name,it.member_id).member||'(미지정)'; if(qMemCnt[mm]===undefined){ qMemCnt[mm]=0; qMemOrder.push(mm); } qMemCnt[mm]++; });
+    qMemOrder.sort(); _qSummaryMembers=qMemOrder;
+    function qchip(st,label,active){ return '<span onclick="DM.qFilter(\''+st+'\')" style="cursor:pointer;color:#b45309;'+(active?'font-weight:800;text-decoration:underline':'font-weight:700')+'">'+esc(label)+'</span>'; }
+    var qAllActive=(_qOnly && Object.keys(_statusSel).length===0 && !_memberSel);
+    var qHtml='';
+    if(qItems.length){
+      qHtml='<span style="margin-left:16px;color:#d1d5db">|</span>'+qchip('', '? 전체 '+qItems.length, qAllActive);
+      DM_STATUSES.forEach(function(st){ if(!qCnt[st]) return; var act=(_qOnly && !_memberSel && Object.keys(_statusSel).length===1 && _statusSel[st]); qHtml+='<span style="color:#e5e7eb">·</span>'+qchip(st, '? '+st+' '+qCnt[st], act); });
+    }
     // 1줄: 물건상태별(좌) + ?임의등록 카운팅 / 2줄: 회원별(미지정 회색). 담당자별은 맨 위 헤더로.
     bar.innerHTML=''
       +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:3px 7px">'
@@ -882,14 +888,29 @@
       +    '<span style="color:#64748b;font-weight:700">회원</span>'
       +    memOrder.map(function(n){return mchip(n);}).join('')
       +    (_hasMi?mchip('(미지정)'):'')
+      +    qMemOrder.map(function(n,i){ var active=(_qOnly && _memberSel===n); return '<span onclick="DM.qMemberFilter('+i+')" title="이 회원의 ?임의등록 물건만" style="cursor:pointer;padding:1px 8px;border-radius:11px;'+(active?'background:#b45309;color:#fff;font-weight:800':'background:#fef3c7;color:#92400e;font-weight:700')+'">?'+esc(n)+' '+qMemCnt[n]+'</span>'; }).join('')
       +'</div>';
   }
   DM.memberSummaryFilter=function(i){
     var name=_summaryMembers[i]; if(name==null) return;
-    _memberSel=(_memberSel===name)?'':name;   // 다시 누르면 해제
+    _memberSel=(_memberSel===name)?'':name; _qOnly=false;   // 다시 누르면 해제
     renderSummary(); renderBody();
   };
+  // ?임의등록 물건 필터 — st=''이면 전체, 아니면 그 상태의 ?물건
+  DM.qFilter=function(st){
+    var cur=(_qOnly && !_memberSel && ((st==='' && Object.keys(_statusSel).length===0) || (st!=='' && Object.keys(_statusSel).length===1 && _statusSel[st])));
+    if(cur){ _qOnly=false; _statusSel={}; }
+    else { _qOnly=true; _memberSel=''; _bidMissing=false; _statusSel={}; if(st) _statusSel[st]=true; }
+    _statusBtn(); renderSummary(); renderBody();
+  };
+  DM.qMemberFilter=function(i){
+    var name=_qSummaryMembers[i]; if(name==null) return;
+    if(_qOnly && _memberSel===name){ _qOnly=false; _memberSel=''; }
+    else { _qOnly=true; _memberSel=name; _statusSel={}; _bidMissing=false; }
+    _statusBtn(); renderSummary(); renderBody();
+  };
   DM.summaryFilter=function(key){
+    _qOnly=false;   // 일반 상태 클릭 시 ?전용 해제
     if(key==='__all__'){ _statusSel={}; _bidMissing=false; }
     else if(key==='bid_missing'){ _bidMissing=!_bidMissing; _statusSel=_bidMissing?{'입찰':true}:{}; }
     else { var only=Object.keys(_statusSel); if(only.length===1 && only[0]===key && !_bidMissing){ _statusSel={}; } else { _statusSel={}; _statusSel[key]=true; } _bidMissing=false; }
@@ -909,6 +930,7 @@
       if (fm && String(it.mulgeon_no||'').toLowerCase().indexOf(fm)<0) return false;
       if (fn && String(it.member_name||'').toLowerCase().indexOf(fn)<0) return false;
       if (_memberSel && (_parseMName(it.member_name,it.member_id).member||'(미지정)')!==_memberSel) return false;   // 회원별 썸머리 클릭 필터
+      if (_qOnly && !_isQ(it)) return false;   // ?표(임의등록) 물건만
       if (ss.length && !_statusSel[String(it.stu_member||'').trim()]) return false;   // 상태 다중선택
       if (_bidMissing && _num(it.bidprice)>0) return false;   // 입찰 미입력만
       return true;
