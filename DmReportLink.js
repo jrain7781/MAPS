@@ -15,8 +15,11 @@ function dmLinkSheet_() {
   var sh = ss.getSheetByName(DM_LINK_SHEET);
   if (!sh) {
     sh = ss.insertSheet(DM_LINK_SHEET);
-    sh.getRange(1, 1, 1, 11).setValues([['token', 'seed', 'member_id', 'phone4', 'html', 'title', 'summary', 'status', 'fail', 'created', 'biddate']]);
+    sh.getRange(1, 1, 1, 12).setValues([['token', 'seed', 'member_id', 'phone4', 'html', 'title', 'summary', 'status', 'fail', 'created', 'biddate', 'payload']]);
     sh.hideSheet();
+  } else if (sh.getMaxColumns() < 12) {
+    sh.insertColumnsAfter(sh.getMaxColumns(), 12 - sh.getMaxColumns());   // 구버전 11열 시트 → payload(12열) 추가
+    sh.getRange(1, 12).setValue('payload');
   }
   return sh;
 }
@@ -47,31 +50,69 @@ function dmExpired_(biddate) {
 }
 
 /** 🔗 링크복사: 활성 링크 있으면 재사용(내용만 최신 갱신), 없으면 새로 생성. → {token,url,gated} */
-function dmGetOrCreateLink(seed, html, title, summary, phone4, member_id, biddate) {
+function dmGetOrCreateLink(seed, html, title, summary, phone4, member_id, biddate, payload) {
   if (!seed || !html) throw new Error('데이터 부족');
   phone4 = String(phone4 || '').replace(/[^0-9]/g, '').slice(-4);
   biddate = String(biddate || '').trim();
+  payload = String(payload || '');   // 동적 렌더용 JSON(회원 새로고침=DB 최신)
   var sh = dmLinkSheet_(), data = sh.getDataRange().getValues();
   var ri = dmFindActiveBySeed_(data, seed), token;
   if (ri >= 0) {
     token = String(data[ri][0]);
     sh.getRange(ri + 1, 4, 1, 6).setValues([[phone4, html, title || '', summary || '', 'active', 0]]); // 4..9
     sh.getRange(ri + 1, 11).setValue(biddate);
+    sh.getRange(ri + 1, 12).setValue(payload);
   } else {
     token = dmRandToken_();
-    sh.appendRow([token, seed, member_id || '', phone4, html, title || '', summary || '', 'active', 0, new Date(), biddate]);
+    sh.appendRow([token, seed, member_id || '', phone4, html, title || '', summary || '', 'active', 0, new Date(), biddate, payload]);
   }
   return { token: token, url: dmLinkUrl_(token), gated: phone4.length >= 4, expire: biddate };
 }
 
 /** 🚫 폐기·재발급: 현재 활성 링크 폐기 후 새 토큰 발급. → {token,url,gated} */
-function dmRevokeAndRenew(seed, html, title, summary, phone4, member_id, biddate) {
+function dmRevokeAndRenew(seed, html, title, summary, phone4, member_id, biddate, payload) {
   if (!seed) throw new Error('seed 없음');
   var sh = dmLinkSheet_(), data = sh.getDataRange().getValues();
   var ri = dmFindActiveBySeed_(data, seed);
   if (ri >= 0) sh.getRange(ri + 1, 8).setValue('revoked');
-  if (html) return dmGetOrCreateLink(seed, html, title, summary, phone4, member_id, biddate);
+  if (html) return dmGetOrCreateLink(seed, html, title, summary, phone4, member_id, biddate, payload);
   return { revoked: true };
+}
+
+/**
+ * 동적 렌더 데이터: 게이트 검증 통과 시 저장된 payload(물건·기한·컨텍스트) + 라이브 명의상세(member_accounts)를 반환.
+ * → 회원이 새로고침하면 본인이 저장한 정보가 바로 반영됨. payload 없는 구버전 링크는 html 스냅샷으로 폴백.
+ */
+function dmRenderData(token, last4) {
+  var sh = dmLinkSheet_(), data = sh.getDataRange().getValues();
+  var ri = dmFindByToken_(data, token);
+  if (ri < 0) return { status: 'revoked' };
+  var row = data[ri];
+  if (String(row[7]) !== 'active') return { status: 'revoked' };
+  if (dmExpired_(row[10])) return { status: 'expired' };
+  var phone4 = String(row[3] || '').replace(/[^0-9]/g, '');
+  if (phone4) {   // 게이트 검증(3회 실패 자동 폐기) — dmVerifyReport와 동일
+    var inp = String(last4 || '').replace(/[^0-9]/g, '').slice(-4);
+    if (inp !== phone4) {
+      var fail = Number(row[8] || 0) + 1;
+      if (fail >= 3) { sh.getRange(ri + 1, 8).setValue('revoked'); return { status: 'locked' }; }
+      sh.getRange(ri + 1, 9).setValue(fail);
+      return { status: 'fail', left: 3 - fail };
+    }
+    if (Number(row[8]) > 0) sh.getRange(ri + 1, 9).setValue(0);
+  }
+  var title = String(row[5] || '');
+  var payloadStr = String(row[11] || '');
+  if (!payloadStr) return { status: 'ok', html: String(row[4] || ''), title: title };   // 구버전 → 스냅샷 폴백
+  var pl;
+  try { pl = JSON.parse(payloadStr); } catch (e) { return { status: 'ok', html: String(row[4] || ''), title: title }; }
+  var detailMap = {};
+  try {
+    var reqs = pl.reqs || [], reqKeys = pl.reqKeys || [];
+    var res = getBulkDaeriipchalData(reqs);
+    reqKeys.forEach(function (k, i) { detailMap[k] = res[i] || {}; });
+  } catch (e2) {}
+  return { status: 'ok', payload: pl, detailMap: detailMap, title: title };
 }
 
 /** 회원 페이지: 전화 뒷4자리 검증 → 보고서 HTML 반환. 3회 실패 시 자동 폐기. */

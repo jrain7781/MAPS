@@ -80,12 +80,13 @@
   <!-- 보고서(확인 후 표시) -->
   <div id="repWrap" style="display:none">
     <div style="position:sticky;top:0;z-index:5;background:#eef1f5;text-align:center;padding:8px 12px;border-bottom:1px solid #dde3ea">
-      <button onclick="location.reload()" style="background:#1f3a5f;color:#fff;border:0;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:800;cursor:pointer">🔄 새로고침 (최신 정보)</button>
+      <button id="dmReloadBtn" onclick="DMV.reload()" style="background:#1f3a5f;color:#fff;border:0;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:800;cursor:pointer">🔄 새로고침 (최신 정보)</button>
     </div>
-    <div class="dmw-top">📨 입찰 안내 — 아래 내용은 길게 눌러 복사할 수 있습니다</div>
+    <div class="dmw-top">📨 입찰 안내 — 노란 칸은 입력 후 💾 저장, 나머지는 길게 눌러 복사</div>
     <div class="dmw-wrap"><div id="dmMsgReport"><?!= embedHtml ?></div></div>
   </div>
   <div id="loading" style="text-align:center;padding:60px 12px;color:#94a3b8;font-size:14px">불러오는 중…</div>
+  <?!= include('dm-builder'); ?>
 
 <script>
   var TOKEN = '<?= token ?>';
@@ -117,11 +118,20 @@
     el: function(id){ return document.getElementById(id); },
     show: function(which){ DMV.el('gate').style.display = which==='gate'?'block':'none'; DMV.el('repWrap').style.display = which==='rep'?'block':'none'; DMV.el('loading').style.display = which==='loading'?'block':'none'; },
     msg: function(t, cls){ var m=DMV.el('gateMsg'); m.textContent=t||''; m.className = cls||''; },
+    // 보고서 주입: payload 있으면 동적 빌드(회원 저장분 라이브 반영), 없으면 html 스냅샷 폴백
+    inject: function(res){
+      var host = DMV.el('dmMsgReport'); if(!host) return;
+      if(res && res.payload && window.DMBuild){
+        var pl = (typeof res.payload === 'string') ? JSON.parse(res.payload) : res.payload;
+        pl.detailMap = res.detailMap || {};
+        host.innerHTML = window.DMBuild.report(pl);
+      } else if(res && res.html != null){ host.innerHTML = res.html; }
+    },
     handle: function(res, typed){
       res = res || {};
       if(res.status === 'ok'){
         if(GATED && typed) { try{ localStorage.setItem(KEY, typed); }catch(e){} }
-        DMV.el('dmMsgReport').innerHTML = res.html || '';
+        DMV.inject(res);
         if(res.title) document.title = res.title;
         DMV.show('rep');
       } else if(res.status === 'fail'){
@@ -147,7 +157,18 @@
       DMV.show('loading');
       google.script.run.withSuccessHandler(function(res){ DMV.handle(res, typed); })
         .withFailureHandler(function(e){ DMV.show('gate'); DMV.msg('오류: '+(e&&e.message||e),'err'); })
-        .dmVerifyReport(TOKEN, typed||'');
+        .dmRenderData(TOKEN, typed||'');   // 동적: 게이트 통과 시 라이브 데이터(저장분 반영)
+    },
+    // 🔄 새로고침: 전체 reload(빈화면) 대신 동적 데이터만 재조회 → 회원이 저장한 내용 즉시 반영
+    reload: function(){
+      var saved=''; try{ saved=localStorage.getItem(KEY)||''; }catch(e){}
+      if(GATED && !saved){ DMV.show('gate'); return; }   // 게이트 링크인데 인증 기록 없음 → 빈값 전송 시 실패카운트 방지
+      var btn=DMV.el('dmReloadBtn'), o=btn?btn.textContent:'';
+      if(typeof google==='undefined'||!google.script||!google.script.run){ return; }
+      if(btn){ btn.disabled=true; btn.textContent='새로고침 중…'; }
+      google.script.run.withSuccessHandler(function(res){ if(btn){ btn.disabled=false; btn.textContent=o; } DMV.handle(res, saved); })
+        .withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.textContent=o; } alert('새로고침 오류: '+(e&&e.message||e)); })
+        .dmRenderData(TOKEN, saved||'');
     },
     submit: function(){
       var v = (DMV.el('g4').value||'').replace(/[^0-9]/g,'');
@@ -165,7 +186,10 @@
     init: function(){
       if(STATUS==='revoked'){ DMV.showInvalid('유효하지 않은 링크입니다. 담당자에게 새 링크를 요청해 주세요.'); return; }
       if(STATUS==='expired'){ DMV.showInvalid('입찰일이 지나 만료된 링크입니다.'); return; }
-      if(HAS_EMBED){ DMV.show('rep'); return; }               // 게이트 없음 → 임베드된 보고서 즉시(서버호출 0)
+      if(HAS_EMBED){ DMV.show('rep');                          // 게이트 없음 → 임베드 스냅샷 즉시 표시 후 동적으로 교체(새로고침=DB최신)
+        if(typeof google!=='undefined'&&google.script&&google.script.run){
+          google.script.run.withSuccessHandler(function(res){ if(res&&res.status==='ok') DMV.inject(res); }).withFailureHandler(function(){}).dmRenderData(TOKEN, '');
+        } return; }
       var saved=''; try{ saved=localStorage.getItem(KEY)||''; }catch(e){}
       if(saved){ DMV.verify(saved); }                          // 게이트: 이 기기 기억 → 자동확인
       else { DMV.show('gate'); setTimeout(function(){ var i=DMV.el('g4'); if(i) i.focus(); }, 100); }
@@ -186,7 +210,7 @@
     var o = btn.getAttribute('data-o') || btn.textContent; btn.setAttribute('data-o', o);
     btn.disabled=true; btn.textContent='저장 중…'; btn.style.background='#9ca3af';
     google.script.run.withSuccessHandler(function(r){
-      if(r&&r.success){ btn.disabled=true; btn.textContent='✓ 저장됨'; btn.style.background='#16a34a'; alert('저장되었습니다. 담당자에게 전달됩니다. 감사합니다!'); }
+      if(r&&r.success){ btn.disabled=true; btn.textContent='✓ 저장됨'; btn.style.background='#16a34a'; alert('저장되었습니다. 담당자에게 전달됩니다. 감사합니다!'); if(DMV&&DMV.reload) DMV.reload(); }
       else { btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 실패: '+((r&&r.msg)||'알 수 없음')); }
     }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 오류: '+(e&&e.message||e)); })
       .dmSaveMemberFields(TOKEN, edits);
