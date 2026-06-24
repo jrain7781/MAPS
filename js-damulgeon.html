@@ -1904,10 +1904,16 @@
     var L=document.getElementById('dmMatchLeft'), R=document.getElementById('dmMatchRight'); if(!L||!R) return;
     L.innerHTML=_matchMembers.map(function(m,mi){
       var used=m.items.length-_matchRemain(mi), active=(mi===_matchActive);
-      var dots=m.items.map(function(_,i){ return '<span style="font-weight:800;font-size:15px;color:'+(i<used?'#cbd5e1':'#b45309')+';'+(i<used?'text-decoration:line-through':'')+'">?</span>'; }).join(' ');
+      var list=m.items.map(function(it,i){ var done=(i<used);
+        return '<div style="font-size:12px;padding:1px 2px;font-weight:700;color:'+(done?'#9ca3af':'#b45309')+';'+(done?'text-decoration:line-through':'')+'">'+esc(it.mulgeon_no||'?')+(done?' ✓ 매칭':'')+'</div>';
+      }).join('');
       return '<div onclick="DM.matchPick('+mi+')" style="cursor:pointer;margin-bottom:8px;padding:8px 10px;border-radius:9px;'+(active?'background:#dbeafe;border:1px solid #2563eb':'background:#fff;border:1px solid #e5e7eb')+'">'
-        +'<div style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</div>'
-        +'<div style="margin-top:3px">'+dots+' <span style="color:#64748b;font-size:11px">남은 '+_matchRemain(mi)+'/'+m.items.length+'</span></div>'
+        +'<div style="display:flex;align-items:center;gap:6px">'
+        +  '<span style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</span>'
+        +  '<span style="font-size:12px;font-weight:800;color:#b45309;background:#fef3c7;border-radius:10px;padding:0 7px">'+m.items.length+'</span>'
+        +  '<span style="margin-left:auto;color:#64748b;font-size:11px">남은 '+_matchRemain(mi)+'</span>'
+        +'</div>'
+        +'<div style="margin-top:4px;border-top:1px dashed #e5e7eb;padding-top:3px">'+list+'</div>'
         +'</div>';
     }).join('') || '<div style="color:#9ca3af">? 회원 없음</div>';
     var fromCols=COLS.slice(COLS.map(function(c){return c.f;}).indexOf('_dong'));   // 동부터 그리드 그대로
