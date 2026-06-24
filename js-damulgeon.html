@@ -32,6 +32,10 @@
   #dmMsgReport .dmpdf-msg { font-size:.82em; color:#6b7280; word-break:break-all; }
   #dmMsgReport .dmpdf-view { background:#0e7490; color:#fff; border:0; border-radius:6px; padding:4px 12px; font-size:.9em; font-weight:700; cursor:pointer; }
   #dmMsgReport .dmpdf-view:active { background:#0b5563; }
+  /* 상세 로딩 배너 — "조용한 업데이트" 혼란 방지(불러오는 중 명시) */
+  #dmMsgReport .dm-msgload { display:flex; align-items:center; gap:8px; margin:0 0 10px; padding:9px 12px; background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; color:#92400e; font-weight:700; font-size:13px; }
+  #dmMsgReport .dm-msgload .dm-spin { display:inline-block; font-size:15px; }
+  #dmMsgReport .dmpdf-reg { background:#fff; color:#1f3a5f; border:1px solid #94a3b8; border-radius:6px; padding:4px 11px; font-size:.88em; font-weight:700; cursor:pointer; }
   #dmMsgReport .dmneed { color:#92400e; font-weight:700; }
   /* 기본: 채워진칸=값 / 빈칸=입력. 수정모드(.editmode): 전부 입력 */
   #dmMsgReport .dmf > .dmedit, #dmMsgReport .dmf > .dmedit-acct { display:none; }
@@ -1110,6 +1114,7 @@
   var _msgGroups=[], _msgCtx={};
   function _won(n){ n=_num(n); return n?n.toLocaleString('ko-KR'):'0'; }
   var _msgDetailMap={}, _msgFocusGi=0, _msgSel={}, _msgTab='link';   // 상세=회원||명의 키, 선택=gi, 탭=link(웹링크 미리보기)/image(캡처)
+  var _msgDetailsLoading=false;   // 명의 상세(전화·주민·계좌·등급) 서버 조회 중 — 보고서에 "불러오는 중" 명시
   DM.openMsgModal = function(targets){
     var g0=targets[0]||{}, court=_courtParse(g0.court||'');
     var _repA=''; for(var _ti=0;_ti<targets.length;_ti++){ var _a=String(targets[_ti].address||'').trim(); if(_a){ _repA=_a; break; } }   // 대표 주소(빈 더미 제외)
@@ -1124,7 +1129,7 @@
       if(pm.gubun==='법인') map[key].gubun='법인';
     });
     _msgGroups=Object.keys(map).map(function(k){ var m=map[k]; m.items.sort(function(a,b){return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0);}); return m; });
-    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgTab='link'; _linkStatusCache={}; _uploadsCache={}; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 링크 탭 기본
+    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgTab='link'; _linkStatusCache={}; _uploadsCache={}; _msgDetailsLoading=true; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 링크 탭 기본 + 상세 로딩중
     var cnt=document.getElementById('dmMsgCnt'); if(cnt) cnt.textContent='· 회원 '+_msgGroups.length+'명 / 물건 '+targets.length+'건';
     var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=true;
     _loadMsgFont();
@@ -1138,11 +1143,12 @@
   };
   // 상세(전화·주민·계좌 등) 재조회 — 회원이 웹에서 등록/저장한 내용 반영. onDone(선택).
   function _loadMsgDetails(onDone){
+    _msgDetailsLoading=true; _renderMsgRight();   // "불러오는 중" 표시
     var reqKeys=[], reqs=[];
     _msgGroups.forEach(function(m){ var seen={}; m.items.forEach(function(it){ var pm=_parseMName(it.member_name, it.member_id); var mk=pm.myungui||''; if(seen[mk]!==undefined) return; seen[mk]=1; reqKeys.push(m.member_id+'||'+mk); reqs.push({ member_id:m.member_id, myungui:mk, daeriin:String(it.daeriin||'').trim() }); }); });
-    if(typeof google==='undefined'||!google.script||!google.script.run){ if(onDone) onDone(); return; }
-    google.script.run.withSuccessHandler(function(res){ res=res||[]; _msgDetailMap={}; reqKeys.forEach(function(k,i){ _msgDetailMap[k]=res[i]||{}; }); _renderMsgLeft(); _renderMsgRight(); if(onDone) onDone(); })
-      .withFailureHandler(function(e){ console.error('[msg detail]',e); if(onDone) onDone(); }).getBulkDaeriipchalData(reqs);
+    if(typeof google==='undefined'||!google.script||!google.script.run){ _msgDetailsLoading=false; _renderMsgRight(); if(onDone) onDone(); return; }
+    google.script.run.withSuccessHandler(function(res){ res=res||[]; _msgDetailMap={}; reqKeys.forEach(function(k,i){ _msgDetailMap[k]=res[i]||{}; }); _msgDetailsLoading=false; _renderMsgLeft(); _renderMsgRight(); if(onDone) onDone(); })
+      .withFailureHandler(function(e){ console.error('[msg detail]',e); _msgDetailsLoading=false; _renderMsgRight(); if(onDone) onDone(); }).getBulkDaeriipchalData(reqs);
   }
   // 🔄 새로고침: 상세 재조회 + 링크상태 재조회 → 회원 등록분 반영(링크/이미지 탭 공통)
   DM.msgRefresh=function(){
@@ -1206,7 +1212,8 @@
     var m=_msgGroups[_msgFocusGi]; if(!m){ rp.innerHTML='<div style="padding:30px;color:#94a3b8">좌측에서 회원을 선택하세요.</div>'; rp.classList.remove('dm-linkmode'); _renderLinkStatus(); return; }
     var web=(_msgTab==='link');
     rp.classList.toggle('dm-linkmode', web);   // 링크 모드: 캡처 여백 제거 + 복사버튼 노출(회원 웹페이지와 동일 화면)
-    rp.innerHTML=_buildMsgReport(m, _msgOpts(), _msgFocusGi, web);   // 링크 탭=웹변형(복사버튼·주민가림), 이미지 탭=캡처변형
+    var loadBanner=_msgDetailsLoading ? '<div class="dm-msgload"><span class="dm-spin">⟳</span> 회원 상세정보 불러오는 중… <span style="font-weight:500;color:#92400e;opacity:.8">(전화·주민·계좌·등급)</span></div>' : '';
+    rp.innerHTML=loadBanner+_buildMsgReport(m, _msgOpts(), _msgFocusGi, web);   // 링크 탭=웹변형(복사버튼·주민가림), 이미지 탭=캡처변형
     _applyMsgFont(); if(_msgTab==='image') _bindBidResizers();
     _renderLinkStatus();
     if(web) _loadUploadsFor(m);   // 회원 등록 PDF(보기/미등록) 비동기 조회 → 도착 시 재렌더
@@ -1419,9 +1426,10 @@
     ];
     if(web){   // 링크 미리보기/모달: 제출방법 = 회원 등록 PDF 보기/미등록
       var _ups=m.member_id?_uploadsCache[String(m.member_id)]:[];
-      var _pdfCell = (_ups==null) ? '<span style="color:#94a3b8">확인 중…</span>'
+      var _view = (_ups==null) ? '<span style="color:#94a3b8">확인 중…</span>'
         : (_ups.length ? '<button type="button" class="dmpdf-view" onclick="DM.viewPdf(\''+esc(_ups[0].url)+'\')">📄 PDF 보기</button>'+(_ups.length>1?(' <span style="color:#64748b;font-size:.85em">외 '+(_ups.length-1)+'건</span>'):'')
                        : '<span style="color:#dc2626;font-weight:700">미등록</span>');
+      var _pdfCell='<div class="dmpdf">'+_view+'<label class="dmpdf-reg">📎 등록하기<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="DM.uploadPdf&&DM.uploadPdf(this)"></label><span class="dmpdf-msg"></span></div>';
       _esRows.push(['제출방법', _pdfCell, '', 'raw']);
     } else {
       _esRows.push(['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요']);
