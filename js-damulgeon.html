@@ -854,9 +854,10 @@
       statusHtml+=schip(st, st+' '+c, DM_SCOLOR[st]||'#4b5563', (only.length===1 && only[0]===st && !_bidMissing && !_qOnly));
       if(st==='입찰' && miss>0) statusHtml+=schip('bid_missing','(미입력 '+miss+')','#dc2626',_bidMissing);
     });
-    // 회원별 카운트 (담당자별은 맨 위 헤더로 이동 — 그리드 위에선 제거)
+    // 입찰 회원별 카운트 — 입찰 상태 물건만 (담당자별은 맨 위 헤더로 이동)
     var memCnt={}, memOrder=[];
     items.forEach(function(it){
+      if(String(it.stu_member||'').trim()!=='입찰') return;   // 입찰만 카운팅
       var mem=_parseMName(it.member_name,it.member_id).member||'(미지정)'; if(memCnt[mem]===undefined){ memCnt[mem]=0; memOrder.push(mem); } memCnt[mem]++;
     });
     // 미지정은 맨 끝(오른쪽)으로
@@ -885,9 +886,10 @@
       +    statusHtml + qHtml
       +'</div>'
       +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;margin-top:5px">'
-      +    '<span style="color:#64748b;font-weight:700">회원</span>'
+      +    '<span style="color:#64748b;font-weight:700">입찰 회원</span>'
       +    memOrder.map(function(n){return mchip(n);}).join('')
       +    (_hasMi?mchip('(미지정)'):'')
+      +    (qMemOrder.length?'<span style="margin:0 4px 0 10px;color:#cbd5e1;font-weight:700">|</span><span style="color:#b45309;font-weight:700;font-size:11px">?임의등록</span>':'')
       +    qMemOrder.map(function(n,i){ var active=(_qOnly && _memberSel===n); return '<span onclick="DM.qMemberFilter('+i+')" title="이 회원의 ?임의등록 물건만" style="cursor:pointer;padding:1px 8px;border-radius:11px;'+(active?'background:#b45309;color:#fff;font-weight:800':'background:#fef3c7;color:#92400e;font-weight:700')+'">?'+esc(n)+' '+qMemCnt[n]+'</span>'; }).join('')
       +'</div>';
   }
