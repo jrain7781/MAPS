@@ -853,28 +853,25 @@
       statusHtml+=schip(st, st+' '+c, DM_SCOLOR[st]||'#4b5563', (only.length===1 && only[0]===st && !_bidMissing));
       if(st==='입찰' && miss>0) statusHtml+=schip('bid_missing','(미입력 '+miss+')','#dc2626',_bidMissing);
     });
-    // 회원별 카운트 + 담당자 카운트
-    var memCnt={}, memOrder=[], mgrCnt={};
+    // 회원별 카운트 (담당자별은 맨 위 헤더로 이동 — 그리드 위에선 제거)
+    var memCnt={}, memOrder=[];
     items.forEach(function(it){
       var mem=_parseMName(it.member_name,it.member_id).member||'(미지정)'; if(memCnt[mem]===undefined){ memCnt[mem]=0; memOrder.push(mem); } memCnt[mem]++;
-      var mn=String(it.m_name_id||'').trim()||'(미지정)'; mgrCnt[mn]=(mgrCnt[mn]||0)+1;
     });
-    memOrder.sort(); _summaryMembers=memOrder;
-    var memChips=memOrder.map(function(name,i){ var active=(_memberSel===name);
-      return '<span onclick="DM.memberSummaryFilter('+i+')" title="이 회원만 보기(다시 누르면 해제)" style="cursor:pointer;padding:1px 8px;border-radius:11px;'+(active?'background:#4f46e5;color:#fff;font-weight:800':'background:#eef2ff;color:#3730a3;font-weight:600')+'">'+esc(name)+' '+memCnt[name]+'</span>';
-    }).join('');
-    var mgrParts=Object.keys(mgrCnt).sort().map(function(k){ var md=(typeof _mgrDisplay==='function')?_mgrDisplay(k):{disp:k,color:'#0e7490'}; return '<span style="color:'+md.color+';font-weight:700">'+esc(md.disp)+'</span> '+mgrCnt[k]; });
-    // 한 행: 좌=회원별(클릭 필터) / 우=상태(클릭 필터). 아래 얇은 줄=물건/회원수/담당자
+    // 미지정은 맨 끝(오른쪽)으로
+    memOrder.sort(); var _mi=memOrder.indexOf('(미지정)'), _hasMi=_mi>=0; if(_hasMi) memOrder.splice(_mi,1);
+    _summaryMembers = memOrder.concat(_hasMi?['(미지정)']:[]);
+    function mchip(name, extra){ var i=_summaryMembers.indexOf(name), active=(_memberSel===name);
+      return '<span onclick="DM.memberSummaryFilter('+i+')" title="이 회원만 보기(다시 누르면 해제)" style="'+(extra||'')+'cursor:pointer;padding:1px 8px;border-radius:11px;'+(active?'background:#4f46e5;color:#fff;font-weight:800':'background:#eef2ff;color:#3730a3;font-weight:600')+'">'+esc(name)+' '+memCnt[name]+'</span>'; }
+    // 1줄: 물건상태별(좌) / 2줄: 회원별(미지정 맨 오른쪽). 담당자별은 맨 위 헤더로.
     bar.innerHTML=''
-      +'<div style="display:flex;align-items:center;gap:8px;width:100%">'
-      +  '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:4px 6px;overflow-x:auto;white-space:nowrap">'
-      +    '<span style="color:#64748b;font-weight:700;flex-shrink:0">회원</span>'+(memChips||'<span style="color:#9ca3af">-</span>')
-      +  '</div>'
-      +  '<div style="flex-shrink:0;display:flex;align-items:center;gap:3px 6px;white-space:nowrap;padding-left:10px;border-left:1px solid #e5e7eb">'+statusHtml+'</div>'
+      +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:3px 7px">'
+      +    statusHtml
       +'</div>'
-      +'<div style="width:100%;margin-top:3px;color:#94a3b8;font-size:11px">'
-      +  '<span style="font-weight:700;color:#475569">물건 '+items.length+'건</span> · 회원 '+memOrder.length+'명'
-      +  '<span style="color:#cbd5e1"> | </span><span style="color:#64748b;font-weight:600">담당자</span> '+mgrParts.join('<span style="color:#e5e7eb">·</span>')
+      +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;margin-top:5px">'
+      +    '<span style="color:#64748b;font-weight:700">회원</span>'
+      +    memOrder.map(function(n){return mchip(n);}).join('')
+      +    (_hasMi?mchip('(미지정)','margin-left:auto;'):'')
       +'</div>';
   }
   DM.memberSummaryFilter=function(i){
@@ -951,7 +948,12 @@
       +   '<span style="font-size:13px;font-weight:700;color:#1d4ed8;flex-shrink:0">'+esc(g.court)+'</span>'
       +   '<span style="font-size:12px;color:#4b5563;flex-shrink:0">입찰일 '+esc(g.in_date)+'</span>'
       +   '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#fef3c7;color:#92400e;font-weight:700;flex-shrink:0">물건 '+g.count+'</span>'
-      +   (_firstMgr(g)? (function(){ var md=_mgrDisplay(_firstMgr(g)); return '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#f1f5f9;color:'+md.color+';font-weight:700;flex-shrink:0">담당 '+esc(md.disp)+'</span>'; })():'')
+      +   (function(){   // 담당자별 카운트(여러 담당이면 모두 표시) — 그리드 위 담당 카운팅 대체
+            var c={}, ord=[]; g.items.forEach(function(it){ var k=String(it.m_name_id||'').trim()||'(미지정)'; if(c[k]===undefined){ c[k]=0; ord.push(k); } c[k]++; });
+            if(!ord.length) return '';
+            var parts=ord.sort().map(function(k){ var md=_mgrDisplay(k); return '<span style="color:'+md.color+';font-weight:700">'+esc(md.disp)+' '+c[k]+'</span>'; });
+            return '<span style="font-size:12px;padding:1px 8px;border-radius:9px;background:#f1f5f9;flex-shrink:0">담당 '+parts.join('<span style="color:#cbd5e1;font-weight:400"> · </span>')+'</span>';
+          })()
       +   '<span style="font-size:15px;font-weight:700;color:#111827;flex-shrink:0;margin-left:20px">'+esc(addrFull)+'</span>'
       + '</div>';
     if (thead) thead.innerHTML = headHtml();
