@@ -95,6 +95,79 @@ function dmVerifyReport(token, last4) {
   return { status: 'fail', left: 3 - fail };
 }
 
+/** 🚫 폐기 전용: 현재 활성 링크만 폐기(새 링크 발급 안 함). */
+function dmRevokeOnly(seed) {
+  if (!seed) throw new Error('seed 없음');
+  var sh = dmLinkSheet_(), data = sh.getDataRange().getValues();
+  var ri = dmFindActiveBySeed_(data, seed);
+  if (ri >= 0) sh.getRange(ri + 1, 8).setValue('revoked');
+  return { revoked: true };
+}
+
+/**
+ * 회원 페이지에서 노란칸(누락 항목) 일괄 저장. token으로 회원 식별 → member_accounts 부분 병합 저장.
+ * edits = [{idx, field, value}]. (field: jumin_corp/biz_no/phone/address/account_bank/account_no/account_name/job/name)
+ */
+function dmSaveMemberFields(token, edits) {
+  edits = edits || [];
+  var data = dmLinkSheet_().getDataRange().getValues();
+  var ri = dmFindByToken_(data, token);
+  if (ri < 0) return { success: false, msg: '유효하지 않은 링크' };
+  var row = data[ri];
+  if (String(row[7]) !== 'active') return { success: false, msg: '폐기된 링크' };
+  if (dmExpired_(row[10])) return { success: false, msg: '만료된 링크' };
+  var memberId = String(row[2] || '').trim();
+  if (!memberId) return { success: false, msg: '회원 식별 불가' };
+  var allow = { gubun: 1, name: 1, job: 1, jumin_corp: 1, biz_no: 1, phone: 1, address: 1, account_bank: 1, account_no: 1, account_name: 1 };
+  var byIdx = {};
+  edits.forEach(function (e) {
+    e = e || {};
+    var idx = parseInt(e.idx, 10), f = String(e.field || ''), v = String(e.value == null ? '' : e.value).trim();
+    if (isNaN(idx) || !allow[f] || !v) return;
+    if (!byIdx[idx]) byIdx[idx] = {};
+    byIdx[idx][f] = v;
+  });
+  var idxs = Object.keys(byIdx);
+  if (!idxs.length) return { success: false, msg: '입력값 없음' };
+  var acc = getMemberAccounts(memberId);
+  if (!acc || !acc.success) return { success: false, msg: '회원 조회 실패' };
+  var saved = 0;
+  idxs.forEach(function (idxKey) {
+    var idx = parseInt(idxKey, 10);
+    var cur = (acc.accounts || []).filter(function (a) { return a.idx === idx; })[0] || { idx: idx };
+    var merged = {
+      gubun: cur.gubun || '', name: cur.name || '', job: cur.job || '회사원',
+      jumin_corp: cur.jumin_corp || '', biz_no: cur.biz_no || '',
+      phone: cur.phone || '', address: cur.address || '',
+      account_bank: cur.account_bank || '', account_no: cur.account_no || '', account_name: cur.account_name || ''
+    };
+    var fields = byIdx[idx];
+    Object.keys(fields).forEach(function (f) { merged[f] = fields[f]; });
+    var r = saveMemberAccount(memberId, idx, merged);
+    if (r && r.success) saved++;
+  });
+  return { success: saved > 0, saved: saved };
+}
+
+/** 모달 표시용: seed의 현재 활성 링크 상태(활성/만료/없음) + 생성시각·게이트여부. 읽기 전용. */
+function dmGetLinkStatus(seed) {
+  seed = String(seed || '').trim();
+  if (!seed) return { status: 'none' };
+  var data = dmLinkSheet_().getDataRange().getValues();
+  var ri = dmFindActiveBySeed_(data, seed);
+  if (ri < 0) return { status: 'none' };
+  var row = data[ri];
+  var created = '';
+  try { if (row[9]) created = Utilities.formatDate(new Date(row[9]), Session.getScriptTimeZone(), 'MM/dd HH:mm'); } catch (e) {}
+  return {
+    status: dmExpired_(row[10]) ? 'expired' : 'active',
+    created: created,
+    gated: !!String(row[3] || ''),
+    biddate: String(row[10] || ''),
+    url: dmLinkUrl_(String(row[0]))
+  };
+}
+
 /** doGet용 메타. 게이트 없으면(전화 미등록) html까지 실어 doGet에서 바로 임베드(서버 재호출 없이 빠르게). */
 function dmGetReportMeta(token) {
   var data = dmLinkSheet_().getDataRange().getValues();

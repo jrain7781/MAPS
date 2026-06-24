@@ -22,7 +22,12 @@
   .dm-spin { animation:dmSpin .7s linear infinite; }
   /* 입찰안내 보고서 — 모바일 친화 좁은 폭, 섹션별 굵은 테두리 + 교대 2색 */
   #dmMsgReport .rrep { width:430px; max-width:100%; margin:0 auto 16px; padding:106px 0; background:#fff; line-height:1.4; }   /* 캡처 루트: 상·하 흰 여백. (캡처는 html-to-image=화면 네이티브 렌더라 줄간격은 가독성용) */
-  #dmMsgReport .rrep-card { border:1px solid #cdd5df; border-radius:10px; overflow:hidden; background:#fff; }   /* 실제 카드 테두리(여백 영역엔 테두리 없음) */
+  #dmMsgReport .rrep-card { position:relative; border:1px solid #cdd5df; border-radius:10px; overflow:hidden; background:#fff; }   /* 실제 카드 테두리(여백 영역엔 테두리 없음) */
+  /* 회원 입력칸(노란칸) + 일괄 저장 버튼(카드 우상단) — 회원 웹페이지와 동일 */
+  #dmMsgReport .dmedit { width:100%; box-sizing:border-box; border:1px solid #f59e0b; border-radius:5px; padding:5px 7px; font-size:.95em; background:#fffbeb; color:#92400e; }
+  #dmMsgReport .dmedit-acct { display:flex; gap:4px; } #dmMsgReport .dmedit-acct .dmedit { width:33%; }
+  #dmMsgReport .dmsave { position:absolute; top:9px; right:10px; z-index:2; background:#f59e0b; color:#fff; border:0; border-radius:7px; padding:6px 13px; font-size:13px; font-weight:800; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.25); }
+  #dmMsgReport .dmsave:active { background:#d97706; }
   #dmMsgReport .rrep-h { display:flex; flex-direction:column; align-items:center; text-align:center; gap:3px; padding:11px 12px; background:#1f3a5f; color:#fff; }
   #dmMsgReport .rrep-title { font-size:15px; }
   #dmMsgReport .rrep-h b { font-size:1.55em; }   /* 이름 크게, 눈에 띄게 */
@@ -56,6 +61,13 @@
   #dmMsgReport .rsub .bgrip:hover { background:#93c5fd; }
   #dmMsgReport .rsub .rnum { text-align:right; } #dmMsgReport .rsub .hl-y { font-weight:700; }
   #dmMsgReport .rsub tfoot td { background:#f6f8fb; } #dmMsgReport .rsub .rtot td { color:#dc2626; font-weight:800; background:#fff5f5; }   /* 합계=기본(굵게X), 총비용만 굵게 빨강 */
+  /* 복사 버튼(웹 링크 미리보기 전용) — 회원 웹페이지(dm-report.html)와 동일한 청록 버튼·값 좌/버튼 우 정렬 */
+  #dmMsgReport .dmcp { background:#0e7490; color:#fff; border:0; border-radius:5px; padding:4px 11px; font-size:.82em; font-weight:700; cursor:pointer; flex:0 0 auto; white-space:nowrap; }
+  #dmMsgReport .dmcp:active { background:#0b5563; }
+  #dmMsgReport .cpline { display:flex; align-items:center; gap:8px; margin:2px 0; }
+  #dmMsgReport .cpline .cpv { flex:1 1 auto; min-width:0; word-break:break-all; }
+  /* 링크(웹) 미리보기 모드: 캡처용 상·하 여백 제거 → 회원 웹페이지와 동일하게 카드만 */
+  #dmMsgReport.dm-linkmode .rrep { padding:0; }
   /* 명의 상세 슬라이드 카드 */
   #DaMultiItemManagement .dm-member-link { color:#0e7490; cursor:pointer; text-decoration:underline dotted; }
   #DaMultiItemManagement .dm-member-link:hover { color:#1e40af; }
@@ -1079,7 +1091,7 @@
       if(pm.gubun==='법인') map[key].gubun='법인';
     });
     _msgGroups=Object.keys(map).map(function(k){ var m=map[k]; m.items.sort(function(a,b){return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0);}); return m; });
-    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgTab='link'; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 기본 전체선택 + 링크 탭 기본
+    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgTab='link'; _linkStatusCache={}; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 기본 전체선택 + 링크 탭 기본
     var cnt=document.getElementById('dmMsgCnt'); if(cnt) cnt.textContent='· 회원 '+_msgGroups.length+'명 / 물건 '+targets.length+'건';
     var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=true;
     _loadMsgFont();
@@ -1149,15 +1161,49 @@
   }
   function _renderMsgRight(){
     var rp=document.getElementById('dmMsgReport'); if(!rp) return;
-    var m=_msgGroups[_msgFocusGi]; if(!m){ rp.innerHTML='<div style="padding:30px;color:#94a3b8">좌측에서 회원을 선택하세요.</div>'; return; }
+    var m=_msgGroups[_msgFocusGi]; if(!m){ rp.innerHTML='<div style="padding:30px;color:#94a3b8">좌측에서 회원을 선택하세요.</div>'; rp.classList.remove('dm-linkmode'); _renderLinkStatus(); return; }
     var web=(_msgTab==='link');
-    // 탭 전환이 한눈에 보이도록 보고서 상단 모드 배지(모달 전용 — 회원용 웹페이지엔 영향 없음)
-    var banner=web
-      ? '<div style="margin:-16px -16px 12px;padding:7px 12px;font-size:12px;font-weight:700;background:#ecfeff;color:#0e7490;border-bottom:1px solid #a5f3fc">🔗 웹링크 미리보기 — 회원이 링크로 여는 화면 (복사버튼·주민 뒷자리 가림)</div>'
-      : '<div style="margin:-16px -16px 12px;padding:7px 12px;font-size:12px;font-weight:700;background:#eef2ff;color:#1f3a5f;border-bottom:1px solid #c7d2fe">📷 캡처 미리보기 — 카톡/텔레그램 전송용 (복사버튼 없음·표 폭 조절)</div>';
-    rp.innerHTML=banner+_buildMsgReport(m, _msgOpts(), _msgFocusGi, web);   // 링크 탭=웹변형(복사버튼·주민가림), 이미지 탭=캡처변형
+    rp.classList.toggle('dm-linkmode', web);   // 링크 모드: 캡처 여백 제거 + 복사버튼 노출(회원 웹페이지와 동일 화면)
+    rp.innerHTML=_buildMsgReport(m, _msgOpts(), _msgFocusGi, web);   // 링크 탭=웹변형(복사버튼·주민가림), 이미지 탭=캡처변형
     _applyMsgFont(); if(_msgTab==='image') _bindBidResizers();
+    _renderLinkStatus();
   }
+  // ── 링크 상태 스트립 (탭 아래, 링크 탭 전용): 생성시각 + 활성/만료/없음 ──
+  var _linkStatusCache={};
+  function _curSeed(){ var m=_msgGroups[_msgFocusGi]; return m?((m.member_id||m.member||'')+'|'+(_msgCtx.sakun||'')):''; }
+  function _paintLinkStatus(s){
+    var strip=document.getElementById('dmLinkStatus'); if(!strip) return;
+    s=s||{status:'none'};
+    if(s.status==='active'){
+      strip.innerHTML='<span style="font-weight:800;color:#15803d">🟢 활성</span>'
+        +(s.created?'<span style="color:#64748b">· 생성 '+esc(s.created)+'</span>':'')
+        +(s.gated?'<span style="color:#0e7490;font-weight:600">· 🔒 전화 뒷4자리 확인</span>':'<span style="color:#b45309;font-weight:600">· 🔓 확인없이 열림</span>');
+    } else if(s.status==='expired'){
+      strip.innerHTML='<span style="font-weight:800;color:#b45309">⚪ 만료</span> <span style="color:#64748b">· 입찰일이 지났습니다 — 🔄 재생성하세요</span>';
+    } else {
+      strip.innerHTML='<span style="font-weight:800;color:#94a3b8">⚪ 링크 없음</span> <span style="color:#64748b">· 📋 링크복사를 누르면 생성됩니다</span>';
+    }
+  }
+  function _renderLinkStatus(){
+    var strip=document.getElementById('dmLinkStatus'); if(!strip) return;
+    if(_msgTab!=='link'){ strip.style.display='none'; return; }
+    strip.style.display='flex';
+    var seed=_curSeed();
+    if(!seed){ strip.innerHTML='<span style="color:#94a3b8">회원을 선택하세요</span>'; return; }
+    if(_linkStatusCache[seed]){ _paintLinkStatus(_linkStatusCache[seed]); return; }   // 캐시 있으면 서버 재조회 생략(make/revoke 시 무효화)
+    strip.innerHTML='<span style="color:#94a3b8">링크 상태 확인 중…</span>';
+    if(typeof google!=='undefined'&&google.script&&google.script.run){
+      google.script.run.withSuccessHandler(function(s){ _linkStatusCache[seed]=s||{status:'none'}; if(_curSeed()===seed&&_msgTab==='link') _paintLinkStatus(_linkStatusCache[seed]); })
+        .withFailureHandler(function(){}).dmGetLinkStatus(seed);
+    }
+  }
+  // 미리보기 복사버튼 동작(웹페이지 DM.copyVal과 동일) — 모달에서도 눌러 복사 가능
+  DM.copyVal=function(btn){
+    var v=btn.getAttribute('data-c')||'';
+    function ok(){ var o=btn.getAttribute('data-o')||btn.textContent; btn.setAttribute('data-o',o); btn.textContent='✓ 복사됨'; btn.style.background='#16a34a'; setTimeout(function(){ btn.textContent=o; btn.style.background=''; },1200); }
+    function fb(){ var ta=document.createElement('textarea'); ta.value=v; ta.style.position='fixed'; ta.style.top='-1000px'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); try{ document.execCommand('copy'); ok(); }catch(e){} document.body.removeChild(ta); }
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(v).then(ok).catch(fb); } else fb();
+  };
   DM.msgUpdateSel=function(){ _msgSel={}; var cbs=document.querySelectorAll('#dmMsgList .dm-msg-cb:checked'); for(var i=0;i<cbs.length;i++){ _msgSel[parseInt(cbs[i].getAttribute('data-gi'),10)]=1; } _msgUpdateSelCnt(); };
   function _msgUpdateSelCnt(){ var n=Object.keys(_msgSel).length, e=document.getElementById('dmMsgSelCnt'); if(e) e.textContent='선택 '+n+'명'; var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=(n===_msgGroups.length && n>0); }
   DM.msgSelectAll=function(el){ var on=!!(el&&el.checked); _msgSel={}; if(on) _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; }); _renderMsgLeft(); _msgUpdateSelCnt(); };
@@ -1204,9 +1250,11 @@
     var firstAgent=(_msgDetailFor(m, m.items[0]).agent)||{};
     // 섹션 블록 (굵은 테두리 + 교대 2색)
     var _bi=0; function blk(name, body){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
-    // 회원정보 누락 항목 → 노란 강조 + "회신 부탁드립니다." (필독 1번 표시 여부도 결정)
+    // 회원정보 누락 항목 → 노란 강조. 웹(링크)에선 입력칸으로(회원이 채워 저장), 그 외엔 "회신 부탁드립니다."
     var _missing=false;
-    function _nrow(label, v){ v=(v==null?'':String(v)).trim(); if(v) return [label, v]; _missing=true; return [label, '회신 부탁드립니다.', 'hl-need']; }
+    function _editCell(idx, field, ph){ return '<input class="dmedit" type="text" data-idx="'+idx+'" data-field="'+field+'" placeholder="'+ph+'">'; }
+    function _nrow(label, v, field, idx){ v=(v==null?'':String(v)).trim(); if(v) return [label, v]; _missing=true; if(web&&field) return [label, _editCell(idx, field, '입력 후 저장'), 'hl-need', 'raw']; return [label, '회신 부탁드립니다.', 'hl-need']; }
+    function _acctRow(p){ var av=_msgAcct(p); if(av) return ['계좌/보증금반환', av]; _missing=true; if(web) return ['계좌/보증금반환', '<div class="dmedit-acct">'+_editCell(p.idx,'account_bank','은행')+_editCell(p.idx,'account_no','계좌번호')+_editCell(p.idx,'account_name','예금주')+'</div>', 'hl-need', 'raw']; return ['계좌/보증금반환','회신 부탁드립니다.','hl-need']; }
     // 복사 버튼(웹 링크 전용). data-c 평문을 클릭 시 복사(DM.copyVal은 웹 보고서 페이지에 정의). 이미지/모달(web=false)에선 버튼 없음
     function _cpBtn(v){ v=String(v==null?'':v).trim(); if(!web||!v||v==='-'||v==='(미입력)'||v==='(대리인 계좌)') return ''; return '<button type="button" class="dmcp" data-c="'+esc(v)+'" onclick="DM.copyVal&&DM.copyVal(this)">복사</button>'; }
     // 값+복사버튼을 한 줄 flex로(버튼은 오른쪽 끝, 겹침 방지). 복사대상 없으면 값만
@@ -1239,8 +1287,8 @@
       var caseLines=grp.map(function(it){ return esc(_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+')'); }).join('<br>');
       var pName=p.name||pm.member||m.member||'';
       var rows=[['사건·물건', caseLines,'hl-y','raw']].concat(isCorp
-        ? [['법인성명',pName,'hl-y'],_nrow('사업자번호',p.biz_no),_nrow('법인등록번호',_maskNo(p.jumin_corp)),_nrow('전화번호',p.phone),_nrow('주소',p.address),_nrow('계좌/보증금반환',_msgAcct(p))]
-        : [['입찰명의성명',pName,'hl-y'],['직업',p.job||'회사원'],_nrow('주민등록번호',_maskNo(p.jumin_corp)),_nrow('전화번호',p.phone),_nrow('주소',p.address),_nrow('계좌/보증금반환',_msgAcct(p))]);
+        ? [['법인성명',pName,'hl-y'],_nrow('사업자번호',p.biz_no,'biz_no',p.idx),_nrow('법인등록번호',_maskNo(p.jumin_corp),'jumin_corp',p.idx),_nrow('전화번호',p.phone,'phone',p.idx),_nrow('주소',p.address,'address',p.idx),_acctRow(p)]
+        : [['입찰명의성명',pName,'hl-y'],['직업',p.job||'회사원'],_nrow('주민등록번호',_maskNo(p.jumin_corp),'jumin_corp',p.idx),_nrow('전화번호',p.phone,'phone',p.idx),_nrow('주소',p.address,'address',p.idx),_acctRow(p)]);
       body += blk(hd, _kvTable(rows));
     });
     // 전자본인서명 용도 = 물건번호별 줄 (3건이면 3줄). 웹이면 줄마다 복사버튼(물건별)
@@ -1269,6 +1317,7 @@
     var shortAddr=rawA?_shortAddr(rawA):(_msgCtx.addr?_shortAddr(_msgCtx.addr):'');
     return '<div class="rrep" id="rrep'+idx+'">'
       +'<div class="rrep-card">'
+      +((web&&_missing)?'<button type="button" class="dmsave" onclick="window.DMV&&DMV.saveFields&&DMV.saveFields(this)">💾 저장</button>':'')
       +'<div class="rrep-h">'
       +  '<div class="rrep-title"><b>'+esc(m.member)+'</b>님 <span class="rh-cnt">'+m.items.length+'물건</span> 입찰안내</div>'
       +  (shortAddr?('<div class="rrep-loc">📍 '+esc(shortAddr)+'</div>'):'')
@@ -1361,6 +1410,7 @@
   }
   function _dmLinkDone(res, a, renewed){
     if(!(res&&res.url)){ alert('링크 처리 실패'); return; }
+    if(a&&a.seed){ delete _linkStatusCache[a.seed]; _renderLinkStatus(); }   // 상태 스트립 즉시 갱신(활성·생성시각)
     var url=res.url;
     var gateMsg = res.gated ? '\n\n🔒 회원이 열 때 전화 뒷4자리 확인 필요(3회 틀리면 자동 폐기).' : '\n\n⚠ 이 회원은 전화번호가 없어 확인 없이 열립니다.';
     var head = renewed ? '🔄 새 링크 발급(옛 링크 폐기됨) — ' : '🔗 웹 링크 복사됨 — ';
@@ -1386,6 +1436,16 @@
     google.script.run.withSuccessHandler(function(res){ _dmLinkDone(res, a, true); })
       .withFailureHandler(function(e){ alert('재발급 오류: '+(e&&e.message||e)); })
       .dmRevokeAndRenew(a.seed, a.html, a.title, a.summary, a.phone4, a.member_id, a.biddate);
+  };
+  DM.discardLink=function(gi){
+    if(gi==null) gi=_msgFocusGi;
+    var m=_msgGroups[gi]; if(!m){ alert('회원을 선택하세요.'); return; }
+    var seed=(m.member_id||m.member||'')+'|'+(_msgCtx.sakun||'');
+    if(!confirm(m.member+'님의 링크를 폐기합니다.\n폐기하면 회원이 더 이상 열 수 없고, 새 링크도 발급되지 않습니다.\n(다시 보내려면 "📋 링크복사"로 새로 생성)\n진행할까요?')) return;
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+    google.script.run.withSuccessHandler(function(r){ delete _linkStatusCache[seed]; _renderLinkStatus(); alert('🚫 '+m.member+'님 링크가 폐기되었습니다.'); })
+      .withFailureHandler(function(e){ alert('폐기 오류: '+(e&&e.message||e)); })
+      .dmRevokeOnly(seed);
   };
   DM.msgCopyImage=function(gi){
     if(gi==null) gi=_msgFocusGi;
