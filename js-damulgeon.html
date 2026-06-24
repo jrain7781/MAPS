@@ -1736,7 +1736,7 @@
     }
     else if(act==='jinhaengbi'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">진행비(원)</label><br><input id="dmBulkVal" placeholder="진행비" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:150px;text-align:right;margin-top:5px">'; }
     else if(act==='hyang'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">향</label><br><input id="dmBulkVal" placeholder="향" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:120px;margin-top:5px">'; }
-    else if(act==='daeriin'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">입찰대리인 (구분에 직원 포함)</label><br><select id="dmBulkVal" onchange="DM.bulkPrev()" style="'+st+';min-width:170px;margin-top:5px"><option value="">불러오는 중…</option></select>'; loadMembers(function(){ var s=document.getElementById('dmBulkVal'); if(s) s.innerHTML='<option value="">선택</option>'+_staff().map(function(m){ var n=m.name||m.member_name||''; return n?'<option>'+esc(n)+'</option>':''; }).join(''); DM.bulkPrev(); }); }
+    else if(act==='daeriin'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">입찰대리인 (구분에 직원 포함)</label><br><select id="dmBulkVal" onchange="DM.bulkPrev()" style="'+st+';min-width:170px;margin-top:5px"><option value="">불러오는 중…</option></select>'; loadMembers(function(){ var s=document.getElementById('dmBulkVal'); if(s) s.innerHTML='<option value="">(미선택 — 대리인 지움)</option>'+_staff().map(function(m){ var n=m.name||m.member_name||''; return n?'<option>'+esc(n)+'</option>':''; }).join(''); DM.bulkPrev(); }); }
     else if(act==='auth_method'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">인증방식</label><br><select id="dmBulkVal" onchange="DM.bulkPrev()" style="'+st+';margin-top:5px"><option value="">선택</option><option>종이</option><option>전자</option></select>'; }
     renderBulkList();
     document.getElementById('dmBulkModal').classList.remove('content-hidden');
@@ -1843,7 +1843,7 @@
       else if(!_bidWon){ alert('입찰가/금액을 입력하세요.'); return; }
       targets.forEach(function(it){ var nb=_bidFor(it); if(nb!=null) itemsRows.push({in_date:it.in_date,sakun_no:it.sakun_no,court:it.court,bidprice:String(nb)}); });
     } else {
-      if(act!=='auth_method' && !val){ alert('값을 입력하세요.'); return; }
+      if(act!=='auth_method' && act!=='daeriin' && !val){ alert('값을 입력하세요.'); return; }   // 대리인·인증은 빈값(미선택=지움) 허용
       targets.forEach(function(it){ var r={in_date:it.in_date,sakun_no:it.sakun_no,court:it.court}; r[act]=val; dmRows.push(r); });
     }
     var need=(itemsRows.length?1:0)+(dmRows.length?1:0), done=0; if(!need){ DM.bulkClose(); return; }
