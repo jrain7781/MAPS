@@ -66,15 +66,30 @@
     var mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).join(', ');
     var firstAgent=(_msgDetailFor(m, m.items[0]).agent)||{};
     var _bi=0; function blk(name, body){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
-    function blkSave(name, body, withSave){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'">'+(withSave?'<button type="button" class="dmsave" onclick="if(window.DMV&&DMV.saveFields){DMV.saveFields(this)}else if(window.DM&&DM.saveFields){DM.saveFields(this)}">💾 저장</button>':'')+'<div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
+    // 명의 카드: 제목 옆 [✏ 수정][💾 저장]. 수정 누르면 .editmode → 채워진 칸도 입력으로(사건·물건 제외).
+    var _EDT='<button type="button" class="dmedt" onclick="var s=this.closest(\'.rsec\');if(s){var on=s.classList.toggle(\'editmode\');this.textContent=on?\'✕ 수정취소\':\'✏ 수정\';}">✏ 수정</button>';
+    var _SAV='<button type="button" class="dmsave" onclick="if(window.DMV&&DMV.saveFields){DMV.saveFields(this)}else if(window.DM&&DM.saveFields){DM.saveFields(this)}">💾 저장</button>';
+    function blkSave(name, body, withBtns){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'">'+(withBtns?('<div class="dmcard-btns">'+_EDT+_SAV+'</div>'):'')+'<div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
     var _missing=false;
-    function _editCell(ix, field, ph){ return '<input class="dmedit" type="text" data-idx="'+ix+'" data-field="'+field+'" placeholder="'+ph+'">'; }
-    function _nrow(label, v, field, ix){ v=(v==null?'':String(v)).trim(); if(v) return [label, v]; _missing=true; if(field) return [label, _editCell(ix, field, '입력 후 저장'), 'hl-need', 'raw']; return [label, '회신 부탁드립니다.', 'hl-need']; }
-    function _acctRow(p){ var av=_msgAcct(p); if(av) return ['계좌/보증금반환', av]; _missing=true; return ['계좌/보증금반환', '<div class="dmedit-acct">'+_editCell(p.idx,'account_bank','은행')+_editCell(p.idx,'account_no','계좌번호')+_editCell(p.idx,'account_name','예금주')+'</div>', 'hl-need', 'raw']; }
+    function _einput(ix, field, ph, val){ return '<input class="dmedit" type="text" data-idx="'+ix+'" data-field="'+field+'" value="'+esc(val||'')+'" placeholder="'+ph+'">'; }
+    // 값+입력칸 동시 렌더. 기본: 채워진칸=값표시 / 빈칸=입력. 수정모드: 전부 입력. (저장은 보이는 입력칸만)
+    function _efield(label, value, field, ix, dispHl){
+      value=(value==null?'':String(value)).trim(); var filled=value!=='';
+      if(!filled) _missing=true;
+      var inner='<span class="dmdisp">'+(filled?esc(value):'<span class="dmneed">회신 부탁</span>')+'</span>'+_einput(ix, field, '입력', value);
+      return [label, '<div class="dmf" data-filled="'+(filled?1:0)+'">'+inner+'</div>', (filled?(dispHl||''):'hl-need'), 'raw'];
+    }
+    function _eacct(p){
+      var bank=String(p.account_bank||'').trim(), no=String(p.account_no||'').trim(), nm=String(p.account_name||'').trim();
+      var disp=[bank,no,nm].filter(Boolean).join(' '), filled=disp!=='';
+      if(!filled) _missing=true;
+      var inner='<span class="dmdisp">'+(filled?esc(disp):'<span class="dmneed">회신 부탁</span>')+'</span>'
+        +'<div class="dmedit-acct">'+_einput(p.idx,'account_bank','은행',bank)+_einput(p.idx,'account_no','계좌번호',no)+_einput(p.idx,'account_name','예금주',nm)+'</div>';
+      return ['계좌/보증금반환', '<div class="dmf" data-filled="'+(filled?1:0)+'">'+inner+'</div>', (filled?'':'hl-need'), 'raw'];
+    }
     function _cpBtn(v){ v=String(v==null?'':v).trim(); if(!v||v==='-'||v==='(미입력)'||v==='(대리인 계좌)') return ''; return '<button type="button" class="dmcp" data-c="'+esc(v)+'" onclick="DM.copyVal&&DM.copyVal(this)">복사</button>'; }
     function _cpLine(v, copyOverride){ var s=(v==null?'':String(v)); var cv=(copyOverride!=null?String(copyOverride):s); var b=_cpBtn(cv); return b ? ('<div class="cpline"><span class="cpv">'+esc(s)+'</span>'+b+'</div>') : esc(s); }
     function _cpRow(label, v, hl){ return [label, _cpLine(v), hl||'', 'raw']; }
-    function _maskNo(v){ v=String(v==null?'':v).trim(); var d=v.replace(/[^0-9]/g,''); if(d.length>=7) return d.slice(0,6)+'-'+d.charAt(6)+'******'; return v; }
     // 입찰 표 (web 반응형)
     var bidRows=m.items.map(function(it,i){ return '<tr><td style="color:'+_msgMyungColor(it)+';font-weight:700;text-align:center">'+esc(_msgMyungLabel(it))+'</td><td style="text-align:center">'+esc(it.mulgeon_no||'')+'</td><td class="rnum" style="color:#2563eb">'+_won(it.bidprice)+'</td><td class="rnum">'+_won(it.deposit)+'</td><td class="rnum">'+_won(fees[i])+'</td></tr>'; }).join('');
     var bidTable='<table class="rsub" style="width:100%;table-layout:fixed"><colgroup><col style="width:15%"><col style="width:11%"><col style="width:28%"><col style="width:27%"><col style="width:19%"></colgroup>'
@@ -95,10 +110,10 @@
       var caseLines=grp.map(function(it){ return esc(_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+')'); }).join('<br>');
       var pName=p.name||pm.member||m.member||'';
       var rows=[['사건·물건', caseLines,'hl-y','raw']].concat(isCorp
-        ? [['법인성명',pName,'hl-y'],_nrow('사업자번호',p.biz_no,'biz_no',p.idx),_nrow('법인등록번호',_maskNo(p.jumin_corp),'jumin_corp',p.idx),_nrow('전화번호',p.phone,'phone',p.idx),_nrow('주소',p.address,'address',p.idx),_acctRow(p)]
-        : [['입찰명의성명',pName,'hl-y'],['직업',p.job||'회사원'],_nrow('주민등록번호',_maskNo(p.jumin_corp),'jumin_corp',p.idx),_nrow('전화번호',p.phone,'phone',p.idx),_nrow('주소',p.address,'address',p.idx),_acctRow(p)]);
+        ? [_efield('법인성명',pName,'name',p.idx,'hl-y'),_efield('사업자번호',p.biz_no,'biz_no',p.idx),_efield('법인등록번호',p.jumin_corp,'jumin_corp',p.idx),_efield('전화번호',p.phone,'phone',p.idx),_efield('주소',p.address,'address',p.idx),_eacct(p)]
+        : [_efield('입찰명의성명',pName,'name',p.idx,'hl-y'),_efield('직업',p.job||'회사원','job',p.idx),_efield('주민등록번호',p.jumin_corp,'jumin_corp',p.idx),_efield('전화번호',p.phone,'phone',p.idx),_efield('주소',p.address,'address',p.idx),_eacct(p)]);
       var tbl=_kvTable(rows);
-      body += blkSave(hd, tbl, tbl.indexOf('dmedit')>=0);
+      body += blkSave(hd, tbl, true);   // 명의 카드 = 항상 수정/저장 버튼(채워진 정보도 수정 가능)
     });
     var purposeLines=m.items.map(function(it){ var line=courtPlain+' '+_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+') 대리입찰'; return _cpLine(line); }).join('');
     var _ytBtn='<button type="button" onclick="DM.playYt(\'S2xVZjJeQd0\')" style="background:#FF0000;color:#fff;border:0;border-radius:6px;padding:4px 11px;font-weight:800;cursor:pointer;font-size:.95em;vertical-align:middle">▶ YouTube</button>';

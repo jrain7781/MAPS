@@ -58,12 +58,23 @@
   #dmMsgReport .dmcp:active{ background:#0b5563; }
   #dmMsgReport .cpline{ display:flex; align-items:center; gap:8px; margin:2px 0; }
   #dmMsgReport .cpline .cpv{ flex:1 1 auto; min-width:0; word-break:break-all; }
-  /* 회원 입력칸(노란칸) + 명의 카드 제목 옆 일괄 저장 버튼 */
+  /* 회원 입력칸 + 명의 카드 [✏수정][💾저장] */
   #dmMsgReport .rsec{ position:relative; }
   #dmMsgReport .dmedit{ width:100%; box-sizing:border-box; border:1px solid #f59e0b; border-radius:6px; padding:8px 9px; font-size:1em; background:#fffbeb; color:#92400e; }
   #dmMsgReport .dmedit:focus{ outline:none; border-color:#d97706; background:#fff; }
-  #dmMsgReport .dmedit-acct{ display:flex; gap:5px; } #dmMsgReport .dmedit-acct .dmedit{ width:33%; }
-  #dmMsgReport .dmsave{ position:absolute; top:4px; right:6px; z-index:2; background:#f59e0b; color:#fff; border:0; border-radius:7px; padding:4px 12px; font-size:13px; font-weight:800; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+  #dmMsgReport .dmedit-acct{ gap:5px; } #dmMsgReport .dmedit-acct .dmedit{ width:33%; }
+  #dmMsgReport .dmneed{ color:#92400e; font-weight:700; }
+  /* 기본: 채워진칸=값 / 빈칸=입력. 수정모드(.editmode): 전부 입력 */
+  #dmMsgReport .dmf > .dmedit, #dmMsgReport .dmf > .dmedit-acct{ display:none; }
+  #dmMsgReport .dmf[data-filled="0"] > .dmdisp{ display:none; }
+  #dmMsgReport .dmf[data-filled="0"] > .dmedit{ display:block; }
+  #dmMsgReport .dmf[data-filled="0"] > .dmedit-acct{ display:flex; }
+  #dmMsgReport .rsec.editmode .dmf > .dmdisp{ display:none; }
+  #dmMsgReport .rsec.editmode .dmf > .dmedit{ display:block; }
+  #dmMsgReport .rsec.editmode .dmf > .dmedit-acct{ display:flex; }
+  #dmMsgReport .dmcard-btns{ position:absolute; top:4px; right:6px; z-index:2; display:flex; gap:6px; }
+  #dmMsgReport .dmedt{ background:#fff; color:#1d4ed8; border:1px solid #93c5fd; border-radius:7px; padding:4px 11px; font-size:13px; font-weight:800; cursor:pointer; }
+  #dmMsgReport .dmsave{ background:#f59e0b; color:#fff; border:0; border-radius:7px; padding:4px 12px; font-size:13px; font-weight:800; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.3); }
   #dmMsgReport .dmsave:active{ background:#d97706; } #dmMsgReport .dmsave:disabled{ cursor:default; opacity:.95; }
 </style>
 </head>
@@ -200,7 +211,9 @@
     var scope = (btn.closest && btn.closest('.rsec')) || document.getElementById('dmMsgReport') || document;
     var inputs = scope.querySelectorAll('.dmedit'), edits = [], filled = 0;
     for(var i=0;i<inputs.length;i++){
-      var el=inputs[i], v=(el.value||'').trim();
+      var el=inputs[i];
+      if(el.offsetParent===null) continue;   // 화면에 보이는 입력칸만(수정모드 ON 또는 빈칸). 채워진 숨김칸 제외
+      var v=(el.value||'').trim();
       if(!v) continue;
       filled++;
       edits.push({ idx: parseInt(el.getAttribute('data-idx'),10), field: el.getAttribute('data-field'), value: v });
