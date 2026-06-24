@@ -59,6 +59,9 @@
   #dmMsgReport .cpline{ display:flex; align-items:center; gap:8px; margin:2px 0; }
   #dmMsgReport .cpline .cpv{ flex:1 1 auto; min-width:0; word-break:break-all; }
   /* 회원 입력칸 + 명의 카드 [✏수정][💾저장] */
+  #dmMsgReport .rrep-card{ position:relative; }
+  #dmMsgReport .dmreload2{ position:absolute; top:8px; right:8px; z-index:3; background:#fbbf24; color:#1f3a5f; border:0; border-radius:8px; padding:6px 13px; font-size:13px; font-weight:800; cursor:pointer; box-shadow:0 1px 4px rgba(0,0,0,.25); }
+  #dmMsgReport .dmreload2:active{ background:#f59e0b; }
   #dmMsgReport .rsec{ position:relative; }
   #dmMsgReport .dmedit{ width:100%; box-sizing:border-box; border:1px solid #f59e0b; border-radius:6px; padding:8px 9px; font-size:1em; background:#fffbeb; color:#92400e; }
   #dmMsgReport .dmedit:focus{ outline:none; border-color:#d97706; background:#fff; }
@@ -94,10 +97,6 @@
   </div>
   <!-- 보고서(확인 후 표시) -->
   <div id="repWrap" style="display:none">
-    <div style="position:sticky;top:0;z-index:5;background:#eef1f5;text-align:center;padding:8px 12px;border-bottom:1px solid #dde3ea">
-      <button id="dmReloadBtn" onclick="DMV.reload()" style="background:#1f3a5f;color:#fff;border:0;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:800;cursor:pointer">🔄 새로고침 (최신 정보)</button>
-    </div>
-    <div class="dmw-top">📨 입찰 안내 — 노란 칸은 입력 후 💾 저장, 나머지는 길게 눌러 복사</div>
     <div class="dmw-wrap"><div id="dmMsgReport"><?!= embedHtml ?></div></div>
   </div>
   <div id="loading" style="text-align:center;padding:60px 12px;color:#94a3b8;font-size:14px">불러오는 중…</div>
@@ -178,7 +177,7 @@
     reload: function(){
       var saved=''; try{ saved=localStorage.getItem(KEY)||''; }catch(e){}
       if(GATED && !saved){ DMV.show('gate'); return; }   // 게이트 링크인데 인증 기록 없음 → 빈값 전송 시 실패카운트 방지
-      var btn=DMV.el('dmReloadBtn'), o=btn?btn.textContent:'';
+      var btn=document.querySelector('#dmMsgReport .dmreload2'), o=btn?btn.textContent:'';
       if(typeof google==='undefined'||!google.script||!google.script.run){ return; }
       if(btn){ btn.disabled=true; btn.textContent='새로고침 중…'; }
       google.script.run.withSuccessHandler(function(res){ if(btn){ btn.disabled=false; btn.textContent=o; } DMV.handle(res, saved); })

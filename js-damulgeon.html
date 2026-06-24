@@ -30,6 +30,8 @@
   #dmMsgReport .dmpdf-btn { display:inline-block; background:#1f3a5f; color:#fff; border-radius:6px; padding:5px 12px; font-weight:700; cursor:pointer; font-size:.9em; white-space:nowrap; }
   #dmMsgReport .dmpdf-btn:active { background:#16294a; }
   #dmMsgReport .dmpdf-msg { font-size:.82em; color:#6b7280; word-break:break-all; }
+  #dmMsgReport .dmpdf-view { background:#0e7490; color:#fff; border:0; border-radius:6px; padding:4px 12px; font-size:.9em; font-weight:700; cursor:pointer; }
+  #dmMsgReport .dmpdf-view:active { background:#0b5563; }
   #dmMsgReport .dmneed { color:#92400e; font-weight:700; }
   /* 기본: 채워진칸=값 / 빈칸=입력. 수정모드(.editmode): 전부 입력 */
   #dmMsgReport .dmf > .dmedit, #dmMsgReport .dmf > .dmedit-acct { display:none; }
@@ -718,8 +720,24 @@
       for(var i=0;i<its.length;i++){ var r=res&&res[i]; if(!r||!r.success) continue; body+=_docsFor(r.principal, r.agent, its[i]); }
       if(!body){ alert('출력할 데이터가 없습니다(명의 정보 확인).'); return; }
       _printHtmlBody(body);
+      // 회원이 등록한 전자서명 PDF 같이 출력 — 브라우저는 HTML+PDF 단일 인쇄가 안 되므로, 첨부 PDF는 클릭 인쇄용 패널로
+      var mids={}, nameById={};
+      its.forEach(function(it){ if(it.member_id){ var k=String(it.member_id); mids[k]=1; nameById[k]=_parseMName(it.member_name,it.member_id).member||it.member_name||k; } });
+      google.script.run.withSuccessHandler(function(map){ _showBulkPdfPanel(map, nameById); }).withFailureHandler(function(){}).dmGetUploadsBulk(Object.keys(mids));
     }).withFailureHandler(function(e){ done(); alert('일괄출력 실패: '+(e&&e.message)); }).getBulkDaeriipchalData(reqs);
   };
+  function _showBulkPdfPanel(map, nameById){
+    var old=document.getElementById('dmBulkPdfPanel'); if(old&&old.parentNode) old.parentNode.removeChild(old);
+    map=map||{}; nameById=nameById||{};
+    var keys=Object.keys(map).filter(function(k){ return (map[k]||[]).length; });
+    if(!keys.length) return;
+    var rows=keys.map(function(k){ return (map[k]||[]).map(function(u){ return '<button onclick="window.open(\''+u.url+'\',\'_blank\')" style="display:block;width:100%;text-align:left;margin:3px 0;background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:6px 9px;font-size:12px;cursor:pointer">📄 '+esc(nameById[k]||k)+' — '+esc(u.filename||'PDF')+'</button>'; }).join(''); }).join('');
+    var p=document.createElement('div'); p.id='dmBulkPdfPanel';
+    p.style.cssText='position:fixed;right:16px;bottom:16px;z-index:70;width:300px;max-height:60vh;overflow:auto;background:#f8fafc;border:1px solid #94a3b8;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:11px 13px';
+    p.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b style="font-size:13px">📎 첨부 전자서명 PDF</b><button onclick="var x=document.getElementById(\'dmBulkPdfPanel\');if(x&&x.parentNode)x.parentNode.removeChild(x)" style="border:0;background:transparent;font-size:16px;cursor:pointer;color:#64748b">✕</button></div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-bottom:6px">클릭하면 PDF가 열립니다. 각 PDF 화면에서 인쇄하세요.</div>'+rows;
+    document.body.appendChild(p);
+  }
   function _vstack(s){ return String(s||'').split('').join('<br>'); }
   function _rep(s,n){ var o=''; while(n-->0) o+=s; return o; }
   function _sakunBase(s){ return String(s||'').replace(/\s*\([^)]*\)\s*$/,'').trim(); }   // 사건번호 끝 괄호(물건번호) 제거
@@ -1106,7 +1124,7 @@
       if(pm.gubun==='법인') map[key].gubun='법인';
     });
     _msgGroups=Object.keys(map).map(function(k){ var m=map[k]; m.items.sort(function(a,b){return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0);}); return m; });
-    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgTab='link'; _linkStatusCache={}; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 기본 전체선택 + 링크 탭 기본
+    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgTab='link'; _linkStatusCache={}; _uploadsCache={}; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 링크 탭 기본
     var cnt=document.getElementById('dmMsgCnt'); if(cnt) cnt.textContent='· 회원 '+_msgGroups.length+'명 / 물건 '+targets.length+'건';
     var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=true;
     _loadMsgFont();
@@ -1130,7 +1148,7 @@
   DM.msgRefresh=function(){
     var b=document.getElementById('dmMsgRefreshBtn'), o=b?b.textContent:'';
     if(b){ b.disabled=true; b.textContent='불러오는 중…'; }
-    _linkStatusCache={};
+    _linkStatusCache={}; _uploadsCache={};
     _loadMsgDetails(function(){ if(b){ b.disabled=false; b.textContent=o; } _renderLinkStatus(); });
   };
   function _msgConsol(){ return !!(document.getElementById('dmMsgFeeConsol')||{}).checked; }
@@ -1177,7 +1195,7 @@
         +  '<span style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</span>'
         +  '<span style="font-size:11px;color:#475569;font-weight:600">물건 '+esc(mulNos)+'</span>'
         +'</div>'
-        +'<div style="font-size:11px;margin:3px 0 0;font-weight:700"><span style="color:#6b7280">등급 </span><span style="color:#0e7490">'+(grade?esc(grade):'<span style="color:#9ca3af">-</span>')+'</span></div>'
+        +(grade?('<div style="font-size:11px;margin:3px 0 0;font-weight:700;color:#0e7490">'+esc(grade)+'</div>'):'')
         +'<div style="display:flex;gap:10px;font-size:11px;font-weight:700;margin:3px 0 0">'+(cnt.join('')||'<span style="color:#9ca3af">-</span>')+'</div>'
         +'<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:12px"><span style="color:#6b7280">총비용</span><span style="font-weight:800;color:#dc2626">'+_won(s.total)+'원</span></div>'
         +'</div>';
@@ -1191,7 +1209,28 @@
     rp.innerHTML=_buildMsgReport(m, _msgOpts(), _msgFocusGi, web);   // 링크 탭=웹변형(복사버튼·주민가림), 이미지 탭=캡처변형
     _applyMsgFont(); if(_msgTab==='image') _bindBidResizers();
     _renderLinkStatus();
+    if(web) _loadUploadsFor(m);   // 회원 등록 PDF(보기/미등록) 비동기 조회 → 도착 시 재렌더
   }
+  // 회원 등록 PDF 캐시(member_id → [{date,filename,url}]). null=조회중, undefined=미조회.
+  var _uploadsCache={};
+  function _loadUploadsFor(m){
+    if(!m||!m.member_id) return; var mid=String(m.member_id);
+    if(_uploadsCache[mid]!==undefined) return;   // 이미 조회(또는 조회중)
+    _uploadsCache[mid]=null;
+    if(typeof google==='undefined'||!google.script||!google.script.run){ _uploadsCache[mid]=[]; return; }
+    google.script.run.withSuccessHandler(function(r){ _uploadsCache[mid]=r||[]; var cm=_msgGroups[_msgFocusGi]; if(cm&&String(cm.member_id)===mid&&_msgTab==='link') _renderMsgRight(); })
+      .withFailureHandler(function(){ _uploadsCache[mid]=[]; }).dmGetUploads(mid);
+  }
+  DM.viewPdf=function(url){
+    if(!url) return;
+    var idm=String(url).match(/[-\w]{25,}/), src=idm?('https://drive.google.com/file/d/'+idm[0]+'/preview'):url;
+    var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.onclick=function(e){ if(e.target===ov&&ov.parentNode) ov.parentNode.removeChild(ov); };
+    ov.innerHTML='<div style="position:relative;width:96%;max-width:920px;height:90%;background:#fff;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;background:#1f3a5f;color:#fff;flex-shrink:0"><span style="font-weight:800">📄 전자서명 PDF</span><span><a href="'+esc(url)+'" target="_blank" style="color:#fbbf24;font-weight:700;margin-right:14px;text-decoration:none">↗ 새 탭</a><button onclick="var o=this.closest(\'div\').parentNode.parentNode;if(o&&o.parentNode)o.parentNode.removeChild(o)" style="background:#fff;border:0;border-radius:6px;padding:4px 12px;font-weight:800;cursor:pointer">✕ 닫기</button></span></div>'
+      +'<iframe src="'+esc(src)+'" style="flex:1;width:100%;border:0"></iframe></div>';
+    document.body.appendChild(ov);
+  };
   // ── 링크 상태 스트립 (탭 아래, 링크 탭 전용): 생성시각 + 활성/만료/없음 ──
   var _linkStatusCache={};
   function _curSeed(){ var m=_msgGroups[_msgFocusGi]; return m?((m.member_id||m.member||'')+'|'+(_msgCtx.sakun||'')):''; }
@@ -1247,7 +1286,7 @@
     setMsg('업로드 중… '+f.name);
     var rd=new FileReader();
     rd.onload=function(){ var b64=String(rd.result||'').split(',')[1]||'';
-      google.script.run.withSuccessHandler(function(r){ if(r&&r.success) setMsg('✓ 업로드됨: '+(r.name||f.name),'#16a34a'); else setMsg('실패: '+((r&&r.msg)||'?'),'#dc2626'); })
+      google.script.run.withSuccessHandler(function(r){ if(r&&r.success){ setMsg('✓ 업로드됨: '+(r.name||f.name),'#16a34a'); delete _uploadsCache[String(m.member_id)]; _renderMsgRight(); } else setMsg('실패: '+((r&&r.msg)||'?'),'#dc2626'); })
         .withFailureHandler(function(e){ setMsg('오류: '+(e&&e.message||e),'#dc2626'); })
         .dmUploadPdfByMember(String(m.member_id), f.name, b64);
     };
@@ -1376,10 +1415,17 @@
       ['용도', purposeLines,'','raw'],
       _cpRow('수임자 성명', firstAgent.name||''),
       _cpRow('수임자 주소', firstAgent.address||''),
-      _cpRow('수요법원', courtPlain),
-      ['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요']
+      _cpRow('수요법원', courtPlain)
     ];
-    if(web) _esRows.push(['PDF 업로드','<div class="dmpdf"><label class="dmpdf-btn">📎 PDF 선택<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="if(window.DMV&&DMV.uploadPdf){DMV.uploadPdf(this)}else if(window.DM&&DM.uploadPdf){DM.uploadPdf(this)}"></label><span class="dmpdf-msg">작성한 전자서명 PDF를 여기에 올려주세요</span></div>','','raw']);
+    if(web){   // 링크 미리보기/모달: 제출방법 = 회원 등록 PDF 보기/미등록
+      var _ups=m.member_id?_uploadsCache[String(m.member_id)]:[];
+      var _pdfCell = (_ups==null) ? '<span style="color:#94a3b8">확인 중…</span>'
+        : (_ups.length ? '<button type="button" class="dmpdf-view" onclick="DM.viewPdf(\''+esc(_ups[0].url)+'\')">📄 PDF 보기</button>'+(_ups.length>1?(' <span style="color:#64748b;font-size:.85em">외 '+(_ups.length-1)+'건</span>'):'')
+                       : '<span style="color:#dc2626;font-weight:700">미등록</span>');
+      _esRows.push(['제출방법', _pdfCell, '', 'raw']);
+    } else {
+      _esRows.push(['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요']);
+    }
     _esRows.push(['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']);
     body += blk('전자본인서명 확인서발급', _kvTable(_esRows));
     // 필독 사항 — 개요 위(맨 위). 1번(정보 회신)은 누락 항목이 있을 때만 노출. 숫자는 직접 부여(캡처 시 ol 마커 누락 방지)

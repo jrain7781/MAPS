@@ -239,6 +239,44 @@ function _dmPdfFolder_() {
   return it.hasNext() ? it.next() : DriveApp.createFolder(name);
 }
 
+/** 회원이 등록한 전자서명 PDF 목록(최신순). [{date,filename,url}] */
+function dmGetUploads(memberId) {
+  memberId = String(memberId || '').trim();
+  if (!memberId) return [];
+  try {
+    var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('dm_uploads');
+    if (!sh || sh.getLastRow() < 2) return [];
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues(), out = [];
+    for (var i = 0; i < v.length; i++) {
+      if (String(v[i][2]).trim() === memberId) {
+        var d = ''; try { d = Utilities.formatDate(new Date(v[i][0]), Session.getScriptTimeZone(), 'MM/dd HH:mm'); } catch (e) {}
+        out.push({ date: d, filename: String(v[i][3] || ''), url: String(v[i][4] || '') });
+      }
+    }
+    return out.reverse();   // 최신 먼저
+  } catch (e) { return []; }
+}
+
+/** 일괄: member_id 배열 → { member_id: [{date,filename,url}] } */
+function dmGetUploadsBulk(memberIds) {
+  memberIds = memberIds || [];
+  var want = {}; memberIds.forEach(function (id) { want[String(id).trim()] = 1; });
+  var map = {};
+  try {
+    var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('dm_uploads');
+    if (!sh || sh.getLastRow() < 2) return map;
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
+    for (var i = 0; i < v.length; i++) {
+      var mid = String(v[i][2]).trim();
+      if (!want[mid]) continue;
+      if (!map[mid]) map[mid] = [];
+      var d = ''; try { d = Utilities.formatDate(new Date(v[i][0]), Session.getScriptTimeZone(), 'MM/dd HH:mm'); } catch (e) {}
+      map[mid].push({ date: d, filename: String(v[i][3] || ''), url: String(v[i][4] || '') });
+    }
+  } catch (e) {}
+  return map;
+}
+
 function _dmRecordUpload_(token, memberId, name, url) {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
