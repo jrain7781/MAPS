@@ -1101,13 +1101,22 @@
     var mo=document.getElementById('dmMsgModal'); if(mo) mo.classList.remove('content-hidden');
     try{ DM.msgTab('link'); }catch(_){}   // 열 때마다 링크 탭 기본 + 버튼/보고서 초기화
     _msgUpdateSelCnt();
-    // 명의별 상세 조회 (회원 × 구분된 명의)
+    _loadMsgDetails();   // 명의별 상세 조회 (회원 × 구분된 명의) → 도착 시 보고서 갱신
+  };
+  // 상세(전화·주민·계좌 등) 재조회 — 회원이 웹에서 등록/저장한 내용 반영. onDone(선택).
+  function _loadMsgDetails(onDone){
     var reqKeys=[], reqs=[];
     _msgGroups.forEach(function(m){ var seen={}; m.items.forEach(function(it){ var pm=_parseMName(it.member_name, it.member_id); var mk=pm.myungui||''; if(seen[mk]!==undefined) return; seen[mk]=1; reqKeys.push(m.member_id+'||'+mk); reqs.push({ member_id:m.member_id, myungui:mk, daeriin:String(it.daeriin||'').trim() }); }); });
-    if(typeof google!=='undefined'&&google.script&&google.script.run){
-      google.script.run.withSuccessHandler(function(res){ res=res||[]; _msgDetailMap={}; reqKeys.forEach(function(k,i){ _msgDetailMap[k]=res[i]||{}; }); _renderMsgRight(); })
-        .withFailureHandler(function(e){ console.error('[msg detail]',e); }).getBulkDaeriipchalData(reqs);
-    }
+    if(typeof google==='undefined'||!google.script||!google.script.run){ if(onDone) onDone(); return; }
+    google.script.run.withSuccessHandler(function(res){ res=res||[]; _msgDetailMap={}; reqKeys.forEach(function(k,i){ _msgDetailMap[k]=res[i]||{}; }); _renderMsgRight(); if(onDone) onDone(); })
+      .withFailureHandler(function(e){ console.error('[msg detail]',e); if(onDone) onDone(); }).getBulkDaeriipchalData(reqs);
+  }
+  // 🔄 새로고침: 상세 재조회 + 링크상태 재조회 → 회원 등록분 반영(링크/이미지 탭 공통)
+  DM.msgRefresh=function(){
+    var b=document.getElementById('dmMsgRefreshBtn'), o=b?b.textContent:'';
+    if(b){ b.disabled=true; b.textContent='불러오는 중…'; }
+    _linkStatusCache={};
+    _loadMsgDetails(function(){ if(b){ b.disabled=false; b.textContent=o; } _renderLinkStatus(); });
   };
   function _msgConsol(){ return !!(document.getElementById('dmMsgFeeConsol')||{}).checked; }
   function _msgFees(m){ var fees=m.items.map(function(it){return _num(it._fee);}); if(_msgConsol()){ var t=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?t:0;}); } return fees; }   // 진행비 대표통합 옵션
