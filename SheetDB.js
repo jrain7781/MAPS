@@ -1546,18 +1546,41 @@ function dmMatchMembers(pairs) {
         if (!evDate) evDate = String(rr2[17] || '') || nowIso;   // 폴백: 실물건 chuchen_date/now
         var misId = 'MIS' + now.getTime() + (seq++) + Math.floor(Math.random() * 1000);
         newMis.push([misId, String(p.member_id || ''), String(p.member_name || ''), String(rr2[5] || ''), String(rr2[14] || ''),
-          String(p.realItemId), String(rr2[1] || ''), String(rr2[2] || ''), String(rr2[3] || ''), '추천', nowIso,
-          String(rr2[22] || ''), String(rr2[7] || ''), '', '', '', evDate, String(rr2[20] || '')]);
+          String(p.realItemId), String(formatParamsDate(rr2[1]) || ''), String(rr2[2] || ''), String(rr2[3] || ''), '추천', nowIso,
+          String(rr2[22] || ''), String(rr2[7] || ''), '', '', '', evDate, String(rr2[20] || '')]);   // in_date Date→yyMMdd 정규화
       }
     });
     delRows.sort(function (a, b) { return b - a; }).forEach(function (rn) { mis.deleteRow(rn); });   // 아래부터 삭제
-    if (newMis.length) mis.getRange(mis.getLastRow() + 1, 1, newMis.length, MIS_HEADERS.length).setValues(newMis);
+    if (newMis.length) {
+      var _sr = mis.getLastRow() + 1, _rg = mis.getRange(_sr, 1, newMis.length, MIS_HEADERS.length);
+      _rg.setNumberFormat('@');   // 텍스트 강제(item_id 지수표기·in_date Date화 방지)
+      _rg.setValues(newMis);
+    }
     SpreadsheetApp.flush();
     return { success: true, matched: pairs.length, discarded: discarded, assigned: assigned, recMoved: newMis.length, recDeleted: delRows.length };
   } catch (e) {
     Logger.log('[dmMatchMembers] ' + e);
     return { success: false, msg: String(e) };
   } finally { try { lock.releaseLock(); } catch (e) {} }
+}
+
+/** [1회 복구] members_item_status의 in_date Date화('Thu Jul..') → yyMMdd, item_id 지수표기 → 텍스트. GAS 에디터에서 실행. */
+function dmRepairMisFormat() {
+  var mis = ensureMembersItemStatusSheet_();
+  var last = mis.getLastRow();
+  if (last < 2) return { fixed: 0, rows: 0 };
+  var n = last - 1, rng = mis.getRange(2, 1, n, MIS_HEADERS.length), data = rng.getValues(), fixed = 0;
+  for (var i = 0; i < n; i++) {
+    var v = data[i][6];   // G(idx6): in_date
+    if (v instanceof Date) { data[i][6] = Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyMMdd'); fixed++; }
+    else { var s = String(v == null ? '' : v); if (/GMT|[A-Z][a-z]{2}\s+[A-Z][a-z]{2}\s/.test(s)) { var d = new Date(s); if (!isNaN(d.getTime())) { data[i][6] = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyMMdd'); fixed++; } } }
+    data[i][5] = String(data[i][5] == null ? '' : data[i][5]);   // F(idx5): item_id → 문자
+  }
+  rng.setNumberFormat('@');   // 전체 텍스트 강제 → 지수표기/Date화 방지
+  rng.setValues(data);
+  SpreadsheetApp.flush();
+  Logger.log('[dmRepairMisFormat] in_date 정규화 ' + fixed + '건 / 전체 ' + n + '행 텍스트화');
+  return { fixed: fixed, rows: n };
 }
 
 // ── 진행비 출장비 요율표 (settings 시트 key-value, JSON) ──
