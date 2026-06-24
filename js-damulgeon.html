@@ -1313,8 +1313,8 @@
         +  '<input type="checkbox" class="dm-msg-cb" data-gi="'+gi+'"'+(_msgSel[gi]?' checked':'')+' onclick="event.stopPropagation()" onchange="DM.msgUpdateSel()">'
         +  (tg?'<span title="텔레그램 사용" style="font-size:10px;font-weight:800;color:#fff;background:#229ED9;border-radius:4px;padding:1px 5px">T</span>':'')
         +  '<span style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</span>'
-        +  '<span style="font-size:11px;color:#475569;font-weight:600">물건 '+esc(mulNos)+'</span>'
         +'</div>'
+        +'<div style="font-size:11px;color:#475569;font-weight:600;margin-top:2px;line-height:1.4;word-break:break-all">물건 '+esc(mulNos)+'</div>'
         +(grade?('<div style="font-size:11px;margin:3px 0 0;font-weight:700;color:#0e7490">'+esc(grade)+'</div>'):'')
         +'<div style="display:flex;gap:10px;font-size:11px;font-weight:700;margin:3px 0 0">'+(cnt.join('')||'<span style="color:#9ca3af">-</span>')+'</div>'
         +'<div style="display:flex;justify-content:space-between;margin-top:5px;font-size:12px"><span style="color:#6b7280">총비용</span><span style="font-weight:800;color:#dc2626">'+_won(s.total)+'원</span></div>'
@@ -1769,6 +1769,8 @@
       .then(function(r){ return r.json(); })
       .then(function(d){ if(d&&d.status==='success') st(kName+' 채팅창 열기 완료','success'); else st('채팅창 열기 실패: '+((d&&d.message)||'?'),'error'); })
       .catch(function(){ st('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.','error'); });
+    // 탭에 따라 클립보드 준비 → 카톡 채팅창에 붙여넣기(Ctrl+V): 링크탭=링크복사 / 이미지탭=이미지복사
+    try{ if(_msgTab==='link') DM.makeLink(); else DM.msgCopyImage(); }catch(_){}
   };
   DM.bulkOpenModal = function(){
     var act=(document.getElementById('dmBulkAction')||{}).value||'';
