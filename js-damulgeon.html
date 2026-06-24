@@ -861,8 +861,10 @@
     // 미지정은 맨 끝(오른쪽)으로
     memOrder.sort(); var _mi=memOrder.indexOf('(미지정)'), _hasMi=_mi>=0; if(_hasMi) memOrder.splice(_mi,1);
     _summaryMembers = memOrder.concat(_hasMi?['(미지정)']:[]);
-    function mchip(name, extra){ var i=_summaryMembers.indexOf(name), active=(_memberSel===name);
-      return '<span onclick="DM.memberSummaryFilter('+i+')" title="이 회원만 보기(다시 누르면 해제)" style="'+(extra||'')+'cursor:pointer;padding:1px 8px;border-radius:11px;'+(active?'background:#4f46e5;color:#fff;font-weight:800':'background:#eef2ff;color:#3730a3;font-weight:600')+'">'+esc(name)+' '+memCnt[name]+'</span>'; }
+    function mchip(name, extra){ var i=_summaryMembers.indexOf(name), active=(_memberSel===name), mi=(name==='(미지정)');
+      var sty = active ? (mi?'background:#64748b;color:#fff;font-weight:800':'background:#4f46e5;color:#fff;font-weight:800')
+                       : (mi?'background:#e2e8f0;color:#475569;font-weight:700':'background:#eef2ff;color:#3730a3;font-weight:600');   // 미지정=회색 구분
+      return '<span onclick="DM.memberSummaryFilter('+i+')" title="이 회원만 보기(다시 누르면 해제)" style="'+(extra||'')+'cursor:pointer;padding:1px 8px;border-radius:11px;'+sty+'">'+esc(name)+' '+memCnt[name]+'</span>'; }
     // 1줄: 물건상태별(좌) / 2줄: 회원별(미지정 맨 오른쪽). 담당자별은 맨 위 헤더로.
     bar.innerHTML=''
       +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:3px 7px">'
@@ -871,7 +873,7 @@
       +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;margin-top:5px">'
       +    '<span style="color:#64748b;font-weight:700">회원</span>'
       +    memOrder.map(function(n){return mchip(n);}).join('')
-      +    (_hasMi?mchip('(미지정)','margin-left:auto;'):'')
+      +    (_hasMi?mchip('(미지정)'):'')
       +'</div>';
   }
   DM.memberSummaryFilter=function(i){
