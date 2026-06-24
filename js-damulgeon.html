@@ -1756,14 +1756,19 @@
       })();
     });
   };
-  DM.msgSendTelegram=function(){
-    var sel=_msgSelected(); if(!sel.length){ alert('회원을 선택하세요.'); return; }
-    var tgN=sel.filter(function(m){ return m.items.some(function(it){return String(it.tg)==='Y';}); }).length;
-    alert('[텔레그램 전송] 연결은 다음 단계입니다.\n선택 '+sel.length+'명 중 텔레그램 사용(T) '+tgN+'명.\n지금은 [📷 이미지]/[💾 분할]/[📋 텍스트]로 보고서를 받아 전송할 수 있습니다.');
-  };
+  // 카톡 회원찾기 — 입찰물건관리 openKakaoChat과 동일(로컬 카카오 서버로 해당 회원 채팅창 열기). 보고서(포커스) 회원 기준.
   DM.msgSendKakao=function(){
-    var sel=_msgSelected(); if(!sel.length){ alert('회원을 선택하세요.'); return; }
-    alert('[카카오 전송] 연결은 다음 단계입니다.\n선택 '+sel.length+'명.\n지금은 [📷 이미지](클립보드)/[💾 분할](앨범)/[📋 텍스트]로 카톡에 붙여넣어 보낼 수 있습니다.');
+    var m=_msgGroups[_msgFocusGi]; if(!m){ alert('좌측에서 회원을 선택하세요.'); return; }
+    if(!m.member_id){ alert('회원 ID가 없어 카톡 찾기 불가(미지정 회원).'); return; }
+    var mem=(typeof getMemberById_==='function')?getMemberById_(m.member_id):null;
+    var kName=mem?(mem.kakao_name||mem.member_name||mem.name1||''):(m.member||'');
+    if(!kName){ alert('카카오 이름이 없습니다. 회원관리에서 설정해주세요.'); return; }
+    function st(msg,t){ if(typeof showStatus==='function') showStatus(msg,t); }
+    st('채팅창 여는 중: '+kName+'...','warning');
+    fetch('http://127.0.0.1:8000/open_kakao',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({target_name:kName}) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d&&d.status==='success') st(kName+' 채팅창 열기 완료','success'); else st('채팅창 열기 실패: '+((d&&d.message)||'?'),'error'); })
+      .catch(function(){ st('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.','error'); });
   };
   DM.bulkOpenModal = function(){
     var act=(document.getElementById('dmBulkAction')||{}).value||'';
