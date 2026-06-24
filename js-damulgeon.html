@@ -1884,6 +1884,71 @@
     }).join('');
   }
   DM.bulkClose = function(){ var m=document.getElementById('dmBulkModal'); if(m) m.classList.add('content-hidden'); };
+
+  // ===== 회원매칭 모달 (?임의등록 입찰 회원 → 실제 물건 배정). 독립 이동 가능 =====
+  var _matchMembers=[], _matchItems=[], _matchActive=0, _matchAssign={};   // assign: realItemId → 회원 index
+  DM.openMatchModal=function(){
+    var its=curItems(); if(!its.length){ alert('사건을 먼저 선택하세요.'); return; }
+    var qByMem={}, order=[];   // 좌: ?임의등록 + 입찰 회원
+    its.forEach(function(it){ if(!(_isQ(it) && String(it.stu_member||'').trim()==='입찰')) return; var pm=_parseMName(it.member_name,it.member_id); var key=(pm.member||'(미지정)'); if(!qByMem[key]){ qByMem[key]={ member:key, member_id:String(it.member_id||''), member_name_full:String(it.member_name||''), items:[] }; order.push(key); } qByMem[key].items.push(it); });
+    _matchMembers=order.map(function(k){ return qByMem[k]; });
+    if(!_matchMembers.length){ alert('?임의등록(입찰) 회원이 없습니다.'); return; }
+    _matchItems=its.filter(function(it){ var st=String(it.stu_member||'').trim(); return !_isQ(it) && (st==='미정'||st==='상품'); });   // 우: 실제 물건(미정·상품)
+    _matchActive=0; _matchAssign={};
+    _renderMatch();
+    var mo=document.getElementById('dmMatchModal'); if(mo) mo.classList.remove('content-hidden');
+  };
+  DM.matchClose=function(){ var mo=document.getElementById('dmMatchModal'); if(mo) mo.classList.add('content-hidden'); };
+  function _matchRemain(mi){ var m=_matchMembers[mi]; if(!m) return 0; var used=0; Object.keys(_matchAssign).forEach(function(id){ if(_matchAssign[id]===mi) used++; }); return m.items.length-used; }
+  function _renderMatch(){
+    var L=document.getElementById('dmMatchLeft'), R=document.getElementById('dmMatchRight'); if(!L||!R) return;
+    L.innerHTML=_matchMembers.map(function(m,mi){
+      var used=m.items.length-_matchRemain(mi), active=(mi===_matchActive);
+      var dots=m.items.map(function(_,i){ return '<span style="font-weight:800;font-size:15px;color:'+(i<used?'#cbd5e1':'#b45309')+';'+(i<used?'text-decoration:line-through':'')+'">?</span>'; }).join(' ');
+      return '<div onclick="DM.matchPick('+mi+')" style="cursor:pointer;margin-bottom:8px;padding:8px 10px;border-radius:9px;'+(active?'background:#dbeafe;border:1px solid #2563eb':'background:#fff;border:1px solid #e5e7eb')+'">'
+        +'<div style="font-size:14px;font-weight:800;color:#111827">'+esc(m.member)+'</div>'
+        +'<div style="margin-top:3px">'+dots+' <span style="color:#64748b;font-size:11px">남은 '+_matchRemain(mi)+'/'+m.items.length+'</span></div>'
+        +'</div>';
+    }).join('') || '<div style="color:#9ca3af">? 회원 없음</div>';
+    var fromCols=COLS.slice(COLS.map(function(c){return c.f;}).indexOf('_dong'));   // 동부터 그리드 그대로
+    var head='<tr style="background:#eef2f7;color:#475569">'
+      +'<th style="padding:4px 6px;position:sticky;left:0;background:#eef2f7">선택</th><th style="padding:4px 6px">물건</th><th style="padding:4px 6px">상태</th><th style="padding:4px 6px">물건종류</th><th style="padding:4px 6px">회원</th>'
+      + fromCols.map(function(c){ return '<th style="padding:4px 6px;white-space:nowrap">'+esc(c.label)+'</th>'; }).join('')+'</tr>';
+    var rows=_matchItems.map(function(it,idx){
+      var id=String(it.link_item_id), asg=_matchAssign[id], asgName=(asg!=null&&_matchMembers[asg])?_matchMembers[asg].member:'';
+      var cells=fromCols.map(function(c){ var v=computed(c.f,it,idx); if(c.num) v=_num(v)?_comma(v):''; return '<td style="padding:3px 6px;white-space:nowrap;text-align:'+c.a+'">'+esc(v==null?'':v)+'</td>'; }).join('');
+      return '<tr style="border-bottom:1px solid #f1f5f9;'+(asg!=null?'background:#ecfdf5':'')+'">'
+        +'<td style="padding:3px 6px;text-align:center;position:sticky;left:0;background:'+(asg!=null?'#ecfdf5':'#fff')+'"><input type="checkbox" '+(asg!=null?'checked':'')+' onclick="DM.matchToggle(\''+esc(id)+'\')"></td>'
+        +'<td style="padding:3px 6px;text-align:center;font-weight:700">'+esc(it.mulgeon_no||'')+'</td>'
+        +'<td style="padding:3px 6px;text-align:center">'+esc(it.stu_member||'')+'</td>'
+        +'<td style="padding:3px 6px">'+esc(it.prop_kind||'')+'</td>'
+        +'<td style="padding:3px 6px;font-weight:700;color:'+(asgName?'#16a34a':'#cbd5e1')+'">'+esc(asgName||'-')+'</td>'
+        +cells+'</tr>';
+    }).join('');
+    R.innerHTML='<table style="border-collapse:collapse;font-size:12px;white-space:nowrap"><thead style="position:sticky;top:0;z-index:1">'+head+'</thead><tbody>'+rows+'</tbody></table>';
+    var info=document.getElementById('dmMatchInfo'); if(info){ var tot=0; _matchMembers.forEach(function(m){ tot+=m.items.length; }); info.textContent='매칭 '+Object.keys(_matchAssign).length+'/'+tot; }
+  }
+  DM.matchPick=function(mi){ _matchActive=mi; _renderMatch(); };
+  DM.matchToggle=function(id){
+    if(_matchAssign[id]!=null){ delete _matchAssign[id]; _renderMatch(); return; }
+    var mi=_matchActive;
+    if(_matchRemain(mi)<=0){ alert(_matchMembers[mi].member+'님은 ? 물건 수만큼 이미 선택했습니다. 좌측에서 다음 회원을 선택하세요.'); return; }
+    _matchAssign[id]=mi;
+    if(_matchRemain(mi)<=0){ for(var n=mi+1;n<_matchMembers.length;n++){ if(_matchRemain(n)>0){ _matchActive=n; break; } } }   // 다 차면 다음 회원 자동
+    _renderMatch();
+  };
+  DM.matchConfirm=function(){
+    var ids=Object.keys(_matchAssign); if(!ids.length){ alert('매칭된 물건이 없습니다.'); return; }
+    var lines=ids.map(function(id){ var it=_matchItems.filter(function(x){return String(x.link_item_id)===id;})[0]; var m=_matchMembers[_matchAssign[id]]; return '· 물건 '+(it?it.mulgeon_no:'?')+' → '+(m?m.member:''); });
+    alert('[매칭 미리보기] '+ids.length+'건\n'+lines.join('\n')+'\n\n적용 내용(다음 단계 연결 예정):\n① ? 물건 → 폐기\n② ? 추천기록 → 매칭 물건으로 이동(추천요청일자 유지)\n③ 매칭 물건 → 회원 등록 + 입찰');
+  };
+  (function(){   // 헤더 드래그로 모달 이동
+    var h=document.getElementById('dmMatchHead'), mo=document.getElementById('dmMatchModal'); if(!h||!mo) return;
+    var drag=false,ox=0,oy=0;
+    h.addEventListener('mousedown',function(e){ if(e.target.tagName==='BUTTON') return; drag=true; var r=mo.getBoundingClientRect(); ox=e.clientX-r.left; oy=e.clientY-r.top; document.body.style.userSelect='none'; e.preventDefault(); });
+    document.addEventListener('mousemove',function(e){ if(!drag) return; mo.style.left=Math.max(0,e.clientX-ox)+'px'; mo.style.top=Math.max(0,e.clientY-oy)+'px'; mo.style.right='auto'; });
+    document.addEventListener('mouseup',function(){ if(drag){ drag=false; document.body.style.userSelect=''; } });
+  })();
   DM.bulkConfirm = function(){
     var act=_bulkAct, valEl=document.getElementById('dmBulkVal'), val=valEl?String(valEl.value).trim():'';
     var targets=_bulkTgts; if(!targets.length){ DM.bulkClose(); return; }
