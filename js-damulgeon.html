@@ -865,10 +865,18 @@
       var sty = active ? (mi?'background:#64748b;color:#fff;font-weight:800':'background:#4f46e5;color:#fff;font-weight:800')
                        : (mi?'background:#e2e8f0;color:#475569;font-weight:700':'background:#eef2ff;color:#3730a3;font-weight:600');   // 미지정=회색 구분
       return '<span onclick="DM.memberSummaryFilter('+i+')" title="이 회원만 보기(다시 누르면 해제)" style="'+(extra||'')+'cursor:pointer;padding:1px 8px;border-radius:11px;'+sty+'">'+esc(name)+' '+memCnt[name]+'</span>'; }
-    // 1줄: 물건상태별(좌) / 2줄: 회원별(미지정 맨 오른쪽). 담당자별은 맨 위 헤더로.
+    // ?표(임의등록) 물건만 별도 카운팅 — 상태 카운팅 뒤에 띄우고 | 로 구분
+    var qItems=items.filter(function(it){ return String(it.sakun_no||'').indexOf('?')>=0 || String(it.mulgeon_no||'').indexOf('?')>=0; });
+    var qMem={}; qItems.forEach(function(it){ qMem[_parseMName(it.member_name,it.member_id).member||'(미지정)']=1; });
+    var qHtml = qItems.length
+      ? '<span style="margin-left:16px;color:#d1d5db">|</span>'
+        +'<span style="color:#b45309;font-weight:800">? 전체 '+qItems.length+'</span>'
+        +'<span style="color:#e5e7eb">·</span><span style="color:#b45309;font-weight:700">? 회원 '+Object.keys(qMem).length+'명</span>'
+      : '';
+    // 1줄: 물건상태별(좌) + ?임의등록 카운팅 / 2줄: 회원별(미지정 회색). 담당자별은 맨 위 헤더로.
     bar.innerHTML=''
       +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:3px 7px">'
-      +    statusHtml
+      +    statusHtml + qHtml
       +'</div>'
       +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;margin-top:5px">'
       +    '<span style="color:#64748b;font-weight:700">회원</span>'
