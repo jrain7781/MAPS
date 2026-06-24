@@ -1133,6 +1133,7 @@
     var cnt=document.getElementById('dmMsgCnt'); if(cnt) cnt.textContent='· 회원 '+_msgGroups.length+'명 / 물건 '+targets.length+'건';
     var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=true;
     _loadMsgFont();
+    _loadMsgDue();   // 저장된 기한(서류제출/보증금) 자동 채움
     _renderMsgLeft();
     _renderMsgRight();   // 진입 즉시 대표(첫) 회원 보고서 표시 — 상세는 도착 시 갱신
     setupMsgSplitter(); _applyMsgListW();   // 카드↔보고서 스플리터(PC별 저장폭 적용)
@@ -1166,12 +1167,28 @@
   var _DUE_TL={'08:00':'오전 8시','09:00':'오전 9시','10:00':'오전 10시','11:00':'오전 11시','12:00':'오후 12시','13:00':'오후 1시','14:00':'오후 2시','15:00':'오후 3시','16:00':'오후 4시','17:00':'오후 5시','18:00':'오후 6시','19:00':'오후 7시','20:00':'오후 8시'};
   function _dueText(dId,tId){ var d=(document.getElementById(dId)||{}).value||'', t=(document.getElementById(tId)||{}).value||''; if(!d) return ''; var tl=_DUE_TL[t]||''; return d+(tl?(' '+tl):''); }
   function _msgOpts(){ return { due1:_dueText('dmMsgDue1Date','dmMsgDue1Time'), due2:_dueText('dmMsgDue2Date','dmMsgDue2Time'), consol:_msgConsol() }; }
-  DM.msgDueChg=function(){ var s=document.getElementById('dmMsgDue2Same'); if(s&&s.checked) DM.msgDueSame(s); else _renderMsgRight(); };
+  // 기한(서류제출/보증금) PC별 저장 — 한 번 입력하면 다음에도 자동 채움
+  var DM_DUE_KEY='dmMsgDueV1';
+  function _saveMsgDue(){
+    try{ localStorage.setItem(DM_DUE_KEY, JSON.stringify({
+      d1:(document.getElementById('dmMsgDue1Date')||{}).value||'', t1:(document.getElementById('dmMsgDue1Time')||{}).value||'',
+      d2:(document.getElementById('dmMsgDue2Date')||{}).value||'', t2:(document.getElementById('dmMsgDue2Time')||{}).value||'',
+      same:!!((document.getElementById('dmMsgDue2Same')||{}).checked) })); }catch(_){}
+  }
+  function _loadMsgDue(){
+    var o={}; try{ o=JSON.parse(localStorage.getItem(DM_DUE_KEY)||'{}')||{}; }catch(_){}
+    var d1=document.getElementById('dmMsgDue1Date'), t1=document.getElementById('dmMsgDue1Time'),
+        d2=document.getElementById('dmMsgDue2Date'), t2=document.getElementById('dmMsgDue2Time'), sm=document.getElementById('dmMsgDue2Same');
+    if(d1) d1.value=o.d1||''; if(t1) t1.value=o.t1||''; if(sm) sm.checked=!!o.same;
+    if(o.same){ if(d2){ d2.value=o.d1||''; d2.disabled=true; } if(t2){ t2.value=o.t1||''; t2.disabled=true; } }
+    else { if(d2){ d2.value=o.d2||''; d2.disabled=false; } if(t2){ t2.value=o.t2||''; t2.disabled=false; } }
+  }
+  DM.msgDueChg=function(){ var s=document.getElementById('dmMsgDue2Same'); if(s&&s.checked){ DM.msgDueSame(s); } else { _saveMsgDue(); _renderMsgRight(); } };
   DM.msgDueSame=function(el){
     var same=!!(el&&el.checked), d2=document.getElementById('dmMsgDue2Date'), t2=document.getElementById('dmMsgDue2Time');
     if(same){ if(d2){ d2.value=(document.getElementById('dmMsgDue1Date')||{}).value||''; d2.disabled=true; } if(t2){ t2.value=(document.getElementById('dmMsgDue1Time')||{}).value||''; t2.disabled=true; } }
     else { if(d2) d2.disabled=false; if(t2) t2.disabled=false; }
-    _renderMsgRight();
+    _saveMsgDue(); _renderMsgRight();
   };
   DM.msgRerender=function(){ _renderMsgLeft(); DM.msgDueChg(); };
   DM.msgFocus=function(gi){ _msgFocusGi=gi; _renderMsgLeft(); _renderMsgRight(); };
