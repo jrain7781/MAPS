@@ -1150,7 +1150,12 @@
   function _renderMsgRight(){
     var rp=document.getElementById('dmMsgReport'); if(!rp) return;
     var m=_msgGroups[_msgFocusGi]; if(!m){ rp.innerHTML='<div style="padding:30px;color:#94a3b8">좌측에서 회원을 선택하세요.</div>'; return; }
-    rp.innerHTML=_buildMsgReport(m, _msgOpts(), _msgFocusGi, _msgTab==='link');   // 링크 탭=웹변형(복사버튼·주민가림), 이미지 탭=캡처변형
+    var web=(_msgTab==='link');
+    // 탭 전환이 한눈에 보이도록 보고서 상단 모드 배지(모달 전용 — 회원용 웹페이지엔 영향 없음)
+    var banner=web
+      ? '<div style="margin:-16px -16px 12px;padding:7px 12px;font-size:12px;font-weight:700;background:#ecfeff;color:#0e7490;border-bottom:1px solid #a5f3fc">🔗 웹링크 미리보기 — 회원이 링크로 여는 화면 (복사버튼·주민 뒷자리 가림)</div>'
+      : '<div style="margin:-16px -16px 12px;padding:7px 12px;font-size:12px;font-weight:700;background:#eef2ff;color:#1f3a5f;border-bottom:1px solid #c7d2fe">📷 캡처 미리보기 — 카톡/텔레그램 전송용 (복사버튼 없음·표 폭 조절)</div>';
+    rp.innerHTML=banner+_buildMsgReport(m, _msgOpts(), _msgFocusGi, web);   // 링크 탭=웹변형(복사버튼·주민가림), 이미지 탭=캡처변형
     _applyMsgFont(); if(_msgTab==='image') _bindBidResizers();
   }
   DM.msgUpdateSel=function(){ _msgSel={}; var cbs=document.querySelectorAll('#dmMsgList .dm-msg-cb:checked'); for(var i=0;i<cbs.length;i++){ _msgSel[parseInt(cbs[i].getAttribute('data-gi'),10)]=1; } _msgUpdateSelCnt(); };
