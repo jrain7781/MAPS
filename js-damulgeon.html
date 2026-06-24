@@ -1756,7 +1756,7 @@
       })();
     });
   };
-  // 카톡 회원찾기 — 입찰물건관리 openKakaoChat과 동일(로컬 카카오 서버로 해당 회원 채팅창 열기). 보고서(포커스) 회원 기준.
+  // 카톡 회원찾기 — 로컬 카카오 서버로 포커스 회원 채팅창 열기. 링크탭=링크를 채팅창에 자동 붙여넣기(send_kakao), 이미지탭=채팅창 열고 이미지 클립보드 복사(수동 Ctrl+V).
   DM.msgSendKakao=function(){
     var m=_msgGroups[_msgFocusGi]; if(!m){ alert('좌측에서 회원을 선택하세요.'); return; }
     if(!m.member_id){ alert('회원 ID가 없어 카톡 찾기 불가(미지정 회원).'); return; }
@@ -1764,13 +1764,27 @@
     var kName=mem?(mem.kakao_name||mem.member_name||mem.name1||''):(m.member||'');
     if(!kName){ alert('카카오 이름이 없습니다. 회원관리에서 설정해주세요.'); return; }
     function st(msg,t){ if(typeof showStatus==='function') showStatus(msg,t); }
-    st('채팅창 여는 중: '+kName+'...','warning');
-    fetch('http://127.0.0.1:8000/open_kakao',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({target_name:kName}) })
-      .then(function(r){ return r.json(); })
-      .then(function(d){ if(d&&d.status==='success') st(kName+' 채팅창 열기 완료','success'); else st('채팅창 열기 실패: '+((d&&d.message)||'?'),'error'); })
-      .catch(function(){ st('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.','error'); });
-    // 탭에 따라 클립보드 준비 → 카톡 채팅창에 붙여넣기(Ctrl+V): 링크탭=링크복사 / 이미지탭=이미지복사
-    try{ if(_msgTab==='link') DM.makeLink(); else DM.msgCopyImage(); }catch(_){}
+    function fail(){ st('로컬 카카오 서버(kakao_server.py)가 실행 중인지 확인하세요.','error'); }
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+    if(_msgTab==='link'){
+      var a=_dmLinkArgs(_msgFocusGi);
+      if(!a || a.notReady){ st('회원 상세 불러오는 중 — 잠시 후 다시 눌러주세요.','warning'); return; }   // 팝업 없이 상태표시만
+      st('링크 생성 후 카톡 전송: '+kName+'...','warning');
+      google.script.run.withSuccessHandler(function(res){
+        var url=(res&&res.url)||''; if(!url){ st('링크 생성 실패','error'); return; }
+        fetch('http://127.0.0.1:8000/send_kakao',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ target_name:kName, message:url, auto_enter:false }) })
+          .then(function(r){ return r.json(); })
+          .then(function(d){ if(d&&d.status==='success') st(kName+' 채팅창에 링크 붙여넣기 완료','success'); else st('카톡 전송 실패: '+((d&&d.message)||'?'),'error'); })
+          .catch(fail);
+      }).withFailureHandler(function(e){ st('링크 오류: '+(e&&e.message||e),'error'); }).dmGetOrCreateLink(a.seed, a.html, a.title, a.summary, a.phone4, a.member_id, a.biddate, a.payload);
+    } else {
+      st('채팅창 여는 중: '+kName+'... (이미지는 Ctrl+V로 붙여넣기)','warning');
+      fetch('http://127.0.0.1:8000/open_kakao',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({target_name:kName}) })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if(d&&d.status==='success') st(kName+' 채팅창 열림 — 이미지 Ctrl+V로 붙여넣기','success'); else st('채팅창 열기 실패: '+((d&&d.message)||'?'),'error'); })
+        .catch(fail);
+      try{ DM.msgCopyImage(); }catch(_){}
+    }
   };
   DM.bulkOpenModal = function(){
     var act=(document.getElementById('dmBulkAction')||{}).value||'';
