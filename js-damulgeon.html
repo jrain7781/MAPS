@@ -867,18 +867,16 @@
       var sty = active ? (mi?'background:#64748b;color:#fff;font-weight:800':'background:#4f46e5;color:#fff;font-weight:800')
                        : (mi?'background:#e2e8f0;color:#475569;font-weight:700':'background:#eef2ff;color:#3730a3;font-weight:600');   // 미지정=회색 구분
       return '<span onclick="DM.memberSummaryFilter('+i+')" title="이 회원만 보기(다시 누르면 해제)" style="'+(extra||'')+'cursor:pointer;padding:1px 8px;border-radius:11px;'+sty+'">'+esc(name)+' '+memCnt[name]+'</span>'; }
-    // ?표(임의등록) 물건만 별도 카운팅 — 상태별(? 추천 2 …), 클릭 필터. 상태 카운팅 뒤 | 구분
-    var qItems=items.filter(_isQ), qCnt={};
-    qItems.forEach(function(it){ var st=String(it.stu_member||'미정').trim(); qCnt[st]=(qCnt[st]||0)+1; });
+    // ?표(임의등록) 중 입찰 상태만 별도 카운팅 — 클릭 필터. 상태 카운팅 뒤 | 구분
+    var qItems=items.filter(function(it){ return _isQ(it) && String(it.stu_member||'').trim()==='입찰'; });
     var qMemCnt={}, qMemOrder=[];
     qItems.forEach(function(it){ var mm=_parseMName(it.member_name,it.member_id).member||'(미지정)'; if(qMemCnt[mm]===undefined){ qMemCnt[mm]=0; qMemOrder.push(mm); } qMemCnt[mm]++; });
     qMemOrder.sort(); _qSummaryMembers=qMemOrder;
     function qchip(st,label,active){ return '<span onclick="DM.qFilter(\''+st+'\')" style="cursor:pointer;color:#b45309;'+(active?'font-weight:800;text-decoration:underline':'font-weight:700')+'">'+esc(label)+'</span>'; }
-    var qAllActive=(_qOnly && Object.keys(_statusSel).length===0 && !_memberSel);
     var qHtml='';
     if(qItems.length){
-      qHtml='<span style="margin-left:16px;color:#d1d5db">|</span>'+qchip('', '? 전체 '+qItems.length, qAllActive);
-      DM_STATUSES.forEach(function(st){ if(!qCnt[st]) return; var act=(_qOnly && !_memberSel && Object.keys(_statusSel).length===1 && _statusSel[st]); qHtml+='<span style="color:#e5e7eb">·</span>'+qchip(st, '? '+st+' '+qCnt[st], act); });
+      var qAct=(_qOnly && !_memberSel && Object.keys(_statusSel).length===1 && _statusSel['입찰']);
+      qHtml='<span style="margin-left:16px;color:#d1d5db">|</span>'+qchip('입찰', '? 입찰 '+qItems.length, qAct);
     }
     // 1줄: 물건상태별(좌) + ?임의등록 카운팅 / 2줄: 회원별(미지정 회색). 담당자별은 맨 위 헤더로.
     bar.innerHTML=''
@@ -907,8 +905,8 @@
   };
   DM.qMemberFilter=function(i){
     var name=_qSummaryMembers[i]; if(name==null) return;
-    if(_qOnly && _memberSel===name){ _qOnly=false; _memberSel=''; }
-    else { _qOnly=true; _memberSel=name; _statusSel={}; _bidMissing=false; }
+    if(_qOnly && _memberSel===name){ _qOnly=false; _memberSel=''; _statusSel={}; }
+    else { _qOnly=true; _memberSel=name; _statusSel={'입찰':true}; _bidMissing=false; }   // ?+입찰+그 회원
     _statusBtn(); renderSummary(); renderBody();
   };
   DM.summaryFilter=function(key){
