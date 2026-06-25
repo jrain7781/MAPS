@@ -79,9 +79,21 @@ function dmRevokeAndRenew(seed, html, title, summary, phone4, member_id, biddate
   return { revoked: true };
 }
 
+// 진행비 자동계산(회원·물건순·지역) — js-damulgeon _computeFees 동일 로직(서버판). 회원 링크 동적 렌더용.
+function dmFeeRegion_(court) { var c = String(court || ''); if (c.indexOf('부산') >= 0) return 'bg'; if (c.indexOf('대구') >= 0 || c.indexOf('울산') >= 0 || c.indexOf('창원') >= 0) return 'gs'; return 'etc'; }
+function dmComputeFees_(items) {
+  var by = {};
+  (items || []).forEach(function (it) { it._fee = ''; var m = String(it.member_name || '').trim(); if (m) { (by[m] = by[m] || []).push(it); } });
+  Object.keys(by).forEach(function (m) {
+    var arr = by[m].slice().sort(function (a, b) { return (parseInt(a.mulgeon_no, 10) || 0) - (parseInt(b.mulgeon_no, 10) || 0); });
+    arr.forEach(function (it, i) { var bgGs = (dmFeeRegion_(it.court) !== 'etc'); it._fee = String(bgGs ? (i === 0 ? 80000 : 60000) : (i === 0 ? 80000 : (i === 1 ? 70000 : 60000))); });
+  });
+  (items || []).forEach(function (it) { var mv = String(it.jinhaengbi == null ? '' : it.jinhaengbi).trim(); if (mv !== '') it._fee = String(parseInt(mv.replace(/[^0-9]/g, ''), 10) || 0); });   // 수동 진행비(다물건 시트 jinhaengbi) 우선
+}
+
 /**
- * 동적 렌더 데이터: 게이트 검증 통과 시 저장된 payload(물건·기한·컨텍스트) + 라이브 명의상세(member_accounts)를 반환.
- * → 회원이 새로고침하면 본인이 저장한 정보가 바로 반영됨. payload 없는 구버전 링크는 html 스냅샷으로 폴백.
+ * 동적 렌더 데이터: 게이트 검증 통과 시 저장된 payload(물건·기한·컨텍스트) + 라이브 명의상세(member_accounts) + 라이브 진행비를 반환.
+ * → 회원이 새로고침하면 본인이 저장한 정보 + 관리자가 고친 진행비가 바로 반영됨. payload 없는 구버전 링크는 html 스냅샷으로 폴백.
  */
 function dmRenderData(token, last4) {
   var sh = dmLinkSheet_(), data = sh.getDataRange().getValues();
@@ -119,6 +131,16 @@ function dmRenderData(token, last4) {
     its.forEach(function (it) { var iid = String((it && it.link_item_id) || '').trim(); if (iid) ids.push(iid); });
     if (ids.length) uploads = dmGetUploadsByItems(ids);
   } catch (e3) {}
+  // 진행비 동적 반영: 최신 jinhaengbi(다물건 시트, 3키) 읽어 _fee 재계산 → 회원 새로고침 = 최신 진행비(링크 재생성 불필요)
+  try {
+    var fitems = (pl.m && pl.m.items) || [];
+    if (fitems.length) {
+      var dmAll = readAllDamulgeon(), feeMap = {};
+      dmAll.forEach(function (e) { feeMap[_dmKey3_(e.in_date, e.sakun_no, e.court)] = String(e.jinhaengbi == null ? '' : e.jinhaengbi); });
+      fitems.forEach(function (it) { var k = _dmKey3_(it.in_date, it.sakun_no, it.court); it.jinhaengbi = (feeMap[k] != null ? feeMap[k] : ''); });
+      dmComputeFees_(fitems);
+    }
+  } catch (eF) { Logger.log('[dmRenderData fee] ' + eF); }
   return { status: 'ok', payload: pl, detailMap: detailMap, uploads: uploads, title: title };
 }
 
