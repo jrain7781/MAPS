@@ -1191,18 +1191,21 @@
       _renderMsgRight(); if(_selKey) renderBody(); _dot('✓ 진행비 저장', true);
     }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; alert('진행비 저장 오류: '+(e&&e.message||e)); }).bulkSaveDamulgeon(rows);
   };
-  // [자동진행비] 수동 저장(jinhaengbi)했어도 다시 자동 계산으로 복귀 — 현재 회원 전체 물건 jinhaengbi 비움(시트에서도 제거).
+  // [자동진행비] 수동 진행비를 자동으로 복귀 + 대표통합 해제. (수동값 없고 통합도 아니면 안내)
   DM.feeAuto = function(btn){
     var m=_msgGroups[_msgFocusGi]; if(!m||!m.items||!m.items.length){ alert('대상이 없습니다.'); return; }
-    if(!m.items.some(function(it){ return _isManualFee(it); })){ alert('이미 전부 자동 진행비입니다.'); return; }
-    if(!confirm('이 회원의 진행비를 모두 자동(기본 계산)으로 되돌릴까요?')) return;
+    var hasManual=m.items.some(function(it){ return _isManualFee(it); }), consolOn=_msgConsol(m);
+    if(!hasManual && !consolOn){ alert('이미 자동 진행비(통합 해제 상태)입니다.'); return; }
+    if(!confirm('이 회원의 진행비를 자동(기본 계산)으로 되돌리고 대표통합도 해제할까요?')) return;
+    _msgConsolBy[_consolKey(m)]=false;   // 대표통합 해제(전체가 켜져 있어도 이 회원만 해제)
+    if(!hasManual){ _renderMsgLeft(); _renderMsgRight(); _dot('✓ 통합 해제', true); return; }   // 수동값 없으면 통합만 해제(시트 변경 없음)
     var rows=m.items.map(function(it){ _applyFeeBoth(it.link_item_id||it.id, ''); return { in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, jinhaengbi:'' }; });   // 모달+그리드 둘 다 비움
     var o=btn.textContent; btn.disabled=true; btn.textContent='처리 중…';
     google.script.run.withSuccessHandler(function(){ btn.disabled=false; btn.textContent=o;
       var sec=btn.closest('.rsec'); if(sec){ sec.classList.remove('editmode'); var e=sec.querySelector('.dmedt'); if(e) e.textContent='✏ 수정'; }
       _recomputeBoth();   // jinhaengbi 비웠으니 _fee=자동값 재계산(양쪽)
       try{ _saveGroupsCache(); }catch(_){}
-      _renderMsgRight(); if(_selKey) renderBody(); _dot('✓ 자동 진행비로 복귀', true);
+      _renderMsgLeft(); _renderMsgRight(); if(_selKey) renderBody(); _dot('✓ 자동 진행비 + 통합 해제', true);
     }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; alert('자동 전환 오류: '+(e&&e.message||e)); }).bulkSaveDamulgeon(rows);
   };
 
@@ -1348,8 +1351,12 @@
     _linkStatusCache={}; _uploadsCache={};
     _loadMsgDetails(function(){ if(b){ b.disabled=false; b.textContent=o; } _renderLinkStatus(); });
   };
-  function _msgConsol(){ return !!(document.getElementById('dmMsgFeeConsol')||{}).checked; }
-  function _msgFees(m){ var fees=m.items.map(function(it){return _num(it._fee);}); if(_msgConsol()){ var t=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?t:0;}); } return fees; }   // 진행비 대표통합 옵션
+  var _msgConsolBy={};   // 회원별 진행비 대표통합 오버라이드(세션). 없으면 툴바 (전체) 체크박스 따름.
+  function _consolKey(m){ return String((m&&m.member_id)||('nm:'+((m&&m.member)||''))); }
+  function _msgConsolGlobal(){ return !!(document.getElementById('dmMsgFeeConsol')||{}).checked; }   // 툴바 '진행비 대표물건 통합(전체)'
+  function _msgConsol(m){ var k=_consolKey(m); return (_msgConsolBy[k]!==undefined)?!!_msgConsolBy[k]:_msgConsolGlobal(); }   // 회원별 설정 우선, 없으면 (전체)
+  function _msgFees(m){ var fees=m.items.map(function(it){return _num(it._fee);}); if(_msgConsol(m)){ var t=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?t:0;}); } return fees; }   // 진행비 대표통합(회원별 우선)
+  DM.toggleConsol=function(gi){ var m=_msgGroups[gi]; if(!m) return; var k=_consolKey(m); _msgConsolBy[k]=!_msgConsol(m); _renderMsgLeft(); _renderMsgRight(); };   // 입찰 카드: 회원별 통합 토글(현재값 반전)
   function _msgSums(m){ var fees=_msgFees(m), b=0,d=0,f=0; m.items.forEach(function(it,i){ b+=_num(it.bidprice); d+=_num(it.deposit); f+=fees[i]; }); return { bid:b, dep:d, fee:f, total:d+f }; }
   function _msgGrade(m){ var g=(m.items[0]&&m.items[0].grade)||''; if(g) return g; var d=_msgDetailFor(m, m.items[0]); return (d&&d.principal&&d.principal.grade)||''; }   // 그리드 등급 우선, 없으면 상세(class) 등급
   function _msgMyungLabel(it){ var pm=_parseMName(it.member_name, it.member_id); return pm.gubun==='본인'?'본인':(pm.myungui||'개인'); }   // 물건 앞 명의
@@ -1382,7 +1389,7 @@
   };
   DM.msgRerender=function(){ _renderMsgLeft(); DM.msgDueChg(); };
   // 진행비 통합·동적 옵션도 글자·기한처럼 PC별 영구 저장 — 모달 다시 열어도/새로고침해도 유지
-  var DM_OPT_KEY='dmMsgOptV1';
+  var DM_OPT_KEY='dmMsgOptV2';   // V2: 묵은 dynamic:false 저장값 무시 → 동적 디폴트 ON 적용
   function _saveMsgOpts(){ try{ localStorage.setItem(DM_OPT_KEY, JSON.stringify({ consol:!!(document.getElementById('dmMsgFeeConsol')||{}).checked, dynamic:!!(document.getElementById('dmMsgDynamic')||{}).checked })); }catch(_){} }
   function _loadMsgOpts(){ var o={}; try{ o=JSON.parse(localStorage.getItem(DM_OPT_KEY)||'{}')||{}; }catch(_){}; var c=document.getElementById('dmMsgFeeConsol'); if(c) c.checked=!!o.consol; var d=document.getElementById('dmMsgDynamic'); if(d) d.checked=(o.dynamic!==undefined?!!o.dynamic:true); }   // 동적 디폴트 ON(저장값 없으면 체크)
   DM.msgOptChg=function(){ _saveMsgOpts(); DM.msgRerender(); };   // 옵션 변경 = 저장 + 미리보기 갱신
@@ -1754,7 +1761,7 @@
     var court=_courtParse((m.items[0]&&m.items[0].court)||'');
     var courtFull=esc(court.bon)+'법원'+(court.support?(' '+esc(court.support)+'지원'):'');
     var courtPlain=court.bon+'법원'+(court.support?(' '+court.support+'지원'):'');   // 복사용 평문
-    var fees=m.items.map(function(it){return _num(it._fee);}); if(opts.consol){ var tf=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?tf:0;}); }
+    var fees=m.items.map(function(it){return _num(it._fee);}); if(_msgConsol(m)){ var tf=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?tf:0;}); }
     var sumBid=0,sumDep=0,sumFee=0; m.items.forEach(function(it,i){ sumBid+=_num(it.bidprice); sumDep+=_num(it.deposit); sumFee+=fees[i]; });
     var mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).join(', ');
     var firstAgent=(_msgDetailFor(m, m.items[0]).agent)||{};
@@ -1817,9 +1824,11 @@
     body += blk('개요', _kvTable([_cpRow('법원',court.bon+'법원','hl-y'),_cpRow('지원',court.support||'-','hl-y'),_cpRow('경매번호',_msgCtx.sakun,'hl-y'),['물건번호',mulNos,'hl-y'],['입찰일자',_msgCtx.bidDate,'hl-y']]));
     // 입찰 카드: web(링크 탭)에선 [✏ 수정][💾 저장] — 진행비 직접 입력(수동). 비우면 자동 복귀. 한 건만 고쳐도 저장 시 이 회원 전체 물건이 수동으로 굳어 색상 변경.
     if(web){
+      var _consolOn=_msgConsol(m);
+      var _feeConsol='<button type="button" class="dmedt" style="'+(_consolOn?'color:#fff;background:#7c3aed;border-color:#7c3aed':'color:#7c3aed;border-color:#c4b5fd')+'" onclick="DM.toggleConsol('+idx+')" title="이 회원 진행비를 대표물건에 통합/해제">📦 통합'+(_consolOn?' ✓':'')+'</button>';
       var _feeAuto='<button type="button" class="dmedt" style="color:#0e7490;border-color:#67e8f9" onclick="DM.feeAuto&&DM.feeAuto(this)">↺ 자동진행비</button>';
       var _feeSav='<button type="button" class="dmsave" onclick="DM.saveFees&&DM.saveFees(this)">💾 저장</button>';
-      body += '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="dmcard-btns">'+_EDT+_feeAuto+_feeSav+'</div><div class="rsec-h">입찰</div><div class="rsec-bd">'+bidTable+'</div></div>';
+      body += '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="dmcard-btns">'+_EDT+_feeConsol+_feeAuto+_feeSav+'</div><div class="rsec-h">입찰</div><div class="rsec-bd">'+bidTable+'</div></div>';
     } else { body += blk('입찰', bidTable); }
     // 보증금 입금계좌: 화면엔 은행·번호·예금주 다 보이고, 복사는 계좌번호만
     var mDue1=String((m.items[0]&&m.items[0].due1)||'').trim(), mDue2=String((m.items[0]&&m.items[0].due2)||'').trim();   // 회원별 저장된 기한
@@ -1882,7 +1891,7 @@
   }
   function _composeMsgText(m, opts){
     var court=_courtParse((m.items[0]&&m.items[0].court)||''), courtFull=court.bon+'법원'+(court.support?(' '+court.support+'지원'):'');
-    var fees=m.items.map(function(it){return _num(it._fee);}); if(opts.consol){ var tf=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?tf:0;}); }
+    var fees=m.items.map(function(it){return _num(it._fee);}); if(_msgConsol(m)){ var tf=fees.reduce(function(a,b){return a+b;},0); fees=fees.map(function(_,i){return i===0?tf:0;}); }
     var sumDep=0,sumFee=0; m.items.forEach(function(it,i){ sumDep+=_num(it.deposit); sumFee+=fees[i]; });
     var firstAgent=(_msgDetailFor(m, m.items[0]).agent)||{};
     var rawA=''; for(var ai=0;ai<m.items.length;ai++){ var aa=String(m.items[ai].address||'').trim(); if(aa){ rawA=aa; break; } }
@@ -1965,7 +1974,7 @@
     var _reqs=[], _reqKeys=[], _seen={};
     m.items.forEach(function(it){ var pm=_parseMName(it.member_name, m.member_id); var mk=pm.myungui||''; if(_seen[mk]!==undefined) return; _seen[mk]=1; _reqKeys.push(m.member_id+'||'+mk); _reqs.push({ member_id:m.member_id, myungui:mk, daeriin:String(it.daeriin||'').trim() }); });
     var _slim=m.items.map(function(it){ return { link_item_id:it.link_item_id, member_name:it.member_name, member_id:it.member_id, court:it.court, sakun_no:it.sakun_no, mulgeon_no:it.mulgeon_no, bidprice:it.bidprice, deposit:it.deposit, _fee:it._fee, address:it.address, in_date:it.in_date, daeriin:it.daeriin }; });
-    var _mDueOpts={ due1:String((m.items[0]&&m.items[0].due1)||'').trim(), due2:String((m.items[0]&&m.items[0].due2)||'').trim(), consol:_msgConsol(), font:_msgFont, dynamic:!!(document.getElementById('dmMsgDynamic')||{}).checked };   // 웹 링크엔 회원별 저장 기한 + 글자크기 + 동적여부(체크 시 회원 새로고침=ITEMS·진행비 최신, 해제=스냅샷 빠름)
+    var _mDueOpts={ due1:String((m.items[0]&&m.items[0].due1)||'').trim(), due2:String((m.items[0]&&m.items[0].due2)||'').trim(), consol:_msgConsol(m), font:_msgFont, dynamic:!!(document.getElementById('dmMsgDynamic')||{}).checked };   // 웹 링크엔 회원별 저장 기한 + 글자크기 + 동적여부(체크 시 회원 새로고침=ITEMS·진행비 최신, 해제=스냅샷 빠름)
     var _payload=JSON.stringify({ m:{ member:m.member, member_id:String(m.member_id||''), items:_slim }, ctx:{ sakun:_msgCtx.sakun, bidDate:_msgCtx.bidDate, addr:_msgCtx.addr, court:_msgCtx.court, memberName:m.member }, opts:_mDueOpts, reqs:_reqs, reqKeys:_reqKeys });
     return { m:m, seed:seed, html:cardEl.outerHTML, title:title, summary:_sp.join(' / '), phone4:phone4, member_id:String(m.member_id||''), biddate:biddate, payload:_payload };
   }
