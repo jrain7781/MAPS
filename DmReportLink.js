@@ -314,6 +314,36 @@ function dmGetUploadsByItems(itemIds) {
   return map;
 }
 
+/** 물건(item_id)별 PDF 바이트(base64) — 클라이언트 합본용. itemIds 순서대로. [{filename,item_id,b64}] */
+function dmGetPdfBytesByItems(itemIds) {
+  itemIds = itemIds || [];
+  var want = {}; itemIds.forEach(function (id) { want[String(id).trim()] = 1; });
+  var byItem = {}, out = [];
+  try {
+    var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('dm_uploads');
+    if (!sh || sh.getLastRow() < 2 || sh.getLastColumn() < 7) return out;
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
+    for (var i = 0; i < v.length; i++) {
+      var iid = String(v[i][6] || '').trim();
+      if (!iid || !want[iid]) continue;
+      if (!byItem[iid]) byItem[iid] = [];
+      byItem[iid].push({ filename: String(v[i][3] || ''), url: String(v[i][4] || '') });
+    }
+    itemIds.forEach(function (id) {
+      id = String(id).trim();
+      (byItem[id] || []).forEach(function (u) {
+        try {
+          var idm = u.url.match(/[-\w]{25,}/);
+          if (!idm) return;
+          var blob = DriveApp.getFileById(idm[0]).getBlob();
+          out.push({ filename: u.filename, item_id: id, b64: Utilities.base64Encode(blob.getBytes()) });
+        } catch (e) {}
+      });
+    });
+  } catch (e) { Logger.log('[dmGetPdfBytesByItems] ' + e); }
+  return out;
+}
+
 /** 업로드(PDF)가 1건이라도 있는 item_id 집합 — 그리드 심볼용. { item_id: true } */
 function _dmItemPdfSet_() {
   var set = {};

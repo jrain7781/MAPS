@@ -753,11 +753,12 @@
     if(btn){ btn.disabled=true; btn.innerHTML='준비중…'; }
     google.script.run.withSuccessHandler(function(map){
       if(btn){ btn.disabled=false; btn.innerHTML=o||'🖨 전자본인 일괄프린트'; }
-      _showItemsPdfPanel(its, map||{});
+      _showItemsPdfPanel(its, map||{}, '체크 물건');
     }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.innerHTML=o; } alert('조회 오류: '+(e&&e.message||e)); }).dmGetUploadsByItems(ids);
   };
-  function _showItemsPdfPanel(its, map){
+  function _showItemsPdfPanel(its, map, label){
     var old=document.getElementById('dmBulkPdfPanel'); if(old&&old.parentNode) old.parentNode.removeChild(old);
+    _pdfPanelIds=its.map(function(it){ return String(it.link_item_id||''); }).filter(Boolean); _pdfPanelLabel=label||'';
     var nReg=0;
     var rows=its.map(function(it){
       var iid=String(it.link_item_id||''); var list=map[iid]||[];
@@ -769,8 +770,9 @@
     }).join('');
     var p=document.createElement('div'); p.id='dmBulkPdfPanel';
     p.style.cssText='position:fixed;right:16px;bottom:16px;z-index:70;width:330px;max-height:66vh;overflow:auto;background:#f8fafc;border:1px solid #94a3b8;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:11px 13px';
-    p.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><b style="font-size:13px">📎 전자본인 PDF (체크 '+its.length+'건 · PDF '+nReg+'개)</b><button onclick="var x=document.getElementById(\'dmBulkPdfPanel\');if(x&&x.parentNode)x.parentNode.removeChild(x)" style="border:0;background:transparent;font-size:16px;cursor:pointer;color:#64748b">✕</button></div>'
-      +'<div style="font-size:11px;color:#6b7280;margin-bottom:2px">클릭 → 미리보기에서 인쇄하세요. (합본 인쇄는 준비중)</div>'+rows;
+    var mergeBtn=(nReg>1)?'<button onclick="DM.mergePdfPanel()" style="font-size:11px;font-weight:800;border:0;background:#4f46e5;color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap">📑 합본 인쇄</button>':'';
+    p.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:3px"><b style="font-size:13px">📎 전자본인 PDF (PDF '+nReg+'개)</b><span style="display:flex;gap:6px;align-items:center;flex-shrink:0">'+mergeBtn+'<button onclick="var x=document.getElementById(\'dmBulkPdfPanel\');if(x&&x.parentNode)x.parentNode.removeChild(x)" style="border:0;background:transparent;font-size:16px;cursor:pointer;color:#64748b">✕</button></span></div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-bottom:2px">📑 합본 인쇄 = 한 파일로 합쳐 한 번에 / 개별 클릭 → 각각 인쇄</div>'+rows;
     document.body.appendChild(p);
   }
   function _showBulkPdfPanel(map, nameById){
@@ -1416,8 +1418,11 @@
     var ctx=_ctxOf(it), isCorp=String((p.gubun||'')).indexOf('법인')>=0;
     var agent=det.agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
     var docHtml=(_docTab==='wijang')?_wijangHtml(p,agent,ctx,isCorp):_ipchalHtml(p,agent,ctx,isCorp);
-    var full='<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><style>'+_DM_PRINT_CSS+'</style></head><body style="margin:0;padding:12px;background:#fff">'+docHtml+'</body></html>';
-    return '<iframe srcdoc="'+esc(full)+'" style="flex:1;width:100%;border:0;background:#fff"></iframe>';
+    var full='<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><style>'+_DM_PRINT_CSS+'</style></head>'
+      +'<body style="margin:0;padding:22px 16px;background:#e2e8f0">'
+      +'<div style="max-width:760px;margin:0 auto;background:#fff;padding:34px 42px;box-shadow:0 4px 18px rgba(0,0,0,.22);box-sizing:border-box">'+docHtml+'</div>'
+      +'</body></html>';
+    return '<iframe srcdoc="'+esc(full)+'" style="flex:1;width:100%;border:0;background:#e2e8f0"></iframe>';
   }
   DM.docPickMul=function(id){ _docMulId=String(id); _renderDocPanel(); };
   DM.docTab=function(which){ _docTab=which; _renderDocPanel(); };
@@ -1452,9 +1457,55 @@
     if(!body){ alert('출력할 위임장/기일입찰표 데이터가 없습니다.(회원 상세정보 확인)'); return; }
     _printHtmlBody(body);
     var ups=(m.member_id&&_uploadsCache[String(m.member_id)])||{};
-    _showItemsPdfPanel(its, ups);   // 전자본인 PDF는 물건별 순서대로 패널(클릭→미리보기 인쇄)
+    _showItemsPdfPanel(its, ups, m.member||'');   // 전자본인 PDF는 물건별 순서대로 패널(클릭/합본 인쇄)
     if(missing.length) setTimeout(function(){ _dot('상세정보 없는 물건 제외: '+missing.join(', '), true); }, 150);
   };
+  // ===== 전자본인 PDF 합본(클라이언트 pdf-lib 병합 → 한 파일 미리보기/인쇄) =====
+  var _pdfPanelIds=[], _pdfPanelLabel='';
+  function _ensurePdfLib(cb){
+    if(window.PDFLib){ cb(true); return; }
+    var s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+    s.onload=function(){ cb(!!window.PDFLib); }; s.onerror=function(){ cb(false); };
+    document.head.appendChild(s);
+  }
+  function _b64ToBytes(b64){ var bin=atob(String(b64||'')), n=bin.length, a=new Uint8Array(n); for(var i=0;i<n;i++) a[i]=bin.charCodeAt(i); return a; }
+  function _mergeAndOpen(list, label, done){
+    var P=window.PDFLib; if(!P){ if(done)done(); alert('PDF 라이브러리 없음'); return; }
+    P.PDFDocument.create().then(function(merged){
+      var chain=Promise.resolve();
+      list.forEach(function(item){ chain=chain.then(function(){
+        return P.PDFDocument.load(_b64ToBytes(item.b64)).then(function(src){
+          return merged.copyPages(src, src.getPageIndices()).then(function(pgs){ pgs.forEach(function(pg){ merged.addPage(pg); }); });
+        }).catch(function(e){ console.error('합본 skip', item.filename, e); });
+      }); });
+      return chain.then(function(){ return merged.save(); });
+    }).then(function(bytes){
+      if(done)done();
+      var url=URL.createObjectURL(new Blob([bytes], {type:'application/pdf'}));
+      _openMergedPdf(url, label, list.length);
+    }).catch(function(e){ if(done)done(); alert('합본 실패: '+(e&&e.message||e)); });
+  }
+  function _openMergedPdf(url, label, n){
+    var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:130;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.onclick=function(e){ if(e.target===ov&&ov.parentNode){ ov.parentNode.removeChild(ov); try{URL.revokeObjectURL(url);}catch(_){} } };
+    ov.innerHTML='<div style="position:relative;width:96%;max-width:920px;height:92%;background:#fff;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;background:#1f3a5f;color:#fff;flex-shrink:0"><span style="font-weight:800">📑 전자본인 합본 ('+n+'개)'+(label?(' · '+esc(label)):'')+'</span><span><a href="'+url+'" target="_blank" style="color:#fbbf24;font-weight:700;margin-right:14px;text-decoration:none">↗ 새 탭</a><button onclick="(function(b){var o=b.parentNode.parentNode.parentNode;if(o&&o.parentNode)o.parentNode.removeChild(o);})(this)" style="background:#fff;color:#1f3a5f;border:0;border-radius:6px;padding:4px 12px;font-weight:800;cursor:pointer">✕ 닫기</button></span></div>'
+      +'<iframe src="'+url+'" style="flex:1;width:100%;border:0"></iframe></div>';
+    document.body.appendChild(ov);
+  }
+  function _doPdfMerge(ids, label){
+    ids=(ids||[]).filter(Boolean); if(!ids.length){ alert('대상 물건이 없습니다.'); return; }
+    var ld=document.createElement('div'); ld.id='dmMergeLoad'; ld.style.cssText='position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
+    ld.innerHTML='<div style="background:#1f3a5f;color:#fff;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:800"><span class="dm-spin" style="display:inline-block">⟳</span> 합본 생성 중…</div>';
+    document.body.appendChild(ld);
+    function done(){ var x=document.getElementById('dmMergeLoad'); if(x&&x.parentNode) x.parentNode.removeChild(x); }
+    _ensurePdfLib(function(ok){
+      if(!ok){ done(); alert('PDF 라이브러리 로드 실패(인터넷 연결 확인)'); return; }
+      google.script.run.withSuccessHandler(function(list){ list=list||[]; if(!list.length){ done(); alert('합본할 전자본인 PDF가 없습니다.'); return; } _mergeAndOpen(list, label, done); })
+        .withFailureHandler(function(e){ done(); alert('PDF 조회 오류: '+(e&&e.message||e)); }).dmGetPdfBytesByItems(ids);
+    });
+  }
+  DM.mergePdfPanel=function(){ _doPdfMerge(_pdfPanelIds, _pdfPanelLabel); };
   // 회원 등록 PDF 캐시(member_id → [{date,filename,url}]). null=조회중, undefined=미조회.
   var _uploadsCache={};   // member_id → { item_id: [{date,filename,url}] }
   function _loadUploadsFor(m){
