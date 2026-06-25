@@ -1218,7 +1218,7 @@
   // ── 일괄작업 모달 (일괄적용 클릭 → 모달: 상단 값입력/회원검색 + 하단 선택 물건) ──
   var _bulkAct='', _bulkTgts=[], _acItems=[];
   var _bidMethod='pct', _bidWon=0;   // 입찰가 방식(pct/direct/plus) + 위젯 환산 원값
-  function _bulkLabel(a){ return {member:'회원',myungui:'명의',bidprice:'입찰가(최저%)',jinhaengbi:'진행비',hyang:'향',daeriin:'입찰대리인',auth_method:'인증'}[a]||a; }
+  function _bulkLabel(a){ return {member:'회원',myungui:'명의',bidprice:'입찰가(최저%)',jinhaengbi:'진행비',hyang:'향',daeriin:'입찰대리인',auth_method:'인증',status:'물건상태 변경'}[a]||a; }
   // ===== 입찰안내 메세지 모달 (회원별 입찰 요약 + 선택 전송) =====
   var _msgGroups=[], _msgCtx={};
   function _won(n){ n=_num(n); return n?n.toLocaleString('ko-KR'):'0'; }
@@ -1896,6 +1896,7 @@
         +'</div>'
         +'<div id="dmBulkMemInfo" style="font-size:12px;font-weight:700;margin-top:5px"></div>';
     }
+    else if(act==='status'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">변경할 물건상태</label><br><select id="dmBulkVal" onchange="DM.bulkPrev()" style="'+st+';min-width:140px;margin-top:5px"><option value="">선택</option>'+DM_STATUSES.map(function(s){ return '<option>'+esc(s)+'</option>'; }).join('')+'</select>'; }
     else if(act==='myungui'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">명의</label><br><input id="dmBulkVal" placeholder="명의" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:200px;margin-top:5px">'; }
     else if(act==='bidprice'){
       area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">입찰가 방식</label>'
@@ -1987,6 +1988,7 @@
       var cur, next;
       if(act==='member'){ cur=it.member_name||''; next=memName; }
       else if(act==='bidprice'){ cur=it.bidprice?_comma(it.bidprice):''; var nb=_bidFor(it); next=(nb==null)?'':_comma(String(nb)); }
+      else if(act==='status'){ cur=it.stu_member||''; next=val; }
       else { cur=it[act]||''; next=val; }
       var changed = next && String(cur)!==String(next);
       var bg = (idx%2) ? '#fafafa' : '#fff';
@@ -2186,6 +2188,19 @@
   DM.bulkConfirm = function(){
     var act=_bulkAct, valEl=document.getElementById('dmBulkVal'), val=valEl?String(valEl.value).trim():'';
     var targets=_bulkTgts; if(!targets.length){ DM.bulkClose(); return; }
+    if(act==='status'){   // 물건상태 일괄변경 — 입찰물건관리와 동일(updateBulkStatus, item_id=link_item_id)
+      if(!val){ alert('변경할 상태를 선택하세요.'); return; }
+      var sids=targets.map(function(it){ return String(it.link_item_id); }).filter(Boolean);
+      if(!sids.length){ alert('대상 물건이 없습니다.'); return; }
+      if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+      var sbtn=document.getElementById('dmBulkConfirmBtn'); if(sbtn){ sbtn.disabled=true; sbtn.textContent='적용 중…'; }
+      var sk=_selKey;
+      google.script.run.withSuccessHandler(function(r){
+        if(sbtn){ sbtn.disabled=false; sbtn.textContent='적용'; }
+        DM.bulkClose(); _dot('✓ 상태변경 '+sids.length+'건 → '+val, true); if(DM.refreshGroup) DM.refreshGroup(sk);
+      }).withFailureHandler(function(e){ if(sbtn){ sbtn.disabled=false; sbtn.textContent='적용'; } alert('상태변경 오류: '+(e&&e.message||e)); }).updateBulkStatus(sids, val);
+      return;
+    }
     var itemsRows=[], dmRows=[];
     if(act==='member'){
       if(!val){ alert('회원명을 입력하세요.'); return; }
