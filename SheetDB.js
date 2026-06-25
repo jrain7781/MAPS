@@ -1465,7 +1465,7 @@ function saveDamulgeonItemBid(inDate, sakun, court, bidprice) {
 function getDamulgeonMembers() {
   try {
     var ms = (typeof readAllMembersNew === 'function') ? readAllMembersNew() : [];
-    var out = ms.map(function(m) { return { member_id: String(m.member_id || ''), name: String(m.member_name || ''), gubun: String(m.gubun || '') }; })
+    var out = ms.map(function(m) { return { member_id: String(m.member_id || ''), name: String(m.member_name || ''), gubun: String(m.gubun || ''), teacher_color: String(m.teacher_color || ''), teacher_nickname: String(m.teacher_nickname || '') }; })
                 .filter(function(x) { return x.member_id && x.name; });
     return { success: true, members: out };
   } catch (e) { return { success: false, message: String(e), members: [] }; }

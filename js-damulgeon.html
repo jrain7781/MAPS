@@ -287,10 +287,18 @@
     (g.items||[]).forEach(function(it){ var d=String(it.daeriin||'').trim(); if(!d) return; cnt[d]=(cnt[d]||0)+1; if(cnt[d]>bestN){ bestN=cnt[d]; best=d; } });
     return best;
   }
-  // 담당자 표시/색상 — 회원관리 강사 teacher_color (전부쌤/대표님 등 본인 색상)
+  // 담당자 표시/색상 — 회원관리 강사 teacher_color (전부쌤/대표님 등 본인 색상). DM _members(getDamulgeonMembers)에서 매칭.
   function _mgrDisplay(mgr){
-    var d=mgr, c='#0e7490';
-    if(mgr && typeof resolveTeacherDisplay_==='function'){ try{ var t=resolveTeacherDisplay_(mgr); if(t){ d=t.display||mgr; if(t.color) c=t.color; } }catch(e){} }
+    var d=mgr, c='#0e7490', v=String(mgr||'').trim();
+    if(v && _members && _members.length){
+      for(var i=0;i<_members.length;i++){ var mm=_members[i];
+        if(String(mm.teacher_nickname||'').trim()===v || String(mm.name||'').trim()===v){
+          d=(String(mm.teacher_nickname||'').trim()||mm.name||v);
+          if(String(mm.teacher_color||'').trim()) c=String(mm.teacher_color).trim();
+          break;
+        }
+      }
+    } else if(v && typeof resolveTeacherDisplay_==='function'){ try{ var t=resolveTeacherDisplay_(v); if(t){ d=t.display||v; if(t.color) c=t.color; } }catch(e){} }
     return { disp:d, color:c };
   }
 
