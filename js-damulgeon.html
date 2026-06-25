@@ -2008,10 +2008,10 @@
     if(cnt>100){ _qGenStatus('1회 최대 100개까지 가능합니다.','error'); return; }
     if((status==='추천'||status==='입찰') && !memberName){ _qGenStatus('상태가 '+status+'이면 회원을 선택해야 합니다.','error'); var mi=_qGenEl('dmQGenMember'); if(mi) mi.focus(); return; }
     if(typeof google==='undefined'||!google.script||!google.script.run){ _qGenStatus('실행 환경이 아닙니다.','error'); return; }
-    var btn=_qGenEl('dmQGenSubmitBtn'); if(btn){ btn.disabled=true; btn.textContent='생성 중…'; }
+    var btn=_qGenEl('dmQGenSubmitBtn'); if(btn){ btn.disabled=true; btn.style.opacity='0.65'; btn.style.cursor='wait'; btn.innerHTML='<span class="dm-spin" style="display:inline-block">↻</span> 생성 중…'; }
     _qGenStatus('생성 중…','info');
     google.script.run.withSuccessHandler(function(r){
-      if(btn){ btn.disabled=false; btn.textContent='생성'; }
+      if(btn){ btn.disabled=false; btn.style.opacity=''; btn.style.cursor=''; btn.textContent='생성'; }
       if(r&&r.success){
         _renderQGen(r.info);
         _qGenStatus('✓ '+r.created+'개 생성 완료 (?'+r.fromNum+'~?'+r.toNum+')'+(r.message?(' · '+r.message):''),'success');
