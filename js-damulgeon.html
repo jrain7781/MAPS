@@ -1322,6 +1322,7 @@
     var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=true;
     _loadMsgFont();
     _loadMsgDue();   // 저장된 기한(서류제출/보증금) 자동 채움
+    _loadMsgOpts();  // 저장된 진행비통합·동적 옵션 복원
     _renderMsgLeft();
     _renderMsgRight();   // 진입 즉시 대표(첫) 회원 보고서 표시 — 상세는 도착 시 갱신
     setupMsgSplitter(); _applyMsgListW();   // 카드↔보고서 스플리터(PC별 저장폭 적용)
@@ -1380,6 +1381,11 @@
     _saveMsgDue(); _renderMsgRight();
   };
   DM.msgRerender=function(){ _renderMsgLeft(); DM.msgDueChg(); };
+  // 진행비 통합·동적 옵션도 글자·기한처럼 PC별 영구 저장 — 모달 다시 열어도/새로고침해도 유지
+  var DM_OPT_KEY='dmMsgOptV1';
+  function _saveMsgOpts(){ try{ localStorage.setItem(DM_OPT_KEY, JSON.stringify({ consol:!!(document.getElementById('dmMsgFeeConsol')||{}).checked, dynamic:!!(document.getElementById('dmMsgDynamic')||{}).checked })); }catch(_){} }
+  function _loadMsgOpts(){ var o={}; try{ o=JSON.parse(localStorage.getItem(DM_OPT_KEY)||'{}')||{}; }catch(_){}; var c=document.getElementById('dmMsgFeeConsol'); if(c) c.checked=!!o.consol; var d=document.getElementById('dmMsgDynamic'); if(d) d.checked=!!o.dynamic; }
+  DM.msgOptChg=function(){ _saveMsgOpts(); DM.msgRerender(); };   // 옵션 변경 = 저장 + 미리보기 갱신
   // 📌 일괄등록: 헤더 입력 기한을 좌측 체크된 회원의 모든 물건(다물건 시트)에 저장
   function _dueRowsFor(groups, due1, due2){ var rows=[]; groups.forEach(function(m){ m.items.forEach(function(it){ if(it.in_date&&it.sakun_no&&it.court) rows.push({ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, due1:due1, due2:due2 }); }); }); return rows; }
   DM.msgDueRegister=function(){
