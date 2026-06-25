@@ -1383,39 +1383,40 @@
   // ===== 우측 문서 패널: 물건번호(상단) + 위임장/기일입찰표/인증서 탭 + 출력 =====
   var _docTab='wijang', _docMulId='';
   function _renderDocPanel(){
-    var mulBar=document.getElementById('dmDocMul'), tabBar=document.getElementById('dmDocTabs'), body=document.getElementById('dmDocBody');
-    if(!mulBar||!tabBar||!body) return;
+    var head=document.getElementById('dmDocHead'), body=document.getElementById('dmDocBody');
+    if(!head||!body) return;
     var m=_msgGroups[_msgFocusGi];
-    if(!m||!m.items||!m.items.length){ mulBar.innerHTML=''; tabBar.innerHTML=''; body.innerHTML='<div style="color:#94a3b8;padding:24px;text-align:center;font-size:13px">좌측에서 회원을 선택하세요.</div>'; return; }
+    if(!m||!m.items||!m.items.length){ head.innerHTML=''; body.innerHTML='<div style="margin:auto;color:#94a3b8;padding:24px;text-align:center;font-size:13px">좌측에서 회원을 선택하세요.</div>'; return; }
     var items=m.items;
     if(!_docMulId || !items.some(function(it){return String(it.link_item_id)===_docMulId;})) _docMulId=String(items[0].link_item_id||'');
     var curIt=items.filter(function(it){return String(it.link_item_id)===_docMulId;})[0]||items[0];
-    mulBar.innerHTML='<span style="font-size:12px;font-weight:700;color:#475569;margin-right:2px">물건</span>'+items.map(function(it){
-      var id=String(it.link_item_id||''), act=(id===_docMulId);
-      return '<span onclick="DM.docPickMul(\''+esc(id)+'\')" style="cursor:pointer;padding:2px 11px;border-radius:11px;font-size:12px;font-weight:800;'+(act?'background:#1f3a5f;color:#fff':'background:#eef2ff;color:#3730a3')+'">'+esc(it.mulgeon_no||'?')+'</span>';
-    }).join('');
     var ups=(m.member_id&&_uploadsCache[String(m.member_id)])||{};
     var certList=(ups&&_docMulId&&ups[_docMulId])||[];
     var hasCert=certList.length>0;
-    function tb(key,label){ var act=(_docTab===key); return '<button onclick="DM.docTab(\''+key+'\')" style="white-space:nowrap;font-size:12px;font-weight:800;border:1px solid '+(act?'#1f3a5f':'#cbd5e1')+';background:'+(act?'#1f3a5f':'#fff')+';color:'+(act?'#fff':'#475569')+';border-radius:7px;padding:5px 13px;cursor:pointer">'+label+'</button>'; }
+    function tb(key,label){ var act=(_docTab===key); return '<button onclick="DM.docTab(\''+key+'\')" style="white-space:nowrap;font-size:12px;font-weight:800;border:1px solid '+(act?'#1f3a5f':'#cbd5e1')+';background:'+(act?'#1f3a5f':'#fff')+';color:'+(act?'#fff':'#475569')+';border-radius:7px;padding:5px 12px;cursor:pointer">'+label+'</button>'; }
     var certLabel='인증서'+(hasCert?'':' <span style="color:'+(_docTab==='cert'?'#fecaca':'#dc2626')+'">(없음)</span>');
-    tabBar.innerHTML=tb('wijang','위임장')+tb('ipchal','기일입찰표')+tb('cert',certLabel)
-      +'<button onclick="DM.docPrint()" style="margin-left:auto;white-space:nowrap;font-size:12px;font-weight:800;border:0;background:#4f46e5;color:#fff;border-radius:7px;padding:5px 15px;cursor:pointer">🖨 출력</button>';
+    var tabs='<span style="display:flex;gap:6px;flex-shrink:0">'+tb('wijang','위임장')+tb('ipchal','기일입찰표')+tb('cert',certLabel)+'</span>';
+    var chips='<span style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex:1;min-width:0">'
+      +'<span style="font-size:12px;font-weight:700;color:#475569;margin-right:1px">물건</span>'
+      +items.map(function(it){ var id=String(it.link_item_id||''), act=(id===_docMulId); return '<span onclick="DM.docPickMul(\''+esc(id)+'\')" style="cursor:pointer;padding:2px 10px;border-radius:11px;font-size:12px;font-weight:800;'+(act?'background:#1f3a5f;color:#fff':'background:#eef2ff;color:#3730a3')+'">'+esc(it.mulgeon_no||'?')+'</span>'; }).join('')+'</span>';
+    var printBtn='<button onclick="DM.docPrint()" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:800;border:0;background:#4f46e5;color:#fff;border-radius:7px;padding:5px 14px;cursor:pointer">🖨 출력</button>';
+    head.innerHTML=tabs+chips+printBtn;
     body.innerHTML=_docTabBody(m, curIt, certList);
   }
   function _docTabBody(m, it, certList){
     if(_docTab==='cert'){
-      if(!certList.length) return '<div style="padding:34px;text-align:center"><div style="font-size:15px;font-weight:800;color:#dc2626">전자본인확인서 없음</div><div style="color:#94a3b8;font-size:12px;margin-top:6px">회원이 이 물건(물건번호 '+esc(it.mulgeon_no||'?')+')에 PDF를 등록하면 여기에 표시됩니다.</div></div>';
-      return certList.map(function(u){ var idm=String(u.url).match(/[-\w]{25,}/), src=idm?('https://drive.google.com/file/d/'+idm[0]+'/preview'):u.url; return '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">📄 '+esc(u.filename||'PDF')+'</div><iframe src="'+esc(src)+'" style="width:100%;height:600px;border:1px solid #cbd5e1;border-radius:6px;background:#fff"></iframe></div>'; }).join('');
+      if(!certList.length) return '<div style="margin:auto;text-align:center;padding:20px"><div style="font-size:15px;font-weight:800;color:#dc2626">전자본인확인서 없음</div><div style="color:#94a3b8;font-size:12px;margin-top:6px">회원이 이 물건(물건번호 '+esc(it.mulgeon_no||'?')+')에 PDF를 등록하면 표시됩니다.</div></div>';
+      if(certList.length===1){ var u0=certList[0], idm0=String(u0.url).match(/[-\w]{25,}/), src0=idm0?('https://drive.google.com/file/d/'+idm0[0]+'/preview'):u0.url; return '<iframe src="'+esc(src0)+'" style="flex:1;width:100%;border:0;background:#fff"></iframe>'; }
+      return '<div style="flex:1;overflow:auto;padding:12px">'+certList.map(function(u){ var idm=String(u.url).match(/[-\w]{25,}/), src=idm?('https://drive.google.com/file/d/'+idm[0]+'/preview'):u.url; return '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">📄 '+esc(u.filename||'PDF')+'</div><iframe src="'+esc(src)+'" style="width:100%;height:560px;border:1px solid #cbd5e1;border-radius:6px;background:#fff"></iframe></div>'; }).join('')+'</div>';
     }
-    if(_msgDetailsLoading) return '<div style="padding:34px;text-align:center;color:#92400e"><span class="dm-spin" style="display:inline-block">⟳</span> 상세정보 불러오는 중…</div>';
+    if(_msgDetailsLoading) return '<div style="margin:auto;text-align:center;color:#92400e;padding:24px"><span class="dm-spin" style="display:inline-block;margin-right:6px">⟳</span> 상세정보 불러오는 중…</div>';
     var det=_msgDetailFor(m, it), p=det.principal;
-    if(!p) return '<div style="padding:34px;text-align:center;color:#dc2626;font-weight:700">회원 상세정보가 없습니다.<div style="color:#94a3b8;font-weight:500;font-size:12px;margin-top:6px">명의/계좌 정보 등록 후 🔄 새로고침 하세요.</div></div>';
+    if(!p) return '<div style="margin:auto;text-align:center;color:#dc2626;font-weight:700;padding:24px">회원 상세정보가 없습니다.<div style="color:#94a3b8;font-weight:500;font-size:12px;margin-top:6px">명의/계좌 정보 등록 후 🔄 새로고침 하세요.</div></div>';
     var ctx=_ctxOf(it), isCorp=String((p.gubun||'')).indexOf('법인')>=0;
     var agent=det.agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
     var docHtml=(_docTab==='wijang')?_wijangHtml(p,agent,ctx,isCorp):_ipchalHtml(p,agent,ctx,isCorp);
-    var full='<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><style>'+_DM_PRINT_CSS+'</style></head><body style="margin:0;padding:10px;background:#fff">'+docHtml+'</body></html>';
-    return '<iframe srcdoc="'+esc(full)+'" style="width:100%;height:720px;border:1px solid #cbd5e1;border-radius:6px;background:#fff"></iframe>';
+    var full='<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><style>'+_DM_PRINT_CSS+'</style></head><body style="margin:0;padding:12px;background:#fff">'+docHtml+'</body></html>';
+    return '<iframe srcdoc="'+esc(full)+'" style="flex:1;width:100%;border:0;background:#fff"></iframe>';
   }
   DM.docPickMul=function(id){ _docMulId=String(id); _renderDocPanel(); };
   DM.docTab=function(which){ _docTab=which; _renderDocPanel(); };
