@@ -48,13 +48,13 @@
   #dmMsgReport .rsec-must .rmust-bd { padding:8px 12px 9px; background:#fffdf5; }
   #dmMsgReport .rsec-must .rmust-li { margin:4px 0; font-weight:700; line-height:1.45; color:#1f2937; }
   #dmMsgReport .rsec-must .rmust-li .mneed { background:#fde047; color:#92400e; padding:1px 5px; border-radius:4px; font-weight:800; }
-  #dmMsgReport .rsub { border-collapse:collapse; font-size:12.5px; table-layout:fixed; max-width:100%; }
+  #dmMsgReport .rsub { border-collapse:collapse; font-size:12.5px; table-layout:auto; width:100%; }
   #dmMsgReport .rsub .rnum { font-size:1.05em; font-weight:700; }   /* 금액 크게 */
   #dmMsgReport .rsub .rtot td { font-size:1.18em; }   /* 총비용 행 크게 */
   #dmMsgReport .rsub th { text-align:center; background:#eef2f7; color:#475569; padding:6px 4px; border:1px solid #dce3ec; font-weight:700; vertical-align:middle; line-height:1.4; }
-  #dmMsgReport .rsub td { border:1px solid #eef2f7; padding:6px 4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; line-height:1.4; }
+  #dmMsgReport .rsub td { border:1px solid #eef2f7; padding:6px 4px; white-space:normal; word-break:keep-all; vertical-align:middle; line-height:1.4; }
   #dmMsgReport .rsub .bgrip { display:none; }
-  #dmMsgReport .rsub .rnum { text-align:right; } #dmMsgReport .rsub .hl-y { font-weight:700; }
+  #dmMsgReport .rsub .rnum { text-align:right; white-space:nowrap; } #dmMsgReport .rsub .hl-y { font-weight:700; }
   #dmMsgReport .rsub tfoot td { background:#f6f8fb; } #dmMsgReport .rsub .rtot td { color:#dc2626; font-weight:800; background:#fff5f5; }
   #dmMsgReport .dmcp{ background:#0e7490; color:#fff; border:0; border-radius:5px; padding:4px 11px; font-size:.82em; font-weight:700; cursor:pointer; flex:0 0 auto; white-space:nowrap; }
   #dmMsgReport .dmcp:active{ background:#0b5563; }
@@ -153,6 +153,21 @@
         if(f && f>=10 && f<=24) host.style.setProperty('--dmrf', f+'px');   // 관리자가 정한 글자크기 적용
         host.innerHTML = window.DMBuild.report(pl);
       } else if(res && res.html != null){ host.innerHTML = res.html; }
+      DMV.fitBid();   // 입찰표 화면 폭에 자동 맞춤(모바일 금액 잘림 방지)
+    },
+    // 입찰표(.rsub)가 화면 폭을 넘으면 글자 크기를 자동 축소해 전부 보이게(제일 큰 크기로). 흐려지지 않게 폰트로 조절.
+    fitBid: function(){
+      var host = DMV.el('dmMsgReport'); if(!host) return;
+      requestAnimationFrame(function(){
+        host.querySelectorAll('table.rsub').forEach(function(t){
+          t.style.fontSize='';
+          var cont = t.parentElement || host;
+          var maxW = (cont.clientWidth || host.clientWidth) - 2;
+          if(!maxW) return;
+          var fs = parseFloat(getComputedStyle(t).fontSize) || 12.5, g = 0;
+          while(t.scrollWidth > maxW && fs > 7 && g < 80){ fs -= 0.4; t.style.fontSize = fs + 'px'; g++; }
+        });
+      });
     },
     handle: function(res, typed){
       res = res || {};
@@ -280,6 +295,7 @@
       .dmDeleteUpload(url, TOKEN);
   };
   document.getElementById('g4') && document.getElementById('g4').addEventListener('keydown', function(e){ if(e.key==='Enter') DMV.submit(); });
+  window.addEventListener('resize', function(){ clearTimeout(DMV._rt); DMV._rt=setTimeout(function(){ DMV.fitBid&&DMV.fitBid(); }, 150); });   // 회전/리사이즈 시 입찰표 재맞춤
   DMV.init();
 </script>
 </body>
