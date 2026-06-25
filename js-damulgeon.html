@@ -1384,7 +1384,7 @@
   // 진행비 통합·동적 옵션도 글자·기한처럼 PC별 영구 저장 — 모달 다시 열어도/새로고침해도 유지
   var DM_OPT_KEY='dmMsgOptV1';
   function _saveMsgOpts(){ try{ localStorage.setItem(DM_OPT_KEY, JSON.stringify({ consol:!!(document.getElementById('dmMsgFeeConsol')||{}).checked, dynamic:!!(document.getElementById('dmMsgDynamic')||{}).checked })); }catch(_){} }
-  function _loadMsgOpts(){ var o={}; try{ o=JSON.parse(localStorage.getItem(DM_OPT_KEY)||'{}')||{}; }catch(_){}; var c=document.getElementById('dmMsgFeeConsol'); if(c) c.checked=!!o.consol; var d=document.getElementById('dmMsgDynamic'); if(d) d.checked=!!o.dynamic; }
+  function _loadMsgOpts(){ var o={}; try{ o=JSON.parse(localStorage.getItem(DM_OPT_KEY)||'{}')||{}; }catch(_){}; var c=document.getElementById('dmMsgFeeConsol'); if(c) c.checked=!!o.consol; var d=document.getElementById('dmMsgDynamic'); if(d) d.checked=(o.dynamic!==undefined?!!o.dynamic:true); }   // 동적 디폴트 ON(저장값 없으면 체크)
   DM.msgOptChg=function(){ _saveMsgOpts(); DM.msgRerender(); };   // 옵션 변경 = 저장 + 미리보기 갱신
   // 📌 일괄등록: 헤더 입력 기한을 좌측 체크된 회원의 모든 물건(다물건 시트)에 저장
   function _dueRowsFor(groups, due1, due2){ var rows=[]; groups.forEach(function(m){ m.items.forEach(function(it){ if(it.in_date&&it.sakun_no&&it.court) rows.push({ in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, due1:due1, due2:due2 }); }); }); return rows; }
@@ -1423,16 +1423,9 @@
     if(ti){ ti.style.background=(_msgTab==='image')?'#1f3a5f':'#fff'; ti.style.color=(_msgTab==='image')?'#fff':'#475569'; }
     _renderMsgRight();
   };
-  // 좌측 입찰카드 리스트 상단 고정 바: 전체선택 + 선택수
-  function _msgSelBar(){
-    var n=Object.keys(_msgSel).length, total=_msgGroups.length;
-    return '<div style="position:sticky;top:0;z-index:3;margin:-12px -12px 10px;padding:9px 12px;background:#eef2f7;border-bottom:1px solid #d8e0ea;display:flex;align-items:center;gap:8px">'
-      +'<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:700;color:#334155"><input type="checkbox" id="dmMsgSelectAll" '+((n===total&&n>0)?'checked':'')+' onchange="DM.msgSelectAll(this)"> 전체선택</label>'
-      +'<span id="dmMsgSelCnt" style="font-size:12px;color:#64748b">선택 '+n+'명</span></div>';
-  }
   function _renderMsgLeft(){
     var box=document.getElementById('dmMsgList'); if(!box) return;
-    box.innerHTML=_msgSelBar()+_msgGroups.map(function(m,gi){
+    box.innerHTML=_msgGroups.map(function(m,gi){
       var s=_msgSums(m), foc=(gi===_msgFocusGi);
       var mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).filter(Boolean).join(',');
       var c={본인:0,개인:0,법인:0}; m.items.forEach(function(it){ var g=_parseMName(it.member_name,it.member_id).gubun; if(c[g]!==undefined) c[g]++; });
