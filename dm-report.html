@@ -48,7 +48,7 @@
   #dmMsgReport .rsec-must .rmust-bd { padding:8px 12px 9px; background:#fffdf5; }
   #dmMsgReport .rsec-must .rmust-li { margin:4px 0; font-weight:700; line-height:1.45; color:#1f2937; }
   #dmMsgReport .rsec-must .rmust-li .mneed { background:#fde047; color:#92400e; padding:1px 5px; border-radius:4px; font-weight:800; }
-  #dmMsgReport .rsub { border-collapse:collapse; font-size:var(--dmrf,14px); table-layout:auto; width:100%; }   /* 다른 카드와 동일 크기 기준(폭 넘으면 _fitBid가 살짝만 축소) */
+  #dmMsgReport .rsub { border-collapse:collapse; font-size:.93em; table-layout:auto; width:100%; }   /* 기본은 다른 카드(.rkv)와 동일 크기. 폭 넘치면 _fitBid가 '들어가는 최대 폰트'로만 축소 */
   #dmMsgReport .rsub .rnum { font-size:1.05em; font-weight:700; }   /* 금액 크게 */
   #dmMsgReport .rsub .rtot td { font-size:1.18em; }   /* 총비용 행 크게 */
   #dmMsgReport .rsub th { text-align:center; background:#eef2f7; color:#475569; padding:5px 2px; border:1px solid #dce3ec; font-weight:700; vertical-align:middle; line-height:1.35; }
@@ -154,20 +154,25 @@
         if(f && f>=10 && f<=24) host.style.setProperty('--dmrf', f+'px');   // 관리자가 정한 글자크기 적용
         host.innerHTML = window.DMBuild.report(pl);
       } else if(res && res.html != null){ host.innerHTML = res.html; }
-      DMV.fitBid();   // 입찰표 화면 폭에 자동 맞춤(모바일 금액 잘림 방지)
-      setTimeout(function(){ DMV.fitBid&&DMV.fitBid(); }, 280);   // 레이아웃 확정 후 재측정(첫 측정이 좁게 잡혀 과축소되는 것 보정)
+      DMV.fitBid();   // 입찰표: 들어가면 기본크기, 넘치면 '들어가는 최대 폰트'로
+      setTimeout(function(){ DMV.fitBid&&DMV.fitBid(); }, 300);   // 레이아웃 확정 후 재측정(첫 측정 부정확 보정)
     },
-    // 입찰표(.rsub)가 화면 폭을 넘을 때만 글자 크기를 살짝 축소(넘지 않으면 그대로). 흐려지지 않게 폰트로 조절. 최소 11px 보장 — 과하게 작아지지 않게.
+    // 입찰표(.rsub): 컨테이너 폭에 들어가면 기본(.93em=다른 카드와 동일) 유지, 넘치면 '들어가는 최대 폰트'로 비례 축소(과축소 없음).
     fitBid: function(){
       var host = DMV.el('dmMsgReport'); if(!host) return;
       requestAnimationFrame(function(){
         host.querySelectorAll('table.rsub').forEach(function(t){
-          t.style.fontSize='';
-          var cont = t.parentElement || host;
-          var maxW = (cont.clientWidth || host.clientWidth || 0) - 2;
-          if(maxW < 150) return;   // 컨테이너 폭 미확정(레이아웃 전) — 과축소 방지, 재측정에서 처리
-          var base = parseFloat(getComputedStyle(t).fontSize) || 14, fs = base, g = 0;
-          while(t.scrollWidth > maxW && fs > 12 && g < 12){ fs -= 0.5; t.style.fontSize = fs + 'px'; g++; }   // 최소 12px(과축소 방지)
+          t.style.fontSize='';   // 기본(최대)에서 측정 시작
+          var p = t.parentElement; if(!p) return;
+          var cs = getComputedStyle(p);
+          var avail = p.clientWidth - (parseFloat(cs.paddingLeft)||0) - (parseFloat(cs.paddingRight)||0);
+          if(avail < 80) return;                 // 폭 미확정(레이아웃 전) — 다음 호출에서 처리
+          var natural = t.scrollWidth;
+          if(natural <= avail + 1) return;       // 들어감 → 기본(최대) 폰트 유지(다른 카드와 동일)
+          var base = parseFloat(getComputedStyle(t).fontSize) || 14;
+          var fs = Math.max(9, Math.floor(base * avail / natural * 2) / 2);   // 들어가는 최대 폰트(비례식)
+          t.style.fontSize = fs + 'px';
+          var g = 0; while(t.scrollWidth > avail + 1 && fs > 9 && g < 8){ fs -= 0.5; t.style.fontSize = fs + 'px'; g++; }   // 미세보정
         });
       });
     },

@@ -1181,6 +1181,20 @@
       _renderMsgRight(); if(_selKey) renderBody(); _dot('✓ 진행비 저장', true);
     }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; alert('진행비 저장 오류: '+(e&&e.message||e)); }).bulkSaveDamulgeon(rows);
   };
+  // [자동진행비] 수동 저장(jinhaengbi)했어도 다시 자동 계산으로 복귀 — 현재 회원 전체 물건 jinhaengbi 비움(시트에서도 제거).
+  DM.feeAuto = function(btn){
+    var m=_msgGroups[_msgFocusGi]; if(!m||!m.items||!m.items.length){ alert('대상이 없습니다.'); return; }
+    if(!m.items.some(function(it){ return _isManualFee(it); })){ alert('이미 전부 자동 진행비입니다.'); return; }
+    if(!confirm('이 회원의 진행비를 모두 자동(기본 계산)으로 되돌릴까요?')) return;
+    var rows=m.items.map(function(it){ it.jinhaengbi=''; return { in_date:it.in_date, sakun_no:it.sakun_no, court:it.court, jinhaengbi:'' }; });
+    var o=btn.textContent; btn.disabled=true; btn.textContent='처리 중…';
+    google.script.run.withSuccessHandler(function(){ btn.disabled=false; btn.textContent=o;
+      var sec=btn.closest('.rsec'); if(sec){ sec.classList.remove('editmode'); var e=sec.querySelector('.dmedt'); if(e) e.textContent='✏ 수정'; }
+      var g=_groups.filter(function(x){return x.group_key===_selKey;})[0]; _computeFees(g?g.items:m.items);   // jinhaengbi 비웠으니 _fee=자동값 재계산
+      try{ _saveGroupsCache(); }catch(_){}
+      _renderMsgRight(); if(_selKey) renderBody(); _dot('✓ 자동 진행비로 복귀', true);
+    }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; alert('자동 전환 오류: '+(e&&e.message||e)); }).bulkSaveDamulgeon(rows);
+  };
 
   // ── 컬럼 리사이즈 (폭=필드키, localStorage 저장) ──
   function bindResizers(){
@@ -1786,8 +1800,10 @@
     var body='';
     body += blk('개요', _kvTable([_cpRow('법원',court.bon+'법원','hl-y'),_cpRow('지원',court.support||'-','hl-y'),_cpRow('경매번호',_msgCtx.sakun,'hl-y'),['물건번호',mulNos,'hl-y'],['입찰일자',_msgCtx.bidDate,'hl-y']]));
     // 입찰 카드: web(링크 탭)에선 [✏ 수정][💾 저장] — 진행비 직접 입력(수동). 비우면 자동 복귀. 한 건만 고쳐도 저장 시 이 회원 전체 물건이 수동으로 굳어 색상 변경.
-    if(web){ var _feeSav='<button type="button" class="dmsave" onclick="DM.saveFees&&DM.saveFees(this)">💾 저장</button>';
-      body += '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="dmcard-btns">'+_EDT+_feeSav+'</div><div class="rsec-h">입찰 <span style="font-size:.72em;font-weight:600;color:#94a3b8">✏수정 → 진행비 직접입력(비우면 자동)</span></div><div class="rsec-bd">'+bidTable+'</div></div>';
+    if(web){
+      var _feeAuto='<button type="button" class="dmedt" style="color:#0e7490;border-color:#67e8f9" onclick="DM.feeAuto&&DM.feeAuto(this)">↺ 자동진행비</button>';
+      var _feeSav='<button type="button" class="dmsave" onclick="DM.saveFees&&DM.saveFees(this)">💾 저장</button>';
+      body += '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'"><div class="dmcard-btns">'+_EDT+_feeAuto+_feeSav+'</div><div class="rsec-h">입찰</div><div class="rsec-bd">'+bidTable+'</div></div>';
     } else { body += blk('입찰', bidTable); }
     // 보증금 입금계좌: 화면엔 은행·번호·예금주 다 보이고, 복사는 계좌번호만
     var mDue1=String((m.items[0]&&m.items[0].due1)||'').trim(), mDue2=String((m.items[0]&&m.items[0].due2)||'').trim();   // 회원별 저장된 기한
