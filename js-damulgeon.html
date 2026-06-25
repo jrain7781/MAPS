@@ -666,11 +666,12 @@
   function _digitsRight(num, n){ var v=Math.round(_num(num))||0, s=(v?String(v):''); var arr=[]; for(var i=0;i<n;i++) arr.push(''); for(var j=0;j<s.length && j<n;j++){ arr[n-1-j]=s[s.length-1-j]; } return arr; }
   function _amtCells(arr){ return arr.map(function(d){ return '<td>'+(d||'')+'</td>'; }).join(''); }
   var _DM_PRINT_CSS = '@page{size:A4;margin:7mm 9mm;}'
-    +'*{box-sizing:border-box;}body{font-family:"Malgun Gothic","맑은 고딕",sans-serif;color:#000;margin:0;}'
+    +'*{box-sizing:border-box;}body{font-family:"함초롱바탕","HCR Batang","HCR Batang ExtB",Batang,"바탕",serif;color:#000;margin:0;}'
     +'.dm-doc{page-break-after:always;}.dm-doc:last-child{page-break-after:auto;}'
     +'.fm{border-collapse:collapse;table-layout:fixed;}'
     +'.fm td{border:1px solid #000;font-size:15px;padding:4px 7px;text-align:center;vertical-align:middle;word-break:break-all;line-height:1.32;}'
     +'.fm .lf{text-align:left;}.fm .vl{font-weight:700;font-size:15px;line-height:1.9;letter-spacing:1px;}'
+    +'.fm td.lbl2{white-space:nowrap;font-size:11.5px;line-height:1.25;}'
     +'.ipblk td{height:54px;}.iprow td{height:44px;}'
     +'.amt .won{vertical-align:bottom;padding-bottom:3px;}'
     +'.wj-title{text-align:center;font-size:27px;letter-spacing:18px;font-weight:700;margin:4px 0 22px;}'
@@ -686,7 +687,7 @@
     +'.ip-formno{display:flex;justify-content:space-between;font-size:9px;color:#222;margin-bottom:2px;}'
     +'.ip-title{text-align:center;font-size:23px;letter-spacing:9px;font-weight:800;margin:2px 0 7px;}'
     +'.ip-head{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin:0 2px 3px;}'
-    +'.amt .u{font-size:10px;padding:2px 0;line-height:1;}.amt .d{height:61px;font-size:20px;font-weight:600;}'
+    +'.amt .u{font-size:13px;padding:1px 1px;line-height:1.04;font-weight:600;}.amt .d{height:54px;font-size:20px;font-weight:600;}'
     +'.wj-doc{padding-top:30px;}.ip-doc{padding-top:16px;}'
     +'.ip-notice{font-size:13px;color:#111;margin-top:12px;line-height:1.3;white-space:pre-line;}';
   DM.mcPrint=function(){
@@ -829,7 +830,7 @@
     var regSaeop=isCorp?(p.biz_no||''):(p.jumin_corp||''), corpReg=isCorp?(p.jumin_corp||''):'';
     var bidU=['천억','백억','십억','억','천만','백만','십만','만','천','백','십','일'], depU=['백억','십억','억','천만','백만','십만','만','천','백','십','일'];
     var bid=_digitsRight(ctx.bidprice, 12), dep=_digitsRight(ctx.deposit, 11);
-    var units=function(arr){ return arr.map(function(u){return '<td class="u">'+u+'</td>';}).join(''); };
+    var units=function(arr){ return arr.map(function(u){return '<td class="u">'+String(u).split('').join('<br>')+'</td>';}).join(''); };   // 천억→천/억 2줄
     var digs=function(arr){ return arr.map(function(d){return '<td class="d">'+(d||'')+'</td>';}).join(''); };
     return '<div class="dm-doc ip-doc">'
     +'<div class="ip-formno"><span>[전산양식 A3360] 기일입찰표(흰색)</span><span>용지규격 210mm×297mm(A4용지)</span></div>'
@@ -837,12 +838,12 @@
     +'<div class="ip-head"><span>'+_courtLine(ctx)+' 집행관 귀하</span><span>입찰기일 : '+esc(ctx.bidDate)+'</span></div>'
     +'<table class="fm iprow" style="width:100%;margin-bottom:-1px"><colgroup><col style="width:12%"><col style="width:36%"><col style="width:9%"><col style="width:43%"></colgroup>'
     +'<tr><td>사건<br>번호</td><td><div style="display:flex;justify-content:space-between"><span>'+esc(_sakunBase(ctx.sakun))+'</span><span>호</span></div></td><td>물건<br>번호</td><td>'+esc(ctx.mulgeon||'')+'</td></tr></table>'
-    +'<table class="fm ipblk" style="width:100%;margin-bottom:-1px"><colgroup><col style="width:5.5%"><col style="width:6.5%"><col style="width:15%"><col style="width:30%"><col style="width:13%"><col style="width:30%"></colgroup>'
-    +'<tr><td class="vl" rowspan="6">'+_vstack('입찰자')+'</td><td class="vl" rowspan="3">'+_vstack('본인')+'</td>'
+    +'<table class="fm ipblk" style="width:100%;margin-bottom:-1px"><colgroup><col style="width:5.5%"><col style="width:10.86%"><col style="width:14%"><col style="width:28%"><col style="width:13%"><col style="width:28.64%"></colgroup>'
+    +'<tr><td class="vl" rowspan="6">'+_vstack('입찰자')+'</td><td rowspan="3" style="font-weight:700">본인</td>'
     +'<td>성　명</td><td>'+esc(p.name||'')+'</td><td>전화번호</td><td>'+esc(p.phone||'')+'</td></tr>'
-    +'<tr><td>주민(사업자)<br>등록번호</td><td>'+esc(regSaeop)+'</td><td>법인등록<br>번　호</td><td>'+esc(corpReg)+'</td></tr>'
+    +'<tr><td class="lbl2">주민(사업자)<br>등록번호</td><td>'+esc(regSaeop)+'</td><td>법인등록<br>번　호</td><td>'+esc(corpReg)+'</td></tr>'
     +'<tr><td>주　소</td><td colspan="3" class="lf">'+esc(p.address||'')+'</td></tr>'
-    +'<tr><td class="vl" rowspan="3">'+_vstack('대리인')+'</td><td>성　명</td><td>'+esc(agent.name||'')+'　(인)</td><td>본인과의<br>관　계</td><td>지인</td></tr>'
+    +'<tr><td rowspan="3" style="font-weight:700">대리인</td><td>성　명</td><td>'+esc(agent.name||'')+'　(인)</td><td>본인과의<br>관　계</td><td>지인</td></tr>'
     +'<tr><td>주민등록<br>번　호</td><td>'+esc(agent.jumin_corp||'')+'</td><td>전화번호</td><td>'+esc(agent.phone||'')+'</td></tr>'
     +'<tr><td>주　소</td><td colspan="3" class="lf">'+esc(agent.address||'')+'</td></tr></table>'
     +'<table class="fm amt" style="width:100%;margin-bottom:-1px;table-layout:fixed">'
