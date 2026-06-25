@@ -1189,6 +1189,8 @@
   var _msgDetailMap={}, _msgFocusGi=0, _msgSel={}, _msgTab='link';   // 상세=회원||명의 키, 선택=gi, 탭=link(웹링크 미리보기)/image(캡처)
   var _msgDetailsLoading=false;   // 명의 상세(전화·주민·계좌·등급) 서버 조회 중 — 보고서에 "불러오는 중" 명시
   DM.openMsgModal = function(targets){
+    targets=(targets||[]).filter(function(it){ return String(it.stu_member||'').trim()==='입찰'; });   // 메세지(입찰안내)는 물건상태=입찰 물건만 대상
+    if(!targets.length){ alert('입찰 상태인 물건이 없습니다.\n메세지(입찰안내)는 입찰 물건만 열립니다.'); return; }
     var g0=targets[0]||{}, court=_courtParse(g0.court||'');
     var _repA=''; for(var _ti=0;_ti<targets.length;_ti++){ var _a=String(targets[_ti].address||'').trim(); if(_a){ _repA=_a; break; } }   // 대표 주소(빈 더미 제외)
     _msgCtx={ court:String(g0.court||''), courtFull:(esc(court.bon)+'법원'+(court.support?(' '+esc(court.support)+'지원'):'')), sakun:_sakunBase(g0.sakun_no||''), bidDate:_bidDateStr(g0.in_date), addr:_addrBase(_repA) };
