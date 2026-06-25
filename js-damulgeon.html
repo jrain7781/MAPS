@@ -1246,7 +1246,7 @@
       if(pm.gubun==='법인') map[key].gubun='법인';
     });
     _msgGroups=Object.keys(map).map(function(k){ var m=map[k]; m.items.sort(function(a,b){return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0);}); return m; });
-    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgTab='link'; _linkStatusCache={}; _uploadsCache={}; _msgDetailsLoading=true; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 링크 탭 기본 + 상세 로딩중
+    _msgDetailMap={}; _msgFocusGi=0; _msgSel={}; _msgTab='link'; _linkStatusCache={}; _uploadsCache={}; _msgDetailsLoading=true; _docTab='wijang'; _docMulId=''; _msgGroups.forEach(function(_,gi){ _msgSel[gi]=1; });   // 링크 탭 기본 + 상세 로딩중
     var cnt=document.getElementById('dmMsgCnt'); if(cnt) cnt.textContent='· 회원 '+_msgGroups.length+'명 / 물건 '+targets.length+'건';
     var sa=document.getElementById('dmMsgSelectAll'); if(sa) sa.checked=true;
     _loadMsgFont();
@@ -1370,15 +1370,71 @@
   }
   function _renderMsgRight(){
     var rp=document.getElementById('dmMsgReport'); if(!rp) return;
-    var m=_msgGroups[_msgFocusGi]; if(!m){ rp.innerHTML='<div style="padding:30px;color:#94a3b8">좌측에서 회원을 선택하세요.</div>'; rp.classList.remove('dm-linkmode'); _renderLinkStatus(); return; }
+    var m=_msgGroups[_msgFocusGi]; if(!m){ rp.innerHTML='<div style="padding:30px;color:#94a3b8">좌측에서 회원을 선택하세요.</div>'; rp.classList.remove('dm-linkmode'); _renderLinkStatus(); _renderDocPanel(); return; }
     var web=(_msgTab==='link');
     rp.classList.toggle('dm-linkmode', web);   // 링크 모드: 캡처 여백 제거 + 복사버튼 노출(회원 웹페이지와 동일 화면)
     var loadBanner=_msgDetailsLoading ? '<div class="dm-msgload"><span class="dm-spin">⟳</span> 회원 상세정보 불러오는 중… <span style="font-weight:500;color:#92400e;opacity:.8">(전화·주민·계좌·등급)</span></div>' : '';
     rp.innerHTML=loadBanner+_buildMsgReport(m, _msgOpts(), _msgFocusGi, web);   // 링크 탭=웹변형(복사버튼·주민가림), 이미지 탭=캡처변형
     _applyMsgFont(); if(_msgTab==='image') _bindBidResizers();
     _renderLinkStatus();
-    if(web) _loadUploadsFor(m);   // 회원 등록 PDF(보기/미등록) 비동기 조회 → 도착 시 재렌더
+    _loadUploadsFor(m);   // 인증서 탭/제출방법용 PDF 로드(탭 무관)
+    _renderDocPanel();    // 우측 문서 패널(위임장/기일입찰표/인증서)
   }
+  // ===== 우측 문서 패널: 물건번호(상단) + 위임장/기일입찰표/인증서 탭 + 출력 =====
+  var _docTab='wijang', _docMulId='';
+  function _renderDocPanel(){
+    var mulBar=document.getElementById('dmDocMul'), tabBar=document.getElementById('dmDocTabs'), body=document.getElementById('dmDocBody');
+    if(!mulBar||!tabBar||!body) return;
+    var m=_msgGroups[_msgFocusGi];
+    if(!m||!m.items||!m.items.length){ mulBar.innerHTML=''; tabBar.innerHTML=''; body.innerHTML='<div style="color:#94a3b8;padding:24px;text-align:center;font-size:13px">좌측에서 회원을 선택하세요.</div>'; return; }
+    var items=m.items;
+    if(!_docMulId || !items.some(function(it){return String(it.link_item_id)===_docMulId;})) _docMulId=String(items[0].link_item_id||'');
+    var curIt=items.filter(function(it){return String(it.link_item_id)===_docMulId;})[0]||items[0];
+    mulBar.innerHTML='<span style="font-size:12px;font-weight:700;color:#475569;margin-right:2px">물건</span>'+items.map(function(it){
+      var id=String(it.link_item_id||''), act=(id===_docMulId);
+      return '<span onclick="DM.docPickMul(\''+esc(id)+'\')" style="cursor:pointer;padding:2px 11px;border-radius:11px;font-size:12px;font-weight:800;'+(act?'background:#1f3a5f;color:#fff':'background:#eef2ff;color:#3730a3')+'">'+esc(it.mulgeon_no||'?')+'</span>';
+    }).join('');
+    var ups=(m.member_id&&_uploadsCache[String(m.member_id)])||{};
+    var certList=(ups&&_docMulId&&ups[_docMulId])||[];
+    var hasCert=certList.length>0;
+    function tb(key,label){ var act=(_docTab===key); return '<button onclick="DM.docTab(\''+key+'\')" style="white-space:nowrap;font-size:12px;font-weight:800;border:1px solid '+(act?'#1f3a5f':'#cbd5e1')+';background:'+(act?'#1f3a5f':'#fff')+';color:'+(act?'#fff':'#475569')+';border-radius:7px;padding:5px 13px;cursor:pointer">'+label+'</button>'; }
+    var certLabel='인증서'+(hasCert?'':' <span style="color:'+(_docTab==='cert'?'#fecaca':'#dc2626')+'">(없음)</span>');
+    tabBar.innerHTML=tb('wijang','위임장')+tb('ipchal','기일입찰표')+tb('cert',certLabel)
+      +'<button onclick="DM.docPrint()" style="margin-left:auto;white-space:nowrap;font-size:12px;font-weight:800;border:0;background:#4f46e5;color:#fff;border-radius:7px;padding:5px 15px;cursor:pointer">🖨 출력</button>';
+    body.innerHTML=_docTabBody(m, curIt, certList);
+  }
+  function _docTabBody(m, it, certList){
+    if(_docTab==='cert'){
+      if(!certList.length) return '<div style="padding:34px;text-align:center"><div style="font-size:15px;font-weight:800;color:#dc2626">전자본인확인서 없음</div><div style="color:#94a3b8;font-size:12px;margin-top:6px">회원이 이 물건(물건번호 '+esc(it.mulgeon_no||'?')+')에 PDF를 등록하면 여기에 표시됩니다.</div></div>';
+      return certList.map(function(u){ var idm=String(u.url).match(/[-\w]{25,}/), src=idm?('https://drive.google.com/file/d/'+idm[0]+'/preview'):u.url; return '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;margin-bottom:4px">📄 '+esc(u.filename||'PDF')+'</div><iframe src="'+esc(src)+'" style="width:100%;height:600px;border:1px solid #cbd5e1;border-radius:6px;background:#fff"></iframe></div>'; }).join('');
+    }
+    if(_msgDetailsLoading) return '<div style="padding:34px;text-align:center;color:#92400e"><span class="dm-spin" style="display:inline-block">⟳</span> 상세정보 불러오는 중…</div>';
+    var det=_msgDetailFor(m, it), p=det.principal;
+    if(!p) return '<div style="padding:34px;text-align:center;color:#dc2626;font-weight:700">회원 상세정보가 없습니다.<div style="color:#94a3b8;font-weight:500;font-size:12px;margin-top:6px">명의/계좌 정보 등록 후 🔄 새로고침 하세요.</div></div>';
+    var ctx=_ctxOf(it), isCorp=String((p.gubun||'')).indexOf('법인')>=0;
+    var agent=det.agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
+    var docHtml=(_docTab==='wijang')?_wijangHtml(p,agent,ctx,isCorp):_ipchalHtml(p,agent,ctx,isCorp);
+    var full='<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><style>'+_DM_PRINT_CSS+'</style></head><body style="margin:0;padding:10px;background:#fff">'+docHtml+'</body></html>';
+    return '<iframe srcdoc="'+esc(full)+'" style="width:100%;height:720px;border:1px solid #cbd5e1;border-radius:6px;background:#fff"></iframe>';
+  }
+  DM.docPickMul=function(id){ _docMulId=String(id); _renderDocPanel(); };
+  DM.docTab=function(which){ _docTab=which; _renderDocPanel(); };
+  DM.docPrint=function(){
+    var m=_msgGroups[_msgFocusGi]; if(!m) return;
+    var it=m.items.filter(function(x){return String(x.link_item_id)===_docMulId;})[0]||m.items[0]; if(!it) return;
+    if(_docTab==='cert'){
+      var ups=(m.member_id&&_uploadsCache[String(m.member_id)])||{}; var list=(ups&&ups[_docMulId])||[];
+      if(!list.length){ alert('전자본인확인서(PDF)가 없습니다.'); return; }
+      DM.viewPdf(list[0].url);   // PDF는 미리보기 창에서 인쇄
+      return;
+    }
+    if(_msgDetailsLoading){ alert('상세정보 로딩중입니다. 잠시 후 다시 시도하세요.'); return; }
+    var det=_msgDetailFor(m, it), p=det.principal; if(!p){ alert('회원 상세정보가 없습니다.'); return; }
+    var ctx=_ctxOf(it), isCorp=String((p.gubun||'')).indexOf('법인')>=0;
+    var agent=det.agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
+    var html=(_docTab==='wijang')?_wijangHtml(p,agent,ctx,isCorp):_ipchalHtml(p,agent,ctx,isCorp);
+    _printHtmlBody(html);
+  };
   // 회원 등록 PDF 캐시(member_id → [{date,filename,url}]). null=조회중, undefined=미조회.
   var _uploadsCache={};   // member_id → { item_id: [{date,filename,url}] }
   function _loadUploadsFor(m){
@@ -1387,7 +1443,7 @@
     _uploadsCache[mid]=null;
     if(typeof google==='undefined'||!google.script||!google.script.run){ _uploadsCache[mid]={}; return; }
     var ids=(m.items||[]).map(function(it){ return String(it.link_item_id||''); }).filter(Boolean);
-    google.script.run.withSuccessHandler(function(map){ _uploadsCache[mid]=map||{}; var cm=_msgGroups[_msgFocusGi]; if(cm&&String(cm.member_id)===mid&&_msgTab==='link') _renderMsgRight(); })
+    google.script.run.withSuccessHandler(function(map){ _uploadsCache[mid]=map||{}; var cm=_msgGroups[_msgFocusGi]; if(cm&&String(cm.member_id)===mid){ if(_msgTab==='link') _renderMsgRight(); else _renderDocPanel(); } })
       .withFailureHandler(function(){ _uploadsCache[mid]={}; }).dmGetUploadsByItems(ids);
   }
   // 모달: 물건별 PDF 등록/보기/삭제 셀
