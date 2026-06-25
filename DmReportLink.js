@@ -201,36 +201,122 @@ function _dmSaveFieldsCore_(memberId, edits) {
   return { success: saved > 0, saved: saved };
 }
 
-/** 전자서명 PDF 업로드(회원 — 토큰 검증) → Drive 저장 + dm_uploads 기록. */
-function dmUploadPdf(token, filename, base64) {
+/** 전자서명 PDF 업로드(회원 — 토큰 검증) → Drive 저장 + dm_uploads 기록. itemId=물건단위(선택). */
+function dmUploadPdf(token, filename, base64, itemId) {
   var data = dmLinkSheet_().getDataRange().getValues();
   var ri = dmFindByToken_(data, token);
   if (ri < 0) return { success: false, msg: '유효하지 않은 링크' };
   var row = data[ri];
   if (String(row[7]) !== 'active') return { success: false, msg: '폐기된 링크' };
-  return _dmSavePdf_(String(row[2] || ''), token, filename, base64);
+  return _dmSavePdf_(String(row[2] || ''), token, filename, base64, itemId);
 }
 
-/** 전자서명 PDF 업로드(관리자 모달 — member_id 직접). */
-function dmUploadPdfByMember(memberId, filename, base64) {
-  return _dmSavePdf_(String(memberId || ''), '', filename, base64);
+/** 전자서명 PDF 업로드(관리자 모달 — member_id 직접). itemId=물건단위(선택). */
+function dmUploadPdfByMember(memberId, filename, base64, itemId) {
+  return _dmSavePdf_(String(memberId || ''), '', filename, base64, itemId);
 }
 
-function _dmSavePdf_(memberId, token, filename, base64) {
+function _dmSavePdf_(memberId, token, filename, base64, itemId) {
   if (!base64) return { success: false, msg: '파일 없음' };
   try {
-    var safe = String(filename || '전자서명.pdf').replace(/[\\/:*?"<>|]/g, '_').trim();
+    var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmm');
+    var info = _dmItemFileInfo_(itemId);                       // { in_date, court, sakun(사건번호+물건번호), mname }
+    // 파일명 = 입찰일자_법원_사건번호(물건번호)_회원명_등록일시.pdf  (한 폴더·사건번호 중복 대비 유일 식별). 정보 없으면 폴백.
+    var parts = [info.in_date, info.court, info.sakun, info.mname, stamp].filter(function (x) { return String(x || '').trim(); });
+    var base = parts.length >= 2 ? parts.join('_') : ((memberId || 'm') + '_' + stamp + '_' + String(filename || '전자서명.pdf').replace(/\.pdf$/i, ''));
+    var safe = String(base).replace(/[\\/:*?"<>|\r\n]+/g, '_').replace(/_+/g, '_').trim();
     if (!/\.pdf$/i.test(safe)) safe += '.pdf';
-    var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
-    var blob = Utilities.newBlob(Utilities.base64Decode(base64), 'application/pdf', (memberId || 'm') + '_' + stamp + '_' + safe);
+    var blob = Utilities.newBlob(Utilities.base64Decode(base64), 'application/pdf', safe);
     var file = _dmPdfFolder_().createFile(blob);
-    file.setDescription('다물건 전자서명 업로드 member=' + memberId + ' token=' + token);
+    file.setDescription('다물건 전자서명 업로드 member=' + memberId + ' token=' + token + ' item=' + (itemId || '') + ' orig=' + (filename || ''));
     var url = file.getUrl();
-    _dmRecordUpload_(token, memberId, safe, url, _dmBiddateFor_(token, memberId));   // 입찰일 기록 → 다음날 자동 삭제
-    return { success: true, url: url, name: safe };
+    _dmRecordUpload_(token, memberId, safe, url, _dmBiddateFor_(token, memberId), itemId);   // 입찰일 기록 → 다음날 자동 삭제
+    return { success: true, url: url, name: safe, item_id: String(itemId || '') };
   } catch (e) {
     return { success: false, msg: (e && e.message) || String(e) };
   }
+}
+
+/** 파일명 생성용: item_id(정확한 키=items.id) → { in_date(입찰일), court(법원), sakun(사건번호+물건번호), mname(회원 기본명) } */
+function _dmItemFileInfo_(itemId) {
+  var out = { in_date: '', court: '', sakun: '', mname: '' };
+  itemId = String(itemId || '').trim();
+  if (!itemId) return out;
+  try {
+    var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);   // 'items'
+    if (!sh || sh.getLastRow() < 2) return out;
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();   // id0 in-date1 sakun_no2 court3 .. m_name6
+    for (var i = 0; i < v.length; i++) {
+      if (String(v[i][0]).trim() === itemId) {
+        out.in_date = (typeof formatParamsDate === 'function') ? String(formatParamsDate(v[i][1]) || '') : String(v[i][1] || '').trim();   // yyMMdd 통일
+        out.sakun = String(v[i][2] || '').trim();
+        out.court = String(v[i][3] || '').trim();
+        var mn = String(v[i][6] || '').trim().replace(/^\([^)]+\)\s*/, '');   // 앞 (구분) 제거
+        out.mname = (mn.split(/[\s(]/)[0] || '').trim();                       // 기본 이름만
+        break;
+      }
+    }
+  } catch (e) {}
+  return out;
+}
+
+/** 전자서명 PDF 삭제 — Drive 휴지통 + dm_uploads 행 제거. token 주면 그 회원 것만 허용(회원 삭제용). */
+function dmDeleteUpload(url, token) {
+  try {
+    url = String(url || '').trim();
+    if (!url) return { success: false, msg: 'url 없음' };
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID), sh = ss.getSheetByName('dm_uploads');
+    if (!sh || sh.getLastRow() < 2) return { success: false, msg: '기록 없음' };
+    var allowMember = '';
+    if (token) {
+      var data = dmLinkSheet_().getDataRange().getValues(), ri = dmFindByToken_(data, token);
+      if (ri < 0) return { success: false, msg: '유효하지 않은 링크' };
+      allowMember = String(data[ri][2] || '').trim();
+    }
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
+    for (var i = 0; i < v.length; i++) {
+      if (String(v[i][4]).trim() === url) {
+        if (token && String(v[i][2]).trim() !== allowMember) return { success: false, msg: '권한 없음' };
+        var idm = url.match(/[-\w]{25,}/);
+        if (idm) { try { DriveApp.getFileById(idm[0]).setTrashed(true); } catch (e) {} }
+        sh.deleteRow(i + 2);
+        return { success: true, item_id: String(v[i][6] || '') };
+      }
+    }
+    return { success: false, msg: '대상 없음' };
+  } catch (e) { return { success: false, msg: (e && e.message) || String(e) }; }
+}
+
+/** 물건(item_id)별 업로드 목록 — { item_id: [{date,filename,url}] } */
+function dmGetUploadsByItems(itemIds) {
+  itemIds = itemIds || [];
+  var want = {}; itemIds.forEach(function (id) { want[String(id).trim()] = 1; });
+  var map = {};
+  try {
+    var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('dm_uploads');
+    if (!sh || sh.getLastRow() < 2 || sh.getLastColumn() < 7) return map;
+    var v = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
+    for (var i = 0; i < v.length; i++) {
+      var iid = String(v[i][6] || '').trim();
+      if (!iid || !want[iid]) continue;
+      if (!map[iid]) map[iid] = [];
+      var d = ''; try { d = Utilities.formatDate(new Date(v[i][0]), Session.getScriptTimeZone(), 'MM/dd HH:mm'); } catch (e) {}
+      map[iid].push({ date: d, filename: String(v[i][3] || ''), url: String(v[i][4] || '') });
+    }
+  } catch (e) {}
+  return map;
+}
+
+/** 업로드(PDF)가 1건이라도 있는 item_id 집합 — 그리드 심볼용. { item_id: true } */
+function _dmItemPdfSet_() {
+  var set = {};
+  try {
+    var sh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName('dm_uploads');
+    if (!sh || sh.getLastRow() < 2 || sh.getLastColumn() < 7) return set;
+    var v = sh.getRange(2, 7, sh.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < v.length; i++) { var iid = String(v[i][0] || '').trim(); if (iid) set[iid] = true; }
+  } catch (e) {}
+  return set;
 }
 
 /** 전자서명 PDF 저장 폴더: 내 드라이브 / MAPS / damulgun_pdf (없으면 생성). */
@@ -280,12 +366,13 @@ function dmGetUploadsBulk(memberIds) {
   return map;
 }
 
-function _dmRecordUpload_(token, memberId, name, url, biddate) {
+function _dmRecordUpload_(token, memberId, name, url, biddate, itemId) {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sh = ss.getSheetByName('dm_uploads');
-    if (!sh) { sh = ss.insertSheet('dm_uploads'); sh.getRange(1, 1, 1, 6).setValues([['date', 'token', 'member_id', 'filename', 'url', 'biddate']]); sh.hideSheet(); }
-    sh.appendRow([new Date(), token, memberId, name, url, String(biddate || '')]);
+    if (!sh) { sh = ss.insertSheet('dm_uploads'); sh.getRange(1, 1, 1, 7).setValues([['date', 'token', 'member_id', 'filename', 'url', 'biddate', 'item_id']]); sh.hideSheet(); }
+    else if (sh.getLastColumn() < 7) { sh.getRange(1, 7).setValue('item_id'); }   // 구버전 6열 → item_id 헤더 보강
+    sh.appendRow([new Date(), token, memberId, name, url, String(biddate || ''), String(itemId || '')]);
   } catch (e) {}
 }
 
@@ -312,7 +399,8 @@ function dmCleanupExpired() {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID), sh = ss.getSheetByName('dm_uploads');
     if (sh && sh.getLastRow() >= 2) {
-      var n = sh.getLastRow() - 1, v = sh.getRange(2, 1, n, 6).getValues(), keep = [];
+      var cols = Math.max(6, sh.getLastColumn());   // item_id(7열) 포함 — 행 재기록 시 어긋남 방지
+      var n = sh.getLastRow() - 1, v = sh.getRange(2, 1, n, cols).getValues(), keep = [];
       for (var i = 0; i < v.length; i++) {
         var bd = String(v[i][5] || '');
         if (bd && dmExpired_(bd)) {
@@ -321,8 +409,8 @@ function dmCleanupExpired() {
           trashed++;
         } else { keep.push(v[i]); kept++; }
       }
-      sh.getRange(2, 1, n, 6).clearContent();
-      if (keep.length) sh.getRange(2, 1, keep.length, 6).setValues(keep);
+      sh.getRange(2, 1, n, cols).clearContent();
+      if (keep.length) sh.getRange(2, 1, keep.length, cols).setValues(keep);
     }
   } catch (e2) { Logger.log('dmCleanupExpired err: ' + e2); }
   Logger.log('dmCleanupExpired: trashedPdf=' + trashed + ' keptPdf=' + kept);

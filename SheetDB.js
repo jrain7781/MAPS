@@ -1343,6 +1343,7 @@ function getDamulgeonList() {
         });
       }
     } catch (e) { Logger.log('[dm grade] ' + e); }
+    var pdfSet = (typeof _dmItemPdfSet_ === 'function') ? _dmItemPdfSet_() : {};   // 전자서명 PDF 등록된 item_id (그리드 심볼용)
     kept.forEach(function(g) {
       g.items.forEach(function(it) {
         var a = byKey[_dmKey3_(it.in_date, it.sakun_no, it.court)];
@@ -1350,6 +1351,7 @@ function getDamulgeonList() {
         var cid = memberClass[String(it.member_id || '')];
         it.grade = cid ? (classGrade[cid] || '') : '';
         it.tg = (memberTg[String(it.member_id || '')] === 'Y') ? 'Y' : '';   // 텔레그램 뱃지용
+        it.has_pdf = !!pdfSet[String(it.link_item_id || '')];                // 전자서명 PDF 등록 여부
       });
       g.items.sort(function(x, y) { return (parseInt(x.mulgeon_no, 10) || 0) - (parseInt(y.mulgeon_no, 10) || 0); });
       g.count = g.items.length;
