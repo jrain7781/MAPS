@@ -181,7 +181,7 @@
     { label:'법원',     f:'court',        t:'ro',     a:'left',   w:60,  src:'items',frozen:true, hideable:true },
     { label:'사건번호', f:'sakun_no',     t:'sakun',  a:'left',   w:116, src:'items',frozen:true, hideable:true },
     { label:'물건종류', f:'prop_kind',    t:'ro',     a:'left',   w:78,  src:'items',frozen:true },
-    { label:'📎',       f:'_pdf',         t:'pdf',    a:'center', w:30,  src:'',     frozen:true },
+    { label:'A',        f:'_pdf',         t:'pdf',    a:'center', w:30,  src:'',     frozen:true },
     { label:'물건',     f:'mulgeon_no',   t:'ro',     a:'center', w:42,  src:'items',frozen:true },
     { label:'상태',     f:'stu_member',   t:'status', a:'center', w:56,  src:'items',frozen:true },
     { label:'T',        f:'tg',           t:'tg',     a:'center', w:28,  src:'link', frozen:true },
@@ -434,7 +434,7 @@
     if(c.t==='auction'){ var aid=String(it.auction_id||'').trim(); return '<td class="'+cls+'" style="'+style+';text-align:center;padding:0">'+(aid?'<button onclick="DM.openAuction(\''+esc(aid)+'\',\''+esc(it.court||'')+'\',\''+esc(it.sakun_no||'')+'\')" title="옥션원 상세 보기" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded transition" style="font-size:10px;padding:2px 6px;cursor:pointer;border:0">옥션원</button>':'')+'</td>'; }
     if(c.t==='sakun') return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(it.sakun_no)+'</span></td>';
     if(c.t==='status'){ var st=String(it.stu_member||''); var k=(typeof getStatusTagClass==='function')?getStatusTagClass(st):''; return '<td class="'+cls+'" style="'+style+'"><span class="'+k+'">'+esc(st)+'</span></td>'; }
-    if(c.t==='pdf'){ return '<td class="'+cls+'" style="'+style+';text-align:center;padding:0">'+(it.has_pdf?'<span title="전자서명 PDF 미리보기" onclick="DM.previewPdf(\''+esc(it.link_item_id)+'\')" style="cursor:pointer;font-size:14px">📎</span>':'<span style="color:#e2e8f0">·</span>')+'</td>'; }
+    if(c.t==='pdf'){ return '<td class="'+cls+'" style="'+style+';text-align:center;padding:0">'+(it.has_pdf?'<span title="전자서명 PDF 미리보기" onclick="DM.previewPdf(\''+esc(it.link_item_id)+'\')" style="cursor:pointer;color:#16a34a;font-size:15px;line-height:1">●</span>':'')+'</td>'; }
     if(c.t==='ro' || c.t==='calc'){
       var v=computed(c.f,it,idx); if(c.num) v=_num(v)?_comma(v):'';
       if(c.f==='mulgeon_no' && it.link_item_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(v)+'</span></td>';   // 사건번호 숨김 시 물건번호로 모달
@@ -1363,19 +1363,22 @@
     return '<div class="dmpdf-list">'+(m.items||[]).map(function(it){
       var iid=String(it.link_item_id||''); var mul=esc(it.mulgeon_no||'')||'?';
       var list=upMap[iid]||[];
-      var files=list.map(function(u){ return '<span class="dmpdf-file"><a href="#" onclick="DM.viewPdf(\''+esc(u.url)+'\');return false">📄 '+esc(u.filename||'PDF')+'</a><button type="button" class="dmpdf-del" title="삭제" onclick="DM.deletePdf(\''+esc(u.url)+'\',this)">🗑</button></span>'; }).join('');
-      return '<div class="dmpdf-row" data-item="'+esc(iid)+'"><span class="dmpdf-mul">물건 '+mul+'</span>'
-        +'<label class="dmpdf-reg">📎 '+(list.length?'추가':'등록')+'<input type="file" accept="application/pdf,.pdf" data-item="'+esc(iid)+'" style="display:none" onchange="DM.uploadPdf&&DM.uploadPdf(this)"></label>'
-        +files+'<span class="dmpdf-msg"></span></div>';
+      var inner;
+      if(list.length){   // 등록됨 → 보기 + 삭제만(등록 버튼 숨김)
+        inner=list.map(function(u){ return '<span class="dmpdf-file"><a href="#" onclick="DM.viewPdf(\''+esc(u.url)+'\');return false">📄 '+esc(u.filename||'PDF')+'</a><button type="button" class="dmpdf-del" title="삭제" onclick="DM.deletePdf(\''+esc(u.url)+'\',this)">🗑 삭제</button></span>'; }).join('');
+      } else {           // 미등록 → 등록 버튼만
+        inner='<label class="dmpdf-reg">PDF 등록하기<input type="file" accept="application/pdf,.pdf" data-item="'+esc(iid)+'" style="display:none" onchange="DM.uploadPdf&&DM.uploadPdf(this)"></label>';
+      }
+      return '<div class="dmpdf-row" data-item="'+esc(iid)+'"><span class="dmpdf-mul">물건 '+mul+'</span>'+inner+'<span class="dmpdf-msg"></span></div>';
     }).join('')+'</div>';
   }
   DM.viewPdf=function(url){
     if(!url) return;
     var idm=String(url).match(/[-\w]{25,}/), src=idm?('https://drive.google.com/file/d/'+idm[0]+'/preview'):url;
-    var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px';
+    var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:120;display:flex;align-items:center;justify-content:center;padding:20px';
     ov.onclick=function(e){ if(e.target===ov&&ov.parentNode) ov.parentNode.removeChild(ov); };
     ov.innerHTML='<div style="position:relative;width:96%;max-width:920px;height:90%;background:#fff;border-radius:10px;overflow:hidden;display:flex;flex-direction:column">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;background:#1f3a5f;color:#fff;flex-shrink:0"><span style="font-weight:800">📄 전자서명 PDF</span><span><a href="'+esc(url)+'" target="_blank" style="color:#fbbf24;font-weight:700;margin-right:14px;text-decoration:none">↗ 새 탭</a><button onclick="var o=this.closest(\'div\').parentNode.parentNode;if(o&&o.parentNode)o.parentNode.removeChild(o)" style="background:#fff;border:0;border-radius:6px;padding:4px 12px;font-weight:800;cursor:pointer">✕ 닫기</button></span></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 13px;background:#1f3a5f;color:#fff;flex-shrink:0"><span style="font-weight:800">📄 전자서명 PDF</span><span><a href="'+esc(url)+'" target="_blank" style="color:#fbbf24;font-weight:700;margin-right:14px;text-decoration:none">↗ 새 탭</a><button onclick="var o=this.closest(\'div\').parentNode.parentNode;if(o&&o.parentNode)o.parentNode.removeChild(o)" style="background:#fff;color:#1f3a5f;border:0;border-radius:6px;padding:4px 12px;font-weight:800;cursor:pointer">✕ 닫기</button></span></div>'
       +'<iframe src="'+esc(src)+'" style="flex:1;width:100%;border:0"></iframe></div>';
     document.body.appendChild(ov);
   };
@@ -1612,7 +1615,7 @@
     } else {
       _esRows.push(['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요']);
     }
-    _esRows.push(['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 <b>물건번호별로 따로 신청</b>하고 물건별로 PDF를 등록하세요. 잘못 등록 시 🗑로 삭제.','hl-r']);
+    _esRows.push(['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 <b>물건번호별로 따로 신청</b>하고 물건별로 PDF를 등록하세요. 잘못 등록 시 🗑 삭제 후 다시 등록.','hl-r','raw']);
     body += blk('전자본인서명 확인서발급', _kvTable(_esRows));
     // 필독 사항 — 개요 위(맨 위). 1번(정보 회신)은 누락 항목이 있을 때만 노출. 숫자는 직접 부여(캡처 시 ol 마커 누락 방지)
     var mustItems=[];

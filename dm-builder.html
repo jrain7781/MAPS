@@ -65,14 +65,18 @@
       var iid = String(it.link_item_id||'');
       var mul = esc(it.mulgeon_no||'') || '?';
       var list = ups[iid] || [];
-      var files = list.map(function(u){
-        return '<span class="dmpdf-file"><a href="'+esc(u.url)+'" target="_blank">📄 '+esc(u.filename||'PDF')+'</a>'
-          + '<button type="button" class="dmpdf-del" title="삭제" onclick="if(window.DMV&&DMV.deletePdf)DMV.deletePdf(\''+esc(u.url)+'\',this)">🗑</button></span>';
-      }).join('');
+      var inner;
+      if(list.length){   // 등록됨 → 파일 + 삭제만(등록 버튼 숨김). 삭제하면 다시 등록 버튼.
+        inner = list.map(function(u){
+          return '<span class="dmpdf-file"><a href="'+esc(u.url)+'" target="_blank">📄 '+esc(u.filename||'PDF')+'</a>'
+            + '<button type="button" class="dmpdf-del" title="삭제" onclick="if(window.DMV&&DMV.deletePdf)DMV.deletePdf(\''+esc(u.url)+'\',this)">🗑 삭제</button></span>';
+        }).join('');
+      } else {           // 미등록 → 등록 버튼만
+        inner = '<label class="dmpdf-btn">PDF 등록하기<input type="file" accept="application/pdf,.pdf" data-item="'+esc(iid)+'" style="display:none" onchange="if(window.DMV&&DMV.uploadPdf){DMV.uploadPdf(this)}else if(window.DM&&DM.uploadPdf){DM.uploadPdf(this)}"></label>';
+      }
       return '<div class="dmpdf-row" data-item="'+esc(iid)+'">'
         + '<span class="dmpdf-mul">물건 '+mul+'</span>'
-        + '<label class="dmpdf-btn">📎 '+(list.length?'추가':'PDF')+'<input type="file" accept="application/pdf,.pdf" data-item="'+esc(iid)+'" style="display:none" onchange="if(window.DMV&&DMV.uploadPdf){DMV.uploadPdf(this)}else if(window.DM&&DM.uploadPdf){DM.uploadPdf(this)}"></label>'
-        + files
+        + inner
         + '<span class="dmpdf-msg"></span>'
         + '</div>';
     }).join('');
@@ -144,7 +148,7 @@
       _cpRow('수임자 주소', firstAgent.address||''),
       _cpRow('수요법원', courtPlain),
       ['제출방법', _pdfPerItemHtml(m),'','raw'],
-      ['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 <b>물건번호별로 따로 신청</b>하고, 위 <b>물건별로 각각 PDF를 올려</b> 주세요. 잘못 올리면 🗑로 삭제 가능합니다.','hl-r']
+      ['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 <b>물건번호별로 따로 신청</b>하고, 위 <b>물건별로 각각 PDF를 올려</b> 주세요. 잘못 올리면 🗑 삭제 후 다시 등록 가능합니다.','hl-r','raw']
     ]));
     var mustItems=[];
     if(_missing) mustItems.push('회원님 정보(<span class="mneed">노란색 칸</span>)를 저장해 주세요~');
