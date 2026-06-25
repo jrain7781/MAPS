@@ -14711,6 +14711,90 @@ MJ 이정우 팀장
             if (_targetTab === 'cancel') _targetTab = 'info';   // 숨긴 물건이력 탭은 회원정보로
         }
         switchMemberDetailTab(_targetTab);
+        loadMyunguiGrid();   // 명의 관리 그리드 로드(회원 있으면 표시, 신규면 숨김)
+    }
+
+    // ─── 명의 관리 (master-detail): getMemberAccounts → 좌 그리드 / 우 상세, saveMyunguiDetail·addMemberMyungui·deleteMemberAccount ───
+    var _myunguiCache = [];
+    function loadMyunguiGrid() {
+        var mid = (document.getElementById('mem-member_id') || {}).value || '';
+        var sec = document.getElementById('mem-myungui-section');
+        var grid = document.getElementById('mem-myungui-grid');
+        _myunguiCache = [];
+        renderMyunguiDetail(null);
+        if (!mid) { if (sec) sec.style.display = 'none'; return; }   // 신규(미저장) 회원은 숨김
+        if (sec) sec.style.display = '';
+        if (grid) grid.innerHTML = '<div class="p-3 text-gray-400 text-xs">불러오는 중…</div>';
+        google.script.run.withSuccessHandler(function (res) {
+            if (!res || !res.success) { if (grid) grid.innerHTML = '<div class="p-3 text-red-500 text-xs">로드 실패: ' + ((res && res.msg) || '') + '</div>'; return; }
+            _myunguiCache = res.accounts || [];
+            renderMyunguiGrid(null);
+        }).withFailureHandler(function (e) { if (grid) grid.innerHTML = '<div class="p-3 text-red-500 text-xs">오류</div>'; }).getMemberAccounts(mid);
+    }
+    function renderMyunguiGrid(selIdx) {
+        var grid = document.getElementById('mem-myungui-grid'); if (!grid) return;
+        grid.innerHTML = _myunguiCache.map(function (a) {
+            var sel = (String(selIdx) === String(a.idx));
+            var label = (a.idx === 0) ? '본인' : ('명의' + a.idx);
+            var gc = ({ '본인': '#2563eb', '개인': '#16a34a', '법인': '#9333ea' })[a.gubun] || '#64748b';
+            return '<div onclick="myunguiSelect(' + a.idx + ')" style="cursor:pointer;padding:7px 9px;border-bottom:1px solid #eef2f7;' + (sel ? 'background:#eef2ff;box-shadow:inset 3px 0 0 #4f46e5' : 'background:#fff') + '">'
+                + '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">'
+                + '<span style="font-weight:700;color:#111827">' + escapeHtml(label) + ' · ' + escapeHtml(a.name || '-') + '</span>'
+                + '<span style="font-size:10px;font-weight:700;color:' + gc + ';background:' + gc + '1a;padding:1px 6px;border-radius:8px">' + escapeHtml(a.gubun || '-') + '</span>'
+                + '</div>'
+                + '<div style="font-size:11px;color:#94a3b8;margin-top:1px">' + (a.jumin_corp ? escapeHtml(a.jumin_corp) : '주민번호 미입력') + (a.saved ? '' : ' <span style="color:#f59e0b">·미저장</span>') + '</div>'
+                + '</div>';
+        }).join('') || '<div class="p-3 text-gray-400 text-xs">명의 없음</div>';
+    }
+    function myunguiSelect(idx) {
+        var a = _myunguiCache.filter(function (x) { return x.idx === idx; })[0];
+        renderMyunguiGrid(idx); renderMyunguiDetail(a);
+    }
+    function renderMyunguiDetail(a) {
+        var empty = document.getElementById('mem-myungui-detail-empty'), form = document.getElementById('mem-myungui-detail-form');
+        if (!form) return;
+        if (!a) { if (empty) empty.style.display = ''; form.style.display = 'none'; return; }
+        if (empty) empty.style.display = 'none'; form.style.display = '';
+        document.getElementById('my-idx').value = a.idx;
+        ['gubun', 'name', 'job', 'jumin_corp', 'biz_no', 'phone', 'address', 'account_bank', 'account_no', 'account_name'].forEach(function (k) {
+            var el = document.getElementById('my-' + k); if (el) el.value = a[k] || '';
+        });
+        var del = document.getElementById('my-delete-btn'); if (del) del.style.display = (a.idx === 0) ? 'none' : '';   // 본인 삭제 불가
+        var gs = document.getElementById('my-gubun'); if (gs) gs.disabled = (a.idx === 0);
+    }
+    function _myunguiCollect() {
+        var d = {};
+        ['gubun', 'name', 'job', 'jumin_corp', 'biz_no', 'phone', 'address', 'account_bank', 'account_no', 'account_name'].forEach(function (k) {
+            d[k] = (document.getElementById('my-' + k) || {}).value || '';
+        });
+        return d;
+    }
+    function myunguiAddNew() {
+        var mid = (document.getElementById('mem-member_id') || {}).value || '';
+        if (!mid) { alert('먼저 회원을 저장한 뒤 명의를 추가하세요.'); return; }
+        renderMyunguiGrid('__new__');
+        renderMyunguiDetail({ idx: '__new__', gubun: '개인', name: '', job: '회사원', jumin_corp: '', biz_no: '', phone: '', address: '', account_bank: '', account_no: '', account_name: '' });
+        var gs = document.getElementById('my-gubun'); if (gs) gs.disabled = false;
+    }
+    function myunguiSave() {
+        var mid = (document.getElementById('mem-member_id') || {}).value || '';
+        var idxRaw = (document.getElementById('my-idx') || {}).value;
+        if (!mid) return;
+        var d = _myunguiCollect();
+        if (!String(d.name || '').trim()) { alert('명의자 이름을 입력하세요.'); return; }
+        var ok = function (res) { if (res && res.success) { showStatus('명의 저장됨', 'success'); loadMyunguiGrid(); } else alert('저장 실패: ' + ((res && res.msg) || '?')); };
+        var fail = function (e) { alert('오류: ' + (e && e.message || e)); };
+        if (idxRaw === '__new__') google.script.run.withSuccessHandler(ok).withFailureHandler(fail).addMemberMyungui(mid, d);
+        else google.script.run.withSuccessHandler(ok).withFailureHandler(fail).saveMyunguiDetail(mid, parseInt(idxRaw, 10), d);
+    }
+    function myunguiDelete() {
+        var mid = (document.getElementById('mem-member_id') || {}).value || '';
+        var idx = parseInt((document.getElementById('my-idx') || {}).value, 10);
+        if (!mid || isNaN(idx) || idx <= 0) { alert('본인은 삭제할 수 없습니다.'); return; }
+        if (!confirm('이 명의를 삭제할까요? (members 명의 슬롯 + 상세 모두 삭제)')) return;
+        google.script.run.withSuccessHandler(function (res) {
+            if (res && res.success) { showStatus('명의 삭제됨', 'success'); loadMyunguiGrid(); } else alert('삭제 실패: ' + ((res && res.msg) || '?'));
+        }).withFailureHandler(function (e) { alert('오류: ' + (e && e.message || e)); }).deleteMemberAccount(mid, idx);
     }
 
     function handleMemberFormSubmitNew() {
@@ -14718,7 +14802,8 @@ MJ 이정우 팀장
         const isEdit = !!memberId;
 
         const data = {};
-        ['member_id', 'class_id', 'gubun', 'member_name', 'name1_gubun', 'name1', 'name2_gubun', 'name2', 'name3_gubun', 'name3', 'name4_gubun', 'name4', 'name5_gubun', 'name5', 'name6_gubun', 'name6', 'name7_gubun', 'name7', 'name8_gubun', 'name8', 'name9_gubun', 'name9', 'name10_gubun', 'name10', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'telegram_enabled', 'kaib_date', 'kakao_name', 'teacher_nickname', 'teacher_color'].forEach(key => {
+        // name1~10 은 하단 '명의 관리' 그리드가 전담(saveMyunguiDetail/add/delete) → 메인 저장 리스트에서 제외(updateMemberNew가 미지정 필드는 보존).
+        ['member_id', 'class_id', 'gubun', 'member_name', 'phone', 'login_id', 'password', 'account_bank', 'account_no', 'account_name', 'address', 'note1', 'note2', 'telegram_enabled', 'kaib_date', 'kakao_name', 'teacher_nickname', 'teacher_color'].forEach(key => {
             data[key] = document.getElementById('mem-' + key)?.value || '';
         });
         // 강사 아닌 회원은 닉네임/색상 저장 안 함 (실수 방지)

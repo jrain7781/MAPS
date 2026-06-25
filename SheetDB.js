@@ -894,6 +894,75 @@ function addMemberMyungui(memberId, data) {
   return { success: true, idx: idx, name: name };
 }
 
+/**
+ * [회원관리 명의 편집] 명의 상세 저장 — member_accounts upsert + members 동기화(분기 저장).
+ *   본인(idx0): 기본필드(phone/address/account_*)는 members 동기화, 직업·주민·사업자번호는 member_accounts.
+ *   명의(idx>=1): members name{idx}/name{idx}_gubun 동기화 + member_accounts 상세.
+ * data = {gubun,name,job,jumin_corp,biz_no,phone,address,account_bank,account_no,account_name}
+ */
+function saveMyunguiDetail(memberId, idx, data) {
+  memberId = String(memberId || '').trim(); idx = parseInt(idx, 10);
+  if (!memberId || isNaN(idx)) return { success: false, msg: '키 오류' };
+  data = data || {};
+  var r = saveMemberAccount(memberId, idx, data);   // 상세 전부 → member_accounts
+  if (!r || !r.success) return r || { success: false, msg: '저장 실패' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { success: true, idx: idx, syncWarn: 'lock' }; }
+  try {
+    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_MEMBERS_SHEET_NAME);
+    if (sheet) {
+      var lr = sheet.getLastRow();
+      var match = sheet.getRange(2, 1, lr - 1, 1).createTextFinder(memberId).matchEntireCell(true).findNext();
+      if (match) {
+        var rowNum = match.getRow();
+        var setCol = function (h, v) { var c = ITEM_MEMBER_HEADERS.indexOf(h); if (c >= 0) sheet.getRange(rowNum, c + 1).setValue(v); };
+        if (idx === 0) {   // 본인 기본필드 동기화(이름은 rename 부작용 방지로 제외)
+          setCol('phone', String(data.phone || '')); setCol('address', String(data.address || ''));
+          setCol('account_bank', String(data.account_bank || '')); setCol('account_no', String(data.account_no || '')); setCol('account_name', String(data.account_name || ''));
+        } else if (idx >= 1 && idx <= 10) {
+          setCol('name' + idx, String(data.name || '')); setCol('name' + idx + '_gubun', String(data.gubun || ''));
+        }
+        SpreadsheetApp.flush();
+      }
+    }
+  } catch (e) { Logger.log('[saveMyunguiDetail sync] ' + e); }
+  finally { try { lock.releaseLock(); } catch (e) {} }
+  return { success: true, idx: idx };
+}
+
+/** [회원관리 명의 편집] 명의 삭제 — member_accounts 행 삭제 + members name{idx}/gubun 비움. 본인(idx0) 불가. */
+function deleteMemberAccount(memberId, idx) {
+  memberId = String(memberId || '').trim(); idx = parseInt(idx, 10);
+  if (!memberId || isNaN(idx)) return { success: false, msg: '키 오류' };
+  if (idx <= 0) return { success: false, msg: '본인은 삭제할 수 없습니다.' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { success: false, msg: 'lock 실패' }; }
+  try {
+    var ash = _getMemberAccountsSheet_();
+    var alr = ash.getLastRow();
+    if (alr >= 2) {
+      var arows = ash.getRange(2, 1, alr - 1, 2).getValues();
+      for (var i = arows.length - 1; i >= 0; i--) {
+        if (String(arows[i][0]).trim() === memberId && parseInt(arows[i][1], 10) === idx) ash.deleteRow(i + 2);
+      }
+    }
+    var msh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_MEMBERS_SHEET_NAME);
+    if (msh) {
+      var mlr = msh.getLastRow();
+      var match = msh.getRange(2, 1, mlr - 1, 1).createTextFinder(memberId).matchEntireCell(true).findNext();
+      if (match) {
+        var rowNum = match.getRow();
+        var nc = ITEM_MEMBER_HEADERS.indexOf('name' + idx), gc = ITEM_MEMBER_HEADERS.indexOf('name' + idx + '_gubun');
+        if (nc >= 0) msh.getRange(rowNum, nc + 1).setValue('');
+        if (gc >= 0) msh.getRange(rowNum, gc + 1).setValue('');
+      }
+    }
+    SpreadsheetApp.flush();
+    return { success: true, idx: idx };
+  } catch (e) { Logger.log('[deleteMemberAccount] ' + e); return { success: false, msg: String(e) }; }
+  finally { try { lock.releaseLock(); } catch (e) {} }
+}
+
 /** 셀 값 → 지수표기 없는 id 문자열 (숫자 저장된 id 안전 비교용) */
 function _idStr_(v) {
   if (v == null) return '';
