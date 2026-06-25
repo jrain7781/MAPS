@@ -14727,7 +14727,12 @@ MJ 이정우 팀장
                 el._myBound = 1;
                 el.addEventListener('input', function () {
                     if (((document.getElementById('mem-member_id') || {}).value || '')) return;   // 수정모드면 무시
-                    _myunguiCache = [_myunguiVirtualBon()]; renderMyunguiGrid(null);
+                    _myunguiCache = [_myunguiVirtualBon()]; renderMyunguiGrid(0);
+                    if (((document.getElementById('my-idx') || {}).value) === '0') {   // 본인 상세 열려있으면 이름/전화 동기화
+                        var n = document.getElementById('my-name'), p = document.getElementById('my-phone');
+                        if (n) n.value = (document.getElementById('mem-member_name') || {}).value || '';
+                        if (p) p.value = (document.getElementById('mem-phone') || {}).value || '';
+                    }
                 });
             }
         });
@@ -14739,9 +14744,9 @@ MJ 이정우 팀장
         _myunguiCache = [];
         renderMyunguiDetail(null);
         _bindMyunguiLiveBon();
-        if (!mid) {   // 신규 등록화면: 본인 명의를 이름·전화로 라이브 표현(저장 후 상세 편집 가능)
+        if (!mid) {   // 신규 등록화면: 본인 명의 라이브 표현 + 우측 상세 자동 열기
             if (sec) sec.style.display = '';
-            _myunguiCache = [_myunguiVirtualBon()]; renderMyunguiGrid(null);
+            _myunguiCache = [_myunguiVirtualBon()]; renderMyunguiGrid(0); renderMyunguiDetail(_myunguiCache[0]);
             return;
         }
         if (sec) sec.style.display = '';
@@ -14749,7 +14754,9 @@ MJ 이정우 팀장
         google.script.run.withSuccessHandler(function (res) {
             if (!res || !res.success) { if (grid) grid.innerHTML = '<div class="p-3 text-red-500 text-xs">로드 실패: ' + ((res && res.msg) || '') + '</div>'; return; }
             _myunguiCache = res.accounts || [];
-            renderMyunguiGrid(null);
+            renderMyunguiGrid(0);
+            var bon = _myunguiCache.filter(function (x) { return x.idx === 0; })[0];
+            if (bon) renderMyunguiDetail(bon);   // 본인 상세 자동 열기
         }).withFailureHandler(function (e) { if (grid) grid.innerHTML = '<div class="p-3 text-red-500 text-xs">오류</div>'; }).getMemberAccounts(mid);
     }
     function renderMyunguiGrid(selIdx) {
@@ -14780,6 +14787,8 @@ MJ 이정우 팀장
         ['gubun', 'name', 'job', 'jumin_corp', 'biz_no', 'phone', 'address', 'account_bank', 'account_no', 'account_name'].forEach(function (k) {
             var el = document.getElementById('my-' + k); if (el) el.value = a[k] || '';
         });
+        var isBon = (a.idx === 0);   // 본인 이름·전화는 위쪽 폼과 연동(읽기전용 표시) — 본인은 위 폼에서만 수정
+        ['name', 'phone'].forEach(function (k) { var el = document.getElementById('my-' + k); if (el) { el.readOnly = isBon; el.style.background = isBon ? '#f1f5f9' : ''; el.title = isBon ? '본인 이름·전화는 위쪽 폼에서 수정 (여기엔 연동되어 표시)' : ''; } });
         var del = document.getElementById('my-delete-btn'); if (del) del.style.display = (a.idx === 0) ? 'none' : '';   // 본인 삭제 불가
         var gs = document.getElementById('my-gubun');
         if (gs) {
