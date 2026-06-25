@@ -131,16 +131,28 @@ function dmRenderData(token, last4) {
     its.forEach(function (it) { var iid = String((it && it.link_item_id) || '').trim(); if (iid) ids.push(iid); });
     if (ids.length) uploads = dmGetUploadsByItems(ids);
   } catch (e3) {}
-  // 진행비 동적 반영: 최신 jinhaengbi(다물건 시트, 3키) 읽어 _fee 재계산 → 회원 새로고침 = 최신 진행비(링크 재생성 불필요)
+  // 입찰표 통째 동적 반영: ITEMS(입찰가·보증금) + 다물건(진행비) 최신값 읽어 한 번에 갱신 → 회원 새로고침 = 항상 일관된 최신(부분 갱신 없음, 링크 재생성 불필요)
   try {
     var fitems = (pl.m && pl.m.items) || [];
     if (fitems.length) {
+      // 1) ITEMS 최신값 (id0 in_date1 sakun_no2 court3 m_name6 bidprice7 member_id8 deposit21 lowest_price22) — 1회 일괄 읽기
+      var ish = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME), imap = {};
+      if (ish && ish.getLastRow() > 1) {
+        ish.getRange(2, 1, ish.getLastRow() - 1, 23).getValues().forEach(function (r) { var id = String(r[0] || '').trim(); if (id) imap[id] = r; });
+      }
+      // 2) 다물건 최신 진행비(3키)
       var dmAll = readAllDamulgeon(), feeMap = {};
       dmAll.forEach(function (e) { feeMap[_dmKey3_(e.in_date, e.sakun_no, e.court)] = String(e.jinhaengbi == null ? '' : e.jinhaengbi); });
-      fitems.forEach(function (it) { var k = _dmKey3_(it.in_date, it.sakun_no, it.court); it.jinhaengbi = (feeMap[k] != null ? feeMap[k] : ''); });
-      dmComputeFees_(fitems);
+      // 3) 물건 집합은 고정, 값(입찰가·보증금·진행비)만 최신으로
+      fitems.forEach(function (it) {
+        var r = imap[String(it.link_item_id || '').trim()];
+        if (r) { it.bidprice = String(r[7] || ''); it.deposit = String(r[21] || ''); }
+        var k = _dmKey3_(it.in_date, it.sakun_no, it.court);
+        it.jinhaengbi = (feeMap[k] != null ? feeMap[k] : '');
+      });
+      dmComputeFees_(fitems);   // _fee = 유효진행비(수동 우선) 재계산
     }
-  } catch (eF) { Logger.log('[dmRenderData fee] ' + eF); }
+  } catch (eF) { Logger.log('[dmRenderData live] ' + eF); }
   return { status: 'ok', payload: pl, detailMap: detailMap, uploads: uploads, title: title };
 }
 
