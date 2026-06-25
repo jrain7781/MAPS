@@ -14716,13 +14716,34 @@ MJ 이정우 팀장
 
     // ─── 명의 관리 (master-detail): getMemberAccounts → 좌 그리드 / 우 상세, saveMyunguiDetail·addMemberMyungui·deleteMemberAccount ───
     var _myunguiCache = [];
+    // 신규 등록화면용 가상 본인 명의 — 위쪽 폼 이름·전화로 라이브 표현(저장 전)
+    function _myunguiVirtualBon() {
+        return { idx: 0, gubun: '본인', name: (document.getElementById('mem-member_name') || {}).value || '', job: '회사원', jumin_corp: '', biz_no: '', phone: (document.getElementById('mem-phone') || {}).value || '', address: '', account_bank: '', account_no: '', account_name: '', saved: false };
+    }
+    function _bindMyunguiLiveBon() {
+        ['mem-member_name', 'mem-phone'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && !el._myBound) {
+                el._myBound = 1;
+                el.addEventListener('input', function () {
+                    if (((document.getElementById('mem-member_id') || {}).value || '')) return;   // 수정모드면 무시
+                    _myunguiCache = [_myunguiVirtualBon()]; renderMyunguiGrid(null);
+                });
+            }
+        });
+    }
     function loadMyunguiGrid() {
         var mid = (document.getElementById('mem-member_id') || {}).value || '';
         var sec = document.getElementById('mem-myungui-section');
         var grid = document.getElementById('mem-myungui-grid');
         _myunguiCache = [];
         renderMyunguiDetail(null);
-        if (!mid) { if (sec) sec.style.display = 'none'; return; }   // 신규(미저장) 회원은 숨김
+        _bindMyunguiLiveBon();
+        if (!mid) {   // 신규 등록화면: 본인 명의를 이름·전화로 라이브 표현(저장 후 상세 편집 가능)
+            if (sec) sec.style.display = '';
+            _myunguiCache = [_myunguiVirtualBon()]; renderMyunguiGrid(null);
+            return;
+        }
         if (sec) sec.style.display = '';
         if (grid) grid.innerHTML = '<div class="p-3 text-gray-400 text-xs">불러오는 중…</div>';
         google.script.run.withSuccessHandler(function (res) {
@@ -14779,7 +14800,7 @@ MJ 이정우 팀장
     function myunguiSave() {
         var mid = (document.getElementById('mem-member_id') || {}).value || '';
         var idxRaw = (document.getElementById('my-idx') || {}).value;
-        if (!mid) return;
+        if (!mid) { alert('먼저 위에서 회원을 [등록]한 뒤 명의 상세(주민번호·계좌 등)를 저장할 수 있습니다.\n본인 이름·전화는 위쪽 폼에 입력하면 자동 반영됩니다.'); return; }
         var d = _myunguiCollect();
         if (!String(d.name || '').trim()) { alert('명의자 이름을 입력하세요.'); return; }
         var ok = function (res) { if (res && res.success) { showStatus('명의 저장됨', 'success'); loadMyunguiGrid(); } else alert('저장 실패: ' + ((res && res.msg) || '?')); };
