@@ -14781,7 +14781,13 @@ MJ 이정우 팀장
             var el = document.getElementById('my-' + k); if (el) el.value = a[k] || '';
         });
         var del = document.getElementById('my-delete-btn'); if (del) del.style.display = (a.idx === 0) ? 'none' : '';   // 본인 삭제 불가
-        var gs = document.getElementById('my-gubun'); if (gs) gs.disabled = (a.idx === 0);
+        var gs = document.getElementById('my-gubun');
+        if (gs) {
+            gs.disabled = (a.idx === 0);   // 본인 행은 구분 고정
+            var bonOpt = gs.querySelector('option[value="본인"]');
+            if (bonOpt) { var notBon = (a.idx !== 0); bonOpt.disabled = notBon; bonOpt.hidden = notBon; }   // 추가명의(idx>=1/신규)는 본인 옵션 숨김 → 개인/법인만
+            if (a.idx !== 0 && gs.value === '본인') gs.value = '개인';   // 혹시 본인으로 와있으면 개인으로 보정
+        }
     }
     function _myunguiCollect() {
         var d = {};
