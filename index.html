@@ -2221,13 +2221,11 @@
                         <button id="dmBulkPrintBtn" onclick="DM.bulkPrint()" title="체크된 물건 위임장+기일입찰표 일괄 인쇄"
                             class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-1 rounded font-bold" style="font-size:12px;white-space:nowrap;flex-shrink:0">🖨 일괄프린트</button>
                         <span style="border-left:1px solid #e5e7eb;height:20px;margin:0 2px;flex-shrink:0"></span>
+                        <button id="dmQGenBtn" onclick="DM.openQGenModal()" title="? 임의물건(placeholder) 자동 생성"
+                            class="bg-violet-600 hover:bg-violet-700 text-white px-3 py-1 rounded font-bold" style="font-size:12px;white-space:nowrap;flex-shrink:0">➕ 임의물건생성</button>
                         <button id="dmRefreshBtn" onclick="DM.refreshGroup()" title="이 사건만 새로고침"
                             class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded font-bold border border-slate-300" style="font-size:12px;white-space:nowrap;flex-shrink:0">↻ 새로고침</button>
                         <span id="dmGridInfo" class="text-gray-400" style="font-size:12px"></span>
-                        <span style="flex-shrink:0;white-space:nowrap;font-size:11px;color:#94a3b8;margin-left:4px">제목색:
-                            <span style="background:#dbeafe;padding:0 4px;border-radius:3px">ITEMS</span>
-                            <span style="background:#fef9c3;padding:0 4px;border-radius:3px">다물건입력</span>
-                            <span style="background:#dcfce7;padding:0 4px;border-radius:3px">수식</span></span>
                         <span id="dmSaveDot" class="text-green-600 font-bold" style="flex-shrink:0;font-size:12px;opacity:0;transition:opacity .3s;margin-left:8px"></span>
                         <button onclick="DM.exportCsv()"
                             class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded font-bold" style="font-size:12px;margin-left:auto;flex-shrink:0;white-space:nowrap">📥 엑셀(CSV) 출력</button>
@@ -2257,6 +2255,65 @@
                         <div id="dmMcBody" class="dm-mcard-body"></div>
                     </div>
                 </main>
+
+                <!-- ? 임의물건 생성 모달 -->
+                <div id="dmQGenModal" class="content-hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)DM.qGenClose()">
+                    <div style="background:#fff;border-radius:10px;width:600px;max-width:94vw;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+                        <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:8px">
+                            <h3 style="font-size:16px;font-weight:800;color:#111827">➕ ? 임의물건 생성</h3>
+                            <span id="dmQGenCount" style="font-size:12px;color:#6b7280"></span>
+                            <button onclick="DM.qGenClose()" style="margin-left:auto;font-size:18px;color:#9ca3af;line-height:1">✕</button>
+                        </div>
+                        <!-- 입력 -->
+                        <div style="padding:14px 16px;border-bottom:1px solid #f1f5f9">
+                            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px 12px">
+                                <label style="font-size:12px;color:#475569">입찰일자
+                                    <input id="dmQGenInDate" type="text" placeholder="예: 250630" autocomplete="off"
+                                        onfocus="this.select()" onclick="this.select()"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px"></label>
+                                <label style="font-size:12px;color:#475569">법원
+                                    <input id="dmQGenCourt" type="text" placeholder="예: 서울중앙지방법원" autocomplete="off"
+                                        onfocus="this.select()" onclick="this.select()"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px"></label>
+                                <label style="font-size:12px;color:#475569">사건번호 <span style="color:#7c3aed">(끝에 (?N) 자동부착)</span>
+                                    <input id="dmQGenSakun" type="text" placeholder="예: 2024타경12345" autocomplete="off"
+                                        onfocus="this.select()" onclick="this.select()"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px"></label>
+                                <label style="font-size:12px;color:#475569">담당
+                                    <input id="dmQGenManager" type="text" placeholder="대표님" autocomplete="off"
+                                        onfocus="this.select()" onclick="this.select()"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px"></label>
+                            </div>
+                            <div style="display:flex;align-items:flex-end;gap:10px;margin-top:10px">
+                                <label style="font-size:12px;color:#475569">생성 개수
+                                    <input id="dmQGenCnt" type="number" min="1" max="100" value="1"
+                                        onfocus="this.select()" onclick="this.select()"
+                                        style="display:block;width:90px;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px;text-align:center"></label>
+                                <button id="dmQGenSubmitBtn" onclick="DM.qGenSubmit()"
+                                    class="bg-violet-600 hover:bg-violet-700 text-white font-bold rounded" style="padding:7px 18px;font-size:13px">생성</button>
+                                <span id="dmQGenNext" style="font-size:12px;color:#7c3aed;font-weight:700"></span>
+                            </div>
+                        </div>
+                        <!-- 현재 ?물건 리스트 -->
+                        <div style="flex:1;overflow:auto;padding:10px 16px;min-height:120px">
+                            <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px">현재 ?임의물건 <span id="dmQGenListCnt" style="color:#7c3aed"></span></div>
+                            <table style="width:100%;border-collapse:collapse;font-size:12px">
+                                <thead>
+                                    <tr style="background:#f8fafc;color:#64748b;text-align:left">
+                                        <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">?번호</th>
+                                        <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">사건번호</th>
+                                        <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">법원</th>
+                                        <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">입찰일</th>
+                                        <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">담당</th>
+                                        <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">상태</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dmQGenList"></tbody>
+                            </table>
+                        </div>
+                        <div id="dmQGenStatus" style="padding:8px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f1f5f9"></div>
+                    </div>
+                </div>
 
                 <!-- 일괄작업 모달 (상단 값입력/회원검색 + 하단 선택 물건 리스트) -->
                 <div id="dmBulkModal" class="content-hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)DM.bulkClose()">

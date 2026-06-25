@@ -1919,6 +1919,72 @@
 
   // ===== 회원매칭 모달 (?임의등록 입찰 회원 → 실제 물건 배정). 독립 이동 가능 =====
   var _matchMembers=[], _matchItems=[], _matchActive=0, _matchAssign={};   // assign: realItemId → 회원 index
+  // ===== ? 임의물건 생성 모달 =====
+  function _qGenEl(id){ return document.getElementById(id); }
+  function _qGenStatus(msg,type){ var el=_qGenEl('dmQGenStatus'); if(!el) return; el.style.color=(type==='error'?'#dc2626':(type==='success'?'#16a34a':'#6b7280')); el.textContent=msg||''; }
+  DM.openQGenModal=function(){
+    var m=_qGenEl('dmQGenModal'); if(!m) return;
+    // 선택한 사건이 있으면 입력칸 프리필 (그 사건에 ?물건 추가하는 흐름)
+    var g=_groups.filter(function(x){return x.group_key===_selKey;})[0];
+    if(g){
+      if(_qGenEl('dmQGenInDate')) _qGenEl('dmQGenInDate').value=g.in_date||'';
+      if(_qGenEl('dmQGenSakun')) _qGenEl('dmQGenSakun').value=g.sakun_base||'';
+      if(_qGenEl('dmQGenCourt')) _qGenEl('dmQGenCourt').value=g.court||'';
+      var mgr=''; for(var i=0;i<g.items.length;i++){ if(String(g.items[i].m_name_id||'').trim()){ mgr=g.items[i].m_name_id; break; } }
+      if(_qGenEl('dmQGenManager')) _qGenEl('dmQGenManager').value=mgr;
+    }
+    if(_qGenEl('dmQGenCnt')) _qGenEl('dmQGenCnt').value='1';
+    _qGenStatus('');
+    m.classList.remove('content-hidden');
+    DM.qGenLoad();
+  };
+  DM.qGenClose=function(){ var m=_qGenEl('dmQGenModal'); if(m) m.classList.add('content-hidden'); };
+  DM.qGenLoad=function(){
+    var body=_qGenEl('dmQGenList'); if(body) body.innerHTML='<tr><td colspan="6" style="padding:10px;text-align:center;color:#9ca3af">불러오는 중…</td></tr>';
+    if(typeof google==='undefined'||!google.script||!google.script.run) return;
+    google.script.run.withSuccessHandler(_renderQGen).withFailureHandler(function(e){ if(body) body.innerHTML='<tr><td colspan="6" style="padding:10px;text-align:center;color:#dc2626">로드 실패: '+(e&&e.message||e)+'</td></tr>'; }).getQItemsInfo();
+  };
+  function _renderQGen(info){
+    info=info||{count:0,nextNum:1,items:[]};
+    var cEl=_qGenEl('dmQGenCount'); if(cEl) cEl.textContent='전체 '+(info.count||0)+'개';
+    var lcEl=_qGenEl('dmQGenListCnt'); if(lcEl) lcEl.textContent=(info.count||0)+'개';
+    var nEl=_qGenEl('dmQGenNext'); if(nEl) nEl.textContent='다음 번호 → ?'+(info.nextNum||1)+' 부터';
+    var body=_qGenEl('dmQGenList'); if(!body) return;
+    if(!info.items||!info.items.length){ body.innerHTML='<tr><td colspan="6" style="padding:12px;text-align:center;color:#9ca3af">아직 ?임의물건이 없습니다.</td></tr>'; return; }
+    body.innerHTML=info.items.map(function(it){
+      return '<tr style="border-bottom:1px solid #f1f5f9">'
+        +'<td style="padding:4px 6px;font-weight:800;color:#7c3aed;white-space:nowrap">?'+esc(it.qnum)+'</td>'
+        +'<td style="padding:4px 6px">'+esc(it.sakun_no)+'</td>'
+        +'<td style="padding:4px 6px;color:#1d4ed8">'+esc(it.court)+'</td>'
+        +'<td style="padding:4px 6px">'+esc(it.in_date)+'</td>'
+        +'<td style="padding:4px 6px">'+esc(it.m_name_id)+'</td>'
+        +'<td style="padding:4px 6px">'+esc(it.stu_member)+'</td>'
+        +'</tr>';
+    }).join('');
+  }
+  DM.qGenSubmit=function(){
+    var inDate=(_qGenEl('dmQGenInDate')||{}).value||'';
+    var sakun=(_qGenEl('dmQGenSakun')||{}).value||'';
+    var court=(_qGenEl('dmQGenCourt')||{}).value||'';
+    var mgr=(_qGenEl('dmQGenManager')||{}).value||'';
+    var cnt=parseInt((_qGenEl('dmQGenCnt')||{}).value,10);
+    if(!String(sakun).trim()){ _qGenStatus('사건번호를 입력하세요.','error'); return; }
+    if(!String(court).trim()){ _qGenStatus('법원을 입력하세요.','error'); return; }
+    if(isNaN(cnt)||cnt<1){ _qGenStatus('생성 개수를 1 이상 입력하세요.','error'); return; }
+    if(cnt>100){ _qGenStatus('1회 최대 100개까지 가능합니다.','error'); return; }
+    if(typeof google==='undefined'||!google.script||!google.script.run){ _qGenStatus('실행 환경이 아닙니다.','error'); return; }
+    var btn=_qGenEl('dmQGenSubmitBtn'); if(btn){ btn.disabled=true; btn.textContent='생성 중…'; }
+    _qGenStatus('생성 중…','info');
+    google.script.run.withSuccessHandler(function(r){
+      if(btn){ btn.disabled=false; btn.textContent='생성'; }
+      if(r&&r.success){
+        _renderQGen(r.info);
+        _qGenStatus('✓ '+r.created+'개 생성 완료 (?'+r.fromNum+'~?'+r.toNum+')','success');
+        if(DM.load) DM.load();   // 좌측 리스트+그리드 갱신
+      } else { _qGenStatus('실패: '+((r&&r.message)||'알 수 없음'),'error'); }
+    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.textContent='생성'; } _qGenStatus('오류: '+(e&&e.message||e),'error'); }).generateQItems(inDate,sakun,court,mgr,cnt);
+  };
+
   DM.openMatchModal=function(){
     var its=curItems(); if(!its.length){ alert('사건을 먼저 선택하세요.'); return; }
     var qByMem={}, order=[];   // 좌: ?임의등록 + 입찰 회원
