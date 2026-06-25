@@ -42,7 +42,8 @@
   #dmMsgReport .dmpdf-mul { font-weight:800; color:#1f3a5f; min-width:50px; }
   #dmMsgReport .dmpdf-file { display:inline-flex; align-items:center; gap:3px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:6px; padding:2px 7px; font-size:.82em; }
   #dmMsgReport .dmpdf-file a { color:#1d4ed8; text-decoration:none; word-break:break-all; }
-  #dmMsgReport .dmpdf-del { border:0; background:transparent; cursor:pointer; font-size:.95em; line-height:1; padding:0 2px; color:#dc2626; }
+  #dmMsgReport .dmpdf-del { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; border-radius:6px; padding:3px 11px; font-size:.82em; font-weight:800; cursor:pointer; white-space:nowrap; }
+  #dmMsgReport .dmpdf-del:active { background:#fee2e2; }
   #dmMsgReport .dmneed { color:#92400e; font-weight:700; }
   /* 기본: 채워진칸=값 / 빈칸=입력. 수정모드(.editmode): 전부 입력 */
   #dmMsgReport .dmf > .dmedit, #dmMsgReport .dmf > .dmedit-acct { display:none; }
@@ -739,13 +740,39 @@
       var body='';
       for(var i=0;i<its.length;i++){ var r=res&&res[i]; if(!r||!r.success) continue; body+=_docsFor(r.principal, r.agent, its[i]); }
       if(!body){ alert('출력할 데이터가 없습니다(명의 정보 확인).'); return; }
-      _printHtmlBody(body);
-      // 회원이 등록한 전자서명 PDF 같이 출력 — 브라우저는 HTML+PDF 단일 인쇄가 안 되므로, 첨부 PDF는 클릭 인쇄용 패널로
-      var mids={}, nameById={};
-      its.forEach(function(it){ if(it.member_id){ var k=String(it.member_id); mids[k]=1; nameById[k]=_parseMName(it.member_name,it.member_id).member||it.member_name||k; } });
-      google.script.run.withSuccessHandler(function(map){ _showBulkPdfPanel(map, nameById); }).withFailureHandler(function(){}).dmGetUploadsBulk(Object.keys(mids));
+      _printHtmlBody(body);   // 위임장+기일입찰표만(전자본인 PDF는 '전자본인 일괄프린트' 버튼)
     }).withFailureHandler(function(e){ done(); alert('일괄출력 실패: '+(e&&e.message)); }).getBulkDaeriipchalData(reqs);
   };
+  // 전자본인서명 PDF 일괄(체크된 물건만) — 물건별 PDF 패널(클릭→미리보기 인쇄). ※합본 인쇄는 추후(pdf-lib)
+  DM.bulkPrintPdf=function(){
+    var ids=DM.selectedIds();
+    if(!ids||!ids.length){ alert('프린트할 물건을 체크하세요.'); return; }
+    var its=ids.map(function(id){ return curItems().filter(function(x){return String(x.link_item_id)===String(id);})[0]; }).filter(Boolean);
+    if(!its.length){ alert('선택된 물건이 없습니다.'); return; }
+    var btn=document.getElementById('dmBulkPdfPrintBtn'), o=btn?btn.innerHTML:'';
+    if(btn){ btn.disabled=true; btn.innerHTML='준비중…'; }
+    google.script.run.withSuccessHandler(function(map){
+      if(btn){ btn.disabled=false; btn.innerHTML=o||'🖨 전자본인 일괄프린트'; }
+      _showItemsPdfPanel(its, map||{});
+    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.innerHTML=o; } alert('조회 오류: '+(e&&e.message||e)); }).dmGetUploadsByItems(ids);
+  };
+  function _showItemsPdfPanel(its, map){
+    var old=document.getElementById('dmBulkPdfPanel'); if(old&&old.parentNode) old.parentNode.removeChild(old);
+    var nReg=0;
+    var rows=its.map(function(it){
+      var iid=String(it.link_item_id||''); var list=map[iid]||[];
+      var mem=_parseMName(it.member_name,it.member_id).member||'';
+      var head='<div style="font-weight:700;font-size:12px;margin:7px 0 2px;color:#334155">물건 '+esc(it.mulgeon_no||'?')+(mem?(' · '+esc(mem)):'')+'</div>';
+      if(!list.length) return head+'<div style="font-size:11px;color:#dc2626;margin-bottom:2px">미등록</div>';
+      nReg+=list.length;
+      return head+list.map(function(u){ return '<button onclick="DM.viewPdf(\''+esc(u.url)+'\')" style="display:block;width:100%;text-align:left;margin:2px 0;background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer">📄 '+esc(u.filename||'PDF')+'</button>'; }).join('');
+    }).join('');
+    var p=document.createElement('div'); p.id='dmBulkPdfPanel';
+    p.style.cssText='position:fixed;right:16px;bottom:16px;z-index:70;width:330px;max-height:66vh;overflow:auto;background:#f8fafc;border:1px solid #94a3b8;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:11px 13px';
+    p.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><b style="font-size:13px">📎 전자본인 PDF (체크 '+its.length+'건 · PDF '+nReg+'개)</b><button onclick="var x=document.getElementById(\'dmBulkPdfPanel\');if(x&&x.parentNode)x.parentNode.removeChild(x)" style="border:0;background:transparent;font-size:16px;cursor:pointer;color:#64748b">✕</button></div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-bottom:2px">클릭 → 미리보기에서 인쇄하세요. (합본 인쇄는 준비중)</div>'+rows;
+    document.body.appendChild(p);
+  }
   function _showBulkPdfPanel(map, nameById){
     var old=document.getElementById('dmBulkPdfPanel'); if(old&&old.parentNode) old.parentNode.removeChild(old);
     map=map||{}; nameById=nameById||{};
@@ -968,7 +995,7 @@
     var checkedN=0; tbody.querySelectorAll('.dm-row-cb').forEach(function(cb){ if(prevSel[cb.getAttribute('data-id')]){ cb.checked=true; checkedN++; } });
     var ca=document.getElementById('dmCheckAll'); if(ca) ca.checked=(items.length>0 && checkedN===items.length);
     var info=document.getElementById('dmGridInfo');
-    if(info){ var tot=curItems().length, sh=items.length; info.textContent = (sh===tot? ('물건 '+tot+'건') : ('표시 '+sh+'/'+tot+'건')) + ' · 수동필드 입력 시 자동저장'; }
+    if(info){ var tot=curItems().length, sh=items.length; info.textContent = (sh===tot? ('물건 '+tot+'건') : ('표시 '+sh+'/'+tot+'건')); }
   }
   DM.applyFilter = function(){ renderBody(); };
 
@@ -1197,6 +1224,12 @@
   function _won(n){ n=_num(n); return n?n.toLocaleString('ko-KR'):'0'; }
   var _msgDetailMap={}, _msgFocusGi=0, _msgSel={}, _msgTab='link';   // 상세=회원||명의 키, 선택=gi, 탭=link(웹링크 미리보기)/image(캡처)
   var _msgDetailsLoading=false;   // 명의 상세(전화·주민·계좌·등급) 서버 조회 중 — 보고서에 "불러오는 중" 명시
+  // 입찰안내 버튼: 체크 불필요 — 이 사건의 입찰 물건 전체로 모달 오픈
+  DM.openMsgAll = function(){
+    var its=curItems().filter(function(it){ return String(it.stu_member||'').trim()==='입찰'; });
+    if(!its.length){ alert('이 사건에 입찰 상태인 물건이 없습니다.'); return; }
+    DM.openMsgModal(its);
+  };
   DM.openMsgModal = function(targets){
     targets=(targets||[]).filter(function(it){ return String(it.stu_member||'').trim()==='입찰'; });   // 메세지(입찰안내)는 물건상태=입찰 물건만 대상
     if(!targets.length){ alert('입찰 상태인 물건이 없습니다.\n메세지(입찰안내)는 입찰 물건만 열립니다.'); return; }
