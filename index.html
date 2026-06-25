@@ -2266,44 +2266,57 @@
                         </div>
                         <!-- 입력 -->
                         <div style="padding:14px 16px;border-bottom:1px solid #f1f5f9">
-                            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px 12px">
+                            <!-- 선택한 사건(키값, 수정 불가) -->
+                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px 12px">
                                 <label style="font-size:12px;color:#475569">입찰일자
-                                    <input id="dmQGenInDate" type="text" placeholder="예: 250630" autocomplete="off"
-                                        onfocus="this.select()" onclick="this.select()"
-                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px"></label>
+                                    <input id="dmQGenInDate" type="text" readonly tabindex="-1"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:13px;background:#f1f5f9;color:#475569;cursor:not-allowed"></label>
                                 <label style="font-size:12px;color:#475569">법원
-                                    <input id="dmQGenCourt" type="text" placeholder="예: 서울중앙지방법원" autocomplete="off"
-                                        onfocus="this.select()" onclick="this.select()"
-                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px"></label>
-                                <label style="font-size:12px;color:#475569">사건번호 <span style="color:#7c3aed">(끝에 (?N) 자동부착)</span>
-                                    <input id="dmQGenSakun" type="text" placeholder="예: 2024타경12345" autocomplete="off"
-                                        onfocus="this.select()" onclick="this.select()"
-                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px"></label>
-                                <label style="font-size:12px;color:#475569">담당
-                                    <input id="dmQGenManager" type="text" placeholder="대표님" autocomplete="off"
-                                        onfocus="this.select()" onclick="this.select()"
-                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px"></label>
+                                    <input id="dmQGenCourt" type="text" readonly tabindex="-1"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:13px;background:#f1f5f9;color:#475569;cursor:not-allowed"></label>
+                                <label style="font-size:12px;color:#475569">사건번호
+                                    <input id="dmQGenSakun" type="text" readonly tabindex="-1"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:13px;background:#f1f5f9;color:#475569;cursor:not-allowed"></label>
                             </div>
-                            <div style="display:flex;align-items:flex-end;gap:10px;margin-top:10px">
+                            <div style="font-size:11px;color:#94a3b8;margin-top:4px">↑ 선택한 사건(수정 불가) · 물건번호는 <b style="color:#7c3aed">(?N)</b> 자동 부착</div>
+                            <!-- 회원 / 상태 / 담당 / 개수 -->
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:10px">
+                                <label style="font-size:12px;color:#475569;position:relative;display:block">회원 <span style="color:#7c3aed">(추천·입찰 시 필수)</span>
+                                    <input id="dmQGenMember" type="text" autocomplete="off" spellcheck="false" placeholder="이름 입력 (예: 이정우)"
+                                        oninput="DM.qMemAcInput()" onfocus="DM.qMemAcInput()" onblur="DM.qMemAcBlur()"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px">
+                                    <input type="hidden" id="dmQGenMemberId">
+                                    <ul id="dmQGenMemberAc" style="display:none;position:absolute;left:0;top:100%;z-index:60;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:220px;overflow:auto;min-width:240px;margin:3px 0 0;padding:4px;list-style:none"></ul></label>
+                                <label style="font-size:12px;color:#475569">상태
+                                    <select id="dmQGenStu" style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px;background:#fff">
+                                        <option value="추천">추천</option>
+                                        <option value="입찰">입찰</option>
+                                        <option value="상품">상품</option>
+                                        <option value="미정">미정</option>
+                                    </select></label>
+                                <label style="font-size:12px;color:#475569">담당
+                                    <input id="dmQGenManager" type="text" placeholder="대표님" autocomplete="off" onfocus="this.select()" onclick="this.select()"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px"></label>
                                 <label style="font-size:12px;color:#475569">생성 개수
-                                    <input id="dmQGenCnt" type="number" min="1" max="100" value="1"
-                                        onfocus="this.select()" onclick="this.select()"
-                                        style="display:block;width:90px;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px;text-align:center"></label>
+                                    <input id="dmQGenCnt" type="number" min="1" max="100" value="1" onfocus="this.select()" onclick="this.select()"
+                                        style="display:block;width:100%;margin-top:3px;border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px;text-align:center"></label>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
                                 <button id="dmQGenSubmitBtn" onclick="DM.qGenSubmit()"
                                     class="bg-violet-600 hover:bg-violet-700 text-white font-bold rounded" style="padding:7px 18px;font-size:13px">생성</button>
                                 <span id="dmQGenNext" style="font-size:12px;color:#7c3aed;font-weight:700"></span>
+                                <span id="dmQGenMemInfo" style="font-size:12px;font-weight:700;margin-left:auto"></span>
                             </div>
                         </div>
-                        <!-- 현재 ?물건 리스트 -->
+                        <!-- 이 사건의 ?물건 리스트 -->
                         <div style="flex:1;overflow:auto;padding:10px 16px;min-height:120px">
-                            <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px">현재 ?임의물건 <span id="dmQGenListCnt" style="color:#7c3aed"></span></div>
+                            <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px">이 사건의 ?임의물건 <span id="dmQGenListCnt" style="color:#7c3aed"></span></div>
                             <table style="width:100%;border-collapse:collapse;font-size:12px">
                                 <thead>
                                     <tr style="background:#f8fafc;color:#64748b;text-align:left">
                                         <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">?번호</th>
                                         <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">사건번호</th>
-                                        <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">법원</th>
-                                        <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">입찰일</th>
+                                        <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">회원</th>
                                         <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">담당</th>
                                         <th style="padding:4px 6px;border-bottom:1px solid #e5e7eb">상태</th>
                                     </tr>

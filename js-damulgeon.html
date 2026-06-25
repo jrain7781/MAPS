@@ -1919,59 +1919,94 @@
 
   // ===== 회원매칭 모달 (?임의등록 입찰 회원 → 실제 물건 배정). 독립 이동 가능 =====
   var _matchMembers=[], _matchItems=[], _matchActive=0, _matchAssign={};   // assign: realItemId → 회원 index
-  // ===== ? 임의물건 생성 모달 =====
+  // ===== ? 임의물건 생성 모달 (선택 사건 종속) =====
+  var _qGenGroup=null, _qAcItems=[];
   function _qGenEl(id){ return document.getElementById(id); }
   function _qGenStatus(msg,type){ var el=_qGenEl('dmQGenStatus'); if(!el) return; el.style.color=(type==='error'?'#dc2626':(type==='success'?'#16a34a':'#6b7280')); el.textContent=msg||''; }
   DM.openQGenModal=function(){
     var m=_qGenEl('dmQGenModal'); if(!m) return;
-    // 선택한 사건이 있으면 입력칸 프리필 (그 사건에 ?물건 추가하는 흐름)
     var g=_groups.filter(function(x){return x.group_key===_selKey;})[0];
-    if(g){
-      if(_qGenEl('dmQGenInDate')) _qGenEl('dmQGenInDate').value=g.in_date||'';
-      if(_qGenEl('dmQGenSakun')) _qGenEl('dmQGenSakun').value=g.sakun_base||'';
-      if(_qGenEl('dmQGenCourt')) _qGenEl('dmQGenCourt').value=g.court||'';
-      var mgr=''; for(var i=0;i<g.items.length;i++){ if(String(g.items[i].m_name_id||'').trim()){ mgr=g.items[i].m_name_id; break; } }
-      if(_qGenEl('dmQGenManager')) _qGenEl('dmQGenManager').value=mgr;
-    }
+    if(!g){ alert('먼저 좌측에서 사건을 선택하세요. ?임의물건은 선택한 사건 안에 생성됩니다.'); return; }
+    var mgr=''; for(var i=0;i<g.items.length;i++){ if(String(g.items[i].m_name_id||'').trim()){ mgr=g.items[i].m_name_id; break; } }
+    _qGenGroup={ in_date:g.in_date||'', sakun:g.sakun_base||'', court:g.court||'' };
+    if(_qGenEl('dmQGenInDate')) _qGenEl('dmQGenInDate').value=_qGenGroup.in_date;
+    if(_qGenEl('dmQGenSakun')) _qGenEl('dmQGenSakun').value=_qGenGroup.sakun;
+    if(_qGenEl('dmQGenCourt')) _qGenEl('dmQGenCourt').value=_qGenGroup.court;
+    if(_qGenEl('dmQGenManager')) _qGenEl('dmQGenManager').value=mgr;
+    if(_qGenEl('dmQGenMember')) _qGenEl('dmQGenMember').value='';
+    if(_qGenEl('dmQGenMemberId')) _qGenEl('dmQGenMemberId').value='';
+    if(_qGenEl('dmQGenStu')) _qGenEl('dmQGenStu').value='추천';
     if(_qGenEl('dmQGenCnt')) _qGenEl('dmQGenCnt').value='1';
-    _qGenStatus('');
+    _qGenMemInfo(); _qGenStatus('');
     m.classList.remove('content-hidden');
     DM.qGenLoad();
   };
   DM.qGenClose=function(){ var m=_qGenEl('dmQGenModal'); if(m) m.classList.add('content-hidden'); };
   DM.qGenLoad=function(){
-    var body=_qGenEl('dmQGenList'); if(body) body.innerHTML='<tr><td colspan="6" style="padding:10px;text-align:center;color:#9ca3af">불러오는 중…</td></tr>';
-    if(typeof google==='undefined'||!google.script||!google.script.run) return;
-    google.script.run.withSuccessHandler(_renderQGen).withFailureHandler(function(e){ if(body) body.innerHTML='<tr><td colspan="6" style="padding:10px;text-align:center;color:#dc2626">로드 실패: '+(e&&e.message||e)+'</td></tr>'; }).getQItemsInfo();
+    var body=_qGenEl('dmQGenList'); if(body) body.innerHTML='<tr><td colspan="5" style="padding:10px;text-align:center;color:#9ca3af">불러오는 중…</td></tr>';
+    if(!_qGenGroup || typeof google==='undefined'||!google.script||!google.script.run) return;
+    google.script.run.withSuccessHandler(_renderQGen).withFailureHandler(function(e){ if(body) body.innerHTML='<tr><td colspan="5" style="padding:10px;text-align:center;color:#dc2626">로드 실패: '+(e&&e.message||e)+'</td></tr>'; }).getQItemsInfo(_qGenGroup.in_date,_qGenGroup.sakun,_qGenGroup.court);
   };
   function _renderQGen(info){
     info=info||{count:0,nextNum:1,items:[]};
-    var cEl=_qGenEl('dmQGenCount'); if(cEl) cEl.textContent='전체 '+(info.count||0)+'개';
+    var cEl=_qGenEl('dmQGenCount'); if(cEl) cEl.textContent='이 사건 '+(info.count||0)+'개';
     var lcEl=_qGenEl('dmQGenListCnt'); if(lcEl) lcEl.textContent=(info.count||0)+'개';
     var nEl=_qGenEl('dmQGenNext'); if(nEl) nEl.textContent='다음 번호 → ?'+(info.nextNum||1)+' 부터';
     var body=_qGenEl('dmQGenList'); if(!body) return;
-    if(!info.items||!info.items.length){ body.innerHTML='<tr><td colspan="6" style="padding:12px;text-align:center;color:#9ca3af">아직 ?임의물건이 없습니다.</td></tr>'; return; }
+    if(!info.items||!info.items.length){ body.innerHTML='<tr><td colspan="5" style="padding:12px;text-align:center;color:#9ca3af">이 사건엔 아직 ?임의물건이 없습니다.</td></tr>'; return; }
     body.innerHTML=info.items.map(function(it){
+      var mn=_parseMName?_parseMName(it.member_name,it.m_name_id).member:'';   // 표시용 회원명(명의 제외)
       return '<tr style="border-bottom:1px solid #f1f5f9">'
         +'<td style="padding:4px 6px;font-weight:800;color:#7c3aed;white-space:nowrap">?'+esc(it.qnum)+'</td>'
         +'<td style="padding:4px 6px">'+esc(it.sakun_no)+'</td>'
-        +'<td style="padding:4px 6px;color:#1d4ed8">'+esc(it.court)+'</td>'
-        +'<td style="padding:4px 6px">'+esc(it.in_date)+'</td>'
+        +'<td style="padding:4px 6px">'+esc(it.member_name||mn||'')+'</td>'
         +'<td style="padding:4px 6px">'+esc(it.m_name_id)+'</td>'
         +'<td style="padding:4px 6px">'+esc(it.stu_member)+'</td>'
         +'</tr>';
     }).join('');
   }
+  // 회원 자동완성 — 입찰물건관리 buildMemberAcItems_ 재사용(명의 포함)
+  DM.qMemAcInput=function(){
+    var inp=_qGenEl('dmQGenMember'), ul=_qGenEl('dmQGenMemberAc'); if(!inp||!ul) return;
+    var hid=_qGenEl('dmQGenMemberId'); if(hid) hid.value='';   // 타이핑하면 선택 해제
+    _qAcItems=(typeof buildMemberAcItems_==='function')?(buildMemberAcItems_(inp.value)||[]):[];
+    if(!_qAcItems.length){ ul.style.display='none'; ul.innerHTML=''; }
+    else {
+      ul.innerHTML=_qAcItems.map(function(it,i){
+        var sty=(it.kind==='myungui')?'padding-left:22px;color:#374151':'font-weight:700;color:#111827';
+        return '<li onmousedown="DM.qMemAcPick('+i+')" onmouseenter="this.style.background=\'#eef2ff\'" onmouseleave="this.style.background=\'transparent\'" style="padding:6px 10px;cursor:pointer;border-radius:5px;white-space:nowrap;'+sty+'">'+esc(it.displayText)+(it.rightText?(' <span style="color:#94a3b8;font-size:11px">'+esc(it.rightText)+'</span>'):'')+'</li>';
+      }).join('');
+      ul.style.display='block';
+    }
+    _qGenMemInfo();
+  };
+  DM.qMemAcPick=function(i){
+    var it=_qAcItems[i]; if(!it) return;
+    var inp=_qGenEl('dmQGenMember'); if(inp) inp.value=it.inputValue;          // "이정우 (MJ) 한한한"
+    var hid=_qGenEl('dmQGenMemberId'); if(hid) hid.value=it.member_id||'';
+    var ul=_qGenEl('dmQGenMemberAc'); if(ul) ul.style.display='none';
+    _qGenMemInfo();
+  };
+  DM.qMemAcBlur=function(){ setTimeout(function(){ var ul=_qGenEl('dmQGenMemberAc'); if(ul) ul.style.display='none'; },200); };
+  function _qGenMemInfo(){
+    var v=String((_qGenEl('dmQGenMember')||{}).value||'').trim();
+    var hid=(_qGenEl('dmQGenMemberId')||{}).value||'';
+    var info=_qGenEl('dmQGenMemInfo'); if(!info) return;
+    if(!v){ info.innerHTML=''; return; }
+    info.innerHTML = hid ? '<span style="color:#16a34a">✓ 회원 선택됨</span>' : '<span style="color:#d97706">목록에서 선택하세요</span>';
+  }
   DM.qGenSubmit=function(){
-    var inDate=(_qGenEl('dmQGenInDate')||{}).value||'';
-    var sakun=(_qGenEl('dmQGenSakun')||{}).value||'';
-    var court=(_qGenEl('dmQGenCourt')||{}).value||'';
+    if(!_qGenGroup){ _qGenStatus('사건이 선택되지 않았습니다.','error'); return; }
+    var inDate=_qGenGroup.in_date, sakun=_qGenGroup.sakun, court=_qGenGroup.court;
     var mgr=(_qGenEl('dmQGenManager')||{}).value||'';
+    var status=(_qGenEl('dmQGenStu')||{}).value||'추천';
+    var memberName=String((_qGenEl('dmQGenMember')||{}).value||'').trim();
+    var memberId=String((_qGenEl('dmQGenMemberId')||{}).value||'').trim();
     var cnt=parseInt((_qGenEl('dmQGenCnt')||{}).value,10);
-    if(!String(sakun).trim()){ _qGenStatus('사건번호를 입력하세요.','error'); return; }
-    if(!String(court).trim()){ _qGenStatus('법원을 입력하세요.','error'); return; }
+    if(!String(sakun).trim()){ _qGenStatus('사건번호가 없습니다.','error'); return; }
     if(isNaN(cnt)||cnt<1){ _qGenStatus('생성 개수를 1 이상 입력하세요.','error'); return; }
     if(cnt>100){ _qGenStatus('1회 최대 100개까지 가능합니다.','error'); return; }
+    if((status==='추천'||status==='입찰') && !memberName){ _qGenStatus('상태가 '+status+'이면 회원을 선택해야 합니다.','error'); var mi=_qGenEl('dmQGenMember'); if(mi) mi.focus(); return; }
     if(typeof google==='undefined'||!google.script||!google.script.run){ _qGenStatus('실행 환경이 아닙니다.','error'); return; }
     var btn=_qGenEl('dmQGenSubmitBtn'); if(btn){ btn.disabled=true; btn.textContent='생성 중…'; }
     _qGenStatus('생성 중…','info');
@@ -1979,10 +2014,10 @@
       if(btn){ btn.disabled=false; btn.textContent='생성'; }
       if(r&&r.success){
         _renderQGen(r.info);
-        _qGenStatus('✓ '+r.created+'개 생성 완료 (?'+r.fromNum+'~?'+r.toNum+')','success');
-        if(DM.load) DM.load();   // 좌측 리스트+그리드 갱신
+        _qGenStatus('✓ '+r.created+'개 생성 완료 (?'+r.fromNum+'~?'+r.toNum+')'+(r.message?(' · '+r.message):''),'success');
+        if(DM.refreshGroup) DM.refreshGroup();   // 이 사건만 서버 재조회 갱신
       } else { _qGenStatus('실패: '+((r&&r.message)||'알 수 없음'),'error'); }
-    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.textContent='생성'; } _qGenStatus('오류: '+(e&&e.message||e),'error'); }).generateQItems(inDate,sakun,court,mgr,cnt);
+    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.textContent='생성'; } _qGenStatus('오류: '+(e&&e.message||e),'error'); }).generateQItems(inDate,sakun,court,mgr,cnt,memberId,memberName,status);
   };
 
   DM.openMatchModal=function(){

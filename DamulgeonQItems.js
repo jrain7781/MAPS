@@ -18,25 +18,37 @@ function _dmQNum_(sakun) {
 }
 
 /**
- * [공개] 현재 전체 ?임의물건 현황 — 모달 상단 카운트/리스트 + 다음 번호.
+ * [공개] 선택한 사건(in_date|사건base|법원) 내 ?임의물건 현황 — 모달 카운트/리스트 + 그 사건 내 다음 번호.
+ *   사건 3키가 모두 주어지면 그 사건만, 아니면 전체(폴백).
+ *   ?물건 = 물건번호가 '(?N)' 숫자인 것만 — '(?회원명)' 등 실제 ?물건(회원매칭용)은 제외.
  * 반환: { success, count, maxNum, nextNum, items:[{id,sakun_no,qnum,court,in_date,m_name_id,stu_member,member_name}] }
  */
-function getQItemsInfo() {
+function getQItemsInfo(inDate, sakun, court) {
   try {
     var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, count: 0, maxNum: 0, nextNum: 1, items: [] };
+    var wantBase = _normSakunBase_(String(sakun == null ? '' : sakun));
+    var wantCourt = String(court == null ? '' : court).trim();
+    var wantDate = _dmDateKey6_(inDate);
+    var scoped = !!(wantBase && wantCourt);   // 사건 지정 시 그 사건만
     var n = sheet.getLastRow() - 1;
     var data = sheet.getRange(2, 1, n, ITEM_HEADERS.length).getValues();
     var items = [], maxNum = 0;
     data.forEach(function (r) {
-      var sakun = String(r[2] || '').trim();
-      if (!sakun || sakun.indexOf('?') < 0) return;            // ?물건만
-      var qnum = _dmQNum_(sakun);
-      if (qnum != null && qnum > maxNum) maxNum = qnum;
+      var s = String(r[2] || '').trim();
+      if (!s) return;
+      var qnum = _dmQNum_(s);
+      if (qnum == null) return;   // '(?N)' 숫자 임의물건만
+      if (scoped) {
+        if (_normSakunBase_(s) !== wantBase) return;
+        if (String(r[3] || '').trim() !== wantCourt) return;
+        if (wantDate && _dmDateKey6_(r[1]) !== wantDate) return;
+      }
+      if (qnum > maxNum) maxNum = qnum;
       items.push({
         id: String(r[0] || ''),
-        sakun_no: sakun,
-        qnum: (qnum == null ? '' : qnum),
+        sakun_no: s,
+        qnum: qnum,
         court: String(r[3] || ''),
         in_date: String(r[1] || ''),
         stu_member: String(r[4] || ''),
@@ -53,81 +65,63 @@ function getQItemsInfo() {
 }
 
 /**
- * [공개] ?임의물건 N개 생성.
- * @param {string} inDate   입찰일자(원문 그대로 저장)
- * @param {string} sakun    사건번호(괄호 앞 본문) — 끝에 (?N) 자동 부착
- * @param {string} court    법원
- * @param {string} mNameId  담당(m_name_id)
- * @param {number} count    생성 개수(1~DM_QITEM_MAX_PER_CALL)
- * @returns {{success, created, fromNum, toNum, created_sakuns, info}}
+ * [공개] ?임의물건 N개 생성. (선택 사건 범위, 그 사건 내 ?번호 연속)
+ *   입찰물건관리와 동일하게 createData 로 생성(회원검증·이력·적립훅 동일).
+ * @param {string} inDate     입찰일자
+ * @param {string} sakun      사건번호(괄호 앞 본문) — 끝에 (?N) 자동 부착
+ * @param {string} court      법원
+ * @param {string} mNameId    담당(m_name_id)
+ * @param {number} count      생성 개수(1~DM_QITEM_MAX_PER_CALL)
+ * @param {string} memberId   회원 id (추천/입찰이면 필수)
+ * @param {string} memberName 회원명(명의 포함 문자열, 예: '이정우 (MJ) 한한한')
+ * @param {string} status     상태(stu_member) — 기본 '추천'
+ * @returns {{success, created, requested, fromNum, toNum, fails, info, message}}
  */
-function generateQItems(inDate, sakun, court, mNameId, count) {
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(20000); } catch (e) { return { success: false, message: '저장이 혼잡합니다. 잠시 후 다시 시도해 주세요.' }; }
+function generateQItems(inDate, sakun, court, mNameId, count, memberId, memberName, status) {
   try {
     inDate = String(inDate == null ? '' : inDate).trim();
     sakun = String(sakun == null ? '' : sakun).trim();
     court = String(court == null ? '' : court).trim();
     mNameId = String(mNameId == null ? '' : mNameId).trim() || '대표님';
+    memberId = String(memberId == null ? '' : memberId).trim();
+    memberName = String(memberName == null ? '' : memberName).trim();
+    status = String(status == null ? '' : status).trim() || '추천';
     count = parseInt(count, 10);
 
-    if (!sakun) return { success: false, message: '사건번호를 입력하세요.' };
-    if (!court) return { success: false, message: '법원을 입력하세요.' };
+    if (!sakun) return { success: false, message: '사건번호가 없습니다.' };
+    if (!court) return { success: false, message: '법원이 없습니다.' };
     if (isNaN(count) || count < 1) return { success: false, message: '생성 개수를 1 이상 입력하세요.' };
     if (count > DM_QITEM_MAX_PER_CALL) return { success: false, message: '1회 최대 ' + DM_QITEM_MAX_PER_CALL + '개까지 생성할 수 있습니다.' };
-    // 사건번호에 이미 괄호 물건번호가 들어있으면 제거(본문만 사용)
-    sakun = sakun.replace(/\([^)]*\)\s*$/, '').trim();
+    sakun = sakun.replace(/\([^)]*\)\s*$/, '').trim();   // 본문만(끝 괄호 물건번호 제거)
     if (!sakun) return { success: false, message: '사건번호 본문이 비었습니다.' };
+    if ((status === '추천' || status === '입찰') && !memberName) {
+      return { success: false, message: '상태가 ' + status + '이면 회원을 선택해야 합니다.' };
+    }
 
-    var sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME);
-    if (!sheet) return { success: false, message: 'items 시트 없음' };
+    // 이 사건 내 ?물건 최대번호 → 다음부터
+    var info0 = getQItemsInfo(inDate, sakun, court);
+    var start = (info0 && info0.maxNum ? info0.maxNum : 0) + 1;
 
-    // 전체 ?물건 최대번호
-    var info = getQItemsInfo();
-    var start = (info && info.maxNum ? info.maxNum : 0) + 1;
-
-    var regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    var rows = [], ids = [], createdSakuns = [], history = [];
+    var created = 0, fails = [];
     for (var k = 0; k < count; k++) {
       var num = start + k;
       var fullSakun = sakun + '(?' + num + ')';
-      var id = String(new Date().getTime()) + String(Math.floor(Math.random() * 1000)) + String(k);
-      var row = ITEM_HEADERS.map(function (h) {
-        switch (h) {
-          case 'id': return id;
-          case 'in-date': return inDate;
-          case 'sakun_no': return fullSakun;
-          case 'court': return court;
-          case 'stu_member': return '상품';
-          case 'm_name_id': return mNameId;
-          case 'reg_date': return regDate;
-          case 'reg_member': return mNameId;
-          default: return '';
-        }
-      });
-      rows.push(row);
-      ids.push(id);
-      createdSakuns.push(fullSakun);
-      history.push({ action: 'ITEM_CREATE', item_id: id, member_id: '', member_name: '', trigger_type: 'dm-qitem', note: court + ' ' + fullSakun + ' (다물건 임의물건 생성)', req_id: String(new Date().getTime()) });
+      // 입찰물건관리와 동일한 정식 생성 — createData(이력·회원검증·적립훅 동일). 각 호출이 자체 락/flush.
+      var r = createData(inDate, fullSakun, court, status, mNameId, memberName, '', memberId, '', '', '', '', '', mNameId, '', '');
+      if (r && r.success) created++;
+      else fails.push({ sakun: fullSakun, msg: (r && r.message) || '실패' });
     }
 
-    // 일괄 append (마지막 행 뒤에 한 번에 기록)
-    var startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow, 1, rows.length, ITEM_HEADERS.length).setValues(rows);
-    // id 열 텍스트 고정(지수표기/매칭실패 방지) — items_id_text 정책
-    var idCol = ITEM_HEADERS.indexOf('id') + 1;
-    sheet.getRange(startRow, idCol, rows.length, 1).setNumberFormat('@');
-    for (var j = 0; j < ids.length; j++) sheet.getRange(startRow + j, idCol).setValue(ids[j]);
-
-    if (history.length && typeof writeItemHistoryBatch_ === 'function') writeItemHistoryBatch_(history);
-    SpreadsheetApp.flush();
-    Logger.log('[generateQItems] ' + count + '개 생성 ?' + start + '~?' + (start + count - 1) + ' (' + sakun + ')');
-
-    return { success: true, created: count, fromNum: start, toNum: start + count - 1, created_sakuns: createdSakuns, info: getQItemsInfo() };
+    Logger.log('[generateQItems] ' + created + '/' + count + ' 생성 ?' + start + '~?' + (start + count - 1) + ' (' + sakun + ') 회원=' + memberName + ' 상태=' + status);
+    var info = getQItemsInfo(inDate, sakun, court);
+    return {
+      success: created > 0,
+      created: created, requested: count, fromNum: start, toNum: start + count - 1,
+      fails: fails, info: info,
+      message: created === count ? '' : (created + '/' + count + '개만 생성됨' + (fails[0] ? (' — ' + fails[0].msg) : ''))
+    };
   } catch (e) {
     Logger.log('[generateQItems] ' + e);
     return { success: false, message: String(e) };
-  } finally {
-    lock.releaseLock();
   }
 }
