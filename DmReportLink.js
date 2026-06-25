@@ -131,17 +131,30 @@ function dmRenderData(token, last4) {
     its.forEach(function (it) { var iid = String((it && it.link_item_id) || '').trim(); if (iid) ids.push(iid); });
     if (ids.length) uploads = dmGetUploadsByItems(ids);
   } catch (e3) {}
-  // 진행비만 동적 반영: 최신 jinhaengbi(다물건 시트=소형, 가벼움) 읽어 _fee 재계산 → 회원 새로고침 = 최신 진행비.
-  //   입찰가·보증금은 스냅샷(전송 후 불변: 보증금=최저가10% 고정, 입찰가 확정) → ITEMS(대형 시트) 매 로드 읽기 제거해 속도 회복. 총비용=보증금(불변)+진행비(동적)이라 일관 유지.
+  // [동적 옵션] 메세지 모달 '🔄 동적' 체크한 링크만: 입찰 카드 전체(입찰가·보증금·진행비)를 매 새로고침마다 최신 DB로 갱신.
+  //   해제(기본=스냅샷)면 추가 DB 읽기 0 → 가장 빠름. 부분 갱신 없음(통째 동적 or 통째 스냅샷).
   try {
-    var fitems = (pl.m && pl.m.items) || [];
-    if (fitems.length) {
-      var dmAll = readAllDamulgeon(), feeMap = {};
-      dmAll.forEach(function (e) { feeMap[_dmKey3_(e.in_date, e.sakun_no, e.court)] = String(e.jinhaengbi == null ? '' : e.jinhaengbi); });
-      fitems.forEach(function (it) { var k = _dmKey3_(it.in_date, it.sakun_no, it.court); it.jinhaengbi = (feeMap[k] != null ? feeMap[k] : ''); });
-      dmComputeFees_(fitems);   // _fee = 유효진행비(수동 우선) 재계산
+    if (pl.opts && pl.opts.dynamic) {
+      var fitems = (pl.m && pl.m.items) || [];
+      if (fitems.length) {
+        // ITEMS 최신(입찰가7·보증금21) — 1회 일괄 읽기
+        var ish = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(DB_SHEET_NAME), imap = {};
+        if (ish && ish.getLastRow() > 1) {
+          ish.getRange(2, 1, ish.getLastRow() - 1, 23).getValues().forEach(function (r) { var id = String(r[0] || '').trim(); if (id) imap[id] = r; });
+        }
+        // 다물건 최신 진행비(3키)
+        var dmAll = readAllDamulgeon(), feeMap = {};
+        dmAll.forEach(function (e) { feeMap[_dmKey3_(e.in_date, e.sakun_no, e.court)] = String(e.jinhaengbi == null ? '' : e.jinhaengbi); });
+        fitems.forEach(function (it) {
+          var r = imap[String(it.link_item_id || '').trim()];
+          if (r) { it.bidprice = String(r[7] || ''); it.deposit = String(r[21] || ''); }
+          var k = _dmKey3_(it.in_date, it.sakun_no, it.court);
+          it.jinhaengbi = (feeMap[k] != null ? feeMap[k] : '');
+        });
+        dmComputeFees_(fitems);   // _fee = 유효진행비(수동 우선) 재계산
+      }
     }
-  } catch (eF) { Logger.log('[dmRenderData fee] ' + eF); }
+  } catch (eF) { Logger.log('[dmRenderData dynamic] ' + eF); }
   return { status: 'ok', payload: pl, detailMap: detailMap, uploads: uploads, title: title };
 }
 
