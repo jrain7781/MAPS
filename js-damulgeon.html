@@ -1671,7 +1671,7 @@
     // 동적 렌더용 payload: 회원 새로고침 시 서버가 이 물건/기한 + member_accounts 라이브로 재조립(회원 저장분 반영)
     var _reqs=[], _reqKeys=[], _seen={};
     m.items.forEach(function(it){ var pm=_parseMName(it.member_name, m.member_id); var mk=pm.myungui||''; if(_seen[mk]!==undefined) return; _seen[mk]=1; _reqKeys.push(m.member_id+'||'+mk); _reqs.push({ member_id:m.member_id, myungui:mk, daeriin:String(it.daeriin||'').trim() }); });
-    var _slim=m.items.map(function(it){ return { member_name:it.member_name, member_id:it.member_id, court:it.court, sakun_no:it.sakun_no, mulgeon_no:it.mulgeon_no, bidprice:it.bidprice, deposit:it.deposit, _fee:it._fee, address:it.address, in_date:it.in_date, daeriin:it.daeriin }; });
+    var _slim=m.items.map(function(it){ return { link_item_id:it.link_item_id, member_name:it.member_name, member_id:it.member_id, court:it.court, sakun_no:it.sakun_no, mulgeon_no:it.mulgeon_no, bidprice:it.bidprice, deposit:it.deposit, _fee:it._fee, address:it.address, in_date:it.in_date, daeriin:it.daeriin }; });
     var _mDueOpts={ due1:String((m.items[0]&&m.items[0].due1)||'').trim(), due2:String((m.items[0]&&m.items[0].due2)||'').trim(), consol:_msgConsol(), font:_msgFont };   // 웹 링크엔 회원별 저장 기한 + 글자크기
     var _payload=JSON.stringify({ m:{ member:m.member, member_id:String(m.member_id||''), items:_slim }, ctx:{ sakun:_msgCtx.sakun, bidDate:_msgCtx.bidDate, addr:_msgCtx.addr, court:_msgCtx.court, memberName:m.member }, opts:_mDueOpts, reqs:_reqs, reqKeys:_reqKeys });
     return { m:m, seed:seed, html:cardEl.outerHTML, title:title, summary:_sp.join(' / '), phone4:phone4, member_id:String(m.member_id||''), biddate:biddate, payload:_payload };

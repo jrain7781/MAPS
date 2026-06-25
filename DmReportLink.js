@@ -112,7 +112,14 @@ function dmRenderData(token, last4) {
     var res = getBulkDaeriipchalData(reqs);
     reqKeys.forEach(function (k, i) { detailMap[k] = res[i] || {}; });
   } catch (e2) {}
-  return { status: 'ok', payload: pl, detailMap: detailMap, title: title };
+  // 물건별 전자서명 PDF 현황(물건단위 등록/삭제 표시용)
+  var uploads = {};
+  try {
+    var its = (pl.m && pl.m.items) || [], ids = [];
+    its.forEach(function (it) { var iid = String((it && it.link_item_id) || '').trim(); if (iid) ids.push(iid); });
+    if (ids.length) uploads = dmGetUploadsByItems(ids);
+  } catch (e3) {}
+  return { status: 'ok', payload: pl, detailMap: detailMap, uploads: uploads, title: title };
 }
 
 /** 회원 페이지: 전화 뒷4자리 검증 → 보고서 HTML 반환. 3회 실패 시 자동 폐기. */

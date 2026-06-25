@@ -72,6 +72,13 @@
   #dmMsgReport .dmpdf-btn{ display:inline-block; background:#1f3a5f; color:#fff; border-radius:7px; padding:7px 14px; font-weight:800; cursor:pointer; font-size:.92em; white-space:nowrap; }
   #dmMsgReport .dmpdf-btn:active{ background:#16294a; }
   #dmMsgReport .dmpdf-msg{ font-size:.85em; color:#6b7280; word-break:break-all; }
+  #dmMsgReport .dmpdf-list{ display:flex; flex-direction:column; gap:8px; }
+  #dmMsgReport .dmpdf-row{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:5px 0; border-bottom:1px dashed #e5e7eb; }
+  #dmMsgReport .dmpdf-row:last-child{ border-bottom:0; }
+  #dmMsgReport .dmpdf-mul{ font-weight:800; color:#1f3a5f; min-width:52px; }
+  #dmMsgReport .dmpdf-file{ display:inline-flex; align-items:center; gap:3px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:6px; padding:2px 7px; font-size:.82em; }
+  #dmMsgReport .dmpdf-file a{ color:#1d4ed8; text-decoration:none; word-break:break-all; }
+  #dmMsgReport .dmpdf-del{ border:0; background:transparent; cursor:pointer; font-size:.95em; line-height:1; padding:0 2px; color:#dc2626; }
   #dmMsgReport .dmneed{ color:#92400e; font-weight:700; }
   /* 기본: 채워진칸=값 / 빈칸=입력. 수정모드(.editmode): 전부 입력 */
   #dmMsgReport .dmf > .dmedit, #dmMsgReport .dmf > .dmedit-acct{ display:none; }
@@ -140,6 +147,7 @@
       if(res && res.payload && window.DMBuild){
         var pl = (typeof res.payload === 'string') ? JSON.parse(res.payload) : res.payload;
         pl.detailMap = res.detailMap || {};
+        pl.uploads = res.uploads || {};   // 물건별 전자서명 PDF 현황
         var f = pl.opts && parseInt(pl.opts.font, 10);
         if(f && f>=10 && f<=24) host.style.setProperty('--dmrf', f+'px');   // 관리자가 정한 글자크기 적용
         host.innerHTML = window.DMBuild.report(pl);
@@ -235,12 +243,14 @@
     }).withFailureHandler(function(e){ btn.disabled=false; btn.textContent=o; btn.style.background=''; alert('저장 오류: '+(e&&e.message||e)); })
       .dmSaveMemberFields(TOKEN, edits);
   };
-  // 전자서명 PDF 업로드 — 파일 선택 시 자동 업로드(서버 Drive 저장)
+  // 전자서명 PDF 업로드 — 물건별, 파일 선택 시 자동 업로드(서버 Drive 저장)
   DMV.uploadPdf = function(inp){
     var f = inp.files && inp.files[0]; if(!f) return;
-    var msg = inp.parentNode.parentNode.querySelector('.dmpdf-msg');
+    var row = inp.closest ? inp.closest('.dmpdf-row') : (inp.parentNode && inp.parentNode.parentNode);
+    var msg = row ? row.querySelector('.dmpdf-msg') : null;
+    var itemId = inp.getAttribute('data-item') || '';
     function setMsg(t,c){ if(msg){ msg.textContent=t; msg.style.color=c||'#6b7280'; } }
-    if(f.type!=='application/pdf' && !/\.pdf$/i.test(f.name)){ setMsg('PDF 파일만 업로드 가능합니다.','#dc2626'); inp.value=''; return; }
+    if(f.type!=='application/pdf' && !/\.pdf$/i.test(f.name)){ setMsg('PDF 파일만 가능합니다.','#dc2626'); inp.value=''; return; }
     if(f.size > 12*1024*1024){ setMsg('12MB 이하 PDF만 가능합니다.','#dc2626'); inp.value=''; return; }
     if(typeof google==='undefined'||!google.script||!google.script.run){ setMsg('업로드 환경 오류','#dc2626'); return; }
     setMsg('업로드 중… '+f.name);
@@ -248,13 +258,25 @@
     rd.onload=function(){
       var b64=String(rd.result||'').split(',')[1]||'';
       google.script.run.withSuccessHandler(function(r){
-        if(r&&r.success){ setMsg('✓ 업로드됨: '+(r.name||f.name),'#16a34a'); }
+        if(r&&r.success){ setMsg('✓ 업로드됨','#16a34a'); if(DMV.reload) DMV.reload(); }   // 갱신 → 파일/삭제버튼 표시
         else { setMsg('업로드 실패: '+((r&&r.msg)||'알 수 없음'),'#dc2626'); }
       }).withFailureHandler(function(e){ setMsg('업로드 오류: '+(e&&e.message||e),'#dc2626'); })
-        .dmUploadPdf(TOKEN, f.name, b64);
+        .dmUploadPdf(TOKEN, f.name, b64, itemId);   // 물건단위 item_id 전달
     };
     rd.onerror=function(){ setMsg('파일 읽기 실패','#dc2626'); };
     rd.readAsDataURL(f);
+  };
+  // 잘못 올린 PDF 삭제 (회원 본인 것만 — 서버에서 토큰 검증)
+  DMV.deletePdf = function(url, btn){
+    if(!url) return;
+    if(!confirm('이 PDF를 삭제할까요?')) return;
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('환경 오류'); return; }
+    if(btn){ btn.disabled=true; btn.textContent='…'; }
+    google.script.run.withSuccessHandler(function(r){
+      if(r&&r.success){ if(DMV.reload) DMV.reload(); }
+      else { if(btn){ btn.disabled=false; btn.textContent='🗑'; } alert('삭제 실패: '+((r&&r.msg)||'?')); }
+    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.textContent='🗑'; } alert('삭제 오류: '+(e&&e.message||e)); })
+      .dmDeleteUpload(url, TOKEN);
   };
   document.getElementById('g4') && document.getElementById('g4').addEventListener('keydown', function(e){ if(e.key==='Enter') DMV.submit(); });
   DMV.init();
