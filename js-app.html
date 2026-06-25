@@ -11539,10 +11539,88 @@ MJ 이정우 팀장
             .saveSettingPublic(key, value);
     }
 
+    // ─── 환경설정 ▸ 트리거 관리 ───────────────────────────────────────────────
+    function loadTriggerConfig() {
+        var listEl = document.getElementById('trigger-list');
+        if (listEl) listEl.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center">불러오는 중…</div>';
+        setTriggerStatus_('', 'info');
+        google.script.run
+            .withSuccessHandler(renderTriggerList_)
+            .withFailureHandler(function (e) {
+                if (listEl) listEl.innerHTML = '<div class="text-sm text-red-500 py-6 text-center">로드 실패: ' + (e && e.message ? e.message : e) + '</div>';
+            })
+            .getTriggerConfig();
+    }
+
+    function renderTriggerList_(rows) {
+        var listEl = document.getElementById('trigger-list');
+        if (!listEl) return;
+        if (!rows || !rows.length) { listEl.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center">트리거 없음</div>'; return; }
+        listEl.innerHTML = rows.map(function (r) {
+            var badge = r.installed
+                ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">설치됨</span>'
+                : '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">미설치</span>';
+            var sched = r.freq === 'hourly'
+                ? '매시간'
+                : ('매일 ' + r.hour + '시' + (r.nearMinute != null ? (':' + ('0' + r.nearMinute).slice(-2) + ' 부근') : ''));
+            var editor;
+            if (r.freq === 'hourly') {
+                editor = '<span class="text-xs text-gray-500 px-2">매시간 고정</span>';
+            } else {
+                editor = '<div class="flex items-center gap-1">'
+                    + '<span class="text-xs text-gray-500">매일</span>'
+                    + '<input type="number" min="0" max="23" value="' + r.hour + '" id="trg-hour-' + r.fn + '" '
+                    + 'onclick="this.select()" onfocus="this.select()" '
+                    + 'class="w-14 px-2 py-1 border border-gray-300 rounded text-sm text-center focus:ring-1 focus:ring-indigo-500 outline-none">'
+                    + '<span class="text-xs text-gray-500">시</span>'
+                    + '<button onclick="applyTrigger(\'' + r.fn + '\')" class="ml-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded shadow">저장·적용</button>'
+                    + '</div>';
+            }
+            var toggleBtn = r.installed
+                ? '<button onclick="toggleTrigger(\'' + r.fn + '\', false)" class="text-xs font-bold px-3 py-1.5 rounded border border-red-300 text-red-600 hover:bg-red-50">해제</button>'
+                : '<button onclick="toggleTrigger(\'' + r.fn + '\', true)" class="text-xs font-bold px-3 py-1.5 rounded border border-green-400 text-green-700 hover:bg-green-50">설치</button>';
+            return '<div class="border border-gray-200 rounded-lg p-3 flex items-center gap-3 flex-wrap">'
+                + '<div class="flex-1 min-w-[220px]">'
+                +   '<div class="flex items-center gap-2"><span class="font-bold text-gray-800 text-sm">' + r.label + '</span>' + badge + '</div>'
+                +   '<div class="text-xs text-gray-500 mt-0.5">' + r.desc + '</div>'
+                +   '<div class="text-[11px] text-gray-400 mt-0.5 font-mono">' + r.fn + ' · 현재: ' + sched + '</div>'
+                + '</div>'
+                + '<div class="flex items-center gap-2 flex-shrink-0">' + editor + toggleBtn + '</div>'
+                + '</div>';
+        }).join('');
+    }
+
+    function applyTrigger(fn) {
+        var input = document.getElementById('trg-hour-' + fn);
+        var hour = input ? parseInt(input.value, 10) : null;
+        if (input && (isNaN(hour) || hour < 0 || hour > 23)) { setTriggerStatus_('시각은 0~23 사이로 입력하세요.', 'error'); return; }
+        setTriggerStatus_('저장 중…', 'info');
+        google.script.run
+            .withSuccessHandler(function (rows) { renderTriggerList_(rows); setTriggerStatus_('저장·재설치 완료', 'success'); })
+            .withFailureHandler(function (e) { setTriggerStatus_('실패: ' + (e && e.message ? e.message : e), 'error'); })
+            .applyTriggerConfig(fn, hour);
+    }
+
+    function toggleTrigger(fn, enabled) {
+        setTriggerStatus_(enabled ? '설치 중…' : '해제 중…', 'info');
+        google.script.run
+            .withSuccessHandler(function (rows) { renderTriggerList_(rows); setTriggerStatus_(enabled ? '설치 완료' : '해제 완료', 'success'); })
+            .withFailureHandler(function (e) { setTriggerStatus_('실패: ' + (e && e.message ? e.message : e), 'error'); })
+            .setTriggerEnabled(fn, enabled);
+    }
+
+    function setTriggerStatus_(msg, type) {
+        var el = document.getElementById('triggerStatus');
+        if (!el) return;
+        var color = type === 'error' ? 'text-red-600' : (type === 'success' ? 'text-green-600' : 'text-gray-500');
+        el.className = 'text-sm mt-3 ' + color;
+        el.textContent = msg || '';
+    }
+
     // ─── 환경설정 탭 전환 ────────────────────────────────────────────────────────
     function switchPrefTab(tab) {
         // 상단 탭 버튼 스타일
-        ['image', 'telegram', 'kakao', 'appinfo'].forEach(function (t) {
+        ['image', 'telegram', 'kakao', 'trigger', 'appinfo'].forEach(function (t) {
             var btn = document.getElementById('pref-tab-btn-' + t);
             var panel = document.getElementById('pref-panel-' + t);
             if (!btn || !panel) return;
@@ -11561,6 +11639,10 @@ MJ 이정우 팀장
         // 카카오 탭 진입 시 설정 로드
         if (tab === 'kakao') {
             loadKakaoAutoEnterSetting();
+        }
+        // 트리거 탭 진입 시 설정·설치상태 로드
+        if (tab === 'trigger') {
+            loadTriggerConfig();
         }
         // 이미지 탭 진입 시 캐시 즉시 적용, 없으면 GAS 호출
         if (tab === 'image') {

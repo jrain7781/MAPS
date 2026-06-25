@@ -649,15 +649,17 @@ function setupDailyImageSync() {
   // 기존 트리거 모두 제거
   removeImageSyncTriggers();
 
-  // 매일 09:30 경에 실행되는 시간 기반 트리거 생성 (GMT+9 기준)
+  // 매일 설정 시각:30 경에 실행 (환경설정▸트리거 탭과 단일 소스, 기본 9시)
+  var hour = (typeof trgHour_ === 'function') ? trgHour_('autoSyncImagesWrapper') : 9;
+  if (hour == null) hour = 9;
   ScriptApp.newTrigger('autoSyncImagesWrapper')
     .timeBased()
     .everyDays(1)
-    .atHour(9) // 09:00 ~ 10:00 사이에 실행되나, nearMinute로 조정 불가하므로 대략 09시경
+    .atHour(hour) // 해당 시각대에 실행되나, 분 단위 정확도는 nearMinute 로 대략 조정
     .nearMinute(30)
     .create();
 
-  Logger.log('매일 오전 09:30 자동 동기화 트리거 설정 완료');
+  Logger.log('매일 오전 ' + hour + ':30 자동 동기화 트리거 설정 완료');
 }
 
 /**

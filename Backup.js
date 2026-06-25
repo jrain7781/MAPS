@@ -111,14 +111,16 @@ function setupBackupTrigger() {
             }
         }
 
-        // 새 트리거 생성 (매일 오전 9시 ~ 10시 사이 실행)
+        // 새 트리거 생성 (환경설정▸트리거 탭과 단일 소스, 기본 9시)
+        var hour = (typeof trgHour_ === 'function') ? trgHour_('backupDataToDrive') : 9;
+        if (hour == null) hour = 9;
         ScriptApp.newTrigger('backupDataToDrive')
             .timeBased()
             .everyDays(1)
-            .atHour(9)
+            .atHour(hour)
             .create();
 
-        SpreadsheetApp.getUi().alert('매일 오전 9시 자동 백업이 설정되었습니다.');
+        SpreadsheetApp.getUi().alert('매일 ' + hour + '시 자동 백업이 설정되었습니다.');
     } catch (e) {
         SpreadsheetApp.getUi().alert('트리거 설정 실패: ' + e.message);
     }

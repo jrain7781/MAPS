@@ -332,8 +332,10 @@ function dmCleanupExpired() {
 /** 일일 트리거 설치(1회 실행) — 매일 새벽 4시 dmCleanupExpired. */
 function installDmCleanupTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'dmCleanupExpired') ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('dmCleanupExpired').timeBased().everyDays(1).atHour(4).create();
-  Logger.log('dmCleanupExpired 일일 트리거 설치 완료(매일 04시)');
+  var hour = (typeof trgHour_ === 'function') ? trgHour_('dmCleanupExpired') : 4;  // 환경설정▸트리거 탭과 단일 소스
+  if (hour == null) hour = 4;
+  ScriptApp.newTrigger('dmCleanupExpired').timeBased().everyDays(1).atHour(hour).create();
+  Logger.log('dmCleanupExpired 일일 트리거 설치 완료(매일 ' + hour + '시)');
   return { installed: true };
 }
 
