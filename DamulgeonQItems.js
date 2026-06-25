@@ -56,7 +56,7 @@ function getQItemsInfo(inDate, sakun, court) {
         member_name: String(r[6] || '')
       });
     });
-    items.sort(function (a, b) { return (parseInt(a.qnum, 10) || 0) - (parseInt(b.qnum, 10) || 0); });
+    items.sort(function (a, b) { return (parseInt(b.qnum, 10) || 0) - (parseInt(a.qnum, 10) || 0); });   // 높은 번호 위로(내림차순)
     return { success: true, count: items.length, maxNum: maxNum, nextNum: maxNum + 1, items: items };
   } catch (e) {
     Logger.log('[getQItemsInfo] ' + e);
