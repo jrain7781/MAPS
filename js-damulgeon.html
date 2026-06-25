@@ -36,6 +36,13 @@
   #dmMsgReport .dm-msgload { display:flex; align-items:center; gap:8px; margin:0 0 10px; padding:9px 12px; background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; color:#92400e; font-weight:700; font-size:13px; }
   #dmMsgReport .dm-msgload .dm-spin { display:inline-block; font-size:15px; }
   #dmMsgReport .dmpdf-reg { background:#fff; color:#1f3a5f; border:1px solid #94a3b8; border-radius:6px; padding:4px 11px; font-size:.88em; font-weight:700; cursor:pointer; }
+  #dmMsgReport .dmpdf-list { display:flex; flex-direction:column; gap:7px; }
+  #dmMsgReport .dmpdf-row { display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:4px 0; border-bottom:1px dashed #e5e7eb; }
+  #dmMsgReport .dmpdf-row:last-child { border-bottom:0; }
+  #dmMsgReport .dmpdf-mul { font-weight:800; color:#1f3a5f; min-width:50px; }
+  #dmMsgReport .dmpdf-file { display:inline-flex; align-items:center; gap:3px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:6px; padding:2px 7px; font-size:.82em; }
+  #dmMsgReport .dmpdf-file a { color:#1d4ed8; text-decoration:none; word-break:break-all; }
+  #dmMsgReport .dmpdf-del { border:0; background:transparent; cursor:pointer; font-size:.95em; line-height:1; padding:0 2px; color:#dc2626; }
   #dmMsgReport .dmneed { color:#92400e; font-weight:700; }
   /* 기본: 채워진칸=값 / 빈칸=입력. 수정모드(.editmode): 전부 입력 */
   #dmMsgReport .dmf > .dmedit, #dmMsgReport .dmf > .dmedit-acct { display:none; }
@@ -1338,14 +1345,27 @@
     if(web) _loadUploadsFor(m);   // 회원 등록 PDF(보기/미등록) 비동기 조회 → 도착 시 재렌더
   }
   // 회원 등록 PDF 캐시(member_id → [{date,filename,url}]). null=조회중, undefined=미조회.
-  var _uploadsCache={};
+  var _uploadsCache={};   // member_id → { item_id: [{date,filename,url}] }
   function _loadUploadsFor(m){
     if(!m||!m.member_id) return; var mid=String(m.member_id);
     if(_uploadsCache[mid]!==undefined) return;   // 이미 조회(또는 조회중)
     _uploadsCache[mid]=null;
-    if(typeof google==='undefined'||!google.script||!google.script.run){ _uploadsCache[mid]=[]; return; }
-    google.script.run.withSuccessHandler(function(r){ _uploadsCache[mid]=r||[]; var cm=_msgGroups[_msgFocusGi]; if(cm&&String(cm.member_id)===mid&&_msgTab==='link') _renderMsgRight(); })
-      .withFailureHandler(function(){ _uploadsCache[mid]=[]; }).dmGetUploads(mid);
+    if(typeof google==='undefined'||!google.script||!google.script.run){ _uploadsCache[mid]={}; return; }
+    var ids=(m.items||[]).map(function(it){ return String(it.link_item_id||''); }).filter(Boolean);
+    google.script.run.withSuccessHandler(function(map){ _uploadsCache[mid]=map||{}; var cm=_msgGroups[_msgFocusGi]; if(cm&&String(cm.member_id)===mid&&_msgTab==='link') _renderMsgRight(); })
+      .withFailureHandler(function(){ _uploadsCache[mid]={}; }).dmGetUploadsByItems(ids);
+  }
+  // 모달: 물건별 PDF 등록/보기/삭제 셀
+  function _msgPdfPerItem(m, upMap){
+    upMap=upMap||{};
+    return '<div class="dmpdf-list">'+(m.items||[]).map(function(it){
+      var iid=String(it.link_item_id||''); var mul=esc(it.mulgeon_no||'')||'?';
+      var list=upMap[iid]||[];
+      var files=list.map(function(u){ return '<span class="dmpdf-file"><a href="#" onclick="DM.viewPdf(\''+esc(u.url)+'\');return false">📄 '+esc(u.filename||'PDF')+'</a><button type="button" class="dmpdf-del" title="삭제" onclick="DM.deletePdf(\''+esc(u.url)+'\',this)">🗑</button></span>'; }).join('');
+      return '<div class="dmpdf-row" data-item="'+esc(iid)+'"><span class="dmpdf-mul">물건 '+mul+'</span>'
+        +'<label class="dmpdf-reg">📎 '+(list.length?'추가':'등록')+'<input type="file" accept="application/pdf,.pdf" data-item="'+esc(iid)+'" style="display:none" onchange="DM.uploadPdf&&DM.uploadPdf(this)"></label>'
+        +files+'<span class="dmpdf-msg"></span></div>';
+    }).join('')+'</div>';
   }
   DM.viewPdf=function(url){
     if(!url) return;
@@ -1403,7 +1423,9 @@
   // 전자서명 PDF 업로드(모달=관리자) — member_id로 직접 Drive 저장
   DM.uploadPdf=function(inp){
     var f=inp.files&&inp.files[0]; if(!f) return;
-    var msg=inp.parentNode.parentNode.querySelector('.dmpdf-msg');
+    var row=inp.closest?inp.closest('.dmpdf-row'):(inp.parentNode&&inp.parentNode.parentNode);
+    var msg=row?row.querySelector('.dmpdf-msg'):null;
+    var itemId=inp.getAttribute('data-item')||'';
     function setMsg(t,c){ if(msg){ msg.textContent=t; msg.style.color=c||'#6b7280'; } }
     if(f.type!=='application/pdf'&&!/\.pdf$/i.test(f.name)){ setMsg('PDF만 가능','#dc2626'); inp.value=''; return; }
     if(f.size>12*1024*1024){ setMsg('12MB 이하만','#dc2626'); inp.value=''; return; }
@@ -1412,12 +1434,21 @@
     setMsg('업로드 중… '+f.name);
     var rd=new FileReader();
     rd.onload=function(){ var b64=String(rd.result||'').split(',')[1]||'';
-      google.script.run.withSuccessHandler(function(r){ if(r&&r.success){ setMsg('✓ 업로드됨: '+(r.name||f.name),'#16a34a'); delete _uploadsCache[String(m.member_id)]; _renderMsgRight(); } else setMsg('실패: '+((r&&r.msg)||'?'),'#dc2626'); })
+      google.script.run.withSuccessHandler(function(r){ if(r&&r.success){ setMsg('✓ 업로드됨','#16a34a'); delete _uploadsCache[String(m.member_id)]; _loadUploadsFor(m); } else setMsg('실패: '+((r&&r.msg)||'?'),'#dc2626'); })
         .withFailureHandler(function(e){ setMsg('오류: '+(e&&e.message||e),'#dc2626'); })
-        .dmUploadPdfByMember(String(m.member_id), f.name, b64);
+        .dmUploadPdfByMember(String(m.member_id), f.name, b64, itemId);   // 물건단위 item_id
     };
     rd.onerror=function(){ setMsg('파일 읽기 실패','#dc2626'); };
     rd.readAsDataURL(f);
+  };
+  DM.deletePdf=function(url, btn){
+    if(!url) return; if(!confirm('이 PDF를 삭제할까요?')) return;
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경 아님'); return; }
+    if(btn){ btn.disabled=true; btn.textContent='…'; }
+    var m=_msgGroups[_msgFocusGi];
+    google.script.run.withSuccessHandler(function(r){ if(r&&r.success){ if(m){ delete _uploadsCache[String(m.member_id)]; _loadUploadsFor(m); } } else { if(btn){btn.disabled=false;btn.textContent='🗑';} alert('삭제 실패: '+((r&&r.msg)||'?')); } })
+      .withFailureHandler(function(e){ if(btn){btn.disabled=false;btn.textContent='🗑';} alert('삭제 오류: '+(e&&e.message||e)); })
+      .dmDeleteUpload(url, '');   // 관리자: 토큰 없음(전체 삭제 권한)
   };
   // 미리보기 복사버튼 동작(웹페이지 DM.copyVal과 동일) — 모달에서도 눌러 복사 가능
   DM.copyVal=function(btn){
@@ -1556,17 +1587,14 @@
       _cpRow('수임자 주소', firstAgent.address||''),
       _cpRow('수요법원', courtPlain)
     ];
-    if(web){   // 링크 미리보기/모달: 제출방법 = 회원 등록 PDF 보기/미등록
-      var _ups=m.member_id?_uploadsCache[String(m.member_id)]:[];
-      var _view = (_ups==null) ? '<span style="color:#94a3b8">확인 중…</span>'
-        : (_ups.length ? '<button type="button" class="dmpdf-view" onclick="DM.viewPdf(\''+esc(_ups[0].url)+'\')">📄 PDF 보기</button>'+(_ups.length>1?(' <span style="color:#64748b;font-size:.85em">외 '+(_ups.length-1)+'건</span>'):'')
-                       : '<span style="color:#dc2626;font-weight:700">미등록</span>');
-      var _pdfCell='<div class="dmpdf">'+_view+'<label class="dmpdf-reg">📎 등록하기<input type="file" accept="application/pdf,.pdf" style="display:none" onchange="DM.uploadPdf&&DM.uploadPdf(this)"></label><span class="dmpdf-msg"></span></div>';
+    if(web){   // 링크 미리보기/모달: 제출방법 = 물건별 등록 PDF 보기/등록/삭제
+      var _upMap=m.member_id?_uploadsCache[String(m.member_id)]:{};
+      var _pdfCell = (_upMap===null) ? '<span style="color:#94a3b8">확인 중…</span>' : _msgPdfPerItem(m, _upMap||{});
       _esRows.push(['제출방법', _pdfCell, '', 'raw']);
     } else {
       _esRows.push(['제출 방법','PDF 파일 다운로드 후 담당자에게 보내주세요']);
     }
-    _esRows.push(['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 물건번호별로 따로 신청해야 됩니다.','hl-r']);
+    _esRows.push(['유의사항','전자서명 본인확인서 발급 시 물건이 1개 이상이면 <b>물건번호별로 따로 신청</b>하고 물건별로 PDF를 등록하세요. 잘못 등록 시 🗑로 삭제.','hl-r']);
     body += blk('전자본인서명 확인서발급', _kvTable(_esRows));
     // 필독 사항 — 개요 위(맨 위). 1번(정보 회신)은 누락 항목이 있을 때만 노출. 숫자는 직접 부여(캡처 시 ol 마커 누락 방지)
     var mustItems=[];
