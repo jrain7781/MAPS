@@ -1423,9 +1423,16 @@
     if(ti){ ti.style.background=(_msgTab==='image')?'#1f3a5f':'#fff'; ti.style.color=(_msgTab==='image')?'#fff':'#475569'; }
     _renderMsgRight();
   };
+  // 좌측 입찰카드 리스트 상단 고정 바: 전체선택 + 선택수
+  function _msgSelBar(){
+    var n=Object.keys(_msgSel).length, total=_msgGroups.length;
+    return '<div style="position:sticky;top:0;z-index:3;margin:-12px -12px 10px;padding:9px 12px;background:#eef2f7;border-bottom:1px solid #d8e0ea;display:flex;align-items:center;gap:8px">'
+      +'<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;font-weight:700;color:#334155"><input type="checkbox" id="dmMsgSelectAll" '+((n===total&&n>0)?'checked':'')+' onchange="DM.msgSelectAll(this)"> 전체선택</label>'
+      +'<span id="dmMsgSelCnt" style="font-size:12px;color:#64748b">선택 '+n+'명</span></div>';
+  }
   function _renderMsgLeft(){
     var box=document.getElementById('dmMsgList'); if(!box) return;
-    box.innerHTML=_msgGroups.map(function(m,gi){
+    box.innerHTML=_msgSelBar()+_msgGroups.map(function(m,gi){
       var s=_msgSums(m), foc=(gi===_msgFocusGi);
       var mulNos=m.items.map(function(it){return it.mulgeon_no||'';}).filter(Boolean).join(',');
       var c={본인:0,개인:0,법인:0}; m.items.forEach(function(it){ var g=_parseMName(it.member_name,it.member_id).gubun; if(c[g]!==undefined) c[g]++; });
