@@ -5424,7 +5424,7 @@ function createItemAndRegisterToD1(classD1Id, itemData, className, classDate, cl
   return { success: true, message: '신규 물건 생성 및 회차 등록 완료' };
 }
 
-function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, mNameOverride) {
+function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, mNameOverride, mNameIdOverride) {
   if (!classD1Id || !Array.isArray(itemIds) || itemIds.length === 0) {
     return { success: false, message: '파라미터 오류' };
   }
@@ -5444,6 +5444,7 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
   var idCol           = ITEM_HEADERS.indexOf('id') + 1;
   var stuMemberCol    = ITEM_HEADERS.indexOf('stu_member') + 1;
   var mNameCol        = ITEM_HEADERS.indexOf('m_name') + 1;
+  var mNameIdCol      = ITEM_HEADERS.indexOf('m_name_id') + 1;       // F열 = 6 (입찰담당)
   var classD1IdCol    = ITEM_HEADERS.indexOf('class_d1_id') + 1;    // S열 = 19
   var chuchenStateCol = ITEM_HEADERS.indexOf('chuchen_state') + 1;
   var chuchenDateCol  = ITEM_HEADERS.indexOf('chuchen_date') + 1;
@@ -5502,6 +5503,9 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
 
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd');
   var nowIso = new Date().toISOString();
+  // [담당 강제변경] 일괄등록 시 담당(m_name_id)을 수업 담당으로 통일 (프론트가 mismatch 확인 후 전달).
+  var mNameIdVal = String(mNameIdOverride || '').trim();
+  var hasMNameId = !!mNameIdVal;
   var updated = 0;
   var notFound = [];
   var affectedMemberIds = {};
@@ -5512,6 +5516,7 @@ function addItemsToClassD1(classD1Id, itemIds, className, classDate, classLoop, 
     var row = idx + 2;
     sheet.getRange(row, stuMemberCol).setValue('추천');
     sheet.getRange(row, mNameCol).setValue(mNameVal);
+    if (hasMNameId) sheet.getRange(row, mNameIdCol).setValue(mNameIdVal);   // 담당 강제변경
     sheet.getRange(row, classD1IdCol).setValue(classD1Id);
     sheet.getRange(row, chuchenStateCol).setValue('전달완료');
     sheet.getRange(row, chuchenDateCol).setValue(nowIso);

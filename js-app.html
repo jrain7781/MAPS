@@ -20538,6 +20538,20 @@ MJ 이정우 팀장
         d1PickerRenderCart_();
     }
 
+    // 현재 선택된 회차(수업)의 담당 강사 표시명 (teacher_id → 닉네임/본명). 없으면 ''.
+    function _d1PickerClassMgr_() {
+        const d1Info = (allClassD1Data || []).find(d => String(d.class_d1_id) === String(selectedClassD1Id || ''));
+        const tid = d1Info ? String(d1Info.teacher_id || '').trim() : '';
+        if (!tid) return '';
+        return (typeof resolveTeacherById_ === 'function') ? String(resolveTeacherById_(tid).display || '').trim() : '';
+    }
+    // 물건 담당(m_name_id) 표시명 정규화 (닉네임 우선). 비교/표시용.
+    function _d1ItemMgrDisp_(mNameId) {
+        return (typeof resolveTeacherDisplay_ === 'function')
+            ? String(resolveTeacherDisplay_(mNameId).display || '').trim()
+            : String(mNameId || '').trim();
+    }
+
     function d1PickerRenderCart_() {
         const cart = document.getElementById('d1ItemPickerCart');
         const cnt = d1PickerCart.length > 0 ? `${d1PickerCart.length}건` : '';
@@ -20568,9 +20582,15 @@ MJ 이정우 팀장
             cart.innerHTML = '<tr><td colspan="8" class="text-xs text-gray-400 text-center py-4">' + (searchKw ? '조회 결과 없음' : '클릭하면 추가됩니다') + '</td></tr>';
             return;
         }
+        const classMgr = _d1PickerClassMgr_();
         cart.innerHTML = list.map(c => {
             const statusCls = getStatusTagClass ? getStatusTagClass(c.stu_member) : '';
             const yongdoVal = String(c.items_youngdo || '').trim();
+            // 담당 불일치(수업 담당 ≠ 물건 담당) → 붉게 굵게
+            const itemMgr = _d1ItemMgrDisp_(c.m_name_id);
+            const mgrMismatch = classMgr && itemMgr && itemMgr !== classMgr;
+            const mgrCls = mgrMismatch ? 'text-red-600 font-bold' : 'text-gray-500';
+            const mgrTitle = mgrMismatch ? `수업 담당(${escapeHtml(classMgr)})과 다름` : '';
             const yongdoCls = (typeof getYongdoTagClass === 'function') ? getYongdoTagClass(yongdoVal) : '';
             const yongdoLabel = (typeof getYongdoDisplayLabel === 'function') ? getYongdoDisplayLabel(yongdoVal) : (yongdoVal || '등록전');
             const dateShort = String(c['in-date'] || '').replace(/-/g, '').substring(2, 8) || '-';
@@ -20581,7 +20601,7 @@ MJ 이정우 팀장
                 <td class="item-col-youngdo text-center"><span class="${yongdoCls} text-[10px]">${escapeHtml(yongdoLabel)}</span></td>
                 <td class="item-col-status text-center"><span class="${statusCls} text-[10px]">${escapeHtml(c.stu_member||'')}</span></td>
                 <td class="item-col-member text-center text-gray-700 overflow-hidden" style="max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.m_name||'')}">${escapeHtml(c.m_name||'')}</td>
-                <td class="item-col-manager text-center text-gray-500">${escapeHtml(c.m_name_id||'')}</td>
+                <td class="item-col-manager text-center ${mgrCls}" title="${mgrTitle}">${escapeHtml(c.m_name_id||'')}</td>
                 <td class="text-center w-5"><button type="button" onclick="d1PickerRemoveCart('${c.id}')" class="text-red-400 hover:text-red-600 text-xs leading-none">✕</button></td>
             </tr>`;
         }).join('');
@@ -20625,6 +20645,25 @@ MJ 이정우 팀장
         const classDate = d1Info ? String(d1Info.class_date||'').replace(/-/g,'') : '';
         const classLoop = d1Info ? (d1Info.class_loop||'') : '';
         const itemIds = d1PickerCart.map(c => c.id);
+
+        // [담당 강제변경] '담당 강제변경' 체크 + 수업 담당과 다른 물건이 있으면 안내 후 담당 통일하여 등록
+        let mNameIdOverride = '';
+        const classMgr = _d1PickerClassMgr_();
+        const forceMgr = !!(document.getElementById('d1picker-force-mgr') || {}).checked;
+        if (classMgr && forceMgr) {
+            const mismatched = d1PickerCart.filter(c => {
+                const im = _d1ItemMgrDisp_(c.m_name_id);
+                return im && im !== classMgr;
+            });
+            if (mismatched.length > 0) {
+                const listStr = mismatched.map(c => `· ${c.sakun_no||''}  (현재 담당: ${_d1ItemMgrDisp_(c.m_name_id) || '-'})`).join('\n');
+                const ok = confirm(
+                    `담당이 수업 담당 '${classMgr}'과(와) 다른 물건 ${mismatched.length}건이 있습니다:\n\n${listStr}\n\n` +
+                    `이 물건들의 담당을 '${classMgr}'(으)로 변경하여 등록합니다.\n계속하시겠습니까?`);
+                if (!ok) return;
+                mNameIdOverride = classMgr;
+            }
+        }
         closeD1ItemPickerModal();
 
         google.script.run
@@ -20633,7 +20672,7 @@ MJ 이정우 팀장
                 if (r.success) loadD1Items(selectedClassD1Id, true); // 변경 후 서버 재조회
             })
             .withFailureHandler(e => showStatus(e.message||'등록 실패', 'error'))
-            .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate, classLoop);
+            .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate, classLoop, '', mNameIdOverride);
     }
 
     function showD1ItemRegisterPanel() {
@@ -20738,6 +20777,12 @@ MJ 이정우 팀장
             })
             .withFailureHandler(e => showStatus(e.message, 'error'))
             .addItemsToClassD1(selectedClassD1Id, itemIds, className, classDate, classLoop);
+    }
+
+    // 물건탭 등록된 물건 리스트 새로고침 (DB 강제 재조회)
+    function reloadD1ItemList_() {
+        if (!selectedClassD1Id || selectedClassD1Id === '__summary__') { showStatus('회차를 선택하세요.', 'error'); return; }
+        loadD1Items(selectedClassD1Id, true);
     }
 
     function loadD1Items(classD1Id, forceServer) {
