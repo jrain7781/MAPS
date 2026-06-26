@@ -5581,6 +5581,22 @@
             });
         });
 
+        // [회원 변경 하이라이트] m_name FIELD_CHANGE 기록이 없는 경로(web-rec 재추천 등)도
+        // 당대 저장 회원명(P열 member_name)을 직전 행과 비교해 변경 지점에 합성 change 생성
+        // → 다른 컬럼처럼 취소선(이전 회원) + 빨강(변경 회원) 표시됨.
+        (function () {
+            var prevMember = '';
+            for (var gi = groups.length - 1; gi >= 0; gi--) { // 과거 -> 최신
+                var gg = groups[gi];
+                var cur = String(gg.member_name || '').trim();
+                if (!cur) continue; // 회원명 없는 로그는 직전값 유지
+                if (!gg.changes['m_name'] && prevMember && prevMember !== cur) {
+                    gg.changes['m_name'] = { from: prevMember, to: cur }; // 실제 변경이력 없을 때만 합성
+                }
+                prevMember = cur;
+            }
+        })();
+
         function fmtDt(dt) {
             var s = String(dt);
             // 텔레그램 수신 날짜 파싱 오류 대응
