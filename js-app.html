@@ -5717,7 +5717,12 @@
 
             FIELD_COLS.forEach(function (col) {
                 var chg = g.changes[col];
-                var snap = applyFieldDisp_(col, g.snapshot[col]);
+                // 회원(m_name) 칸: 현재회원 역산값 대신 당대 저장 스냅샷(telegram_requests P열 member_name) 우선 사용.
+                // web-rec 재추천 등 m_name 변경이력을 안 남기는 경로에서도 각 로그의 실제 회원이 정확히 표시됨.
+                var snapRaw = (col === 'm_name' && g.member_name && String(g.member_name).trim())
+                    ? g.member_name
+                    : g.snapshot[col];
+                var snap = applyFieldDisp_(col, snapRaw);
                 if (chg) chg = { from: applyFieldDisp_(col, chg.from), to: applyFieldDisp_(col, chg.to) };
                 html += renderCell(chg, snap, isCreate);
             });
