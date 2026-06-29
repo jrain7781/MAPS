@@ -276,12 +276,13 @@
   function _feeAmt(bucket,i){ var a=(_feeTbl()[bucket]&&_feeTbl()[bucket].amounts)||[]; if(!a.length) return 0; return _num(a[Math.min(i,a.length-1)]); }
   function _computeFees(items){
     var by={};
-    (items||[]).forEach(function(it){ it._fee=''; var m=String(it.member_name||'').trim(); if(m) (by[m]=by[m]||[]).push(it); });
+    // 진행비는 '입찰' 상태 물건만. 회원이 등록돼 있어도 상태가 입찰이 아니면(=입찰 안 하는 것) 진행비 없음.
+    (items||[]).forEach(function(it){ it._fee=''; if(String(it.stu_member||'').trim()!=='입찰') return; var m=String(it.member_name||'').trim(); if(m) (by[m]=by[m]||[]).push(it); });
     Object.keys(by).forEach(function(m){
       var arr=by[m].slice().sort(function(a,b){ return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0); });
       arr.forEach(function(it,i){ it._fee=String(_feeAmt(_feeBucket(it.court),i)); });
     });
-    (items||[]).forEach(function(it){ if(_isManualFee(it)) it._fee=String(_num(it.jinhaengbi)); });   // 수동 진행비(시트 jinhaengbi) 있으면 자동값 위에 덮어씀 → _fee=유효진행비(그리드·모달·회원링크 공통)
+    (items||[]).forEach(function(it){ if(String(it.stu_member||'').trim()==='입찰' && _isManualFee(it)) it._fee=String(_num(it.jinhaengbi)); });   // 수동 진행비(시트 jinhaengbi)도 입찰 상태일 때만 적용
   }
   // 요율표 로드(현재 적용값 표시·수정용). 저장본 있으면 그걸로 계산.
   function _loadFeeTable(cb){ if(typeof google==='undefined'||!google.script||!google.script.run){ if(cb)cb(); return; } google.script.run.withSuccessHandler(function(r){ if(r&&r.success&&r.table) _dmFeeTable=r.table; if(cb)cb(); }).withFailureHandler(function(){ if(cb)cb(); }).getDmFeeTable(); }
