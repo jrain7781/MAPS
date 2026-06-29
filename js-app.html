@@ -14284,6 +14284,57 @@ MJ 이정우 팀장
         }, { passive: false });
     }
 
+    // ───────────────────────────────────────────────────────────────
+    // 물건상태 편집 잠금/해제 (회원정보 탭의 🔒 관리 버튼 → 암호 593998)
+    //  - 활성화 전: 물건상태 탭의 행추가·이력복사·수정·삭제 숨김
+    //  - 활성화 후: 버튼 노출 + 관리 버튼이 🔓 활성화 로 변경
+    //  - 활성화 버튼 재클릭 → 모달에서 비활성화 → 다시 잠금
+    // ───────────────────────────────────────────────────────────────
+    window.misEditUnlocked = window.misEditUnlocked || false;
+    const MIS_MANAGE_PW = '593998';
+
+    function setMisEditUnlocked(on) {
+        window.misEditUnlocked = !!on;
+        document.body.classList.toggle('mis-unlocked', !!on);
+        const btn = document.getElementById('btnMisManage');
+        if (btn) {
+            if (on) {
+                btn.innerHTML = '🔓 활성화';
+                btn.className = 'bg-green-600 hover:bg-green-700 text-white font-semibold py-1.5 px-3 rounded-lg text-sm';
+            } else {
+                btn.innerHTML = '🔒 관리';
+                btn.className = 'bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-1.5 px-3 rounded-lg text-sm';
+            }
+        }
+    }
+
+    function handleMisManageClick() {
+        if (!window.misEditUnlocked) {
+            const pw = prompt('관리 비밀번호를 입력하세요');
+            if (pw === null) return;            // 취소
+            if (String(pw).trim() === MIS_MANAGE_PW) {
+                setMisEditUnlocked(true);
+            } else {
+                alert('비밀번호가 일치하지 않습니다.');
+            }
+        } else {
+            openMisManageModal();
+        }
+    }
+
+    function openMisManageModal() { document.getElementById('misManageModal').classList.remove('hidden'); }
+    function closeMisManageModal() { document.getElementById('misManageModal').classList.add('hidden'); }
+    function deactivateMisEdit() { setMisEditUnlocked(false); closeMisManageModal(); }
+
+    // 활성화 안 된 상태에서 편집 기능 직접 호출 방지(이중 안전장치)
+    function misRequireUnlock() {
+        if (!window.misEditUnlocked) {
+            alert('🔒 회원정보 탭의 [관리] 버튼으로 활성화한 뒤 사용할 수 있습니다.');
+            return false;
+        }
+        return true;
+    }
+
     function loadMemberItemStatus() {
         const tbody = document.getElementById('misTableBody');
         const statusEl = document.getElementById('misStatus');
@@ -14361,8 +14412,9 @@ MJ 이정우 팀장
                     <td class="px-2 py-1.5 text-right font-mono text-gray-600 whitespace-nowrap">${_josaNum(r.est_resale)}</td>
                     <td class="px-2 py-1.5 text-center font-mono text-gray-400 text-[10px] whitespace-nowrap">${escapeHtml(rec)}</td>
                     <td class="px-2 py-1.5 text-center whitespace-nowrap">
-                        <button onclick="editMisRowUI('${escapeHtml(r.mis_id)}')" class="text-indigo-600 hover:text-indigo-800 mr-1">수정</button>
-                        <button onclick="deleteMisRowUI('${escapeHtml(r.mis_id)}')" class="text-red-500 hover:text-red-700">삭제</button>
+                        <button onclick="editMisRowUI('${escapeHtml(r.mis_id)}')" class="mis-gated text-indigo-600 hover:text-indigo-800 mr-1">수정</button>
+                        <button onclick="deleteMisRowUI('${escapeHtml(r.mis_id)}')" class="mis-gated text-red-500 hover:text-red-700">삭제</button>
+                        <span class="mis-locked-hint text-gray-300 text-[11px]">🔒</span>
                     </td>
                 </tr>`;
         }).join('');
@@ -14380,6 +14432,7 @@ MJ 이정우 팀장
 
     // 낙찰건 추가하기(복사) 모달 열기 — 선택 행을 동일정보 + 상태변경으로 추가
     function openMisCopyModal() {
+        if (!misRequireUnlock()) return;
         const memberId = (document.getElementById('mem-member_id') || {}).value || '';
         if (!memberId) { alert('먼저 회원을 선택해 주세요.'); return; }
         const selId = String(window.misSelectedId || '');
@@ -14477,6 +14530,7 @@ MJ 이정우 팀장
     }
 
     function editMisRowUI(misId) {
+        if (!misRequireUnlock()) return;
         const tr = document.querySelector('#misTableBody tr[data-mis="' + misId + '"]');
         if (!tr) return;
         const r = (window.misRowsCache || []).find(function (x) { return String(x.mis_id) === String(misId); });
@@ -14504,6 +14558,7 @@ MJ 이정우 팀장
     }
 
     function addMisRowUI() {
+        if (!misRequireUnlock()) return;
         const memberId = (document.getElementById('mem-member_id') || {}).value || '';
         if (!memberId) { alert('먼저 회원을 선택해 주세요.'); return; }
         const tbody = document.getElementById('misTableBody');
@@ -14546,6 +14601,7 @@ MJ 이정우 팀장
     }
 
     function deleteMisRowUI(misId) {
+        if (!misRequireUnlock()) return;
         if (!confirm('이 물건상태 행을 삭제할까요?')) return;
         google.script.run
             .withSuccessHandler(function (res) {
