@@ -10,6 +10,7 @@
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   function _sakunBase(s){ return String(s||'').replace(/\s*\([^)]*\)\s*$/,'').trim(); }
   function _msgAcct(a){ a=a||{}; return [String(a.account_bank||'').trim(),String(a.account_no||'').trim(),String(a.account_name||'').trim()].filter(Boolean).join(' '); }
+  function _jikState(items){ var t=(items||[]).length, n=0; (items||[]).forEach(function(it){ if(String(it.jikjub||'').toUpperCase()==='Y') n++; }); return { state:(n===0?'none':(n>=t?'all':'some')), n:n, total:t }; }   // 직접입찰 집계
   function _courtParse(court){
     var c=String(court||'').trim(), m=c.match(/^(.*?)지방법원\s*(.*?)지원/);
     if(m) return { bon:(m[1]||'')+'지방', support:(m[2]||'') };
@@ -131,8 +132,9 @@
         : [_efield('입찰명의성명',pName,'name',p.idx,'hl-y'),_efield('직업',p.job||'회사원','job',p.idx),_efield('주민등록번호',p.jumin_corp,'jumin_corp',p.idx),_efield('전화번호',p.phone,'phone',p.idx),_efield('주소',p.address,'address',p.idx)].concat(_acctRows));
       var tbl=_kvTable(rows);
       var _card=blkSave(hd, tbl, true);   // 명의 카드 = 항상 수정/저장 버튼(채워진 정보도 수정 가능)
-      var _grpJik=grp.some(function(it){ return String(it.jikjub||'').toUpperCase()==='Y'; });   // 그룹 내 직접입찰 물건 있으면 붉은 세로 카드 앞에
-      body += _grpJik ? ('<div class="dm-jik-wrap"><div class="dm-jik-ribbon">직접입찰</div>'+_card+'</div>') : _card;
+      var _gjs=_jikState(grp);   // 그룹 내 직접입찰: 전부(직접입찰)/일부(일부직접)면 붉은 세로 카드 앞에
+      if(_gjs.state==='none'){ body += _card; }
+      else { var _glab=(_gjs.state==='all'?'직접입찰':'일부직접'); body += '<div class="dm-jik-wrap"><div class="dm-jik-ribbon'+(_gjs.state==='some'?' dm-jik-some':'')+'" title="'+_glab+(_gjs.state==='some'?(' ('+_gjs.n+'/'+_gjs.total+')'):'')+'">'+_glab+'</div>'+_card+'</div>'; }
     });
     var purposeLines=m.items.map(function(it){ var line=courtPlain+' '+_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+') 대리입찰'; return _cpLine(line); }).join('');
     var _ytBtn='<button type="button" onclick="DM.playYt(\'S2xVZjJeQd0\')" style="background:#FF0000;color:#fff;border:0;border-radius:6px;padding:4px 11px;font-weight:800;cursor:pointer;font-size:.95em;vertical-align:middle">▶ YouTube</button>';
