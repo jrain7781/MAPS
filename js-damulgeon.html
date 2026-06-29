@@ -71,6 +71,10 @@
   #dmMsgReport .rbody { padding:10px; font-size:var(--dmrf,14px); }   /* 폰트 조절(상단 글자 버튼) */
   /* 섹션 블록 */
   #dmMsgReport .rsec { position:relative; border:2px solid; border-radius:8px; margin:0 0 9px; overflow:hidden; }
+  /* 직접입찰: 회원(명의) 카드 앞 붉은 세로 리본(같은 높이의 짧은 카드) */
+  #dmMsgReport .dm-jik-wrap { display:flex; align-items:stretch; gap:6px; margin:0 0 9px; }
+  #dmMsgReport .dm-jik-wrap > .rsec { flex:1; min-width:0; margin:0; }
+  #dmMsgReport .dm-jik-ribbon { flex:0 0 34px; width:34px; border-radius:8px; background:#dc2626; color:#fff; font-weight:900; letter-spacing:2px; writing-mode:vertical-rl; text-orientation:upright; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(220,38,38,.4); }
   #dmMsgReport .rsec-h { padding:5px 10px; font-weight:800; font-size:1.02em; }
   #dmMsgReport .rsec-h .rh-sub { font-weight:700; font-size:.82em; padding:0 6px; border-radius:8px; background:rgba(255,255,255,.6); }
   #dmMsgReport .rsec-a { border-color:#9db4d4; } #dmMsgReport .rsec-a .rsec-h { background:#e6eef8; color:#1e3a5f; }
@@ -185,6 +189,7 @@
     { label:'법원',     f:'court',        t:'ro',     a:'left',   w:60,  src:'items',frozen:true, hideable:true },
     { label:'사건번호', f:'sakun_no',     t:'sakun',  a:'left',   w:116, src:'items',frozen:true, hideable:true },
     { label:'물건종류', f:'prop_kind',    t:'ro',     a:'left',   w:78,  src:'items',frozen:true },
+    { label:'D',        f:'jikjub',       t:'jikjub', a:'center', w:28,  src:'dm',   frozen:true },
     { label:'A',        f:'_pdf',         t:'pdf',    a:'center', w:30,  src:'',     frozen:true },
     { label:'물건',     f:'mulgeon_no',   t:'ro',     a:'center', w:42,  src:'items',frozen:true },
     { label:'상태',     f:'stu_member',   t:'status', a:'center', w:56,  src:'items',frozen:true },
@@ -450,6 +455,7 @@
     if(c.t==='sakun') return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(it.sakun_no)+'</span></td>';
     if(c.t==='status'){ var st=String(it.stu_member||''); var k=(typeof getStatusTagClass==='function')?getStatusTagClass(st):''; return '<td class="'+cls+'" style="'+style+'"><span class="'+k+'">'+esc(st)+'</span></td>'; }
     if(c.t==='pdf'){ return '<td class="'+cls+'" style="'+style+';text-align:center;padding:0">'+(it.has_pdf?'<span title="전자서명 PDF 미리보기" onclick="DM.previewPdf(\''+esc(it.link_item_id)+'\')" style="cursor:pointer;color:#16a34a;font-size:15px;line-height:1">●</span>':'')+'</td>'; }
+    if(c.t==='jikjub'){ return '<td class="'+cls+'" style="'+style+';text-align:center;padding:0">'+(String(it.jikjub||'').toUpperCase()==='Y'?'<span title="직접입찰" style="color:#dc2626;font-weight:900;font-size:15px;line-height:1">✔</span>':'')+'</td>'; }   // D = 직접입찰(붉은 굵은 체크)
     if(c.t==='ro' || c.t==='calc'){
       var v=computed(c.f,it,idx); if(c.num) v=_num(v)?_comma(v):'';
       if(c.f==='mulgeon_no' && it.link_item_id) return '<td class="'+cls+'" style="'+style+'"><span class="dm-sakun-link" onclick="DM._hl(this);DM.openItem(\''+esc(it.link_item_id)+'\')" title="클릭 → 입찰 수정 모달">'+esc(v)+'</span></td>';   // 사건번호 숨김 시 물건번호로 모달
@@ -1292,7 +1298,7 @@
   // ── 일괄작업 모달 (일괄적용 클릭 → 모달: 상단 값입력/회원검색 + 하단 선택 물건) ──
   var _bulkAct='', _bulkTgts=[], _acItems=[];
   var _bidMethod='pct', _bidWon=0;   // 입찰가 방식(pct/direct/plus) + 위젯 환산 원값
-  function _bulkLabel(a){ return {member:'회원',myungui:'명의',bidprice:'입찰가(최저%)',jinhaengbi:'진행비',hyang:'향',daeriin:'입찰대리인',auth_method:'인증',status:'물건상태 변경'}[a]||a; }
+  function _bulkLabel(a){ return {member:'회원',myungui:'명의',bidprice:'입찰가(최저%)',jinhaengbi:'진행비',hyang:'향',daeriin:'입찰대리인',auth_method:'인증',jikjub:'직접입찰',status:'물건상태 변경'}[a]||a; }
   // ===== 입찰안내 메세지 모달 (회원별 입찰 요약 + 선택 전송) =====
   var _msgGroups=[], _msgCtx={};
   function _won(n){ n=_num(n); return n?n.toLocaleString('ko-KR'):'0'; }
@@ -1840,7 +1846,9 @@
         ? [_efield('법인성명',pName,'name',p.idx,'hl-y'),_efield('사업자번호',p.biz_no,'biz_no',p.idx),_efield('법인등록번호',p.jumin_corp,'jumin_corp',p.idx),_efield('전화번호',p.phone,'phone',p.idx),_efield('주소',p.address,'address',p.idx)].concat(_acctRows)
         : [_efield('입찰명의성명',pName,'name',p.idx,'hl-y'),_efield('직업',p.job||'회사원','job',p.idx),_efield('주민등록번호',p.jumin_corp,'jumin_corp',p.idx),_efield('전화번호',p.phone,'phone',p.idx),_efield('주소',p.address,'address',p.idx)].concat(_acctRows));
       var tbl=_kvTable(rows);
-      body += blkSave(hd, tbl, web);   // web(링크)에서만 명의 카드에 [수정][저장] 버튼(이미지 캡처엔 없음)
+      var _card=blkSave(hd, tbl, web);   // web(링크)에서만 명의 카드에 [수정][저장] 버튼(이미지 캡처엔 없음)
+      var _grpJik=grp.some(function(it){ return String(it.jikjub||'').toUpperCase()==='Y'; });   // 그룹 내 직접입찰 물건 있으면 붉은 세로 카드 앞에
+      body += _grpJik ? ('<div class="dm-jik-wrap"><div class="dm-jik-ribbon">직접입찰</div>'+_card+'</div>') : _card;
     });
     // 전자본인서명 용도 = 물건번호별 줄 (3건이면 3줄). 웹이면 줄마다 복사버튼(물건별)
     var purposeLines=m.items.map(function(it){ var line=courtPlain+' '+_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+') 대리입찰'; return web ? _cpLine(line) : esc(line); }).join(web?'':'<br>');
@@ -1966,7 +1974,7 @@
     // 동적 렌더용 payload: 회원 새로고침 시 서버가 이 물건/기한 + member_accounts 라이브로 재조립(회원 저장분 반영)
     var _reqs=[], _reqKeys=[], _seen={};
     m.items.forEach(function(it){ var pm=_parseMName(it.member_name, m.member_id); var mk=pm.myungui||''; if(_seen[mk]!==undefined) return; _seen[mk]=1; _reqKeys.push(m.member_id+'||'+mk); _reqs.push({ member_id:m.member_id, myungui:mk, daeriin:String(it.daeriin||'').trim() }); });
-    var _slim=m.items.map(function(it){ return { link_item_id:it.link_item_id, member_name:it.member_name, member_id:it.member_id, court:it.court, sakun_no:it.sakun_no, mulgeon_no:it.mulgeon_no, bidprice:it.bidprice, deposit:it.deposit, _fee:it._fee, address:it.address, in_date:it.in_date, daeriin:it.daeriin }; });
+    var _slim=m.items.map(function(it){ return { link_item_id:it.link_item_id, member_name:it.member_name, member_id:it.member_id, court:it.court, sakun_no:it.sakun_no, mulgeon_no:it.mulgeon_no, bidprice:it.bidprice, deposit:it.deposit, _fee:it._fee, address:it.address, in_date:it.in_date, daeriin:it.daeriin, jikjub:it.jikjub }; });
     var _mDueOpts={ due1:String((m.items[0]&&m.items[0].due1)||'').trim(), due2:String((m.items[0]&&m.items[0].due2)||'').trim(), consol:_msgConsol(m), font:_msgFont, dynamic:!!(document.getElementById('dmMsgDynamic')||{}).checked };   // 웹 링크엔 회원별 저장 기한 + 글자크기 + 동적여부(체크 시 회원 새로고침=ITEMS·진행비 최신, 해제=스냅샷 빠름)
     var _payload=JSON.stringify({ m:{ member:m.member, member_id:String(m.member_id||''), items:_slim }, ctx:{ sakun:_msgCtx.sakun, bidDate:_msgCtx.bidDate, addr:_msgCtx.addr, court:_msgCtx.court, memberName:m.member }, opts:_mDueOpts, reqs:_reqs, reqKeys:_reqKeys });
     return { m:m, seed:seed, html:cardEl.outerHTML, title:title, summary:_sp.join(' / '), phone4:phone4, member_id:String(m.member_id||''), biddate:biddate, payload:_payload };
@@ -2124,6 +2132,7 @@
     else if(act==='hyang'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">향</label><br><input id="dmBulkVal" placeholder="향" oninput="DM.bulkPrev()" onfocus="this.select()" style="'+st+';width:120px;margin-top:5px">'; }
     else if(act==='daeriin'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">입찰대리인 (구분에 직원 포함)</label><br><select id="dmBulkVal" onchange="DM.bulkPrev()" style="'+st+';min-width:170px;margin-top:5px"><option value="">불러오는 중…</option></select>'; loadMembers(function(){ var s=document.getElementById('dmBulkVal'); if(s) s.innerHTML='<option value="">(미선택 — 대리인 지움)</option>'+_staff().map(function(m){ var n=m.name||m.member_name||''; return n?'<option>'+esc(n)+'</option>':''; }).join(''); DM.bulkPrev(); }); }
     else if(act==='auth_method'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">인증방식</label><br><select id="dmBulkVal" onchange="DM.bulkPrev()" style="'+st+';margin-top:5px"><option value="">선택</option><option>종이</option><option>전자</option></select>'; }
+    else if(act==='jikjub'){ area.innerHTML='<label style="font-size:12px;color:#374151;font-weight:600">직접입찰 (회원 직접 입찰건)</label><br><select id="dmBulkVal" onchange="DM.bulkPrev()" style="'+st+';margin-top:5px"><option value="Y">✔ 체크(직접입찰)</option><option value="N">해제</option></select>'; }
     renderBulkList();
     document.getElementById('dmBulkModal').classList.remove('content-hidden');
     setTimeout(function(){ var v=document.getElementById('dmBulkVal'); if(v) v.focus(); },60);
