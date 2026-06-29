@@ -288,13 +288,15 @@
   DM.openFeeModal=function(){
     function fill(){ var t=_feeTbl();
       var set=function(id,v){ var e=document.getElementById(id); if(e) e.value=v; };
+      var setN=function(id,v){ var e=document.getElementById(id); if(e) e.value=_comma(_num(v)); };   // 금액=콤마 표기
       set('dmFeeNearKw',((t.near&&t.near.keywords)||[]).join(', '));
-      set('dmFeeNear0',(t.near&&t.near.amounts[0])||0); set('dmFeeNear1',(t.near&&t.near.amounts[1])||0);
-      set('dmFeeFar0',(t.far&&t.far.amounts[0])||0); set('dmFeeFar1',(t.far&&t.far.amounts[1])||0); set('dmFeeFar2',(t.far&&t.far.amounts[2])||0);
+      setN('dmFeeNear0',(t.near&&t.near.amounts[0])||0); setN('dmFeeNear1',(t.near&&t.near.amounts[1])||0);
+      setN('dmFeeFar0',(t.far&&t.far.amounts[0])||0); setN('dmFeeFar1',(t.far&&t.far.amounts[1])||0); setN('dmFeeFar2',(t.far&&t.far.amounts[2])||0);
       var mo=document.getElementById('dmFeeModal'); if(mo) mo.classList.remove('content-hidden');
     }
     if(_dmFeeTable===null) _loadFeeTable(fill); else fill();   // 최신 저장본 반영 후 표시
   };
+  DM.feeFmt=function(el){ var v=String(el.value).replace(/[^0-9]/g,''); el.value=v?_comma(v):''; };   // 입력 시 천단위 콤마
   DM.closeFeeModal=function(){ var mo=document.getElementById('dmFeeModal'); if(mo) mo.classList.add('content-hidden'); };
   DM.restoreFeeDefault=function(){ if(!confirm('기본값(현재 적용값)으로 입력칸을 되돌릴까요? (저장해야 반영됩니다)')) return; _dmFeeTable=JSON.parse(JSON.stringify(_DM_FEE_DEFAULT)); DM.openFeeModal(); };
   DM.saveFeeTable=function(btn){
