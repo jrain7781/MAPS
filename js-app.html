@@ -19146,6 +19146,86 @@ MJ 이정우 팀장
         selectEditD1Type(defaultType_);
     }
 
+    // ── 종목수정: 선택한 수업(배치)을 다른 종목(class)으로 통째 이동 ──
+    let _ccBatchKey = null, _ccCurrentClassId = null, _ccSelectedClassId = null;
+    function showChangeClassModal() {
+        const batch = d1Batches[d1BatchIdx];
+        if (!batch || !batch.items || batch.items.length === 0) {
+            showStatus('이동할 수업을 먼저 선택하세요.', 'error'); return;
+        }
+        _ccBatchKey = batch.batchKey || getD1BatchKey_(String(batch.items[0].class_d1_id));
+        _ccCurrentClassId = String(selectedClassId || batch.items[0].class_id || '');
+        _ccSelectedClassId = null;
+        const fmt = d => { const s = String(d || '').replace(/-/g, ''); return s.length >= 8 ? s.substring(2, 4) + '/' + s.substring(4, 6) + '/' + s.substring(6, 8) : ''; };
+        const its = batch.items;
+        const period = (fmt(its[0].class_date) || '') + '~' + (fmt(its[its.length - 1].class_date) || fmt(its[0].class_date) || '');
+        document.getElementById('ccBatchInfo').textContent = its.length + '회 · ' + period;
+        const cur = (allClassesData || []).find(c => String(c.class_id) === _ccCurrentClassId);
+        document.getElementById('ccCurrentClass').textContent = cur
+            ? [cur.class_type, cur.class_name, cur.class_grade, cur.class_loc].filter(Boolean).join(' · ')
+            : ('(' + _ccCurrentClassId + ')');
+        document.getElementById('ccFilter').value = '';
+        document.getElementById('ccApplyBtn').disabled = true;
+        renderCcTargetList();
+        document.getElementById('changeClassModal').classList.remove('content-hidden');
+    }
+    function renderCcTargetList() {
+        const box = document.getElementById('ccTargetList');
+        if (!box) return;
+        const kw = (document.getElementById('ccFilter').value || '').trim().toLowerCase();
+        let list = (allClassesData || []).slice().sort((a, b) =>
+            String(a.class_type + a.class_name + a.class_grade + a.class_loc).localeCompare(String(b.class_type + b.class_name + b.class_grade + b.class_loc)));
+        if (kw) list = list.filter(c => [c.class_type, c.class_name, c.class_grade, c.class_loc].join(' ').toLowerCase().includes(kw));
+        if (!list.length) { box.innerHTML = '<div class="p-4 text-center text-gray-400 text-xs">종목이 없습니다.</div>'; return; }
+        box.innerHTML = list.map(c => {
+            const id = String(c.class_id);
+            const isCur = id === _ccCurrentClassId;
+            const isSel = id === _ccSelectedClassId;
+            const cls = isSel ? 'bg-purple-100 border-purple-400' : (isCur ? 'bg-gray-100 border-transparent' : 'hover:bg-purple-50 border-transparent cursor-pointer');
+            const onclick = isCur ? '' : `onclick="selectCcTarget('${id}')"`;
+            return `<div ${onclick} class="flex items-center gap-2 px-3 py-2 border-l-4 ${cls} text-sm border-b border-gray-100">
+                <span class="text-xs text-gray-500 w-20 flex-none">${escapeHtml(c.class_type || '')}</span>
+                <span class="flex-1 font-medium text-gray-800">${escapeHtml(c.class_name || '')}</span>
+                <span class="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700">${escapeHtml(c.class_grade || '')}</span>
+                <span class="text-xs text-gray-500 w-16 flex-none text-right">${escapeHtml(c.class_loc || '')}</span>
+                ${isCur ? '<span class="text-[10px] text-gray-400 flex-none">(현재)</span>' : ''}
+            </div>`;
+        }).join('');
+    }
+    function selectCcTarget(classId) {
+        _ccSelectedClassId = String(classId);
+        document.getElementById('ccApplyBtn').disabled = false;
+        renderCcTargetList();
+    }
+    function closeChangeClassModal() {
+        document.getElementById('changeClassModal').classList.add('content-hidden');
+    }
+    function applyChangeClass(btn) {
+        if (!_ccBatchKey || !_ccSelectedClassId) { showStatus('이동할 종목을 선택하세요.', 'error'); return; }
+        if (_ccSelectedClassId === _ccCurrentClassId) { showStatus('현재 종목과 동일합니다.', 'error'); return; }
+        const tgt = (allClassesData || []).find(c => String(c.class_id) === _ccSelectedClassId);
+        const tgtLabel = tgt ? [tgt.class_type, tgt.class_name, tgt.class_grade, tgt.class_loc].filter(Boolean).join(' · ') : _ccSelectedClassId;
+        if (!confirm('이 수업을 아래 종목으로 이동할까요?\n\n→ ' + tgtLabel + '\n\n(회차·회원은 그대로, 새로고침하면 선택 종목에 표시)')) return;
+        if (btn) { btn.disabled = true; btn.textContent = '이동 중…'; }
+        const oldClassId = _ccCurrentClassId, newClassId = _ccSelectedClassId;
+        google.script.run
+            .withSuccessHandler(r => {
+                if (btn) { btn.disabled = false; btn.textContent = '이동 적용'; }
+                if (r && r.success) {
+                    closeChangeClassModal();
+                    showStatus('수업을 종목 이동했습니다. (' + (r.d1Changed || 0) + '회차, ' + (r.mChanged || 0) + '명)', 'success');
+                    if (typeof _d1CacheMap !== 'undefined') { delete _d1CacheMap[oldClassId]; delete _d1CacheMap[newClassId]; }
+                    if (typeof _batchMembersCache !== 'undefined') { delete _batchMembersCache[oldClassId]; delete _batchMembersCache[newClassId]; }
+                    loadClasses();   // 종목리스트(수업수) 갱신
+                    if (typeof reloadClassD1Grid === 'function' && oldClassId) reloadClassD1Grid(oldClassId);   // 현재 종목 수업리스트(이동 배치 사라짐)
+                } else {
+                    showStatus('이동 실패: ' + ((r && r.message) || '?'), 'error');
+                }
+            })
+            .withFailureHandler(e => { if (btn) { btn.disabled = false; btn.textContent = '이동 적용'; } showStatus('이동 오류: ' + (e && e.message || e), 'error'); })
+            .moveClassD1BatchToClass(_ccBatchKey, newClassId);
+    }
+
     function renderEditD1List_() {
         const batch = d1Batches[d1BatchIdx];
         const items = batch ? (batch.items || []) : [];

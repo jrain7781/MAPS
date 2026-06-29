@@ -4849,6 +4849,91 @@ function deleteClassD1(classD1Id) {
 }
 
 /**
+ * [수업 종목 이동] 한 수업(배치)을 통째로 다른 종목(class)으로 이동.
+ *   - 그 배치의 class_d1 회차들: class_id + class_type/name/grade/loc → 대상 종목값으로 교체
+ *   - 그 배치의 member_class_details 행들: class_id → 대상 종목
+ *   - 회차 날짜·강사·등록 회원은 그대로, 회원관리(member.class_id)는 안 건드림(단방향).
+ * @param {string} batchKey       배치키 (= class_d1_id prefix, member_class_details.class_d1_id)
+ * @param {string} targetClassId  이동할 종목(class) id
+ */
+function moveClassD1BatchToClass(batchKey, targetClassId) {
+  var __lock = LockService.getScriptLock();
+  try { __lock.waitLock(20000); } catch (e) { return { success: false, message: '저장이 혼잡합니다. 잠시 후 다시 시도해 주세요.' }; }
+  try {
+    batchKey = String(batchKey == null ? '' : batchKey).trim();
+    targetClassId = String(targetClassId == null ? '' : targetClassId).trim();
+    if (!batchKey || !targetClassId) return { success: false, message: '배치키/대상 종목이 필요합니다.' };
+
+    // 1) 대상 종목 정보 읽기
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var classSh = ss.getSheetByName(CLASS_SHEET_NAME_DB);
+    if (!classSh || classSh.getLastRow() < 2) return { success: false, message: '종목(class) 데이터가 없습니다.' };
+    var cidIdx = CLASS_HEADERS.indexOf('class_id');
+    var ctIdx = CLASS_HEADERS.indexOf('class_type'), cnIdx = CLASS_HEADERS.indexOf('class_name'),
+        cgIdx = CLASS_HEADERS.indexOf('class_grade'), clIdx = CLASS_HEADERS.indexOf('class_loc');
+    var cData = classSh.getRange(2, 1, classSh.getLastRow() - 1, CLASS_HEADERS.length).getValues();
+    var tRow = null;
+    for (var ci = 0; ci < cData.length; ci++) { if (String(cData[ci][cidIdx]) === targetClassId) { tRow = cData[ci]; break; } }
+    if (!tRow) return { success: false, message: '대상 종목을 찾을 수 없습니다. (종목관리에서 먼저 등록하세요)' };
+    var T = {
+      class_type: String(tRow[ctIdx] || ''), class_name: String(tRow[cnIdx] || ''),
+      class_grade: String(tRow[cgIdx] || ''), class_loc: String(tRow[clIdx] || '')
+    };
+
+    // 2) class_d1: 이 배치 회차들(class_d1_id prefix === batchKey) → class_id + 4필드 갱신
+    var d1Sh = ensureClassD1Sheet_();
+    var d1Last = d1Sh.getLastRow();
+    if (d1Last < 2) return { success: false, message: '회차(class_d1) 데이터가 없습니다.' };
+    var dIdIdx = CLASS_D1_HEADERS.indexOf('class_d1_id'), dClassIdIdx = CLASS_D1_HEADERS.indexOf('class_id');
+    var dCtIdx = CLASS_D1_HEADERS.indexOf('class_type'), dCnIdx = CLASS_D1_HEADERS.indexOf('class_name'),
+        dCgIdx = CLASS_D1_HEADERS.indexOf('class_grade'), dClIdx = CLASS_D1_HEADERS.indexOf('class_loc');
+    var d1Data = d1Sh.getRange(2, 1, d1Last - 1, CLASS_D1_HEADERS.length).getValues();
+    var oldClassId = '', d1Changed = 0;
+    for (var i = 0; i < d1Data.length; i++) {
+      var rid = String(d1Data[i][dIdIdx] || '');
+      if (rid.replace(/_\d+$/, '') !== batchKey) continue;   // 이 배치의 회차만
+      if (!oldClassId) oldClassId = String(d1Data[i][dClassIdIdx] || '');
+      var rn = i + 2;
+      d1Sh.getRange(rn, dClassIdIdx + 1).setValue(targetClassId);
+      d1Sh.getRange(rn, dCtIdx + 1).setValue(T.class_type);
+      d1Sh.getRange(rn, dCnIdx + 1).setValue(T.class_name);
+      d1Sh.getRange(rn, dCgIdx + 1).setValue(T.class_grade);
+      d1Sh.getRange(rn, dClIdx + 1).setValue(T.class_loc);
+      d1Changed++;
+    }
+    if (!d1Changed) return { success: false, message: '이동할 수업(회차)을 찾지 못했습니다.' };
+    if (oldClassId === targetClassId) return { success: false, message: '이미 같은 종목입니다.' };
+
+    // 3) member_class_details: class_d1_id === batchKey → class_id 갱신
+    var mcdSh = ensureMemberClassDetailsSheet_();
+    var mLast = mcdSh.getLastRow();
+    var mChanged = 0;
+    if (mLast >= 2) {
+      var mD1Idx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_d1_id'), mCidIdx = MEMBER_CLASS_DETAILS_HEADERS.indexOf('class_id');
+      var mData = mcdSh.getRange(2, 1, mLast - 1, MEMBER_CLASS_DETAILS_HEADERS.length).getValues();
+      for (var j = 0; j < mData.length; j++) {
+        if (String(mData[j][mD1Idx] || '') !== batchKey) continue;
+        mcdSh.getRange(j + 2, mCidIdx + 1).setValue(targetClassId);
+        mChanged++;
+      }
+    }
+
+    SpreadsheetApp.flush();
+    // 4) 캐시 정리 (이전/대상 종목 + 배치 회원)
+    var cache = CacheService.getScriptCache();
+    cache.remove('mcd_' + batchKey);
+    if (oldClassId) cache.remove('sessions_' + oldClassId);
+    cache.remove('sessions_' + targetClassId);
+    cache.remove('all_class_d1_sessions');
+
+    return { success: true, message: '수업 종목 이동 완료', d1Changed: d1Changed, mChanged: mChanged, oldClassId: oldClassId, targetClassId: targetClassId };
+  } catch (e) {
+    Logger.log('[moveClassD1BatchToClass] ' + e);
+    return { success: false, message: String(e) };
+  } finally { __lock.releaseLock(); }
+}
+
+/**
  * [정리용] class.class_loop 초과 회차 자동 식별 + 삭제
  *  - 2026-05-11 잘못 실행된 appendRoundsForContract로 추가된 회차를 정리
  *  - class 시트의 class_loop가 N인데 class_d1에 N보다 큰 회차가 있으면 그게 잘못 추가된 회차
