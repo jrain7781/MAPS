@@ -80,13 +80,16 @@ function dmRevokeAndRenew(seed, html, title, summary, phone4, member_id, biddate
 }
 
 // 진행비 자동계산(회원·물건순·지역) — js-damulgeon _computeFees 동일 로직(서버판). 회원 링크 동적 렌더용.
-function dmFeeRegion_(court) { var c = String(court || ''); if (c.indexOf('부산') >= 0) return 'bg'; if (c.indexOf('대구') >= 0 || c.indexOf('울산') >= 0 || c.indexOf('창원') >= 0) return 'gs'; return 'etc'; }
+//   요율표(settings DM_FEE_TABLE) 기반. 미저장 시 _dmDefaultFeeTable_()=현재 적용값.
+function _dmFeeBucket_(court, table) { var c = String(court || ''), kws = (table && table.near && table.near.keywords) || []; for (var i = 0; i < kws.length; i++) { if (kws[i] && c.indexOf(kws[i]) >= 0) return 'near'; } return 'far'; }
+function _dmFeeAmount_(table, bucket, i) { var a = (table && table[bucket] && table[bucket].amounts) || []; if (!a.length) return 0; return parseInt(String(a[Math.min(i, a.length - 1)]).replace(/[^0-9]/g, ''), 10) || 0; }
 function dmComputeFees_(items) {
+  var table = (getDmFeeTable() || {}).table || _dmDefaultFeeTable_();
   var by = {};
   (items || []).forEach(function (it) { it._fee = ''; var m = String(it.member_name || '').trim(); if (m) { (by[m] = by[m] || []).push(it); } });
   Object.keys(by).forEach(function (m) {
     var arr = by[m].slice().sort(function (a, b) { return (parseInt(a.mulgeon_no, 10) || 0) - (parseInt(b.mulgeon_no, 10) || 0); });
-    arr.forEach(function (it, i) { var bgGs = (dmFeeRegion_(it.court) !== 'etc'); it._fee = String(bgGs ? (i === 0 ? 80000 : 60000) : (i === 0 ? 80000 : (i === 1 ? 70000 : 60000))); });
+    arr.forEach(function (it, i) { it._fee = String(_dmFeeAmount_(table, _dmFeeBucket_(it.court, table), i)); });
   });
   (items || []).forEach(function (it) { var mv = String(it.jinhaengbi == null ? '' : it.jinhaengbi).trim(); if (mv !== '') it._fee = String(parseInt(mv.replace(/[^0-9]/g, ''), 10) || 0); });   // 수동 진행비(다물건 시트 jinhaengbi) 우선
 }

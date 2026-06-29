@@ -2227,6 +2227,8 @@
                             class="bg-slate-700 hover:bg-slate-800 text-white px-3 py-1 rounded font-bold" style="font-size:12px;white-space:nowrap;flex-shrink:0">🖨 일괄프린트</button>
                         <button id="dmBulkPdfPrintBtn" onclick="DM.bulkPrintPdf()" title="체크된 물건의 전자본인서명 PDF 일괄"
                             class="bg-teal-700 hover:bg-teal-800 text-white px-3 py-1 rounded font-bold" style="font-size:12px;white-space:nowrap;flex-shrink:0">🖨 전자본인 일괄프린트</button>
+                        <button id="dmFeeBtn" onclick="DM.openFeeModal()" title="진행비 자동계산 요율 확인·수정"
+                            class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded font-bold" style="font-size:12px;white-space:nowrap;flex-shrink:0">💰 진행비</button>
                         <span style="border-left:1px solid #e5e7eb;height:20px;margin:0 2px;flex-shrink:0"></span>
                         <button id="dmRefreshBtn" onclick="DM.refreshGroup()" title="이 사건만 새로고침"
                             class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded font-bold border border-slate-300" style="font-size:12px;white-space:nowrap;flex-shrink:0">↻ 새로고침</button>
@@ -2327,6 +2329,47 @@
                             </table>
                         </div>
                         <div id="dmQGenStatus" style="padding:8px 16px;font-size:12px;color:#6b7280;border-top:1px solid #f1f5f9"></div>
+                    </div>
+                </div>
+
+                <!-- 진행비 자동계산 요율 모달 (현재 적용값 표시 + 수정) -->
+                <div id="dmFeeModal" class="content-hidden" style="position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:55;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)DM.closeFeeModal()">
+                    <div style="background:#fff;border-radius:12px;width:520px;max-width:94vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 50px rgba(0,0,0,.35);overflow:hidden">
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #e5e7eb;background:#fff7ed">
+                            <h3 style="font-size:16px;font-weight:800;color:#9a3412">💰 진행비 자동계산 설정</h3>
+                            <button onclick="DM.closeFeeModal()" style="border:0;background:transparent;font-size:20px;line-height:1;color:#9ca3af;cursor:pointer">×</button>
+                        </div>
+                        <div style="padding:16px 18px;overflow-y:auto">
+                            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:15px;line-height:1.65;color:#475569;font-size:12px">
+                                ℹ️ 진행비는 <b>회원별로 물건번호 순서</b>대로 자동 계산됩니다. 같은 회원의 <b>첫 물건</b>은 첫 물건 금액, <b>이후 물건</b>은 추가 물건 금액이 적용됩니다.<br>
+                                법원 지역(키워드 매칭)에 따라 <b>근거리 / 원거리</b>로 구분됩니다.<br>
+                                ※ 그리드에 <b style="color:#d97706">수동 진행비</b>(주황)가 입력된 물건은 자동값 대신 그 값을 사용합니다.
+                            </div>
+                            <div style="border:1px solid #fdba74;border-radius:8px;padding:13px;margin-bottom:12px">
+                                <div style="font-weight:800;color:#c2410c;margin-bottom:9px;font-size:13px">근거리 (부산·경상)</div>
+                                <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:3px">적용 법원 키워드 (쉼표로 구분)</label>
+                                <input id="dmFeeNearKw" onfocus="this.select()" style="width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:13px;margin-bottom:10px">
+                                <div style="display:flex;gap:12px">
+                                    <div style="flex:1"><label style="display:block;font-size:12px;color:#6b7280;margin-bottom:3px">첫 물건 (원)</label><input id="dmFeeNear0" inputmode="numeric" onfocus="this.select()" style="width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:13px;text-align:right"></div>
+                                    <div style="flex:1"><label style="display:block;font-size:12px;color:#6b7280;margin-bottom:3px">추가 물건 (원)</label><input id="dmFeeNear1" inputmode="numeric" onfocus="this.select()" style="width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:13px;text-align:right"></div>
+                                </div>
+                            </div>
+                            <div style="border:1px solid #cbd5e1;border-radius:8px;padding:13px">
+                                <div style="font-weight:800;color:#334155;margin-bottom:9px;font-size:13px">원거리 (그 외 법원)</div>
+                                <div style="display:flex;gap:10px">
+                                    <div style="flex:1"><label style="display:block;font-size:12px;color:#6b7280;margin-bottom:3px">첫 물건 (원)</label><input id="dmFeeFar0" inputmode="numeric" onfocus="this.select()" style="width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:13px;text-align:right"></div>
+                                    <div style="flex:1"><label style="display:block;font-size:12px;color:#6b7280;margin-bottom:3px">둘째 물건 (원)</label><input id="dmFeeFar1" inputmode="numeric" onfocus="this.select()" style="width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:13px;text-align:right"></div>
+                                    <div style="flex:1"><label style="display:block;font-size:12px;color:#6b7280;margin-bottom:3px">셋째 물건~ (원)</label><input id="dmFeeFar2" inputmode="numeric" onfocus="this.select()" style="width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:6px 9px;font-size:13px;text-align:right"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-top:1px solid #e5e7eb;background:#f9fafb">
+                            <button onclick="DM.restoreFeeDefault()" style="font-size:12px;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;padding:7px 13px;background:#fff;cursor:pointer">기본값 복원</button>
+                            <div style="display:flex;gap:8px">
+                                <button onclick="DM.closeFeeModal()" style="font-size:13px;color:#374151;border:1px solid #d1d5db;border-radius:6px;padding:7px 17px;background:#fff;cursor:pointer">닫기</button>
+                                <button onclick="DM.saveFeeTable(this)" style="font-size:13px;color:#fff;background:#ea580c;border:0;border-radius:6px;padding:7px 20px;font-weight:700;cursor:pointer">저장</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

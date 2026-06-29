@@ -267,20 +267,48 @@
     if(!fl && ho && ho.length>=3) fl=ho.slice(0,ho.length-2);
     return {dong:dong,floor:fl,ho:ho};
   }
-  // 진행비 자동: 법원 지역 + 회원별 입찰건수 (입찰진행비표 근거). 부산/경상=8만+건당6만, 그외=8만→7만→이후6만
-  function _feeRegion(court){ var c=String(court||''); if(c.indexOf('부산')>=0) return 'bg'; if(c.indexOf('대구')>=0||c.indexOf('울산')>=0||c.indexOf('창원')>=0) return 'gs'; return 'etc'; }
+  // 진행비 자동계산 요율 — 현재 하드코딩값을 기본값으로(요율표 모달 💰진행비 에서 확인·수정). settings DM_FEE_TABLE.
+  //   회원별 물건번호 순서대로 amounts 적용(배열 끝값=이후 물건 반복). near=부산/경상=[첫8만,추가6만], far=그외=[첫8만,둘째7만,셋째~6만]
+  var _DM_FEE_DEFAULT={ near:{ label:'근거리(부산·경상)', keywords:['부산','대구','울산','창원'], amounts:[80000,60000] }, far:{ label:'원거리(그 외)', keywords:[], amounts:[80000,70000,60000] } };
+  var _dmFeeTable=null;   // 서버 저장 요율표(null=미로드 → 기본값=현재 적용값과 동일)
+  function _feeTbl(){ return _dmFeeTable||_DM_FEE_DEFAULT; }
+  function _feeBucket(court){ var c=String(court||''), kws=(_feeTbl().near&&_feeTbl().near.keywords)||[]; for(var i=0;i<kws.length;i++){ if(kws[i]&&c.indexOf(kws[i])>=0) return 'near'; } return 'far'; }
+  function _feeAmt(bucket,i){ var a=(_feeTbl()[bucket]&&_feeTbl()[bucket].amounts)||[]; if(!a.length) return 0; return _num(a[Math.min(i,a.length-1)]); }
   function _computeFees(items){
     var by={};
     (items||[]).forEach(function(it){ it._fee=''; var m=String(it.member_name||'').trim(); if(m) (by[m]=by[m]||[]).push(it); });
     Object.keys(by).forEach(function(m){
       var arr=by[m].slice().sort(function(a,b){ return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0); });
-      arr.forEach(function(it,i){
-        var bgGs=(_feeRegion(it.court)!=='etc');
-        it._fee = String(bgGs ? (i===0?80000:60000) : (i===0?80000:(i===1?70000:60000)));
-      });
+      arr.forEach(function(it,i){ it._fee=String(_feeAmt(_feeBucket(it.court),i)); });
     });
     (items||[]).forEach(function(it){ if(_isManualFee(it)) it._fee=String(_num(it.jinhaengbi)); });   // 수동 진행비(시트 jinhaengbi) 있으면 자동값 위에 덮어씀 → _fee=유효진행비(그리드·모달·회원링크 공통)
   }
+  // 요율표 로드(현재 적용값 표시·수정용). 저장본 있으면 그걸로 계산.
+  function _loadFeeTable(cb){ if(typeof google==='undefined'||!google.script||!google.script.run){ if(cb)cb(); return; } google.script.run.withSuccessHandler(function(r){ if(r&&r.success&&r.table) _dmFeeTable=r.table; if(cb)cb(); }).withFailureHandler(function(){ if(cb)cb(); }).getDmFeeTable(); }
+  DM.openFeeModal=function(){
+    function fill(){ var t=_feeTbl();
+      var set=function(id,v){ var e=document.getElementById(id); if(e) e.value=v; };
+      set('dmFeeNearKw',((t.near&&t.near.keywords)||[]).join(', '));
+      set('dmFeeNear0',(t.near&&t.near.amounts[0])||0); set('dmFeeNear1',(t.near&&t.near.amounts[1])||0);
+      set('dmFeeFar0',(t.far&&t.far.amounts[0])||0); set('dmFeeFar1',(t.far&&t.far.amounts[1])||0); set('dmFeeFar2',(t.far&&t.far.amounts[2])||0);
+      var mo=document.getElementById('dmFeeModal'); if(mo) mo.classList.remove('content-hidden');
+    }
+    if(_dmFeeTable===null) _loadFeeTable(fill); else fill();   // 최신 저장본 반영 후 표시
+  };
+  DM.closeFeeModal=function(){ var mo=document.getElementById('dmFeeModal'); if(mo) mo.classList.add('content-hidden'); };
+  DM.restoreFeeDefault=function(){ if(!confirm('기본값(현재 적용값)으로 입력칸을 되돌릴까요? (저장해야 반영됩니다)')) return; _dmFeeTable=JSON.parse(JSON.stringify(_DM_FEE_DEFAULT)); DM.openFeeModal(); };
+  DM.saveFeeTable=function(btn){
+    var gv=function(id){ return _num((document.getElementById(id)||{}).value); };
+    var kw=((document.getElementById('dmFeeNearKw')||{}).value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    var t={ near:{ label:'근거리(부산·경상)', keywords:kw, amounts:[gv('dmFeeNear0'),gv('dmFeeNear1')] }, far:{ label:'원거리(그 외)', keywords:[], amounts:[gv('dmFeeFar0'),gv('dmFeeFar1'),gv('dmFeeFar2')] } };
+    if(typeof google==='undefined'||!google.script||!google.script.run){ alert('실행 환경이 아닙니다.'); return; }
+    if(btn){ btn.disabled=true; btn.textContent='저장 중…'; }
+    google.script.run.withSuccessHandler(function(r){
+      if(btn){ btn.disabled=false; btn.textContent='저장'; }
+      if(r&&r.success){ _dmFeeTable=t; DM.closeFeeModal(); var g=_groups.filter(function(x){return x.group_key===_selKey;})[0]; if(g){ _computeFees(g.items); renderBody(); renderSummary(); } if(typeof _dot==='function') _dot('✓ 진행비 요율 저장(적용됨)', true); }
+      else alert('저장 실패: '+((r&&r.message)||'?'));
+    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.textContent='저장'; } alert('저장 오류: '+(e&&e.message||e)); }).saveDmFeeTable(t);
+  };
   // 수동 진행비 여부 = 다물건 시트 jinhaengbi 가 비어있지 않음(수기 등록분). 색 구분/되돌리기 판단용.
   function _isManualFee(it){ return String((it&&it.jinhaengbi)==null?'':it.jinhaengbi).trim()!==''; }
   function widthOf(c){ return (_colW[c.f]!=null)?_colW[c.f]:c.w; }
@@ -320,6 +348,7 @@
     try { _colW = JSON.parse(localStorage.getItem(COLW_KEY)||'{}')||{}; } catch(_){ _colW={}; }
     try { _hideBasic = localStorage.getItem('dmHideBasic')==='1'; var hb=document.getElementById('dmHideBasic'); if(hb) hb.checked=_hideBasic; } catch(_){}   // 기본정보 숨기기 복원(PC별)
     loadMembers(function(){ DM.filterList((document.getElementById('dmSearch')||{}).value||''); var g=_groups.filter(function(x){return x.group_key===_selKey;})[0]; if(g) renderDetail(g); });   // 회원 선로드 후 리스트(강사 색상)+상세 재렌더
+    if(_dmFeeTable===null) _loadFeeTable(function(){ var g=_groups.filter(function(x){return x.group_key===_selKey;})[0]; if(g){ _computeFees(g.items); renderBody(); renderSummary(); } });   // 진행비 요율표(저장본) 로드 → 그리드 재계산
     var list = document.getElementById('dmList');
     // 1) 캐시 즉시 표시(체감속도) — 서버 응답 오면 교체
     var hadCache=false;

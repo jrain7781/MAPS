@@ -1657,11 +1657,11 @@ function dmRepairMisFormat() {
 
 // ── 진행비 출장비 요율표 (settings 시트 key-value, JSON) ──
 function _dmDefaultFeeTable_() {
+  // 현재 하드코딩 진행비 = 이 기본값. (요율표 모달에서 수정 가능, settings DM_FEE_TABLE 저장)
+  //   회원별 물건번호 순서대로 amounts 적용(배열 끝값은 이후 물건에 반복). near=법원 키워드 매칭, 그외=far.
   return {
-    courts: {},                                          // { '부산지방법원': 1인기준액, ... } 사용자 편집
-    person_rate: { '1': 1.0, '2': 0.7, '3': 0.5, '4': 0.4 },  // 인원수별 비율(1인기준 × 비율)
-    car_depreciation: 0,                                 // 차량감가(정액)
-    bid_fee_rule: ''                                     // 입찰진행비 규칙(메모/공식, 추후 확정)
+    near: { label: '근거리(부산·경상)', keywords: ['부산', '대구', '울산', '창원'], amounts: [80000, 60000] },   // [첫물건, 추가물건~]
+    far:  { label: '원거리(그 외)',     keywords: [],                            amounts: [80000, 70000, 60000] }   // [첫물건, 둘째물건, 셋째물건~]
   };
 }
 function getDmFeeTable() {
@@ -1729,7 +1729,7 @@ function testDamulgeonList_() {
     g.items.forEach(function(it) { Logger.log('       └ (%s) id=%s 동%s 층%s 호%s 최저=%s', it.mulgeon_no, it.link_item_id, it.dong, it.floor, it.ho, it.lowest_price); });
   });
   var ft = getDmFeeTable();
-  Logger.log('[다물건] 요율표 person_rate=%s', JSON.stringify(ft.table.person_rate));
+  Logger.log('[다물건] 진행비 요율 near=%s far=%s', JSON.stringify(ft.table.near), JSON.stringify(ft.table.far));
   return r;
 }
 
