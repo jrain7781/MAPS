@@ -1595,26 +1595,27 @@
     var html=(_docTab==='wijang')?_wijangHtml(p,agent,ctx,isCorp):_ipchalHtml(p,agent,ctx,isCorp);
     _printHtmlBody(html);
   };
-  // 전체출력: 이 회원 모든 물건의 위임장+기일입찰표를 물건번호 순으로 한 번에 인쇄 + 전자본인 PDF는 물건별 패널(클릭 인쇄)
+  // 전체출력: 물건번호 순으로 [위임장+기일입찰표+전자본인 PDF]를 물건별로 묶어 한 번의 인쇄 미리보기로 출력
   DM.docPrintAll=function(){
     var m=_msgGroups[_msgFocusGi]; if(!m||!m.items||!m.items.length) return;
     if(_msgDetailsLoading){ alert('상세정보 로딩중입니다. 잠시 후 다시 시도하세요.'); return; }
     var its=m.items.slice().sort(function(a,b){ return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0); });
-    var body='', missing=[];
+    var docParts=[], missing=[];   // [{id, doc}] — 물건 순서대로 위임장+기일입찰표
     its.forEach(function(it){
       var det=_msgDetailFor(m, it), p=det.principal;
       if(!p){ missing.push(it.mulgeon_no||'?'); return; }
       var agent=det.agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
-      body+=_docsFor(p, agent, it);   // 위임장+기일입찰표 (물건별 순서)
+      docParts.push({ id:String(it.link_item_id||''), doc:_docsFor(p, agent, it) });
     });
-    if(!body){ alert('출력할 위임장/기일입찰표 데이터가 없습니다.(회원 상세정보 확인)'); return; }
+    if(!docParts.length){ alert('출력할 위임장/기일입찰표 데이터가 없습니다.(회원 상세정보 확인)'); return; }
     if(missing.length) setTimeout(function(){ _dot('상세정보 없는 물건 제외: '+missing.join(', '), true); }, 150);
-    // 위임장+기일입찰표 + 전자본인 PDF(이미지)를 한 번의 인쇄 미리보기로 출력 (우측 하단 패널 없음)
+    // 전자본인 PDF를 물건별로 렌더 → 각 물건의 위임장+기일입찰표 바로 뒤에 끼워 한 번에 인쇄
     var ids=its.map(function(it){ return String(it.link_item_id||''); }).filter(Boolean);
     var ld=_certLoading('인쇄 미리보기 준비 중…');
+    function build(certMap){ return docParts.map(function(dp){ return dp.doc + ((certMap&&certMap[dp.id])||''); }).join(''); }
     google.script.run.withSuccessHandler(function(list){
-      _certImagesHtml(list||[], function(certHtml){ _certLoadingHide(ld); _printHtmlBody(body+certHtml); });
-    }).withFailureHandler(function(e){ _certLoadingHide(ld); _printHtmlBody(body); }).dmGetPdfBytesByItems(ids);
+      _certImagesByItem(list||[], function(certMap){ _certLoadingHide(ld); _printHtmlBody(build(certMap)); });
+    }).withFailureHandler(function(e){ _certLoadingHide(ld); _printHtmlBody(build(null)); }).dmGetPdfBytesByItems(ids);
   };
   // ===== 전자본인 PDF 합본(클라이언트 pdf-lib 병합 → 한 파일 미리보기/인쇄) =====
   var _pdfPanelIds=[], _pdfPanelLabel='';
@@ -1667,14 +1668,15 @@
     s.onerror=function(){ cb(false); };
     document.head.appendChild(s);
   }
-  // 전자본인 PDF들을 페이지 이미지(dataURL)로 렌더 → 인쇄용 HTML 문자열로 콜백. 없음/실패 시 '' 콜백(문서만 출력).
-  function _certImagesHtml(list, cb){
+  // 전자본인 PDF들을 페이지 이미지(dataURL)로 렌더 → item_id별 인쇄 HTML 맵으로 콜백. 없음/실패 시 {} 콜백.
+  function _certImagesByItem(list, cb){
     list=(list||[]).filter(function(x){ return x&&x.b64; });
-    if(!list.length){ cb(''); return; }
+    if(!list.length){ cb({}); return; }
     _ensurePdfJs(function(ok){
-      if(!ok){ cb(''); return; }   // pdf.js 로드 실패 → 전자본인 생략
-      var lib=window.pdfjsLib, imgs=[], chain=Promise.resolve();
+      if(!ok){ cb({}); return; }   // pdf.js 로드 실패 → 전자본인 생략
+      var lib=window.pdfjsLib, map={}, chain=Promise.resolve();
       list.forEach(function(item){
+        var iid=String(item.item_id||'');
         chain=chain.then(function(){
           return lib.getDocument({data:_b64ToBytes(item.b64)}).promise.then(function(pdf){
             var pchain=Promise.resolve();
@@ -1683,7 +1685,7 @@
                 return pdf.getPage(pn).then(function(page){
                   var vp=page.getViewport({scale:2.5});   // 인쇄 선명도용 고배율
                   var cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
-                  return page.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise.then(function(){ imgs.push(cv.toDataURL('image/jpeg', 0.86)); });
+                  return page.render({canvasContext:cv.getContext('2d'), viewport:vp}).promise.then(function(){ map[iid]=(map[iid]||'')+'<div class="dm-cert-pg"><img src="'+cv.toDataURL('image/jpeg', 0.86)+'"></div>'; });
                 });
               });
             })(pn); }
@@ -1691,7 +1693,15 @@
           }).catch(function(e){ console.error('전자본인 렌더 skip', item.filename, e); });
         });
       });
-      chain.then(function(){ cb(imgs.map(function(src){ return '<div class="dm-cert-pg"><img src="'+src+'"></div>'; }).join('')); }).catch(function(){ cb(''); });
+      chain.then(function(){ cb(map); }).catch(function(){ cb(map); });
+    });
+  }
+  // item_id 등장 순서대로 평탄화한 인쇄 HTML(없음/실패 시 '').
+  function _certImagesHtml(list, cb){
+    _certImagesByItem(list, function(map){
+      var seen={}, html='';
+      (list||[]).forEach(function(item){ var iid=String(item.item_id||''); if(seen[iid]) return; seen[iid]=1; html+=(map[iid]||''); });
+      cb(html);
     });
   }
   function _certLoading(text){ var ld=document.createElement('div'); ld.id='dmCertLoad'; ld.style.cssText='position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center'; ld.innerHTML='<div style="background:#1f3a5f;color:#fff;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:800"><span class="dm-spin" style="display:inline-block">⟳</span> '+esc(text||'준비 중…')+'</div>'; document.body.appendChild(ld); return ld; }
