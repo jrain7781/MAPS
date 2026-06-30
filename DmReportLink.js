@@ -274,6 +274,8 @@ function _dmSavePdf_(memberId, token, filename, base64, itemId) {
     if (!/\.pdf$/i.test(safe)) safe += '.pdf';
     var blob = Utilities.newBlob(Utilities.base64Decode(base64), 'application/pdf', safe);
     var file = _dmPdfFolder_().createFile(blob);
+    // 링크가 있는 누구나 보기 — MAPS를 쓰는 다른 PC/계정에서도 미리보기 가능하도록(미설정 시 소유자 PC에서만 조회됨)
+    try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
     file.setDescription('다물건 전자서명 업로드 member=' + memberId + ' token=' + token + ' item=' + (itemId || '') + ' orig=' + (filename || ''));
     var url = file.getUrl();
     _dmRecordUpload_(token, memberId, safe, url, _dmBiddateFor_(token, memberId), itemId);   // 입찰일 기록 → 다음날 자동 삭제
@@ -402,6 +404,18 @@ function _dmPdfFolder_() {
   var maps = mit.hasNext() ? mit.next() : root.createFolder('MAPS');
   var sit = maps.getFoldersByName('damulgun_pdf');
   return sit.hasNext() ? sit.next() : maps.createFolder('damulgun_pdf');
+}
+
+/** [1회성 유지보수] 이미 올라간 전자서명 PDF 전부 '링크 공유(보기)'로 전환.
+ *  과거 업로드 파일이 다른 PC에서 안 보일 때 Apps Script 편집기에서 1회 실행. */
+function dmShareExistingCertPdfs() {
+  var files = _dmPdfFolder_().getFiles(), shared = 0, failed = 0;
+  while (files.hasNext()) {
+    try { files.next().setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); shared++; }
+    catch (e) { failed++; }
+  }
+  Logger.log('dmShareExistingCertPdfs: shared=' + shared + ' failed=' + failed);
+  return { success: true, shared: shared, failed: failed };
 }
 
 /** 회원이 등록한 전자서명 PDF 목록(최신순). [{date,filename,url}] */

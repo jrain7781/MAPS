@@ -702,6 +702,25 @@
     }).withFailureHandler(function(e){ if(msg){ msg.textContent='등록 실패: '+esc(e&&e.message); msg.style.color='#dc2626'; } }).addMyunguiAndAssign(mid, data, itemId, mname);
   };
   DM.closeMyungui = function(){ var card=_mcEl('dmMyunguiCard'); if(card){ card.classList.remove('open'); card.setAttribute('aria-hidden','true'); } };
+  // 명의 슬라이드 상단 새로고침: 캐시 버리고 서버에서 명의 정보 재조회(현재 선택 명의 유지)
+  DM.mcRefresh = function(btn){
+    var mid=_mcMemberId; if(!mid) return;
+    if(typeof google==='undefined'||!google.script||!google.script.run){ return; }
+    var keepSel=_mcSel, oTxt=btn?btn.textContent:'';
+    if(btn){ btn.disabled=true; btn.textContent='…'; }
+    delete _mcCache[mid];
+    _mcEl('dmMcBody').innerHTML='<div style="color:#94a3b8;padding:10px 2px">새로고침 중…</div>';
+    google.script.run.withSuccessHandler(function(res){
+      if(btn){ btn.disabled=false; btn.textContent=oTxt||'🔄'; }
+      if(!res||!res.success){ _mcEl('dmMcBody').innerHTML=esc((res&&res.msg)||'조회 실패'); return; }
+      _mcCache[mid]=res;
+      _mcAccounts=(res.accounts||[]).map(function(a){ return Object.assign({}, a); });
+      _mcEl('dmMcMember').textContent=res.member_name||'';
+      _mcEl('dmMcGrade').textContent=res.grade||'';
+      var exists=_mcAccounts.some(function(a){ return a.idx===keepSel; });
+      DM.mcSelect(exists?keepSel:0, true);
+    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.textContent=oTxt||'🔄'; } _mcEl('dmMcBody').innerHTML='실패: '+esc(e&&e.message); }).getMemberAccounts(mid);
+  };
   DM.mcResizeStart=function(ev){
     ev.preventDefault();
     var card=_mcEl('dmMyunguiCard'); if(!card) return;
@@ -863,7 +882,7 @@
     +'<div class="wj-date">'+esc(ctx.bidDate)+'</div>'
     +_wijTbl('본인', p.name, p.job, pReg, p.phone, p.address, 'wj-tbl2')
     +'<div class="wj-sign">서명　　　'+esc(p.name||'')+'　　　(인)</div>'
-    +'<div class="wj-foot">지방법원 귀중</div></div>';
+    +'<div class="wj-foot">'+_courtLine(ctx)+' 귀중</div></div>';
   }
   function _ipNotice(){
     return ['주의사항',
@@ -1836,7 +1855,11 @@
     }
     // 회원정보 — web(링크)에선 값+입력 동시(채워진칸=값/빈칸=입력, 수정모드=전부 입력), 이미지(web=false)는 값만/빈칸은 회신문구.
     var _missing=false;
-    function _einput(idx, field, ph, val){ return '<input class="dmedit" type="text" data-idx="'+idx+'" data-field="'+field+'" value="'+esc(val||'')+'" placeholder="'+ph+'">'; }
+    function _einput(idx, field, ph, val){
+      // 주민/법인등록번호(jumin_corp): 입력 시 6자리 뒤 하이픈 자동 삽입(최대 13자리)
+      var oi=(field==='jumin_corp')?' oninput="var d=this.value.replace(/[^0-9]/g,&quot;&quot;).slice(0,13);this.value=d.length>6?d.slice(0,6)+&quot;-&quot;+d.slice(6):d;"':'';
+      return '<input class="dmedit" type="text" data-idx="'+idx+'" data-field="'+field+'" value="'+esc(val||'')+'"'+oi+' placeholder="'+ph+'">';
+    }
     function _efield(label, value, field, idx, dispHl){
       value=(value==null?'':String(value)).trim(); var filled=value!=='';
       if(!filled) _missing=true;

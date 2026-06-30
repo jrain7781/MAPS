@@ -96,7 +96,11 @@
     var _SAV='<button type="button" class="dmsave" onclick="if(window.DMV&&DMV.saveFields){DMV.saveFields(this)}else if(window.DM&&DM.saveFields){DM.saveFields(this)}">💾 저장</button>';
     function blkSave(name, body, withBtns){ return '<div class="rsec '+((_bi++)%2?'rsec-b':'rsec-a')+'">'+(withBtns?('<div class="dmcard-btns">'+_EDT+_SAV+'</div>'):'')+'<div class="rsec-h">'+name+'</div><div class="rsec-bd">'+body+'</div></div>'; }
     var _missing=false;
-    function _einput(ix, field, ph, val){ return '<input class="dmedit" type="text" data-idx="'+ix+'" data-field="'+field+'" value="'+esc(val||'')+'" placeholder="'+ph+'">'; }
+    function _einput(ix, field, ph, val){
+      // 주민/법인등록번호(jumin_corp): 입력 시 6자리 뒤 하이픈 자동 삽입(최대 13자리)
+      var oi=(field==='jumin_corp')?' oninput="var d=this.value.replace(/[^0-9]/g,&quot;&quot;).slice(0,13);this.value=d.length>6?d.slice(0,6)+&quot;-&quot;+d.slice(6):d;"':'';
+      return '<input class="dmedit" type="text" data-idx="'+ix+'" data-field="'+field+'" value="'+esc(val||'')+'"'+oi+' placeholder="'+ph+'">';
+    }
     // 값+입력칸 동시 렌더. 기본: 채워진칸=값표시 / 빈칸=입력. 수정모드: 전부 입력. (저장은 보이는 입력칸만)
     function _efield(label, value, field, ix, dispHl){
       value=(value==null?'':String(value)).trim(); var filled=value!=='';
