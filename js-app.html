@@ -3863,21 +3863,42 @@
         updateMissingBidMoveBtn();
     }
 
+    function toggleAllUnsentBidChecks(checked) {
+        document.querySelectorAll('.unsent-bid-cb').forEach(cb => cb.checked = checked);
+        updateMissingBidMoveBtn();
+    }
+
     function updateMissingBidMoveBtn() {
         const btn = document.getElementById('missingBidMoveBtn');
-        const checked = document.querySelectorAll('.missing-bid-cb:checked');
+        const checked = document.querySelectorAll('.missing-bid-cb:checked, .unsent-bid-cb:checked');
         if (btn) btn.classList.toggle('hidden', checked.length === 0);
     }
 
     function goToItemManagementFromMissingSelection() {
-        const checked = document.querySelectorAll('.missing-bid-cb:checked');
-        const dates = Array.from(checked).map(cb => cb.dataset.date);
-        if (dates.length === 0) return;
+        const missingDates = Array.from(document.querySelectorAll('.missing-bid-cb:checked')).map(cb => cb.dataset.date);
+        const unsentDates = Array.from(document.querySelectorAll('.unsent-bid-cb:checked')).map(cb => cb.dataset.date);
+        if (missingDates.length === 0 && unsentDates.length === 0) return;
         const filterMember = document.getElementById('missingBidFilterMember')?.value || '';
-        if (dates.length === 1) {
-            filterFromDashboard(dates[0], 'missing', null, filterMember);
+
+        if (unsentDates.length === 0) {
+            // 미입력만 선택
+            if (missingDates.length === 1) {
+                filterFromDashboard(missingDates[0], 'missing', null, filterMember);
+            } else {
+                dashboardFilter = { active: true, dates: missingDates, type: 'missing_multi', status: null, manager: filterMember };
+                navigateTo('ItemManagement');
+            }
+        } else if (missingDates.length === 0) {
+            // 미전송만 선택
+            if (unsentDates.length === 1) {
+                filterFromDashboard(unsentDates[0], 'unsent', null, filterMember);
+            } else {
+                dashboardFilter = { active: true, dates: unsentDates, type: 'unsent_multi', status: null, manager: filterMember };
+                navigateTo('ItemManagement');
+            }
         } else {
-            dashboardFilter = { active: true, dates: dates, type: 'missing_multi', status: null, manager: filterMember };
+            // 미입력 + 미전송 혼합 선택
+            dashboardFilter = { active: true, missingDates: missingDates, unsentDates: unsentDates, type: 'missing_unsent_multi', status: null, manager: filterMember };
             navigateTo('ItemManagement');
         }
     }
@@ -3889,11 +3910,18 @@
         if (missingBidTableFoot) missingBidTableFoot.innerHTML = '';
         const selectAll = document.getElementById('missingBidSelectAll');
         if (selectAll) selectAll.checked = false;
+        const selectAllUnsent = document.getElementById('unsentBidSelectAll');
+        if (selectAllUnsent) selectAllUnsent.checked = false;
         updateMissingBidMoveBtn();
 
         const targetDates = getWorkingDaysFromToday();
         const filterMember = document.getElementById('missingBidFilterMember') ? document.getElementById('missingBidFilterMember').value : '';
+        const fmAttr = String(filterMember).replace(/'/g, "\\'");
         let totalMissing = 0;
+        let totalUnsent = 0;
+
+        // 미전송 = 입찰가는 등록(>0) 되었으나 입찰상태가 전달완료/확인완료가 아닌 건
+        const _isUnsentState = (bs) => { const s = String(bs || '').trim(); return s !== '전달완료' && s !== '확인완료'; };
 
         targetDates.forEach((dateObj, index) => {
             const year = String(dateObj.getFullYear()).slice(-2);
@@ -3906,37 +3934,51 @@
             const dDayColor = index === 0 ? "text-gray-800" : "text-red-500";
             const dateStr = `${month}/${day} (${dayNames[dateObj.getDay()]})`;
 
+            const isTargetMember = (item) => {
+                const itemMember = item.m_name_id || '';
+                return (filterMember === 'All' || filterMember === '') || (itemMember === filterMember);
+            };
+
             const missingCount = allBiddingData.filter(item => {
                 const itemDate = String(item['in-date']);
                 const price = parseInt(String(item.bidprice || 0));
-                const filterMemberVal = filterMember;
-                const itemMember = item.m_name_id || '';
-                const isTargetMember = (filterMemberVal === 'All' || filterMemberVal === '') || (itemMember === filterMemberVal);
-                return itemDate === targetYYMMDD && (isNaN(price) || price === 0) && item.stu_member === '입찰' && isTargetMember;
+                return itemDate === targetYYMMDD && (isNaN(price) || price === 0) && item.stu_member === '입찰' && isTargetMember(item);
+            }).length;
+
+            const unsentCount = allBiddingData.filter(item => {
+                const itemDate = String(item['in-date']);
+                const price = parseFloat(String(item.bidprice || 0).replace(/,/g, '')) || 0;
+                return itemDate === targetYYMMDD && price > 0 && _isUnsentState(item.bid_state) && item.stu_member === '입찰' && isTargetMember(item);
             }).length;
 
             totalMissing += missingCount;
-            const displayCount = missingCount === 0 ? "없음" : `${missingCount}건`;
-            const textColorClass = missingCount > 0 ? "text-red-600 font-bold" : "text-gray-400";
-            const cursorClass = missingCount > 0 ? "cursor-pointer hover:bg-gray-100" : "";
+            totalUnsent += unsentCount;
+
+            const missingDisplay = missingCount === 0 ? "없음" : `${missingCount}건`;
+            const missingColor = missingCount > 0 ? "text-red-600 font-bold cursor-pointer hover:underline" : "text-gray-400";
+            const unsentDisplay = unsentCount === 0 ? "없음" : `${unsentCount}건`;
+            const unsentColor = unsentCount > 0 ? "text-orange-600 font-bold cursor-pointer hover:underline" : "text-gray-400";
 
             const row = document.createElement('tr');
-            row.className = `border-b border-gray-100 transition ${cursorClass}`;
+            row.className = `border-b border-gray-100 transition`;
             row.innerHTML = `
-              <td class="py-2 px-2 text-center w-8" onclick="event.stopPropagation()">
-                  ${missingCount > 0 ? `<input type="checkbox" class="missing-bid-cb cursor-pointer" data-date="${targetYYMMDD}" onchange="updateMissingBidMoveBtn()">` : ''}
-              </td>
               <td class="py-2 px-3 text-left whitespace-nowrap">
                   <span class="${dDayColor} font-bold mr-2 text-sm">${dDay}</span>
                   <span class="text-gray-500 text-sm">${dateStr}</span>
               </td>
-              <td class="py-2 px-3 text-center text-sm">
-                  <span class="${textColorClass}">${displayCount}</span>
+              <td class="py-2 px-2 text-center text-sm">
+                  <span class="inline-flex items-center justify-center gap-1.5">
+                      ${missingCount > 0 ? `<input type="checkbox" class="missing-bid-cb cursor-pointer" data-date="${targetYYMMDD}" onchange="updateMissingBidMoveBtn()">` : ''}
+                      <span class="${missingColor}" ${missingCount > 0 ? `onclick="filterFromDashboard('${targetYYMMDD}','missing',null,'${fmAttr}')"` : ''}>${missingDisplay}</span>
+                  </span>
+              </td>
+              <td class="py-2 px-2 text-center text-sm">
+                  <span class="inline-flex items-center justify-center gap-1.5">
+                      ${unsentCount > 0 ? `<input type="checkbox" class="unsent-bid-cb cursor-pointer" data-date="${targetYYMMDD}" onchange="updateMissingBidMoveBtn()">` : ''}
+                      <span class="${unsentColor}" ${unsentCount > 0 ? `onclick="filterFromDashboard('${targetYYMMDD}','unsent',null,'${fmAttr}')"` : ''}>${unsentDisplay}</span>
+                  </span>
               </td>
           `;
-            if (missingCount > 0) {
-                row.onclick = () => filterFromDashboard(targetYYMMDD, 'missing', null, filterMember);
-            }
             missingBidTableBody.appendChild(row);
         });
 
@@ -3944,23 +3986,22 @@
         if (missingBidTableFoot) {
             missingBidTableFoot.innerHTML = '';
             const totalRow = document.createElement('tr');
-            totalRow.className = `bg-blue-50 font-bold transition ${totalMissing > 0 ? 'cursor-pointer hover:bg-blue-100' : ''}`;
+            totalRow.className = `bg-blue-50 font-bold`;
 
-            const countColor = totalMissing > 0 ? "text-red-600" : "text-blue-800";
+            const missingTotColor = totalMissing > 0 ? "text-red-600 cursor-pointer hover:underline" : "text-blue-800";
+            const unsentTotColor = totalUnsent > 0 ? "text-orange-600 cursor-pointer hover:underline" : "text-blue-800";
 
             totalRow.innerHTML = `
-                <td class="py-2 px-2 text-center w-8"></td>
                 <td class="py-2 px-3 text-left whitespace-nowrap">
                     <span class="text-blue-800 text-sm">전체 (오늘~)</span>
                 </td>
-                <td class="py-2 px-3 text-center text-sm">
-                    <span class="${countColor}">${totalMissing}건</span>
+                <td class="py-2 px-2 text-center text-sm">
+                    <span class="${missingTotColor}" ${totalMissing > 0 ? `onclick="filterFromDashboard('${todayYYMMDD}','total_missing',null,'${fmAttr}')"` : ''}>${totalMissing}건</span>
+                </td>
+                <td class="py-2 px-2 text-center text-sm">
+                    <span class="${unsentTotColor}" ${totalUnsent > 0 ? `onclick="filterFromDashboard('${todayYYMMDD}','total_unsent',null,'${fmAttr}')"` : ''}>${totalUnsent}건</span>
                 </td>
             `;
-
-            if (totalMissing > 0) {
-                totalRow.onclick = () => filterFromDashboard(todayYYMMDD, 'total_missing', null, filterMember);
-            }
             missingBidTableFoot.appendChild(totalRow);
         }
     }
@@ -8853,6 +8894,19 @@ MJ 이정우 팀장
                 filterDesc = `당일 이후 상품 전체`;
             } else if (dashboardFilter.type === 'missing_multi') {
                 filterDesc = `${(dashboardFilter.dates || []).length}개 날짜 입찰가 미입력 건`;
+            } else if (dashboardFilter.type === 'unsent_multi') {
+                filterDesc = `${(dashboardFilter.dates || []).length}개 날짜 입찰가 미전송 건`;
+            } else if (dashboardFilter.type === 'missing_unsent_multi') {
+                const mc = (dashboardFilter.missingDates || []).length;
+                const uc = (dashboardFilter.unsentDates || []).length;
+                const parts = [];
+                if (mc) parts.push(`미입력 ${mc}일`);
+                if (uc) parts.push(`미전송 ${uc}일`);
+                filterDesc = `입찰가 ${parts.join(' · ')} 건`;
+            } else if (dashboardFilter.type === 'total_missing') {
+                filterDesc = `당일 이후 전체 입찰가 미입력 건`;
+            } else if (dashboardFilter.type === 'total_unsent') {
+                filterDesc = `당일 이후 전체 입찰가 미전송 건`;
             } else if (dashboardFilter.type === 'yongdo_multi') {
                 const yLabels = (dashboardFilter.yongdos || []).map(y => y === '__pre__' ? '등록전' : (y === '__all__' ? '상품' : y));
                 filterDesc = `${(dashboardFilter.dates || []).length}개 날짜 상품 [${yLabels.join('/')}] 건`;
@@ -8861,6 +8915,8 @@ MJ 이정우 팀장
                 const niceDate = `${d.substring(0, 2)}/${d.substring(2, 4)}/${d.substring(4, 6)}`;
                 if (dashboardFilter.type === 'missing') {
                     filterDesc = `${niceDate} 입찰가 미입력 건`;
+                } else if (dashboardFilter.type === 'unsent') {
+                    filterDesc = `${niceDate} 입찰가 미전송 건`;
                 } else if (dashboardFilter.type === 'yongdo') {
                     const yLabel = dashboardFilter.status === '__pre__' ? '등록전' : dashboardFilter.status;
                     filterDesc = `${niceDate} 상품 [${yLabel}] 건`;
@@ -8908,7 +8964,7 @@ MJ 이정우 팀장
             const inDateNum = inDateStr.replace(/\D/g, '');
             // all_status/all_bid_state/item_ids 타입은 날짜 전체 범위를 조회 (과거 날짜 포함)
             const bypassDateFilter = dashboardFilter.active &&
-                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids' || dashboardFilter.type === 'missing_multi' || dashboardFilter.type === 'yongdo_multi' || dashboardFilter.type === 'total_yongdo' || dashboardFilter.type === 'total_yongdo_all_product');
+                (dashboardFilter.type === 'all_status' || dashboardFilter.type === 'all_bid_state' || dashboardFilter.type === 'item_ids' || dashboardFilter.type === 'missing_multi' || dashboardFilter.type === 'unsent_multi' || dashboardFilter.type === 'missing_unsent_multi' || dashboardFilter.type === 'total_missing' || dashboardFilter.type === 'total_unsent' || dashboardFilter.type === 'yongdo_multi' || dashboardFilter.type === 'total_yongdo' || dashboardFilter.type === 'total_yongdo_all_product');
             const matchesIndate = bypassDateFilter
                 ? true
                 : (syncSakunFilter.active
@@ -8951,6 +9007,10 @@ MJ 이정우 팀장
         filteredData = filteredData.filter(item => {
             const itemDate = String(item['in-date']);
             const price = parseInt(String(item.bidprice || 0));
+            // 미전송 판정용: 콤마 제거 후 숫자, 입찰상태 전달완료/확인완료 여부
+            const bidNum = parseFloat(String(item.bidprice || 0).replace(/,/g, '')) || 0;
+            const _bs = String(item.bid_state || '').trim();
+            const isDelivered = (_bs === '전달완료' || _bs === '확인완료');
 
             if (dashboardFilter.active) {
                 const isManagerMatch = (dashboardFilter.manager === 'All' || !dashboardFilter.manager) ||
@@ -8962,6 +9022,21 @@ MJ 이정우 팀장
                     return itemDate === dashboardFilter.date && (isNaN(price) || price === 0) && item.stu_member === '입찰';
                 } else if (dashboardFilter.type === 'missing_multi') {
                     return (dashboardFilter.dates || []).includes(itemDate) && (isNaN(price) || price === 0) && item.stu_member === '입찰';
+                } else if (dashboardFilter.type === 'unsent') {
+                    return itemDate === dashboardFilter.date && item.stu_member === '입찰' && bidNum > 0 && !isDelivered;
+                } else if (dashboardFilter.type === 'unsent_multi') {
+                    return (dashboardFilter.dates || []).includes(itemDate) && item.stu_member === '입찰' && bidNum > 0 && !isDelivered;
+                } else if (dashboardFilter.type === 'missing_unsent_multi') {
+                    if (item.stu_member !== '입찰') return false;
+                    const md = dashboardFilter.missingDates || [];
+                    const ud = dashboardFilter.unsentDates || [];
+                    const isMissing = (isNaN(price) || price === 0);
+                    const isUnsent = (bidNum > 0 && !isDelivered);
+                    return (md.includes(itemDate) && isMissing) || (ud.includes(itemDate) && isUnsent);
+                } else if (dashboardFilter.type === 'total_missing') {
+                    return itemDate >= todayYYMMDD && item.stu_member === '입찰' && (isNaN(price) || price === 0);
+                } else if (dashboardFilter.type === 'total_unsent') {
+                    return itemDate >= todayYYMMDD && item.stu_member === '입찰' && bidNum > 0 && !isDelivered;
                 } else if (dashboardFilter.type === 'yongdo') {
                     // 단건 셀 클릭: 해당 날짜 + stu_member='상품' + 특정 yongdo
                     const itemYongdo = String(item.items_youngdo || '').trim();
@@ -9149,11 +9224,50 @@ MJ 이정우 팀장
         th.style.color = isRedMode ? '#dc2626' : '';
     }
 
+    // 대시보드/입찰일정에서 필터를 들고 입찰물건관리로 진입할 때, 기존에 걸려 있던
+    // 입찰물건관리 검색조건(입찰일자/사건/법원/등록일/명의/상태/담당자/용도/수업)을 모두 초기화한다.
+    // (loadData 는 호출하지 않음 — 이어서 sync 가 현재 필터만 다시 세팅한 뒤 navigateTo 가 loadData 실행)
+    function _clearItemSearchInputsForDashboard() {
+        summaryClickFilter = null;
+        if (searchIndateInput) searchIndateInput.value = '';
+        if (searchSakunNoInput) searchSakunNoInput.value = '';
+        if (searchCourtInput) searchCourtInput.value = '';
+        if (searchRegDateInput) searchRegDateInput.value = '';
+        if (searchMNameInput) searchMNameInput.value = '';
+        // 상태: 전체
+        const allStatusCb = document.getElementById('search-status-all');
+        if (allStatusCb) allStatusCb.checked = true;
+        document.querySelectorAll('input[name="search-status-cb"]').forEach(cb => { if (cb.id !== 'search-status-all') cb.checked = false; });
+        const statusLabel = document.getElementById('search-status-label');
+        if (statusLabel) { statusLabel.textContent = '상태'; statusLabel.style.fontWeight = ''; statusLabel.style.color = ''; }
+        // 담당자: 전체
+        const allMgrCb = document.getElementById('search-manager-all');
+        if (allMgrCb) allMgrCb.checked = true;
+        document.querySelectorAll('input[name="search-manager-cb"]').forEach(cb => { if (cb.id !== 'search-manager-all') cb.checked = false; });
+        if (typeof updateManagerLabel === 'function') updateManagerLabel();
+        // 용도: 전체
+        const allYongdoCb = document.getElementById('bid-youngdo-all');
+        if (allYongdoCb) allYongdoCb.checked = true;
+        document.querySelectorAll('input[name="bid-youngdo-cb"]').forEach(cb => cb.checked = false);
+        if (typeof updateYongdoLabel === 'function') updateYongdoLabel();
+        // 수업 필터
+        const t = document.getElementById('bid-class-type'); if (t) t.value = '';
+        const n = document.getElementById('bid-class-name'); if (n) { n.value = ''; const w = document.getElementById('bid-class-name-wrap'); if (w) w.style.display = 'none'; }
+        const g = document.getElementById('bid-class-grade'); if (g) { g.value = ''; const w = document.getElementById('bid-class-grade-wrap'); if (w) w.style.display = 'none'; }
+        // 강조 제거 (이후 현재 필터에 맞게 다시 부여)
+        document.querySelectorAll('#ItemManagement .filter-active-input').forEach(el => el.classList.remove('filter-active-input'));
+    }
+
     function syncItemManagementSearchFromDashboard() {
         if (!dashboardFilter.active) return;
 
-        // 관련 입력 필드 강조 (파란 배경)
-        if (searchIndateInput && dashboardFilter.date) {
+        // [초기화] 기존 입찰물건관리 필터를 모두 비우고, 현재 선택한 필터만 다시 적용
+        _clearItemSearchInputsForDashboard();
+
+        // 입찰일자 강조/설정 — 단일 날짜 타입만. 다중/전체(오늘~) 타입은 날짜 박스를 비워둔다.
+        const _noIndateTypes = ['missing_multi', 'unsent_multi', 'missing_unsent_multi', 'total_missing', 'total_unsent',
+            'all_status', 'all_bid_state', 'item_ids', 'yongdo_multi', 'total_yongdo', 'total_yongdo_all_product'];
+        if (searchIndateInput && dashboardFilter.date && !_noIndateTypes.includes(dashboardFilter.type)) {
             searchIndateInput.value = dashboardFilter.date;
             searchIndateInput.classList.add('filter-active-input');
         }
@@ -9209,7 +9323,9 @@ MJ 이정우 팀장
             return;
         }
 
-        const statusToSet = (dashboardFilter.type === 'missing') ? '입찰' : (
+        // 미입력/미전송 계열은 모두 상태='입찰' 로 고정 (2단계 dashboardFilter 가 세부 판정)
+        const _bidStatusTypes = ['missing', 'unsent', 'missing_multi', 'unsent_multi', 'missing_unsent_multi', 'total_missing', 'total_unsent'];
+        const statusToSet = _bidStatusTypes.includes(dashboardFilter.type) ? '입찰' : (
             Array.isArray(dashboardFilter.status) ? dashboardFilter.status[0] : (dashboardFilter.status || '')
         );
         if (statusToSet) {
