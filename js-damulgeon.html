@@ -237,6 +237,8 @@
 
   function _num(v){ var n=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; }
   function _comma(v){ var n=_num(v); return n? n.toLocaleString('ko-KR') : String(v==null?'':v); }
+  // 금액을 만 단위로 최대한 줄여 표기 (예: 145090000 → "1억4,509만", 50000000 → "5,000만")
+  function _manShort(v){ var n=_num(v); if(!n||n<=0) return ''; var man=Math.round(n/10000); if(man<=0) return ''; var eok=Math.floor(man/10000), rem=man%10000; return eok>0 ? (eok+'억'+(rem?(_comma(rem)+'만'):'')) : (_comma(man)+'만'); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
   // 동/층/호수 토큰 제거 (숫자+동만 → 건물동, 법정동은 보존). 우측 상세 + 그리드 주소.
   // 동/층/호수 + 대괄호 조사내용([특수권리 등]) 제거. 법정동(전포동)은 숫자 없어 보존.
@@ -501,10 +503,15 @@
     if(c.t==='num' || c.t==='text' || c.t==='bid'){
       var val=it[c.f]==null?'':it[c.f]; if(c.num) val=_num(val)?_comma(val):'';
       var inS='width:100%;border:0;text-align:'+c.a+';padding:3px 6px;font-size:12px;box-sizing:border-box;';
-      if(c.t==='bid'){ var delivered=(it.bid_state && it.bid_state!=='신규'); inS+='background:transparent;font-weight:700;color:'+(delivered?'#1f2937':'#dc2626')+';'; }   // 전달 전(신규/미전달)=빨강, 전달완료/확인완료=검정 (입찰물건관리 동일)
-      else inS+=(c.src==='dm')?'background:#fffdf3;':'background:transparent;';
-      var ic=(c.t==='bid')?'dmgrid-input bidprice-cell':'dmgrid-input';
-      return '<td class="'+cls+'" style="'+style+';padding:0"><input type="text" value="'+esc(val)+'" data-f="'+c.f+'" oninput="DM.edit(this)" onfocus="this.select()" onclick="this.select()" class="'+ic+'" style="'+inS+'"></td>';
+      if(c.t==='bid'){
+        var delivered=(it.bid_state && it.bid_state!=='신규');   // 전달 전(신규/미전달)=빨강, 전달완료/확인완료=검정
+        inS+='background:transparent;font-weight:700;padding-top:0;color:'+(delivered?'#1f2937':'#dc2626')+';';
+        // 입찰가 위에 만 단위 축약 표기 (일괄적용 결과도 한눈에)
+        var manLine='<span class="bid-man" style="display:block;font-size:10px;line-height:1.1;font-weight:700;color:#0369a1;text-align:right;padding:1px 6px 0;white-space:nowrap;overflow:hidden;min-height:12px">'+esc(_manShort(it.bidprice))+'</span>';
+        return '<td class="'+cls+'" style="'+style+';padding:0">'+manLine+'<input type="text" value="'+esc(val)+'" data-f="'+c.f+'" oninput="DM.edit(this);DM.bidManSync(this)" onfocus="this.select()" onclick="this.select()" class="dmgrid-input bidprice-cell" style="'+inS+'"></td>';
+      }
+      inS+=(c.src==='dm')?'background:#fffdf3;':'background:transparent;';
+      return '<td class="'+cls+'" style="'+style+';padding:0"><input type="text" value="'+esc(val)+'" data-f="'+c.f+'" oninput="DM.edit(this)" onfocus="this.select()" onclick="this.select()" class="dmgrid-input" style="'+inS+'"></td>';
     }
     if(c.t==='auth'){ var cur=it[c.f]||''; return '<td class="'+cls+'" style="'+style+';padding:0;text-align:center"><select data-f="'+c.f+'" onchange="DM.edit(this)" style="width:100%;border:0;background:transparent;font-size:12px;padding:2px"><option value=""'+(cur===''?' selected':'')+'>-</option><option'+(cur==='종이'?' selected':'')+'>종이</option><option'+(cur==='전자'?' selected':'')+'>전자</option></select></td>'; }
     if(c.t==='daeriin'){   // 입찰대리인 = 구분에 '직원' 포함된 회원 드롭다운
@@ -1201,6 +1208,8 @@
     if (_saveTimers[tk]) clearTimeout(_saveTimers[tk]);
     _saveTimers[tk]=setTimeout(function(){ (f==='bidprice') ? saveItemBid(it) : saveDmAux(it); },600);
   };
+  // 입찰가 입력 시 셀 위 만단위 표기 즉시 갱신
+  DM.bidManSync = function(inp){ try{ var td=inp.closest('td'); if(!td) return; var lb=td.querySelector('.bid-man'); if(lb) lb.textContent=_manShort(inp.value); }catch(e){} };
   function refreshCalc(tr,it){
     var tds=tr.children, vc=visCols();
     vc.forEach(function(c,i){ if(c.t==='calc' && tds[i]) tds[i].textContent=computed(c.f,it,0); });
