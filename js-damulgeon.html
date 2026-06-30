@@ -799,24 +799,34 @@
     }, 350);
   }
   function _printDaeriipchal(p, agent, it){ _printHtmlBody(_docsFor(p, agent, it)); }
-  // 일괄 프린트 — 그리드 체크된 물건 전체
+  // 그리드 체크 물건 프린트 — 회원별 → 물건번호순으로 [위임장+기일입찰표+전자본인 PDF] 한 번에 인쇄 미리보기
   DM.bulkPrint=function(){
     var ids=DM.selectedIds();
     if(!ids||!ids.length){ alert('프린트할 물건을 체크하세요.'); return; }
     var its=ids.map(function(id){ return curItems().filter(function(x){return String(x.link_item_id)===String(id);})[0]; }).filter(Boolean);
     its=its.filter(function(it){ return String(it.member_id||'').trim(); });
     if(!its.length){ alert('회원이 배정된 물건이 없습니다.'); return; }
+    // 그리드 순서와 무관하게 회원별 → 물건번호순으로 재정렬
+    its.sort(function(a,b){
+      var ma=(_parseMName(a.member_name,a.member_id).member||'')+' '+String(a.member_id||'');
+      var mb=(_parseMName(b.member_name,b.member_id).member||'')+' '+String(b.member_id||'');
+      if(ma!==mb) return ma<mb?-1:1;
+      return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0);
+    });
     var reqs=its.map(function(it){ return { member_id:it.member_id, myungui:it.myungui||'', daeriin:it.daeriin||'' }; });
+    var ids2=its.map(function(it){ return String(it.link_item_id||''); }).filter(Boolean);
     var btn=document.getElementById('dmBulkPrintBtn'), orig=btn?btn.innerHTML:'';
     if(btn){ btn.disabled=true; btn.innerHTML='준비중…'; }
-    function done(){ if(btn){ btn.disabled=false; btn.innerHTML=orig||'🖨 일괄프린트'; } }
+    function restore(){ if(btn){ btn.disabled=false; btn.innerHTML=orig||'🖨 프린트'; } }
+    var ld=_certLoading('인쇄 미리보기 준비 중…');
     google.script.run.withSuccessHandler(function(res){
-      done();
-      var body='';
-      for(var i=0;i<its.length;i++){ var r=res&&res[i]; if(!r||!r.success) continue; body+=_docsFor(r.principal, r.agent, its[i]); }
-      if(!body){ alert('출력할 데이터가 없습니다(명의 정보 확인).'); return; }
-      _printHtmlBody(body);   // 위임장+기일입찰표만(전자본인 PDF는 '전자본인 일괄프린트' 버튼)
-    }).withFailureHandler(function(e){ done(); alert('일괄출력 실패: '+(e&&e.message)); }).getBulkDaeriipchalData(reqs);
+      var docParts=[];
+      for(var i=0;i<its.length;i++){ var r=res&&res[i]; if(!r||!r.success) continue; docParts.push({ id:String(its[i].link_item_id||''), doc:_docsFor(r.principal, r.agent, its[i]) }); }
+      if(!docParts.length){ _certLoadingHide(ld); restore(); alert('출력할 데이터가 없습니다(명의 정보 확인).'); return; }
+      google.script.run.withSuccessHandler(function(list){
+        _certImagesByItem(list||[], function(certMap){ _certLoadingHide(ld); restore(); _printHtmlBody(docParts.map(function(dp){ return dp.doc + ((certMap&&certMap[dp.id])||''); }).join('')); });
+      }).withFailureHandler(function(e){ _certLoadingHide(ld); restore(); _printHtmlBody(docParts.map(function(dp){return dp.doc;}).join('')); }).dmGetPdfBytesByItems(ids2);
+    }).withFailureHandler(function(e){ _certLoadingHide(ld); restore(); alert('일괄출력 실패: '+(e&&e.message)); }).getBulkDaeriipchalData(reqs);
   };
   // 전자본인서명 PDF 일괄(체크된 물건만) — 물건별 PDF 패널(클릭→미리보기 인쇄). ※합본 인쇄는 추후(pdf-lib)
   DM.bulkPrintPdf=function(){
@@ -1554,7 +1564,7 @@
     var chips='<span style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex:1;min-width:0;margin-left:10px">'
       +'<span style="font-size:12px;font-weight:700;color:#475569;margin-right:2px">물건</span>'
       +items.map(function(it){ var id=String(it.link_item_id||''), act=(id===_docMulId); return '<span onclick="DM.docPickMul(\''+esc(id)+'\')" style="cursor:pointer;padding:2px 10px;border-radius:11px;font-size:12px;font-weight:800;'+(act?'background:#1f3a5f;color:#fff':'background:#eef2ff;color:#3730a3')+'">'+esc(it.mulgeon_no||'?')+'</span>'; }).join('')+'</span>';
-    var printBtn='<button onclick="DM.docPrint()" title="현재 탭(선택 물건) 1건 인쇄" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:800;border:0;background:#4f46e5;color:#fff;border-radius:7px;padding:5px 13px;cursor:pointer">🖨 출력</button>'
+    var printBtn='<button onclick="DM.docPrint()" title="선택 물건 1건: 위임장+기일입찰표+전자본인 PDF 인쇄" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:800;border:0;background:#4f46e5;color:#fff;border-radius:7px;padding:5px 13px;cursor:pointer">🖨 출력</button>'
       +'<button onclick="DM.docPrintAll()" title="이 회원 모든 물건 위임장+기일입찰표 순서대로 + 전자본인 PDF" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:800;border:0;background:#1f3a5f;color:#fff;border-radius:7px;padding:5px 13px;cursor:pointer">🖨 전체출력</button>';
     head.innerHTML=tabs+chips+printBtn;
     body.innerHTML=_docTabBody(m, curIt, certList);
@@ -1582,18 +1592,16 @@
   DM.docPrint=function(){
     var m=_msgGroups[_msgFocusGi]; if(!m) return;
     var it=m.items.filter(function(x){return String(x.link_item_id)===_docMulId;})[0]||m.items[0]; if(!it) return;
-    if(_docTab==='cert'){
-      var ups=(m.member_id&&_uploadsCache[String(m.member_id)])||{}; var list=(ups&&ups[_docMulId])||[];
-      if(!list.length){ alert('전자본인확인서(PDF)가 없습니다.'); return; }
-      DM.viewPdf(list[0].url);   // PDF는 미리보기 창에서 인쇄
-      return;
-    }
     if(_msgDetailsLoading){ alert('상세정보 로딩중입니다. 잠시 후 다시 시도하세요.'); return; }
     var det=_msgDetailFor(m, it), p=det.principal; if(!p){ alert('회원 상세정보가 없습니다.'); return; }
-    var ctx=_ctxOf(it), isCorp=String((p.gubun||'')).indexOf('법인')>=0;
     var agent=det.agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
-    var html=(_docTab==='wijang')?_wijangHtml(p,agent,ctx,isCorp):_ipchalHtml(p,agent,ctx,isCorp);
-    _printHtmlBody(html);
+    var doc=_docsFor(p, agent, it);   // 위임장+기일입찰표 (선택 물건 1건)
+    var iid=String(it.link_item_id||'');
+    // 전체출력과 동일하게: 위임장+기일입찰표+전자본인 PDF 를 한 미리보기로
+    var ld=_certLoading('인쇄 미리보기 준비 중…');
+    google.script.run.withSuccessHandler(function(list){
+      _certImagesByItem(list||[], function(certMap){ _certLoadingHide(ld); _printHtmlBody(doc + ((certMap&&certMap[iid])||'')); });
+    }).withFailureHandler(function(e){ _certLoadingHide(ld); _printHtmlBody(doc); }).dmGetPdfBytesByItems([iid]);
   };
   // 전체출력: 물건번호 순으로 [위임장+기일입찰표+전자본인 PDF]를 물건별로 묶어 한 번의 인쇄 미리보기로 출력
   DM.docPrintAll=function(){
