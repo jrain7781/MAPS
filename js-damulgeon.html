@@ -761,7 +761,7 @@
     +'.ip-title{text-align:center;font-size:23px;letter-spacing:9px;font-weight:800;margin:2px 0 7px;}'
     +'.ip-head{display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin:0 2px 3px;}'
     +'.amt .u{font-size:13px;padding:3px 0;line-height:1;}.amt .d{height:72px;font-size:19px;}.amt .ub{border-bottom:2px solid #000;}'
-    +'.wj-doc{padding-top:30px;}.ip-doc{padding-top:16px;}'
+    +'.wj-doc{padding-top:30mm;}.ip-doc{padding-top:16px;}'
     +'.ip-notice{font-size:13px;color:#111;margin-top:12px;line-height:1.3;white-space:pre-line;}'
     +'.dm-cert-pg{page-break-after:always;text-align:center;}.dm-cert-pg:last-child{page-break-after:auto;}.dm-cert-pg img{max-width:100%;max-height:283mm;}';
   DM.mcPrint=function(){
@@ -822,14 +822,13 @@
   DM.bulkPrintPdf=function(){
     var ids=DM.selectedIds();
     if(!ids||!ids.length){ alert('프린트할 물건을 체크하세요.'); return; }
-    var its=ids.map(function(id){ return curItems().filter(function(x){return String(x.link_item_id)===String(id);})[0]; }).filter(Boolean);
-    if(!its.length){ alert('선택된 물건이 없습니다.'); return; }
     var btn=document.getElementById('dmBulkPdfPrintBtn'), o=btn?btn.innerHTML:'';
     if(btn){ btn.disabled=true; btn.innerHTML='준비중…'; }
-    google.script.run.withSuccessHandler(function(map){
+    var ld=_certLoading('인쇄 미리보기 준비 중…');
+    google.script.run.withSuccessHandler(function(list){
       if(btn){ btn.disabled=false; btn.innerHTML=o||'🖨 전자본인 일괄프린트'; }
-      _showItemsPdfPanel(its, map||{}, '체크 물건');
-    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.innerHTML=o; } alert('조회 오류: '+(e&&e.message||e)); }).dmGetUploadsByItems(ids);
+      _certImagesHtml(list||[], function(html){ _certLoadingHide(ld); if(!html){ alert('등록된 전자본인 PDF가 없거나 미리보기를 만들 수 없습니다.'); return; } _printHtmlBody(html); });
+    }).withFailureHandler(function(e){ if(btn){ btn.disabled=false; btn.innerHTML=o; } _certLoadingHide(ld); alert('조회 오류: '+(e&&e.message||e)); }).dmGetPdfBytesByItems(ids);
   };
   function _showItemsPdfPanel(its, map, label){
     var old=document.getElementById('dmBulkPdfPanel'); if(old&&old.parentNode) old.parentNode.removeChild(old);
@@ -1609,10 +1608,13 @@
       body+=_docsFor(p, agent, it);   // 위임장+기일입찰표 (물건별 순서)
     });
     if(!body){ alert('출력할 위임장/기일입찰표 데이터가 없습니다.(회원 상세정보 확인)'); return; }
-    _printHtmlBody(body);
-    var ups=(m.member_id&&_uploadsCache[String(m.member_id)])||{};
-    _showItemsPdfPanel(its, ups, m.member||'');   // 전자본인 PDF는 물건별 순서대로 패널(클릭/합본 인쇄)
     if(missing.length) setTimeout(function(){ _dot('상세정보 없는 물건 제외: '+missing.join(', '), true); }, 150);
+    // 위임장+기일입찰표 + 전자본인 PDF(이미지)를 한 번의 인쇄 미리보기로 출력 (우측 하단 패널 없음)
+    var ids=its.map(function(it){ return String(it.link_item_id||''); }).filter(Boolean);
+    var ld=_certLoading('인쇄 미리보기 준비 중…');
+    google.script.run.withSuccessHandler(function(list){
+      _certImagesHtml(list||[], function(certHtml){ _certLoadingHide(ld); _printHtmlBody(body+certHtml); });
+    }).withFailureHandler(function(e){ _certLoadingHide(ld); _printHtmlBody(body); }).dmGetPdfBytesByItems(ids);
   };
   // ===== 전자본인 PDF 합본(클라이언트 pdf-lib 병합 → 한 파일 미리보기/인쇄) =====
   var _pdfPanelIds=[], _pdfPanelLabel='';
@@ -1665,10 +1667,12 @@
     s.onerror=function(){ cb(false); };
     document.head.appendChild(s);
   }
-  // 전자본인 PDF들을 페이지 이미지로 렌더 → _printHtmlBody 로 인쇄(위임장/기일입찰표와 동일한 미리보기·출력). 실패 시 다운로드 폴백.
-  function _certImagesPrint(list, label, done){
+  // 전자본인 PDF들을 페이지 이미지(dataURL)로 렌더 → 인쇄용 HTML 문자열로 콜백. 없음/실패 시 '' 콜백(문서만 출력).
+  function _certImagesHtml(list, cb){
+    list=(list||[]).filter(function(x){ return x&&x.b64; });
+    if(!list.length){ cb(''); return; }
     _ensurePdfJs(function(ok){
-      if(!ok){ _ensurePdfLib(function(ok2){ if(ok2) _mergeAndOpen(list, label, done); else { if(done)done(); alert('PDF 라이브러리 로드 실패(인터넷 연결 확인)'); } }); return; }
+      if(!ok){ cb(''); return; }   // pdf.js 로드 실패 → 전자본인 생략
       var lib=window.pdfjsLib, imgs=[], chain=Promise.resolve();
       list.forEach(function(item){
         chain=chain.then(function(){
@@ -1687,21 +1691,18 @@
           }).catch(function(e){ console.error('전자본인 렌더 skip', item.filename, e); });
         });
       });
-      chain.then(function(){
-        if(!imgs.length){ _ensurePdfLib(function(ok2){ if(ok2) _mergeAndOpen(list, label, done); else { if(done)done(); alert('전자본인 PDF를 처리할 수 없습니다.'); } }); return; }
-        if(done)done();
-        _printHtmlBody(imgs.map(function(src){ return '<div class="dm-cert-pg"><img src="'+src+'"></div>'; }).join(''));
-      }).catch(function(e){ if(done)done(); alert('전자본인 인쇄 실패: '+(e&&e.message||e)); });
+      chain.then(function(){ cb(imgs.map(function(src){ return '<div class="dm-cert-pg"><img src="'+src+'"></div>'; }).join('')); }).catch(function(){ cb(''); });
     });
   }
+  function _certLoading(text){ var ld=document.createElement('div'); ld.id='dmCertLoad'; ld.style.cssText='position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center'; ld.innerHTML='<div style="background:#1f3a5f;color:#fff;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:800"><span class="dm-spin" style="display:inline-block">⟳</span> '+esc(text||'준비 중…')+'</div>'; document.body.appendChild(ld); return ld; }
+  function _certLoadingHide(ld){ if(ld&&ld.parentNode) ld.parentNode.removeChild(ld); }
+  // (호환용) 전자본인만 직접 인쇄 미리보기 — 우측 하단 패널/모달 없이 바로 출력 미리보기
+  function _certImagesPrint(list, label, done){ _certImagesHtml(list, function(html){ if(done)done(); if(!html){ alert('전자본인 PDF 미리보기를 만들 수 없습니다.'); return; } _printHtmlBody(html); }); }
   function _doPdfMerge(ids, label){
     ids=(ids||[]).filter(Boolean); if(!ids.length){ alert('대상 물건이 없습니다.'); return; }
-    var ld=document.createElement('div'); ld.id='dmMergeLoad'; ld.style.cssText='position:fixed;inset:0;z-index:140;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center';
-    ld.innerHTML='<div style="background:#1f3a5f;color:#fff;padding:14px 24px;border-radius:10px;font-size:15px;font-weight:800"><span class="dm-spin" style="display:inline-block">⟳</span> 인쇄 미리보기 준비 중…</div>';
-    document.body.appendChild(ld);
-    function done(){ var x=document.getElementById('dmMergeLoad'); if(x&&x.parentNode) x.parentNode.removeChild(x); }
-    google.script.run.withSuccessHandler(function(list){ list=list||[]; if(!list.length){ done(); alert('인쇄할 전자본인 PDF가 없습니다.'); return; } _certImagesPrint(list, label, done); })
-      .withFailureHandler(function(e){ done(); alert('PDF 조회 오류: '+(e&&e.message||e)); }).dmGetPdfBytesByItems(ids);
+    var ld=_certLoading('인쇄 미리보기 준비 중…');
+    google.script.run.withSuccessHandler(function(list){ _certImagesHtml(list||[], function(html){ _certLoadingHide(ld); if(!html){ alert('인쇄할 전자본인 PDF가 없습니다.'); return; } _printHtmlBody(html); }); })
+      .withFailureHandler(function(e){ _certLoadingHide(ld); alert('PDF 조회 오류: '+(e&&e.message||e)); }).dmGetPdfBytesByItems(ids);
   }
   DM.mergePdfPanel=function(){ _doPdfMerge(_pdfPanelIds, _pdfPanelLabel); };
   // 회원 등록 PDF 캐시(member_id → [{date,filename,url}]). null=조회중, undefined=미조회.
