@@ -1985,6 +1985,9 @@
             }
         } else {
             if (noDataMessage) noDataMessage.classList.add('content-hidden');
+            // 사건번호 검색 중일 때, 입찰일이 오늘보다 지난 물건은 행 전체를 붉은 톤으로 표시 (지난 물건 인지)
+            const _sakunSearchActive = !!(searchSakunNoInput && searchSakunNoInput.value && searchSakunNoInput.value.trim());
+            const _todayNum = parseInt(String(todayYYMMDD || '').replace(/\D/g, '') || '0');
             data.forEach(item => {
                 const row = dataTableBody.insertRow();
                 row.dataset.id = item.id;
@@ -2013,7 +2016,11 @@
                     if (hasImgs && hitImgCell) ev.preventDefault();
                     openInvestigationTab(r, hasImgs && !!hitImgCell);
                 };
-                row.className = 'cursor-pointer hover:bg-gray-100 transition duration-150';
+                const _inNum = parseInt(String(item['in-date'] || '').replace(/\D/g, '') || '0');
+                const _isPastSakun = _sakunSearchActive && _inNum > 0 && _inNum < _todayNum;
+                row.className = _isPastSakun
+                    ? 'cursor-pointer bg-red-100 hover:bg-red-200 transition duration-150'
+                    : 'cursor-pointer hover:bg-gray-100 transition duration-150';
 
                 var checkCell = row.insertCell(0);
                 checkCell.className = 'item-col-check text-center';
