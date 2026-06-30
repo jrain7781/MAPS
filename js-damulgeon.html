@@ -1020,12 +1020,8 @@
       +    '<span style="color:#64748b;font-weight:700">입찰 회원</span>'
       +    memOrder.map(function(n){return mchip(n);}).join('')
       +    (_hasMi?mchip('(미지정)'):'')
-      +'</div>'
-      + (qMemOrder.length ? (
-          '<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;margin-top:5px">'
-        +    '<span style="color:#b45309;font-weight:700;font-size:11px">?임의등록</span>'
-        +    qMemOrder.map(function(n,i){ var active=(_qOnly && _memberSel===n); return '<span onclick="DM.qMemberFilter('+i+')" title="이 회원의 ?임의등록 물건만" style="cursor:pointer;padding:1px 8px;border-radius:11px;'+(active?'background:#b45309;color:#fff;font-weight:800':'background:#fef3c7;color:#92400e;font-weight:700')+'">?'+esc(n)+' '+qMemCnt[n]+'</span>'; }).join('')
-        +'</div>') : '');
+      +    qMemOrder.map(function(n,i){ var active=(_qOnly && _memberSel===n); return '<span onclick="DM.qMemberFilter('+i+')" title="?임의등록 회원 — 이 회원의 ?물건만" style="cursor:pointer;padding:1px 8px;border-radius:11px;'+(active?'background:#dc2626;color:#fff;font-weight:800':'background:#fecaca;color:#991b1b;font-weight:700')+'">?'+esc(n)+' '+qMemCnt[n]+'</span>'; }).join('')
+      +'</div>';
   }
   DM.memberSummaryFilter=function(i){
     var name=_summaryMembers[i]; if(name==null) return;
@@ -1040,12 +1036,14 @@
     var cur=(_qOnly && !_memberSel && ((st==='' && Object.keys(_statusSel).length===0) || (st!=='' && Object.keys(_statusSel).length===1 && _statusSel[st])));
     if(cur){ _qOnly=false; _statusSel={}; }
     else { _qOnly=true; _memberSel=''; _bidMissing=false; _statusSel={}; if(st) _statusSel[st]=true; }
+    _sortField='_pMember'; _sortDir=1;   // 회원명 기준으로 묶어 보기
     _statusBtn(); renderSummary(); renderBody();
   };
   DM.qMemberFilter=function(i){
     var name=_qSummaryMembers[i]; if(name==null) return;
-    if(_qOnly && _memberSel===name){ _qOnly=false; _memberSel=''; _statusSel={}; }
-    else { _qOnly=true; _memberSel=name; _statusSel={'입찰':true}; _bidMissing=false; }   // ?+입찰+그 회원
+    var inp=document.getElementById('dmFilterMember');
+    if(_qOnly && _memberSel===name){ _qOnly=false; _memberSel=''; _statusSel={}; if(inp) inp.value=''; }
+    else { _qOnly=true; _memberSel=name; _statusSel={'입찰':true}; _bidMissing=false; if(inp) inp.value=(name==='(미지정)'?'':name); }   // ?+입찰+그 회원 + 회원명 기본필터
     _statusBtn(); renderSummary(); renderBody();
   };
   DM.summaryFilter=function(key){
@@ -1053,6 +1051,7 @@
     if(key==='__all__'){ _statusSel={}; _bidMissing=false; }
     else if(key==='bid_missing'){ _bidMissing=!_bidMissing; _statusSel=_bidMissing?{'입찰':true}:{}; }
     else { var only=Object.keys(_statusSel); if(only.length===1 && only[0]===key && !_bidMissing){ _statusSel={}; } else { _statusSel={}; _statusSel[key]=true; } _bidMissing=false; }
+    _sortField='_pMember'; _sortDir=1;   // 물건상태 썸머리 선택 시 회원명 기준으로 묶어 보기
     _statusBtn(); renderSummary(); renderBody();
   };
   DM.checkAll = function(el){ document.querySelectorAll('#dmGridBody .dm-row-cb').forEach(function(cb){ cb.checked = el.checked; }); };
