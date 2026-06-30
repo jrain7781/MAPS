@@ -11,6 +11,10 @@
   #DaMultiItemManagement tr:hover td.dmgrid-td { background:#f8fafc; }
   #DaMultiItemManagement tr.dm-row-hl td.dmgrid-td { background:#fff3c4; }
   #DaMultiItemManagement tr.dm-row-hl:hover td.dmgrid-td { background:#ffe9a3; }
+  /* 상태=입찰 + ?임의등록(물건/사건번호에 ?) 물건: 행 전체 붉은 배경 */
+  #DaMultiItemManagement tr.dm-row-q td.dmgrid-td { background:#fee2e2 !important; }
+  #DaMultiItemManagement tr.dm-row-q:hover td.dmgrid-td { background:#fecaca !important; }
+  #DaMultiItemManagement tr.dm-row-q .dmgrid-input:not(:focus), #DaMultiItemManagement tr.dm-row-q select { background:transparent !important; }
   #DaMultiItemManagement .dmgrid-input:focus { background:#fffbeb !important; outline:1px solid #fbbf24; }
   #DaMultiItemManagement #dmSplitter:hover, #DaMultiItemManagement #dmSplitter.dragging { background:#93c5fd; }
   #DaMultiItemManagement .dm-th-grip { position:absolute; top:0; right:-3px; width:7px; height:100%; cursor:col-resize; z-index:7; }
@@ -1089,7 +1093,8 @@
     var prevSel={}; tbody.querySelectorAll('.dm-row-cb:checked').forEach(function(cb){ prevSel[cb.getAttribute('data-id')]=1; });   // 일괄적용/필터 후에도 선택 유지
     var items=filteredItems(), rc=_renderCols();
     tbody.innerHTML = items.map(function(it,idx){
-      return '<tr data-id="'+esc(it.link_item_id)+'">'+rc.map(function(o){ return cell(o.c,it,idx,o.left,o.edge); }).join('')+'</tr>';
+      var qcls=(String(it.stu_member||'').trim()==='입찰' && _isQ(it))?' class="dm-row-q"':'';   // 입찰 + ? 물건 = 붉은 행
+      return '<tr data-id="'+esc(it.link_item_id)+'"'+qcls+'>'+rc.map(function(o){ return cell(o.c,it,idx,o.left,o.edge); }).join('')+'</tr>';
     }).join('');
     var checkedN=0; tbody.querySelectorAll('.dm-row-cb').forEach(function(cb){ if(prevSel[cb.getAttribute('data-id')]){ cb.checked=true; checkedN++; } });
     var ca=document.getElementById('dmCheckAll'); if(ca) ca.checked=(items.length>0 && checkedN===items.length);
