@@ -993,39 +993,46 @@
       var mem=_parseMName(it.member_name,it.member_id).member||'(미지정)'; if(memCnt[mem]===undefined){ memCnt[mem]=0; memOrder.push(mem); } memCnt[mem]++;
     });
     // 미지정은 맨 끝(오른쪽)으로
-    memOrder.sort(); var _mi=memOrder.indexOf('(미지정)'), _hasMi=_mi>=0; if(_hasMi) memOrder.splice(_mi,1);
+    memOrder.sort(function(a,b){return String(a).localeCompare(String(b),'ko');}); var _mi=memOrder.indexOf('(미지정)'), _hasMi=_mi>=0; if(_hasMi) memOrder.splice(_mi,1);
     _summaryMembers = memOrder.concat(_hasMi?['(미지정)']:[]);
-    function mchip(name, extra){ var i=_summaryMembers.indexOf(name), active=(_memberSel===name && !_qOnly), mi=(name==='(미지정)');
+    var _fnVal=String((document.getElementById('dmFilterMember')||{}).value||'').trim();   // 회원명 기본필터 값(칩 활성 판정)
+    function mchip(name, extra){ var i=_summaryMembers.indexOf(name), mi=(name==='(미지정)');
+      var active=(mi?(_memberSel==='(미지정)'):(_fnVal===name)) && !_qOnly;
       var sty = active ? (mi?'background:#64748b;color:#fff;font-weight:800':'background:#4f46e5;color:#fff;font-weight:800')
                        : (mi?'background:#e2e8f0;color:#475569;font-weight:700':'background:#eef2ff;color:#3730a3;font-weight:600');   // 미지정=회색 구분
-      return '<span onclick="DM.memberSummaryFilter('+i+')" title="이 회원만 보기(다시 누르면 해제)" style="'+(extra||'')+'cursor:pointer;padding:1px 8px;border-radius:11px;'+sty+'">'+esc(name)+' '+memCnt[name]+'</span>'; }
+      return '<span onclick="DM.memberSummaryFilter('+i+')" title="이 회원명으로 필터(다시 누르면 해제)" style="'+(extra||'')+'cursor:pointer;padding:1px 8px;border-radius:11px;'+sty+'">'+esc(name)+' '+memCnt[name]+'</span>'; }
     // ?표(임의등록) 중 입찰 상태만 별도 카운팅 — 클릭 필터. 상태 카운팅 뒤 | 구분
     var qItems=items.filter(function(it){ return _isQ(it) && String(it.stu_member||'').trim()==='입찰'; });
     var qMemCnt={}, qMemOrder=[];
     qItems.forEach(function(it){ var mm=_parseMName(it.member_name,it.member_id).member||'(미지정)'; if(qMemCnt[mm]===undefined){ qMemCnt[mm]=0; qMemOrder.push(mm); } qMemCnt[mm]++; });
-    qMemOrder.sort(); _qSummaryMembers=qMemOrder;
+    qMemOrder.sort(function(a,b){return String(a).localeCompare(String(b),'ko');}); _qSummaryMembers=qMemOrder;
     function qchip(st,label,active){ return '<span onclick="DM.qFilter(\''+st+'\')" style="cursor:pointer;color:#b45309;'+(active?'font-weight:800;text-decoration:underline':'font-weight:700')+'">'+esc(label)+'</span>'; }
     var qHtml='';
     if(qItems.length){
       var qAct=(_qOnly && !_memberSel && Object.keys(_statusSel).length===1 && _statusSel['입찰']);
       qHtml='<span style="margin-left:16px;color:#d1d5db">|</span>'+qchip('입찰', '? 입찰 '+qItems.length, qAct);
     }
-    // 1줄: 물건상태별(좌) + ?임의등록 카운팅 / 2줄: 회원별(미지정 회색). 담당자별은 맨 위 헤더로.
+    // 1줄: 물건상태별(좌) + ?입찰  ─ 2cm 띄움 ─  입찰 회원(우). 2줄: ?임의등록 회원(있을 때만). 담당자별은 맨 위 헤더로.
     bar.innerHTML=''
       +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:3px 7px">'
       +    statusHtml + qHtml
-      +'</div>'
-      +'<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;margin-top:5px">'
+      +    '<span style="display:inline-block;width:2cm"></span>'
       +    '<span style="color:#64748b;font-weight:700">입찰 회원</span>'
       +    memOrder.map(function(n){return mchip(n);}).join('')
       +    (_hasMi?mchip('(미지정)'):'')
-      +    (qMemOrder.length?'<span style="margin:0 4px 0 10px;color:#cbd5e1;font-weight:700">|</span><span style="color:#b45309;font-weight:700;font-size:11px">?임의등록</span>':'')
-      +    qMemOrder.map(function(n,i){ var active=(_qOnly && _memberSel===n); return '<span onclick="DM.qMemberFilter('+i+')" title="이 회원의 ?임의등록 물건만" style="cursor:pointer;padding:1px 8px;border-radius:11px;'+(active?'background:#b45309;color:#fff;font-weight:800':'background:#fef3c7;color:#92400e;font-weight:700')+'">?'+esc(n)+' '+qMemCnt[n]+'</span>'; }).join('')
-      +'</div>';
+      +'</div>'
+      + (qMemOrder.length ? (
+          '<div style="width:100%;display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;margin-top:5px">'
+        +    '<span style="color:#b45309;font-weight:700;font-size:11px">?임의등록</span>'
+        +    qMemOrder.map(function(n,i){ var active=(_qOnly && _memberSel===n); return '<span onclick="DM.qMemberFilter('+i+')" title="이 회원의 ?임의등록 물건만" style="cursor:pointer;padding:1px 8px;border-radius:11px;'+(active?'background:#b45309;color:#fff;font-weight:800':'background:#fef3c7;color:#92400e;font-weight:700')+'">?'+esc(n)+' '+qMemCnt[n]+'</span>'; }).join('')
+        +'</div>') : '');
   }
   DM.memberSummaryFilter=function(i){
     var name=_summaryMembers[i]; if(name==null) return;
-    _memberSel=(_memberSel===name)?'':name; _qOnly=false;   // 다시 누르면 해제
+    _qOnly=false;
+    var inp=document.getElementById('dmFilterMember');
+    if(name==='(미지정)'){ if(inp) inp.value=''; _memberSel=(_memberSel==='(미지정)')?'':'(미지정)'; }   // (미지정)은 입력칸으로 표현 불가 → 내부 토글
+    else { _memberSel=''; if(inp){ var cur=String(inp.value||'').trim(); inp.value=(cur===name)?'':name; } }   // 회원명 기본필터 입력칸에 넣기(재클릭 해제)
     renderSummary(); renderBody();
   };
   // ?임의등록 물건 필터 — st=''이면 전체, 아니면 그 상태의 ?물건
