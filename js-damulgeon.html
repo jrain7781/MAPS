@@ -1306,6 +1306,70 @@
   }
 
   // 엑셀(CSV) 출력 — 현재 화면(보이는 컬럼+표시값) 그대로
+  // ── 다물건 보고서(대리인 입찰 참고용) — 현재 그리드를 가로(A4 landscape) 격자표로 인쇄 ──
+  function _printReportLandscape(inner){
+    var css='@page{size:A4 landscape;margin:8mm;}'
+      +'*{box-sizing:border-box;}body{font-family:"맑은 고딕","Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#000;margin:0;font-size:11px;}'
+      +'.rep-title{font-size:16px;font-weight:800;margin:0 0 5px;}'
+      +'.rep-meta{font-size:11px;line-height:1.55;margin-bottom:8px;border:1px solid #999;border-radius:4px;padding:6px 9px;background:#f8fafc;}'
+      +'.rep-meta b{color:#1f3a5f;}'
+      +'table.rep{width:100%;border-collapse:collapse;table-layout:fixed;}'
+      +'table.rep th,table.rep td{border:1px solid #444;padding:3px 5px;font-size:10.5px;line-height:1.3;word-break:break-all;overflow-wrap:anywhere;white-space:normal;vertical-align:middle;}'
+      +'table.rep th{background:#e5e7eb;font-weight:700;text-align:center;}'
+      +'table.rep td.r{text-align:right;}table.rep td.c{text-align:center;}table.rep td.l{text-align:left;}'
+      +'table.rep thead{display:table-header-group;}table.rep tr{page-break-inside:avoid;}';
+    var html='<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>다물건 보고서</title><style>'+css+'</style></head><body>'+inner+'</body></html>';
+    var old=document.getElementById('dmRepPrintIframe'); if(old&&old.parentNode) old.parentNode.removeChild(old);
+    var ifr=document.createElement('iframe'); ifr.id='dmRepPrintIframe'; ifr.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(ifr);
+    var d=ifr.contentWindow.document; d.open(); d.write(html); d.close();
+    setTimeout(function(){ try{ ifr.contentWindow.focus(); ifr.contentWindow.print(); }catch(e){ alert('인쇄 실패: '+(e&&e.message)); } }, 300);
+  }
+  DM.openReport = function(){
+    if(!_selKey){ alert('사건을 선택하세요.'); return; }
+    var g=_groups.filter(function(x){return x.group_key===_selKey;})[0];
+    // 입찰 상태 물건만(체크박스 무관, 사건 전체) → 회원별 → 물건번호 순 정렬
+    var items=curItems().filter(function(it){ return String(it.stu_member||'').trim()==='입찰'; }).slice().sort(function(a,b){
+      var ka=(_parseMName(a.member_name,a.member_id).member||'')+' '+String(a.member_id||'');
+      var kb=(_parseMName(b.member_name,b.member_id).member||'')+' '+String(b.member_id||'');
+      if(ka!==kb) return ka<kb?-1:1;
+      return (parseInt(a.mulgeon_no,10)||0)-(parseInt(b.mulgeon_no,10)||0);
+    });
+    if(!items.length){ alert('입찰 상태인 물건이 없습니다.'); return; }
+    // 회원별 입찰 물건 수 썸머리
+    var _cnt={}, _ord=[]; items.forEach(function(it){ var nm=_parseMName(it.member_name,it.member_id).member||'(미지정)'; if(_cnt[nm]==null){ _cnt[nm]=0; _ord.push(nm); } _cnt[nm]++; });
+    var sumLine=_ord.map(function(nm){ return esc(nm)+' <b>'+_cnt[nm]+'</b>'; }).join(' · ');
+    var mgr=(g&&_firstMgr(g))?_mgrDisplay(_firstMgr(g)).disp:'';
+    var addrFull=g?_addrBase((g.items[0]&&g.items[0].address)||g.address_base||''):'';
+    var head='<div class="rep-title">다물건 입찰 보고서</div>'
+      +'<div class="rep-meta"><b>사건번호</b> '+esc(g&&g.sakun_base||'')+' &nbsp;|&nbsp; <b>법원</b> '+esc(g&&g.court||'')+' &nbsp;|&nbsp; <b>입찰일</b> '+esc(g&&g.in_date||'')+' &nbsp;|&nbsp; <b>전체물건</b> '+esc(String((g&&g.count)||items.length))+' &nbsp;|&nbsp; <b>담당</b> '+esc(mgr)+'<br><b>주소</b> '+esc(addrFull)
+      +'<br><b>입찰 회원</b> '+sumLine+' &nbsp;(<b>입찰 합계 '+items.length+'건</b>)</div>';
+    // 기본정보 숨김 모드 컬럼셋 (물건~총입금요청), 남는 폭은 비고
+    var REP=[
+      {label:'물건',f:'mulgeon_no',a:'c',w:30},
+      {label:'회원',f:'_pMember',a:'l',w:60},
+      {label:'구분',f:'_pGubun',a:'c',w:36},
+      {label:'명의',f:'_pMyungui',a:'l',w:66},
+      {label:'등급',f:'grade',a:'c',w:42},
+      {label:'동',f:'_dong',a:'c',w:34},
+      {label:'층',f:'_floor',a:'c',w:30},
+      {label:'호수',f:'_ho',a:'c',w:42},
+      {label:'입찰가',f:'bidprice',a:'r',w:88,num:true},
+      {label:'보증금',f:'deposit',a:'r',w:82,num:true},
+      {label:'진행비',f:'jinhaengbi',a:'r',w:74,num:true},
+      {label:'총입금요청',f:'_total',a:'r',w:92,num:true},
+      {label:'비고',f:'dm_note',a:'l',w:0}
+    ];
+    var colg='<colgroup>'+REP.map(function(c){ return '<col style="width:'+(c.w?(c.w+'px'):'auto')+'">'; }).join('')+'</colgroup>';
+    var thead='<tr>'+REP.map(function(c){ return '<th>'+esc(c.label)+'</th>'; }).join('')+'</tr>';
+    var tbody=items.map(function(it,idx){
+      return '<tr>'+REP.map(function(c){
+        var v=computed(c.f,it,idx); if(c.num) v=_num(v)?_comma(v):''; v=(v==null?'':String(v));
+        return '<td class="'+c.a+'">'+esc(v)+'</td>';
+      }).join('')+'</tr>';
+    }).join('');
+    _printReportLandscape(head+'<table class="rep">'+colg+'<thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>');
+  };
   DM.exportCsv = function(){
     if(!_selKey){ alert('사건을 선택하세요.'); return; }
     var cols=visCols().filter(function(c){ return c.t!=='check' && c.t!=='auction'; });   // 체크박스·옥션버튼 제외
