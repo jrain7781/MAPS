@@ -1564,7 +1564,7 @@
     var chips='<span style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;flex:1;min-width:0;margin-left:10px">'
       +'<span style="font-size:12px;font-weight:700;color:#475569;margin-right:2px">물건</span>'
       +items.map(function(it){ var id=String(it.link_item_id||''), act=(id===_docMulId); return '<span onclick="DM.docPickMul(\''+esc(id)+'\')" style="cursor:pointer;padding:2px 10px;border-radius:11px;font-size:12px;font-weight:800;'+(act?'background:#1f3a5f;color:#fff':'background:#eef2ff;color:#3730a3')+'">'+esc(it.mulgeon_no||'?')+'</span>'; }).join('')+'</span>';
-    var printBtn='<button onclick="DM.docPrint()" title="선택 물건 1건: 위임장+기일입찰표+전자본인 PDF 인쇄" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:800;border:0;background:#4f46e5;color:#fff;border-radius:7px;padding:5px 13px;cursor:pointer">🖨 출력</button>'
+    var printBtn='<button onclick="DM.docPrint()" title="현재 보이는 탭만 인쇄(위임장/기일입찰표/인증서 중 1개)" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:800;border:0;background:#4f46e5;color:#fff;border-radius:7px;padding:5px 13px;cursor:pointer">🖨 출력</button>'
       +'<button onclick="DM.docPrintAll()" title="이 회원 모든 물건 위임장+기일입찰표 순서대로 + 전자본인 PDF" style="flex-shrink:0;white-space:nowrap;font-size:12px;font-weight:800;border:0;background:#1f3a5f;color:#fff;border-radius:7px;padding:5px 13px;cursor:pointer">🖨 전체출력</button>';
     head.innerHTML=tabs+chips+printBtn;
     body.innerHTML=_docTabBody(m, curIt, certList);
@@ -1592,16 +1592,21 @@
   DM.docPrint=function(){
     var m=_msgGroups[_msgFocusGi]; if(!m) return;
     var it=m.items.filter(function(x){return String(x.link_item_id)===_docMulId;})[0]||m.items[0]; if(!it) return;
+    var iid=String(it.link_item_id||'');
+    // 보이는 탭만 출력 — 인증서 탭: 그 물건 전자본인 PDF만 인쇄 미리보기
+    if(_docTab==='cert'){
+      var ld=_certLoading('인쇄 미리보기 준비 중…');
+      google.script.run.withSuccessHandler(function(list){
+        _certImagesHtml(list||[], function(html){ _certLoadingHide(ld); if(!html){ alert('전자본인확인서(PDF)가 없습니다.'); return; } _printHtmlBody(html); });
+      }).withFailureHandler(function(e){ _certLoadingHide(ld); alert('PDF 조회 오류: '+(e&&e.message||e)); }).dmGetPdfBytesByItems([iid]);
+      return;
+    }
+    // 위임장/기일입찰표 탭: 현재 보이는 탭 1개만 인쇄
     if(_msgDetailsLoading){ alert('상세정보 로딩중입니다. 잠시 후 다시 시도하세요.'); return; }
     var det=_msgDetailFor(m, it), p=det.principal; if(!p){ alert('회원 상세정보가 없습니다.'); return; }
+    var ctx=_ctxOf(it), isCorp=String((p.gubun||'')).indexOf('법인')>=0;
     var agent=det.agent||{name:'',job:'회사원',jumin_corp:'',phone:'',address:''};
-    var doc=_docsFor(p, agent, it);   // 위임장+기일입찰표 (선택 물건 1건)
-    var iid=String(it.link_item_id||'');
-    // 전체출력과 동일하게: 위임장+기일입찰표+전자본인 PDF 를 한 미리보기로
-    var ld=_certLoading('인쇄 미리보기 준비 중…');
-    google.script.run.withSuccessHandler(function(list){
-      _certImagesByItem(list||[], function(certMap){ _certLoadingHide(ld); _printHtmlBody(doc + ((certMap&&certMap[iid])||'')); });
-    }).withFailureHandler(function(e){ _certLoadingHide(ld); _printHtmlBody(doc); }).dmGetPdfBytesByItems([iid]);
+    _printHtmlBody((_docTab==='wijang')?_wijangHtml(p,agent,ctx,isCorp):_ipchalHtml(p,agent,ctx,isCorp));
   };
   // 전체출력: 물건번호 순으로 [위임장+기일입찰표+전자본인 PDF]를 물건별로 묶어 한 번의 인쇄 미리보기로 출력
   DM.docPrintAll=function(){
