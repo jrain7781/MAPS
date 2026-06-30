@@ -102,8 +102,12 @@
       return '<input class="dmedit" type="text" data-idx="'+ix+'" data-field="'+field+'" value="'+esc(val||'')+'"'+oi+' placeholder="'+ph+'">';
     }
     // 값+입력칸 동시 렌더. 기본: 채워진칸=값표시 / 빈칸=입력. 수정모드: 전부 입력. (저장은 보이는 입력칸만)
-    function _efield(label, value, field, ix, dispHl){
+    function _efield(label, value, field, ix, dispHl, locked){
       value=(value==null?'':String(value)).trim(); var filled=value!=='';
+      if(locked){   // 관리자만 수정(회원/모달에서 수정 금지) — 입력칸 없이 값만 표시
+        var dv=filled?esc(value):'<span class="dmneed">관리자 등록</span>';
+        return [label, '<div class="dmf" data-filled="1"><span class="dmlock" style="color:#334155">'+dv+'</span> <span title="관리자만 수정 가능" style="font-size:.78em;color:#94a3b8">🔒</span></div>', (filled?(dispHl||''):''), 'raw'];
+      }
       if(!filled) _missing=true;
       var inner='<span class="dmdisp">'+(filled?esc(value):'<span class="dmneed">회신 부탁</span>')+'</span>'+_einput(ix, field, '입력', value);
       return [label, '<div class="dmf" data-filled="'+(filled?1:0)+'">'+inner+'</div>', (filled?(dispHl||''):'hl-need'), 'raw'];
@@ -127,13 +131,14 @@
       var p=(_msgDetailFor(m, it0).principal)||{};
       var isCorp=String(p.gubun||pm.gubun||'').indexOf('법인')>=0;
       var gname=isCorp?'법인':(pm.gubun==='본인'?'개인(본인)':'개인');
-      var hd=(mgOrder.length>1?('명의 '+(gIdx+1)+' <span class="rh-sub">'+gname+'</span>'):gname);
-      var caseLines=grp.map(function(it){ return esc(_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+')'); }).join('<br>');
       var pName=p.name||pm.member||m.member||'';
+      var _bon=(pm.gubun==='본인');   // 본인 명의 = 이름·전화 잠금
+      var hd=(mgOrder.length>1?('명의 '+(gIdx+1)+' <span class="rh-sub">'+gname+'</span>'):gname)+((!_bon&&pName)?(' <span style="font-weight:800">'+esc(pName)+'</span>'):'');
+      var caseLines=grp.map(function(it){ return esc(_sakunBase(it.sakun_no||'')+' ('+(it.mulgeon_no||'')+')'); }).join('<br>');
       var _acctRows=[_efield('은행',p.account_bank,'account_bank',p.idx),_efield('계좌번호',p.account_no,'account_no',p.idx),_efield('예금주',p.account_name,'account_name',p.idx)];   // 은행·계좌번호·예금주 각각 별도 행(각각 노란칸/등록) — 예금주만 채워져도 은행·번호 등록 가능
       var rows=[['사건·물건', caseLines,'hl-y','raw']].concat(isCorp
-        ? [_efield('법인성명',pName,'name',p.idx,'hl-y'),_efield('사업자번호',p.biz_no,'biz_no',p.idx),_efield('법인등록번호',p.jumin_corp,'jumin_corp',p.idx),_efield('전화번호',p.phone,'phone',p.idx),_efield('주소',p.address,'address',p.idx)].concat(_acctRows)
-        : [_efield('입찰명의성명',pName,'name',p.idx,'hl-y'),_efield('직업',p.job||'회사원','job',p.idx),_efield('주민등록번호',p.jumin_corp,'jumin_corp',p.idx),_efield('전화번호',p.phone,'phone',p.idx),_efield('주소',p.address,'address',p.idx)].concat(_acctRows));
+        ? [_efield('법인성명',pName,'name',p.idx,'hl-y',true),_efield('사업자번호',p.biz_no,'biz_no',p.idx),_efield('법인등록번호',p.jumin_corp,'jumin_corp',p.idx),_efield('전화번호',p.phone,'phone',p.idx,'',_bon),_efield('주소',p.address,'address',p.idx)].concat(_acctRows)
+        : [_efield('입찰명의성명',pName,'name',p.idx,'hl-y',true),_efield('직업',p.job||'회사원','job',p.idx),_efield('주민등록번호',p.jumin_corp,'jumin_corp',p.idx),_efield('전화번호',p.phone,'phone',p.idx,'',_bon),_efield('주소',p.address,'address',p.idx)].concat(_acctRows));
       var tbl=_kvTable(rows);
       var _card=blkSave(hd, tbl, true);   // 명의 카드 = 항상 수정/저장 버튼(채워진 정보도 수정 가능)
       var _gjs=_jikState(grp);   // 그룹 내 직접입찰: 전부(직접입찰)/일부(일부직접)면 붉은 세로 카드 앞에
