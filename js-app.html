@@ -8971,7 +8971,9 @@ MJ 이정우 팀장
                     ? true
                     : (termIndate
                         ? (inDateStr.includes(termIndate) || inDateNum.includes(termIndate.replace(/\D/g, '')))
-                        : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, '')))));
+                        : (termSakunNo
+                            ? true   // 사건번호로 검색 시 날짜 하한(오늘 이후) 무시 — 과거 물건도 조회
+                            : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, ''))))));
             const matchesSakunNo = !termSakunNo || String(item.sakun_no || '').toLowerCase().includes(termSakunNo);
             // 정확한 매칭: 입력값과 정확히 일치하는 경우만 통과
             const matchesCourt = !termCourt || String(item.court || '').toLowerCase().trim() === termCourt.toLowerCase().trim();
