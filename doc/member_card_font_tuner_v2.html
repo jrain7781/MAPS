@@ -6,7 +6,7 @@
 <title>회원 물건카드 · 편집기 V2</title>
 <style>
   :root{
-    --fs-date: 18px;
+    --fs-date: 20px;
     --fs-court: 12px;
     --fs-manager: 12px;
     --fs-sakun: 18px;
@@ -15,10 +15,10 @@
     --fs-view: 13px;
     /* 세로 높이/여백 + 간격 */
     --pv-head: 11px;
-    --gap-date-mgr: 36px;   /* 날짜↔담당자 (약 1cm) */
-    --pt-court: 8px;        /* 법원줄 상단 여백 */
-    --gap-court-sakun: 4px; /* 법원↔사건번호 */
-    --pv-sakun: 12px;       /* 사건번호 아래 여백 */
+    --gap-date-mgr: 23px;   /* 날짜↔담당자 */
+    --pt-court: 11px;       /* 법원줄 상단 여백 */
+    --gap-court-sakun: 11px;/* 법원↔사건번호 */
+    --pv-sakun: 11px;       /* 사건번호 아래 여백 */
     --pv-price: 11px;
     /* 버튼 크기 (폰트와 별도) */
     --btn-py: 10px;
@@ -62,7 +62,7 @@
   .c1-date .dow { font-weight:800; opacity:.92; }
   .manager { display:inline-flex; align-items:center; padding:3px 12px; border-radius:8px; background:#fff; color:#334155; font-weight:800; font-size:var(--fs-manager); white-space:nowrap; flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,.12); }
 
-  .c1-btn { border:none; cursor:pointer; padding:var(--btn-py) var(--btn-px); border-radius:13px; font-weight:900; font-size:var(--fs-btn); color:#fff; flex-shrink:0; transition:transform .07s ease, box-shadow .07s ease, filter .12s; }
+  .c1-btn { display:inline-flex; align-items:center; justify-content:center; height:calc(var(--btn-py) * 2 + 20px); padding:0 var(--btn-px); line-height:1; overflow:hidden; border:none; cursor:pointer; border-radius:13px; font-weight:900; font-size:var(--fs-btn); color:#fff; flex-shrink:0; transition:transform .07s ease, box-shadow .07s ease, filter .12s; }
   .c1-btn.rec { background:linear-gradient(180deg,#fdbb74,#f97316); box-shadow:0 5px 0 #c2410c, 0 9px 14px -4px rgba(249,115,22,.55), inset 0 1px 0 rgba(255,255,255,.5); }
   .c1-btn.bid { background:linear-gradient(180deg,#818cf8,#4f46e5); box-shadow:0 5px 0 #3730a3, 0 9px 14px -4px rgba(79,70,229,.55), inset 0 1px 0 rgba(255,255,255,.5); }
   .c1-btn:hover{ filter:brightness(1.05); }
@@ -78,13 +78,18 @@
   .c1-card.bid .court { background:#eef2ff; color:#4338ca; border-color:#c7d2fe; }
 
   .sakun-row { display:flex; align-items:flex-start; gap:7px; padding:var(--gap-court-sakun) 0 var(--pv-sakun); }
-  .sakun { flex:1; min-width:0; font-weight:900; color:#1e293b; font-size:var(--fs-sakun); line-height:1.3; word-break:keep-all; overflow-wrap:anywhere; }
+  .sakun { min-width:0; font-weight:900; color:#1e293b; font-size:var(--fs-sakun); line-height:1.3; word-break:keep-all; overflow-wrap:anywhere; }
   .sakun-row .cp { margin-top:2px; }
 
   .price-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:var(--pv-price) 0; border-top:1px dashed #e5e7eb; }
   .price-left { display:flex; align-items:center; gap:7px; }
   .price { font-weight:900; font-size:var(--fs-price); } .price.na{ color:#9ca3af; font-weight:500; } .price.ok{ color:#7c3aed; }
-  .view { display:inline-flex; align-items:center; gap:5px; color:#334155; background:#eef2f7; padding:8px 15px; border-radius:13px; font-weight:800; font-size:var(--fs-view); cursor:pointer; border:none; }
+  .view { display:inline-flex; align-items:center; gap:5px; color:#475569; background:linear-gradient(180deg,#f8fafc,#e6ebf2); padding:8px 15px; border-radius:13px; font-weight:800; font-size:var(--fs-view); cursor:pointer; border:1px solid #dbe2ea;
+          box-shadow:0 3px 0 #cbd5e1, 0 6px 11px -3px rgba(15,23,42,.20), inset 0 1px 0 rgba(255,255,255,.95); transition:transform .07s ease, box-shadow .07s ease, filter .12s; }
+  .view:hover { filter:brightness(1.03); }
+  .view:active { transform:translateY(3px); box-shadow:0 1px 0 #cbd5e1, 0 2px 5px -2px rgba(15,23,42,.2), inset 0 1px 0 rgba(255,255,255,.85); }
+  .v-ico { width:15px; height:15px; flex-shrink:0; }
+  .v-arr { font-weight:900; opacity:.6; margin-left:1px; }
 </style>
 </head>
 <body>
@@ -142,7 +147,7 @@
           </div>
           <div class="price-row">
             <div class="price-left"><span class="price na">가격미정</span></div>
-            <button class="view">🔍 조사내용보기 ›</button>
+            <button class="view">조사내용보기<span class="v-arr">›</span></button>
           </div>
         </div>
       </div>
@@ -169,7 +174,7 @@
               <span class="price ok">1억 2,500만원</span>
               <button class="cp" title="입찰가 복사 — 숫자 원본(125000000)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
             </div>
-            <button class="view">🔍 조사내용보기 ›</button>
+            <button class="view">조사내용보기<span class="v-arr">›</span></button>
           </div>
         </div>
       </div>
