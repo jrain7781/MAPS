@@ -569,6 +569,10 @@ function processMemberDashboardActionDirect(memberToken, itemId, action) {
     const oldStuDirect = (typeof checkItemStatus_ === 'function') ? checkItemStatus_(item) : '';
     updateItemStuMemberById_(item, newStatus);
 
+    // [버그수정] 회원 물건 서버캐시(member_items_v1_) 즉시 무효화
+    //  — 안 하면 회원 화면 새로고침 시 5분간 옛 상태(추천)로 되돌아 보임
+    try { if (typeof invalidateMemberItemsCache_ === 'function') invalidateMemberItemsCache_(member.member_id); } catch (e) {}
+
     // [추가] 상태 변경 FIELD_CHANGE 로그 기록
     if (oldStuDirect !== newStatus) {
       writeItemHistory_({
