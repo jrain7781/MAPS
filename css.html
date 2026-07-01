@@ -3037,7 +3037,7 @@
     --ic-price-fs: 24px;     /* 입찰가 */
     --ic-court-fs: 16px;     /* 법원 */
     --ic-mgr-fs: 14px;       /* 담당자 */
-    --ic-view-fs: 18px;      /* 조사내용보기 (박스 고정, 글자 크게) */
+    --ic-view-fs: 15px;      /* 조사내용 (박스 고정) */
     --badge-fs: 24px;        /* 버튼 글자 */
     --ic-pv-head: 11px;      /* 헤더 세로 여백 */
     --ic-gap-date-mgr: 9px;  /* 날짜↔담당자 */
@@ -3092,9 +3092,12 @@
 
   .ic-date { color: #fff; font-weight: 900; font-size: var(--ic-date-fs); text-shadow: 0 1px 2px rgba(0,0,0,.15); white-space: nowrap; }
   .ic-date .ic-dow { font-weight: 800; opacity: .92; }
-  /* 법원 (색블록 안, 반투명 흰 칩) */
-  .ic-head-left .ic-court { display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 999px; background: rgba(255,255,255,.24); color: #fff; border: 1px solid rgba(255,255,255,.42); font-weight: 800; font-size: var(--ic-court-fs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-  .ic-head-left .copy-btn { color: rgba(255,255,255,.92); }
+  /* 법원: 사건번호 위(본문), 상태색 톤 칩 */
+  .ic-court-row { display: flex; align-items: center; gap: 5px; padding-top: var(--ic-pt-court); }
+  .ic-court { display: inline-flex; align-items: center; max-width: 210px; padding: 3px 10px; border-radius: 8px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; font-weight: 800; font-size: var(--ic-court-fs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ic.sr .ic-court { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+  .ic.sb .ic-court { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
+  .ic.sv .ic-court { background: #faf5ff; color: #7e22ce; border-color: #e9d5ff; }
 
   /* 입찰가 줄: 가격+복사(좌) | 조사내용보기(우) */
   .ic-price-row-wrap {
@@ -3102,7 +3105,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: var(--ic-pv-price) 0;
+    padding: var(--ic-pv-price) 0 12px;   /* 아래 여백 = 오른쪽 여백(12px) */
     border-top: 1px dashed #e5e7eb;
   }
   .ic-price-left { display: flex; align-items: center; gap: 6px; }
@@ -3124,10 +3127,10 @@
   /* 조사내용보기 버튼 — 박스 고정(글자 키워도 안 커짐), 글자 최대 */
   .view-btn-header {
     display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-    height: 38px; padding: 0 16px; line-height: 1; overflow: hidden;
+    height: 32px; padding: 0 13px; line-height: 1; overflow: hidden;
     color: #334155;
     background: linear-gradient(180deg,#f1f5f9,#dbe2ea);
-    border-radius: 13px;
+    border-radius: 11px;
     font-weight: 800; font-size: var(--ic-view-fs);
     cursor: pointer; border: 1.5px solid #94a3b8; flex-shrink: 0;
     box-shadow: 0 3px 0 #94a3b8, 0 6px 11px -3px rgba(15,23,42,.25), inset 0 1px 0 rgba(255,255,255,.9);
@@ -3142,7 +3145,7 @@
   .ic-body {
     display: flex;
     flex-direction: column;
-    padding: 0 15px;
+    padding: 0 12px;
   }
 
   /* 사건번호 줄: 텍스트 + 복사버튼(바로 옆) */
@@ -3295,7 +3298,7 @@
   }
 
   /* 프리미엄 액션 버튼 (추천/입찰) — 눌리는 입체버튼. 박스 높이는 글자크기와 무관 */
-  /* 상태버튼 = 흰 알약 + 상태색 글자 (흰 배경 우측) */
+  /* 상태버튼 = 색상 입체버튼 (흰 배경 우측) */
   .badge {
     align-self: center;
     display: inline-flex; align-items: center; justify-content: center;
@@ -3304,16 +3307,17 @@
     line-height: 1; overflow: hidden;
     border-radius: 13px;
     font-size: var(--badge-fs); font-weight: 900; letter-spacing: .01em;
-    cursor: pointer; border: 1.5px solid #eef2f7; background: #fff; white-space: nowrap; flex-shrink: 0;
-    box-shadow: 0 4px 12px -2px rgba(15,23,42,.22);
-    transition: transform .1s ease, filter .12s;
+    cursor: pointer; border: none; color: #fff; white-space: nowrap; flex-shrink: 0;
+    transition: transform .07s ease, box-shadow .07s ease, filter .12s;
   }
-  .badge:hover { filter: brightness(.99); }
-  .badge:active { transform: scale(.95); }
-  .badge.bb { color: #4338ca; }
-  .badge.br { color: #ea580c; }
-  .badge.bv { color: #7e22ce; cursor: default; }
-  .badge.bc { color: #334155; cursor: default; }
+  .badge:hover { filter: brightness(1.05); }
+  .badge.bb { background: linear-gradient(180deg,#818cf8,#4f46e5); box-shadow: 0 5px 0 #3730a3, 0 9px 14px -4px rgba(79,70,229,.55), inset 0 1px 0 rgba(255,255,255,.5); }
+  .badge.br { background: linear-gradient(180deg,#fdbb74,#f97316); box-shadow: 0 5px 0 #c2410c, 0 9px 14px -4px rgba(249,115,22,.55), inset 0 1px 0 rgba(255,255,255,.5); }
+  .badge.bv { background: linear-gradient(180deg,#c084fc,#9333ea); box-shadow: 0 5px 0 #6b21a8, inset 0 1px 0 rgba(255,255,255,.5); cursor: default; }
+  .badge.bc { background: linear-gradient(180deg,#64748b,#334155); box-shadow: 0 4px 0 #0f172a, inset 0 1px 0 rgba(255,255,255,.3); cursor: default; }
+  .badge.bb:active, .badge.br:active { transform: translateY(4px); }
+  .badge.bb:active { box-shadow: 0 1px 0 #3730a3, inset 0 1px 0 rgba(255,255,255,.35); }
+  .badge.br:active { box-shadow: 0 1px 0 #c2410c, inset 0 1px 0 rgba(255,255,255,.35); }
 
   /* 배지 아래 클릭 유도 (추천만) */
   .ic-click-label {
