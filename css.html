@@ -2448,18 +2448,17 @@
     background: #dc2626;
   }
 
-  /* 입찰리스트 전용 상단바 (새로고침은 헤더로 이동 → 상태버튼 4개만 한 줄에) */
+  /* 입찰리스트 전용 상단바 */
   .il-top-bar {
     height: 60px !important;
   }
 
   .il-sp {
     height: 48px !important;
-    padding: 0 14px !important;
+    padding: 0 18px !important;
     font-size: 1.15rem !important;
     cursor: pointer;
     border: none;
-    white-space: nowrap;   /* 버튼 내부 '0입찰' 이 두 줄로 쪼개지지 않게 */
   }
 
   /* 새로고침 버튼 */
@@ -2481,12 +2480,11 @@
   .refresh-btn:hover { background: #eef2ff; border-color: #6366f1; }
   .refresh-btn:active { transform: rotate(180deg); }
 
-  /* top-bar-inner (입찰리스트용: 새로고침 헤더 이동 후 상태버튼만 가운데 한 줄) */
+  /* top-bar-inner justify 수정 (입찰리스트용: space-between) */
   .il-top-bar .top-bar-inner {
-    justify-content: center;
+    justify-content: space-between;
     width: 100%;
     padding: 0 4px;
-    flex-wrap: nowrap;   /* 한 줄 유지 */
   }
 
   /* 2. 캘린더 */
@@ -3028,31 +3026,36 @@
     animation: swipeLeftHint 0.75s ease 0.4s both;
   }
 
-  /* ===== 물건카드 CSS 변수 (회원 튜너 확정값) ===== */
+  /* ===== 물건카드 CSS 변수 ===== */
   :root {
-    --ic-h: 60px;
-    --ic-gap: 14px;
-    --ic-date-fs: 24px;      /* 입찰일자 */
-    --ic-sakun-fs: 24px;     /* 사건번호 */
-    --ic-price-fs: 24px;     /* 입찰가 */
-    --ic-court-fs: 16px;     /* 법원 */
-    --ic-mgr-fs: 14px;       /* 담당자 */
-    --ic-view-fs: 15px;      /* 조사내용 (박스 고정) */
-    --badge-fs: 24px;        /* 버튼 글자 */
-    --ic-pv-head: 11px;      /* 헤더 세로 여백 */
-    --ic-gap-date-mgr: 9px;  /* 날짜↔담당자 */
-    --ic-pt-court: 5px;      /* 법원줄 상단여백 */
-    --ic-gap-court-sakun: 5px; /* 법원↔사건번호 */
-    --ic-pv-sakun: 2px;      /* 사건번호 아래여백 */
-    --ic-pv-price: 5px;      /* 입찰가 칸 */
-    --ic-btn-py: 15px;       /* 버튼 세로(박스, 글자무관) */
-    --ic-btn-px: 15px;       /* 버튼 가로 */
+    --ic-h: 70px;
+    --ic-gap: 16px;
+    --ic-date-h: 50px;
+    --ic-date-fs: 1.30rem;
+    --ic-sakun-fs: 1.30rem;
+    --ic-price-fs: 1.30rem;
+    --ic-court-fs: 1.00rem;
+    --ic-mgr-fs: 0.90rem;
+    --vbh-px: 12px;
+    --vbh-py: 9px;
+    --vbh-fs: 0.72rem;
+    --vbh-mt: 0px;
+    --vbh-mb: 0px;
+    --vbh-ml: 4px;
+    --vbh-mr: 13px;
+    --badge-px: 18px;
+    --badge-py: 8px;
+    --badge-fs: 1.20rem;
+    --badge-mt: 0px;
+    --badge-mb: 0px;
+    --badge-ml: 0px;
+    --badge-mr: 0px;
   }
 
   .ic {
     background: #fff;
-    border: 3px solid #b6c2cf;
-    border-radius: 18px;
+    border: 3px solid #e2e8f0;
+    border-radius: 14px;
     padding: 0 !important;
     display: flex;
     flex-direction: column;
@@ -3060,55 +3063,17 @@
     min-height: var(--ic-h);
     margin-bottom: var(--ic-gap);
     margin-top: 4px;
-    box-shadow: 0 4px 16px -6px rgba(15,23,42,.12);
-    transition: transform .28s cubic-bezier(.4, 0, .2, 1), opacity .28s ease, box-shadow .2s ease;
+    transition: transform .28s cubic-bezier(.4, 0, .2, 1), opacity .28s ease;
     will-change: transform;
   }
 
-  /* 카드 헤더: 좌상단 색블록(입찰일자+법원, 우하단 라운드) + 상태버튼(흰 배경 우측) */
+  /* 카드 헤더: 날짜배지 + 조사내용보기 */
   .ic-header {
     display: flex;
-    align-items: flex-start;
+    align-items: stretch;
     justify-content: space-between;
-    gap: 10px;
     width: 100%;
-    padding: 0 12px 0 0;
   }
-  /* 색 블록 = 입찰일자 + 법원. 우하단만 라운드. */
-  .ic-head-left {
-    display: inline-flex;
-    align-items: center;
-    gap: 9px;
-    min-width: 0;
-    max-width: 80%;
-    padding: var(--ic-pv-head) 15px;
-    border-radius: 0 0 18px 0;
-  }
-  .ic.sr .ic-head-left { background: linear-gradient(135deg,#fb923c,#f97316); }
-  .ic.sb .ic-head-left { background: linear-gradient(135deg,#6366f1,#4f46e5); }
-  .ic.sv .ic-head-left { background: linear-gradient(135deg,#c084fc,#9333ea); }
-  .ic.sc .ic-head-left { background: linear-gradient(135deg,#64748b,#334155); }
-  .ic:not(.sr):not(.sb):not(.sv):not(.sc) .ic-head-left { background: linear-gradient(135deg,#94a3b8,#64748b); }
-
-  .ic-date { color: #fff; font-weight: 900; font-size: var(--ic-date-fs); text-shadow: 0 1px 2px rgba(0,0,0,.15); white-space: nowrap; }
-  .ic-date .ic-dow { font-weight: 800; opacity: .92; }
-  /* 법원: 사건번호 위(본문), 상태색 톤 칩 */
-  .ic-court-row { display: flex; align-items: center; gap: 5px; padding-top: var(--ic-pt-court); }
-  .ic-court { display: inline-flex; align-items: center; max-width: 210px; padding: 3px 10px; border-radius: 8px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; font-weight: 800; font-size: var(--ic-court-fs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ic.sr .ic-court { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
-  .ic.sb .ic-court { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
-  .ic.sv .ic-court { background: #faf5ff; color: #7e22ce; border-color: #e9d5ff; }
-
-  /* 입찰가 줄: 가격+복사(좌) | 조사내용보기(우) */
-  .ic-price-row-wrap {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: var(--ic-pv-price) 0 12px;   /* 아래 여백 = 오른쪽 여백(12px) */
-    border-top: 1px dashed #e5e7eb;
-  }
-  .ic-price-left { display: flex; align-items: center; gap: 6px; }
 
   .ic-date-badge {
     display: inline-flex;
@@ -3123,56 +3088,45 @@
     line-height: 1;
   }
 
-
-  /* 조사내용보기 버튼 — 박스 고정(글자 키워도 안 커짐), 글자 최대 */
-  .view-btn-header {
-    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-    height: 32px; padding: 0 13px; line-height: 1; overflow: hidden;
-    color: #334155;
-    background: linear-gradient(180deg,#f1f5f9,#dbe2ea);
-    border-radius: 11px;
-    font-weight: 800; font-size: var(--ic-view-fs);
-    cursor: pointer; border: 1.5px solid #94a3b8; flex-shrink: 0;
-    box-shadow: 0 3px 0 #94a3b8, 0 6px 11px -3px rgba(15,23,42,.25), inset 0 1px 0 rgba(255,255,255,.9);
-    transition: transform .07s ease, box-shadow .07s ease, filter .12s;
+  /* 법원/담당자 (사건번호 아래) */
+  .ic-court-label {
+    font-size: var(--ic-court-fs);
+    font-weight: 700;
+    color: #64748b;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .view-btn-header:hover { filter: brightness(1.03); }
-  .view-btn-header:active { transform: translateY(3px); box-shadow: 0 1px 0 #94a3b8, 0 2px 5px -2px rgba(15,23,42,.25), inset 0 1px 0 rgba(255,255,255,.85); }
-  .vbh-lbl { font-weight: 800; white-space: nowrap; letter-spacing: .01em; }
-  .vbh-arr { font-weight: 900; opacity: .6; margin-left: 1px; }
 
-  /* 본문: 법원(위) → 사건번호 → 입찰가·조사내용보기 */
+  /* 조사내용보기 버튼 (헤더 오른쪽, pill) */
+  .view-btn-header {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: var(--vbh-py) var(--vbh-px);
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #b0b8c1 0%, #8d98a4 100%);
+    cursor: pointer;
+    color: #fff;
+    flex-shrink: 0;
+    margin: var(--vbh-mt) var(--vbh-mr) var(--vbh-mb) var(--vbh-ml);
+    align-self: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,.15);
+    transition: filter .15s, transform .1s;
+  }
+  .view-btn-header:hover { filter: brightness(1.08); }
+  .view-btn-header:active { transform: scale(.96); filter: brightness(.94); }
+  .vbh-lbl { font-size: var(--vbh-fs); font-weight: 800; white-space: nowrap; letter-spacing: .01em; }
+  .vbh-arr { font-size: 0.9rem; font-weight: 900; line-height: 1; }
+
   .ic-body {
     display: flex;
-    flex-direction: column;
-    padding: 0 12px;
-  }
-
-  /* 사건번호 줄: 텍스트 + 복사버튼(바로 옆) */
-  .ic-sakun-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 7px;
-    padding: var(--ic-gap-court-sakun) 0 var(--ic-pv-sakun);
-    cursor: pointer;
-  }
-  .ic-sakun-row .copy-btn { margin-top: 3px; }
-
-  /* 푸터: 추천 버튼(+입찰확정클릭) | 조사내용보기 */
-  .ic-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 10px 14px 12px;
-    border-top: 1px solid #eef2f7;
-  }
-  .ic-footer-l {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    flex-shrink: 0;
+    gap: 8px;
+    padding: 12px 14px 14px;
   }
 
   .ic-timer-wrap {
@@ -3185,16 +3139,27 @@
     opacity: 0;
   }
 
-  .ic.sb { border-color: #4f46e5; }
-  .ic.sr { border-color: #f97316; }
-  .ic.sc { border-color: #334155; }
-  .ic.sv { border-color: #9333ea; }
+  .ic.sb {
+    border-color: #4f46e5;
+  }
+
+  .ic.sr {
+    border-color: #fb923c;
+  }
+
+  .ic.sc {
+    border-color: #1f2937;
+  }
+
+  .ic.sv {
+    border-color: #9333ea;
+  }
 
   .ic-l {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    justify-content: space-between;
     min-width: 0;
   }
 
@@ -3205,13 +3170,19 @@
   }
 
   .ic-sakun {
-    min-width: 0;
+    font-size: var(--ic-sakun-fs);
     font-weight: 900;
     color: #1e293b;
-    font-size: var(--ic-sakun-fs);
-    line-height: 1.3;
-    word-break: keep-all;     /* 단어 단위 줄바꿈 (안정적) */
-    overflow-wrap: anywhere;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ic-court {
+    font-size: .76rem;
+    color: #64748b;
+    margin-top: 2px;
   }
 
   .ic-price {
@@ -3292,32 +3263,51 @@
   .ic-r {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;   /* 법원/가격 오른쪽에 추천버튼+안내 */
-    gap: 4px;
-    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 76px;
   }
 
-  /* 프리미엄 액션 버튼 (추천/입찰) — 눌리는 입체버튼. 박스 높이는 글자크기와 무관 */
-  /* 상태버튼 = 색상 입체버튼 (흰 배경 우측) */
   .badge {
-    align-self: center;
-    display: inline-flex; align-items: center; justify-content: center;
-    height: calc(var(--ic-btn-py) * 2 + 20px);
-    padding: 0 var(--ic-btn-px);
-    line-height: 1; overflow: hidden;
-    border-radius: 13px;
-    font-size: var(--badge-fs); font-weight: 900; letter-spacing: .01em;
-    cursor: pointer; border: none; color: #fff; white-space: nowrap; flex-shrink: 0;
-    transition: transform .07s ease, box-shadow .07s ease, filter .12s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--badge-py) var(--badge-px);
+    border-radius: 10px;
+    font-size: var(--badge-fs);
+    font-weight: 800;
+    cursor: pointer;
+    border: none;
+    color: #fff;
+    white-space: nowrap;
+    margin: var(--badge-mt) var(--badge-mr) var(--badge-mb) var(--badge-ml);
+    transition: transform .1s;
   }
-  .badge:hover { filter: brightness(1.05); }
-  .badge.bb { background: linear-gradient(180deg,#818cf8,#4f46e5); box-shadow: 0 5px 0 #3730a3, 0 9px 14px -4px rgba(79,70,229,.55), inset 0 1px 0 rgba(255,255,255,.5); }
-  .badge.br { background: linear-gradient(180deg,#fdbb74,#f97316); box-shadow: 0 5px 0 #c2410c, 0 9px 14px -4px rgba(249,115,22,.55), inset 0 1px 0 rgba(255,255,255,.5); }
-  .badge.bv { background: linear-gradient(180deg,#c084fc,#9333ea); box-shadow: 0 5px 0 #6b21a8, inset 0 1px 0 rgba(255,255,255,.5); cursor: default; }
-  .badge.bc { background: linear-gradient(180deg,#64748b,#334155); box-shadow: 0 4px 0 #0f172a, inset 0 1px 0 rgba(255,255,255,.3); cursor: default; }
-  .badge.bb:active, .badge.br:active { transform: translateY(4px); }
-  .badge.bb:active { box-shadow: 0 1px 0 #3730a3, inset 0 1px 0 rgba(255,255,255,.35); }
-  .badge.br:active { box-shadow: 0 1px 0 #c2410c, inset 0 1px 0 rgba(255,255,255,.35); }
+  .badge:active { transform: scale(.95); }
+
+  @keyframes pulseBid { 0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.5)} 60%{box-shadow:0 0 0 9px rgba(79,70,229,0)} }
+  @keyframes pulseRec { 0%,100%{box-shadow:0 0 0 0 rgba(251,146,60,.5)} 60%{box-shadow:0 0 0 9px rgba(251,146,60,0)} }
+
+  .badge.bb {
+    background: #4f46e5;
+    animation: pulseBid 2s infinite;
+  }
+
+  .badge.br {
+    background: #fb923c;
+    animation: pulseRec 2s infinite;
+  }
+
+  .badge.bc {
+    background: #1f2937;
+    cursor: default;
+  }
+
+  .badge.bv {
+    background: #9333ea;
+    cursor: default;
+  }
 
   /* 배지 아래 클릭 유도 (추천만) */
   .ic-click-label {

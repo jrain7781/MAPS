@@ -434,11 +434,9 @@
             }
         } catch (e) { console.warn('[TG] expand/disableVerticalSwipes:', e); }
 
-        // 회원 모드 전용 내리기 버튼 + 새로고침 버튼(상단바→헤더 이동) 표시
+        // 회원 모드 전용 내리기 버튼 표시
         const closeBtn = document.getElementById('btn-close-webapp');
         if (closeBtn) closeBtn.classList.remove('content-hidden');
-        const refreshMemBtn = document.getElementById('btn-refresh-member');
-        if (refreshMemBtn) refreshMemBtn.classList.remove('content-hidden');
 
         // 사이드바: 회원/조사자 전용 메뉴만 남기고 나머지(관리자 — 조사물건관리 포함) 전부 숨김
         document.querySelectorAll('nav button').forEach(el => {
@@ -23803,48 +23801,14 @@ MJ 이정우 팀장
     function mapN(n) { return N_MAP[n] || n; }
     function fmtP(n) { return n ? new Intl.NumberFormat('ko-KR').format(parseInt(n)) : '0'; }
 
-    // 입찰가 표시용: 만 단위로 딱 떨어지면 '1억 9087만원', 만 아래 자리가 있으면 숫자 그대로(콤마)
-    function fmtKoreanMoney(raw) {
-        var n = parseInt(String(raw == null ? '' : raw).replace(/[^0-9]/g, ''), 10);
-        if (!n || isNaN(n)) return '';
-        if (n % 10000 !== 0) return new Intl.NumberFormat('ko-KR').format(n) + '원';
-        var eok = Math.floor(n / 100000000), man = Math.floor((n % 100000000) / 10000);
-        var s = '';
-        if (eok) s += eok + '억';
-        if (man) s += (s ? ' ' : '') + man + '만';
-        return (s || '0') + '원';
-    }
-
-    // 짧은 법원명 → 풀네임 (복사용). 본원=지방법원 / 지원=지방법원 X지원 / 서울=각 지방법원
-    function courtFullName(shortRaw) {
-        var c = String(shortRaw || '').replace(/\s+/g, '').trim();
-        if (!c) return '';
-        if (c.indexOf('서울') === 0) return c + '지방법원';
-        var bases = ['의정부', '광주', '대구', '대전', '부산', '수원', '울산', '인천', '전주', '제주', '창원', '청주', '춘천'];
-        for (var b = 0; b < bases.length; b++) {
-            var base = bases[b];
-            if (c === base) return base + '지방법원';
-            if (c.indexOf(base) === 0) return base + '지방법원 ' + c.slice(base.length) + '지원';
-        }
-        return c;
-    }
-    // in-date(YYMMDD) → "M월 D일 (요일)"  (앞자리 0 제거 + 요일 자동)
-    function icDateLabel(dt) {
-        dt = String(dt || '').replace(/[^0-9]/g, '');
-        if (dt.length < 6) return dt;
-        var yy = parseInt(dt.substring(0, 2), 10), mm = parseInt(dt.substring(2, 4), 10), dd = parseInt(dt.substring(4, 6), 10);
-        var dow = '';
-        try { dow = ['일', '월', '화', '수', '목', '금', '토'][new Date(2000 + yy, mm - 1, dd).getDay()]; } catch (e) {}
-        return mm + '월 ' + dd + '일' + (dow ? ' <span class="ic-dow">(' + dow + ')</span>' : '');
-    }
-
     function cItem(i) {
         var s = String(i.stu_member || '미정');
         var cls = 'ic';
-        if (s === '입찰') cls += ' sb';
-        else if (s === '추천') cls += ' sr';
-        else if (s === '검증') cls += ' sv';
-        else if (s === '취소') cls += ' sc';
+        var borderCol = '#e2e8f0';
+        if (s === '입찰') { cls += ' sb'; borderCol = '#4f46e5'; }
+        else if (s === '추천') { cls += ' sr'; borderCol = '#fb923c'; }
+        else if (s === '검증') { cls += ' sv'; borderCol = '#9333ea'; }
+        else if (s === '취소') { cls += ' sc'; borderCol = '#1f2937'; }
 
         var bCls = 'badge';
         if (s === '입찰') bCls += ' bb';
@@ -23853,53 +23817,52 @@ MJ 이정우 팀장
         else if (s === '취소') bCls += ' bc';
 
         var sk = String(i.sakun_no || '');
-        var skSafe = sk.replace(/'/g, '');
         var ct = String(i.court || '');
-        var ctFull = courtFullName(ct).replace(/'/g, '');   // 복사용 풀네임
-        var m_nm = mapN(String(i.m_name_id || ''));
-        var rawBid = String(i.bidprice || '').replace(/[^0-9]/g, '');   // 복사용 원본숫자
         var pr = i.bidprice ? fmtP(i.bidprice) : '0';
         var bidSt = String(i.bid_state || '').trim();
+        var m_nm = mapN(String(i.m_name_id || ''));
 
+        var priceHtml, copyBtnHtml = '';
         var cpSvg = '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>';
-
-        var priceHtml, priceCopy = '';
         if (s !== '입찰') {
             priceHtml = '<div class="ic-price ic-price-default">가격미정</div>';
         } else if (bidSt === '전달완료') {
             priceHtml = '<div class="ic-price ic-price-pending" onclick="event.stopPropagation();handleBidPriceClick(\'' + i.id + '\')">입찰가 도착! 터치하세요 👆</div>';
         } else if (bidSt === '확인완료' || bidSt.includes('확인완료')) {
-            var koPrice = fmtKoreanMoney(i.bidprice);   // 표시: 1억 9087만원 (만 아래 있으면 숫자 그대로)
-            priceHtml = '<div class="ic-price ic-price-confirmed">' + (koPrice || '미입력') + '</div>';
-            if (rawBid) priceCopy = '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + rawBid + '\', event)" title="입찰가 복사(숫자 원본)">' + cpSvg + '</button>';
+            var fullPrice = (pr && pr !== '0') ? pr + ' 원' : '미입력';
+            priceHtml = '<div class="ic-price ic-price-confirmed">' + fullPrice + '</div>';
+            copyBtnHtml = '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + pr + '\', event)">' + cpSvg + '</button>';
         } else {
             priceHtml = '<div class="ic-price ic-price-default">가격미정</div>';
         }
 
-        var dtLabel = icDateLabel(i['in-date']);
+        var dt = String(i['in-date'] || '');
+        var dtLabel = dt.substring(2, 4) + '월 ' + dt.substring(4, 6) + '일';
+        var txtCol = (s === '추천') ? '#000' : '#fff';
+        var clickLabel = (s === '추천') ? '<div class="ic-click-label bid-confirm">입찰확정 클릭!</div>' : '';
         var timerBar = _shouldShowChuchenBar_(i) ? createChuchenTimerBar(i.chuchen_date, i) : '';
+        var skSafe = sk.replace(/'/g, '');
+        var viewIcoSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
 
         return '<div class="' + cls + '" data-id="' + i.id + '" data-sk="' + skSafe + '">' +
-            // 헤더: 색블록(입찰일자 + 법원, 우하단 라운드) + 상태버튼(흰 배경 우측)
             '<div class="ic-header">' +
-            '<div class="ic-head-left">' +
-            '<span class="ic-date">' + dtLabel + '</span>' +
+            '<div class="ic-date-badge" style="background:' + borderCol + ';color:' + txtCol + '">' + dtLabel + '</div>' +
+            '<button class="view-btn-header" onclick="event.stopPropagation();openImgViewer(\'' + i.id + '\',\'' + skSafe + '\')" title="조사내용보기">' +
+            viewIcoSvg + '<span class="vbh-lbl">조사내용보기</span><span class="vbh-arr">›</span>' +
+            '</button>' +
             '</div>' +
-            '<button class="' + bCls + '" onclick="setB(\'' + i.id + '\', \'' + s + '\', \'' + sk + '\')">' + s + '</button>' +
-            '</div>' +
-            // 본문: 법원(사건번호 위) → 사건번호 → 입찰가·조사내용
             '<div class="ic-body">' +
-            '<div class="ic-court-row">' +
-            '<span class="ic-court">' + ct + '</span>' +
-            (ctFull ? '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + ctFull + '\', event)" title="법원 복사(풀네임)">' + cpSvg + '</button>' : '') +
-            '</div>' +
-            '<div class="ic-sakun-row" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
+            '<div class="ic-l" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
+            '<div class="ic-copy-row">' +
             '<div class="ic-sakun">' + sk + '</div>' +
-            '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + skSafe + '\', event)" title="사건번호 복사">' + cpSvg + '</button>' +
+            '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + skSafe + '\', event)">' + cpSvg + '</button>' +
             '</div>' +
-            '<div class="ic-price-row-wrap">' +
-            '<div class="ic-price-left">' + priceHtml + priceCopy + '</div>' +
-            '<button class="view-btn-header" onclick="event.stopPropagation();openImgViewer(\'' + i.id + '\',\'' + skSafe + '\')" title="조사내용보기"><span class="vbh-lbl">조사내용</span></button>' +
+            '<div class="ic-court-label">' + ct + ' / ' + m_nm + '</div>' +
+            '<div class="ic-copy-row">' + priceHtml + copyBtnHtml + '</div>' +
+            '</div>' +
+            '<div class="ic-r">' +
+            '<button class="' + bCls + '" onclick="setB(\'' + i.id + '\', \'' + s + '\', \'' + sk + '\')">' + s + '</button>' +
+            clickLabel +
             '</div>' +
             '</div>' +
             (timerBar ? '<div class="ic-timer-wrap">' + timerBar + '</div>' : '') +
