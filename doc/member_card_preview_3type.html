@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회원 물건카드 · 3가지 시안</title>
+<style>
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: 'Pretendard','Apple SD Gothic Neo','Malgun Gothic',-apple-system,sans-serif;
+    background: #e9edf2; margin: 0; padding: 26px 12px 70px; color: #0f172a;
+  }
+  .page-title { text-align:center; font-size: 1.5rem; font-weight: 900; letter-spacing:-.02em; }
+  .page-sub { text-align:center; color:#64748b; font-size:.92rem; margin: 6px 0 30px; }
+  .page-sub b { color:#2563eb; }
+  .cols { display:flex; gap: 22px; justify-content:center; flex-wrap:wrap; align-items:flex-start; }
+  .col { width: 372px; max-width: 94vw; }
+  .col-h { text-align:center; font-weight:900; font-size: 1.08rem; }
+  .col-d { text-align:center; font-size:.78rem; color:#64748b; margin: 4px 0 14px; line-height:1.4; }
+  .stage { background:#f3f4f6; border:1px solid #e2e8f0; border-radius: 22px; padding: 16px; box-shadow: inset 0 2px 8px rgba(15,23,42,.04); }
+
+  /* ===== 공통 요소 ===== */
+  .sakun { font-weight: 900; color:#1e293b; line-height:1.25; word-break: break-all; }
+  .court { font-size: .92rem; font-weight: 700; color:#64748b; }
+  .price { font-weight: 900; }
+  .price.na { color:#9ca3af; font-weight: 500; }
+  .price.ok { color:#7c3aed; }
+  .hint { font-size:.66rem; font-weight:800; text-align:center; white-space:nowrap; animation: bounceY 1s infinite; }
+  @keyframes bounceY { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+  .card + .card { margin-top: 14px; }
+
+  /* ============================================================
+     TYPE A — 클린 미니멀 (플랫 + 얇은 테두리 + 라이트 버튼)
+     ============================================================ */
+  .a-card { background:#fff; border:1.5px solid #e5e7eb; border-radius: 16px; overflow:hidden; box-shadow: 0 2px 10px -4px rgba(15,23,42,.10); }
+  .a-head { display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom:1px solid #f1f5f9; }
+  .a-date { display:inline-flex; align-items:center; padding: 6px 14px; border-radius: 10px; font-weight:800; font-size:.95rem; }
+  .a-date.rec { background:#fff7ed; color:#c2410c; } .a-date.bid { background:#eef2ff; color:#4338ca; }
+  .a-btn { border:none; cursor:pointer; padding: 8px 18px; border-radius: 11px; font-weight:800; font-size:1rem; color:#fff; }
+  .a-btn.rec { background:#fb923c; } .a-btn.bid { background:#6366f1; }
+  .a-body { padding: 11px 14px 13px; }
+  .a-body .court { margin-bottom: 3px; }
+  .a-body .sakun { font-size: 1.18rem; margin-bottom: 8px; }
+  .a-price-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .a-price-row .price { font-size:1.05rem; }
+  .a-view { display:inline-flex; align-items:center; gap:5px; border:1px solid #e2e8f0; background:#f8fafc; color:#475569; padding: 7px 13px; border-radius: 11px; font-weight:800; font-size:.78rem; cursor:pointer; }
+  .a-hint { color:#ea580c; margin-top:5px; }
+
+  /* ============================================================
+     TYPE B — 프리미엄 글래스 (그라디언트 + 다층 그림자 + 글로우)
+     ============================================================ */
+  .b-card { background:#fff; border:2px solid #eef2f7; border-radius: 18px; overflow:hidden; box-shadow: 0 8px 24px -10px rgba(15,23,42,.18); }
+  .b-head { display:flex; align-items:center; justify-content:space-between; padding: 12px 14px 12px 0; gap:10px; }
+  .b-date { display:inline-flex; align-items:center; justify-content:center; padding: 9px 20px; min-height:44px; font-weight:800; font-size:1.06rem; color:#fff; border-radius: 0 0 16px 0; }
+  .b-date.rec { background: linear-gradient(160deg,#fdba74,#f97316); } .b-date.bid { background: linear-gradient(160deg,#818cf8,#4338ca); }
+  .b-act { display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .b-btn { border:none; cursor:pointer; padding: 9px 22px; border-radius: 16px; font-weight:800; font-size:1.05rem; color:#fff; letter-spacing:.02em;
+           box-shadow: 0 8px 18px -6px rgba(2,6,23,.3), inset 0 1px 0 rgba(255,255,255,.4), inset 0 -2px 5px rgba(0,0,0,.12); }
+  .b-btn.rec { background: linear-gradient(160deg,#fdba74 0%,#fb923c 50%,#f97316 100%); animation: glowRec 2.4s ease-in-out infinite; }
+  .b-btn.bid { background: linear-gradient(160deg,#6366f1 0%,#4f46e5 55%,#4338ca 100%); animation: glowBid 2.4s ease-in-out infinite; }
+  @keyframes glowRec { 0%,100%{box-shadow:0 8px 18px -6px rgba(249,115,22,.5),inset 0 1px 0 rgba(255,255,255,.42),inset 0 -2px 5px rgba(0,0,0,.1)} 50%{box-shadow:0 11px 28px -6px rgba(249,115,22,.85),inset 0 1px 0 rgba(255,255,255,.5),inset 0 -2px 5px rgba(0,0,0,.08)} }
+  @keyframes glowBid { 0%,100%{box-shadow:0 8px 18px -6px rgba(79,70,229,.5),inset 0 1px 0 rgba(255,255,255,.38),inset 0 -2px 5px rgba(0,0,0,.13)} 50%{box-shadow:0 11px 28px -6px rgba(79,70,229,.82),inset 0 1px 0 rgba(255,255,255,.45),inset 0 -2px 5px rgba(0,0,0,.1)} }
+  .b-body { padding: 6px 15px 15px; }
+  .b-body .court { margin-bottom: 3px; }
+  .b-body .sakun { font-size: 1.28rem; margin-bottom: 10px; }
+  .b-price-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .b-price-row .price { font-size:1.12rem; }
+  .b-view { display:inline-flex; align-items:center; gap:5px; color:#fff; padding: 9px 16px; border-radius: 16px; font-weight:800; font-size:.8rem; cursor:pointer; border:none;
+            background: linear-gradient(160deg,#aab4c2,#7c8797 55%,#64748b); box-shadow: 0 6px 14px -6px rgba(15,23,42,.4), inset 0 1px 0 rgba(255,255,255,.32); }
+  .b-hint { color:#4f46e5; }
+
+  /* ============================================================
+     TYPE C — 볼드 컬러헤더 (상태색 헤더 스트립)
+     ============================================================ */
+  .c-card { background:#fff; border-radius: 18px; overflow:hidden; box-shadow: 0 10px 26px -12px rgba(15,23,42,.28); border:1px solid #eef2f7; }
+  .c-head { display:flex; align-items:center; justify-content:space-between; padding: 13px 15px; }
+  .c-head.rec { background: linear-gradient(135deg,#fb923c,#f97316); } .c-head.bid { background: linear-gradient(135deg,#6366f1,#4f46e5); }
+  .c-date { color:#fff; font-weight:900; font-size:1.12rem; letter-spacing:-.01em; text-shadow:0 1px 2px rgba(0,0,0,.15); }
+  .c-act { display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .c-btn { border:none; cursor:pointer; padding: 8px 20px; border-radius: 13px; font-weight:900; font-size:1rem; background:rgba(255,255,255,.95); box-shadow:0 4px 10px -2px rgba(0,0,0,.2); }
+  .c-btn.rec { color:#ea580c; } .c-btn.bid { color:#4338ca; }
+  .c-hint { color:rgba(255,255,255,.95); text-shadow:0 1px 2px rgba(0,0,0,.15); }
+  .c-body { padding: 12px 16px 15px; }
+  .c-body .court { margin-bottom: 3px; }
+  .c-body .sakun { font-size: 1.26rem; margin-bottom: 10px; }
+  .c-price-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:10px; border-top:1px dashed #e5e7eb; }
+  .c-price-row .price { font-size:1.1rem; }
+  .c-view { display:inline-flex; align-items:center; gap:5px; color:#334155; background:#eef2f7; padding: 8px 15px; border-radius: 13px; font-weight:800; font-size:.8rem; cursor:pointer; border:none; }
+  .ico { width:15px; height:15px; }
+</style>
+</head>
+<body>
+  <div class="page-title">회원 물건카드 · 3가지 시안</div>
+  <div class="page-sub">공통 배치: <b>입찰일자+추천</b>(헤더) · <b>법원</b>(사건번호 위) · <b>조사내용보기</b>(입찰가 우측)<br>마음에 드는 타입을 알려주세요 — 예: “<b>B로 가자</b>” / “B인데 버튼은 A처럼”</div>
+
+  <div class="cols">
+
+    <!-- ===================== TYPE A ===================== -->
+    <div class="col">
+      <div class="col-h">타입 A · 클린 미니멀</div>
+      <div class="col-d">플랫 + 얇은 구분선 + 라이트 버튼<br>깔끔·가벼움 (텔레그램 기본 느낌)</div>
+      <div class="stage">
+        <div class="a-card card">
+          <div class="a-head">
+            <span class="a-date rec">07월 22일</span>
+            <div style="text-align:center">
+              <button class="a-btn rec">추천</button>
+              <div class="hint a-hint">입찰확정 클릭!</div>
+            </div>
+          </div>
+          <div class="a-body">
+            <div class="court">부산 / MJ</div>
+            <div class="sakun">2024타경1391(4) 2024타경1502(1)</div>
+            <div class="a-price-row">
+              <span class="price na">가격미정</span>
+              <button class="a-view">🔍 조사내용보기 ›</button>
+            </div>
+          </div>
+        </div>
+        <div class="a-card card">
+          <div class="a-head">
+            <span class="a-date bid">07월 25일</span>
+            <div style="text-align:center"><button class="a-btn bid">입찰</button></div>
+          </div>
+          <div class="a-body">
+            <div class="court">인천 / 박대원</div>
+            <div class="sakun">2024타경536838(12)</div>
+            <div class="a-price-row">
+              <span class="price ok">1억 2,500만원</span>
+              <button class="a-view">🔍 조사내용보기 ›</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TYPE B ===================== -->
+    <div class="col">
+      <div class="col-h">타입 B · 프리미엄 글래스</div>
+      <div class="col-d">그라디언트 + 다층 그림자 + 은은한 글로우<br>고급·입체감 (현재 배포된 방향)</div>
+      <div class="stage">
+        <div class="b-card card">
+          <div class="b-head">
+            <span class="b-date rec">07월 22일</span>
+            <div class="b-act">
+              <button class="b-btn rec">추천</button>
+              <div class="hint b-hint">입찰확정 클릭!</div>
+            </div>
+          </div>
+          <div class="b-body">
+            <div class="court">부산 / MJ</div>
+            <div class="sakun">2024타경1391(4) 2024타경1502(1)</div>
+            <div class="b-price-row">
+              <span class="price na">가격미정</span>
+              <button class="b-view">🔍 조사내용보기 ›</button>
+            </div>
+          </div>
+        </div>
+        <div class="b-card card">
+          <div class="b-head">
+            <span class="b-date bid">07월 25일</span>
+            <div class="b-act"><button class="b-btn bid">입찰</button></div>
+          </div>
+          <div class="b-body">
+            <div class="court">인천 / 박대원</div>
+            <div class="sakun">2024타경536838(12)</div>
+            <div class="b-price-row">
+              <span class="price ok">1억 2,500만원</span>
+              <button class="b-view">🔍 조사내용보기 ›</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== TYPE C ===================== -->
+    <div class="col">
+      <div class="col-h">타입 C · 볼드 컬러헤더</div>
+      <div class="col-d">상태색 헤더 스트립 + 흰 본문<br>강한 대비·눈에 확 띔</div>
+      <div class="stage">
+        <div class="c-card card">
+          <div class="c-head rec">
+            <span class="c-date">07월 22일</span>
+            <div class="c-act">
+              <button class="c-btn rec">추천</button>
+              <div class="hint c-hint">입찰확정 클릭!</div>
+            </div>
+          </div>
+          <div class="c-body">
+            <div class="court">부산 / MJ</div>
+            <div class="sakun">2024타경1391(4) 2024타경1502(1)</div>
+            <div class="c-price-row">
+              <span class="price na">가격미정</span>
+              <button class="c-view">🔍 조사내용보기 ›</button>
+            </div>
+          </div>
+        </div>
+        <div class="c-card card">
+          <div class="c-head bid">
+            <span class="c-date">07월 25일</span>
+            <div class="c-act"><button class="c-btn bid">입찰</button></div>
+          </div>
+          <div class="c-body">
+            <div class="court">인천 / 박대원</div>
+            <div class="sakun">2024타경536838(12)</div>
+            <div class="c-price-row">
+              <span class="price ok">1억 2,500만원</span>
+              <button class="c-view">🔍 조사내용보기 ›</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
