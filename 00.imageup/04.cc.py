@@ -516,6 +516,25 @@ def open_detail_text(driver, view_url):
         return ""
 
 
+_JOSA_MARK = re.compile(r'(?:^|\n)\s*(\d+\s*회차)\b')
+_JOSA_STOPS = ('사진 펼쳐보기', '사진펼쳐보기', '지도보기', '인쇄하기', '이전물건', '다음물건', '위로가기', '목록보기')
+
+def extract_interest_josa(detail_txt):
+    """옥션 상세(로그인 계정의 '관심물건 등록 내용' = 조사내용) 텍스트 추출.
+    조사내용은 'N회차 / 연구생 …' 형식으로 시작. 페이지 구조에 따라 마커/컷 튜닝 필요(원문은 josa_debug 로 덤프)."""
+    if not detail_txt:
+        return ""
+    m = _JOSA_MARK.search(detail_txt)
+    if not m:
+        return ""
+    body = detail_txt[m.start():].strip()
+    for stop in _JOSA_STOPS:
+        i = body.find(stop)
+        if i > 40:
+            body = body[:i].rstrip()
+    return body.strip()
+
+
 def capture_detail(driver, tag, sakun=""):
     """상세 '소재지 표 ~ 사진 3장'만 좌우 타이트 크롭 캡처 → PNG. (상단 툴바/제목/nav 제외)
     보고서 카드는 별도 컬러 헤더바(사건번호 등)를 붙이므로 표부터 캡처. 실패 시 ''."""
@@ -730,6 +749,7 @@ def process_case(driver, wait, case):
     # 옥션원 링크는 모든 건(진행/매각/불가)에 대해 생성
     view_url = build_view_url(driver, picked["pid"], picked["line_num"], line_tnum)
     screenshot_path = ""
+    josa = ""
     # 불가/매각만 상세페이지 열어 추가 정보 파싱
     if state_kind in ("불가", "매각"):
         detail_txt = open_detail_text(driver, view_url)
@@ -746,6 +766,16 @@ def process_case(driver, wait, case):
             buyer = md["buyer"]
             bidder_count = md["bidder_count"]
             maegak_date = exp_d6   # 경매 매각일 = 매칭된 매각기일(YYMMDD)
+            josa = extract_interest_josa(detail_txt)   # 관심물건 조사내용(카페등록용)
+            # [튜닝용] 조사내용 추출 결과가 비면 원문 상세 텍스트를 덤프해 마커 확인 (1회 확인 후 제거 가능)
+            try:
+                if not josa:
+                    _dbgp = os.path.join(REPORT_SHOT_DIR, f"josa_debug_{case_num2(case['sakun_no'])}.txt")
+                    with open(_dbgp, "w", encoding="utf-8") as _df:
+                        _df.write(detail_txt or "")
+                    print(f"    ℹ 조사내용 미추출 → 원문 덤프: {_dbgp}")
+            except Exception:
+                pass
 
     is_buga = (state_kind == "불가")
     rec = dict(base,
@@ -765,6 +795,7 @@ def process_case(driver, wait, case):
                bidder_count=bidder_count,
                maegak_date=maegak_date,
                addr=picked.get("addr", ""),
+               josa=josa,
                screenshot_path=screenshot_path,
                view_url=view_url)
     print(f"RESULT|{json.dumps(rec, ensure_ascii=False)}")

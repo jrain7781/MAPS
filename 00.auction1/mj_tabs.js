@@ -1586,7 +1586,8 @@
       date: r.bid_date || r.maegak_date || '',
       bid: r.maegak_price || r.bidprice || '',
       addr: r.addr || '',
-      cnt: r.bidder_count || ''
+      cnt: r.bidder_count || '',
+      josa: r.josa || ''   // 옥션 관심물건 조사내용(있으면 자동 채움)
     });
   }
 
