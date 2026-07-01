@@ -80,6 +80,60 @@
 
   var lastNode = null;
   function setStatus(s) { var e = $('ncStatus'); if (e) e.textContent = s; }
+
+  // ── 불러오기: 낙찰 크롤(06.nc.py) 실행 → 매칭(진행사항확인과 동일) → 매각결과+조사내용 자동채움 ──
+  // 로컬 매니저 서버(localhost)의 크롤 실행 경로. 외부 유료 API 아님(비용 0).
+  var ncRunId = null, ncOffset = 0, ncFilled = false;
+  function ncLoad() {
+    if (ncRunId) { alert('이미 크롤 중입니다.'); return; }
+    var sakun = ($('ncSakun').value || '').trim();
+    if (!sakun) { alert('사건번호를 입력하세요.'); return; }
+    // 키 3개: 사건번호(필수) · 입찰일자(매각기일란) · 법원(없으면 주소→법원 자동대조). cc와 동일 매칭.
+    var kase = { sakun_no: sakun, bid_date: ($('ncDate').value || '').trim(), court: '' };
+    ncOffset = 0; ncFilled = false;
+    var lb = $('ncLoadBtn'); if (lb) lb.disabled = true;
+    setStatus('크롤중… (옥션 매칭 → 매각결과 + 조사내용)');
+    fetch('/api/imageup/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ which: 'nc', cases: [kase], headless: false })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.ok) { ncRunId = j.run_id; ncPoll(); }
+      else { setStatus('시작 실패: ' + (j.error || '?')); if (lb) lb.disabled = false; }
+    }).catch(function (e) { setStatus('요청 오류: ' + e); if (lb) lb.disabled = false; });
+  }
+  function ncPoll() {
+    if (!ncRunId) return;
+    fetch('/api/imageup/logs?run_id=' + encodeURIComponent(ncRunId) + '&offset=' + ncOffset)
+      .then(function (r) { return r.json(); }).then(function (j) {
+        if (j.lines && j.lines.length) {
+          j.lines.forEach(function (line) {
+            if (typeof line !== 'string' || line.indexOf('RESULT|') !== 0) return;
+            try {
+              var o = JSON.parse(line.slice(7));
+              if (o && o.ok && !ncFilled) {
+                ncFilled = true;
+                window.NakchalCafe.fill({
+                  sakun: o.sakun_no, member: o.member, buyer: o.buyer, date: o.date,
+                  bid: o.bid, cnt: o.cnt, addr: o.addr, josa: o.josa
+                });
+                setStatus('✓ 크롤 완료 — 매수인 ' + (o.buyer || '?') + ' · 조사내용 ' + (o.josa_len || 0) + '자'
+                  + (o.key_match ? '' : ' (⚠키불일치 확인)'));
+              } else if (o && !o.ok) {
+                setStatus('⚠ ' + (o.err || '매칭 실패') + ' (사건번호/기일 확인)');
+              }
+            } catch (e) {}
+          });
+          ncOffset += j.lines.length;
+        }
+        if (j.status === 'running') { setTimeout(ncPoll, 700); }
+        else {
+          ncRunId = null;
+          var lb = $('ncLoadBtn'); if (lb) lb.disabled = false;
+          if (!ncFilled) setStatus('크롤 종료 — 결과 없음(사건번호/매각기일 확인)');
+        }
+      }).catch(function (e) { setStatus('polling 오류: ' + e); setTimeout(ncPoll, 1500); });
+  }
+
   function collect() {
     return {
       sakun: $('ncSakun').value, member: $('ncMember').value, buyer: $('ncBuyer').value, date: $('ncDate').value,
@@ -116,9 +170,7 @@
     g.addEventListener('click', generate);
     var c = $('ncCopyBtn'); if (c) c.addEventListener('click', copyImg);
     var dn = $('ncDownBtn'); if (dn) dn.addEventListener('click', download);
-    var lb = $('ncLoadBtn'); if (lb) lb.addEventListener('click', function () {
-      alert('자동 불러오기(옥션 사건조회 크롤 + MAPS 조사내용)는 다음 단계에서 연결됩니다.\n지금은 아래 항목을 입력/붙여넣고 [🖼 생성]을 누르세요.');
-    });
+    var lb = $('ncLoadBtn'); if (lb) lb.addEventListener('click', ncLoad);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 

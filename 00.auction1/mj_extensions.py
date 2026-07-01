@@ -24,6 +24,7 @@ _IMAGEUP_SCRIPTS = {
     "k":  os.path.join(_DIR_IMAGEUP, "03.k.py"),
     "cc": os.path.join(_DIR_IMAGEUP, "04.cc.py"),   # 진행사항 확인 (불가/매각/진행 통합, 캡처 없음)
     "dm": os.path.join(_DIR_IMAGEUP, "05.dm.py"),   # 다물건 데이터 크롤 (사건의 모든 물건 → 진행건 상품등록)
+    "nc": os.path.join(_DIR_IMAGEUP, "06.nc.py"),   # 낙찰 카페등록 크롤 (매각결과 + 조사내용 textarea + 사건조회 캡처)
 }
 _IMAGEUP_CONFIG_PATH = os.path.join(_DIR_IMAGEUP, "imageup_config.json")
 
@@ -65,8 +66,8 @@ def get_accounts(which: str) -> list:
     saved = (cfg.get(which) or {}).get("accounts")
     if saved:
         return saved
-    # cc/dm 은 다른 스크립트의 계정 공유 (id/pw/manager 동일 master)
-    if which in ("cc", "dm"):
+    # cc/dm/nc 은 다른 스크립트의 계정 공유 (id/pw/manager 동일 master)
+    if which in ("cc", "dm", "nc"):
         for other in ("k", "i", "d", "cc"):
             shared = (cfg.get(other) or {}).get("accounts")
             if shared:
@@ -672,6 +673,8 @@ def handle_post(handler) -> bool:
             payload = json.loads(raw or "{}")
             which = payload.get("which", "")
             accounts = payload.get("accounts") or []
+            if not accounts:                       # 미전달(예: 낙찰 탭) → 저장된 config 계정 자동 사용
+                accounts = get_accounts(which)
             limit = payload.get("limit")
             cases = payload.get("cases")
             headless = bool(payload.get("headless"))
