@@ -434,9 +434,11 @@
             }
         } catch (e) { console.warn('[TG] expand/disableVerticalSwipes:', e); }
 
-        // 회원 모드 전용 내리기 버튼 표시
+        // 회원 모드 전용 내리기 버튼 + 새로고침(상단바→헤더 이동) 표시
         const closeBtn = document.getElementById('btn-close-webapp');
         if (closeBtn) closeBtn.classList.remove('content-hidden');
+        const refreshMemBtn = document.getElementById('btn-refresh-member');
+        if (refreshMemBtn) refreshMemBtn.classList.remove('content-hidden');
 
         // 사이드바: 회원/조사자 전용 메뉴만 남기고 나머지(관리자 — 조사물건관리 포함) 전부 숨김
         document.querySelectorAll('nav button').forEach(el => {
@@ -23836,8 +23838,10 @@ MJ 이정우 팀장
             priceHtml = '<div class="ic-price ic-price-default">가격미정</div>';
         }
 
-        var dt = String(i['in-date'] || '');
-        var dtLabel = dt.substring(2, 4) + '월 ' + dt.substring(4, 6) + '일';
+        var dt = String(i['in-date'] || '').replace(/\D/g, '');
+        var _icm = parseInt(dt.substring(2, 4), 10) || 0, _icd = parseInt(dt.substring(4, 6), 10) || 0, _icdow = '';
+        try { _icdow = ['일','월','화','수','목','금','토'][new Date(2000 + (parseInt(dt.substring(0, 2), 10) || 0), _icm - 1, _icd).getDay()]; } catch (e) {}
+        var dtLabel = _icm + '월 ' + _icd + '일' + (_icdow ? ' (' + _icdow + ')' : '');
         var txtCol = (s === '추천') ? '#000' : '#fff';
         var clickLabel = (s === '추천') ? '<div class="ic-click-label bid-confirm">입찰확정 클릭!</div>' : '';
         var timerBar = _shouldShowChuchenBar_(i) ? createChuchenTimerBar(i.chuchen_date, i) : '';
@@ -23848,7 +23852,7 @@ MJ 이정우 팀장
             '<div class="ic-header">' +
             '<div class="ic-date-badge" style="background:' + borderCol + ';color:' + txtCol + '">' + dtLabel + '</div>' +
             '<button class="view-btn-header" onclick="event.stopPropagation();openImgViewer(\'' + i.id + '\',\'' + skSafe + '\')" title="조사내용보기">' +
-            viewIcoSvg + '<span class="vbh-lbl">조사내용보기</span><span class="vbh-arr">›</span>' +
+            '<span class="vbh-lbl">조사내용보기</span>' +
             '</button>' +
             '</div>' +
             '<div class="ic-body">' +
