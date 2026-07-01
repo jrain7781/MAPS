@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회원 물건카드 · 깔끔 재디자인</title>
+<style>
+  * { box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  body { font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',-apple-system,sans-serif; background:#eef1f5; margin:0; padding:26px 12px 70px; color:#0f172a; }
+  .title { text-align:center; font-size:1.4rem; font-weight:900; }
+  .sub { text-align:center; color:#64748b; font-size:.9rem; margin:6px 0 28px; }
+  .cols { display:flex; gap:26px; justify-content:center; flex-wrap:wrap; align-items:flex-start; }
+  .col { width:380px; max-width:94vw; }
+  .col-h { text-align:center; font-weight:900; font-size:1.05rem; margin-bottom:4px; }
+  .col-d { text-align:center; font-size:.8rem; color:#64748b; margin-bottom:16px; line-height:1.5; }
+  .stage { background:#f3f4f6; border:1px solid #e2e8f0; border-radius:20px; padding:16px; }
+  .cp { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border:1px solid #e2e8f0; background:#f8fafc; border-radius:7px; color:#94a3b8; cursor:pointer; flex-shrink:0; padding:0; }
+  .cp svg { width:14px; height:14px; }
+  .card + .card { margin-top:16px; }
+
+  /* ===================================================
+     A · 컬러헤더 정돈 (헤더=상태색, 상태=흰 알약, 본문 깔끔)
+     =================================================== */
+  .a-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:18px; overflow:hidden; box-shadow:0 8px 22px -10px rgba(15,23,42,.18); }
+  .a-head { display:flex; align-items:center; gap:10px; padding:13px 16px; }
+  .a-head.bid { background:linear-gradient(135deg,#6366f1,#4f46e5); } .a-head.rec { background:linear-gradient(135deg,#fb923c,#f97316); }
+  .a-date { color:#fff; font-weight:800; font-size:20px; letter-spacing:-.01em; white-space:nowrap; }
+  .a-date .dw { font-weight:700; opacity:.92; }
+  .a-mgr { color:#fff; font-weight:700; font-size:13px; background:rgba(255,255,255,.22); border:1px solid rgba(255,255,255,.35); padding:3px 11px; border-radius:999px; white-space:nowrap; }
+  .a-sp { margin-left:auto; background:#fff; font-weight:900; font-size:16px; padding:8px 20px; border-radius:11px; border:none; cursor:pointer; box-shadow:0 3px 8px -1px rgba(0,0,0,.18); }
+  .a-sp.bid { color:#4338ca; } .a-sp.rec { color:#ea580c; }
+  .a-body { padding:14px 16px 16px; }
+  .a-court { display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:800; color:#64748b; margin-bottom:9px; }
+  .a-sakun-row { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .a-sakun { font-size:22px; font-weight:900; color:#111827; letter-spacing:-.01em; }
+  .a-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; padding-top:13px; border-top:1px solid #eef2f7; }
+  .a-price { display:flex; align-items:center; gap:8px; font-size:20px; font-weight:900; }
+  .a-price.na { color:#9ca3af; font-weight:600; font-size:16px; }
+  .a-price.ok { color:#7c3aed; }
+  .a-view { display:inline-flex; align-items:center; gap:5px; color:#334155; background:#f1f5f9; border:1.5px solid #cbd5e1; padding:9px 16px; border-radius:11px; font-weight:800; font-size:13px; cursor:pointer; }
+
+  /* ===================================================
+     B · 미니멀 화이트 (상단 컬러 라인 + 상태 알약, 전부 흰 배경)
+     =================================================== */
+  .b-card { background:#fff; border:1.5px solid #e5e7eb; border-radius:18px; overflow:hidden; box-shadow:0 8px 22px -10px rgba(15,23,42,.14); }
+  .b-strip { height:5px; } .b-strip.bid { background:linear-gradient(90deg,#6366f1,#4f46e5); } .b-strip.rec { background:linear-gradient(90deg,#fb923c,#f97316); }
+  .b-head { display:flex; align-items:center; gap:10px; padding:14px 16px 8px; }
+  .b-date { font-size:20px; font-weight:900; color:#111827; white-space:nowrap; } .b-date .dw { color:#94a3b8; font-weight:800; }
+  .b-mgr { font-size:13px; font-weight:800; color:#475569; background:#f1f5f9; border:1px solid #e2e8f0; padding:3px 11px; border-radius:999px; white-space:nowrap; }
+  .b-sp { margin-left:auto; font-weight:900; font-size:15px; padding:7px 18px; border-radius:10px; border:none; cursor:pointer; color:#fff; }
+  .b-sp.bid { background:#4f46e5; box-shadow:0 4px 10px -2px rgba(79,70,229,.5); } .b-sp.rec { background:#f97316; box-shadow:0 4px 10px -2px rgba(249,115,22,.5); }
+  .b-body { padding:4px 16px 16px; }
+  .b-court { display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:800; margin-bottom:9px; }
+  .b-court.bid { color:#4338ca; } .b-court.rec { color:#c2410c; }
+  .b-sakun-row { display:flex; align-items:center; gap:8px; }
+  .b-sakun { font-size:22px; font-weight:900; color:#111827; }
+  .b-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; padding-top:13px; border-top:1px solid #f1f5f9; }
+  .b-price { display:flex; align-items:center; gap:8px; font-size:20px; font-weight:900; } .b-price.na { color:#9ca3af; font-weight:600; font-size:16px; } .b-price.ok { color:#7c3aed; }
+  .b-view { display:inline-flex; align-items:center; gap:5px; color:#475569; background:#fff; border:1.5px solid #cbd5e1; padding:9px 16px; border-radius:11px; font-weight:800; font-size:13px; cursor:pointer; }
+</style>
+</head>
+<body>
+  <div class="title">회원 물건카드 · 깔끔 재디자인</div>
+  <div class="sub">과한 요소(흰테두리·굵은테두리·과한 걸침) 정리 · 여백/정렬/색 정돈 — 마음에 드는 걸 알려주세요</div>
+
+  <div class="cols">
+    <!-- A -->
+    <div class="col">
+      <div class="col-h">A · 컬러헤더 정돈</div>
+      <div class="col-d">상태색 헤더 유지하되 정리 · 상태=흰 알약 버튼<br>또렷하고 안정적</div>
+      <div class="stage">
+        <div class="a-card card">
+          <div class="a-head bid">
+            <span class="a-date">7월 25일 <span class="dw">(토)</span></span>
+            <span class="a-mgr">박대원</span>
+            <button class="a-sp bid">입찰</button>
+          </div>
+          <div class="a-body">
+            <span class="a-court">의정부고양 <button class="cp" title="법원 복사(풀네임)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></span>
+            <div class="a-sakun-row"><span class="a-sakun">2024타경536838(12)</span><button class="cp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></div>
+            <div class="a-foot">
+              <div class="a-price ok">1억 2,500만원 <button class="cp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></div>
+              <button class="a-view">조사내용보기</button>
+            </div>
+          </div>
+        </div>
+        <div class="a-card card">
+          <div class="a-head rec">
+            <span class="a-date">7월 22일 <span class="dw">(수)</span></span>
+            <span class="a-mgr">MJ</span>
+            <button class="a-sp rec">추천</button>
+          </div>
+          <div class="a-body">
+            <span class="a-court">부산 <button class="cp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></span>
+            <div class="a-sakun-row"><span class="a-sakun">2024타경1391(4)</span><button class="cp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></div>
+            <div class="a-foot">
+              <div class="a-price na">가격미정</div>
+              <button class="a-view">조사내용보기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B -->
+    <div class="col">
+      <div class="col-h">B · 미니멀 화이트</div>
+      <div class="col-d">전부 흰 배경 + 상단 컬러 라인 + 컬러 상태버튼<br>가볍고 세련</div>
+      <div class="stage">
+        <div class="b-card card">
+          <div class="b-strip bid"></div>
+          <div class="b-head">
+            <span class="b-date">7월 25일 <span class="dw">(토)</span></span>
+            <span class="b-mgr">박대원</span>
+            <button class="b-sp bid">입찰</button>
+          </div>
+          <div class="b-body">
+            <span class="b-court bid">의정부고양 <button class="cp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></span>
+            <div class="b-sakun-row"><span class="b-sakun">2024타경536838(12)</span><button class="cp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></div>
+            <div class="b-foot">
+              <div class="b-price ok">1억 2,500만원 <button class="cp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></div>
+              <button class="b-view">조사내용보기</button>
+            </div>
+          </div>
+        </div>
+        <div class="b-card card">
+          <div class="b-strip rec"></div>
+          <div class="b-head">
+            <span class="b-date">7월 22일 <span class="dw">(수)</span></span>
+            <span class="b-mgr">MJ</span>
+            <button class="b-sp rec">추천</button>
+          </div>
+          <div class="b-body">
+            <span class="b-court rec">부산 <button class="cp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></span>
+            <div class="b-sakun-row"><span class="b-sakun">2024타경1391(4)</span><button class="cp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button></span>
+            <div class="b-sakun-row"><span class="b-sakun">2024타경1391(4)</span></div>
+            <div class="b-foot">
+              <div class="b-price na">가격미정</div>
+              <button class="b-view">조사내용보기</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
