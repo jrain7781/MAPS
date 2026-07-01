@@ -9806,6 +9806,10 @@ function initJosaPresetsSheet_() {
   return sheet;
 }
 
+// 크롤→MAPS 전송 로그 (전송마다 1행 append) — 전송내역 모달용
+const DB_JOSA_UPLOAD_LOG_SHEET_NAME = 'josa_upload_log';
+const JOSA_UPLOAD_LOG_HEADERS = ['ts', 'preset_id', 'preset_title', 'added', 'updated', 'failed', 'deleted', 'marked', 'detached', 'total'];
+
 const DB_JOSA_ITEMS_SHEET_NAME = 'josa_items';
 const JOSA_ITEMS_HEADERS = [
   'josa_id',                // PK — 자동 발급 (items.id 와 동일 패턴, Date.now() 기반 timestamp)
@@ -10280,9 +10284,49 @@ function bulkUpsertJosaItems(payload) {
 
   // josa_presets 의 items_count + last_upload_at 갱신
   try { _updateJosaPresetUploadStat_(presetId, presetTitle); } catch (e) {}
+  // 전송 로그 1행 append (전송내역 모달용)
+  try {
+    _appendJosaUploadLog_({ ts: now, preset_id: presetId, preset_title: presetTitle,
+      added: added, updated: updated, failed: failed,
+      deleted: reconDeleted, marked: reconMarked, detached: reconDetached, total: items.length });
+  } catch (e) {}
 
   return { success: true, added: added, updated: updated, failed: failed, total: items.length,
            recon_deleted: reconDeleted, recon_marked: reconMarked, recon_detached: reconDetached };
+}
+
+// 전송 로그 1행 append (없으면 시트 생성)
+function _appendJosaUploadLog_(entry) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(DB_JOSA_UPLOAD_LOG_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(DB_JOSA_UPLOAD_LOG_SHEET_NAME);
+    sh.getRange(1, 1, 1, JOSA_UPLOAD_LOG_HEADERS.length).setValues([JOSA_UPLOAD_LOG_HEADERS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  sh.appendRow(JOSA_UPLOAD_LOG_HEADERS.map(function (h) { return entry[h] !== undefined ? entry[h] : ''; }));
+}
+
+// 전송내역 조회 — 최신순 (limit 기본 200)
+function getJosaUploadLog(limit) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sh = ss.getSheetByName(DB_JOSA_UPLOAD_LOG_SHEET_NAME);
+    if (!sh || sh.getLastRow() < 2) return { success: true, logs: [] };
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, JOSA_UPLOAD_LOG_HEADERS.length).getValues();
+    var logs = vals.map(function (row) {
+      var o = {};
+      JOSA_UPLOAD_LOG_HEADERS.forEach(function (h, i) {
+        var v = row[i];
+        if (v instanceof Date) v = Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+        o[h] = String(v == null ? '' : v);
+      });
+      return o;
+    });
+    logs.reverse();  // 최신 먼저
+    var n = (limit && limit > 0) ? limit : 200;
+    return { success: true, logs: logs.slice(0, n) };
+  } catch (e) { return { success: false, error: String(e), logs: [] }; }
 }
 
 function _updateJosaPresetUploadStat_(presetId, presetTitle) {
@@ -10470,6 +10514,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'notifyAdminsText')   return notifyAdminsText(payload);
   if (action === 'getJosaPresets')  return { success: true, presets: readAllJosaPresets() };
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
+  if (action === 'getJosaUploadLog') return getJosaUploadLog(payload.limit);
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
   if (action === 'updateJosaField') return updateJosaField(payload.josa_id, payload.field, payload.value);
   if (action === 'getItemsBySakun') return getItemsBySakun(payload.sakun_no, payload.include_past);

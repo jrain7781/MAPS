@@ -26012,6 +26012,45 @@ MJ 이정우 팀장
             .jmLoadList();
     }
 
+    // ── 크롤 전송내역 모달 ──
+    function openJmUploadLog() {
+        var m = document.getElementById('jm-uploadlog-modal'); if (!m) return;
+        m.classList.remove('hidden');
+        var body = document.getElementById('jm-uploadlog-body');
+        var sub = document.getElementById('jm-uploadlog-sub');
+        if (sub) sub.textContent = '';
+        if (body) body.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:40px 0">불러오는 중…</div>';
+        google.script.run
+            .withSuccessHandler(function (d) { renderJmUploadLog((d && d.logs) || []); })
+            .withFailureHandler(function (e) { if (body) body.innerHTML = '<div style="color:#ef4444;padding:20px">불러오기 실패: ' + escHtml(String((e && e.message) || e)) + '</div>'; })
+            .getJosaUploadLog(200);
+    }
+    function closeJmUploadLog() { var m = document.getElementById('jm-uploadlog-modal'); if (m) m.classList.add('hidden'); }
+    function renderJmUploadLog(logs) {
+        var body = document.getElementById('jm-uploadlog-body');
+        var sub = document.getElementById('jm-uploadlog-sub');
+        if (sub) sub.textContent = '최근 ' + logs.length + '건 · 최신순';
+        if (!body) return;
+        if (!logs.length) { body.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:40px 0">전송 내역이 없습니다. (다음 크롤 전송부터 기록)</div>'; return; }
+        var fmtTs = function (s) { return String(s || '').replace(/:\d{2}$/, ''); };  // 초 제거
+        var nz = function (v, col) { var n = +v || 0; return '<td style="padding:6px 8px;text-align:right;color:' + (n ? col : '#cbd5e1') + ';font-weight:' + (n ? 700 : 400) + '">' + n + '</td>'; };
+        var rows = logs.map(function (g) {
+            return '<tr style="border-bottom:1px solid #f1f5f9">'
+                + '<td style="padding:6px 8px;white-space:nowrap;font-weight:600;color:#1e293b">' + escHtml(fmtTs(g.ts)) + '</td>'
+                + '<td style="padding:6px 8px">' + escHtml(g.preset_title || g.preset_id || '') + '</td>'
+                + nz(g.added, '#2563eb') + nz(g.updated, '#334155') + nz(g.deleted, '#dc2626') + nz(g.marked, '#b45309')
+                + '<td style="padding:6px 8px;text-align:right;color:#64748b">' + (+g.total || 0) + '</td>'
+                + '</tr>';
+        }).join('');
+        body.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+            + '<thead><tr style="background:#f8fafc;color:#475569;text-align:left;position:sticky;top:0">'
+            + '<th style="padding:6px 8px">전송 시각</th><th style="padding:6px 8px">리스트</th>'
+            + '<th style="padding:6px 8px;text-align:right">신규</th><th style="padding:6px 8px;text-align:right">갱신</th>'
+            + '<th style="padding:6px 8px;text-align:right" title="고아 미분류 자동삭제">삭제</th>'
+            + '<th style="padding:6px 8px;text-align:right" title="크롤 이탈 마킹">이탈</th>'
+            + '<th style="padding:6px 8px;text-align:right">총전송</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
     function rebuildJmJosajaFilter() {
         var sel = document.getElementById('jm-filter-josaja');
         if (!sel) return;
