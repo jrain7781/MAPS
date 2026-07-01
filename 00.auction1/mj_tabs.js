@@ -360,7 +360,7 @@
       p.classList.toggle('hidden', p.dataset.subpanel !== key));
     // 진행사항 확인(cc)/다물건(dm) 탭에서는 구글드라이브 폴더브라우저/미리보기 숨김
     document.querySelectorAll('[data-hide-on-cc]').forEach(el =>
-      el.classList.toggle('hidden', key === 'cc' || key === 'dm'));
+      el.classList.toggle('hidden', key === 'cc' || key === 'dm' || key === 'nc'));
     if (key === 'dm') initDmOnce();
     try { localStorage.setItem('mj_capture_subtab', key); } catch(e) {}
   }

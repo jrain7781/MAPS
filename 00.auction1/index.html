@@ -98,6 +98,7 @@ function mjWaitServerBack() {
       <button class="mjcap-subtab" data-subtab="k" type="button">🎯 건별</button>
       <button class="mjcap-subtab" data-subtab="cc" type="button">📋 진행사항 확인</button>
       <button class="mjcap-subtab" data-subtab="dm" type="button">📑 다물건</button>
+      <button class="mjcap-subtab" data-subtab="nc" type="button">🏆 낙찰카페등록</button>
     </div>
 
     <!-- 01.i 등록일 정렬 -->
@@ -301,6 +302,63 @@ function mjWaitServerBack() {
           <summary style="cursor:pointer;font-size:12px;color:#6b7280;user-select:none">🖥 크롤 로그 (펼치기)</summary>
           <pre class="mjcap-log" data-role="log" style="height:120px;max-height:120px;margin-top:4px"></pre>
         </details>
+      </div>
+    </section>
+
+    <!-- ====== 낙찰 카페등록 이미지 생성 ====== -->
+    <section class="mjcap-card mjcap-subpanel hidden" data-cap="nc" data-subpanel="nc">
+      <header class="mjcap-head">
+        <span class="mjcap-title">🏆 낙찰카페등록</span>
+        <span class="mjcap-sub">낙찰 안내 이미지 생성 → 복사/다운로드 (카페 업로드용)</span>
+        <span class="mjcap-spacer"></span>
+        <span class="mjcap-status" id="ncStatus">대기</span>
+      </header>
+      <div class="mjcap-body">
+        <div class="mjcap-k-input" style="background:#fff7ed;border-color:#fed7aa">
+          <div class="mjcap-row" style="align-items:center;gap:6px;flex-wrap:wrap">
+            <label class="bold">사건번호</label>
+            <input type="text" id="ncSakun" placeholder="예: 2024타경82847" style="width:150px;padding:3px 7px" onfocus="this.select()">
+            <button type="button" class="btn_box_sss btn_blue bold" id="ncLoadBtn" title="옥션 사건조회 크롤 + MAPS 조사내용 자동(다음 단계)">📥 불러오기</button>
+            <span style="font-size:11px;color:#9a3412">자동 불러오기(옥션 크롤·MAPS 조사)는 다음 단계 · 진행사항 확인 탭 낙찰건에서 넘겨오는 것도 연결 예정. 지금은 아래 입력/붙여넣기로 생성.</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;align-items:flex-start">
+          <div style="flex:1;min-width:340px">
+            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap">
+              <label>회원명 <input type="text" id="ncMember" style="width:88px"></label>
+              <label>매수인 <input type="text" id="ncBuyer" placeholder="이현민" style="width:88px" title="이미지에서 뒷글자 가림"></label>
+              <label>매각기일 <input type="text" id="ncDate" placeholder="2026.06.30" style="width:96px"></label>
+            </div>
+            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
+              <label>감정가 <input type="text" id="ncAppr" placeholder="235000000" style="width:104px"></label>
+              <label>최저가 <input type="text" id="ncMin" placeholder="80605000" style="width:104px"></label>
+              <label>낙찰가 <input type="text" id="ncBid" placeholder="97999999" style="width:104px"></label>
+            </div>
+            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
+              <label>입찰수 <input type="text" id="ncCnt" placeholder="5" style="width:44px"></label>
+              <label>차순위 <input type="text" id="ncSecond" placeholder="95700000" style="width:104px"></label>
+              <label>주소 <input type="text" id="ncAddr" placeholder="고양시 일산동구 성석동 한울하임 402호" style="width:230px"></label>
+            </div>
+            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
+              <label>매매시세 <input type="text" id="ncSale" placeholder="140000000" style="width:104px"></label>
+              <label>전세 <input type="text" id="ncJeonse" placeholder="140000000" style="width:104px"></label>
+              <label>월세보증 <input type="text" id="ncWolBo" placeholder="20000000" style="width:88px"></label>
+              <label>월세 <input type="text" id="ncWol" placeholder="800000" style="width:76px"></label>
+            </div>
+            <textarea id="ncJosa" placeholder="조사내용 붙여넣기 (부동산 전화번호는 자동 블러 처리됩니다)" style="width:100%;height:200px;margin-top:6px;font-size:12px;padding:6px;box-sizing:border-box"></textarea>
+            <div class="mjcap-row" style="gap:6px;margin-top:6px">
+              <button type="button" class="btn_box_sss btn_blue bold" id="ncGenBtn">🖼 생성</button>
+              <button type="button" class="btn_box_sss btn_white" id="ncCopyBtn" disabled>📋 이미지 복사</button>
+              <button type="button" class="btn_box_sss btn_white" id="ncDownBtn" disabled>⬇ 다운로드</button>
+            </div>
+          </div>
+          <div style="flex:1;min-width:360px">
+            <div style="font-size:12px;color:#6b7280;margin-bottom:4px">미리보기</div>
+            <div id="ncPreviewWrap" style="max-height:72vh;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;background:#0f172a;padding:12px">
+              <div id="ncPreview" style="width:640px;max-width:100%;margin:0 auto"><div style="color:#94a3b8;text-align:center;padding:30px 0">입력 후 [🖼 생성]을 누르면 여기에 미리보기가 표시됩니다.</div></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1056,5 +1114,7 @@ function mjWaitServerBack() {
 <script src="app.js?v=89"></script>
 <script src="court_map.js?v=1"></script>
 <script src="mj_tabs.js?v=33"></script>
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+<script src="mj_nakchal.js?v=1"></script>
 </body>
 </html>
