@@ -23803,6 +23803,18 @@ MJ 이정우 팀장
     function mapN(n) { return N_MAP[n] || n; }
     function fmtP(n) { return n ? new Intl.NumberFormat('ko-KR').format(parseInt(n)) : '0'; }
 
+    // 입찰가 표시용: 만 단위로 딱 떨어지면 '1억 9087만원', 만 아래 자리가 있으면 숫자 그대로(콤마)
+    function fmtKoreanMoney(raw) {
+        var n = parseInt(String(raw == null ? '' : raw).replace(/[^0-9]/g, ''), 10);
+        if (!n || isNaN(n)) return '';
+        if (n % 10000 !== 0) return new Intl.NumberFormat('ko-KR').format(n) + '원';
+        var eok = Math.floor(n / 100000000), man = Math.floor((n % 100000000) / 10000);
+        var s = '';
+        if (eok) s += eok + '억';
+        if (man) s += (s ? ' ' : '') + man + '만';
+        return (s || '0') + '원';
+    }
+
     // 짧은 법원명 → 풀네임 (복사용). 본원=지방법원 / 지원=지방법원 X지원 / 서울=각 지방법원
     function courtFullName(shortRaw) {
         var c = String(shortRaw || '').replace(/\s+/g, '').trim();
@@ -23857,8 +23869,9 @@ MJ 이정우 팀장
         } else if (bidSt === '전달완료') {
             priceHtml = '<div class="ic-price ic-price-pending" onclick="event.stopPropagation();handleBidPriceClick(\'' + i.id + '\')">입찰가 도착! 터치하세요 👆</div>';
         } else if (bidSt === '확인완료' || bidSt.includes('확인완료')) {
-            priceHtml = '<div class="ic-price ic-price-confirmed">' + ((pr && pr !== '0') ? pr + ' 원' : '미입력') + '</div>';
-            if (rawBid) priceCopy = '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + rawBid + '\', event)" title="입찰가 복사(숫자)">' + cpSvg + '</button>';
+            var koPrice = fmtKoreanMoney(i.bidprice);   // 표시: 1억 9087만원 (만 아래 있으면 숫자 그대로)
+            priceHtml = '<div class="ic-price ic-price-confirmed">' + (koPrice || '미입력') + '</div>';
+            if (rawBid) priceCopy = '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + rawBid + '\', event)" title="입찰가 복사(숫자 원본)">' + cpSvg + '</button>';
         } else {
             priceHtml = '<div class="ic-price ic-price-default">가격미정</div>';
         }
