@@ -1491,7 +1491,7 @@
         <td class="cc-actions" style="text-align:center;white-space:nowrap">${(['낙찰', '미입찰', '불가'].indexOf(cat) >= 0) ? `<div style="display:flex;gap:4px;flex-wrap:nowrap;white-space:nowrap;justify-content:center">
           <button type="button" class="cc-row-send btn_box_sss" data-key="${escapeAttr(rkey)}" title="이 건을 담당자에게 즉시 텔레그램 전송" style="padding:1px 6px;font-size:11px;white-space:nowrap">📤전송</button>
           <button type="button" class="cc-row-copy btn_box_sss" data-key="${escapeAttr(rkey)}" title="카드 이미지만 복사(카톡 붙여넣기)" style="padding:1px 6px;font-size:11px;white-space:nowrap">📋이미지</button>
-          <button type="button" class="cc-row-text btn_box_sss" data-key="${escapeAttr(rkey)}" title="제목 텍스트 복사(카톡에 별도 붙여넣기)" style="padding:1px 6px;font-size:11px;white-space:nowrap">📝제목</button></div>` : ''}</td>
+          <button type="button" class="cc-row-text btn_box_sss" data-key="${escapeAttr(rkey)}" title="제목 텍스트 복사(카톡에 별도 붙여넣기)" style="padding:1px 6px;font-size:11px;white-space:nowrap">📝제목</button>${cat === '낙찰' ? `<button type="button" class="cc-row-cafe btn_box_sss" data-key="${escapeAttr(rkey)}" title="낙찰카페등록 탭으로 넘겨 카페용 이미지 생성" style="padding:1px 6px;font-size:11px;white-space:nowrap;background:#e11d48;color:#fff;border-color:#e11d48">📣카페등록</button>` : ''}</div>` : ''}</td>
       </tr>`;
     }).join('');
     const doneCnt = merged.filter(r => !r._pending).length;
@@ -1569,8 +1569,25 @@
     wrap.querySelectorAll('.cc-row-send').forEach(b => b.addEventListener('click', () => sendOneByKey(b.dataset.key)));
     wrap.querySelectorAll('.cc-row-copy').forEach(b => b.addEventListener('click', () => copyCardByKey(b.dataset.key)));
     wrap.querySelectorAll('.cc-row-text').forEach(b => b.addEventListener('click', () => copyTitleByKey(b.dataset.key)));
+    wrap.querySelectorAll('.cc-row-cafe').forEach(b => b.addEventListener('click', () => ccToNakchal(b.dataset.key)));
     wrap.querySelector('.cc-auto-report')?.addEventListener('change', (e) => setCcAutoReport(e.target.checked));
     wrap.querySelectorAll('th.cc-sort').forEach(th => th.addEventListener('click', () => sortCc(th.dataset.sort)));
+  }
+
+  // cc 낙찰 행 → 낙찰카페등록 탭으로 데이터 넘겨 카드 생성. (조사내용·시세는 다음 단계에서 옥션 관심물건 크롤로 자동 채움)
+  function ccToNakchal(key) {
+    const r = ccMergedRows().find(x => ccKeyOf(x) === key);
+    if (!r) { alert('행을 찾을 수 없습니다.'); return; }
+    if (!window.NakchalCafe || !window.NakchalCafe.fill) { alert('낙찰카페등록 모듈이 로드되지 않았습니다.'); return; }
+    window.NakchalCafe.fill({
+      sakun: r.sakun_no || '',
+      member: r.m_name || '',
+      buyer: r.buyer || '',
+      date: r.bid_date || r.maegak_date || '',
+      bid: r.maegak_price || r.bidprice || '',
+      addr: r.addr || '',
+      cnt: r.bidder_count || ''
+    });
   }
 
   function sendCcToMaps() {
