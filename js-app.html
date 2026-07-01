@@ -1987,6 +1987,7 @@
             if (noDataMessage) noDataMessage.classList.add('content-hidden');
             // 사건번호 검색 중일 때, 입찰일이 오늘보다 지난 물건은 행 전체를 붉은 톤으로 표시 (지난 물건 인지)
             const _includePastActive = !!document.getElementById('search-include-past')?.checked;
+            const _sakunSearchActive = !!(searchSakunNoInput && searchSakunNoInput.value && searchSakunNoInput.value.trim());
             const _todayNum = parseInt(String(todayYYMMDD || '').replace(/\D/g, '') || '0');
             data.forEach(item => {
                 const row = dataTableBody.insertRow();
@@ -2017,7 +2018,7 @@
                     openInvestigationTab(r, hasImgs && !!hitImgCell);
                 };
                 const _inNum = parseInt(String(item['in-date'] || '').replace(/\D/g, '') || '0');
-                const _isPastSakun = _includePastActive && _inNum > 0 && _inNum < _todayNum;
+                const _isPastSakun = _includePastActive && _sakunSearchActive && _inNum > 0 && _inNum < _todayNum;
                 row.className = _isPastSakun
                     ? 'cursor-pointer item-row-past bg-red-100 hover:bg-red-200 transition duration-150'
                     : 'cursor-pointer hover:bg-gray-100 transition duration-150';
@@ -8980,8 +8981,8 @@ MJ 이정우 팀장
                     ? true
                     : (termIndate
                         ? (inDateStr.includes(termIndate) || inDateNum.includes(termIndate.replace(/\D/g, '')))
-                        : (includePast
-                            ? true   // '이전포함' 체크 시 날짜 하한(오늘 이후) 무시 — 과거 물건도 조회 (오늘 이전은 붉은 배경)
+                        : ((includePast && termSakunNo)
+                            ? true   // '이전포함' 체크 + 사건번호 검색일 때만 날짜 하한(오늘 이후) 무시 — 과거 물건 포함 (오늘 이전은 붉은 배경)
                             : (parseInt(inDateNum || '0') >= parseInt(todayYYMMDD.replace(/\D/g, ''))))));
             const matchesSakunNo = !termSakunNo || String(item.sakun_no || '').toLowerCase().includes(termSakunNo);
             // 정확한 매칭: 입력값과 정확히 일치하는 경우만 통과
