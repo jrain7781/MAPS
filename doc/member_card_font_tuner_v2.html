@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회원 물건카드 · 편집기 V2 (법원·담당자 = 사건번호 우측)</title>
+<style>
+  :root{
+    --fs-date: 18px;
+    --fs-court: 12px;
+    --fs-manager: 12px;
+    --fs-sakun: 18px;
+    --fs-price: 18px;
+    --fs-btn: 14px;
+    --fs-view: 13px;
+    /* 세로 높이/여백 */
+    --pv-head: 11px;
+    --pv-sakun: 12px;
+    --pv-price: 11px;
+    --gap-cm: 5px;
+  }
+  * { box-sizing:border-box; -webkit-font-smoothing:antialiased; }
+  body { font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',-apple-system,sans-serif; background:#e9edf2; margin:0; padding:24px 12px 70px; color:#0f172a; }
+  .title { text-align:center; font-size:1.4rem; font-weight:900; }
+  .sub { text-align:center; color:#64748b; font-size:.88rem; margin:6px 0 22px; }
+  .badge-v2 { display:inline-block; background:#eef2ff; color:#4338ca; font-weight:800; font-size:.72rem; padding:2px 9px; border-radius:999px; }
+  .layout { display:flex; gap:26px; justify-content:center; flex-wrap:wrap; align-items:flex-start; }
+
+  .panel { width:330px; background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:16px 18px; box-shadow:0 6px 20px -8px rgba(15,23,42,.15); }
+  .panel h3 { margin:0 0 12px; font-size:1rem; }
+  .ctrl { margin-bottom:13px; }
+  .ctrl-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+  .ctrl-top label { font-weight:800; font-size:.9rem; color:#334155; }
+  .ctrl-top .val { font-weight:800; font-size:.82rem; color:#2563eb; }
+  .ctrl-top .val small { color:#94a3b8; font-weight:600; }
+  .ctrl-in { display:flex; gap:8px; align-items:center; }
+  .ctrl-in input[type=range]{ flex:1; accent-color:#4f46e5; }
+  .ctrl-in input[type=number]{ width:58px; padding:4px 6px; border:1px solid #cbd5e1; border-radius:7px; font-size:.85rem; text-align:center; }
+  .summary { margin-top:14px; border-top:1px dashed #e2e8f0; padding-top:12px; }
+  .summary textarea { width:100%; height:120px; border:1px solid #cbd5e1; border-radius:8px; padding:8px; font-family:ui-monospace,monospace; font-size:.78rem; color:#334155; resize:vertical; }
+  .summary button { margin-top:8px; width:100%; padding:9px; border:none; border-radius:9px; background:#4f46e5; color:#fff; font-weight:800; cursor:pointer; }
+  .summary button:active { transform:scale(.98); }
+
+  /* ── 카드 ── */
+  .stage { width:372px; max-width:94vw; background:#f3f4f6; border:1px solid #e2e8f0; border-radius:22px; padding:16px; box-shadow:inset 0 2px 8px rgba(15,23,42,.04); }
+  .cp { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border:1px solid #e2e8f0; background:#f8fafc; border-radius:7px; color:#94a3b8; cursor:pointer; flex-shrink:0; padding:0; transition:all .12s; }
+  .cp:hover{ background:#eef2f7; color:#475569; } .cp:active{ transform:scale(.88); } .cp svg{ width:13px; height:13px; }
+
+  .c1-card { background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 10px 26px -12px rgba(15,23,42,.28); border:1px solid #eef2f7; }
+  .c1-card + .c1-card { margin-top:14px; }
+  .c1-head { display:flex; align-items:center; justify-content:space-between; padding:var(--pv-head) 15px; gap:10px; }
+  .c1-head.rec { background:linear-gradient(135deg,#fb923c,#f97316); } .c1-head.bid { background:linear-gradient(135deg,#6366f1,#4f46e5); }
+  .c1-date { color:#fff; font-weight:900; font-size:var(--fs-date); text-shadow:0 1px 2px rgba(0,0,0,.15); white-space:nowrap; }
+  .c1-date .dow { font-weight:800; opacity:.92; }
+
+  .c1-btn { border:none; cursor:pointer; padding:10px 22px; border-radius:13px; font-weight:900; font-size:var(--fs-btn); color:#fff; flex-shrink:0; transition:transform .07s ease, box-shadow .07s ease, filter .12s; }
+  .c1-btn.rec { background:linear-gradient(180deg,#fdbb74,#f97316); box-shadow:0 5px 0 #c2410c, 0 9px 14px -4px rgba(249,115,22,.55), inset 0 1px 0 rgba(255,255,255,.5); }
+  .c1-btn.bid { background:linear-gradient(180deg,#818cf8,#4f46e5); box-shadow:0 5px 0 #3730a3, 0 9px 14px -4px rgba(79,70,229,.55), inset 0 1px 0 rgba(255,255,255,.5); }
+  .c1-btn:hover{ filter:brightness(1.05); }
+  .c1-btn.rec:active { transform:translateY(4px); box-shadow:0 1px 0 #c2410c, 0 2px 6px -2px rgba(249,115,22,.5), inset 0 1px 0 rgba(255,255,255,.35); }
+  .c1-btn.bid:active { transform:translateY(4px); box-shadow:0 1px 0 #3730a3, 0 2px 6px -2px rgba(79,70,229,.5), inset 0 1px 0 rgba(255,255,255,.35); }
+
+  .c1-body { padding:0 15px; }
+  /* 사건번호(좌) + 법원·담당자(우) */
+  .sakun-row { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:var(--pv-sakun) 0; }
+  .sakun-left { display:flex; align-items:flex-start; gap:7px; min-width:0; flex:1; }
+  .sakun { min-width:0; font-weight:900; color:#1e293b; font-size:var(--fs-sakun); line-height:1.3; word-break:keep-all; overflow-wrap:anywhere; }
+  .sakun-left .cp { margin-top:2px; }
+  .cm { display:flex; flex-direction:column; align-items:flex-end; gap:var(--gap-cm); flex-shrink:0; }
+  .cm-court { display:flex; align-items:center; gap:5px; }
+  .court { display:inline-flex; align-items:center; max-width:150px; padding:3px 10px; border-radius:8px; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; font-weight:800; font-size:var(--fs-court); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .manager { display:inline-flex; align-items:center; max-width:150px; padding:3px 10px; border-radius:8px; background:#eef2ff; color:#4338ca; border:1px solid #e0e7ff; font-weight:800; font-size:var(--fs-manager); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .price-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:var(--pv-price) 0; border-top:1px dashed #e5e7eb; }
+  .price-left { display:flex; align-items:center; gap:7px; }
+  .price { font-weight:900; font-size:var(--fs-price); } .price.na{ color:#9ca3af; font-weight:500; } .price.ok{ color:#7c3aed; }
+  .view { display:inline-flex; align-items:center; gap:5px; color:#334155; background:#eef2f7; padding:8px 15px; border-radius:13px; font-weight:800; font-size:var(--fs-view); cursor:pointer; border:none; }
+</style>
+</head>
+<body>
+  <div class="title">회원 물건카드 · 편집기 <span class="badge-v2">V2</span></div>
+  <div class="sub">배치: 법원·담당자를 <b>사건번호 줄 오른쪽</b>으로 · 이 스타일 전용 편집기 (기존 튜너와 별도)</div>
+
+  <div class="layout">
+    <!-- 편집 패널 -->
+    <div class="panel">
+      <h3>🎚️ 폰트 크기 (px)</h3>
+      <div class="ctrl" data-var="--fs-date"><div class="ctrl-top"><label>입찰일자</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="12" max="30"><input type="number" min="8" max="40"></div></div>
+      <div class="ctrl" data-var="--fs-court"><div class="ctrl-top"><label>법원</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="10" max="26"><input type="number" min="8" max="40"></div></div>
+      <div class="ctrl" data-var="--fs-manager"><div class="ctrl-top"><label>담당자</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="10" max="24"><input type="number" min="8" max="40"></div></div>
+      <div class="ctrl" data-var="--fs-sakun"><div class="ctrl-top"><label>사건번호</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="12" max="30"><input type="number" min="8" max="40"></div></div>
+      <div class="ctrl" data-var="--fs-price"><div class="ctrl-top"><label>입찰가</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="12" max="28"><input type="number" min="8" max="40"></div></div>
+      <div class="ctrl" data-var="--fs-btn"><div class="ctrl-top"><label>추천/입찰 버튼</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="12" max="26"><input type="number" min="8" max="40"></div></div>
+      <div class="ctrl" data-var="--fs-view"><div class="ctrl-top"><label>조사내용보기</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="10" max="22"><input type="number" min="8" max="40"></div></div>
+
+      <h3 style="margin-top:18px">📐 세로 높이/여백 (px)</h3>
+      <div class="ctrl" data-var="--pv-head"><div class="ctrl-top"><label>헤더 칸 높이</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="2" max="30"><input type="number" min="0" max="60"></div></div>
+      <div class="ctrl" data-var="--pv-sakun"><div class="ctrl-top"><label>사건번호 칸 높이</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="2" max="30"><input type="number" min="0" max="60"></div></div>
+      <div class="ctrl" data-var="--gap-cm"><div class="ctrl-top"><label>법원↔담당자 간격</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="0" max="20"><input type="number" min="0" max="60"></div></div>
+      <div class="ctrl" data-var="--pv-price"><div class="ctrl-top"><label>입찰가 칸 높이</label><span class="val"></span></div><div class="ctrl-in"><input type="range" min="2" max="30"><input type="number" min="0" max="60"></div></div>
+
+      <div class="summary">
+        <textarea id="sum" readonly></textarea>
+        <button id="copyBtn">📋 현재 값 복사</button>
+      </div>
+    </div>
+
+    <!-- 카드 (2개) -->
+    <div class="stage">
+      <div class="c1-card">
+        <div class="c1-head rec">
+          <span class="c1-date">7월 22일 <span class="dow">(수)</span></span>
+          <button class="c1-btn rec">추천</button>
+        </div>
+        <div class="c1-body">
+          <div class="sakun-row">
+            <div class="sakun-left">
+              <span class="sakun">2024타경1391(4)</span>
+              <button class="cp" title="사건번호 복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+            </div>
+            <div class="cm">
+              <div class="cm-court">
+                <span class="court">부산</span>
+                <button class="cp" title="법원 복사 — 풀네임(부산지방법원)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+              </div>
+              <span class="manager">MJ</span>
+            </div>
+          </div>
+          <div class="price-row">
+            <div class="price-left"><span class="price na">가격미정</span></div>
+            <button class="view">🔍 조사내용보기 ›</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="c1-card">
+        <div class="c1-head bid">
+          <span class="c1-date">7월 25일 <span class="dow">(토)</span></span>
+          <button class="c1-btn bid">입찰</button>
+        </div>
+        <div class="c1-body">
+          <div class="sakun-row">
+            <div class="sakun-left">
+              <span class="sakun">2024타경536838(12)</span>
+              <button class="cp" title="사건번호 복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+            </div>
+            <div class="cm">
+              <div class="cm-court">
+                <span class="court">의정부고양</span>
+                <button class="cp" title="법원 복사 — 풀네임(의정부지방법원 고양지원)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+              </div>
+              <span class="manager">박대원</span>
+            </div>
+          </div>
+          <div class="price-row">
+            <div class="price-left">
+              <span class="price ok">1억 2,500만원</span>
+              <button class="cp" title="입찰가 복사 — 숫자 원본(125000000)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+            </div>
+            <button class="view">🔍 조사내용보기 ›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var LABELS = { '--fs-date':'입찰일자','--fs-court':'법원','--fs-manager':'담당자','--fs-sakun':'사건번호','--fs-price':'입찰가','--fs-btn':'버튼','--fs-view':'조사내용보기',
+                   '--pv-head':'헤더 높이','--pv-sakun':'사건번호 칸','--gap-cm':'법원↔담당자 간격','--pv-price':'입찰가 칸' };
+    var ctrls = Array.prototype.slice.call(document.querySelectorAll('.ctrl'));
+    function px(v){ return v+'px'; }
+    function rem(v){ return (v/16).toFixed(2)+'rem'; }
+    function updateSummary(){
+      var lines = ctrls.map(function(c){
+        var v = c.querySelector('input[type=number]').value;
+        var vr = c.dataset.var; var isFont = vr.indexOf('--fs-')===0;
+        return LABELS[vr] + ': ' + px(v) + (isFont ? '  ('+rem(v)+')' : '');
+      });
+      document.getElementById('sum').value = lines.join('\n');
+    }
+    ctrls.forEach(function(c){
+      var vr=c.dataset.var, range=c.querySelector('input[type=range]'), num=c.querySelector('input[type=number]'), val=c.querySelector('.val');
+      var cur=parseInt(getComputedStyle(document.documentElement).getPropertyValue(vr));
+      var lo=parseInt(num.getAttribute('min')); if(isNaN(lo))lo=0;
+      var hi=parseInt(num.getAttribute('max')); if(isNaN(hi))hi=100;
+      var isFont=vr.indexOf('--fs-')===0;
+      function apply(v){ v=Math.max(lo,Math.min(hi,parseInt(v)||cur)); document.documentElement.style.setProperty(vr,px(v)); range.value=v; num.value=v; val.innerHTML=px(v)+(isFont?' <small>('+rem(v)+')</small>':''); updateSummary(); }
+      range.addEventListener('input',function(){apply(range.value);});
+      num.addEventListener('input',function(){apply(num.value);});
+      apply(cur);
+    });
+    document.getElementById('copyBtn').addEventListener('click',function(){ var ta=document.getElementById('sum'); ta.select(); document.execCommand('copy'); var b=this; b.textContent='✅ 복사됨!'; setTimeout(function(){b.textContent='📋 현재 값 복사';},1500); });
+  </script>
+</body>
+</html>
