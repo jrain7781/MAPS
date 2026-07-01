@@ -2448,9 +2448,14 @@
     background: #dc2626;
   }
 
-  /* 입찰리스트 전용 상단바 */
+  /* 입찰리스트 전용 상단바 — 버튼 짤림 방지: 고정높이 대신 자동확장 + 상단 여백 확보 */
   .il-top-bar {
-    height: 60px !important;
+    height: auto !important;
+    min-height: 64px;
+    padding-top: 12px !important;
+    padding-bottom: 8px !important;
+    box-sizing: border-box;
+    overflow: visible;
   }
 
   .il-sp {
@@ -2485,6 +2490,7 @@
     justify-content: space-between;
     width: 100%;
     padding: 0 4px;
+    flex-wrap: nowrap;   /* 버튼 줄바꿈 → 상단바 넘침/짤림 방지 */
   }
 
   /* 2. 캘린더 */
@@ -3125,7 +3131,8 @@
 
   .ic-body {
     display: flex;
-    gap: 8px;
+    flex-direction: column;   /* 사건번호를 한 줄 전체폭으로 → 추천 버튼은 아래로 */
+    gap: 6px;
     padding: 12px 14px 14px;
   }
 
@@ -3156,10 +3163,9 @@
   }
 
   .ic-l {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    gap: 3px;
     min-width: 0;
   }
 
@@ -3174,6 +3180,7 @@
     font-weight: 900;
     color: #1e293b;
     line-height: 1.2;
+    min-width: 0;            /* 한 줄 전체를 쓰고, 넘칠 때만 … 로 잘림 */
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -3263,10 +3270,8 @@
   .ic-r {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-width: 76px;
+    align-items: flex-end;   /* 사건번호 아래, 우측 정렬로 버튼+안내 배치 */
+    gap: 4px;
   }
 
   .badge {
