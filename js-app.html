@@ -25930,39 +25930,86 @@ MJ 이정우 팀장
         if (!google.script) { if (summary && !hadCache) summary.textContent = '[ERR] google.script === undefined'; return; }
         if (!google.script.run) { if (summary && !hadCache) summary.textContent = '[ERR] google.script.run === undefined'; return; }
 
-        // [3] 백그라운드 GAS 최신화 (응답 오면 재렌더 + 캐시 갱신)
+        // [3] 데이터 최신화
         var callTimer = setTimeout(function () {
             if (summary && summary.textContent.indexOf('[1]') === 0) {
                 summary.textContent = '[ERR] GAS 응답 30초 timeout — google.script.run 응답 안 옴';
             }
         }, 30000);
 
+        // 기존 단일 호출(전체) — 캐시 최신화 / 강제새로고침 / progressive 실패 폴백
+        function _jmFullRefresh() {
+            google.script.run
+                .withSuccessHandler(function (d) {
+                    clearTimeout(callTimer);
+                    if (!d || !d.success) {
+                        if (summary && !hadCache) summary.textContent = 'GAS 에러: ' + (d && (d.error || d.message) || 'unknown');
+                        console.error('jmLoadAllData failed:', d);
+                        return;
+                    }
+                    smInvestigators = d.investigators || [];
+                    jmPresets = d.presets || [];
+                    jmItems = d.items || [];
+                    _jmSaveCache();
+                    _jmRenderLoaded(summary);
+                    var ms = Date.now() - t0;
+                    if (summary) summary.textContent = 'preset ' + jmPresets.length + ' · items ' + jmItems.length + ' (' + ms + 'ms)';
+                })
+                .withFailureHandler(function (err) {
+                    clearTimeout(callTimer);
+                    var msg = (err && (err.message || err.name)) || String(err) || 'unknown';
+                    if (summary && !hadCache) { summary.textContent = '[ERR-gas] ' + msg; summary.title = JSON.stringify(err); }
+                    console.error('jmLoadAllData failed:', err);
+                })
+                .jmLoadAllData();
+        }
+
+        // 캐시 있음(백그라운드 최신화) 또는 강제새로고침 → 단일 호출
+        if (hadCache || forceRefresh) { _jmFullRefresh(); return; }
+
+        // 첫 로딩(캐시 없음) → progressive: ① 리스트 먼저 → ② items(사진X) → ③ 사진(백그라운드)
+        if (summary) summary.textContent = '리스트 불러오는 중…';
         google.script.run
-            .withSuccessHandler(function (d) {
-                clearTimeout(callTimer);
-                if (!d || !d.success) {
-                    if (summary && !hadCache) summary.textContent = 'GAS 에러: ' + (d && (d.error || d.message) || 'unknown');
-                    console.error('jmLoadAllData failed:', d);
-                    return;
-                }
-                smInvestigators = d.investigators || [];
-                jmPresets = d.presets || [];
-                jmItems = d.items || [];
-                _jmSaveCache();
-                _jmRenderLoaded(summary);
-                var ms = Date.now() - t0;
-                if (summary) summary.textContent = 'preset ' + jmPresets.length + ' · items ' + jmItems.length + ' (' + ms + 'ms)';
+            .withSuccessHandler(function (dl) {
+                if (!dl || !dl.success) { _jmFullRefresh(); return; }   // 리스트 실패 → 전체 폴백
+                smInvestigators = dl.investigators || [];
+                jmPresets = dl.presets || [];
+                jmItems = [];
+                jmSelectedPresetIds = new Set();
+                jmPresets.forEach(function (p) { if (p.preset_id) jmSelectedPresetIds.add(p.preset_id); });
+                try { _jmtSaveCollapsed(new Set()); } catch (_) {}
+                try { rebuildJmJosajaFilter(); } catch (e) {}
+                try { renderJosaTree(); } catch (e) {}          // ① 리스트/트리 즉시 표시
+                if (summary) summary.textContent = '리스트 ' + jmPresets.length + ' · 그리드 불러오는 중…';
+                // ② items (전체 물건시트 사진 스캔 제외 → 빠름)
+                google.script.run
+                    .withSuccessHandler(function (di) {
+                        if (!di || !di.success) { _jmFullRefresh(); return; }
+                        jmItems = di.items || [];
+                        try { renderJosaTree(); } catch (e) {}   // 카운트 갱신
+                        try { applyJosaFilters(); } catch (e) {} // 그리드 표시(사진 없이)
+                        if (summary) summary.textContent = 'preset ' + jmPresets.length + ' · items ' + jmItems.length + ' · 사진 로딩…';
+                        // ③ 사진맵 병합 (백그라운드 — 렌더 후)
+                        google.script.run
+                            .withSuccessHandler(function (dg) {
+                                clearTimeout(callTimer);
+                                if (dg && dg.success && dg.images) {
+                                    var im = dg.images;
+                                    jmItems.forEach(function (it) { var iid = im[_jmSakunKeyJS(it.sakun_no)] || ''; it.bid_img_id = iid; it.bid_img = !!iid; });
+                                    try { applyJosaFilters(); } catch (e) {}   // 사진 반영 재렌더
+                                }
+                                _jmSaveCache();
+                                var ms = Date.now() - t0;
+                                if (summary) summary.textContent = 'preset ' + jmPresets.length + ' · items ' + jmItems.length + ' (' + ms + 'ms)';
+                            })
+                            .withFailureHandler(function () { clearTimeout(callTimer); _jmSaveCache(); })
+                            .jmLoadItemImages();
+                    })
+                    .withFailureHandler(function () { _jmFullRefresh(); })
+                    .jmLoadItemsLite();
             })
-            .withFailureHandler(function (err) {
-                clearTimeout(callTimer);
-                var msg = (err && (err.message || err.name)) || String(err) || 'unknown';
-                if (summary && !hadCache) {
-                    summary.textContent = '[ERR-gas] ' + msg;
-                    summary.title = JSON.stringify(err);
-                }
-                console.error('jmLoadAllData failed:', err);
-            })
-            .jmLoadAllData();
+            .withFailureHandler(function () { _jmFullRefresh(); })   // 리스트 실패 → 전체 폴백
+            .jmLoadList();
     }
 
     function rebuildJmJosajaFilter() {
@@ -26034,9 +26081,17 @@ MJ 이정우 팀장
     function _jmBid8(it) { var raw = String((it && it.bid_date) || '').split(/[ T]/)[0]; var d = raw.replace(/[^0-9]/g, ''); if (d.length === 6) d = '20' + d; return d.slice(0, 8); }
     function _jmPassToday(it) {
         var el = document.getElementById('jm-today-only');
-        if (el && !el.checked) return true;   // '오늘만' 해제 시 전체
+        if (el && !el.checked) return true;   // '오늘 이후만' 해제 시 전체
         var d = _jmBid8(it);
-        return !d || d >= _jmToday8();          // 날짜없음 or 오늘이후
+        return !d || d > _jmToday8();            // 날짜없음 or 내일 이후(오늘 입찰건도 제외)
+    }
+    // 사건번호 정규화 (GAS _jmSakunKey_ 와 동일 — 사진맵 병합 키). '2024타경82847'→'24타경82847'
+    function _jmSakunKeyJS(s) {
+        s = String(s || '').trim();
+        var m = s.match(/(\d{2,4})\s*타경\s*0*(\d+)/);
+        if (!m) return s.replace(/\s+/g, '');
+        var y = m[1]; if (y.length >= 4) y = y.slice(2); else if (y.length === 1) y = '0' + y;
+        return y + '타경' + m[2];
     }
     // '오늘 이후만' 토글 시 그리드 + 트리 카운트 동시 갱신 (일관성)
     function jmApplyTodayToggle() {

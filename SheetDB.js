@@ -10351,6 +10351,23 @@ function jmLoadAllData() {
   }
 }
 
+// ── 조사물건관리 progressive 로딩 (첫 진입 체감속도 — 리스트 먼저 / 사진 나중) ──
+// ① 리스트(트리): presets + investigators (작음, 빠름)
+function jmLoadList() {
+  try { return { success: true, investigators: getInvestigators(), presets: readAllJosaPresets() }; }
+  catch (e) { return { success: false, error: String(e) }; }
+}
+// ② 그리드 items: 사진맵(전체 물건시트 스캔) 제외 → 빠름. 사진은 ③에서 별도.
+function jmLoadItemsLite() {
+  try { return { success: true, items: readAllJosaItems() }; }
+  catch (e) { return { success: false, error: String(e) }; }
+}
+// ③ 사진맵: 사건번호(정규화) → image_id. 렌더 후 백그라운드 병합용.
+function jmLoadItemImages() {
+  try { return { success: true, images: _jmItemsImageMap_() }; }
+  catch (e) { return { success: false, error: String(e) }; }
+}
+
 /**
  * josa_items 한 행의 특정 필드 1개 업데이트 (memo/josaja/josa_status 등)
  * @param {string} josaId   PK
