@@ -1400,7 +1400,7 @@
           totalUpdated += (d.updated || 0);
           totalFailed += (d.failed || 0);
           try { localStorage.setItem(LS_UPLOAD_PFX + preset.id, String(Date.now())); } catch (_) {}
-          okList.push(`${preset.title || preset.id}: 추가필터 ${withItems[i].filteredCount}/${withItems[i].rawCount} → 신규${d.added || 0} 갱신${d.updated || 0}`);
+          okList.push(`${preset.title || preset.id}: 추가필터 ${withItems[i].filteredCount}/${withItems[i].rawCount} → 신규${d.added || 0} 갱신${d.updated || 0}` + ((d.recon_deleted || d.recon_marked) ? ` · 정리(삭제${d.recon_deleted || 0}/이탈${d.recon_marked || 0})` : ''));
         }
       } catch (e) {
         failList.push(`${preset.title || preset.id}: ${e && e.message ? e.message : e}`);
@@ -1505,7 +1505,10 @@
         alert('MAPS items 업로드 실패: ' + (data.message || data.error || JSON.stringify(data)));
       } else {
         try { localStorage.setItem(LS_UPLOAD_PFX + currentPresetId, String(Date.now())); } catch (_) {}
-        alert(`MAPS items 업로드 완료\n신규: ${data.added}  |  갱신: ${data.updated}  |  실패: ${data.failed || 0}\n총 ${data.total}건 전송`);
+        const reconMsg = (data.recon_deleted || data.recon_marked || data.recon_detached)
+          ? `\n\n리스트 정리 — 미분류 삭제 ${data.recon_deleted || 0} · 이탈 마킹 ${data.recon_marked || 0}` + (data.recon_detached ? ` · 타리스트 분리 ${data.recon_detached}` : '')
+          : '';
+        alert(`MAPS items 업로드 완료\n신규: ${data.added}  |  갱신: ${data.updated}  |  실패: ${data.failed || 0}\n총 ${data.total}건 전송` + reconMsg);
         renderSidebar();
       }
     } catch (e) {

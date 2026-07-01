@@ -26858,6 +26858,7 @@ MJ 이정우 팀장
         var spec  = (document.getElementById('jm-search-special')?.value || '').trim();
         var todayOnly = !!document.getElementById('jm-today-only')?.checked;
         var excludePolye = !!document.getElementById('jm-exclude-polye')?.checked;
+        var hideLeft = !document.getElementById('jm-hide-left') || !!document.getElementById('jm-hide-left').checked;  // 기본 숨김(체크박스 없으면 숨김)
         var todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
 
         var filtered = jmItems.filter(function (it) {
@@ -26870,6 +26871,7 @@ MJ 이정우 팀장
             if (bid && String(it.bid_date || '').indexOf(bid) === -1) return false;
             if (court && String(it.court || '').indexOf(court) === -1) return false;
             if (excludePolye && String(it.josa_status || '') === '폐기') return false;
+            if (hideLeft && String(it.left_at || '').trim()) return false;   // 이탈 숨김(기본)
             if (JM_FILTER_STATUS.size > 0 && !JM_FILTER_STATUS.has(String(it.josa_status || '미분류'))) return false;
             if (JM_FILTER_JOSAJA.size > 0 && !JM_FILTER_JOSAJA.has(String(it.josaja || ''))) return false;
             if (addr && String(it.address || '').indexOf(addr) === -1) return false;
@@ -27950,7 +27952,11 @@ MJ 이정우 팀장
             var josaBtn = it.bid_img
                 ? '<button type="button" onclick="openJosaContentModal(\'' + escAttr(it.josa_id) + '\')" class="jm-cell-btn jm-btn-josa">조사내용</button>'
                 : '';
-            var sakunCell = '<div class="' + sakunCls + '" title="' + escAttr(sakunTip) + '">' + escHtml(it.sakun_no || '') + '</div>' +
+            // 이탈 뱃지 — 크롤 리스트에서 빠진 건(left_at). 상태값과 별개, 눈에만 표시.
+            var leftBadge = it.left_at
+                ? '<div style="margin-bottom:2px"><span style="display:inline-block;background:#f59e0b;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px" title="크롤 리스트에서 빠짐 · ' + escAttr(it.left_at) + ' · 다시 크롤되면 자동 해제">⚠ 이탈</span></div>'
+                : '';
+            var sakunCell = leftBadge + '<div class="' + sakunCls + '" title="' + escAttr(sakunTip) + '">' + escHtml(it.sakun_no || '') + '</div>' +
                             (it.prop_kind ? '<div class="jm-prop-kind">' + escHtml(it.prop_kind) + '</div>' : '') +
                             (auctionBtn || josaBtn ? '<div class="jm-cell-btns">' + auctionBtn + josaBtn + '</div>' : '');
 
@@ -28005,7 +28011,7 @@ MJ 이정우 팀장
                 return '<button type="button" class="jm-memo-btn jm-memo-empty" onclick="openJmMemoModal(\'' + escAttr(it.josa_id) + '\')">+ 메모</button>';
             })();
 
-            return '<tr class="jm-row">' +
+            return '<tr class="jm-row"' + (it.left_at ? ' style="background:#fffbeb;box-shadow:inset 3px 0 0 #f59e0b"' : '') + '>' +
                 '<td class="jm-td text-center"><input type="checkbox" class="jm-row-cb rounded" data-id="' + escAttr(it.josa_id) + '"></td>' +
                 '<td class="jm-td text-center">' + statusBtn + '</td>' +
                 '<td class="jm-td text-center">' + josajaCell + '</td>' +

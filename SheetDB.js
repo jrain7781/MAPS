@@ -9839,7 +9839,8 @@ const JOSA_ITEMS_HEADERS = [
   'memo',                   // 사용자 비고
   'reg_date',               // YYYY-MM-DD HH:mm:ss 초단위
   'update_date',            // 최종 갱신 시각
-  'josaja_id'               // 조사자 member_id (동명이인 대비 — 키 매칭은 이것 우선)
+  'josaja_id',              // 조사자 member_id (동명이인 대비 — 키 매칭은 이것 우선)
+  'left_at'                 // 크롤 리스트 이탈 감지 시각 (비어있음=라이브, 값=이탈). 재크롤 등장 시 자동 해제
 ];
 
 function initJosaItemsSheet_() {
@@ -10206,7 +10207,8 @@ function bulkUpsertJosaItems(payload) {
         preset_ids: prevIds.join(','),
         preset_titles_cached: prevTitles.join(','),
         update_date: now,
-        reg_date: prev.reg_date || now
+        reg_date: prev.reg_date || now,
+        left_at: ''             // 이번 크롤에 다시 등장 → 이탈 마킹 해제(라이브 복귀)
       };
       BODY_FIELDS.forEach(function(f) {
         rowObj[f] = (item[f] !== undefined && item[f] !== null) ? String(item[f]) : '';
@@ -10236,10 +10238,51 @@ function bulkUpsertJosaItems(payload) {
     }
   });
 
+  // ── 리스트 재조정: 이번 크롤에 안 온(이 리스트에서 사라진) 기존 물건 처리 ──
+  //  · 다른 리스트에도 속함  → 이 preset_id 만 떼기(라이브 유지, left_at 해제)
+  //  · 이 리스트가 마지막(고아) + 미분류 → 자동 삭제 (사용자 확정 룰)
+  //  · 이 리스트가 마지막(고아) + 그 외 상태 → left_at 마킹(이탈), 상태·소속 보존
+  var incomingKeys = {};
+  items.forEach(function (it) { var k = _josaDedupKey_(it); if (k) incomingKeys[k] = true; });
+  var reconDeleted = 0, reconMarked = 0, reconDetached = 0;
+  var toDeleteRows = [];
+  var laCol = JOSA_ITEMS_HEADERS.indexOf('left_at') + 1;
+  var piCol = JOSA_ITEMS_HEADERS.indexOf('preset_ids') + 1;
+  var ptCol = JOSA_ITEMS_HEADERS.indexOf('preset_titles_cached') + 1;
+  existing.forEach(function (e, i) {
+    var k = _josaDedupKey_(e);
+    if (!k || incomingKeys[k]) return;                 // 이번에 온 건/키없음 → skip
+    var ids = String(e.preset_ids || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (ids.indexOf(presetId) === -1) return;           // 이 리스트 소속 아님 → skip
+    var rowNum = i + 2;
+    var remainIds = ids.filter(function (id) { return id !== presetId; });
+    if (remainIds.length > 0) {
+      // 다른 리스트에 아직 있음 → 이 리스트만 떼기 (라이브 유지)
+      var titles = String(e.preset_titles_cached || '').split(',').map(function (s) { return s.trim(); });
+      var remainTitles = [];
+      ids.forEach(function (id, ti) { if (id !== presetId) remainTitles.push(titles[ti] || ''); });
+      sheet.getRange(rowNum, piCol).setValue(remainIds.join(','));
+      sheet.getRange(rowNum, ptCol).setValue(remainTitles.join(','));
+      if (laCol > 0 && e.left_at) sheet.getRange(rowNum, laCol).setValue('');
+      reconDetached++;
+    } else {
+      // 이 리스트가 마지막(고아)
+      if (String(e.josa_status || '미분류') === '미분류') {
+        toDeleteRows.push(rowNum); reconDeleted++;       // 미분류 → 자동 삭제
+      } else {
+        if (laCol > 0) sheet.getRange(rowNum, laCol).setValue(now);  // 그 외 → 이탈 마킹(상태·소속 보존)
+        reconMarked++;
+      }
+    }
+  });
+  // 삭제는 아래→위 (행번호 밀림 방지)
+  toDeleteRows.sort(function (a, b) { return b - a; }).forEach(function (rn) { sheet.deleteRow(rn); });
+
   // josa_presets 의 items_count + last_upload_at 갱신
   try { _updateJosaPresetUploadStat_(presetId, presetTitle); } catch (e) {}
 
-  return { success: true, added: added, updated: updated, failed: failed, total: items.length };
+  return { success: true, added: added, updated: updated, failed: failed, total: items.length,
+           recon_deleted: reconDeleted, recon_marked: reconMarked, recon_detached: reconDetached };
 }
 
 function _updateJosaPresetUploadStat_(presetId, presetTitle) {
