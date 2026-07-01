@@ -434,9 +434,11 @@
             }
         } catch (e) { console.warn('[TG] expand/disableVerticalSwipes:', e); }
 
-        // 회원 모드 전용 내리기 버튼 표시
+        // 회원 모드 전용 내리기 버튼 + 새로고침 버튼(상단바→헤더 이동) 표시
         const closeBtn = document.getElementById('btn-close-webapp');
         if (closeBtn) closeBtn.classList.remove('content-hidden');
+        const refreshMemBtn = document.getElementById('btn-refresh-member');
+        if (refreshMemBtn) refreshMemBtn.classList.remove('content-hidden');
 
         // 사이드바: 회원/조사자 전용 메뉴만 남기고 나머지(관리자 — 조사물건관리 포함) 전부 숨김
         document.querySelectorAll('nav button').forEach(el => {
@@ -23852,17 +23854,21 @@ MJ 이정우 팀장
             '</button>' +
             '</div>' +
             '<div class="ic-body">' +
-            '<div class="ic-l" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
-            '<div class="ic-copy-row">' +
+            // 사건번호: 전체폭 한 줄 (길면 줄바꿈)
+            '<div class="ic-copy-row ic-sakun-row" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
             '<div class="ic-sakun">' + sk + '</div>' +
             '<button class="copy-btn" onclick="event.stopPropagation();copyT(\'' + skSafe + '\', event)">' + cpSvg + '</button>' +
             '</div>' +
+            // 사건번호 아래: 법원/가격(좌) + 추천버튼(우) — 딱 붙여서
+            '<div class="ic-body-lower">' +
+            '<div class="ic-l" onclick="showInvestigationDetail(\'' + i.id + '\')">' +
             '<div class="ic-court-label">' + ct + ' / ' + m_nm + '</div>' +
             '<div class="ic-copy-row">' + priceHtml + copyBtnHtml + '</div>' +
             '</div>' +
             '<div class="ic-r">' +
             '<button class="' + bCls + '" onclick="setB(\'' + i.id + '\', \'' + s + '\', \'' + sk + '\')">' + s + '</button>' +
             clickLabel +
+            '</div>' +
             '</div>' +
             '</div>' +
             (timerBar ? '<div class="ic-timer-wrap">' + timerBar + '</div>' : '') +

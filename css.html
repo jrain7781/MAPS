@@ -2448,22 +2448,18 @@
     background: #dc2626;
   }
 
-  /* 입찰리스트 전용 상단바 — 버튼 짤림 방지: 고정높이 대신 자동확장 + 상단 여백 확보 */
+  /* 입찰리스트 전용 상단바 (새로고침은 헤더로 이동 → 상태버튼 4개만 한 줄에) */
   .il-top-bar {
-    height: auto !important;
-    min-height: 64px;
-    padding-top: 12px !important;
-    padding-bottom: 8px !important;
-    box-sizing: border-box;
-    overflow: visible;
+    height: 60px !important;
   }
 
   .il-sp {
     height: 48px !important;
-    padding: 0 18px !important;
+    padding: 0 14px !important;
     font-size: 1.15rem !important;
     cursor: pointer;
     border: none;
+    white-space: nowrap;   /* 버튼 내부 '0입찰' 이 두 줄로 쪼개지지 않게 */
   }
 
   /* 새로고침 버튼 */
@@ -2485,12 +2481,12 @@
   .refresh-btn:hover { background: #eef2ff; border-color: #6366f1; }
   .refresh-btn:active { transform: rotate(180deg); }
 
-  /* top-bar-inner justify 수정 (입찰리스트용: space-between) */
+  /* top-bar-inner (입찰리스트용: 새로고침 헤더 이동 후 상태버튼만 가운데 한 줄) */
   .il-top-bar .top-bar-inner {
-    justify-content: space-between;
+    justify-content: center;
     width: 100%;
     padding: 0 4px;
-    flex-wrap: nowrap;   /* 버튼 줄바꿈 → 상단바 넘침/짤림 방지 */
+    flex-wrap: nowrap;   /* 한 줄 유지 */
   }
 
   /* 2. 캘린더 */
@@ -3131,9 +3127,22 @@
 
   .ic-body {
     display: flex;
-    flex-direction: column;   /* 사건번호를 한 줄 전체폭으로 → 추천 버튼은 아래로 */
-    gap: 6px;
+    flex-direction: column;   /* 사건번호(전체폭) 위, 법원·가격+추천버튼 아래 */
+    gap: 5px;
     padding: 12px 14px 14px;
+  }
+
+  /* 사건번호 줄: 전체폭, 길면 줄바꿈. 줄바꿈 시 복사버튼은 상단 정렬 */
+  .ic-sakun-row {
+    align-items: flex-start;
+  }
+
+  /* 사건번호 아래: 법원/가격(좌) + 추천버튼(우) — 딱 붙여서 최적화 */
+  .ic-body-lower {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    justify-content: space-between;
   }
 
   .ic-timer-wrap {
@@ -3163,9 +3172,10 @@
   }
 
   .ic-l {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     min-width: 0;
   }
 
@@ -3179,11 +3189,10 @@
     font-size: var(--ic-sakun-fs);
     font-weight: 900;
     color: #1e293b;
-    line-height: 1.2;
-    min-width: 0;            /* 한 줄 전체를 쓰고, 넘칠 때만 … 로 잘림 */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.25;
+    min-width: 0;
+    white-space: normal;     /* 길면 다음 줄로 줄바꿈 (… 대신) */
+    word-break: break-all;
   }
 
   .ic-court {
@@ -3270,8 +3279,9 @@
   .ic-r {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;   /* 사건번호 아래, 우측 정렬로 버튼+안내 배치 */
+    align-items: flex-end;   /* 법원/가격 오른쪽에 추천버튼+안내 */
     gap: 4px;
+    flex-shrink: 0;
   }
 
   .badge {
