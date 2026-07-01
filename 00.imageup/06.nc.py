@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-MJ경매 [낙찰 카페등록 크롤]
+MJ경매 [낙찰 카페등록 크롤] (다계정)
 - 입력: 낙찰건 키 = "사건번호 | 입찰일자(매각기일) | 법원". (env MJ_IMAGEUP_CASES_JSON)
 - ★ 04.cc.py(진행사항 확인)의 로그인·종합검색·행매칭·매각파싱·상세캡처 로직을 그대로 재사용
   (importlib 로 모듈 로드만; 04 원본은 절대 수정하지 않음).
-- 04 와의 유일한 차이: 조사내용을 관심물건 편집폼 textarea(#fm_inter) 의 value 로 직접 취득.
-  (본문 텍스트 슬라이싱/‘N회차’ 마커 방식은 취약 → textarea 가 조사내용만 깔끔히 담고 있음)
-- 결과: 'RESULT|{json}' 한 줄 — sakun/buyer/bid/cnt/date/addr/josa/screenshot_path 등.
-  → 매니저 낙찰카페등록 탭이 받아 NakchalCafe.fill() 로 카드 자동 생성.
+- 04 와의 차이:
+  ① 조사내용을 관심물건 편집폼 textarea(#fm_inter) value 로 직접 취득(물건데이터 미포함·정확).
+  ② ★ 체크된 계정 전부에 로그인해 각 계정의 조사내용 유무를 확인(계정별 등록내용이 다름).
+- 결과: 'RESULT|{json}' 한 줄/사건 — 매각결과(1회) + josa_accounts:[{id,josa,len}] (조사내용 있는 계정들).
+  → 매니저 낙찰카페등록 탭이 받아 그리드/카드 생성.
 - 낙찰(매각) 건 전용. Selenium 일반 모드(창 표시, MJ_IMAGEUP_HEADLESS=1 이면 숨김).
 """
-print("🏆 MJ경매 [낙찰 카페등록 크롤] (종합검색 → 키매칭 → 매각결과 + 조사내용 textarea)...")
+print("🏆 MJ경매 [낙찰 카페등록 크롤·다계정] (종합검색 → 키매칭 → 매각결과 + 계정별 조사내용)...")
 
 import os, sys, json, time, traceback, importlib.util
 
@@ -52,37 +53,26 @@ def get_interest_josa(driver):
     return ""
 
 
-def process_nakchal(driver, wait, case):
-    """단건: 종합검색 → (법원·기일[·물건번호]) 매칭행 선택 → 상세 열어 매각결과+조사내용 취득."""
+def crawl_case(driver, wait, case, want_capture=False):
+    """단건(로그인된 현재 계정 기준): 종합검색 → (법원·기일[·물건번호]) 매칭행 선택
+    → 상세 열어 매각결과 + 조사내용(textarea) 취득. 결과 dict 반환(매칭 실패 시 matched=False)."""
     exp_court = (case.get("court") or "").strip()
     exp_d6 = cc.norm_date6(case.get("bid_date"))
     exp_lawsup = cc.court_to_lawsup(exp_court)
     sakun = case.get("sakun_no", "")
-    base = {
-        "sakun_no": sakun,
-        "bid_date": case.get("bid_date", ""),
-        "court": exp_court,
-        "item_id": case.get("item_id", ""),
-        "member": case.get("m_name", ""),   # 회원명(있으면 카드에 자동)
-    }
 
     if not cc.search_case(driver, wait, case, use_date=bool(exp_d6)):
-        print(f"RESULT|{json.dumps(dict(base, ok=False, err='검색실패'), ensure_ascii=False)}")
-        return
+        return {"matched": False, "err": "검색실패"}
 
     rows = cc.collect_rows_paged(driver)
     if not rows and exp_d6:
-        print("    ↻ 매각기일 일치 0건 → 날짜 제외 재검색")
         if cc.search_case(driver, wait, case, use_date=False):
             rows = cc.collect_rows_paged(driver)
     if not rows:
-        print(f"RESULT|{json.dumps(dict(base, ok=False, err='결과없음'), ensure_ascii=False)}")
-        print("    ⚠ 결과 행 없음")
-        return
+        return {"matched": False, "err": "결과없음"}
 
     line_tnum = len(rows)
     exp_mulgeon = cc.mulgeon_no(sakun)   # 다물건 물건번호 '(4)'
-    # (법원 일치) AND (매각기일 일치) [AND 물건번호 일치] — 04.process_case 와 동일 규칙
     picked = None
     for r in rows:
         fc = cc.addr_to_court(r["addr"]); r["_fc"] = fc
@@ -110,29 +100,73 @@ def process_nakchal(driver, wait, case):
     view_url = cc.build_view_url(driver, picked["pid"], picked["line_num"], line_tnum)
     detail_txt = cc.open_detail_text(driver, view_url)     # 상세로 이동(그 페이지에 textarea 존재)
     josa = get_interest_josa(driver)                        # ★ 조사내용 = textarea value
-    if state_kind == "매각":
-        md = cc.parse_maegak_detail(detail_txt, exp_d6)     # {maegak_price, buyer, bidder_count}
-    else:
-        md = {"maegak_price": "", "buyer": "", "bidder_count": ""}
-    shot = cc.capture_detail(driver, f"nc_{cc.case_num2(sakun)}", sakun)  # 사건조회 이미지
+    md = cc.parse_maegak_detail(detail_txt, exp_d6) if state_kind == "매각" else {"maegak_price": "", "buyer": "", "bidder_count": ""}
+    shot = cc.capture_detail(driver, f"nc_{cc.case_num2(sakun)}", sakun) if want_capture else ""
 
+    return {
+        "matched": True,
+        "state_kind": state_kind,
+        "court_hit": court_hit, "date_hit": date_hit,
+        "bid": md.get("maegak_price", ""),
+        "buyer": md.get("buyer", ""),
+        "cnt": md.get("bidder_count", ""),
+        "date": (picked.get("date_txt", "") or case.get("bid_date", "")),
+        "addr": picked.get("addr", ""),
+        "josa": josa,
+        "view_url": view_url,
+        "shot": shot,
+    }
+
+
+def process_case_multi(driver, wait, case, accounts):
+    """한 사건을 체크된 계정 전부로 크롤: 매각결과는 첫 매칭에서, 조사내용은 계정별 수집."""
+    exp_court = (case.get("court") or "").strip()
+    base = {
+        "sakun_no": case.get("sakun_no", ""),
+        "bid_date": case.get("bid_date", ""),
+        "court": exp_court,
+        "item_id": case.get("item_id", ""),
+        "member": case.get("m_name", ""),
+        "bidprice": case.get("bidprice", ""),   # MAPS 우리 입찰가(그리드 비교용)
+    }
+    result = None
+    josa_accounts = []
+    for ai, acc in enumerate(accounts):
+        try:
+            cc.login(driver, acc)
+        except Exception as e:
+            print(f"    ⚠ 로그인 실패({acc.get('id')}): {repr(e)[:80]}")
+            continue
+        r = crawl_case(driver, wait, case, want_capture=(result is None))
+        if not r.get("matched"):
+            print(f"    · {acc.get('id')}: 매칭 실패({r.get('err','')})")
+            continue
+        if result is None:
+            result = r                      # 매각결과(매수인·낙찰가·입찰수·주소) = 첫 매칭
+        j = (r.get("josa") or "").strip()
+        print(f"    · {acc.get('id')}: 매칭 O · 조사내용 {len(j)}자")
+        if j:
+            josa_accounts.append({"id": acc.get("id"), "josa": j, "len": len(j)})
+
+    if result is None:
+        print(f"RESULT|{json.dumps(dict(base, ok=False, err='매칭 실패(전 계정)'), ensure_ascii=False)}")
+        return
+
+    primary = josa_accounts[0]["josa"] if josa_accounts else ""
     rec = dict(base,
                ok=True,
-               state_kind=state_kind,
-               key_match=(court_hit and date_hit),
-               court_hit=court_hit, date_hit=date_hit,
-               bid=md.get("maegak_price", ""),      # 낙찰가
-               buyer=md.get("buyer", ""),           # 매수인(마스킹은 프론트에서)
-               cnt=md.get("bidder_count", ""),      # 입찰인원
-               date=(picked.get("date_txt", "") or case.get("bid_date", "")),  # 매각기일
-               addr=picked.get("addr", ""),
-               josa=josa,
-               josa_len=len(josa),
-               screenshot_path=shot,
-               view_url=view_url)
+               state_kind=result["state_kind"],
+               key_match=(result["court_hit"] and result["date_hit"]),
+               court_hit=result["court_hit"], date_hit=result["date_hit"],
+               bid=result["bid"], buyer=result["buyer"], cnt=result["cnt"],
+               date=result["date"], addr=result["addr"],
+               josa=primary, josa_len=len(primary),
+               josa_accounts=josa_accounts,                 # [{id, josa, len}] 조사내용 있는 계정들
+               josa_account_ids=[a["id"] for a in josa_accounts],
+               screenshot_path=result["shot"], view_url=result["view_url"])
     print(f"RESULT|{json.dumps(rec, ensure_ascii=False)}")
-    flag = "✅" if (court_hit and date_hit) else "⚠키불일치"
-    print(f"    → {flag} 상태:{state_kind} 매수인:{md.get('buyer','')} 낙찰가:{md.get('maegak_price','')} 조사내용:{len(josa)}자 캡처:{'O' if shot else 'X'}")
+    flag = "✅" if rec["key_match"] else "⚠키불일치"
+    print(f"    → {flag} 상태:{result['state_kind']} 매수인:{result['buyer']} 낙찰가:{result['bid']} · 조사내용 보유계정 {len(josa_accounts)}개")
 
 
 def main():
@@ -155,12 +189,12 @@ def main():
     if not cases:
         print("❌ 조회할 사건번호가 없습니다.")
         sys.exit(1)
-    if not cc.ACCOUNTS:
-        print("❌ 활성 계정 없음 (매니저에서 낙찰 계정 활성 후 실행)")
-        sys.exit(1)
 
-    acc = cc.ACCOUNTS[0]
-    print(f"🔐 로그인 계정: {acc.get('id')}  (조사내용은 이 계정의 관심물건 등록내용)")
+    accounts = [a for a in (cc.ACCOUNTS or []) if a.get("enabled", True) and a.get("id")]
+    if not accounts:
+        print("❌ 활성 계정 없음 (매니저에서 낙찰 계정 체크 후 실행)")
+        sys.exit(1)
+    print(f"🔐 체크 계정 {len(accounts)}개: {', '.join(a.get('id','') for a in accounts)}  (각 계정의 관심물건 조사내용 확인)")
     print(f"🏆 낙찰 카페등록 크롤 시작: {len(cases)}건\n")
 
     options = webdriver.ChromeOptions()
@@ -173,15 +207,14 @@ def main():
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     wait = WebDriverWait(driver, 15)
     try:
-        cc.login(driver, acc)
         for i, case in enumerate(cases, 1):
             print(f"[낙찰 {i}/{len(cases)}] {case.get('sakun_no')} | {case.get('bid_date')} | {case.get('court')}")
             try:
-                process_nakchal(driver, wait, case)
+                process_case_multi(driver, wait, case, accounts)
             except Exception as e:
                 traceback.print_exc()
                 print(f"RESULT|{json.dumps(dict(sakun_no=case.get('sakun_no',''), ok=False, err=str(e)), ensure_ascii=False)}")
-            time.sleep(1.4)
+            time.sleep(1.2)
         print(f"\n✅ 완료: 총 {len(cases)}건")
     except Exception as e:
         traceback.print_exc()

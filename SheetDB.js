@@ -534,7 +534,7 @@ function _dmDateKey6_(v) {
 /**
  * [다물건] 입력 사건번호로 items 기등록 행을 조회 (물건번호 변형 포함). 불러오기/대조용.
  */
-function getItemsBySakun(sakunNo) {
+function getItemsBySakun(sakunNo, includePast) {
   try {
     var base = _normSakunBase_(sakunNo);
     if (!base) return { success: false, message: '사건번호 필요', items: [] };
@@ -542,6 +542,7 @@ function getItemsBySakun(sakunNo) {
     if (!sheet || sheet.getLastRow() < 2) return { success: true, items: [], count: 0 };
     var addrCol = _itemColByHeader_(sheet, 'address');
     var areaCol = _itemColByHeader_(sheet, 'building_area');
+    var gjCol = _itemColByHeader_(sheet, 'gamjungga');   // 감정가(신규 맨끝열)
     var maxCols = sheet.getMaxColumns();
     var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, maxCols).getValues();
     // ITEM_HEADERS index: id0 in-date1 sakun_no2 court3 stu_member4 m_name_id5 ... deposit21 lowest_price22
@@ -558,7 +559,7 @@ function getItemsBySakun(sakunNo) {
     data.forEach(function (r) {
       if (_normSakunBase_(r[2]) !== base) return;
       var d6 = _toY6(r[1]);
-      if (d6 && d6 < todayY6) return;   // 오늘 이전 입찰일 제외
+      if (!includePast && d6 && d6 < todayY6) return;   // 오늘 이전 입찰일 제외 (includePast=true 면 과거 낙찰건도 포함)
       out.push({
         id: String(r[0] || ''),
         in_date: formatParamsDate(r[1]),
@@ -567,9 +568,11 @@ function getItemsBySakun(sakunNo) {
         stu_member: String(r[4] || ''),
         m_name_id: String(r[5] || ''),
         m_name: String(r[6] || ''),
+        bidprice: String(r[7] || ''),       // H열=입찰가 (우리 입찰가 — 매각가 비교용)
         auction_id: String(r[15] || ''),   // P열=옥션ID — 기등록 행의 MAPS 저장값(갱신 확인용)
         deposit: String(r[21] || ''),
         lowest_price: String(r[22] || ''),
+        gamjungga: gjCol > 0 ? String(r[gjCol - 1] || '') : '',   // 감정가(신규 맨끝열)
         address: addrCol > 0 ? String(r[addrCol - 1] || '') : '',
         building_area: areaCol > 0 ? String(r[areaCol - 1] || '') : ''
       });
@@ -10409,7 +10412,7 @@ function handleJosaApiPost_(payload) {
   if (action === 'getJosaItems')    return { success: true, items: readAllJosaItems() };
   if (action === 'getInvestigators') return { success: true, investigators: getInvestigators() };
   if (action === 'updateJosaField') return updateJosaField(payload.josa_id, payload.field, payload.value);
-  if (action === 'getItemsBySakun') return getItemsBySakun(payload.sakun_no);
+  if (action === 'getItemsBySakun') return getItemsBySakun(payload.sakun_no, payload.include_past);
   if (action === 'registerDamulgeon') return registerDamulgeon(payload.items || [], payload.m_name_id);
   if (action === 'getTeacherNicknames') return getTeacherNicknames();
   return { success: false, message: '알 수 없는 josa API 액션: ' + action };

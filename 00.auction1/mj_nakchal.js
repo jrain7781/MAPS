@@ -81,25 +81,89 @@
   var lastNode = null;
   function setStatus(s) { var e = $('ncStatus'); if (e) e.textContent = s; }
 
-  // ── 불러오기: 낙찰 크롤(06.nc.py) 실행 → 매칭(진행사항확인과 동일) → 매각결과+조사내용 자동채움 ──
-  // 로컬 매니저 서버(localhost)의 크롤 실행 경로. 외부 유료 API 아님(비용 0).
-  var ncRunId = null, ncOffset = 0, ncFilled = false;
+  function ncCard() { return document.querySelector('.mjcap-card[data-cap="nc"]'); }
+  function mapsKey() { try { return localStorage.getItem('auction1_maps_admin_key') || ''; } catch (e) { return ''; } }
+  function escA(s) { return esc(s).replace(/"/g, '&quot;'); }
+
+  // ── 계정 UI (진행사항확인과 계정 공유 · 체크된 계정 전부 접속해 조사내용 확인) ──
+  function ncLoadAccounts() {
+    fetch('/api/imageup/accounts?which=nc').then(function (r) { return r.json(); })
+      .then(function (j) { ncRenderAccounts(j.accounts || []); }).catch(function () {});
+  }
+  function ncRenderAccounts(accs) {
+    var wrap = ncCard() && ncCard().querySelector('[data-role="nc-accounts"]'); if (!wrap) return;
+    var h = '<div style="font-size:11px;color:#6b7280;margin-bottom:4px;font-weight:600">계정 목록 — 체크된 계정 전부 접속해 조사내용 확인 (진행사항확인과 공유·체크변경 자동저장)</div>';
+    accs.forEach(function (a) { h += ncAccRowHtml(a); });
+    h += '<span class="nc-acc-add" style="font-size:11px;color:#2563eb;cursor:pointer">+ 계정 추가</span>';
+    wrap.innerHTML = h;
+    wrap.querySelector('.nc-acc-add').addEventListener('click', function () {
+      var d = document.createElement('div'); d.innerHTML = ncAccRowHtml({ id: '', pw: '', manager: '', enabled: true });
+      wrap.insertBefore(d.firstChild, this);
+    });
+    if (!wrap.dataset.bound) {
+      wrap.dataset.bound = '1';
+      wrap.addEventListener('change', function (e) { if (e.target && e.target.classList.contains('nc-acc-en')) ncSaveAccounts(); });
+    }
+  }
+  function ncAccRowHtml(a) {
+    return '<div class="nc-acc-row" style="display:flex;gap:4px;align-items:center;margin-bottom:2px">'
+      + '<input type="checkbox" class="nc-acc-en" ' + (a.enabled !== false ? 'checked' : '') + '>'
+      + '<input type="text" class="nc-acc-id" placeholder="아이디" value="' + escA(a.id || '') + '" style="width:92px;padding:2px 4px">'
+      + '<input type="text" class="nc-acc-pw" placeholder="비밀번호" value="' + escA(a.pw || '') + '" style="width:92px;padding:2px 4px">'
+      + '<input type="text" class="nc-acc-mgr" placeholder="매니저" value="' + escA(a.manager || '') + '" style="width:70px;padding:2px 4px">'
+      + '</div>';
+  }
+  function ncCollectAccounts() {
+    var wrap = ncCard() && ncCard().querySelector('[data-role="nc-accounts"]'); if (!wrap) return [];
+    return Array.prototype.map.call(wrap.querySelectorAll('.nc-acc-row'), function (r) {
+      return { id: r.querySelector('.nc-acc-id').value.trim(), pw: r.querySelector('.nc-acc-pw').value, manager: r.querySelector('.nc-acc-mgr').value.trim(), enabled: r.querySelector('.nc-acc-en').checked };
+    }).filter(function (a) { return a.id; });
+  }
+  function ncSaveAccounts() {
+    fetch('/api/imageup/accounts?which=nc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accounts: ncCollectAccounts() }) }).catch(function () {});
+  }
+
+  // ── 불러오기: MAPS 3키 조회 → 체크 계정들로 옥션 크롤(cc와 동일 매칭) → 그리드 ──
+  // 로컬 매니저 서버(localhost) 경로. 외부 유료 API 아님(비용 0).
+  var ncRunId = null, ncOffset = 0, ncItems = [], ncCrawl = null;
   function ncLoad() {
     if (ncRunId) { alert('이미 크롤 중입니다.'); return; }
     var sakun = ($('ncSakun').value || '').trim();
     if (!sakun) { alert('사건번호를 입력하세요.'); return; }
-    // 키 3개: 사건번호(필수) · 입찰일자(매각기일란) · 법원(없으면 주소→법원 자동대조). cc와 동일 매칭.
-    var kase = { sakun_no: sakun, bid_date: ($('ncDate').value || '').trim(), court: '' };
-    ncOffset = 0; ncFilled = false;
+    var accs = ncCollectAccounts().filter(function (a) { return a.enabled; });
+    if (!accs.length) { alert('체크된 계정이 없습니다. 계정을 체크하세요.'); return; }
+    ncItems = []; ncCrawl = null; ncOffset = 0; renderGrid();
     var lb = $('ncLoadBtn'); if (lb) lb.disabled = true;
-    setStatus('크롤중… (옥션 매칭 → 매각결과 + 조사내용)');
-    fetch('/api/imageup/run', {
+    var doCrawl = function (caseObj) {
+      setStatus('크롤중… (체크 계정 ' + accs.length + '개 · 3키 매칭 → 매각결과+조사내용)');
+      fetch('/api/imageup/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ which: 'nc', accounts: accs, cases: [caseObj], headless: !!($('ncHeadless') && $('ncHeadless').checked) })
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j.ok) { ncRunId = j.run_id; ncPoll(); }
+        else { setStatus('시작 실패: ' + (j.error || '?')); if (lb) lb.disabled = false; }
+      }).catch(function (e) { setStatus('요청 오류: ' + e); if (lb) lb.disabled = false; });
+    };
+    var key = mapsKey();
+    if (!key) {  // MAPS 키 없음 → 사건번호(+매각기일)만으로 크롤
+      setStatus('MAPS 키 없음 — 사건번호(+매각기일)만으로 크롤');
+      doCrawl({ sakun_no: sakun, bid_date: ($('ncDate').value || '').trim(), court: '' });
+      return;
+    }
+    setStatus('MAPS 3키 조회 중…');
+    fetch('/api/maps-gas', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ which: 'nc', cases: [kase], headless: false })
+      body: JSON.stringify({ api_key: key, api_action: 'getItemsBySakun', sakun_no: sakun, include_past: true })
     }).then(function (r) { return r.json(); }).then(function (j) {
-      if (j.ok) { ncRunId = j.run_id; ncPoll(); }
-      else { setStatus('시작 실패: ' + (j.error || '?')); if (lb) lb.disabled = false; }
-    }).catch(function (e) { setStatus('요청 오류: ' + e); if (lb) lb.disabled = false; });
+      ncItems = (j && j.success && j.items) ? j.items : [];
+      var it0 = ncItems[0] || {};
+      var caseObj = { sakun_no: sakun, bid_date: (it0.in_date || it0.bid_date || ($('ncDate').value || '').trim() || ''), court: (it0.court || '') };
+      if (caseObj.court && $('ncDate') && !$('ncDate').value) $('ncDate').value = caseObj.bid_date || '';
+      renderGrid(); doCrawl(caseObj);
+    }).catch(function (e) {
+      setStatus('MAPS 조회 오류 → 수동 크롤: ' + e);
+      doCrawl({ sakun_no: sakun, bid_date: ($('ncDate').value || '').trim(), court: '' });
+    });
   }
   function ncPoll() {
     if (!ncRunId) return;
@@ -108,30 +172,85 @@
         if (j.lines && j.lines.length) {
           j.lines.forEach(function (line) {
             if (typeof line !== 'string' || line.indexOf('RESULT|') !== 0) return;
-            try {
-              var o = JSON.parse(line.slice(7));
-              if (o && o.ok && !ncFilled) {
-                ncFilled = true;
-                window.NakchalCafe.fill({
-                  sakun: o.sakun_no, member: o.member, buyer: o.buyer, date: o.date,
-                  bid: o.bid, cnt: o.cnt, addr: o.addr, josa: o.josa
-                });
-                setStatus('✓ 크롤 완료 — 매수인 ' + (o.buyer || '?') + ' · 조사내용 ' + (o.josa_len || 0) + '자'
-                  + (o.key_match ? '' : ' (⚠키불일치 확인)'));
-              } else if (o && !o.ok) {
-                setStatus('⚠ ' + (o.err || '매칭 실패') + ' (사건번호/기일 확인)');
-              }
-            } catch (e) {}
+            try { var o = JSON.parse(line.slice(7)); if (o && o.ok) { ncCrawl = o; renderGrid(); } else if (o && !o.ok) { setStatus('⚠ ' + (o.err || '매칭 실패') + ' (사건번호/기일 확인)'); } } catch (e) {}
           });
           ncOffset += j.lines.length;
         }
         if (j.status === 'running') { setTimeout(ncPoll, 700); }
         else {
-          ncRunId = null;
-          var lb = $('ncLoadBtn'); if (lb) lb.disabled = false;
-          if (!ncFilled) setStatus('크롤 종료 — 결과 없음(사건번호/매각기일 확인)');
+          ncRunId = null; var lb = $('ncLoadBtn'); if (lb) lb.disabled = false;
+          if (ncCrawl) setStatus('✓ 크롤 완료 — 매수인 ' + (ncCrawl.buyer || '?') + ' · 조사내용 보유계정 ' + ((ncCrawl.josa_accounts || []).length) + '개' + (ncCrawl.key_match ? '' : ' (⚠법원키 확인)'));
+          else setStatus('크롤 종료 — 결과 없음(사건번호/매각기일 확인)');
+          renderGrid();
         }
       }).catch(function (e) { setStatus('polling 오류: ' + e); setTimeout(ncPoll, 1500); });
+  }
+
+  // ── cc식 결과 그리드 (✓3키매칭 · 입찰가 vs 매각가 색비교 · 매수인=회원이면 파랑) ──
+  function keyCell(v, hit) { if (!v) return '<span style="color:#cbd5e1">·</span>'; var t = esc(v); return (hit ? '<span style="color:#16a34a;font-weight:700">✓</span> ' : '<span style="color:#dc2626;font-weight:700">✗</span> ') + t; }
+  function resBadge(cat) { var c = cat === '낙찰' ? '#2563eb' : (cat === '미입찰' ? '#dc2626' : (cat === '불가' ? '#111827' : '#6b7280')); return '<span style="background:' + c + ';color:#fff;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700">' + esc(cat) + '</span>'; }
+  function renderGrid() {
+    var box = $('ncGrid'); if (!box) return;
+    var cr = ncCrawl, sakun = ($('ncSakun').value || '').trim();
+    var items = ncItems.length ? ncItems : (cr ? [{ sakun_no: cr.sakun_no, court: cr.court, bid_date: cr.bid_date, m_name: cr.member, bidprice: cr.bidprice }] : []);
+    if (!items.length) { box.innerHTML = '<div style="color:#9ca3af;padding:8px;border:1px dashed #e5e7eb;border-radius:8px">📥 불러오기 결과가 여기에 표시됩니다.</div>'; renderJosaAccounts(); return; }
+    var rowsHtml = items.map(function (it, i) {
+      var buyer = cr ? (cr.buyer || '') : '';
+      var mNm = (it.m_name || '').trim();
+      var isWin = !!(cr && buyer && mNm && mNm === buyer);
+      // 결과: 회원 알 때만 낙찰/미입찰 판정. 회원 모르면 크롤 상태(매각/불가/진행)만 표시.
+      var cat = !cr ? '…' : (mNm ? (isWin ? '낙찰' : '미입찰') : (cr.state_kind || '매각'));
+      var mae = num(cr ? cr.bid : 0), bidp = num(it.bidprice);
+      var maeCol = (mae && bidp) ? (mae < bidp ? '#dc2626' : (mae > bidp ? '#111827' : '#2563eb')) : '#111827';
+      var td = 'padding:3px 6px;white-space:nowrap;border-bottom:1px solid #f1f5f9';
+      return '<tr>'
+        + '<td style="' + td + '">' + keyCell(it.in_date || it.bid_date || (cr && cr.date) || '', cr ? (cr.date_hit !== false) : false) + '</td>'
+        + '<td style="' + td + '">' + keyCell(it.sakun_no || sakun, !!cr) + '</td>'
+        + '<td style="' + td + '">' + keyCell(it.court || (cr && cr.court) || '', cr ? (cr.court_hit !== false) : false) + '</td>'
+        + '<td style="' + td + '">' + esc(it.m_name_id || '') + '</td>'
+        + '<td style="' + td + '">' + esc(it.m_name || '') + '</td>'
+        + '<td style="' + td + ';color:' + (isWin ? '#2563eb' : '#111827') + ';font-weight:' + (isWin ? 700 : 400) + '">' + esc(buyer) + '</td>'
+        + '<td style="' + td + ';text-align:right">' + (bidp ? comma(bidp) : '') + '</td>'
+        + '<td style="' + td + ';text-align:right;color:' + maeCol + ';font-weight:700">' + (mae ? comma(mae) : '') + '</td>'
+        + '<td style="' + td + ';text-align:center">' + (cr ? resBadge(cat) : '…') + '</td>'
+        + '<td style="' + td + ';text-align:center">' + ((cr && cr.view_url) ? '<a href="' + escA(cr.view_url) + '" target="_blank" style="color:#2563eb;text-decoration:none">옥션원</a>' : '') + '</td>'
+        + '<td style="' + td + ';text-align:center">' + (cr ? '<button type="button" class="nc-mk btn_box_sss btn_blue bold" data-i="' + i + '" style="padding:1px 7px;font-size:11px">🖼카드</button>' : '') + '</td>'
+        + '</tr>';
+    }).join('');
+    var th = 'padding:4px 6px;white-space:nowrap;position:sticky;top:0';
+    box.innerHTML = '<div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px"><table style="border-collapse:collapse;font-size:12px;min-width:100%"><thead><tr style="background:#f1f5f9;color:#334155">'
+      + '<th style="' + th + '">입찰일자</th><th style="' + th + '">사건번호</th><th style="' + th + '">법원</th><th style="' + th + '">담당자</th><th style="' + th + '">회원</th><th style="' + th + '">매수인</th><th style="' + th + '">입찰가</th><th style="' + th + '">매각가</th><th style="' + th + '">결과</th><th style="' + th + '">옥션원</th><th style="' + th + '">카드</th>'
+      + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+    box.querySelectorAll('.nc-mk').forEach(function (b) { b.addEventListener('click', function () { makeCardFromRow(parseInt(b.dataset.i, 10)); }); });
+    renderJosaAccounts();
+  }
+  function renderJosaAccounts() {
+    var wrap = ncCard() && ncCard().querySelector('[data-role="nc-josa-accounts"]'); if (!wrap) return;
+    var ja = (ncCrawl && ncCrawl.josa_accounts) || [];
+    if (!ja.length) { wrap.innerHTML = ''; return; }
+    var h = '<div style="font-size:11px;color:#374151;font-weight:600;margin-bottom:2px">조사내용 보유 계정 ' + ja.length + '개 — 카드에 쓸 계정 선택:</div>';
+    ja.forEach(function (a, i) { h += '<label style="font-size:12px;margin-right:10px;cursor:pointer"><input type="radio" name="ncJosaAcc" value="' + i + '" ' + (i === 0 ? 'checked' : '') + '> ' + esc(a.id) + ' (' + a.len + '자)</label>'; });
+    wrap.innerHTML = h;
+    wrap.querySelectorAll('input[name=ncJosaAcc]').forEach(function (r) { r.addEventListener('change', function () { var a = ja[parseInt(r.value, 10)]; if (a) $('ncJosa').value = a.josa; }); });
+  }
+  function makeCardFromRow(i) {
+    var cr = ncCrawl; if (!cr) return;
+    var it = ncItems[i] || {};
+    var ja = (cr.josa_accounts || []);
+    var sel = ncCard() && ncCard().querySelector('input[name=ncJosaAcc]:checked');
+    var josa = (sel && ja[parseInt(sel.value, 10)]) ? ja[parseInt(sel.value, 10)].josa : (cr.josa || '');
+    window.NakchalCafe.fill({
+      sakun: cr.sakun_no || it.sakun_no || '',
+      member: it.m_name || cr.member || '',
+      buyer: cr.buyer || '',
+      date: cr.date || it.bid_date || '',
+      bid: cr.bid || '',
+      cnt: cr.cnt || '',
+      addr: cr.addr || it.address || '',
+      appr: it.gamjungga || '',
+      min: it.lowest_price || '',
+      josa: josa
+    });
   }
 
   function collect() {
@@ -171,6 +290,8 @@
     var c = $('ncCopyBtn'); if (c) c.addEventListener('click', copyImg);
     var dn = $('ncDownBtn'); if (dn) dn.addEventListener('click', download);
     var lb = $('ncLoadBtn'); if (lb) lb.addEventListener('click', ncLoad);
+    ncLoadAccounts();   // 계정 UI 로드 (진행사항확인과 공유)
+    renderGrid();       // 빈 그리드 안내
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
