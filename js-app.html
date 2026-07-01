@@ -26858,7 +26858,7 @@ MJ 이정우 팀장
         var spec  = (document.getElementById('jm-search-special')?.value || '').trim();
         var todayOnly = !!document.getElementById('jm-today-only')?.checked;
         var excludePolye = !!document.getElementById('jm-exclude-polye')?.checked;
-        var hideLeft = !document.getElementById('jm-hide-left') || !!document.getElementById('jm-hide-left').checked;  // 기본 숨김(체크박스 없으면 숨김)
+        var showLeftOnly = !!document.getElementById('jm-show-left')?.checked;  // 체크=이탈만, 해제(기본)=이탈 숨김
         var todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
 
         var filtered = jmItems.filter(function (it) {
@@ -26871,7 +26871,9 @@ MJ 이정우 팀장
             if (bid && String(it.bid_date || '').indexOf(bid) === -1) return false;
             if (court && String(it.court || '').indexOf(court) === -1) return false;
             if (excludePolye && String(it.josa_status || '') === '폐기') return false;
-            if (hideLeft && String(it.left_at || '').trim()) return false;   // 이탈 숨김(기본)
+            var isLeft = !!String(it.left_at || '').trim();
+            if (showLeftOnly) { if (!isLeft) return false; }   // '이탈 보기' → 이탈만
+            else if (isLeft) return false;                     // 기본 → 이탈 숨김
             if (JM_FILTER_STATUS.size > 0 && !JM_FILTER_STATUS.has(String(it.josa_status || '미분류'))) return false;
             if (JM_FILTER_JOSAJA.size > 0 && !JM_FILTER_JOSAJA.has(String(it.josaja || ''))) return false;
             if (addr && String(it.address || '').indexOf(addr) === -1) return false;
