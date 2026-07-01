@@ -25869,37 +25869,70 @@ MJ 이정우 팀장
         __jmResizeReady = true;
     }
 
-    // 단일 wrapper 호출 (jmLoadAllData) — 단계별 진단 메시지 표시
+    // 로드된 데이터(캐시 or GAS)를 화면에 반영 — 트리 전체선택+펼침 후 렌더
+    function _jmRenderLoaded(summary) {
+        try { rebuildJmJosajaFilter(); } catch (e) { if (summary) summary.textContent = '[ERR-render-1] ' + e.message; return; }
+        // 처음 열 때: 전체 선택 + 모든 단계 펼침 (제목 클릭으로 닫기/해제)
+        jmSelectedPresetIds = new Set();
+        jmPresets.forEach(function (p) { if (p.preset_id) jmSelectedPresetIds.add(p.preset_id); });
+        try { _jmtSaveCollapsed(new Set()); } catch (_) {}
+        try { renderJosaTree(); } catch (e) { if (summary) summary.textContent = '[ERR-render-2] ' + e.message; return; }
+        try { applyJosaFilters(); } catch (e) { if (summary) summary.textContent = '[ERR-render-3] ' + e.message; return; }
+    }
+    var JM_CACHE_KEY = 'jmDataCache_v1';
+    function _jmSaveCache() {
+        try { localStorage.setItem(JM_CACHE_KEY, JSON.stringify({ investigators: smInvestigators, presets: jmPresets, items: jmItems, ts: Date.now() })); } catch (_) {}
+    }
+
+    // 단일 wrapper 호출 (jmLoadAllData) — 캐시 즉시표시(다물건 방식) + 백그라운드 최신화
     function loadJosaData(forceRefresh) {
         var summary = document.getElementById('jm-summary');
         var t0 = Date.now();
-        if (summary) summary.textContent = '[1] loadJosaData 진입';
 
-        // 빈 영역(트리/카운팅바/요약/그리드) → 로딩 placeholder 로 통일 (첫 진입 깜빡임 제거)
-        var _tl = document.getElementById('jmt-list');
-        if (_tl && !_tl.querySelector('.jmt-card')) {
-            _tl.innerHTML = '<li style="padding:24px 12px;text-align:center;color:#94a3b8;font-size:12px;list-style:none">조사 리스트 불러오는 중…</li>';
-        }
-        var _tb = document.getElementById('jmt-topbar');
-        if (_tb && !_tb.children.length) {
-            _tb.innerHTML = '<span style="font-size:11px;color:#94a3b8">불러오는 중…</span>';
-        }
-        var _ss = document.getElementById('jm-status-summary');
-        if (_ss && !_ss.children.length) {
-            _ss.innerHTML = '<span style="font-size:11.5px;color:#94a3b8">조사 데이터 불러오는 중…</span>';
-        }
-        var _gb = document.getElementById('jm-grid-body');
-        if (_gb && !_gb.querySelector('tr.jm-row')) {
-            _gb.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:60px 0;font-size:13px">조사 데이터 불러오는 중…</td></tr>';
+        // [1] 캐시 즉시 표시 (체감 로딩 0 — GAS 응답 기다리지 않음)
+        var hadCache = false;
+        if (!forceRefresh) {
+            try {
+                var cc = JSON.parse(localStorage.getItem(JM_CACHE_KEY) || 'null');
+                if (cc && cc.presets && cc.items) {
+                    smInvestigators = cc.investigators || [];
+                    jmPresets = cc.presets || [];
+                    jmItems = cc.items || [];
+                    _jmRenderLoaded(summary);
+                    hadCache = true;
+                    if (summary) summary.textContent = '캐시 ' + jmPresets.length + '리스트 · ' + jmItems.length + '건 표시 · 최신화 중…';
+                }
+            } catch (_) {}
         }
 
-        if (typeof google === 'undefined') { if (summary) summary.textContent = '[ERR] google === undefined'; return; }
-        if (!google.script) { if (summary) summary.textContent = '[ERR] google.script === undefined'; return; }
-        if (!google.script.run) { if (summary) summary.textContent = '[ERR] google.script.run === undefined'; return; }
-        if (summary) summary.textContent = '[2] google.script.run OK, GAS 호출 시작';
+        // [2] 캐시 없으면 placeholder 표시
+        if (!hadCache) {
+            if (summary) summary.textContent = '[1] loadJosaData 진입';
+            var _tl = document.getElementById('jmt-list');
+            if (_tl && !_tl.querySelector('.jmt-card')) {
+                _tl.innerHTML = '<li style="padding:24px 12px;text-align:center;color:#94a3b8;font-size:12px;list-style:none">조사 리스트 불러오는 중…</li>';
+            }
+            var _tb = document.getElementById('jmt-topbar');
+            if (_tb && !_tb.children.length) {
+                _tb.innerHTML = '<span style="font-size:11px;color:#94a3b8">불러오는 중…</span>';
+            }
+            var _ss = document.getElementById('jm-status-summary');
+            if (_ss && !_ss.children.length) {
+                _ss.innerHTML = '<span style="font-size:11.5px;color:#94a3b8">조사 데이터 불러오는 중…</span>';
+            }
+            var _gb = document.getElementById('jm-grid-body');
+            if (_gb && !_gb.querySelector('tr.jm-row')) {
+                _gb.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#94a3b8;padding:60px 0;font-size:13px">조사 데이터 불러오는 중…</td></tr>';
+            }
+        }
 
+        if (typeof google === 'undefined') { if (summary && !hadCache) summary.textContent = '[ERR] google === undefined'; return; }
+        if (!google.script) { if (summary && !hadCache) summary.textContent = '[ERR] google.script === undefined'; return; }
+        if (!google.script.run) { if (summary && !hadCache) summary.textContent = '[ERR] google.script.run === undefined'; return; }
+
+        // [3] 백그라운드 GAS 최신화 (응답 오면 재렌더 + 캐시 갱신)
         var callTimer = setTimeout(function () {
-            if (summary && summary.textContent.indexOf('[2]') === 0) {
+            if (summary && summary.textContent.indexOf('[1]') === 0) {
                 summary.textContent = '[ERR] GAS 응답 30초 timeout — google.script.run 응답 안 옴';
             }
         }, 30000);
@@ -25907,29 +25940,23 @@ MJ 이정우 팀장
         google.script.run
             .withSuccessHandler(function (d) {
                 clearTimeout(callTimer);
-                if (summary) summary.textContent = '[3] 응답 수신';
                 if (!d || !d.success) {
-                    if (summary) summary.textContent = 'GAS 에러: ' + (d && (d.error || d.message) || 'unknown');
+                    if (summary && !hadCache) summary.textContent = 'GAS 에러: ' + (d && (d.error || d.message) || 'unknown');
                     console.error('jmLoadAllData failed:', d);
                     return;
                 }
                 smInvestigators = d.investigators || [];
                 jmPresets = d.presets || [];
                 jmItems = d.items || [];
-                try { rebuildJmJosajaFilter(); } catch (e) { if (summary) summary.textContent = '[ERR-render-1] ' + e.message; return; }
-                // 처음 열 때: 전체 선택 + 모든 단계 펼침 (제목 클릭으로 닫기/해제)
-                jmSelectedPresetIds = new Set();
-                jmPresets.forEach(function (p) { if (p.preset_id) jmSelectedPresetIds.add(p.preset_id); });
-                try { _jmtSaveCollapsed(new Set()); } catch (_) {}
-                try { renderJosaTree(); } catch (e) { if (summary) summary.textContent = '[ERR-render-2] ' + e.message; return; }
-                try { applyJosaFilters(); } catch (e) { if (summary) summary.textContent = '[ERR-render-3] ' + e.message; return; }
+                _jmSaveCache();
+                _jmRenderLoaded(summary);
                 var ms = Date.now() - t0;
                 if (summary) summary.textContent = 'preset ' + jmPresets.length + ' · items ' + jmItems.length + ' (' + ms + 'ms)';
             })
             .withFailureHandler(function (err) {
                 clearTimeout(callTimer);
                 var msg = (err && (err.message || err.name)) || String(err) || 'unknown';
-                if (summary) {
+                if (summary && !hadCache) {
                     summary.textContent = '[ERR-gas] ' + msg;
                     summary.title = JSON.stringify(err);
                 }
@@ -26001,6 +26028,23 @@ MJ 이정우 팀장
         ids.forEach(function (id) { if (jmSelectedPresetIds.has(id)) n++; });
         return n === 0 ? 'none' : (n === ids.length ? 'all' : 'some');
     }
+    // ── 오늘 이후 필터 — bid_date 6자리(YYMMDD)→8자리 정규화 후 비교. 상태/데이터 무변경, 표시·카운트만. ──
+    // '오늘 이후만' 체크 해제 시 전체 통과. 날짜 없는 건은 통과(과거 아님).
+    function _jmToday8() { return new Date().toISOString().slice(0, 10).replace(/-/g, ''); }   // YYYYMMDD
+    function _jmBid8(it) { var raw = String((it && it.bid_date) || '').split(/[ T]/)[0]; var d = raw.replace(/[^0-9]/g, ''); if (d.length === 6) d = '20' + d; return d.slice(0, 8); }
+    function _jmPassToday(it) {
+        var el = document.getElementById('jm-today-only');
+        if (el && !el.checked) return true;   // '오늘만' 해제 시 전체
+        var d = _jmBid8(it);
+        return !d || d >= _jmToday8();          // 날짜없음 or 오늘이후
+    }
+    // '오늘 이후만' 토글 시 그리드 + 트리 카운트 동시 갱신 (일관성)
+    function jmApplyTodayToggle() {
+        try { applyJosaFilters(); } catch (e) {}
+        try { renderJosaTree(); } catch (e) {}
+        try { renderJmtTopBar(); } catch (e) {}
+    }
+
     // 서브트리 내 jmItems 카운트 — (전체, 미분류, 조사중, 조사완료, 폐기)
     // 조사중 = 조사예정·조사요청·조사접수·조사확정·조사불가
     function _jmtSubtreeCounts(node) {
@@ -26009,6 +26053,7 @@ MJ 이정우 팀장
         (jmItems || []).forEach(function (it) {
             var pids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); });
             if (!pids.some(function (id) { return idsSet.has(id); })) return;
+            if (!_jmPassToday(it)) return;   // 오늘 이후만 카운트
             total++;
             var s = String(it.josa_status || '미분류');
             if (s === '미분류') bunryu++;
@@ -26058,6 +26103,7 @@ MJ 이정우 팀장
         (jmItems || []).forEach(function (it) {
             var pids = String(it.preset_ids || '').split(',').map(function (s) { return s.trim(); });
             if (!pids.some(function (id) { return jmSelectedPresetIds.has(id); })) return;
+            if (!_jmPassToday(it)) return;   // 오늘 이후만 카운트
             total++;
             var s = String(it.josa_status || '미분류');
             if (s === '미분류') bunryu++;
@@ -26775,11 +26821,7 @@ MJ 이정우 팀장
             if (prop && String(it.prop_kind || '').indexOf(prop) === -1) return false;
             if (spec && String(it.specials || '').indexOf(spec) === -1) return false;
 
-            if (todayOnly) {
-                // bid_date 가 오늘(YYYYMMDD 또는 YYYY-MM-DD) 이후만
-                var d = String(it.bid_date || '').replace(/[^0-9]/g, '').slice(0, 8);
-                if (d && d < todayStr) return false;
-            }
+            if (!_jmPassToday(it)) return false;   // 오늘 이후만 (6자리 날짜 정규화 — 트리 카운트와 동일 기준)
             return true;
         });
 
