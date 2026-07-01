@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회원 물건카드 · 타입 C 변형 3종</title>
+<style>
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: 'Pretendard','Apple SD Gothic Neo','Malgun Gothic',-apple-system,sans-serif;
+    background: #e9edf2; margin: 0; padding: 26px 12px 70px; color: #0f172a;
+  }
+  .page-title { text-align:center; font-size: 1.5rem; font-weight: 900; letter-spacing:-.02em; }
+  .page-sub { text-align:center; color:#64748b; font-size:.92rem; margin: 6px 0 30px; }
+  .page-sub b { color:#2563eb; }
+  .cols { display:flex; gap: 22px; justify-content:center; flex-wrap:wrap; align-items:flex-start; }
+  .col { width: 372px; max-width: 94vw; }
+  .col-h { text-align:center; font-weight:900; font-size: 1.08rem; }
+  .col-d { text-align:center; font-size:.78rem; color:#64748b; margin: 4px 0 14px; line-height:1.4; }
+  .stage { background:#f3f4f6; border:1px solid #e2e8f0; border-radius: 22px; padding: 16px; box-shadow: inset 0 2px 8px rgba(15,23,42,.04); }
+
+  /* 공통 */
+  .sakun { font-weight: 900; color:#1e293b; line-height:1.25; word-break: break-all; }
+  .court { font-size: .92rem; font-weight: 700; color:#64748b; margin-bottom:3px; }
+  .price { font-weight: 900; font-size:1.1rem; }
+  .price.na { color:#9ca3af; font-weight: 500; }
+  .price.ok { color:#7c3aed; }
+  .hint { font-size:.66rem; font-weight:800; text-align:center; white-space:nowrap; animation: bounceY 1s infinite; color:rgba(255,255,255,.96); text-shadow:0 1px 2px rgba(0,0,0,.15); }
+  @keyframes bounceY { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+  .card + .card { margin-top: 14px; }
+  .price-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:10px; border-top:1px dashed #e5e7eb; }
+  .view { display:inline-flex; align-items:center; gap:5px; color:#334155; background:#eef2f7; padding: 8px 15px; border-radius: 13px; font-weight:800; font-size:.8rem; cursor:pointer; border:none; }
+  .act { display:flex; flex-direction:column; align-items:center; gap:2px; }
+
+  /* ============================================================
+     C-1 · 클래식 컬러헤더 (풀 그라디언트 + 솔리드 화이트 버튼)
+     ============================================================ */
+  .c1-card { background:#fff; border-radius: 18px; overflow:hidden; box-shadow: 0 10px 26px -12px rgba(15,23,42,.28); border:1px solid #eef2f7; }
+  .c1-head { display:flex; align-items:center; justify-content:space-between; padding: 13px 15px; }
+  .c1-head.rec { background: linear-gradient(135deg,#fb923c,#f97316); } .c1-head.bid { background: linear-gradient(135deg,#6366f1,#4f46e5); }
+  .c1-date { color:#fff; font-weight:900; font-size:1.14rem; text-shadow:0 1px 2px rgba(0,0,0,.15); }
+  .c1-btn { border:none; cursor:pointer; padding: 8px 22px; border-radius: 13px; font-weight:900; font-size:1rem; background:#fff; box-shadow:0 4px 10px -2px rgba(0,0,0,.22); }
+  .c1-btn.rec { color:#ea580c; } .c1-btn.bid { color:#4338ca; }
+  .c1-body { padding: 12px 16px 15px; }
+  .c1-body .sakun { font-size: 1.26rem; margin-bottom: 10px; }
+
+  /* ============================================================
+     C-2 · 곡선 헤더 (딥 라운드) + 글래스 버튼
+     ============================================================ */
+  .c2-card { background:#fff; border-radius: 20px; overflow:hidden; box-shadow: 0 12px 30px -12px rgba(15,23,42,.3); border:1px solid #eef2f7; }
+  .c2-head { display:flex; align-items:center; justify-content:space-between; padding: 15px 16px 20px; border-radius: 0 0 28px 28px; }
+  .c2-head.rec { background: linear-gradient(135deg,#fdba74,#f97316); } .c2-head.bid { background: linear-gradient(135deg,#818cf8,#4f46e5); }
+  .c2-date { color:#fff; font-weight:900; font-size:1.22rem; text-shadow:0 1px 3px rgba(0,0,0,.18); }
+  .c2-btn { cursor:pointer; padding: 8px 20px; border-radius: 14px; font-weight:800; font-size:1rem; color:#fff; background:rgba(255,255,255,.22); border:1.5px solid rgba(255,255,255,.75); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); box-shadow:0 4px 12px -4px rgba(0,0,0,.22); }
+  .c2-body { padding: 14px 16px 16px; }
+  .c2-body .sakun { font-size: 1.26rem; margin-bottom: 10px; }
+
+  /* ============================================================
+     C-3 · 아웃라인(고스트) 버튼 + 좌측 컬러 액센트 + 컬러 사건번호
+     ============================================================ */
+  .c3-card { background:#fff; border-radius: 18px; overflow:hidden; box-shadow: 0 10px 26px -12px rgba(15,23,42,.26); border:1px solid #eef2f7; border-left-width:7px; }
+  .c3-card.rec { border-left-color:#f97316; } .c3-card.bid { border-left-color:#4f46e5; }
+  .c3-head { display:flex; align-items:center; justify-content:space-between; padding: 13px 15px; }
+  .c3-head.rec { background: linear-gradient(135deg,#fb923c,#f97316); } .c3-head.bid { background: linear-gradient(135deg,#6366f1,#4f46e5); }
+  .c3-date { color:#fff; font-weight:900; font-size:1.14rem; text-shadow:0 1px 2px rgba(0,0,0,.15); }
+  .c3-btn { cursor:pointer; padding: 8px 22px; border-radius: 13px; font-weight:800; font-size:1rem; color:#fff; background:transparent; border:2px solid rgba(255,255,255,.9); }
+  .c3-body { padding: 12px 16px 15px; }
+  .c3-body .sakun { font-size: 1.26rem; margin-bottom: 10px; }
+  .c3-body .sakun.rec { color:#c2410c; } .c3-body .sakun.bid { color:#3730a3; }
+</style>
+</head>
+<body>
+  <div class="page-title">타입 C 변형 · 3종</div>
+  <div class="page-sub">공통: 상태색 헤더 + 흰 본문 / 배치(입찰일자+추천 헤더 · 법원 사건번호 위 · 조사내용보기 입찰가 우측)<br>고르실 때: “<b>C-2로 가자</b>” / 섞기 “<b>C-1인데 버튼은 C-2 글래스</b>” 등</div>
+
+  <div class="cols">
+
+    <!-- ===================== C-1 ===================== -->
+    <div class="col">
+      <div class="col-h">C-1 · 클래식 컬러헤더</div>
+      <div class="col-d">풀 그라디언트 헤더 + 솔리드 화이트 버튼<br>정석·또렷함</div>
+      <div class="stage">
+        <div class="c1-card card">
+          <div class="c1-head rec">
+            <span class="c1-date">07월 22일</span>
+            <div class="act"><button class="c1-btn rec">추천</button></div>
+          </div>
+          <div class="c1-body">
+            <div class="court">부산 / MJ</div>
+            <div class="sakun">2024타경1391(4) 2024타경1502(1)</div>
+            <div class="price-row"><span class="price na">가격미정</span><button class="view">🔍 조사내용보기 ›</button></div>
+          </div>
+        </div>
+        <div class="c1-card card">
+          <div class="c1-head bid">
+            <span class="c1-date">07월 25일</span>
+            <div class="act"><button class="c1-btn bid">입찰</button></div>
+          </div>
+          <div class="c1-body">
+            <div class="court">인천 / 박대원</div>
+            <div class="sakun">2024타경536838(12)</div>
+            <div class="price-row"><span class="price ok">1억 2,500만원</span><button class="view">🔍 조사내용보기 ›</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== C-2 ===================== -->
+    <div class="col">
+      <div class="col-h">C-2 · 곡선 헤더 + 글래스 버튼</div>
+      <div class="col-d">헤더 하단 딥 라운드 + 반투명 유리 버튼<br>세련·부드러움</div>
+      <div class="stage">
+        <div class="c2-card card">
+          <div class="c2-head rec">
+            <span class="c2-date">07월 22일</span>
+            <div class="act"><button class="c2-btn rec">추천</button></div>
+          </div>
+          <div class="c2-body">
+            <div class="court">부산 / MJ</div>
+            <div class="sakun">2024타경1391(4) 2024타경1502(1)</div>
+            <div class="price-row"><span class="price na">가격미정</span><button class="view">🔍 조사내용보기 ›</button></div>
+          </div>
+        </div>
+        <div class="c2-card card">
+          <div class="c2-head bid">
+            <span class="c2-date">07월 25일</span>
+            <div class="act"><button class="c2-btn bid">입찰</button></div>
+          </div>
+          <div class="c2-body">
+            <div class="court">인천 / 박대원</div>
+            <div class="sakun">2024타경536838(12)</div>
+            <div class="price-row"><span class="price ok">1억 2,500만원</span><button class="view">🔍 조사내용보기 ›</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== C-3 ===================== -->
+    <div class="col">
+      <div class="col-h">C-3 · 아웃라인 버튼 + 컬러강조</div>
+      <div class="col-d">고스트(테두리) 버튼 + 좌측 컬러바 + 사건번호 컬러<br>모던·강조</div>
+      <div class="stage">
+        <div class="c3-card rec card">
+          <div class="c3-head rec">
+            <span class="c3-date">07월 22일</span>
+            <div class="act"><button class="c3-btn rec">추천</button></div>
+          </div>
+          <div class="c3-body">
+            <div class="court">부산 / MJ</div>
+            <div class="sakun rec">2024타경1391(4) 2024타경1502(1)</div>
+            <div class="price-row"><span class="price na">가격미정</span><button class="view">🔍 조사내용보기 ›</button></div>
+          </div>
+        </div>
+        <div class="c3-card bid card">
+          <div class="c3-head bid">
+            <span class="c3-date">07월 25일</span>
+            <div class="act"><button class="c3-btn bid">입찰</button></div>
+          </div>
+          <div class="c3-body">
+            <div class="court">인천 / 박대원</div>
+            <div class="sakun bid">2024타경536838(12)</div>
+            <div class="price-row"><span class="price ok">1억 2,500만원</span><button class="view">🔍 조사내용보기 ›</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

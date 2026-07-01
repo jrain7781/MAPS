@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>회원 물건카드 · C-1 정제안</title>
+<style>
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  body { font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',-apple-system,sans-serif; background:#e9edf2; margin:0; padding:26px 12px 70px; color:#0f172a; }
+  .page-title { text-align:center; font-size:1.5rem; font-weight:900; letter-spacing:-.02em; }
+  .page-sub { text-align:center; color:#64748b; font-size:.9rem; margin:6px 0 26px; line-height:1.5; }
+  .page-sub b { color:#2563eb; }
+  .wrap { max-width:400px; margin:0 auto; }
+  .stage { background:#f3f4f6; border:1px solid #e2e8f0; border-radius:22px; padding:16px; box-shadow:inset 0 2px 8px rgba(15,23,42,.04); }
+
+  /* 복사 버튼 (공통) */
+  .cp { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border:1px solid #e2e8f0; background:#f8fafc; border-radius:8px; color:#94a3b8; cursor:pointer; flex-shrink:0; transition:all .12s; padding:0; }
+  .cp:hover { background:#eef2f7; color:#475569; border-color:#cbd5e1; }
+  .cp:active { transform:scale(.88); }
+  .cp svg { width:14px; height:14px; }
+
+  /* ===== C-1 정제 카드 ===== */
+  .c1-card { background:#fff; border-radius:18px; overflow:hidden; box-shadow:0 10px 26px -12px rgba(15,23,42,.28); border:1px solid #eef2f7; }
+  .c1-card + .c1-card { margin-top:14px; }
+  .c1-head { display:flex; align-items:center; justify-content:space-between; padding:12px 15px; }
+  .c1-head.rec { background:linear-gradient(135deg,#fb923c,#f97316); } .c1-head.bid { background:linear-gradient(135deg,#6366f1,#4f46e5); }
+  .c1-date { color:#fff; font-weight:900; font-size:1.14rem; text-shadow:0 1px 2px rgba(0,0,0,.15); }
+
+  /* 눌리는 입체 버튼 — 아래쪽 단단한 모서리(0 5px 0) + 누르면 내려앉음 */
+  .c1-btn { position:relative; border:none; cursor:pointer; padding:10px 24px; border-radius:13px; font-weight:900; font-size:1.05rem; color:#fff; letter-spacing:.01em;
+            transition:transform .07s ease, box-shadow .07s ease, filter .12s; }
+  .c1-btn.rec { background:linear-gradient(180deg,#fdbb74,#f97316); box-shadow:0 5px 0 #c2410c, 0 9px 14px -4px rgba(249,115,22,.55), inset 0 1px 0 rgba(255,255,255,.5); }
+  .c1-btn.bid { background:linear-gradient(180deg,#818cf8,#4f46e5); box-shadow:0 5px 0 #3730a3, 0 9px 14px -4px rgba(79,70,229,.55), inset 0 1px 0 rgba(255,255,255,.5); }
+  .c1-btn:hover { filter:brightness(1.05); }
+  .c1-btn.rec:active { transform:translateY(4px); box-shadow:0 1px 0 #c2410c, 0 2px 6px -2px rgba(249,115,22,.5), inset 0 1px 0 rgba(255,255,255,.35); }
+  .c1-btn.bid:active { transform:translateY(4px); box-shadow:0 1px 0 #3730a3, 0 2px 6px -2px rgba(79,70,229,.5), inset 0 1px 0 rgba(255,255,255,.35); }
+
+  .c1-body { padding:12px 15px 14px; }
+  .court-row { display:flex; align-items:center; gap:7px; margin-bottom:6px; }
+  .court { font-size:.94rem; font-weight:700; color:#64748b; }
+  .sakun-row { display:flex; align-items:flex-start; gap:7px; margin-bottom:10px; }
+  /* 사건번호 — 단어 단위로 안정적 줄바꿈 (긴 토큰만 강제 분리) */
+  .sakun { flex:1; min-width:0; font-weight:900; color:#1e293b; font-size:1.26rem; line-height:1.3; word-break:keep-all; overflow-wrap:anywhere; }
+  .sakun-row .cp { margin-top:2px; }
+  .price-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:11px; border-top:1px dashed #e5e7eb; }
+  .price-left { display:flex; align-items:center; gap:7px; }
+  .price { font-weight:900; font-size:1.12rem; } .price.na { color:#9ca3af; font-weight:500; } .price.ok { color:#7c3aed; }
+  .view { display:inline-flex; align-items:center; gap:5px; color:#334155; background:#eef2f7; padding:8px 15px; border-radius:13px; font-weight:800; font-size:.8rem; cursor:pointer; border:none; transition:all .12s; }
+  .view:hover { background:#e2e8f0; } .view:active { transform:scale(.96); }
+</style>
+</head>
+<body>
+  <div class="page-title">C-1 정제안</div>
+  <div class="page-sub">① 사건번호 줄바꿈 안정화(단어 단위) · ② <b>법원·사건번호·입찰가 복사버튼</b> · ③ 추천/입찰 <b>눌리는 입체 버튼</b><br>버튼을 마우스로 꾹 눌러보세요 — 실제로 내려앉습니다</div>
+
+  <div class="wrap">
+    <div class="stage">
+
+      <!-- 추천 · 긴 사건번호(안정적 2줄) · 가격미정 -->
+      <div class="c1-card">
+        <div class="c1-head rec">
+          <span class="c1-date">07월 22일</span>
+          <button class="c1-btn rec">추천</button>
+        </div>
+        <div class="c1-body">
+          <div class="court-row">
+            <span class="court">부산 / MJ</span>
+            <button class="cp" title="법원 복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+          </div>
+          <div class="sakun-row">
+            <span class="sakun">2024타경1391(4) 2024타경1502(1)</span>
+            <button class="cp" title="사건번호 복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+          </div>
+          <div class="price-row">
+            <div class="price-left"><span class="price na">가격미정</span></div>
+            <button class="view">🔍 조사내용보기 ›</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 입찰 · 짧은 사건번호 · 확정가(복사 가능) -->
+      <div class="c1-card">
+        <div class="c1-head bid">
+          <span class="c1-date">07월 25일</span>
+          <button class="c1-btn bid">입찰</button>
+        </div>
+        <div class="c1-body">
+          <div class="court-row">
+            <span class="court">인천 / 박대원</span>
+            <button class="cp" title="법원 복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+          </div>
+          <div class="sakun-row">
+            <span class="sakun">2024타경536838(12)</span>
+            <button class="cp" title="사건번호 복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+          </div>
+          <div class="price-row">
+            <div class="price-left">
+              <span class="price ok">1억 2,500만원</span>
+              <button class="cp" title="입찰가 복사"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg></button>
+            </div>
+            <button class="view">🔍 조사내용보기 ›</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
