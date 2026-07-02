@@ -1205,6 +1205,26 @@ class Handler(SimpleHTTPRequestHandler):
                 "has_report": True,   # 이 빌드는 /api/send-report·preview-report·restart-server 보유
             }, ensure_ascii=False).encode("utf-8"))
             return
+        # 낙찰 카페글 스킬 파일 읽기 (매니저 편집기용)
+        if self.path.startswith("/api/nc-skill"):
+            try:
+                sp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".claude", "skills", "nakchal-cafe-post", "SKILL.md")
+                txt = ""
+                exists = os.path.exists(sp)
+                if exists:
+                    with open(sp, encoding="utf-8") as f:
+                        txt = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True, "content": txt, "exists": exists}, ensure_ascii=False).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False).encode("utf-8"))
+            return
         # 크롤링 진행상황 폴링
         if self.path.startswith("/api/progress"):
             self.send_response(200)
@@ -1280,6 +1300,27 @@ class Handler(SimpleHTTPRequestHandler):
         # 서버 자가 재시작 (코드 갱신 반영) — 응답 후 os.execv
         if self.path == "/api/restart-server":
             self._handle_restart_server()
+            return
+        # 낙찰 카페글 스킬 파일 저장 (매니저 편집기 → SKILL.md 즉시 반영)
+        if self.path == "/api/nc-skill":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+                payload = json.loads(raw or "{}")
+                content = payload.get("content", "")
+                sp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".claude", "skills", "nakchal-cafe-post", "SKILL.md")
+                os.makedirs(os.path.dirname(sp), exist_ok=True)
+                with open(sp, "w", encoding="utf-8") as f:
+                    f.write(content)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": True, "bytes": len(content)}, ensure_ascii=False).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False).encode("utf-8"))
             return
         # 계정 검증 — 설정 모달의 [검증하기] 버튼
         if self.path == "/api/verify-account":

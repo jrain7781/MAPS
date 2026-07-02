@@ -297,6 +297,36 @@
   }
   function download() { toBlob(function (blob) { dl(blob); setStatus('다운로드됨'); }); }
 
+  // ── 좌측 탭 (연동데이터 | 스킬) + 스킬(SKILL.md) 편집기 ──
+  var _ncSkillLoaded = false;
+  function ncSkillStatus(s) { var e = $('ncSkillStatus'); if (e) e.textContent = s; }
+  function ncSwitchLtTab(which) {
+    var card = ncCard(); if (!card) return;
+    card.querySelectorAll('.nc-lt-tab').forEach(function (b) {
+      var on = b.dataset.lt === which;
+      b.style.color = on ? '#2563eb' : '#94a3b8';
+      b.style.borderBottomColor = on ? '#2563eb' : 'transparent';
+    });
+    card.querySelectorAll('.nc-lt-panel').forEach(function (p) { p.style.display = (p.dataset.ltp === which) ? '' : 'none'; });
+    if (which === 'skill' && !_ncSkillLoaded) ncSkillLoad();
+  }
+  function ncSkillLoad() {
+    var ed = $('ncSkillEditor'); if (!ed) return;
+    ncSkillStatus('불러오는 중…');
+    fetch('/api/nc-skill').then(function (r) { return r.json(); }).then(function (j) {
+      if (j.ok) { ed.value = j.content || ''; _ncSkillLoaded = true; ncSkillStatus(j.exists ? '불러옴' : '파일 없음 — 저장 시 생성'); }
+      else ncSkillStatus('로드 실패: ' + (j.error || '?'));
+    }).catch(function (e) { ncSkillStatus('오류: ' + e); });
+  }
+  function ncSkillSave() {
+    var ed = $('ncSkillEditor'); if (!ed) return;
+    ncSkillStatus('저장 중…');
+    fetch('/api/nc-skill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: ed.value }) })
+      .then(function (r) { return r.json(); }).then(function (j) {
+        ncSkillStatus(j.ok ? ('✓ 저장됨 (' + j.bytes + 'B) · 다음 작업부터 즉시 반영') : ('저장 실패: ' + (j.error || '?')));
+      }).catch(function (e) { ncSkillStatus('저장 오류: ' + e); });
+  }
+
   function init() {
     var g = $('ncGenBtn'); if (!g) return;
     g.addEventListener('click', generate);
@@ -304,6 +334,10 @@
     var dn = $('ncDownBtn'); if (dn) dn.addEventListener('click', download);
     var lb = $('ncLoadBtn'); if (lb) lb.addEventListener('click', ncLoad);
     var rb = $('ncRunBtn'); if (rb) rb.addEventListener('click', ncRun);
+    var cd = ncCard();
+    if (cd) cd.querySelectorAll('.nc-lt-tab').forEach(function (b) { b.addEventListener('click', function () { ncSwitchLtTab(b.dataset.lt); }); });
+    var sr = $('ncSkillReload'); if (sr) sr.addEventListener('click', function () { _ncSkillLoaded = false; ncSkillLoad(); });
+    var sv = $('ncSkillSave'); if (sv) sv.addEventListener('click', ncSkillSave);
     ncLoadAccounts();   // 계정 UI 로드 (진행사항확인과 공유)
     renderGrid();       // 빈 그리드 안내
   }

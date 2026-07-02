@@ -332,30 +332,53 @@ function mjWaitServerBack() {
         <!-- 반/반: 좌 연동된 데이터 / 우 미리보기 -->
         <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
           <div style="flex:1;min-width:340px">
-            <div style="font-size:12px;color:#374151;font-weight:700;margin-bottom:5px">연동된 데이터 <span style="font-weight:400;color:#94a3b8">· 일치 시 자동 채움, 필요 시 수정</span></div>
-            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap">
-              <label>회원명 <input type="text" id="ncMember" style="width:88px"></label>
-              <label>매수인 <input type="text" id="ncBuyer" placeholder="이현민" style="width:88px" title="이미지에서 뒷글자 가림"></label>
-              <label>매각기일 <input type="text" id="ncDate" placeholder="2026.06.30" style="width:96px"></label>
+            <!-- 좌측 탭: 연동데이터 | 스킬 -->
+            <div style="display:flex;gap:4px;margin-bottom:6px;border-bottom:1px solid #e5e7eb">
+              <button type="button" class="nc-lt-tab" data-lt="data" style="border:none;background:none;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid #2563eb;color:#2563eb">📋 연동데이터</button>
+              <button type="button" class="nc-lt-tab" data-lt="skill" style="border:none;background:none;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;color:#94a3b8">🧩 스킬</button>
             </div>
-            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
-              <label>감정가 <input type="text" id="ncAppr" placeholder="235000000" style="width:104px"></label>
-              <label>최저가 <input type="text" id="ncMin" placeholder="80605000" style="width:104px"></label>
-              <label>낙찰가 <input type="text" id="ncBid" placeholder="97999999" style="width:104px"></label>
+            <!-- 탭: 연동데이터 -->
+            <div class="nc-lt-panel" data-ltp="data">
+              <div style="font-size:11px;color:#94a3b8;margin-bottom:5px">일치 시 자동 채움 · 필요 시 수정</div>
+              <div class="mjcap-row" style="gap:6px;flex-wrap:wrap">
+                <label>회원명 <input type="text" id="ncMember" style="width:88px"></label>
+                <label>매수인 <input type="text" id="ncBuyer" placeholder="이현민" style="width:88px" title="이미지에서 뒷글자 가림"></label>
+                <label>매각기일 <input type="text" id="ncDate" placeholder="2026.06.30" style="width:96px"></label>
+              </div>
+              <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
+                <label>감정가 <input type="text" id="ncAppr" placeholder="235000000" style="width:104px"></label>
+                <label>최저가 <input type="text" id="ncMin" placeholder="80605000" style="width:104px"></label>
+                <label>낙찰가 <input type="text" id="ncBid" placeholder="97999999" style="width:104px"></label>
+              </div>
+              <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
+                <label>입찰수 <input type="text" id="ncCnt" placeholder="5" style="width:44px"></label>
+                <label>차순위 <input type="text" id="ncSecond" placeholder="95700000" style="width:104px"></label>
+                <label>주소 <input type="text" id="ncAddr" placeholder="고양시 일산동구 성석동 한울하임 402호" style="width:230px"></label>
+              </div>
+              <div data-role="nc-josa-accounts" style="margin-top:6px"></div>
+              <div style="font-size:11px;color:#374151;font-weight:600;margin-top:6px">🔎 조사내용</div>
+              <textarea id="ncJosa" placeholder="조사내용 (부동산 전화번호는 자동 블러 처리됩니다)" style="width:100%;height:170px;margin-top:2px;font-size:12px;padding:6px;box-sizing:border-box"></textarea>
+              <!-- 시세: 조사내용 아래 (확실히 구분) -->
+              <div style="font-size:11px;color:#7c3aed;font-weight:700;margin-top:8px;border-top:1px dashed #ddd6fe;padding-top:6px">💬 시세 <span style="font-weight:400;color:#94a3b8">— ↑조사내용에서 발췌·연동 (MAPS/옥션 아님)</span></div>
+              <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:2px">
+                <label>매매시세 <input type="text" id="ncSale" placeholder="140000000" style="width:104px"></label>
+                <label>전세 <input type="text" id="ncJeonse" placeholder="140000000" style="width:104px"></label>
+                <label>월세보증 <input type="text" id="ncWolBo" placeholder="20000000" style="width:88px"></label>
+                <label>월세 <input type="text" id="ncWol" placeholder="800000" style="width:76px"></label>
+              </div>
             </div>
-            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
-              <label>입찰수 <input type="text" id="ncCnt" placeholder="5" style="width:44px"></label>
-              <label>차순위 <input type="text" id="ncSecond" placeholder="95700000" style="width:104px"></label>
-              <label>주소 <input type="text" id="ncAddr" placeholder="고양시 일산동구 성석동 한울하임 402호" style="width:230px"></label>
+            <!-- 탭: 스킬 (SKILL.md 편집 → 저장 시 즉시 반영) -->
+            <div class="nc-lt-panel" data-ltp="skill" style="display:none">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                <span style="font-size:12px;font-weight:700;color:#374151">🧩 낙찰 카페글 스킬 (SKILL.md)</span>
+                <span style="flex:1"></span>
+                <button type="button" class="btn_box_sss btn_white" id="ncSkillReload" title="파일에서 다시 불러오기">↻</button>
+                <button type="button" class="btn_box_sss btn_blue bold" id="ncSkillSave">💾 저장</button>
+                <span id="ncSkillStatus" style="font-size:11px;color:#6b7280"></span>
+              </div>
+              <textarea id="ncSkillEditor" spellcheck="false" style="width:100%;height:440px;font-family:'D2Coding','Consolas',monospace;font-size:12px;padding:8px;box-sizing:border-box;line-height:1.5"></textarea>
+              <div style="font-size:11px;color:#94a3b8;margin-top:3px">저장하면 다음 "낙찰건 작업해줘"부터 즉시 반영 (파일 직접 수정).</div>
             </div>
-            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
-              <label>매매시세 <input type="text" id="ncSale" placeholder="140000000" style="width:104px"></label>
-              <label>전세 <input type="text" id="ncJeonse" placeholder="140000000" style="width:104px"></label>
-              <label>월세보증 <input type="text" id="ncWolBo" placeholder="20000000" style="width:88px"></label>
-              <label>월세 <input type="text" id="ncWol" placeholder="800000" style="width:76px"></label>
-            </div>
-            <div data-role="nc-josa-accounts" style="margin-top:6px"></div>
-            <textarea id="ncJosa" placeholder="조사내용 (부동산 전화번호는 자동 블러 처리됩니다)" style="width:100%;height:180px;margin-top:6px;font-size:12px;padding:6px;box-sizing:border-box"></textarea>
           </div>
           <div style="flex:1;min-width:340px">
             <div style="display:flex;align-items:center;gap:8px">
