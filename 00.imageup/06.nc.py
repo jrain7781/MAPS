@@ -184,6 +184,14 @@ def process_case_multi(driver, wait, case, accounts):
         aid = acc.get("id")
         _acct(aid, "🔄 크롤중")
         try:
+            if ai > 0:
+                # 이전 계정 세션 제거(로그아웃) → 로그인폼(#client_id) 정상 노출. 안 하면 이미 로그인 상태라 cc.login 타임아웃.
+                try:
+                    driver.get(cc.A1_BASE + "/")
+                    driver.delete_all_cookies()
+                    time.sleep(0.3)
+                except Exception:
+                    pass
             cc.login(driver, acc)
         except Exception as e:
             print(f"    ⚠ 로그인 실패({aid}): {repr(e)[:80]}")
