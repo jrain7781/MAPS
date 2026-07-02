@@ -323,6 +323,7 @@ function mjWaitServerBack() {
             <input type="text" id="ncSakun" placeholder="예: 2024타경82847" style="width:150px;padding:3px 7px" onfocus="this.select()">
             <button type="button" class="btn_box_sss btn_blue bold" id="ncLoadBtn" title="MAPS에서 3키(사건번호·입찰일자·법원)+회원·입찰가를 불러와 아래 그리드에 표시">📥 불러오기</button>
             <button type="button" class="btn_box_sss bold" id="ncRunBtn" style="background:#059669;color:#fff;border-color:#059669" title="체크 계정들로 옥션 크롤 → 3키 일치 확정 → 일치 시 자동 연동+미리보기 생성">▶ 실행</button>
+            <button type="button" class="btn_box_sss bold" id="ncClaudeCopy" style="background:#7c3aed;color:#fff;border-color:#7c3aed" title="클로드에게 붙여넣을 요청문 복사 → 클로드가 이 매니저를 읽어 제목/본문 생성">📋 클로드 복사</button>
             <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="크롤 창 숨김(헤드리스)"><input type="checkbox" id="ncHeadless">조사숨김</label>
             <span style="font-size:11px;color:#9a3412">📥불러오기(MAPS 3키) → ▶실행(옥션 크롤·3키 일치 확정) → <b>일치 시 자동 연동+미리보기</b></span>
           </div>
@@ -359,8 +360,9 @@ function mjWaitServerBack() {
               <div style="font-size:11px;color:#374151;font-weight:600;margin-top:6px">🔎 조사내용</div>
               <textarea id="ncJosa" placeholder="조사내용 (부동산 전화번호는 자동 블러 처리됩니다)" style="width:100%;height:170px;margin-top:2px;font-size:12px;padding:6px;box-sizing:border-box"></textarea>
               <!-- 시세: 조사내용 아래 (확실히 구분) -->
-              <div style="font-size:11px;color:#7c3aed;font-weight:700;margin-top:8px;border-top:1px dashed #ddd6fe;padding-top:6px">💬 시세 <span style="font-weight:400;color:#94a3b8">— ↑조사내용에서 발췌·연동 (MAPS/옥션 아님)</span></div>
+              <div style="font-size:11px;color:#7c3aed;font-weight:700;margin-top:8px;border-top:1px dashed #ddd6fe;padding-top:6px">💬 시세·공시지가 <span style="font-weight:400;color:#94a3b8">— ↑조사내용에서 발췌·연동 (MAPS/옥션 아님)</span></div>
               <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:2px">
+                <label>공시지가 <input type="text" id="ncGongsi" placeholder="126000000" style="width:104px"></label>
                 <label>매매시세 <input type="text" id="ncSale" placeholder="140000000" style="width:104px"></label>
                 <label>전세 <input type="text" id="ncJeonse" placeholder="140000000" style="width:104px"></label>
                 <label>월세보증 <input type="text" id="ncWolBo" placeholder="20000000" style="width:88px"></label>
@@ -370,7 +372,7 @@ function mjWaitServerBack() {
             <!-- 탭: 스킬 (SKILL.md 편집 → 저장 시 즉시 반영) -->
             <div class="nc-lt-panel" data-ltp="skill" style="display:none">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                <span style="font-size:12px;font-weight:700;color:#374151">🧩 낙찰 카페글 스킬 (SKILL.md)</span>
+                <span style="font-size:12px;font-weight:700;color:#374151">🧩 [MAPS] 낙찰 카페글 스킬 (SKILL.md)</span>
                 <span style="flex:1"></span>
                 <button type="button" class="btn_box_sss btn_white" id="ncSkillReload" title="파일에서 다시 불러오기">↻</button>
                 <button type="button" class="btn_box_sss btn_blue bold" id="ncSkillSave">💾 저장</button>
@@ -388,7 +390,13 @@ function mjWaitServerBack() {
               <button type="button" class="btn_box_sss btn_white" id="ncCopyBtn" disabled>📋 이미지 복사</button>
               <button type="button" class="btn_box_sss btn_white" id="ncDownBtn" disabled>⬇ 다운로드</button>
             </div>
-            <div id="ncPreviewWrap" style="min-height:60vh;max-height:82vh;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;background:#0f172a;padding:12px;margin-top:5px">
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+              <span style="font-size:11px;color:#374151;font-weight:700;white-space:nowrap">제목</span>
+              <input type="text" id="ncTitle" placeholder="[▶실행]+작업 시 어그로 제목 자동 생성 (등급 포함)" style="flex:1;padding:4px 8px;font-size:13px;font-weight:700;border:1px solid #cbd5e1;border-radius:6px">
+              <button type="button" class="btn_box_sss btn_white" id="ncTitleCopy" title="제목 텍스트 복사">📋</button>
+            </div>
+            <div style="font-size:11px;color:#94a3b8;margin:5px 0 2px">↓ 내용(카드)</div>
+            <div id="ncPreviewWrap" style="min-height:56vh;max-height:78vh;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;background:#0f172a;padding:12px">
               <div id="ncPreview" style="width:640px;max-width:100%;margin:0 auto"><div style="color:#94a3b8;text-align:center;padding:34px 0">[▶실행]으로 일치되면 자동으로 카드가 생성됩니다.</div></div>
             </div>
           </div>

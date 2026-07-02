@@ -51,9 +51,12 @@
       + '#nccard .josa{font-size:12.5px;line-height:1.6;color:#334155;font-weight:500;}'
       + '#nccard .note{font-size:10.5px;color:#94a3b8;margin-top:8px;line-height:1.5;}'
       + '</style>';
+    var heroTitle = String(d.title || '').trim()
+      ? esc(d.title)   // ncTitle(어그로 제목) 있으면 카드 대표제목으로 사용
+      : (esc(d.member || '회원') + ' 회원님, <span class="y">' + (man(bid) || comma(bid)) + '원</span> 낙찰 성공! 🎉');
     var h = css + '<div id="nccard">';
     h += '<div class="hero"><span class="bd">🏆 낙찰 성공 · ' + esc(d.sakun || '') + '</span>'
-      + '<h1>' + esc(d.member || '회원') + ' 회원님, <span class="y">' + (man(bid) || comma(bid)) + '원</span> 낙찰 성공! 🎉</h1>'
+      + '<h1>' + heroTitle + '</h1>'
       + '<div class="sub">' + esc(d.addr || '') + (d.date ? (' · 매각기일 ' + esc(d.date)) : '') + '</div></div>';
     h += '<div class="sec"><h2>📌 낙찰 요약</h2>'
       + (appr ? ('<div class="kv"><div class="k">감정가</div><div class="v">' + comma(appr) + '원</div></div>') : '')
@@ -266,11 +269,12 @@
     setStatus('✓ 일치 — 자동 연동+미리보기 생성' + (ja.length ? (' · 조사내용 계정 ' + ja.length) : '') + (cr.key_match ? '' : ' (⚠법원키 확인)'));
   }
 
+  function _fv(id) { var e = $(id); return e ? e.value : ''; }
   function collect() {
     return {
-      sakun: $('ncSakun').value, member: $('ncMember').value, buyer: $('ncBuyer').value, date: $('ncDate').value,
+      title: _fv('ncTitle'), sakun: $('ncSakun').value, member: $('ncMember').value, buyer: $('ncBuyer').value, date: $('ncDate').value,
       appr: $('ncAppr').value, min: $('ncMin').value, bid: $('ncBid').value, cnt: $('ncCnt').value, second: $('ncSecond').value,
-      addr: $('ncAddr').value, sale: $('ncSale').value, jeonse: $('ncJeonse').value, wolBo: $('ncWolBo').value, wol: $('ncWol').value,
+      addr: $('ncAddr').value, gongsi: _fv('ncGongsi'), sale: $('ncSale').value, jeonse: $('ncJeonse').value, wolBo: $('ncWolBo').value, wol: $('ncWol').value,
       josa: $('ncJosa').value
     };
   }
@@ -327,6 +331,23 @@
       }).catch(function (e) { ncSkillStatus('저장 오류: ' + e); });
   }
 
+  // 클로드에게 붙여넣을 요청문 복사 (클로드가 이 매니저를 읽어 제목/본문 생성)
+  function ncClaudeCopy() {
+    var sakun = ($('ncSakun').value || '').trim();
+    var txt = '낙찰카페등록 자료 만들어줘' + (sakun ? (' (사건번호 ' + sakun + ')') : '')
+      + '\n— 크롤링 매니저(localhost:8765) 낙찰카페등록 탭의 연동데이터+조사내용을 읽고, [MAPS] 낙찰 카페글 스킬대로 어그로 제목/본문을 만들어 카드에 넣어줘.';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(
+        function () { setStatus('📋 클로드 요청문 복사됨 — 클로드 창에 Ctrl+V'); },
+        function () { setStatus('복사 실패(클립보드 권한 확인)'); });
+    } else { setStatus('클립보드 미지원'); }
+  }
+  function ncTitleCopy() {
+    var t = ($('ncTitle').value || '').trim();
+    if (!t) { setStatus('제목이 비어 있습니다'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { setStatus('📋 제목 복사됨'); }, function () {});
+  }
+
   function init() {
     var g = $('ncGenBtn'); if (!g) return;
     g.addEventListener('click', generate);
@@ -338,6 +359,8 @@
     if (cd) cd.querySelectorAll('.nc-lt-tab').forEach(function (b) { b.addEventListener('click', function () { ncSwitchLtTab(b.dataset.lt); }); });
     var sr = $('ncSkillReload'); if (sr) sr.addEventListener('click', function () { _ncSkillLoaded = false; ncSkillLoad(); });
     var sv = $('ncSkillSave'); if (sv) sv.addEventListener('click', ncSkillSave);
+    var cc2 = $('ncClaudeCopy'); if (cc2) cc2.addEventListener('click', ncClaudeCopy);
+    var tc = $('ncTitleCopy'); if (tc) tc.addEventListener('click', ncTitleCopy);
     ncLoadAccounts();   // 계정 UI 로드 (진행사항확인과 공유)
     renderGrid();       // 빈 그리드 안내
   }
@@ -348,7 +371,7 @@
   window.NakchalCafe = {
     fill: function (d) {
       d = d || {};
-      var map = { ncSakun: 'sakun', ncMember: 'member', ncBuyer: 'buyer', ncDate: 'date', ncAppr: 'appr', ncMin: 'min', ncBid: 'bid', ncCnt: 'cnt', ncSecond: 'second', ncAddr: 'addr', ncSale: 'sale', ncJeonse: 'jeonse', ncWolBo: 'wolBo', ncWol: 'wol', ncJosa: 'josa' };
+      var map = { ncTitle: 'title', ncSakun: 'sakun', ncMember: 'member', ncBuyer: 'buyer', ncDate: 'date', ncAppr: 'appr', ncMin: 'min', ncBid: 'bid', ncCnt: 'cnt', ncSecond: 'second', ncAddr: 'addr', ncGongsi: 'gongsi', ncSale: 'sale', ncJeonse: 'jeonse', ncWolBo: 'wolBo', ncWol: 'wol', ncJosa: 'josa' };
       Object.keys(map).forEach(function (id) { var el = $(id); if (el && d[map[id]] != null && d[map[id]] !== '') el.value = d[map[id]]; });
       var btn = document.querySelector('.mjcap-subtab[data-subtab="nc"]'); if (btn) btn.click();
       if (d.autogen !== false && num($('ncBid').value)) generate();
