@@ -234,10 +234,22 @@
     var wrap = ncCard() && ncCard().querySelector('[data-role="nc-josa-accounts"]'); if (!wrap) return;
     var ja = (ncCrawl && ncCrawl.josa_accounts) || [];
     if (!ja.length) { wrap.innerHTML = ''; return; }
-    var h = '<div style="font-size:11px;color:#374151;font-weight:600;margin-bottom:2px">조사내용 보유 계정 ' + ja.length + '개 — 카드에 쓸 계정 선택:</div>';
-    ja.forEach(function (a, i) { h += '<label style="font-size:12px;margin-right:10px;cursor:pointer"><input type="radio" name="ncJosaAcc" value="' + i + '" ' + (i === 0 ? 'checked' : '') + '> ' + esc(a.id) + ' (' + a.len + '자)</label>'; });
+    var h = '<div style="font-size:11px;color:#374151;font-weight:600;margin-bottom:3px">조사내용 보유 계정 ' + ja.length + '개 — 체크한 계정만 조사내용에 취합 (기본 전체)</div>';
+    ja.forEach(function (a, i) { h += '<label style="font-size:12px;margin-right:10px;cursor:pointer"><input type="checkbox" class="nc-josa-cb" data-i="' + i + '" checked> ' + esc(a.id) + ' (' + a.len + '자)</label>'; });
     wrap.innerHTML = h;
-    wrap.querySelectorAll('input[name=ncJosaAcc]').forEach(function (r) { r.addEventListener('change', function () { var a = ja[parseInt(r.value, 10)]; if (a) { $('ncJosa').value = a.josa; if (lastNode) generate(); } }); });
+    wrap.querySelectorAll('.nc-josa-cb').forEach(function (cb) { cb.addEventListener('change', ncCombineJosa); });
+    ncCombineJosa();   // 초기: 전체 체크 취합
+  }
+  // 체크된 계정들의 조사내용을 ncJosa 에 취합 (여러 계정이면 계정 라벨+구분선)
+  function ncCombineJosa() {
+    var ja = (ncCrawl && ncCrawl.josa_accounts) || []; if (!ja.length) return;
+    var wrap = ncCard() && ncCard().querySelector('[data-role="nc-josa-accounts"]'); if (!wrap) return;
+    var parts = [];
+    wrap.querySelectorAll('.nc-josa-cb').forEach(function (cb) {
+      if (cb.checked) { var a = ja[parseInt(cb.dataset.i, 10)]; if (a) parts.push((ja.length > 1 ? ('【조사자 계정: ' + a.id + '】\n') : '') + a.josa); }
+    });
+    $('ncJosa').value = parts.join('\n\n──────────\n\n');
+    if (lastNode) generate();   // 카드 있으면 갱신
   }
   // 일치 시 자동 연동 — 낙찰(회원==매수인) 행 우선, 없으면 첫 행 → 폼 채우고 미리보기 자동 생성
   function ncAutoLink() {
@@ -250,10 +262,8 @@
     ncLinkedIdx = ncItems.length ? idx : -1;
     var it = ncItems[idx] || {};
     var ja = (cr.josa_accounts || []);
-    var sel = ncCard() && ncCard().querySelector('input[name=ncJosaAcc]:checked');
-    var josa = (sel && ja[parseInt(sel.value, 10)]) ? ja[parseInt(sel.value, 10)].josa : (cr.josa || '');
-    renderGrid();   // 연동 행 하이라이트 반영
-    window.NakchalCafe.fill({   // autogen:false → 실행 시 데이터만 연동, 카드 미생성(제목/본문 작업 후 생성)
+    renderGrid();   // 연동 행 하이라이트 + renderJosaAccounts→ncCombineJosa 가 ncJosa(체크계정 취합) 채움
+    window.NakchalCafe.fill({   // autogen:false → 실행 시 데이터만 연동, 카드 미생성(제목/본문 작업 후 생성). josa 는 취합이 담당(미포함)
       autogen: false,
       sakun: cr.sakun_no || it.sakun_no || '',
       member: it.m_name || cr.member || '',
@@ -266,8 +276,7 @@
       appr: it.gamjungga || cr.appr || '',     // MAPS 감정가 없으면 옥션 상세 크롤값
       min: it.lowest_price || '',
       second: cr.second || '',                 // 차순위금액(상세, 있을 때만)
-      gongsi: cr.gongsi || '',                 // 공시지가(옥션 상세 연동)
-      josa: josa
+      gongsi: cr.gongsi || ''                  // 공시지가(옥션 상세 연동)
     });
     ncShowDetailImg();   // 상세이미지 탭 이미지 갱신
     setStatus('✓ 일치 — 데이터 연동 완료 (제목/본문 작업 후 카드 생성)' + (ja.length ? (' · 조사내용 계정 ' + ja.length) : '') + (cr.key_match ? '' : ' (⚠법원키 확인)'));
