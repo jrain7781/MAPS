@@ -114,7 +114,21 @@
       + '<input type="text" class="nc-acc-id" placeholder="아이디" value="' + escA(a.id || '') + '" style="width:92px;padding:2px 4px">'
       + '<input type="text" class="nc-acc-pw" placeholder="비밀번호" value="' + escA(a.pw || '') + '" style="width:92px;padding:2px 4px">'
       + '<input type="text" class="nc-acc-mgr" placeholder="매니저" value="' + escA(a.manager || '') + '" style="width:70px;padding:2px 4px">'
+      + '<span class="nc-acc-prog" style="font-size:11px;font-weight:600;margin-left:4px;white-space:nowrap"></span>'
       + '</div>';
+  }
+  // 계정 진행사항 표시 (id 매칭) — 06.nc.py NCACCT 마커로 갱신
+  function ncSetAcctProg(id, state) {
+    var wrap = ncCard() && ncCard().querySelector('[data-role="nc-accounts"]'); if (!wrap) return;
+    var col = state.indexOf('✖') === 0 ? '#dc2626' : (state.indexOf('✔') === 0 ? '#16a34a' : '#2563eb');
+    wrap.querySelectorAll('.nc-acc-row').forEach(function (r) {
+      var idi = r.querySelector('.nc-acc-id'); var pr = r.querySelector('.nc-acc-prog');
+      if (idi && pr && idi.value.trim() === id) { pr.textContent = state; pr.style.color = col; }
+    });
+  }
+  function ncClearAcctProg() {
+    var wrap = ncCard() && ncCard().querySelector('[data-role="nc-accounts"]'); if (!wrap) return;
+    wrap.querySelectorAll('.nc-acc-prog').forEach(function (p) { p.textContent = ''; });
   }
   function ncCollectAccounts() {
     var wrap = ncCard() && ncCard().querySelector('[data-role="nc-accounts"]'); if (!wrap) return [];
@@ -175,6 +189,7 @@
     var it0 = ncItems[0] || {};
     var caseObj = { sakun_no: sakun, bid_date: (it0.in_date || it0.bid_date || ($('ncDate').value || '').trim() || ''), court: (it0.court || '') };
     ncCrawl = null; ncOffset = 0; ncLinkedIdx = -1;
+    ncClearAcctProg();   // 계정 진행사항 초기화
     var rb = $('ncRunBtn'); if (rb) rb.disabled = true;
     setStatus('실행중… (체크 계정 ' + accs.length + '개 · 3키 일치 확정 → 매각결과+조사내용)');
     fetch('/api/imageup/run', {
@@ -191,7 +206,9 @@
       .then(function (r) { return r.json(); }).then(function (j) {
         if (j.lines && j.lines.length) {
           j.lines.forEach(function (line) {
-            if (typeof line !== 'string' || line.indexOf('RESULT|') !== 0) return;
+            if (typeof line !== 'string') return;
+            if (line.indexOf('NCACCT|') === 0) { try { var a = JSON.parse(line.slice(7)); if (a && a.id) ncSetAcctProg(a.id, a.state || ''); } catch (e) {} return; }
+            if (line.indexOf('RESULT|') !== 0) return;
             try { var o = JSON.parse(line.slice(7)); if (o && o.ok) { ncCrawl = o; renderGrid(); } else if (o && !o.ok) { setStatus('⚠ ' + (o.err || '매칭 실패') + ' (사건번호/기일 확인)'); } } catch (e) {}
           });
           ncOffset += j.lines.length;
@@ -408,6 +425,10 @@
     ['ncTitle', 'ncMember', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncCnt', 'ncSecond', 'ncAddr', 'ncGongsi', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncJosa'].forEach(function (id) {
       var el = $(id); if (el) el.addEventListener('input', function () { clearTimeout(_regenT); _regenT = setTimeout(function () { if (num($('ncBid').value)) generate(); }, 500); });
     });
+    // 가격 필드 — 포커스 벗어나면 3자리 콤마 포맷
+    ['ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncSecond', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol'].forEach(function (id) {
+      var el = $(id); if (el) el.addEventListener('blur', function () { if (String(el.value).trim()) el.value = comma(el.value); });
+    });
     ncLoadAccounts();   // 계정 UI 로드 (진행사항확인과 공유)
     renderGrid();       // 빈 그리드 안내
   }
@@ -419,7 +440,8 @@
     fill: function (d) {
       d = d || {};
       var map = { ncTitle: 'title', ncSakun: 'sakun', ncMember: 'member', ncGrade: 'grade', ncBuyer: 'buyer', ncDate: 'date', ncAppr: 'appr', ncMin: 'min', ncBid: 'bid', ncCnt: 'cnt', ncSecond: 'second', ncAddr: 'addr', ncGongsi: 'gongsi', ncSale: 'sale', ncJeonse: 'jeonse', ncWolBo: 'wolBo', ncWol: 'wol', ncHoga: 'hoga', ncJosa: 'josa' };
-      Object.keys(map).forEach(function (id) { var el = $(id); if (el && d[map[id]] != null && d[map[id]] !== '') el.value = d[map[id]]; });
+      var priceIds = { ncAppr: 1, ncMin: 1, ncBid: 1, ncGongsi: 1, ncSecond: 1, ncSale: 1, ncJeonse: 1, ncWolBo: 1, ncWol: 1 };
+      Object.keys(map).forEach(function (id) { var el = $(id); if (el && d[map[id]] != null && d[map[id]] !== '') el.value = priceIds[id] ? comma(d[map[id]]) : d[map[id]]; });
       var btn = document.querySelector('.mjcap-subtab[data-subtab="nc"]'); if (btn) btn.click();
       if (d.autogen !== false && num($('ncBid').value)) generate();
       setStatus('진행사항 확인에서 넘어옴');

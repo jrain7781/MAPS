@@ -178,22 +178,29 @@ def process_case_multi(driver, wait, case, accounts):
     }
     result = None
     josa_accounts = []
+    def _acct(aid, state):   # 계정별 진행 마커 → 매니저 계정행에 표시
+        print("NCACCT|" + json.dumps({"id": aid, "state": state}, ensure_ascii=False))
     for ai, acc in enumerate(accounts):
+        aid = acc.get("id")
+        _acct(aid, "🔄 크롤중")
         try:
             cc.login(driver, acc)
         except Exception as e:
-            print(f"    ⚠ 로그인 실패({acc.get('id')}): {repr(e)[:80]}")
+            print(f"    ⚠ 로그인 실패({aid}): {repr(e)[:80]}")
+            _acct(aid, "✖ 로그인실패")
             continue
         r = crawl_case(driver, wait, case, want_capture=(result is None))
         if not r.get("matched"):
-            print(f"    · {acc.get('id')}: 매칭 실패({r.get('err','')})")
+            print(f"    · {aid}: 매칭 실패({r.get('err','')})")
+            _acct(aid, "✖ 매칭실패")
             continue
         if result is None:
             result = r                      # 매각결과(매수인·낙찰가·입찰수·주소) = 첫 매칭
         j = (r.get("josa") or "").strip()
-        print(f"    · {acc.get('id')}: 매칭 O · 조사내용 {len(j)}자")
+        print(f"    · {aid}: 매칭 O · 조사내용 {len(j)}자")
+        _acct(aid, ("✔ 조사 " + str(len(j)) + "자") if j else "✔ 매칭(조사없음)")
         if j:
-            josa_accounts.append({"id": acc.get("id"), "josa": j, "len": len(j)})
+            josa_accounts.append({"id": aid, "josa": j, "len": len(j)})
 
     if result is None:
         print(f"RESULT|{json.dumps(dict(base, ok=False, err='매칭 실패(전 계정)'), ensure_ascii=False)}")
