@@ -132,7 +132,7 @@
   // 모든 연동 데이터·그리드·미리보기·상세이미지 초기화 (keepSakun=true 면 사건번호 유지)
   function ncClearData(keepSakun) {
     if (ncRunId) { alert('실행 중입니다. 잠시 후 다시.'); return false; }
-    ['ncTitle', 'ncMember', 'ncGrade', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncCnt', 'ncSecond', 'ncAddr', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncJosa'].forEach(function (id) { var e = $(id); if (e) e.value = ''; });
+    ['ncTitle', 'ncMember', 'ncGrade', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncCnt', 'ncSecond', 'ncAddr', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncHoga', 'ncJosa'].forEach(function (id) { var e = $(id); if (e) e.value = ''; });
     if (!keepSakun) { var s = $('ncSakun'); if (s) s.value = ''; }
     ncItems = []; ncCrawl = null; ncLinkedIdx = -1; lastNode = null;
     var pv = $('ncPreview'); if (pv) pv.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:34px 0">제목/본문 작업이 완료되면 여기에 카드가 표시됩니다.</div>';
@@ -300,7 +300,7 @@
     return {
       title: _fv('ncTitle'), sakun: $('ncSakun').value, member: $('ncMember').value, grade: _fv('ncGrade'), buyer: $('ncBuyer').value, date: $('ncDate').value,
       appr: $('ncAppr').value, min: $('ncMin').value, bid: $('ncBid').value, cnt: $('ncCnt').value, second: $('ncSecond').value,
-      addr: $('ncAddr').value, gongsi: _fv('ncGongsi'), sale: $('ncSale').value, jeonse: $('ncJeonse').value, wolBo: $('ncWolBo').value, wol: $('ncWol').value,
+      addr: $('ncAddr').value, gongsi: _fv('ncGongsi'), sale: $('ncSale').value, jeonse: $('ncJeonse').value, wolBo: $('ncWolBo').value, wol: $('ncWol').value, hoga: _fv('ncHoga'),
       josa: $('ncJosa').value
     };
   }
@@ -418,7 +418,7 @@
   window.NakchalCafe = {
     fill: function (d) {
       d = d || {};
-      var map = { ncTitle: 'title', ncSakun: 'sakun', ncMember: 'member', ncGrade: 'grade', ncBuyer: 'buyer', ncDate: 'date', ncAppr: 'appr', ncMin: 'min', ncBid: 'bid', ncCnt: 'cnt', ncSecond: 'second', ncAddr: 'addr', ncGongsi: 'gongsi', ncSale: 'sale', ncJeonse: 'jeonse', ncWolBo: 'wolBo', ncWol: 'wol', ncJosa: 'josa' };
+      var map = { ncTitle: 'title', ncSakun: 'sakun', ncMember: 'member', ncGrade: 'grade', ncBuyer: 'buyer', ncDate: 'date', ncAppr: 'appr', ncMin: 'min', ncBid: 'bid', ncCnt: 'cnt', ncSecond: 'second', ncAddr: 'addr', ncGongsi: 'gongsi', ncSale: 'sale', ncJeonse: 'jeonse', ncWolBo: 'wolBo', ncWol: 'wol', ncHoga: 'hoga', ncJosa: 'josa' };
       Object.keys(map).forEach(function (id) { var el = $(id); if (el && d[map[id]] != null && d[map[id]] !== '') el.value = d[map[id]]; });
       var btn = document.querySelector('.mjcap-subtab[data-subtab="nc"]'); if (btn) btn.click();
       if (d.autogen !== false && num($('ncBid').value)) generate();
