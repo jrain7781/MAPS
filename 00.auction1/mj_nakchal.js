@@ -31,11 +31,15 @@
       + '#nccard *{box-sizing:border-box;margin:0;padding:0;font-family:"Pretendard","맑은 고딕","Malgun Gothic",sans-serif;}'
       + '#nccard{width:640px;background:#fff;border-radius:16px;overflow:hidden;color:#0f172a;}'
       + '#nccard .ncbl{filter:blur(5px);background:#e5e7eb;border-radius:3px;}'
-      + '#nccard .hero{background:linear-gradient(135deg,#1e1b4b,#4338ca);color:#fff;padding:22px 24px;}'
-      + '#nccard .hero .bd{display:inline-block;background:#fbbf24;color:#7c2d12;font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;}'
-      + '#nccard .hero h1{font-size:25px;font-weight:900;line-height:1.3;margin:12px 0 4px;}'
+      + '#nccard .hero{background:linear-gradient(140deg,#0b1026,#312e81 55%,#4338ca);color:#fff;padding:26px 26px 24px;}'
+      + '#nccard .hero .bd{display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#7c2d12;font-size:12px;font-weight:800;padding:4px 12px;border-radius:999px;letter-spacing:-.2px;box-shadow:0 2px 8px rgba(251,191,36,.35);}'
+      + '#nccard .hero h1{font-size:26px;font-weight:900;line-height:1.32;margin:13px 0 6px;letter-spacing:-.5px;}'
       + '#nccard .hero h1 .y{color:#fbbf24;}'
-      + '#nccard .hero .sub{font-size:13px;color:#c7d2fe;font-weight:600;}'
+      + '#nccard .hero .sub{font-size:13px;color:#c7d2fe;font-weight:600;line-height:1.5;}'
+      + '#nccard .proof{padding:16px 24px 4px;border-top:1px solid #eef2f7;}'
+      + '#nccard .proof .cap{font-size:11px;font-weight:800;color:#64748b;margin-bottom:8px;display:flex;align-items:center;gap:6px;}'
+      + '#nccard .proof .cap b{color:#dc2626;}'
+      + '#nccard .proof img{width:100%;display:block;border-radius:10px;border:1px solid #e2e8f0;}'
       + '#nccard .sec{padding:18px 24px;border-top:1px solid #eef2f7;}'
       + '#nccard h2{font-size:17px;font-weight:900;color:#1e1b4b;margin-bottom:10px;}'
       + '#nccard .kv{display:flex;font-size:14px;padding:6px 0;border-bottom:1px solid #f1f5f9;}'
@@ -48,22 +52,40 @@
       + '#nccard .sc .t{font-size:12px;font-weight:900;} #nccard .sc.a .t{color:#b45309;} #nccard .sc.b .t{color:#047857;} #nccard .sc.c .t{color:#1d4ed8;}'
       + '#nccard .sc .n{font-size:19px;font-weight:900;margin-top:4px;} #nccard .sc.a .n{color:#b45309;} #nccard .sc.b .n{color:#047857;} #nccard .sc.c .n{color:#1d4ed8;}'
       + '#nccard .punch{margin-top:12px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border-radius:11px;padding:13px;text-align:center;font-weight:900;font-size:15px;}'
-      + '#nccard .josa{font-size:12.5px;line-height:1.6;color:#334155;font-weight:500;}'
+      + '#nccard .josa{font-size:13px;line-height:1.72;color:#1e293b;font-weight:500;}'
+      + '#nccard .josa .li{display:flex;gap:8px;padding:3px 0;}'
+      + '#nccard .josa .li .dot{color:#4338ca;font-weight:900;flex-shrink:0;}'
       + '#nccard .note{font-size:10.5px;color:#94a3b8;margin-top:8px;line-height:1.5;}'
+      + '#nccard .win{margin:2px 0 0;background:linear-gradient(135deg,#dc2626,#f97316);color:#fff;border-radius:11px;padding:12px 14px;font-weight:900;font-size:14.5px;text-align:center;letter-spacing:-.3px;box-shadow:0 4px 14px rgba(220,38,38,.28);}'
       + '</style>';
+    // 대표제목(어그로) — ncTitle 우선
     var heroTitle = String(d.title || '').trim()
-      ? esc(d.title)   // ncTitle(어그로 제목) 있으면 카드 대표제목으로 사용
-      : (esc(d.member || '회원') + ' 회원님, <span class="y">' + (man(bid) || comma(bid)) + '원</span> 낙찰 성공! 🎉');
+      ? esc(d.title)
+      : ('감정가의 <span class="y">' + (pct || '?') + '%</span>, <span class="y">' + (man(bid) || comma(bid)) + '원</span>에 낙찰 성공! 🎉');
+    // 인사 — 이름(성 제외) 친근하게
+    var full = String(d.member || '').trim();
+    var given = full.length >= 2 ? full.slice(1) : (full || '회원');
+    var grade = String(d.grade || '').trim();
+    var eyebrow = '🏆 ' + esc(given) + ' 회원님' + (grade ? (' · ' + esc(grade)) : '') + ' 낙찰 성공';
     var h = css + '<div id="nccard">';
-    h += '<div class="hero"><span class="bd">🏆 낙찰 성공 · ' + esc(d.sakun || '') + '</span>'
+    // 주소 정리 — 대괄호 주석([선순위임차권/대항력/HUG…][대지권…]) 제거(리스크·스펙 노출 금지), 공백 정돈
+    var cleanAddr = String(d.addr || '').replace(/\[[^\]]*\]/g, ' ').replace(/\s*,\s*/g, ', ').replace(/\s+/g, ' ').trim();
+    h += '<div class="hero"><span class="bd">' + eyebrow + '</span>'
       + '<h1>' + heroTitle + '</h1>'
-      + '<div class="sub">' + esc(d.addr || '') + (d.date ? (' · 매각기일 ' + esc(d.date)) : '') + '</div></div>';
+      + '<div class="sub">' + esc(cleanAddr) + (d.date ? (' · 매각기일 ' + esc(d.date)) : '') + '</div></div>';
+    // 증빙 이미지(옥션 매각결과 캡처) — 최상단 증빙
+    if (String(d.imgUrl || '').trim()) {
+      h += '<div class="proof"><div class="cap">📸 실제 낙찰 <b>증빙</b> · 옥션원 매각결과</div>'
+        + '<img src="' + esc(d.imgUrl) + '" alt="낙찰 증빙"></div>';
+    }
     h += '<div class="sec"><h2>📌 낙찰 요약</h2>'
       + (appr ? ('<div class="kv"><div class="k">감정가</div><div class="v">' + comma(appr) + '원</div></div>') : '')
       + (mn ? ('<div class="kv"><div class="k">최저가</div><div class="v">' + comma(mn) + '원</div></div>') : '')
       + '<div class="kv"><div class="k">낙찰가</div><div class="v"><span class="hl">' + comma(bid) + '원' + (pct ? (' (' + pct + '%)') : '') + '</span></div></div>'
       + (sec ? ('<div class="kv"><div class="k">차순위</div><div class="v">' + comma(sec) + '원 (차이 ' + man(bid - sec) + ')</div></div>') : '')
       + ((d.cnt || buyer) ? ('<div class="kv"><div class="k">입찰</div><div class="v">' + esc(d.cnt || '') + (d.cnt ? '명' : '') + (buyer ? (' · 매수인 ' + esc(buyer)) : '') + '</div></div>') : '')
+      + (sec && (bid - sec) > 0 ? ('<div class="win">😮 차순위와 단 ' + man(bid - sec) + ' 차이 — 짜릿한 역전 낙찰!</div>')
+          : (num(d.cnt) >= 3 ? ('<div class="win">🔥 ' + esc(d.cnt) + '명 경쟁을 뚫고 낙찰 성공!</div>') : ''))
       + '</div>';
     h += '<div class="sec"><h2>💰 수익 시나리오</h2><div class="g3">'
       + '<div class="sc a"><div class="t">① 매매 차익</div><div class="n">' + (sale ? manSigned(saleGain) : '–') + '</div></div>'
@@ -73,9 +95,15 @@
       + (((jeonseGain > 0) || (yld >= 8)) ? '<div class="punch">전세만 놔도 투자금 회수, 월세 돌리면 두 자릿수 수익률 🚀</div>' : '')
       + '<div class="note">※ 취득세·수리비·명도비 등 별도, 시세·임대료·수익률은 조사 기반 추정치로 실제와 다를 수 있습니다.</div>'
       + '</div>';
-    if (String(d.josa || '').trim()) {
-      h += '<div class="sec"><h2>🔎 현장 조사 내용</h2><div class="josa">' + blurPhones(d.josa) + '</div>'
-        + '<div class="note">부동산 전화번호는 블러 처리했습니다.</div></div>';
+    // 현장 조사 — 조사내용 원문 덤프 금지. 큐레이션 요약(ncSummary)만 노출.
+    var summ = String(d.summary || '').trim();
+    if (summ) {
+      var lis = summ.split(/\r?\n/).map(function (ln) { return ln.replace(/^\s*[-·•*]\s*/, '').trim(); }).filter(function (x) { return x; });
+      var body = lis.length
+        ? lis.map(function (x) { return '<div class="li"><span class="dot">✓</span><span>' + blurPhones(esc(x)) + '</span></div>'; }).join('')
+        : blurPhones(esc(summ));
+      h += '<div class="sec"><h2>🔎 현장 조사 요약</h2><div class="josa">' + body + '</div>'
+        + '<div class="note">현장 부동산 조사 기반 요약 · 연락처는 비공개 처리했습니다.</div></div>';
     }
     h += '</div>';
     return h;
@@ -146,7 +174,7 @@
   // 모든 연동 데이터·그리드·미리보기·상세이미지 초기화 (keepSakun=true 면 사건번호 유지)
   function ncClearData(keepSakun) {
     if (ncRunId) { alert('실행 중입니다. 잠시 후 다시.'); return false; }
-    ['ncTitle', 'ncMember', 'ncGrade', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncCnt', 'ncSecond', 'ncAddr', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncHoga', 'ncJosa'].forEach(function (id) { var e = $(id); if (e) e.value = ''; });
+    ['ncTitle', 'ncMember', 'ncGrade', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncCnt', 'ncSecond', 'ncAddr', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncHoga', 'ncJosa', 'ncSummary'].forEach(function (id) { var e = $(id); if (e) e.value = ''; });
     if (!keepSakun) { var s = $('ncSakun'); if (s) s.value = ''; }
     ncItems = []; ncCrawl = null; ncLinkedIdx = -1; lastNode = null;
     var pv = $('ncPreview'); if (pv) pv.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:34px 0">제목/본문 작업이 완료되면 여기에 카드가 표시됩니다.</div>';
@@ -331,8 +359,14 @@
       title: _fv('ncTitle'), sakun: $('ncSakun').value, member: $('ncMember').value, grade: _fv('ncGrade'), buyer: $('ncBuyer').value, date: $('ncDate').value,
       appr: $('ncAppr').value, min: $('ncMin').value, bid: $('ncBid').value, cnt: $('ncCnt').value, second: $('ncSecond').value,
       addr: $('ncAddr').value, gongsi: _fv('ncGongsi'), sale: $('ncSale').value, jeonse: $('ncJeonse').value, wolBo: $('ncWolBo').value, wol: $('ncWol').value, hoga: _fv('ncHoga'),
-      josa: $('ncJosa').value
+      josa: $('ncJosa').value, summary: _fv('ncSummary'), imgUrl: _ncImgUrl()
     };
+  }
+  // 증빙 이미지 URL(옥션 매각결과 캡처) — ncCrawl.screenshot_path 기반
+  function _ncImgUrl() {
+    var sp = (ncCrawl && ncCrawl.screenshot_path) || '';
+    var fn = sp ? sp.replace(/\\/g, '/').split('/').pop() : '';
+    return fn ? ('/api/nc-detail-image?f=' + encodeURIComponent(fn)) : '';
   }
   function generate() {
     var d = collect();
@@ -420,7 +454,7 @@
 
   // ── 마지막 자료 저장/복원 (새로고침 후에도 조회) ──
   var NC_STATE_KEY = 'nc_state_v1';
-  var _NC_FIELD_IDS = ['ncSakun', 'ncTitle', 'ncMember', 'ncGrade', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncCnt', 'ncSecond', 'ncAddr', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncHoga', 'ncJosa'];
+  var _NC_FIELD_IDS = ['ncSakun', 'ncTitle', 'ncMember', 'ncGrade', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncCnt', 'ncSecond', 'ncAddr', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncHoga', 'ncJosa', 'ncSummary'];
   function ncSaveState() {
     try {
       var f = {}; _NC_FIELD_IDS.forEach(function (id) { var e = $(id); if (e) f[id] = e.value; });
@@ -457,7 +491,7 @@
     if (hd) { try { hd.checked = localStorage.getItem('nc_headless') === '1'; } catch (e) {} hd.addEventListener('change', function () { try { localStorage.setItem('nc_headless', hd.checked ? '1' : '0'); } catch (e) {} }); }
     // 생성 버튼 없음 → 폼 수정 시 자동 재생성(디바운스, 이미 낙찰가 있을 때만)
     var _regenT;
-    ['ncTitle', 'ncMember', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncCnt', 'ncSecond', 'ncAddr', 'ncGongsi', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncJosa'].forEach(function (id) {
+    ['ncTitle', 'ncMember', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncCnt', 'ncSecond', 'ncAddr', 'ncGongsi', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncJosa', 'ncSummary'].forEach(function (id) {
       var el = $(id); if (el) el.addEventListener('input', function () { clearTimeout(_regenT); _regenT = setTimeout(function () { if (num($('ncBid').value)) generate(); else ncSaveState(); }, 500); });
     });
     // 가격 필드 — 포커스 벗어나면 3자리 콤마 포맷
