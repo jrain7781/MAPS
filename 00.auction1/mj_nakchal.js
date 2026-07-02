@@ -256,6 +256,7 @@
     window.NakchalCafe.fill({   // fill 이 num(bid) 있으면 미리보기 자동 생성
       sakun: cr.sakun_no || it.sakun_no || '',
       member: it.m_name || cr.member || '',
+      grade: it.grade || '',                   // 회원등급(MAPS 연동)
       buyer: cr.buyer || '',
       date: cr.date || it.in_date || it.bid_date || '',
       bid: cr.bid || '',
@@ -264,15 +265,17 @@
       appr: it.gamjungga || cr.appr || '',     // MAPS 감정가 없으면 옥션 상세 크롤값
       min: it.lowest_price || '',
       second: cr.second || '',                 // 차순위금액(상세, 있을 때만)
+      gongsi: cr.gongsi || '',                 // 공시지가(옥션 상세 연동)
       josa: josa
     });
+    ncShowDetailImg();   // 상세이미지 탭 이미지 갱신
     setStatus('✓ 일치 — 자동 연동+미리보기 생성' + (ja.length ? (' · 조사내용 계정 ' + ja.length) : '') + (cr.key_match ? '' : ' (⚠법원키 확인)'));
   }
 
   function _fv(id) { var e = $(id); return e ? e.value : ''; }
   function collect() {
     return {
-      title: _fv('ncTitle'), sakun: $('ncSakun').value, member: $('ncMember').value, buyer: $('ncBuyer').value, date: $('ncDate').value,
+      title: _fv('ncTitle'), sakun: $('ncSakun').value, member: $('ncMember').value, grade: _fv('ncGrade'), buyer: $('ncBuyer').value, date: $('ncDate').value,
       appr: $('ncAppr').value, min: $('ncMin').value, bid: $('ncBid').value, cnt: $('ncCnt').value, second: $('ncSecond').value,
       addr: $('ncAddr').value, gongsi: _fv('ncGongsi'), sale: $('ncSale').value, jeonse: $('ncJeonse').value, wolBo: $('ncWolBo').value, wol: $('ncWol').value,
       josa: $('ncJosa').value
@@ -313,6 +316,7 @@
     });
     card.querySelectorAll('.nc-lt-panel').forEach(function (p) { p.style.display = (p.dataset.ltp === which) ? '' : 'none'; });
     if (which === 'skill' && !_ncSkillLoaded) ncSkillLoad();
+    if (which === 'detail') ncShowDetailImg();
   }
   function ncSkillLoad() {
     var ed = $('ncSkillEditor'); if (!ed) return;
@@ -348,12 +352,23 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { setStatus('📋 제목 복사됨'); }, function () {});
   }
 
+  // 상세이미지 탭 — 옥션 상세 캡처(서버 report_shots) 표시
+  function ncShowDetailImg() {
+    var img = $('ncDetailImg'), empty = $('ncDetailImgEmpty'); if (!img) return;
+    var sp = (ncCrawl && ncCrawl.screenshot_path) || '';
+    var fn = sp ? sp.replace(/\\/g, '/').split('/').pop() : '';
+    if (fn) {
+      img.onerror = function () { img.style.display = 'none'; if (empty) { empty.style.display = ''; empty.textContent = '캡처 이미지를 불러오지 못했습니다.'; } };
+      img.src = '/api/nc-detail-image?f=' + encodeURIComponent(fn) + '&t=' + Date.now();
+      img.style.display = ''; if (empty) empty.style.display = 'none';
+    } else { img.style.display = 'none'; if (empty) { empty.style.display = ''; empty.textContent = '[▶실행] 후 상세 캡처가 여기에 표시됩니다.'; } }
+  }
+
   function init() {
-    var g = $('ncGenBtn'); if (!g) return;
-    g.addEventListener('click', generate);
+    var lb = $('ncLoadBtn'); if (!lb) return;   // nc 탭 로드 확인
+    lb.addEventListener('click', ncLoad);
     var c = $('ncCopyBtn'); if (c) c.addEventListener('click', copyImg);
     var dn = $('ncDownBtn'); if (dn) dn.addEventListener('click', download);
-    var lb = $('ncLoadBtn'); if (lb) lb.addEventListener('click', ncLoad);
     var rb = $('ncRunBtn'); if (rb) rb.addEventListener('click', ncRun);
     var cd = ncCard();
     if (cd) cd.querySelectorAll('.nc-lt-tab').forEach(function (b) { b.addEventListener('click', function () { ncSwitchLtTab(b.dataset.lt); }); });
@@ -361,6 +376,14 @@
     var sv = $('ncSkillSave'); if (sv) sv.addEventListener('click', ncSkillSave);
     var cc2 = $('ncClaudeCopy'); if (cc2) cc2.addEventListener('click', ncClaudeCopy);
     var tc = $('ncTitleCopy'); if (tc) tc.addEventListener('click', ncTitleCopy);
+    // 조사숨김 옵션 저장/복원
+    var hd = $('ncHeadless');
+    if (hd) { try { hd.checked = localStorage.getItem('nc_headless') === '1'; } catch (e) {} hd.addEventListener('change', function () { try { localStorage.setItem('nc_headless', hd.checked ? '1' : '0'); } catch (e) {} }); }
+    // 생성 버튼 없음 → 폼 수정 시 자동 재생성(디바운스, 이미 낙찰가 있을 때만)
+    var _regenT;
+    ['ncTitle', 'ncMember', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncCnt', 'ncSecond', 'ncAddr', 'ncGongsi', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncJosa'].forEach(function (id) {
+      var el = $(id); if (el) el.addEventListener('input', function () { clearTimeout(_regenT); _regenT = setTimeout(function () { if (num($('ncBid').value)) generate(); }, 500); });
+    });
     ncLoadAccounts();   // 계정 UI 로드 (진행사항확인과 공유)
     renderGrid();       // 빈 그리드 안내
   }
@@ -371,7 +394,7 @@
   window.NakchalCafe = {
     fill: function (d) {
       d = d || {};
-      var map = { ncTitle: 'title', ncSakun: 'sakun', ncMember: 'member', ncBuyer: 'buyer', ncDate: 'date', ncAppr: 'appr', ncMin: 'min', ncBid: 'bid', ncCnt: 'cnt', ncSecond: 'second', ncAddr: 'addr', ncGongsi: 'gongsi', ncSale: 'sale', ncJeonse: 'jeonse', ncWolBo: 'wolBo', ncWol: 'wol', ncJosa: 'josa' };
+      var map = { ncTitle: 'title', ncSakun: 'sakun', ncMember: 'member', ncGrade: 'grade', ncBuyer: 'buyer', ncDate: 'date', ncAppr: 'appr', ncMin: 'min', ncBid: 'bid', ncCnt: 'cnt', ncSecond: 'second', ncAddr: 'addr', ncGongsi: 'gongsi', ncSale: 'sale', ncJeonse: 'jeonse', ncWolBo: 'wolBo', ncWol: 'wol', ncJosa: 'josa' };
       Object.keys(map).forEach(function (id) { var el = $(id); if (el && d[map[id]] != null && d[map[id]] !== '') el.value = d[map[id]]; });
       var btn = document.querySelector('.mjcap-subtab[data-subtab="nc"]'); if (btn) btn.click();
       if (d.autogen !== false && num($('ncBid').value)) generate();

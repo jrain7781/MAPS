@@ -1225,6 +1225,28 @@ class Handler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False).encode("utf-8"))
             return
+        # 낙찰 상세 캡처 이미지 서빙 (00.imageup/report_shots/nc_*.png) — 낙찰카페등록 상세이미지 탭
+        if self.path.startswith("/api/nc-detail-image"):
+            try:
+                from urllib.parse import urlparse, parse_qs
+                q = parse_qs(urlparse(self.path).query)
+                fn = os.path.basename((q.get("f", [""])[0] or ""))   # basename만 (경로 탈출 방지)
+                ip = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "00.imageup", "report_shots", fn)
+                if fn.lower().endswith(".png") and os.path.exists(ip):
+                    with open(ip, "rb") as f:
+                        data = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "image/png")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(data)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+            except Exception:
+                self.send_response(500)
+                self.end_headers()
+            return
         # 크롤링 진행상황 폴링
         if self.path.startswith("/api/progress"):
             self.send_response(200)

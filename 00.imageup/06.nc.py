@@ -20,8 +20,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ── 옥션 상세에서 감정가 + 차순위금액 파싱 (MAPS 비어도 상세에서 채움) ──
 def parse_appr_second(detail_txt):
-    """상세 본문에서 감정가·차순위금액 추출. return {appr, second} (숫자 문자열, 없으면 '')."""
-    res = {"appr": "", "second": ""}
+    """상세 본문에서 감정가·차순위금액·공시지가 추출. return {appr, second, gongsi} (숫자 문자열, 없으면 '')."""
+    res = {"appr": "", "second": "", "gongsi": ""}
     if not detail_txt:
         return res
     m = re.search(r"감\s*정\s*가[^\d]{0,20}([\d,]{6,})\s*원", detail_txt)      # 감정가 235,000,000원
@@ -30,6 +30,11 @@ def parse_appr_second(detail_txt):
     m2 = re.search(r"차\s*순\s*위\s*금?\s*액?\s*[:：]?\s*([\d,]{6,})\s*원", detail_txt)  # 차순위금액 95,700,000원
     if m2:
         res["second"] = m2.group(1).replace(",", "")
+    m3 = re.search(r"공시\s*지가\s*[:：]\s*([\d,]{6,})\s*원", detail_txt)       # 공시지가 : 126,000,000원
+    if not m3:
+        m3 = re.search(r"공시\s*가격\s*[:：]?\s*([\d,]{6,})\s*원", detail_txt)
+    if m3:
+        res["gongsi"] = m3.group(1).replace(",", "")
     return res
 
 
@@ -128,6 +133,7 @@ def crawl_case(driver, wait, case, want_capture=False):
         "cnt": md.get("bidder_count", ""),
         "appr": aps.get("appr", ""),         # 감정가(상세 — MAPS 비어도 채움)
         "second": aps.get("second", ""),     # 차순위금액(상세, 있을 때만)
+        "gongsi": aps.get("gongsi", ""),     # 공시지가(상세)
         "date": (picked.get("date_txt", "") or case.get("bid_date", "")),
         "addr": picked.get("addr", ""),
         "josa": josa,
@@ -177,7 +183,7 @@ def process_case_multi(driver, wait, case, accounts):
                key_match=(result["court_hit"] and result["date_hit"]),
                court_hit=result["court_hit"], date_hit=result["date_hit"],
                bid=result["bid"], buyer=result["buyer"], cnt=result["cnt"],
-               appr=result.get("appr", ""), second=result.get("second", ""),
+               appr=result.get("appr", ""), second=result.get("second", ""), gongsi=result.get("gongsi", ""),
                date=result["date"], addr=result["addr"],
                josa=primary, josa_len=len(primary),
                josa_accounts=josa_accounts,                 # [{id, josa, len}] 조사내용 있는 계정들

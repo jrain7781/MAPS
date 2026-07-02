@@ -336,20 +336,23 @@ function mjWaitServerBack() {
             <!-- 좌측 탭: 연동데이터 | 스킬 -->
             <div style="display:flex;gap:4px;margin-bottom:6px;border-bottom:1px solid #e5e7eb">
               <button type="button" class="nc-lt-tab" data-lt="data" style="border:none;background:none;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid #2563eb;color:#2563eb">📋 연동데이터</button>
+              <button type="button" class="nc-lt-tab" data-lt="detail" style="border:none;background:none;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;color:#94a3b8">🖼 상세이미지</button>
               <button type="button" class="nc-lt-tab" data-lt="skill" style="border:none;background:none;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;color:#94a3b8">🧩 스킬</button>
             </div>
             <!-- 탭: 연동데이터 -->
             <div class="nc-lt-panel" data-ltp="data">
               <div style="font-size:11px;color:#94a3b8;margin-bottom:5px">일치 시 자동 채움 · 필요 시 수정</div>
               <div class="mjcap-row" style="gap:6px;flex-wrap:wrap">
-                <label>회원명 <input type="text" id="ncMember" style="width:88px"></label>
-                <label>매수인 <input type="text" id="ncBuyer" placeholder="이현민" style="width:88px" title="이미지에서 뒷글자 가림"></label>
-                <label>매각기일 <input type="text" id="ncDate" placeholder="2026.06.30" style="width:96px"></label>
+                <label>회원명 <input type="text" id="ncMember" style="width:80px"></label>
+                <label>등급 <input type="text" id="ncGrade" placeholder="(MAPS 연동)" title="MAPS 회원등급 연동" style="width:118px"></label>
+                <label>매수인 <input type="text" id="ncBuyer" placeholder="이현민" style="width:80px" title="이미지에서 뒷글자 가림"></label>
+                <label>매각기일 <input type="text" id="ncDate" placeholder="2026.06.30" style="width:92px"></label>
               </div>
               <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
                 <label>감정가 <input type="text" id="ncAppr" placeholder="235000000" style="width:104px"></label>
                 <label>최저가 <input type="text" id="ncMin" placeholder="80605000" style="width:104px"></label>
                 <label>낙찰가 <input type="text" id="ncBid" placeholder="97999999" style="width:104px"></label>
+                <label>공시지가 <input type="text" id="ncGongsi" placeholder="126000000" style="width:104px" title="옥션 상세 연동"></label>
               </div>
               <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
                 <label>입찰수 <input type="text" id="ncCnt" placeholder="5" style="width:44px"></label>
@@ -360,13 +363,20 @@ function mjWaitServerBack() {
               <div style="font-size:11px;color:#374151;font-weight:600;margin-top:6px">🔎 조사내용</div>
               <textarea id="ncJosa" placeholder="조사내용 (부동산 전화번호는 자동 블러 처리됩니다)" style="width:100%;height:170px;margin-top:2px;font-size:12px;padding:6px;box-sizing:border-box"></textarea>
               <!-- 시세: 조사내용 아래 (확실히 구분) -->
-              <div style="font-size:11px;color:#7c3aed;font-weight:700;margin-top:8px;border-top:1px dashed #ddd6fe;padding-top:6px">💬 시세·공시지가 <span style="font-weight:400;color:#94a3b8">— ↑조사내용에서 발췌·연동 (MAPS/옥션 아님)</span></div>
+              <div style="font-size:11px;color:#7c3aed;font-weight:700;margin-top:8px;border-top:1px dashed #ddd6fe;padding-top:6px">💬 시세 <span style="font-weight:400;color:#94a3b8">— ↑조사내용에서 발췌·연동 (MAPS/옥션 아님)</span></div>
               <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:2px">
-                <label>공시지가 <input type="text" id="ncGongsi" placeholder="126000000" style="width:104px"></label>
                 <label>매매시세 <input type="text" id="ncSale" placeholder="140000000" style="width:104px"></label>
                 <label>전세 <input type="text" id="ncJeonse" placeholder="140000000" style="width:104px"></label>
                 <label>월세보증 <input type="text" id="ncWolBo" placeholder="20000000" style="width:88px"></label>
                 <label>월세 <input type="text" id="ncWol" placeholder="800000" style="width:76px"></label>
+              </div>
+            </div>
+            <!-- 탭: 상세이미지 (옥션 사건조회 캡처 = 낙찰 증빙) -->
+            <div class="nc-lt-panel" data-ltp="detail" style="display:none">
+              <div style="font-size:11px;color:#94a3b8;margin-bottom:5px">옥션 상세 캡처 ([▶실행] 시 저장) · 카페글 상단 증빙용</div>
+              <div style="border:1px solid #e5e7eb;border-radius:8px;overflow:auto;max-height:72vh;background:#f8fafc;text-align:center;padding:8px">
+                <div id="ncDetailImgEmpty" style="color:#9ca3af;padding:40px 0;font-size:12px">[▶실행] 후 상세 캡처가 여기에 표시됩니다.</div>
+                <img id="ncDetailImg" style="max-width:100%;display:none" alt="상세 캡처">
               </div>
             </div>
             <!-- 탭: 스킬 (SKILL.md 편집 → 저장 시 즉시 반영) -->
@@ -384,9 +394,8 @@ function mjWaitServerBack() {
           </div>
           <div style="flex:1;min-width:340px">
             <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:12px;color:#6b7280;font-weight:600">미리보기</span>
+              <span style="font-size:12px;color:#6b7280;font-weight:600">미리보기 <span style="font-weight:400;color:#94a3b8">· 자동 생성</span></span>
               <span style="flex:1"></span>
-              <button type="button" class="btn_box_sss btn_blue bold" id="ncGenBtn">🖼 생성</button>
               <button type="button" class="btn_box_sss btn_white" id="ncCopyBtn" disabled>📋 이미지 복사</button>
               <button type="button" class="btn_box_sss btn_white" id="ncDownBtn" disabled>⬇ 다운로드</button>
             </div>
