@@ -129,12 +129,25 @@
   // ── 불러오기: MAPS 3키 조회 → 체크 계정들로 옥션 크롤(cc와 동일 매칭) → 그리드 ──
   // 로컬 매니저 서버(localhost) 경로. 외부 유료 API 아님(비용 0).
   var ncRunId = null, ncOffset = 0, ncItems = [], ncCrawl = null, ncLinkedIdx = -1;
+  // 모든 연동 데이터·그리드·미리보기·상세이미지 초기화 (keepSakun=true 면 사건번호 유지)
+  function ncClearData(keepSakun) {
+    if (ncRunId) { alert('실행 중입니다. 잠시 후 다시.'); return false; }
+    ['ncTitle', 'ncMember', 'ncGrade', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncCnt', 'ncSecond', 'ncAddr', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncJosa'].forEach(function (id) { var e = $(id); if (e) e.value = ''; });
+    if (!keepSakun) { var s = $('ncSakun'); if (s) s.value = ''; }
+    ncItems = []; ncCrawl = null; ncLinkedIdx = -1; lastNode = null;
+    var pv = $('ncPreview'); if (pv) pv.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:34px 0">제목/본문 작업이 완료되면 여기에 카드가 표시됩니다.</div>';
+    var cp = $('ncCopyBtn'), dn = $('ncDownBtn'); if (cp) cp.disabled = true; if (dn) dn.disabled = true;
+    var jw = ncCard() && ncCard().querySelector('[data-role="nc-josa-accounts"]'); if (jw) jw.innerHTML = '';
+    renderGrid(); ncShowDetailImg();
+    return true;
+  }
+
   // [📥불러오기] MAPS getItemsBySakun(3키+회원·입찰가) → 그리드 표시 (크롤 X)
   function ncLoad() {
     if (ncRunId) { alert('실행 중입니다. 잠시 후 다시.'); return; }
     var sakun = ($('ncSakun').value || '').trim();
     if (!sakun) { alert('사건번호를 입력하세요.'); return; }
-    ncItems = []; ncCrawl = null; ncLinkedIdx = -1;
+    ncClearData(true);   // 불러오기 시 이전 데이터 모두 초기화 (사건번호 유지)
     var key = mapsKey();
     if (!key) { setStatus('MAPS 키 없음 — [▶실행]으로 옥션 크롤만 진행(회원/입찰가 없음)'); renderGrid(); return; }
     setStatus('MAPS 3키 조회 중…');
@@ -377,6 +390,7 @@
   function init() {
     var lb = $('ncLoadBtn'); if (!lb) return;   // nc 탭 로드 확인
     lb.addEventListener('click', ncLoad);
+    var rst = $('ncResetBtn'); if (rst) rst.addEventListener('click', function () { if (ncClearData(false)) setStatus('초기화됨'); });
     var c = $('ncCopyBtn'); if (c) c.addEventListener('click', copyImg);
     var dn = $('ncDownBtn'); if (dn) dn.addEventListener('click', download);
     var rb = $('ncRunBtn'); if (rb) rb.addEventListener('click', ncRun);
