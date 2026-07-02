@@ -73,6 +73,26 @@ def get_interest_josa(driver):
     return ""
 
 
+def _hide_josa_memo(driver):
+    """상세 캡처 전, 관심물건 메모(조사내용/관심분류) 영역을 display:none 처리 → 증빙 캡처에서 제외.
+    (04.capture_detail 은 폭 넓은 표만 잡으므로, 메모 표를 숨기면 소재지·매각결과 표부터 캡처됨)"""
+    try:
+        driver.execute_script("""
+            var kw=['관심 분류','메모 사항','관심물건 수정','관심물건 삭제','나의 관심','최근열람일시'];
+            Array.prototype.slice.call(document.querySelectorAll('table,form,div,textarea')).forEach(function(e){
+              var t=(e.textContent||'');
+              if(t.length>3000) return;                 // 너무 큰 래퍼는 제외(소재지까지 다 숨을 위험)
+              var hit=kw.some(function(k){return t.indexOf(k)>=0;});
+              if(hit && t.indexOf('소재지')<0 && t.indexOf('감정가')<0 && t.indexOf('감 정 가')<0){
+                e.style.display='none';
+              }
+            });
+        """)
+        import time as _t; _t.sleep(0.2)
+    except Exception as e:
+        print(f"    ⚠ 메모 숨김 오류: {repr(e)[:80]}")
+
+
 def crawl_case(driver, wait, case, want_capture=False):
     """단건(로그인된 현재 계정 기준): 종합검색 → (법원·기일[·물건번호]) 매칭행 선택
     → 상세 열어 매각결과 + 조사내용(textarea) 취득. 결과 dict 반환(매칭 실패 시 matched=False)."""
@@ -122,7 +142,10 @@ def crawl_case(driver, wait, case, want_capture=False):
     josa = get_interest_josa(driver)                        # ★ 조사내용 = textarea value
     md = cc.parse_maegak_detail(detail_txt, exp_d6) if state_kind == "매각" else {"maegak_price": "", "buyer": "", "bidder_count": ""}
     aps = parse_appr_second(detail_txt)     # 감정가 + 차순위금액 (상세)
-    shot = cc.capture_detail(driver, f"nc_{cc.case_num2(sakun)}", sakun) if want_capture else ""
+    shot = ""
+    if want_capture:
+        _hide_josa_memo(driver)             # 캡처 전 관심물건 메모(조사내용) 영역 숨김 → 증빙에서 제외
+        shot = cc.capture_detail(driver, f"nc_{cc.case_num2(sakun)}", sakun)
 
     return {
         "matched": True,
