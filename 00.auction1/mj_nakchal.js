@@ -152,6 +152,7 @@
     var pv = $('ncPreview'); if (pv) pv.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:34px 0">제목/본문 작업이 완료되면 여기에 카드가 표시됩니다.</div>';
     var cp = $('ncCopyBtn'), dn = $('ncDownBtn'); if (cp) cp.disabled = true; if (dn) dn.disabled = true;
     var jw = ncCard() && ncCard().querySelector('[data-role="nc-josa-accounts"]'); if (jw) jw.innerHTML = '';
+    try { localStorage.removeItem('nc_state_v1'); } catch (e) {}   // 저장된 직전 자료도 삭제
     renderGrid(); ncShowDetailImg();
     return true;
   }
@@ -176,6 +177,7 @@
       if (it0.court && $('ncDate') && !$('ncDate').value) $('ncDate').value = (it0.in_date || it0.bid_date || '');
       renderGrid();
       setStatus(ncItems.length ? ('불러오기 완료 — ' + ncItems.length + '건. [▶실행]으로 옥션 크롤·일치 확정') : 'MAPS에 이 사건 없음 — [▶실행]으로 크롤만 진행 가능');
+      ncSaveState();
     }).catch(function (e) { if (lb) lb.disabled = false; setStatus('MAPS 조회 오류: ' + e); renderGrid(); });
   }
 
@@ -289,7 +291,7 @@
       if (cb.checked) { var a = ja[parseInt(cb.dataset.i, 10)]; if (a) parts.push((ja.length > 1 ? ('【조사자 계정: ' + a.id + '】\n') : '') + a.josa); }
     });
     $('ncJosa').value = parts.join('\n\n──────────\n\n');
-    if (lastNode) generate();   // 카드 있으면 갱신
+    if (lastNode) generate(); else ncSaveState();   // 카드 있으면 갱신(저장 포함), 없으면 상태만 저장
   }
   // 일치 시 자동 연동 — 낙찰(회원==매수인) 행 우선, 없으면 첫 행 → 폼 채우고 미리보기 자동 생성
   function ncAutoLink() {
@@ -320,6 +322,7 @@
     });
     ncShowDetailImg();   // 상세이미지 탭 이미지 갱신
     setStatus('✓ 일치 — 데이터 연동 완료 (제목/본문 작업 후 카드 생성)' + (ja.length ? (' · 조사내용 계정 ' + ja.length) : '') + (cr.key_match ? '' : ' (⚠법원키 확인)'));
+    ncSaveState();
   }
 
   function _fv(id) { var e = $(id); return e ? e.value : ''; }
@@ -338,6 +341,7 @@
     lastNode = document.getElementById('nccard');
     $('ncCopyBtn').disabled = false; $('ncDownBtn').disabled = false;
     setStatus('생성됨');
+    ncSaveState();
   }
   function toBlob(cb, err) {
     if (!lastNode) return;
@@ -414,6 +418,26 @@
     } else { img.style.display = 'none'; if (empty) { empty.style.display = ''; empty.textContent = '[▶실행] 후 상세 캡처가 여기에 표시됩니다.'; } }
   }
 
+  // ── 마지막 자료 저장/복원 (새로고침 후에도 조회) ──
+  var NC_STATE_KEY = 'nc_state_v1';
+  var _NC_FIELD_IDS = ['ncSakun', 'ncTitle', 'ncMember', 'ncGrade', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncCnt', 'ncSecond', 'ncAddr', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncHoga', 'ncJosa'];
+  function ncSaveState() {
+    try {
+      var f = {}; _NC_FIELD_IDS.forEach(function (id) { var e = $(id); if (e) f[id] = e.value; });
+      localStorage.setItem(NC_STATE_KEY, JSON.stringify({ f: f, items: ncItems, crawl: ncCrawl, linkedIdx: ncLinkedIdx, ts: Date.now() }));
+    } catch (e) {}
+  }
+  function ncRestoreState() {
+    try {
+      var s = JSON.parse(localStorage.getItem(NC_STATE_KEY) || 'null'); if (!s) return;
+      ncItems = s.items || []; ncCrawl = s.crawl || null; ncLinkedIdx = (s.linkedIdx != null ? s.linkedIdx : -1);
+      renderGrid(); ncShowDetailImg();                 // 그리드·상세이미지·조사계정 복원
+      if (s.f) _NC_FIELD_IDS.forEach(function (id) { var e = $(id); if (e && s.f[id] != null) e.value = s.f[id]; });  // 폼(취합 josa 포함) 복원 — renderGrid 뒤에 덮어씀
+      if (num($('ncBid').value)) generate();           // 카드 재생성
+      setStatus('직전 자료 복원됨');
+    } catch (e) {}
+  }
+
   function init() {
     var lb = $('ncLoadBtn'); if (!lb) return;   // nc 탭 로드 확인
     lb.addEventListener('click', ncLoad);
@@ -434,7 +458,7 @@
     // 생성 버튼 없음 → 폼 수정 시 자동 재생성(디바운스, 이미 낙찰가 있을 때만)
     var _regenT;
     ['ncTitle', 'ncMember', 'ncBuyer', 'ncDate', 'ncAppr', 'ncMin', 'ncBid', 'ncCnt', 'ncSecond', 'ncAddr', 'ncGongsi', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol', 'ncJosa'].forEach(function (id) {
-      var el = $(id); if (el) el.addEventListener('input', function () { clearTimeout(_regenT); _regenT = setTimeout(function () { if (num($('ncBid').value)) generate(); }, 500); });
+      var el = $(id); if (el) el.addEventListener('input', function () { clearTimeout(_regenT); _regenT = setTimeout(function () { if (num($('ncBid').value)) generate(); else ncSaveState(); }, 500); });
     });
     // 가격 필드 — 포커스 벗어나면 3자리 콤마 포맷
     ['ncAppr', 'ncMin', 'ncBid', 'ncGongsi', 'ncSecond', 'ncSale', 'ncJeonse', 'ncWolBo', 'ncWol'].forEach(function (id) {
@@ -442,6 +466,7 @@
     });
     ncLoadAccounts();   // 계정 UI 로드 (진행사항확인과 공유)
     renderGrid();       // 빈 그리드 안내
+    ncRestoreState();   // 직전 자료 복원 (새로고침 후에도 조회)
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 
