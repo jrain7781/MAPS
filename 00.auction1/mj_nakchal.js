@@ -125,45 +125,49 @@
 
   // ── 불러오기: MAPS 3키 조회 → 체크 계정들로 옥션 크롤(cc와 동일 매칭) → 그리드 ──
   // 로컬 매니저 서버(localhost) 경로. 외부 유료 API 아님(비용 0).
-  var ncRunId = null, ncOffset = 0, ncItems = [], ncCrawl = null;
+  var ncRunId = null, ncOffset = 0, ncItems = [], ncCrawl = null, ncLinkedIdx = -1;
+  // [📥불러오기] MAPS getItemsBySakun(3키+회원·입찰가) → 그리드 표시 (크롤 X)
   function ncLoad() {
-    if (ncRunId) { alert('이미 크롤 중입니다.'); return; }
+    if (ncRunId) { alert('실행 중입니다. 잠시 후 다시.'); return; }
     var sakun = ($('ncSakun').value || '').trim();
     if (!sakun) { alert('사건번호를 입력하세요.'); return; }
-    var accs = ncCollectAccounts().filter(function (a) { return a.enabled; });
-    if (!accs.length) { alert('체크된 계정이 없습니다. 계정을 체크하세요.'); return; }
-    ncItems = []; ncCrawl = null; ncOffset = 0; renderGrid();
-    var lb = $('ncLoadBtn'); if (lb) lb.disabled = true;
-    var doCrawl = function (caseObj) {
-      setStatus('크롤중… (체크 계정 ' + accs.length + '개 · 3키 매칭 → 매각결과+조사내용)');
-      fetch('/api/imageup/run', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ which: 'nc', accounts: accs, cases: [caseObj], headless: !!($('ncHeadless') && $('ncHeadless').checked) })
-      }).then(function (r) { return r.json(); }).then(function (j) {
-        if (j.ok) { ncRunId = j.run_id; ncPoll(); }
-        else { setStatus('시작 실패: ' + (j.error || '?')); if (lb) lb.disabled = false; }
-      }).catch(function (e) { setStatus('요청 오류: ' + e); if (lb) lb.disabled = false; });
-    };
+    ncItems = []; ncCrawl = null; ncLinkedIdx = -1;
     var key = mapsKey();
-    if (!key) {  // MAPS 키 없음 → 사건번호(+매각기일)만으로 크롤
-      setStatus('MAPS 키 없음 — 사건번호(+매각기일)만으로 크롤');
-      doCrawl({ sakun_no: sakun, bid_date: ($('ncDate').value || '').trim(), court: '' });
-      return;
-    }
+    if (!key) { setStatus('MAPS 키 없음 — [▶실행]으로 옥션 크롤만 진행(회원/입찰가 없음)'); renderGrid(); return; }
     setStatus('MAPS 3키 조회 중…');
+    var lb = $('ncLoadBtn'); if (lb) lb.disabled = true;
     fetch('/api/maps-gas', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ api_key: key, api_action: 'getItemsBySakun', sakun_no: sakun, include_past: true })
     }).then(function (r) { return r.json(); }).then(function (j) {
+      if (lb) lb.disabled = false;
       ncItems = (j && j.success && j.items) ? j.items : [];
       var it0 = ncItems[0] || {};
-      var caseObj = { sakun_no: sakun, bid_date: (it0.in_date || it0.bid_date || ($('ncDate').value || '').trim() || ''), court: (it0.court || '') };
-      if (caseObj.court && $('ncDate') && !$('ncDate').value) $('ncDate').value = caseObj.bid_date || '';
-      renderGrid(); doCrawl(caseObj);
-    }).catch(function (e) {
-      setStatus('MAPS 조회 오류 → 수동 크롤: ' + e);
-      doCrawl({ sakun_no: sakun, bid_date: ($('ncDate').value || '').trim(), court: '' });
-    });
+      if (it0.court && $('ncDate') && !$('ncDate').value) $('ncDate').value = (it0.in_date || it0.bid_date || '');
+      renderGrid();
+      setStatus(ncItems.length ? ('불러오기 완료 — ' + ncItems.length + '건. [▶실행]으로 옥션 크롤·일치 확정') : 'MAPS에 이 사건 없음 — [▶실행]으로 크롤만 진행 가능');
+    }).catch(function (e) { if (lb) lb.disabled = false; setStatus('MAPS 조회 오류: ' + e); renderGrid(); });
+  }
+
+  // [▶실행] 체크 계정들로 옥션 크롤 → 3키 일치 확정 → 일치 시 자동 연동+미리보기
+  function ncRun() {
+    if (ncRunId) { alert('이미 실행 중입니다.'); return; }
+    var sakun = ($('ncSakun').value || '').trim();
+    if (!sakun) { alert('사건번호를 입력하세요.'); return; }
+    var accs = ncCollectAccounts().filter(function (a) { return a.enabled; });
+    if (!accs.length) { alert('체크된 계정이 없습니다. 계정을 체크하세요.'); return; }
+    var it0 = ncItems[0] || {};
+    var caseObj = { sakun_no: sakun, bid_date: (it0.in_date || it0.bid_date || ($('ncDate').value || '').trim() || ''), court: (it0.court || '') };
+    ncCrawl = null; ncOffset = 0; ncLinkedIdx = -1;
+    var rb = $('ncRunBtn'); if (rb) rb.disabled = true;
+    setStatus('실행중… (체크 계정 ' + accs.length + '개 · 3키 일치 확정 → 매각결과+조사내용)');
+    fetch('/api/imageup/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ which: 'nc', accounts: accs, cases: [caseObj], headless: !!($('ncHeadless') && $('ncHeadless').checked) })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.ok) { ncRunId = j.run_id; ncPoll(); }
+      else { setStatus('시작 실패: ' + (j.error || '?')); if (rb) rb.disabled = false; }
+    }).catch(function (e) { setStatus('요청 오류: ' + e); if (rb) rb.disabled = false; });
   }
   function ncPoll() {
     if (!ncRunId) return;
@@ -178,16 +182,16 @@
         }
         if (j.status === 'running') { setTimeout(ncPoll, 700); }
         else {
-          ncRunId = null; var lb = $('ncLoadBtn'); if (lb) lb.disabled = false;
-          if (ncCrawl) setStatus('✓ 크롤 완료 — 매수인 ' + (ncCrawl.buyer || '?') + ' · 조사내용 보유계정 ' + ((ncCrawl.josa_accounts || []).length) + '개' + (ncCrawl.key_match ? '' : ' (⚠법원키 확인)'));
-          else setStatus('크롤 종료 — 결과 없음(사건번호/매각기일 확인)');
+          ncRunId = null; var rb = $('ncRunBtn'); if (rb) rb.disabled = false;
           renderGrid();
+          if (ncCrawl) { ncAutoLink(); }   // ★ 일치 시 자동 연동 + 미리보기 생성
+          else setStatus('실행 종료 — 결과 없음(사건번호/매각기일 확인)');
         }
       }).catch(function (e) { setStatus('polling 오류: ' + e); setTimeout(ncPoll, 1500); });
   }
 
   // ── cc식 결과 그리드 (✓3키매칭 · 입찰가 vs 매각가 색비교 · 매수인=회원이면 파랑) ──
-  function keyCell(v, hit) { if (!v) return '<span style="color:#cbd5e1">·</span>'; var t = esc(v); return (hit ? '<span style="color:#16a34a;font-weight:700">✓</span> ' : '<span style="color:#dc2626;font-weight:700">✗</span> ') + t; }
+  function keyCell(v, hit) { if (!v) return '<span style="color:#cbd5e1">·</span>'; var t = esc(v); if (hit === null || hit === undefined) return t; return (hit ? '<span style="color:#16a34a;font-weight:700">✓</span> ' : '<span style="color:#dc2626;font-weight:700">✗</span> ') + t; }
   function resBadge(cat) { var c = cat === '낙찰' ? '#2563eb' : (cat === '미입찰' ? '#dc2626' : (cat === '불가' ? '#111827' : '#6b7280')); return '<span style="background:' + c + ';color:#fff;padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700">' + esc(cat) + '</span>'; }
   function renderGrid() {
     var box = $('ncGrid'); if (!box) return;
@@ -202,26 +206,25 @@
       var cat = !cr ? '…' : (mNm ? (isWin ? '낙찰' : '미입찰') : (cr.state_kind || '매각'));
       var mae = num(cr ? cr.bid : 0), bidp = num(it.bidprice);
       var maeCol = (mae && bidp) ? (mae < bidp ? '#dc2626' : (mae > bidp ? '#111827' : '#2563eb')) : '#111827';
-      var td = 'padding:3px 6px;white-space:nowrap;border-bottom:1px solid #f1f5f9';
+      var isLinked = !!(cr && ncLinkedIdx === i);   // 자동 연동된 행 하이라이트
+      var td = 'padding:3px 6px;white-space:nowrap;border-bottom:1px solid #f1f5f9' + (isLinked ? ';background:#ecfdf5' : '');
       return '<tr>'
-        + '<td style="' + td + '">' + keyCell(it.in_date || it.bid_date || (cr && cr.date) || '', cr ? (cr.date_hit !== false) : false) + '</td>'
-        + '<td style="' + td + '">' + keyCell(it.sakun_no || sakun, !!cr) + '</td>'
-        + '<td style="' + td + '">' + keyCell(it.court || (cr && cr.court) || '', cr ? (cr.court_hit !== false) : false) + '</td>'
+        + '<td style="' + td + '">' + keyCell(it.in_date || it.bid_date || (cr && cr.date) || '', cr ? (cr.date_hit !== false) : null) + '</td>'
+        + '<td style="' + td + '">' + keyCell(it.sakun_no || sakun, cr ? true : null) + '</td>'
+        + '<td style="' + td + '">' + keyCell(it.court || (cr && cr.court) || '', cr ? (cr.court_hit !== false) : null) + '</td>'
         + '<td style="' + td + '">' + esc(it.m_name_id || '') + '</td>'
         + '<td style="' + td + '">' + esc(it.m_name || '') + '</td>'
         + '<td style="' + td + ';color:' + (isWin ? '#2563eb' : '#111827') + ';font-weight:' + (isWin ? 700 : 400) + '">' + esc(buyer) + '</td>'
         + '<td style="' + td + ';text-align:right">' + (bidp ? comma(bidp) : '') + '</td>'
         + '<td style="' + td + ';text-align:right;color:' + maeCol + ';font-weight:700">' + (mae ? comma(mae) : '') + '</td>'
-        + '<td style="' + td + ';text-align:center">' + (cr ? resBadge(cat) : '…') + '</td>'
+        + '<td style="' + td + ';text-align:center">' + (cr ? resBadge(cat) : '<span style="color:#cbd5e1">대기</span>') + '</td>'
         + '<td style="' + td + ';text-align:center">' + ((cr && cr.view_url) ? '<a href="' + escA(cr.view_url) + '" target="_blank" style="color:#2563eb;text-decoration:none">옥션원</a>' : '') + '</td>'
-        + '<td style="' + td + ';text-align:center">' + (cr ? '<button type="button" class="nc-mk btn_box_sss btn_blue bold" data-i="' + i + '" style="padding:1px 7px;font-size:11px">🖼카드</button>' : '') + '</td>'
         + '</tr>';
     }).join('');
     var th = 'padding:4px 6px;white-space:nowrap;position:sticky;top:0';
-    box.innerHTML = '<div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px"><table style="border-collapse:collapse;font-size:12px;min-width:100%"><thead><tr style="background:#f1f5f9;color:#334155">'
-      + '<th style="' + th + '">입찰일자</th><th style="' + th + '">사건번호</th><th style="' + th + '">법원</th><th style="' + th + '">담당자</th><th style="' + th + '">회원</th><th style="' + th + '">매수인</th><th style="' + th + '">입찰가</th><th style="' + th + '">매각가</th><th style="' + th + '">결과</th><th style="' + th + '">옥션원</th><th style="' + th + '">카드</th>'
+    box.innerHTML = '<div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#f1f5f9;color:#334155">'
+      + '<th style="' + th + '">입찰일자</th><th style="' + th + '">사건번호</th><th style="' + th + '">법원</th><th style="' + th + '">담당자</th><th style="' + th + '">회원</th><th style="' + th + '">매수인</th><th style="' + th + '">입찰가</th><th style="' + th + '">매각가</th><th style="' + th + '">결과</th><th style="' + th + '">옥션원</th>'
       + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
-    box.querySelectorAll('.nc-mk').forEach(function (b) { b.addEventListener('click', function () { makeCardFromRow(parseInt(b.dataset.i, 10)); }); });
     renderJosaAccounts();
   }
   function renderJosaAccounts() {
@@ -231,19 +234,27 @@
     var h = '<div style="font-size:11px;color:#374151;font-weight:600;margin-bottom:2px">조사내용 보유 계정 ' + ja.length + '개 — 카드에 쓸 계정 선택:</div>';
     ja.forEach(function (a, i) { h += '<label style="font-size:12px;margin-right:10px;cursor:pointer"><input type="radio" name="ncJosaAcc" value="' + i + '" ' + (i === 0 ? 'checked' : '') + '> ' + esc(a.id) + ' (' + a.len + '자)</label>'; });
     wrap.innerHTML = h;
-    wrap.querySelectorAll('input[name=ncJosaAcc]').forEach(function (r) { r.addEventListener('change', function () { var a = ja[parseInt(r.value, 10)]; if (a) $('ncJosa').value = a.josa; }); });
+    wrap.querySelectorAll('input[name=ncJosaAcc]').forEach(function (r) { r.addEventListener('change', function () { var a = ja[parseInt(r.value, 10)]; if (a) { $('ncJosa').value = a.josa; if (lastNode) generate(); } }); });
   }
-  function makeCardFromRow(i) {
+  // 일치 시 자동 연동 — 낙찰(회원==매수인) 행 우선, 없으면 첫 행 → 폼 채우고 미리보기 자동 생성
+  function ncAutoLink() {
     var cr = ncCrawl; if (!cr) return;
-    var it = ncItems[i] || {};
+    var idx = 0;
+    for (var i = 0; i < ncItems.length; i++) {
+      var m = String((ncItems[i] && ncItems[i].m_name) || '').trim();
+      if (cr.buyer && m && m === cr.buyer) { idx = i; break; }
+    }
+    ncLinkedIdx = ncItems.length ? idx : -1;
+    var it = ncItems[idx] || {};
     var ja = (cr.josa_accounts || []);
     var sel = ncCard() && ncCard().querySelector('input[name=ncJosaAcc]:checked');
     var josa = (sel && ja[parseInt(sel.value, 10)]) ? ja[parseInt(sel.value, 10)].josa : (cr.josa || '');
-    window.NakchalCafe.fill({
+    renderGrid();   // 연동 행 하이라이트 반영
+    window.NakchalCafe.fill({   // fill 이 num(bid) 있으면 미리보기 자동 생성
       sakun: cr.sakun_no || it.sakun_no || '',
       member: it.m_name || cr.member || '',
       buyer: cr.buyer || '',
-      date: cr.date || it.bid_date || '',
+      date: cr.date || it.in_date || it.bid_date || '',
       bid: cr.bid || '',
       cnt: cr.cnt || '',
       addr: cr.addr || it.address || '',
@@ -251,6 +262,7 @@
       min: it.lowest_price || '',
       josa: josa
     });
+    setStatus('✓ 일치 — 자동 연동+미리보기 생성' + (ja.length ? (' · 조사내용 계정 ' + ja.length) : '') + (cr.key_match ? '' : ' (⚠법원키 확인)'));
   }
 
   function collect() {
@@ -290,6 +302,7 @@
     var c = $('ncCopyBtn'); if (c) c.addEventListener('click', copyImg);
     var dn = $('ncDownBtn'); if (dn) dn.addEventListener('click', download);
     var lb = $('ncLoadBtn'); if (lb) lb.addEventListener('click', ncLoad);
+    var rb = $('ncRunBtn'); if (rb) rb.addEventListener('click', ncRun);
     ncLoadAccounts();   // 계정 UI 로드 (진행사항확인과 공유)
     renderGrid();       // 빈 그리드 안내
   }

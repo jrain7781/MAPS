@@ -313,24 +313,51 @@ function mjWaitServerBack() {
         <span class="mjcap-spacer"></span>
         <span class="mjcap-status" id="ncStatus">대기</span>
       </header>
-      <div class="mjcap-body">
-        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
-          <!-- 왼쪽: 계정(다중) + 불러오기 + 결과 그리드 -->
-          <div style="flex:0 0 46%;min-width:430px;display:flex;flex-direction:column;gap:8px">
-            <div data-role="nc-accounts" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:8px"></div>
-            <div class="mjcap-k-input" style="background:#fff7ed;border-color:#fed7aa">
-              <div class="mjcap-row" style="align-items:center;gap:6px;flex-wrap:wrap">
-                <label class="bold">사건번호</label>
-                <input type="text" id="ncSakun" placeholder="예: 2024타경82847" style="width:150px;padding:3px 7px" onfocus="this.select()">
-                <button type="button" class="btn_box_sss btn_blue bold" id="ncLoadBtn" title="MAPS에서 3키(사건번호·입찰일자·법원) 불러와 → 체크 계정들로 옥션 크롤(진행사항확인과 동일 매칭) → 매각결과·계정별 조사내용">📥 불러오기</button>
-                <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="크롤 창 숨김(헤드리스)"><input type="checkbox" id="ncHeadless">조사숨김</label>
-              </div>
-              <div style="font-size:11px;color:#9a3412;margin-top:3px">사건번호 → 📥불러오기 = MAPS 3키 + 체크 계정들로 옥션 크롤 → 진행사항확인과 동일 3키 매칭. 낙찰 행의 [🖼카드]로 우측 미리보기 생성.</div>
-            </div>
-            <div id="ncGrid" style="font-size:12px"></div>
+      <div class="mjcap-body" style="display:block">
+        <!-- 계정 (전체 폭) -->
+        <div data-role="nc-accounts" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:8px"></div>
+        <!-- 사건번호 + 불러오기 + 실행 -->
+        <div class="mjcap-k-input" style="background:#fff7ed;border-color:#fed7aa;margin-bottom:8px">
+          <div class="mjcap-row" style="align-items:center;gap:6px;flex-wrap:wrap">
+            <label class="bold">사건번호</label>
+            <input type="text" id="ncSakun" placeholder="예: 2024타경82847" style="width:150px;padding:3px 7px" onfocus="this.select()">
+            <button type="button" class="btn_box_sss btn_blue bold" id="ncLoadBtn" title="MAPS에서 3키(사건번호·입찰일자·법원)+회원·입찰가를 불러와 아래 그리드에 표시">📥 불러오기</button>
+            <button type="button" class="btn_box_sss bold" id="ncRunBtn" style="background:#059669;color:#fff;border-color:#059669" title="체크 계정들로 옥션 크롤 → 3키 일치 확정 → 일치 시 자동 연동+미리보기 생성">▶ 실행</button>
+            <label style="font-size:12px;display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="크롤 창 숨김(헤드리스)"><input type="checkbox" id="ncHeadless">조사숨김</label>
+            <span style="font-size:11px;color:#9a3412">📥불러오기(MAPS 3키) → ▶실행(옥션 크롤·3키 일치 확정) → <b>일치 시 자동 연동+미리보기</b></span>
           </div>
-          <!-- 오른쪽(절반↑): 미리보기 크게 + 편집 폼 -->
-          <div style="flex:1;min-width:430px;display:flex;flex-direction:column;gap:8px">
+        </div>
+        <!-- 결과 그리드 (전체 폭) -->
+        <div id="ncGrid" style="font-size:12px;margin-bottom:10px"></div>
+        <!-- 반/반: 좌 연동된 데이터 / 우 미리보기 -->
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <div style="flex:1;min-width:340px">
+            <div style="font-size:12px;color:#374151;font-weight:700;margin-bottom:5px">연동된 데이터 <span style="font-weight:400;color:#94a3b8">· 일치 시 자동 채움, 필요 시 수정</span></div>
+            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap">
+              <label>회원명 <input type="text" id="ncMember" style="width:88px"></label>
+              <label>매수인 <input type="text" id="ncBuyer" placeholder="이현민" style="width:88px" title="이미지에서 뒷글자 가림"></label>
+              <label>매각기일 <input type="text" id="ncDate" placeholder="2026.06.30" style="width:96px"></label>
+            </div>
+            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
+              <label>감정가 <input type="text" id="ncAppr" placeholder="235000000" style="width:104px"></label>
+              <label>최저가 <input type="text" id="ncMin" placeholder="80605000" style="width:104px"></label>
+              <label>낙찰가 <input type="text" id="ncBid" placeholder="97999999" style="width:104px"></label>
+            </div>
+            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
+              <label>입찰수 <input type="text" id="ncCnt" placeholder="5" style="width:44px"></label>
+              <label>차순위 <input type="text" id="ncSecond" placeholder="95700000" style="width:104px"></label>
+              <label>주소 <input type="text" id="ncAddr" placeholder="고양시 일산동구 성석동 한울하임 402호" style="width:230px"></label>
+            </div>
+            <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
+              <label>매매시세 <input type="text" id="ncSale" placeholder="140000000" style="width:104px"></label>
+              <label>전세 <input type="text" id="ncJeonse" placeholder="140000000" style="width:104px"></label>
+              <label>월세보증 <input type="text" id="ncWolBo" placeholder="20000000" style="width:88px"></label>
+              <label>월세 <input type="text" id="ncWol" placeholder="800000" style="width:76px"></label>
+            </div>
+            <div data-role="nc-josa-accounts" style="margin-top:6px"></div>
+            <textarea id="ncJosa" placeholder="조사내용 (부동산 전화번호는 자동 블러 처리됩니다)" style="width:100%;height:180px;margin-top:6px;font-size:12px;padding:6px;box-sizing:border-box"></textarea>
+          </div>
+          <div style="flex:1;min-width:340px">
             <div style="display:flex;align-items:center;gap:8px">
               <span style="font-size:12px;color:#6b7280;font-weight:600">미리보기</span>
               <span style="flex:1"></span>
@@ -338,37 +365,9 @@ function mjWaitServerBack() {
               <button type="button" class="btn_box_sss btn_white" id="ncCopyBtn" disabled>📋 이미지 복사</button>
               <button type="button" class="btn_box_sss btn_white" id="ncDownBtn" disabled>⬇ 다운로드</button>
             </div>
-            <div id="ncPreviewWrap" style="min-height:60vh;max-height:80vh;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;background:#0f172a;padding:12px">
-              <div id="ncPreview" style="width:640px;max-width:100%;margin:0 auto"><div style="color:#94a3b8;text-align:center;padding:34px 0">낙찰 행에서 [🖼카드] 를 누르면 여기에 카드가 표시됩니다.</div></div>
+            <div id="ncPreviewWrap" style="min-height:60vh;max-height:82vh;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;background:#0f172a;padding:12px;margin-top:5px">
+              <div id="ncPreview" style="width:640px;max-width:100%;margin:0 auto"><div style="color:#94a3b8;text-align:center;padding:34px 0">[▶실행]으로 일치되면 자동으로 카드가 생성됩니다.</div></div>
             </div>
-            <details style="border:1px solid #e5e7eb;border-radius:8px;padding:6px 8px">
-              <summary style="cursor:pointer;font-size:12px;color:#374151;font-weight:600">✏ 수동 보정 (시세·감정가 등 · 조사내용 편집)</summary>
-              <div style="margin-top:6px">
-                <div class="mjcap-row" style="gap:6px;flex-wrap:wrap">
-                  <label>회원명 <input type="text" id="ncMember" style="width:88px"></label>
-                  <label>매수인 <input type="text" id="ncBuyer" placeholder="이현민" style="width:88px" title="이미지에서 뒷글자 가림"></label>
-                  <label>매각기일 <input type="text" id="ncDate" placeholder="2026.06.30" style="width:96px"></label>
-                </div>
-                <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
-                  <label>감정가 <input type="text" id="ncAppr" placeholder="235000000" style="width:104px"></label>
-                  <label>최저가 <input type="text" id="ncMin" placeholder="80605000" style="width:104px"></label>
-                  <label>낙찰가 <input type="text" id="ncBid" placeholder="97999999" style="width:104px"></label>
-                </div>
-                <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
-                  <label>입찰수 <input type="text" id="ncCnt" placeholder="5" style="width:44px"></label>
-                  <label>차순위 <input type="text" id="ncSecond" placeholder="95700000" style="width:104px"></label>
-                  <label>주소 <input type="text" id="ncAddr" placeholder="고양시 일산동구 성석동 한울하임 402호" style="width:230px"></label>
-                </div>
-                <div class="mjcap-row" style="gap:6px;flex-wrap:wrap;margin-top:4px">
-                  <label>매매시세 <input type="text" id="ncSale" placeholder="140000000" style="width:104px"></label>
-                  <label>전세 <input type="text" id="ncJeonse" placeholder="140000000" style="width:104px"></label>
-                  <label>월세보증 <input type="text" id="ncWolBo" placeholder="20000000" style="width:88px"></label>
-                  <label>월세 <input type="text" id="ncWol" placeholder="800000" style="width:76px"></label>
-                </div>
-                <div data-role="nc-josa-accounts" style="margin-top:6px"></div>
-                <textarea id="ncJosa" placeholder="조사내용 (부동산 전화번호는 자동 블러 처리됩니다)" style="width:100%;height:160px;margin-top:6px;font-size:12px;padding:6px;box-sizing:border-box"></textarea>
-              </div>
-            </details>
           </div>
         </div>
       </div>
