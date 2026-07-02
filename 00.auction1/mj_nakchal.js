@@ -29,82 +29,142 @@
     var buyer = maskName(d.buyer);
     var css = '<style>'
       + '#nccard *{box-sizing:border-box;margin:0;padding:0;font-family:"Pretendard","맑은 고딕","Malgun Gothic",sans-serif;}'
-      + '#nccard{width:640px;background:#fff;border-radius:16px;overflow:hidden;color:#0f172a;}'
+      + '#nccard{width:640px;background:#fff;border-radius:18px;overflow:hidden;color:#0f172a;box-shadow:0 12px 40px rgba(15,23,42,.18);}'
       + '#nccard .ncbl{filter:blur(5px);background:#e5e7eb;border-radius:3px;}'
-      + '#nccard .hero{background:linear-gradient(140deg,#0b1026,#312e81 55%,#4338ca);color:#fff;padding:26px 26px 24px;}'
+      // 상단 인트로 배너
+      + '#nccard .intro{background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;padding:16px 24px;text-align:center;}'
+      + '#nccard .intro .t{font-size:16px;font-weight:900;letter-spacing:-.4px;}'
+      + '#nccard .intro .s{font-size:12px;color:#f3e8ff;margin-top:5px;font-weight:600;line-height:1.5;}'
+      + '#nccard .tease{background:#f5f3ff;color:#6d28d9;font-size:12.5px;font-weight:800;text-align:center;padding:9px 24px;border-bottom:1px solid #ede9fe;}'
+      // 히어로
+      + '#nccard .hero{background:linear-gradient(140deg,#0b1026,#312e81 55%,#4338ca);color:#fff;padding:24px 26px 20px;}'
       + '#nccard .hero .bd{display:inline-block;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#7c2d12;font-size:12px;font-weight:800;padding:4px 12px;border-radius:999px;letter-spacing:-.2px;box-shadow:0 2px 8px rgba(251,191,36,.35);}'
-      + '#nccard .hero h1{font-size:26px;font-weight:900;line-height:1.32;margin:13px 0 6px;letter-spacing:-.5px;}'
-      + '#nccard .hero h1 .y{color:#fbbf24;}'
-      + '#nccard .hero .sub{font-size:13px;color:#c7d2fe;font-weight:600;line-height:1.5;}'
+      + '#nccard .hero h1{font-size:25px;font-weight:900;line-height:1.32;margin:12px 0 5px;letter-spacing:-.6px;}'
+      + '#nccard .hero .ach{font-size:15px;font-weight:800;color:#fde68a;line-height:1.45;}'
+      + '#nccard .hero .ach .y{color:#fff;background:rgba(251,191,36,.22);padding:0 4px;border-radius:4px;}'
+      + '#nccard .stat{display:flex;margin-top:18px;border-top:1px solid rgba(255,255,255,.16);padding-top:15px;}'
+      + '#nccard .stat .st{flex:1;text-align:center;}'
+      + '#nccard .stat .st + .st{border-left:1px solid rgba(255,255,255,.16);}'
+      + '#nccard .stat .st .n{font-size:19px;font-weight:900;color:#fff;letter-spacing:-.3px;}'
+      + '#nccard .stat .st .n.hot{color:#fbbf24;}'
+      + '#nccard .stat .st .l{font-size:11px;color:#c7d2fe;margin-top:3px;font-weight:600;}'
+      // 증빙
       + '#nccard .proof{padding:16px 24px 4px;border-top:1px solid #eef2f7;}'
-      + '#nccard .proof .cap{font-size:11px;font-weight:800;color:#64748b;margin-bottom:8px;display:flex;align-items:center;gap:6px;}'
+      + '#nccard .proof .cap{font-size:11px;font-weight:800;color:#64748b;margin-bottom:8px;}'
       + '#nccard .proof .cap b{color:#dc2626;}'
       + '#nccard .proof img{width:100%;display:block;border-radius:10px;border:1px solid #e2e8f0;}'
+      // 섹션 공통
       + '#nccard .sec{padding:18px 24px;border-top:1px solid #eef2f7;}'
-      + '#nccard h2{font-size:17px;font-weight:900;color:#1e1b4b;margin-bottom:10px;}'
-      + '#nccard .kv{display:flex;font-size:14px;padding:6px 0;border-bottom:1px solid #f1f5f9;}'
-      + '#nccard .kv .k{width:96px;color:#64748b;font-weight:700;flex-shrink:0;}'
-      + '#nccard .kv .v{font-weight:700;}'
+      + '#nccard h2{font-size:16px;font-weight:900;color:#1e1b4b;margin-bottom:11px;padding-left:11px;border-left:4px solid #7c3aed;line-height:1.2;}'
+      + '#nccard .kv{display:flex;font-size:13.5px;padding:6px 0;border-bottom:1px solid #f1f5f9;}'
+      + '#nccard .kv:last-child{border-bottom:0;}'
+      + '#nccard .kv .k{width:92px;color:#64748b;font-weight:700;flex-shrink:0;}'
+      + '#nccard .kv .v{font-weight:700;flex:1;}'
       + '#nccard .hl{color:#dc2626;font-weight:900;}'
+      // 수익 시나리오 카드
       + '#nccard .g3{display:flex;gap:10px;}'
-      + '#nccard .sc{flex:1;border:2px solid #e2e8f0;border-radius:12px;padding:12px;text-align:center;}'
+      + '#nccard .sc{flex:1;border:2px solid #e2e8f0;border-radius:13px;padding:13px 10px;text-align:center;}'
       + '#nccard .sc.a{border-color:#fcd34d;background:#fffbeb;} #nccard .sc.b{border-color:#6ee7b7;background:#ecfdf5;} #nccard .sc.c{border-color:#93c5fd;background:#eff6ff;}'
       + '#nccard .sc .t{font-size:12px;font-weight:900;} #nccard .sc.a .t{color:#b45309;} #nccard .sc.b .t{color:#047857;} #nccard .sc.c .t{color:#1d4ed8;}'
-      + '#nccard .sc .n{font-size:19px;font-weight:900;margin-top:4px;} #nccard .sc.a .n{color:#b45309;} #nccard .sc.b .n{color:#047857;} #nccard .sc.c .n{color:#1d4ed8;}'
-      + '#nccard .punch{margin-top:12px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border-radius:11px;padding:13px;text-align:center;font-weight:900;font-size:15px;}'
-      + '#nccard .josa{font-size:13px;line-height:1.72;color:#1e293b;font-weight:500;}'
-      + '#nccard .josa .li{display:flex;gap:8px;padding:3px 0;}'
-      + '#nccard .josa .li .dot{color:#4338ca;font-weight:900;flex-shrink:0;}'
+      + '#nccard .sc .n{font-size:19px;font-weight:900;margin-top:5px;} #nccard .sc.a .n{color:#b45309;} #nccard .sc.b .n{color:#047857;} #nccard .sc.c .n{color:#1d4ed8;}'
+      + '#nccard .sc .d{font-size:10.5px;color:#64748b;margin-top:5px;line-height:1.4;font-weight:600;}'
+      + '#nccard .punch{margin-top:12px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border-radius:11px;padding:13px;text-align:center;font-weight:900;font-size:14.5px;}'
+      // 브리핑 불릿
+      + '#nccard .josa{font-size:13px;line-height:1.7;color:#1e293b;font-weight:500;}'
+      + '#nccard .josa .li{display:flex;gap:8px;padding:4px 0;}'
+      + '#nccard .josa .li .dot{color:#7c3aed;font-weight:900;flex-shrink:0;}'
       + '#nccard .note{font-size:10.5px;color:#94a3b8;margin-top:8px;line-height:1.5;}'
-      + '#nccard .win{margin:2px 0 0;background:linear-gradient(135deg,#dc2626,#f97316);color:#fff;border-radius:11px;padding:12px 14px;font-weight:900;font-size:14.5px;text-align:center;letter-spacing:-.3px;box-shadow:0 4px 14px rgba(220,38,38,.28);}'
+      + '#nccard .win{margin:12px 0 0;background:linear-gradient(135deg,#dc2626,#f97316);color:#fff;border-radius:11px;padding:12px 14px;font-weight:900;font-size:14.5px;text-align:center;letter-spacing:-.3px;box-shadow:0 4px 14px rgba(220,38,38,.28);}'
+      + '#nccard .foot{background:linear-gradient(135deg,#312e81,#4338ca);color:#fff;padding:18px 24px;text-align:center;}'
+      + '#nccard .foot .t{font-size:15px;font-weight:900;}'
+      + '#nccard .foot .s{font-size:12px;color:#c7d2fe;margin-top:5px;font-weight:600;}'
       + '</style>';
-    // 대표제목(어그로) — ncTitle 우선
-    var heroTitle = String(d.title || '').trim()
-      ? esc(d.title)
-      : ('감정가의 <span class="y">' + (pct || '?') + '%</span>, <span class="y">' + (man(bid) || comma(bid)) + '원</span>에 낙찰 성공! 🎉');
-    // 인사 — 이름(성 제외) 친근하게
+    // 인사 이름(성 제외)
     var full = String(d.member || '').trim();
     var given = full.length >= 2 ? full.slice(1) : (full || '회원');
     var grade = String(d.grade || '').trim();
-    var eyebrow = '🏆 ' + esc(given) + ' 회원님' + (grade ? (' · ' + esc(grade)) : '') + ' 낙찰 성공';
-    var h = css + '<div id="nccard">';
-    // 주소 정리 — 대괄호 주석([선순위임차권/대항력/HUG…][대지권…]) 제거(리스크·스펙 노출 금지), 공백 정돈
+    // 주소 정리 — 대괄호 주석([선순위/대항력/HUG…][대지권…]) 제거
     var cleanAddr = String(d.addr || '').replace(/\[[^\]]*\]/g, ' ').replace(/\s*,\s*/g, ', ').replace(/\s+/g, ' ').trim();
-    h += '<div class="hero"><span class="bd">' + eyebrow + '</span>'
-      + '<h1>' + heroTitle + '</h1>'
-      + '<div class="sub">' + esc(cleanAddr) + (d.date ? (' · 매각기일 ' + esc(d.date)) : '') + '</div></div>';
-    // 증빙 이미지(옥션 매각결과 캡처) — 최상단 증빙
+    // 물건 스펙(대지권/건물면적 등) — 주소 대괄호에서 파싱(리스크/공시 제외)
+    var specSrc = (String(d.addr || '').match(/\[[^\]]*\]/g) || []).map(function (s) { return s.slice(1, -1); }).join(', ');
+    var specs = specSrc.split(/\s*,\s*/).map(function (x) { return x.trim(); })
+      .filter(function (x) { return x && /㎡|평|방|욕|화\d|층|향/.test(x) && !/공시|선순위|대항력|HUG|가격|유치|법정지상|분묘/i.test(x); });
+    var h = css + '<div id="nccard">';
+    // ① 인트로 배너
+    h += '<div class="intro"><div class="t">🎉 이번 낙찰의 주인공은 바로 이 회원님!</div>'
+      + '<div class="s">누구나 배우면 할 수 있습니다 · 다음 주인공은 <b>당신</b>입니다</div></div>';
+    // 티저
+    h += '<div class="tease">👀 이런 물건을 이 가격에?! 아래에서 확인하세요</div>';
+    // ② 히어로 (인사 + 성과 + 스탯)
+    var ach = String(d.title || '').trim()
+      ? esc(d.title)
+      : ('감정가 <span class="y">' + (man(appr) || comma(appr)) + '</span> 물건을 단 <span class="y">' + (man(bid) || comma(bid) + '원') + '</span>에!');
+    h += '<div class="hero"><span class="bd">🏆 ' + esc(grade || '우리') + ' 회원 낙찰 성공</span>'
+      + '<h1>' + esc(given) + ' 회원님, 또 한 건 해냈습니다! 🎉</h1>'
+      + '<div class="ach">' + ach + '</div>'
+      + '<div class="stat">'
+      + '<div class="st"><div class="n hot">' + (comma(bid) || '-') + '원</div><div class="l">낙찰가</div></div>'
+      + '<div class="st"><div class="n">' + (pct ? (pct + '%') : '-') + '</div><div class="l">감정가 대비</div></div>'
+      + '<div class="st"><div class="n">' + (d.cnt ? (esc(d.cnt) + '명') : '-') + '</div><div class="l">입찰 경쟁</div></div>'
+      + '</div></div>';
+    // ③ 증빙 이미지
     if (String(d.imgUrl || '').trim()) {
       h += '<div class="proof"><div class="cap">📸 실제 낙찰 <b>증빙</b> · 옥션원 매각결과</div>'
         + '<img src="' + esc(d.imgUrl) + '" alt="낙찰 증빙"></div>';
     }
-    h += '<div class="sec"><h2>📌 낙찰 요약</h2>'
+    // ④ 낙찰 요약
+    h += '<div class="sec"><h2>📋 낙찰 요약</h2>'
+      + (cleanAddr ? ('<div class="kv"><div class="k">소재지</div><div class="v">' + esc(cleanAddr) + '</div></div>') : '')
+      + (d.sakun ? ('<div class="kv"><div class="k">사건번호</div><div class="v">' + esc(d.sakun) + (d.date ? (' · 매각 ' + esc(d.date)) : '') + '</div></div>') : '')
       + (appr ? ('<div class="kv"><div class="k">감정가</div><div class="v">' + comma(appr) + '원</div></div>') : '')
       + (mn ? ('<div class="kv"><div class="k">최저가</div><div class="v">' + comma(mn) + '원</div></div>') : '')
-      + '<div class="kv"><div class="k">낙찰가</div><div class="v"><span class="hl">' + comma(bid) + '원' + (pct ? (' (' + pct + '%)') : '') + '</span></div></div>'
-      + (sec ? ('<div class="kv"><div class="k">차순위</div><div class="v">' + comma(sec) + '원 (차이 ' + man(bid - sec) + ')</div></div>') : '')
+      + '<div class="kv"><div class="k">낙찰가</div><div class="v"><span class="hl">' + comma(bid) + '원' + (pct ? (' (감정가의 ' + pct + '%)') : '') + '</span></div></div>'
+      + (num(d.gongsi) ? ('<div class="kv"><div class="k">공시지가</div><div class="v">' + comma(d.gongsi) + '원</div></div>') : '')
       + ((d.cnt || buyer) ? ('<div class="kv"><div class="k">입찰</div><div class="v">' + esc(d.cnt || '') + (d.cnt ? '명' : '') + (buyer ? (' · 매수인 ' + esc(buyer)) : '') + '</div></div>') : '')
       + (sec && (bid - sec) > 0 ? ('<div class="win">😮 차순위와 단 ' + man(bid - sec) + ' 차이 — 짜릿한 역전 낙찰!</div>')
           : (num(d.cnt) >= 3 ? ('<div class="win">🔥 ' + esc(d.cnt) + '명 경쟁을 뚫고 낙찰 성공!</div>') : ''))
       + '</div>';
-    h += '<div class="sec"><h2>💰 수익 시나리오</h2><div class="g3">'
-      + '<div class="sc a"><div class="t">① 매매 차익</div><div class="n">' + (sale ? manSigned(saleGain) : '–') + '</div></div>'
-      + '<div class="sc b"><div class="t">② 전세 무피</div><div class="n">' + (jeonse ? manSigned(jeonseGain) : '–') + '</div></div>'
-      + '<div class="sc c"><div class="t">③ 월세 수익률</div><div class="n">' + (yld ? (yld + '%') : '–') + '</div></div>'
+    // ⑤ 물건 개요 (스펙 있을 때만)
+    if (specs.length) {
+      h += '<div class="sec"><h2>🏠 물건 개요</h2>'
+        + specs.map(function (x) {
+            var m = x.match(/^(\S+)\s*(.*)$/);
+            var k = m ? m[1] : '', v = m ? m[2] : x;
+            return '<div class="kv"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v || x) + '</div></div>';
+          }).join('')
+        + '</div>';
+    }
+    // ⑥ 수익 시나리오 (설명 포함)
+    var jLabel = jeonseGain >= 0 ? '② 전세 무피·플피' : '② 전세 세팅';
+    h += '<div class="sec"><h2>💰 ' + (bid ? (man(bid) + '으로 ') : '') + '만드는 수익 시나리오</h2><div class="g3">'
+      + '<div class="sc a"><div class="t">① 매매 차익</div><div class="n">' + (sale ? manSigned(saleGain) : '–') + '</div><div class="d">' + (sale ? ('시세 ' + man(sale) + ' 매도 시') : '시세 확인 필요') + '</div></div>'
+      + '<div class="sc b"><div class="t">' + jLabel + '</div><div class="n">' + (jeonse ? manSigned(jeonseGain) : '–') + '</div><div class="d">' + (jeonse ? ('전세 ' + man(jeonse) + ' 세팅 시') : '전세 시세 확인') + '</div></div>'
+      + '<div class="sc c"><div class="t">③ 월세 수익률</div><div class="n">' + (yld ? (yld + '%') : '–') + '</div><div class="d">' + ((wol && wolBo) ? ('보증 ' + man(wolBo) + '·월 ' + comma(wol)) : (wol ? ('월 ' + comma(wol)) : '월세 시세 확인')) + '</div></div>'
       + '</div>'
       + (((jeonseGain > 0) || (yld >= 8)) ? '<div class="punch">전세만 놔도 투자금 회수, 월세 돌리면 두 자릿수 수익률 🚀</div>' : '')
       + '<div class="note">※ 취득세·수리비·명도비 등 별도, 시세·임대료·수익률은 조사 기반 추정치로 실제와 다를 수 있습니다.</div>'
       + '</div>';
-    // 현장 조사 — 조사내용 원문 덤프 금지. 큐레이션 요약(ncSummary)만 노출.
+    // ⑦ 현장 조사 브리핑 (큐레이션 요약만 — 조사내용 원문 금지)
     var summ = String(d.summary || '').trim();
     if (summ) {
-      var lis = summ.split(/\r?\n/).map(function (ln) { return ln.replace(/^\s*[-·•*]\s*/, '').trim(); }).filter(function (x) { return x; });
+      var lis = summ.split(/\r?\n/).map(function (ln) { return ln.replace(/^\s*[-·•*✓]\s*/, '').trim(); }).filter(function (x) { return x; });
       var body = lis.length
-        ? lis.map(function (x) { return '<div class="li"><span class="dot">✓</span><span>' + blurPhones(esc(x)) + '</span></div>'; }).join('')
-        : blurPhones(esc(summ));
-      h += '<div class="sec"><h2>🔎 현장 조사 요약</h2><div class="josa">' + body + '</div>'
-        + '<div class="note">현장 부동산 조사 기반 요약 · 연락처는 비공개 처리했습니다.</div></div>';
+        ? lis.map(function (x) { return '<div class="li"><span class="dot">✓</span><span>' + blurPhones(x) + '</span></div>'; }).join('')
+        : blurPhones(summ);
+      h += '<div class="sec"><h2>🔎 현장 조사 브리핑</h2><div class="josa">' + body + '</div></div>';
     }
+    // ⑧ 현장 부동산 브리핑 (시세 집계)
+    if (sale || jeonse || wol || String(d.hoga || '').trim()) {
+      h += '<div class="sec"><h2>🏢 현장 부동산 브리핑</h2>'
+        + (sale ? ('<div class="kv"><div class="k">매매 시세</div><div class="v">약 ' + man(sale) + '</div></div>') : '')
+        + (jeonse ? ('<div class="kv"><div class="k">전세 시세</div><div class="v">약 ' + man(jeonse) + '</div></div>') : '')
+        + ((wol || wolBo) ? ('<div class="kv"><div class="k">월세</div><div class="v">보증 ' + (man(wolBo) || '-') + ' · 월 ' + (comma(wol) || '-') + '</div></div>') : '')
+        + (String(d.hoga || '').trim() ? ('<div class="kv"><div class="k">호가</div><div class="v">' + blurPhones(d.hoga) + '</div></div>') : '')
+        + '<div class="note">현장 부동산 조사 기반 · 연락처는 비공개 처리했습니다.</div></div>';
+    }
+    // ⑨ 클로징 CTA
+    h += '<div class="foot"><div class="t">부럽다면? 다음 주인공은 당신입니다 🙌</div>'
+      + '<div class="s">경매, 배우면 누구나 할 수 있습니다 — 지금 문의하세요</div></div>';
     h += '</div>';
     return h;
   }
