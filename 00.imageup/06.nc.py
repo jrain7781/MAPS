@@ -13,9 +13,24 @@ MJ경매 [낙찰 카페등록 크롤] (다계정)
 """
 print("🏆 MJ경매 [낙찰 카페등록 크롤·다계정] (종합검색 → 키매칭 → 매각결과 + 계정별 조사내용)...")
 
-import os, sys, json, time, traceback, importlib.util
+import os, sys, json, time, re, traceback, importlib.util
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+# ── 옥션 상세에서 감정가 + 차순위금액 파싱 (MAPS 비어도 상세에서 채움) ──
+def parse_appr_second(detail_txt):
+    """상세 본문에서 감정가·차순위금액 추출. return {appr, second} (숫자 문자열, 없으면 '')."""
+    res = {"appr": "", "second": ""}
+    if not detail_txt:
+        return res
+    m = re.search(r"감\s*정\s*가[^\d]{0,20}([\d,]{6,})\s*원", detail_txt)      # 감정가 235,000,000원
+    if m:
+        res["appr"] = m.group(1).replace(",", "")
+    m2 = re.search(r"차\s*순\s*위\s*금?\s*액?\s*[:：]?\s*([\d,]{6,})\s*원", detail_txt)  # 차순위금액 95,700,000원
+    if m2:
+        res["second"] = m2.group(1).replace(",", "")
+    return res
 
 
 # ── 04.cc.py 모듈 로드 (원본 미변경 재사용) ─────────────────────────────
@@ -101,6 +116,7 @@ def crawl_case(driver, wait, case, want_capture=False):
     detail_txt = cc.open_detail_text(driver, view_url)     # 상세로 이동(그 페이지에 textarea 존재)
     josa = get_interest_josa(driver)                        # ★ 조사내용 = textarea value
     md = cc.parse_maegak_detail(detail_txt, exp_d6) if state_kind == "매각" else {"maegak_price": "", "buyer": "", "bidder_count": ""}
+    aps = parse_appr_second(detail_txt)     # 감정가 + 차순위금액 (상세)
     shot = cc.capture_detail(driver, f"nc_{cc.case_num2(sakun)}", sakun) if want_capture else ""
 
     return {
@@ -110,6 +126,8 @@ def crawl_case(driver, wait, case, want_capture=False):
         "bid": md.get("maegak_price", ""),
         "buyer": md.get("buyer", ""),
         "cnt": md.get("bidder_count", ""),
+        "appr": aps.get("appr", ""),         # 감정가(상세 — MAPS 비어도 채움)
+        "second": aps.get("second", ""),     # 차순위금액(상세, 있을 때만)
         "date": (picked.get("date_txt", "") or case.get("bid_date", "")),
         "addr": picked.get("addr", ""),
         "josa": josa,
@@ -159,6 +177,7 @@ def process_case_multi(driver, wait, case, accounts):
                key_match=(result["court_hit"] and result["date_hit"]),
                court_hit=result["court_hit"], date_hit=result["date_hit"],
                bid=result["bid"], buyer=result["buyer"], cnt=result["cnt"],
+               appr=result.get("appr", ""), second=result.get("second", ""),
                date=result["date"], addr=result["addr"],
                josa=primary, josa_len=len(primary),
                josa_accounts=josa_accounts,                 # [{id, josa, len}] 조사내용 있는 계정들

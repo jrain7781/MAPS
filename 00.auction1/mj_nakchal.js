@@ -213,7 +213,7 @@
         + '<td style="' + td + '">' + keyCell(it.sakun_no || sakun, cr ? true : null) + '</td>'
         + '<td style="' + td + '">' + keyCell(it.court || (cr && cr.court) || '', cr ? (cr.court_hit !== false) : null) + '</td>'
         + '<td style="' + td + '">' + esc(it.m_name_id || '') + '</td>'
-        + '<td style="' + td + '">' + esc(it.m_name || '') + '</td>'
+        + '<td style="' + td + '">' + esc(it.m_name || '') + (it.grade ? ' <span style="color:#7c3aed;font-size:11px">(' + esc(it.grade) + ')</span>' : '') + '</td>'
         + '<td style="' + td + ';color:' + (isWin ? '#2563eb' : '#111827') + ';font-weight:' + (isWin ? 700 : 400) + '">' + esc(buyer) + '</td>'
         + '<td style="' + td + ';text-align:right">' + (bidp ? comma(bidp) : '') + '</td>'
         + '<td style="' + td + ';text-align:right;color:' + maeCol + ';font-weight:700">' + (mae ? comma(mae) : '') + '</td>'
@@ -258,8 +258,9 @@
       bid: cr.bid || '',
       cnt: cr.cnt || '',
       addr: cr.addr || it.address || '',
-      appr: it.gamjungga || '',
+      appr: it.gamjungga || cr.appr || '',     // MAPS 감정가 없으면 옥션 상세 크롤값
       min: it.lowest_price || '',
+      second: cr.second || '',                 // 차순위금액(상세, 있을 때만)
       josa: josa
     });
     setStatus('✓ 일치 — 자동 연동+미리보기 생성' + (ja.length ? (' · 조사내용 계정 ' + ja.length) : '') + (cr.key_match ? '' : ' (⚠법원키 확인)'));

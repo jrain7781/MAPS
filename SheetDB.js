@@ -569,6 +569,8 @@ function getItemsBySakun(sakunNo, includePast) {
         m_name_id: String(r[5] || ''),
         m_name: String(r[6] || ''),
         bidprice: String(r[7] || ''),       // H열=입찰가 (우리 입찰가 — 매각가 비교용)
+        member_id: String(r[8] || ''),      // I열=member_id (회원등급 연계용)
+        grade: '',                          // 회원등급 (member_id→class_id→class_type-class_grade, 아래에서 채움)
         auction_id: String(r[15] || ''),   // P열=옥션ID — 기등록 행의 MAPS 저장값(갱신 확인용)
         deposit: String(r[21] || ''),
         lowest_price: String(r[22] || ''),
@@ -577,6 +579,24 @@ function getItemsBySakun(sakunNo, includePast) {
         building_area: areaCol > 0 ? String(r[areaCol - 1] || '') : ''
       });
     });
+    // 회원등급 연계 (member_id → class_id → class_type-class_grade) — 매칭 물건 있을 때만
+    if (out.length) {
+      try {
+        var memberClass = {}, classGrade = {};
+        ((typeof readAllMembersNew === 'function') ? readAllMembersNew() : []).forEach(function (m) {
+          if (m.member_id) memberClass[String(m.member_id)] = String(m.class_id || '');
+        });
+        var csh = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(CLASS_SHEET_NAME_DB);
+        if (csh && csh.getLastRow() > 1) {
+          var cidI = CLASS_HEADERS.indexOf('class_id'), cgI = CLASS_HEADERS.indexOf('class_grade'), ctI = CLASS_HEADERS.indexOf('class_type');
+          csh.getRange(2, 1, csh.getLastRow() - 1, CLASS_HEADERS.length).getValues().forEach(function (cr) {
+            var ct = String(cr[ctI] || '').trim(), cg = String(cr[cgI] || '').trim();
+            classGrade[String(cr[cidI])] = [ct, cg].filter(function (x) { return x; }).join('-');
+          });
+        }
+        out.forEach(function (it) { var cid = memberClass[String(it.member_id || '')]; it.grade = cid ? (classGrade[cid] || '') : ''; });
+      } catch (e) { Logger.log('[getItemsBySakun grade] ' + e); }
+    }
     return { success: true, items: out, count: out.length };
   } catch (e) {
     Logger.log('[getItemsBySakun] ' + e);
