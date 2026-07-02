@@ -191,14 +191,23 @@
     ncCrawl = null; ncOffset = 0; ncLinkedIdx = -1;
     ncClearAcctProg();   // 계정 진행사항 초기화
     var rb = $('ncRunBtn'); if (rb) rb.disabled = true;
+    var sb0 = $('ncStopBtn'); if (sb0) sb0.disabled = false;   // 실행 중 중지 가능
     setStatus('실행중… (체크 계정 ' + accs.length + '개 · 3키 일치 확정 → 매각결과+조사내용)');
     fetch('/api/imageup/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ which: 'nc', accounts: accs, cases: [caseObj], headless: !!($('ncHeadless') && $('ncHeadless').checked) })
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (j.ok) { ncRunId = j.run_id; ncPoll(); }
-      else { setStatus('시작 실패: ' + (j.error || '?')); if (rb) rb.disabled = false; }
-    }).catch(function (e) { setStatus('요청 오류: ' + e); if (rb) rb.disabled = false; });
+      else { setStatus('시작 실패: ' + (j.error || '?')); if (rb) rb.disabled = false; var sb = $('ncStopBtn'); if (sb) sb.disabled = true; }
+    }).catch(function (e) { setStatus('요청 오류: ' + e); if (rb) rb.disabled = false; var sb = $('ncStopBtn'); if (sb) sb.disabled = true; });
+  }
+  // 진행 중인 크롤 중지
+  function ncStop() {
+    if (!ncRunId) return;
+    fetch('/api/imageup/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: ncRunId }) }).catch(function () {});
+    ncRunId = null;
+    var rb = $('ncRunBtn'), sb = $('ncStopBtn'); if (rb) rb.disabled = false; if (sb) sb.disabled = true;
+    setStatus('⏹ 중지됨');
   }
   function ncPoll() {
     if (!ncRunId) return;
@@ -216,6 +225,7 @@
         if (j.status === 'running') { setTimeout(ncPoll, 700); }
         else {
           ncRunId = null; var rb = $('ncRunBtn'); if (rb) rb.disabled = false;
+          var sb = $('ncStopBtn'); if (sb) sb.disabled = true;
           renderGrid();
           if (ncCrawl) { ncAutoLink(); }   // ★ 일치 시 자동 연동 + 미리보기 생성
           else setStatus('실행 종료 — 결과 없음(사건번호/매각기일 확인)');
@@ -411,6 +421,7 @@
     var c = $('ncCopyBtn'); if (c) c.addEventListener('click', copyImg);
     var dn = $('ncDownBtn'); if (dn) dn.addEventListener('click', download);
     var rb = $('ncRunBtn'); if (rb) rb.addEventListener('click', ncRun);
+    var sb = $('ncStopBtn'); if (sb) sb.addEventListener('click', ncStop);
     var cd = ncCard();
     if (cd) cd.querySelectorAll('.nc-lt-tab').forEach(function (b) { b.addEventListener('click', function () { ncSwitchLtTab(b.dataset.lt); }); });
     var sr = $('ncSkillReload'); if (sr) sr.addEventListener('click', function () { _ncSkillLoaded = false; ncSkillLoad(); });
