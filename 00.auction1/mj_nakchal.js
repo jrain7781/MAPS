@@ -253,7 +253,8 @@
     var sel = ncCard() && ncCard().querySelector('input[name=ncJosaAcc]:checked');
     var josa = (sel && ja[parseInt(sel.value, 10)]) ? ja[parseInt(sel.value, 10)].josa : (cr.josa || '');
     renderGrid();   // 연동 행 하이라이트 반영
-    window.NakchalCafe.fill({   // fill 이 num(bid) 있으면 미리보기 자동 생성
+    window.NakchalCafe.fill({   // autogen:false → 실행 시 데이터만 연동, 카드 미생성(제목/본문 작업 후 생성)
+      autogen: false,
       sakun: cr.sakun_no || it.sakun_no || '',
       member: it.m_name || cr.member || '',
       grade: it.grade || '',                   // 회원등급(MAPS 연동)
@@ -269,7 +270,7 @@
       josa: josa
     });
     ncShowDetailImg();   // 상세이미지 탭 이미지 갱신
-    setStatus('✓ 일치 — 자동 연동+미리보기 생성' + (ja.length ? (' · 조사내용 계정 ' + ja.length) : '') + (cr.key_match ? '' : ' (⚠법원키 확인)'));
+    setStatus('✓ 일치 — 데이터 연동 완료 (제목/본문 작업 후 카드 생성)' + (ja.length ? (' · 조사내용 계정 ' + ja.length) : '') + (cr.key_match ? '' : ' (⚠법원키 확인)'));
   }
 
   function _fv(id) { var e = $(id); return e ? e.value : ''; }
