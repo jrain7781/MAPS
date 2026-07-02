@@ -107,12 +107,7 @@
       + '<div class="st"><div class="n">' + (pct ? (pct + '%') : '-') + '</div><div class="l">감정가 대비</div></div>'
       + '<div class="st"><div class="n">' + (d.cnt ? (esc(d.cnt) + '명') : '-') + '</div><div class="l">입찰 경쟁</div></div>'
       + '</div></div>';
-    // ③ 증빙 이미지
-    if (String(d.imgUrl || '').trim()) {
-      h += '<div class="proof"><div class="cap">📸 실제 낙찰 <b>증빙</b> · 옥션원 매각결과</div>'
-        + '<img src="' + esc(d.imgUrl) + '" alt="낙찰 증빙"></div>';
-    }
-    // ④ 낙찰 요약
+    // ③ 낙찰 요약
     h += '<div class="sec"><h2>📋 낙찰 요약</h2>'
       + (cleanAddr ? ('<div class="kv"><div class="k">소재지</div><div class="v">' + esc(cleanAddr) + '</div></div>') : '')
       + (d.sakun ? ('<div class="kv"><div class="k">사건번호</div><div class="v">' + esc(d.sakun) + (d.date ? (' · 매각 ' + esc(d.date)) : '') + '</div></div>') : '')
@@ -124,6 +119,11 @@
       + (sec && (bid - sec) > 0 ? ('<div class="win">😮 차순위와 단 ' + man(bid - sec) + ' 차이 — 짜릿한 역전 낙찰!</div>')
           : (num(d.cnt) >= 3 ? ('<div class="win">🔥 ' + esc(d.cnt) + '명 경쟁을 뚫고 낙찰 성공!</div>') : ''))
       + '</div>';
+    // ④ 낙찰 증빙 이미지 (옥션 매각결과 상세) — 낙찰 요약 바로 다음
+    if (String(d.imgUrl || '').trim()) {
+      h += '<div class="sec"><h2>📸 옥션 상세 (매각결과 <b style="color:#dc2626">증빙</b>)</h2>'
+        + '<img src="' + esc(d.imgUrl) + '" alt="낙찰 증빙" style="width:100%;display:block;border-radius:10px;border:1px solid #e2e8f0"></div>';
+    }
     // ⑤ 물건 개요 (스펙 있을 때만)
     if (specs.length) {
       h += '<div class="sec"><h2>🏠 물건 개요</h2>'
